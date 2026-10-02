@@ -10,7 +10,6 @@ import com.raulshma.jellyplay.core.model.SeerrWidgetSource
 import com.raulshma.jellyplay.core.model.WidgetConfig
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
-import com.raulshma.jellyplay.core.model.seerr.SeerrSearchResponse
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -100,7 +99,7 @@ class SeerrRecommendationsWidgetWorkerTest {
         configureSeerr()
         val noPoster = searchItem(100, posterPath = null)
         coEvery { seerrRepository.getTrending(any()) } returns Result.success(
-            SeerrSearchResponse(results = (1..11).map { searchItem(it) } + noPoster),
+            (1..11).map { searchItem(it) } + noPoster,
         )
 
         val result = createWorker().doWork()
@@ -120,13 +119,11 @@ class SeerrRecommendationsWidgetWorkerTest {
     fun `items map titles subtitles and built TMDB urls`() = runTest {
         configureSeerr()
         coEvery { seerrRepository.getTrending(any()) } returns Result.success(
-            SeerrSearchResponse(
-                results = listOf(
-                    searchItem(1),
-                    searchItem(2, mediaType = "tv"),
-                    // No poster path → dropped by the worker's poster filter.
-                    SeerrSearchItem(id = 3, mediaType = "movie", title = null, name = "Named"),
-                ),
+            listOf(
+                searchItem(1),
+                searchItem(2, mediaType = "tv"),
+                // No poster path → dropped by the worker's poster filter.
+                SeerrSearchItem(id = 3, mediaType = "movie", title = null, name = "Named"),
             ),
         )
 
@@ -150,7 +147,7 @@ class SeerrRecommendationsWidgetWorkerTest {
         configureSeerr()
         widgetConfig.value = WidgetConfig(seerrSource = SeerrWidgetSource.POPULAR_TV)
         coEvery { seerrRepository.getDiscoverTv(any(), any()) } returns Result.success(
-            SeerrSearchResponse(results = listOf(searchItem(7, mediaType = "tv"))),
+            listOf(searchItem(7, mediaType = "tv")),
         )
 
         val result = createWorker().doWork()
@@ -165,7 +162,7 @@ class SeerrRecommendationsWidgetWorkerTest {
         configureSeerr()
         widgetConfig.value = WidgetConfig(seerrSource = SeerrWidgetSource.UPCOMING_TV)
         coEvery { seerrRepository.getDiscoverTv(any(), any()) } returns Result.success(
-            SeerrSearchResponse(results = listOf(searchItem(8, mediaType = "tv"))),
+            listOf(searchItem(8, mediaType = "tv")),
         )
 
         createWorker().doWork()
@@ -180,7 +177,7 @@ class SeerrRecommendationsWidgetWorkerTest {
     @Test
     fun `an empty fetch keeps the existing snapshot`() = runTest {
         configureSeerr()
-        coEvery { seerrRepository.getTrending(any()) } returns Result.success(SeerrSearchResponse())
+        coEvery { seerrRepository.getTrending(any()) } returns Result.success(emptyList())
 
         val result = createWorker().doWork()
 

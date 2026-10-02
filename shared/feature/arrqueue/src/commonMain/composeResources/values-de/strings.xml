@@ -54,4 +54,24 @@
     <string name="arrqueue_remove_only">Nur entfernen</string>
     <string name="arrqueue_remove_search">Entfernen &amp; erneut suchen</string>
     <string name="arrqueue_blocklist_search">Blockliste &amp; Suche</string>
+    <string name="releaseSearch_title">Releases suchen</string>
+    <string name="releaseSearch_loading">Indexer werden durchsucht — das kann bis zu einer Minute dauern.</string>
+    <string name="releaseSearch_empty">Keine Releases gefunden</string>
+    <string name="releaseSearch_cache_miss_body">Die zwischengespeicherten Suchergebnisse des Servers sind abgelaufen. Führe die Suche erneut aus.</string>
+    <string name="releaseSearch_search_again">Erneut suchen</string>
+    <string name="releaseSearch_retry">Erneut versuchen</string>
+    <string name="releaseSearch_sort_score">Bewertung</string>
+    <string name="releaseSearch_sort_seeders">Seeder</string>
+    <string name="releaseSearch_sort_age">Alter</string>
+    <string name="releaseSearch_approved">Genehmigt</string>
+    <string name="releaseSearch_rejected">Abgelehnt</string>
+    <string name="releaseSearch_grab_anyway">Trotzdem laden</string>
+    <string name="releaseSearch_grab_title">Release laden?</string>
+    <string name="releaseSearch_grab_message">"%1$s" an den Download-Client senden?</string>
+    <string name="releaseSearch_grab_rejected_message">"%1$s" wurde abgelehnt: %2$s. Trotzdem laden?</string>
+    <string name="releaseSearch_grab_sent">Laden von "%1$s" beauftragt</string>
+    <string name="releaseSearch_history_grabbed">Zuvor geladen</string>
+    <string name="releaseSearch_history_failed">Zuvor fehlgeschlagen</string>
+    <string name="releaseSearch_full_season">Komplette Staffel</string>
+    <string name="releaseSearch_seeders_leechers">%1$d Seeder · %2$d Leecher</string>
 </resources>

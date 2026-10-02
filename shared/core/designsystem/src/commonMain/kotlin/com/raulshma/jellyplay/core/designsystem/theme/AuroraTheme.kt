@@ -48,20 +48,12 @@ fun getAuroraColorScheme(accent: String): ColorScheme {
 
 /** Aurora typography — airy Manrope with calm, loose body tracking. */
 val AuroraTypography: Typography
-    @Composable get() = Typography(
-    displayLarge = JellyPlayTypography.displayLarge.copy(fontFamily = auroraFontFamily, letterSpacing = (-0.2).sp),
-    displayMedium = JellyPlayTypography.displayMedium.copy(fontFamily = auroraFontFamily, letterSpacing = (-0.2).sp),
-    displaySmall = JellyPlayTypography.displaySmall.copy(fontFamily = auroraFontFamily),
-    headlineLarge = JellyPlayTypography.headlineLarge.copy(fontFamily = auroraFontFamily),
-    headlineMedium = JellyPlayTypography.headlineMedium.copy(fontFamily = auroraFontFamily),
-    headlineSmall = JellyPlayTypography.headlineSmall.copy(fontFamily = auroraFontFamily),
-    titleLarge = JellyPlayTypography.titleLarge.copy(fontFamily = auroraFontFamily),
-    titleMedium = JellyPlayTypography.titleMedium.copy(fontFamily = auroraFontFamily),
-    titleSmall = JellyPlayTypography.titleSmall.copy(fontFamily = auroraFontFamily),
-    bodyLarge = JellyPlayTypography.bodyLarge.copy(fontFamily = auroraFontFamily, letterSpacing = 0.2.sp),
-    bodyMedium = JellyPlayTypography.bodyMedium.copy(fontFamily = auroraFontFamily, letterSpacing = 0.2.sp),
-    bodySmall = JellyPlayTypography.bodySmall.copy(fontFamily = auroraFontFamily, letterSpacing = 0.3.sp),
-    labelLarge = JellyPlayTypography.labelLarge.copy(fontFamily = auroraFontFamily),
-    labelMedium = JellyPlayTypography.labelMedium.copy(fontFamily = auroraFontFamily),
-    labelSmall = JellyPlayTypography.labelSmall.copy(fontFamily = auroraFontFamily),
-)
+    @Composable get() = variantTypography(JellyPlayTypography, auroraFontFamily) {
+        copy(
+            displayLarge = displayLarge.copy(letterSpacing = (-0.2).sp),
+            displayMedium = displayMedium.copy(letterSpacing = (-0.2).sp),
+            bodyLarge = bodyLarge.copy(letterSpacing = 0.2.sp),
+            bodyMedium = bodyMedium.copy(letterSpacing = 0.2.sp),
+            bodySmall = bodySmall.copy(letterSpacing = 0.3.sp),
+        )
+    }

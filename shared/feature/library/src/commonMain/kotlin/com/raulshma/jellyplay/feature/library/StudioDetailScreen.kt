@@ -21,10 +21,10 @@ import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.paging.LoadState
 import androidx.paging.compose.collectAsLazyPagingItems
+import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaQuickActionScope
 import com.raulshma.jellyplay.core.model.MediaType
-import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.DeferredRefreshEffect
 import com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
@@ -32,19 +32,17 @@ import com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator
 import com.raulshma.jellyplay.core.ui.components.LocalMediaQuickActionController
 import com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus
 import com.raulshma.jellyplay.core.ui.components.LocalServerHealth
+import com.raulshma.jellyplay.core.ui.components.PagedAppendRung
+import com.raulshma.jellyplay.core.ui.components.PagedCollectionGrid
 import com.raulshma.jellyplay.core.ui.components.PosterCard
 import com.raulshma.jellyplay.core.ui.components.QuickActionAdapter
 import com.raulshma.jellyplay.core.ui.components.QuickActionIntakeHost
-import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
-import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
 import com.raulshma.jellyplay.core.model.progressFraction
 import com.raulshma.jellyplay.core.ui.components.rememberQuickActionIntake
 import com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
-import com.raulshma.jellyplay.core.ui.util.safeItemKey
-import com.raulshma.jellyplay.core.ui.tv.TvFocusableGrid
 import com.raulshma.jellyplay.core.ui.tv.input.onDpadKey
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
@@ -122,83 +120,71 @@ internal fun StudioDetailScreen(
             },
         ) { _ ->
         Box(modifier = Modifier.fillMaxSize()) {
-            when (val refreshState = items.loadState.refresh) {
-                is LoadState.Loading -> {
-                    ScreenLoadingState()
-                }
-                is LoadState.Error -> {
-                    ErrorScreen(
-                        message = refreshState.error.message
-                            ?: stringResource(Res.string.library_failed_to_load_items),
-                        onRetry = { items.refresh() },
-                    )
-                }
-                is LoadState.NotLoading -> {
-                    if (items.itemCount == 0) {
-                        ScreenEmptyState(
-                            icon = Tabler.Outline.Movie,
-                            title = stringResource(Res.string.library_no_items_found),
-                        )
-                    } else {
-                        val adaptiveInfo = LocalAdaptiveInfo.current
-                        val isTv = LocalTvMode.current
-                        val spanCount = when {
-                            adaptiveInfo.windowSizeClass == com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass.Expanded -> 5
-                            adaptiveInfo.windowSizeClass == com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass.Medium -> 4
-                            else -> 3
-                        }
-                        TvFocusableGrid(
-                            itemCount = items.itemCount,
-                            key = items.safeItemKey { it.id },
-                            columns = GridCells.Fixed(spanCount),
-                            contentPadding = PaddingValues(
-                                start = 16.dp,
-                                end = 16.dp,
-                                bottom = adaptiveInfo.bottomPadding(isTv),
-                            ),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
-                            modifier = Modifier.fillMaxSize(),
-                            contentType = { "mediaItem" },
-                            onFocusedIndexChange = { index -> items[index]?.let { quickActionIntake.tvFocusedItem = it } },
-                        ) { index, itemModifier ->
-                            val item = items[index]
-                            if (item != null) {
-                                val progress = item.progressFraction()
-                                PosterCard(
-                                    item = item,
-                                    imageUrl = viewModel.getImageUrl(item.id),
-                                    onClick = { onItemClick(item.id) },
-                                    showProgress = progress != null && progress > 0f,
-                                    progressPercent = progress ?: 0f,
-                                    modifier = itemModifier,
-                                )
-                            }
-                        }
-                    }
-                }
+            val adaptiveInfo = LocalAdaptiveInfo.current
+            val isTv = LocalTvMode.current
+            val spanCount = when {
+                adaptiveInfo.windowSizeClass == com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass.Expanded -> 5
+                adaptiveInfo.windowSizeClass == com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass.Medium -> 4
+                else -> 3
             }
-
-            when (val appendState = items.loadState.append) {
-                is LoadState.Loading -> {
-                    JellyPlayLoadingIndicator(
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .padding(16.dp),
-                    )
-                }
-                is LoadState.Error -> {
-                    Text(
-                        text = appendState.error.message
-                            ?: stringResource(Res.string.library_failed_to_load_more),
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .padding(16.dp),
-                    )
-                }
-                is LoadState.NotLoading -> Unit
+            // The shared paged-collection renderer (core:ui) — content wins
+            // over the spinner once pages exist. No pull-to-refresh on this
+            // route (renderer gate off, matching the old wiring).
+            PagedCollectionGrid(
+                items = items,
+                itemKey = { it.id },
+                columns = GridCells.Fixed(spanCount),
+                contentPadding = PaddingValues(
+                    start = 16.dp,
+                    end = 16.dp,
+                    bottom = adaptiveInfo.bottomPadding(isTv),
+                ),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                pullToRefresh = false,
+                emptyIcon = Tabler.Outline.Movie,
+                emptyTitle = stringResource(Res.string.library_no_items_found),
+                errorFallbackMessage = stringResource(Res.string.library_failed_to_load_items),
+                onFocusedIndexChange = { index -> items[index]?.let { quickActionIntake.tvFocusedItem = it } },
+                // This screen's append failure stays a bare message (no
+                // retry affordance today); only the copy resolution is
+                // unified. The Loading arm re-renders the standard
+                // bottom-center spinner the renderer would show.
+                appendFooter = { rung ->
+                    when (rung) {
+                        PagedAppendRung.Loading -> {
+                            JellyPlayLoadingIndicator(
+                                modifier = Modifier
+                                    .align(Alignment.BottomCenter)
+                                    .padding(16.dp),
+                            )
+                        }
+                        PagedAppendRung.Retry -> {
+                            Text(
+                                text = UserErrorMessages.resolve(
+                                    (items.loadState.append as LoadState.Error).error,
+                                    stringResource(Res.string.library_failed_to_load_more),
+                                ),
+                                color = MaterialTheme.colorScheme.error,
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier
+                                    .align(Alignment.BottomCenter)
+                                    .padding(16.dp),
+                            )
+                        }
+                        PagedAppendRung.Hidden -> Unit
+                    }
+                },
+            ) { item, itemModifier ->
+                val progress = item.progressFraction()
+                PosterCard(
+                    item = item,
+                    imageUrl = viewModel.getImageUrl(item.id),
+                    onClick = { onItemClick(item.id) },
+                    showProgress = progress != null && progress > 0f,
+                    progressPercent = progress ?: 0f,
+                    modifier = itemModifier,
+                )
             }
         }
         } // close scaffold content lambda

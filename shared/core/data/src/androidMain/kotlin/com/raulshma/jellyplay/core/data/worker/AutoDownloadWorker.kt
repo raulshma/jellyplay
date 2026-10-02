@@ -7,13 +7,15 @@ import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
+import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 
 /**
  * Thin Android adapter between WorkManager and the shared
  * [AutoDownloadCheck] — the check choreography itself (prefs gate,
- * single-query series index, per-season intake, transient-failure retry
- * budget) moved verbatim to :shared:core:data so Android and desktop check
- * through one code path (desktop previously ported this body verbatim).
+ * retention-policy bounds, single-query series index, per-season intake,
+ * transient-failure retry budget) moved verbatim to :shared:core:data so
+ * Android and desktop check through one code path (desktop previously ported
+ * this body verbatim).
  *
  * Triggered periodically and on demand by [AutoDownloadScheduler]; the worker
  * respects the WiFi-only and storage-limit constraints enforced inside
@@ -30,6 +32,7 @@ class AutoDownloadWorker(
     downloadRepository: DownloadRepository,
     downloadIntake: DownloadIntake,
     downloadsStore: DownloadsStore,
+    serverIdentityStore: ServerIdentityStore,
 ) : CoroutineWorker(context, params) {
 
     private val check = AutoDownloadCheck(
@@ -37,6 +40,7 @@ class AutoDownloadWorker(
         downloadRepository = downloadRepository,
         downloadIntake = downloadIntake,
         episodeCatalogue = episodeCatalogue,
+        serverIdentityStore = serverIdentityStore,
         isStopped = { isStopped },
     )
 

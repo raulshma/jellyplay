@@ -14,6 +14,8 @@ import com.raulshma.jellyplay.feature.book.OkHttpBookContentResolver
 import com.raulshma.jellyplay.feature.book.OkHttpBookFetcher
 import com.raulshma.jellyplay.feature.book.OkHttpBookFormatProbe
 import com.raulshma.jellyplay.feature.book.PdfOutlineParser
+import com.raulshma.jellyplay.feature.book.SapiBookSpeechEngine
+import com.sun.jna.Platform
 import com.raulshma.jellyplay.feature.book.epub.EpubDesktopEnv
 import com.raulshma.jellyplay.feature.book.epub.KcefRuntime
 import okhttp3.OkHttpClient
@@ -39,11 +41,14 @@ fun desktopBookPlayerModule(dataDir: okio.Path): Module = module {
         )
     }
     single<BookDocumentOpener> { DesktopBookDocumentOpener() }
-    // Read-aloud: desktop has no TTS binding yet — the engine reports
-    // UNAVAILABLE and the reader degrades (caption + hidden controls).
-    // NoopBookSpeechEngine verbatim (desktop TTS is roadmap-future); binding
-    // it here keeps the degradation a platform decision, not a missing one.
-    single<BookSpeechEngine> { NoopBookSpeechEngine }
+    // Read-aloud: Windows speaks through SAPI (ISpVoice via the jna-platform
+    // COM bridge); every other desktop OS keeps the Noop engine (reports
+    // UNAVAILABLE — the reader degrades to a caption + hidden controls).
+    // Binding it here keeps the degradation a platform decision, not a
+    // missing one.
+    single<BookSpeechEngine> {
+        if (Platform.isWindows()) SapiBookSpeechEngine() else NoopBookSpeechEngine
+    }
     single<PdfOutlineParser> { PdfOutlineParser() }
     // The detail screen's TOC probe (never-opened books) — same PDFBox
     // binding, plus the jvmShared EPUB/comic parsers.

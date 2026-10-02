@@ -9,17 +9,14 @@ import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -50,20 +47,12 @@ import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.expressiveListShape
 import com.raulshma.jellyplay.core.model.PinnedHomeSection
 import com.raulshma.jellyplay.core.model.PinnedSectionType
-import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
-import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
-import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
-import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
-import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState
 import com.raulshma.jellyplay.core.ui.components.SheetHeader
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
-import com.raulshma.jellyplay.core.ui.tv.CenteredBringIntoView
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
-import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.enableMarqueeOnFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
-import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_add_pinned_section
@@ -103,103 +92,75 @@ fun PinnedHomeSectionsScreen(
     viewModel: LibraryLayoutViewModel = koinViewModel(),
 ) {
     val pinnedSections by viewModel.pinnedHomeSectionsFlow.collectAsStateWithLifecycle()
-    val isTv = LocalTvMode.current
-    val backgroundColorState = rememberScreenBackgroundColorState()
-    val adaptiveInfo = LocalAdaptiveInfo.current
-
-    val focusRequester = remember { FocusRequester() }
-    TvGrabInitialFocus(
-        focusRequester = focusRequester,
-        itemCount = 1,
-        tag = "pinned_home_init",
-    )
 
     var showAddSheet by remember { mutableStateOf(false) }
 
-    val scrollState = rememberLazyListState()
-
-    JellyPlayScreenScaffold(
+    PreferenceScreenScaffold(
         title = stringResource(Res.string.settings_pinned_home_sections),
         onBack = onBack,
-        backgroundColorState = backgroundColorState,
-    ) { innerPadding ->
-        CenteredBringIntoView {
-        LazyColumn(
-            state = scrollState,
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .tvFocusRestorer()
-                .focusRequester(focusRequester),
-            contentPadding = PaddingValues(
-                start = adaptiveInfo.contentPadding(isTv),
-                end = adaptiveInfo.contentPadding(isTv),
-                bottom = adaptiveInfo.bottomPadding(isTv),
-            ),
-        ) {
-            item {
-                SettingsGroup(
-                    icon = Tabler.Outline.Pinned,
-                    title = stringResource(Res.string.settings_pinned_sections),
-                    summary = {
-                        if (pinnedSections.isEmpty()) {
-                            stringResource(Res.string.settings_no_pinned_sections)
-                        } else {
-                            val byType = pinnedSections.groupBy { it.type.displayName }
-                            byType.entries.joinToString(", ") { (type, list) ->
-                                "$type: ${list.size}"
-                            }
-                        }
-                    },
-                    modifier = Modifier.padding(vertical = 8.dp),
-                    initiallyExpanded = true,
-                ) {
+        focusTag = "pinned_home_init",
+    ) { _ ->
+        item {
+            SettingsGroup(
+                icon = Tabler.Outline.Pinned,
+                title = stringResource(Res.string.settings_pinned_sections),
+                summary = {
                     if (pinnedSections.isEmpty()) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 18.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Icon(
-                                Tabler.Outline.PinnedOff,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(20.dp),
-                            )
-                            Spacer(Modifier.width(12.dp))
-                            Text(
-                                text = stringResource(Res.string.settings_pinned_helper),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
+                        stringResource(Res.string.settings_no_pinned_sections)
                     } else {
-                        val totalCount = pinnedSections.size
-                        pinnedSections.forEachIndexed { index, section ->
-                            PinnedSectionRow(
-                                section = section,
-                                position = index + 1,
-                                index = index,
-                                count = totalCount,
-                                canMoveUp = index > 0,
-                                canMoveDown = index < totalCount - 1,
-                                onMoveUp = { viewModel.movePinnedHomeSection(index, index - 1) },
-                                onMoveDown = { viewModel.movePinnedHomeSection(index, index + 1) },
-                                onRemove = { viewModel.removePinnedHomeSection(section.id) },
-                            )
+                        val byType = pinnedSections.groupBy { it.type.displayName }
+                        byType.entries.joinToString(", ") { (type, list) ->
+                            "$type: ${list.size}"
                         }
                     }
-
-                    AddPinnedSectionRow(
-                        index = pinnedSections.size,
-                        count = pinnedSections.size + 1,
-                        highlighted = highlightSettingId == PINNED_ADD_HIGHLIGHT_ID,
-                        onClick = { showAddSheet = true },
-                    )
+                },
+                modifier = Modifier.padding(vertical = 8.dp),
+                initiallyExpanded = true,
+            ) {
+                if (pinnedSections.isEmpty()) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 18.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(
+                            Tabler.Outline.PinnedOff,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp),
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Text(
+                            text = stringResource(Res.string.settings_pinned_helper),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                } else {
+                    val totalCount = pinnedSections.size
+                    pinnedSections.forEachIndexed { index, section ->
+                        PinnedSectionRow(
+                            section = section,
+                            position = index + 1,
+                            index = index,
+                            count = totalCount,
+                            canMoveUp = index > 0,
+                            canMoveDown = index < totalCount - 1,
+                            onMoveUp = { viewModel.movePinnedHomeSection(index, index - 1) },
+                            onMoveDown = { viewModel.movePinnedHomeSection(index, index + 1) },
+                            onRemove = { viewModel.removePinnedHomeSection(section.id) },
+                        )
+                    }
                 }
+
+                AddPinnedSectionRow(
+                    index = pinnedSections.size,
+                    count = pinnedSections.size + 1,
+                    highlighted = highlightSettingId == PINNED_ADD_HIGHLIGHT_ID,
+                    onClick = { showAddSheet = true },
+                )
             }
-        }
         }
     }
 

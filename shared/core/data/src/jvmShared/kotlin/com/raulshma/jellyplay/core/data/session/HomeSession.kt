@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.core.data.session
 
 import com.raulshma.jellyplay.core.model.CacheIdentity
-import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import com.raulshma.jellyplay.core.network.api.AuthApiClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -29,7 +29,7 @@ import java.util.concurrent.atomic.AtomicReference
  * Besides the triplication, combining the two separate StateFlows observed
  * the synthetic `(newServer, oldUser)` intermediate every two-step publish
  * (login / switchUser) produced — an identity that never existed. This class
- * consumes the engine's ATOMIC [JellyfinApiClient.session] flow instead, so a
+ * consumes the engine's ATOMIC [AuthApiClient.session] flow instead, so a
  * transition is always one stable identity → the next.
  *
  * Classification rules (identical to the three mirrors it replaces):
@@ -64,7 +64,7 @@ import java.util.concurrent.atomic.AtomicReference
  * dataJvmModule).
  */
 class HomeSession(
-    private val apiClient: JellyfinApiClient,
+    private val apiClient: AuthApiClient,
     collectorScope: CoroutineScope,
 ) : SessionIdentityProvider {
 

@@ -8,13 +8,17 @@ import com.raulshma.jellyplay.core.data.repository.LiveTvRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.LyricsRepository
 import com.raulshma.jellyplay.core.data.repository.LyricsRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.MediaCacheInvalidator
+import com.raulshma.jellyplay.core.data.repository.MediaBrowseReads
+import com.raulshma.jellyplay.core.data.repository.MediaCollectionReads
 import com.raulshma.jellyplay.core.data.repository.MediaDetailProvider
+import com.raulshma.jellyplay.core.data.repository.MediaExtrasReads
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryCacheInvalidation
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryInternals
+import com.raulshma.jellyplay.core.data.repository.MediaUncachedReadsImpl
+import com.raulshma.jellyplay.core.data.repository.MusicCatalogue
 import com.raulshma.jellyplay.core.data.repository.NewsletterRepository
-import com.raulshma.jellyplay.core.data.repository.NewsletterRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.OfflineFirstItemResolver
 import com.raulshma.jellyplay.core.data.repository.OfflineFirstItemResolverImpl
 import com.raulshma.jellyplay.core.data.repository.OfflinePlaybackFacade
@@ -26,6 +30,7 @@ import com.raulshma.jellyplay.core.data.repository.SyncPlayRepository
 import com.raulshma.jellyplay.core.data.repository.UnifiedMediaDetailProviderImpl
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.data.repository.UserDataMutatorImpl
+import com.raulshma.jellyplay.core.data.repository.UserDataWriteOperations
 import com.raulshma.jellyplay.core.data.search.MediaSearchEngine
 import com.raulshma.jellyplay.core.data.search.MediaSearchEngineImpl
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayController
@@ -39,6 +44,7 @@ import com.raulshma.jellyplay.core.data.worker.OkHttpDownloadTransferClient
 import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
+import com.raulshma.jellyplay.core.data.repository.HomeSectionsSnapshotStore
 import com.raulshma.jellyplay.core.network.api.AuthApiClient
 import com.raulshma.jellyplay.core.network.api.SyncPlayApiClient
 import com.raulshma.jellyplay.core.network.di.NetworkQualifiers
@@ -94,10 +100,26 @@ internal val dataMediaRepositoryModule: Module = module {
             homeSession = get(),
         )
     }
+    // The home-sections snapshot store: the deep owner of the PERSISTED half
+    // of the home pipeline (the Room SWR snapshot — dedup-window persist
+    // choreography, identity-scoped privacy clear, the two cold-open reads).
+    // Declared BEFORE its one consumer below: MediaRepositoryImpl
+    // ctor-injects this single (the EpisodeCatalogueImpl precedent), keeping
+    // the construction edge acyclic and one-instance across the graph.
+    single {
+        HomeSectionsSnapshotStore(
+            homeSectionCacheDao = get(),
+            homeSession = get(),
+            timeSource = get(),
+        )
+    }
     single {
         MediaRepositoryImpl(
-            apiClient = get(),
-            homeSectionCacheDao = get(),
+            libraryApiClient = get(),
+            collectionApiClient = get(),
+            homeSectionsCachePort = get(),
+            syncPlayApiClient = get(),
+            homeSnapshotStore = get(),
             playedStateSync = get(),
             episodeCatalogue = get(),
             userDataRealtimeChannel = get(),
@@ -105,9 +127,35 @@ internal val dataMediaRepositoryModule: Module = module {
             homeSession = get(),
             sessionCacheRegistry = get(),
             internals = get(),
+            // The deepened createSyncPlayGroup routes through the manager
+            // (create→join MY group lives there once — see its KDoc).
+            syncPlayManager = get(),
         )
     }
     single<MediaRepository> { get<MediaRepositoryImpl>() }
+    // Family seams over the same single (the SonarrSeriesOperations
+    // over-the-impl pattern in dataSeerrArrModule): the music-catalogue reads
+    // and the user-data writes, so single-family consumers inject the seam
+    // instead of the union. UserDataMutatorImpl already does (the user-data
+    // family's clean sole consumer); the music playback stack + feature:music
+    // ViewModels migrated too — they inject MusicCatalogue for the catalogue
+    // reads and keep MediaRepository only as mixed consumers (detail reads,
+    // the user-data feed). getAlbumTracks is the one member still dual-declared:
+    // the detail provider's session resolves detail + album tracks together.
+    single<MusicCatalogue> { get<MediaRepositoryImpl>() }
+    single<UserDataWriteOperations> { get<MediaRepositoryImpl>() }
+    // Family-repository split, second wave: the nine uncached browse-read
+    // members left the union for their own narrow seams over the
+    // [LibraryApiClient] single ([MediaUncachedReadsImpl] — one impl, three
+    // seams, the same one-impl-many-seams idiom as the two binds above; the
+    // LiveTvRepositoryImpl shape: pure forwards, no cache state). Consumers
+    // inject only the seam they read — MediaExtrasReads (intros/extras),
+    // MediaBrowseReads (people/tags), MediaCollectionReads (items/favorites/
+    // suggestions queries).
+    single { MediaUncachedReadsImpl(libraryApiClient = get()) }
+    single<MediaExtrasReads> { get<MediaUncachedReadsImpl>() }
+    single<MediaBrowseReads> { get<MediaUncachedReadsImpl>() }
+    single<MediaCollectionReads> { get<MediaUncachedReadsImpl>() }
     // Plan 08's module-internal cache-maintenance view (the former DataModule
     // bindMediaRepositoryCacheInvalidation @Binds): same single, narrow seam.
     single<MediaRepositoryCacheInvalidation> { get<MediaRepositoryImpl>() }
@@ -133,11 +181,18 @@ internal val dataMediaRepositoryModule: Module = module {
         )
     }
     single<LiveTvRepository> { get<LiveTvRepositoryImpl>() }
-    single { NewsletterRepositoryImpl(apiClient = get()) }
-    single<NewsletterRepository> { get<NewsletterRepositoryImpl>() }
+    // Pass-through mirror retired: NewsletterRepository extends the
+    // NewsletterApiClient family seam and the MediaInfoApiClient single
+    // implements that family — interface delegation (a two-line inline
+    // object, the LiveTvRepositoryImpl `by` shape without the class) carries
+    // the three members verbatim, so no forward impl class exists anymore.
+    single<NewsletterRepository> {
+        val apiClient = get<com.raulshma.jellyplay.core.network.api.MediaInfoApiClient>()
+        object : NewsletterRepository, com.raulshma.jellyplay.core.network.api.NewsletterApiClient by apiClient {}
+    }
     single {
         PlaylistRepositoryImpl(
-            libraryApiClient = get(),
+            playlistApiClient = get(),
             internals = get(),
         )
     }
@@ -162,7 +217,9 @@ internal val dataMediaRepositoryModule: Module = module {
             // other's graphs (UnifiedMediaDetailProviderImpl ctor-injects
             // MediaRepository; UserDataMutator reaches MediaDetailProvider),
             // and deferring construction keeps this module out of any cycle.
-            mediaRepository = lazy { get<MediaRepository>() },
+            // The write dep is the family seam, not the union — the mutator
+            // is the user-data-write family's clean sole consumer.
+            userDataWrites = lazy { get<UserDataWriteOperations>() },
             mediaDetailProvider = lazy { get<MediaDetailProvider>() },
         )
     }

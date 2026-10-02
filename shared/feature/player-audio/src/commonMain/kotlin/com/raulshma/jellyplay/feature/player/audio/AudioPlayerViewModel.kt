@@ -5,11 +5,17 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import com.raulshma.jellyplay.core.data.playback.AudioEffectsManager
 import com.raulshma.jellyplay.core.data.playback.AudioPlayerEngine
+import com.raulshma.jellyplay.core.data.playback.AudioQueueFacade
 import com.raulshma.jellyplay.core.data.playback.AudioQueueManager
-import com.raulshma.jellyplay.core.data.playback.AudioSleepTimerManager
+import com.raulshma.jellyplay.core.data.playback.SleepCountdown
+import com.raulshma.jellyplay.core.data.playback.RadioState
 import com.raulshma.jellyplay.core.data.download.TrackDownloadActions
 import com.raulshma.jellyplay.core.data.download.TrackDownloadStatusWindow
+import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
+import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.datastore.audio.AudioStore
+import com.raulshma.jellyplay.core.datastore.audioeffects.AudioEffectsStore
 import com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.AudioPlayerUiPreferences
@@ -49,19 +55,30 @@ class AudioPlayerViewModel(
     private val effectsManager: AudioEffectsManager,
     private val engine: AudioPlayerEngine,
     private val cast: AudioPlayerCast,
+    /** The build-a-queue facade — read-only here: the endless-radio state. */
+    private val audioQueueFacade: AudioQueueFacade,
     private val projections: PreferenceProjections,
     private val audioStore: AudioStore,
-    private val audioEffectsStore: com.raulshma.jellyplay.core.datastore.audioeffects.AudioEffectsStore,
-    private val mediaRepository: com.raulshma.jellyplay.core.data.repository.MediaRepository,
-    private val playlistRepository: com.raulshma.jellyplay.core.data.repository.PlaylistRepository,
-    private val userDataMutator: com.raulshma.jellyplay.core.data.repository.UserDataMutator,
+    private val audioEffectsStore: AudioEffectsStore,
+    private val mediaRepository: MediaRepository,
+    private val playlistRepository: PlaylistRepository,
+    private val userDataMutator: UserDataMutator,
     private val downloads: TrackDownloadStatusWindow,
     private val trackDownloadActions: TrackDownloadActions,
-    private val sleepTimerManager: AudioSleepTimerManager,
+    private val sleepCountdown: SleepCountdown,
 ) : JellyPlayViewModel() {
 
     /** Exposed so the audio top bar can render a shared [com.raulshma.jellyplay.feature.player.audio.components.CastButton]. */
     val castController: AudioPlayerCast = cast
+
+    /**
+     * Endless-radio status — the queue sheet's active-radio chip reads this.
+     * Lazy: resolving it at construction would force the facade's
+     * radio-controller (and its queue observer) into existence for every
+     * player-screen open, radio started or not — deferring to first read
+     * keeps radio-free sessions observer-free.
+     */
+    val radioState: StateFlow<RadioState> by lazy { audioQueueFacade.radioState }
 
     init {
         // The cast controller is a ref-counted app-wide singleton shared with
@@ -82,13 +99,13 @@ class AudioPlayerViewModel(
     val uiState: StateFlow<AudioPlayerUiState> = _uiState.asStateFlow()
 
     /**
-     * Sleep-timer countdown, sourced directly from the AudioSleepTimerManager. Kept OUT
+     * Sleep-timer countdown, sourced directly from the SleepCountdown core. Kept OUT
      * of [uiState] (mirroring [currentPosition]) so a 5 s tick — or the 100 ms
      * fade-out burst — does not copy the whole [AudioPlayerUiState] and
      * re-invalidate the screen root. Collected only by the leaf composables
      * that render the countdown (top-bar label, AudioSleepTimerSheet).
      */
-    val sleepTimerRemainingMs: StateFlow<Long> = sleepTimerManager.sleepTimerRemainingMs
+    val sleepTimerRemainingMs: StateFlow<Long> = sleepCountdown.sleepTimerRemainingMs
 
     /**
      * High-frequency playback position, kept OUTSIDE [uiState] so the 250ms tick only
@@ -106,18 +123,6 @@ class AudioPlayerViewModel(
      * rather than invalidating the whole screen body.
      */
     val currentPositionState: LongState get() = currentPositionHolder.asState()
-
-    /** Mirrors [AudioEffectsState.dialogueBoostStrength] for callers that read it directly. */
-    val dialogueBoostStrength: EffectStrength
-        get() = effects.state.value.dialogueBoostStrength
-
-    /** Mirrors [AudioEffectsState.nightModeStrength] for callers that read it directly. */
-    val nightModeStrength: EffectStrength
-        get() = effects.state.value.nightModeStrength
-
-    /** Mirrors [AudioEffectsState.bassBoostStrength] for callers that read it directly. */
-    val bassBoostStrength: EffectStrength
-        get() = effects.state.value.bassBoostStrength
 
     val hasKaraokeLyrics: Boolean
         get() = _uiState.value.lyrics.hasKaraokeLyrics
@@ -157,7 +162,7 @@ class AudioPlayerViewModel(
     /** Owns the sleep-timer starts/cancel/expiry + store writes + slice updates. */
     internal val sleepTimer = AudioSleepTimerController(
         scope = scope,
-        sleepTimerManager = sleepTimerManager,
+        sleepCountdown = sleepCountdown,
         audioStore = audioStore,
         engine = engine,
         updateState = { transform -> _uiState.update { it.copy(sleepTimer = transform(it.sleepTimer)) } },
@@ -183,6 +188,21 @@ class AudioPlayerViewModel(
     private val _currentDownloadItem = stateFlow<com.raulshma.jellyplay.core.model.DownloadItem?>(null)
     val currentDownloadItem: StateFlow<com.raulshma.jellyplay.core.model.DownloadItem?> = _currentDownloadItem.flow
 
+    /**
+     * The flow-driven half of [AudioPlayerUiState] — ONE projection
+     * ([AudioStateProjection]) over the engine/queue/sleep/prefs flows,
+     * collected into the state with a single write per emission (the former
+     * ~12 hand-synced field-by-field collectors are gone; the field mapping
+     * lives once in [AudioProjectionState.appliedTo]).
+     */
+    private val projection = AudioStateProjection(
+        engine = engine,
+        queueManager = queueManager,
+        sleepCountdown = sleepCountdown,
+        audioStore = audioStore,
+        scope = scope,
+    )
+
     init {
         launch {
             queueManager.currentPlayingItemId.collect { itemId ->
@@ -191,7 +211,7 @@ class AudioPlayerViewModel(
                     downloadJob = launch {
                         // The single-id window read (the former seam's
                         // trackStatus): rows → the one row, null when none.
-                        downloads.downloadsFor(listOf(itemId))
+                        downloads.getDownloadsByMediaItemIdsFlow(listOf(itemId))
                             .map { rows -> rows.firstOrNull() }
                             .collect { download ->
                                 _currentDownloadItem.set(download)
@@ -204,66 +224,11 @@ class AudioPlayerViewModel(
         }
 
         launch {
-            engine.title.collect { value ->
-                _uiState.update { it.copy(title = value) }
-            }
-        }
-        launch {
-            engine.playbackError.collect { value ->
-                _uiState.update { it.copy(playbackError = value) }
-            }
-        }
-        launch {
-            engine.isLoadingItem.collect { value ->
-                _uiState.update { it.copy(isLoading = value) }
-            }
-        }
-        // Group the track-metadata fields that change together on every track
-        // transition into a single combine so a transition produces one
-        // 95-field uiState copy (rather than 5 separate copies + update
-        // attempts). StateFlow conflation means downstream sees the final
-        // state either way; this just removes the per-field allocation churn.
-        launch {
-            combine(
-                engine.artist,
-                engine.artistId,
-                engine.album,
-                engine.albumArtUrl,
-            ) { artist, artistId, album, albumArtUrl ->
-                _uiState.update {
-                    it.copy(
-                        artist = artist,
-                        artistId = artistId,
-                        album = album,
-                        albumArtUrl = albumArtUrl,
-                    )
-                }
-            }.collect {}
-        }
-        launch {
-            combine(
-                engine.isPlaying,
-                engine.duration,
-                engine.speed,
-            ) { playing, dur, spd ->
-                _uiState.update { it.copy(isPlaying = playing, duration = dur, speed = spd) }
-            }.collect {}
+            projection.state.collect { p -> _uiState.update(p::appliedTo) }
         }
         // Position is high-frequency; keep it in its own state holder (not in uiState).
         launch {
             engine.currentPosition.collect { currentPosition = it }
-        }
-        launch {
-            combine(
-                queueManager.shuffleMode,
-                queueManager.repeatMode,
-                queueManager.queue,
-                queueManager.currentIndex,
-            ) { shuf, rep, q, idx ->
-                _uiState.update {
-                    it.copy(queue = QueueState(queue = q, currentIndex = idx, shuffleMode = shuf, repeatMode = rep))
-                }
-            }.collect {}
         }
         launch {
             queueManager.currentPlayingItemId.collect { itemId ->
@@ -285,52 +250,6 @@ class AudioPlayerViewModel(
                 }
             }
         }
-        launch {
-            combine(
-                engine.lyrics,
-                engine.currentLyricIndex,
-                engine.lyricsSource,
-                engine.isFetchingLyrics,
-            ) { ly, idx, src, fetching ->
-                _uiState.update {
-                    it.copy(
-                        lyrics = it.lyrics.copy(
-                            lyrics = ly,
-                            currentLyricIndex = idx,
-                            lyricsSource = src,
-                            isFetchingLyrics = fetching,
-                        ),
-                    )
-                }
-            }.collect {}
-        }
-        launch {
-            engine.lyricsOffsetMs.collect { value ->
-                _uiState.update { it.copy(lyrics = it.lyrics.copy(lyricsOffsetMs = value)) }
-            }
-        }
-        // The effects-slice mirror collectors died with the uiState effects
-        // field — [AudioEffectsController] mirrors the manager flows into its
-        // own state slice now (see its init). Only the crossfade field (a
-        // uiState resident, not an effects-slice field) keeps its collector.
-        launch {
-            engine.crossfadeDurationMs.collect { cross ->
-                _uiState.update { it.copy(crossfadeDurationMs = cross) }
-            }
-        }
-        launch {
-            combine(
-                sleepTimerManager.isSleepTimerActive,
-                sleepTimerManager.isEndOfEpisodeMode,
-            ) { active, endOfEpisode ->
-                _uiState.update { it.copy(sleepTimer = it.sleepTimer.copy(active = active, endOfEpisode = endOfEpisode)) }
-            }.collect {}
-        }
-        launch {
-            audioStore.audio.map { it.sleepTimerDurationMs }.collect { durationMs ->
-                _uiState.update { it.copy(sleepTimer = it.sleepTimer.copy(lastUsedDurationMs = durationMs)) }
-            }
-        }
     }
 
     /**
@@ -348,6 +267,7 @@ class AudioPlayerViewModel(
         when (event) {
             is AudioPlayerUiEvent.Play -> play(event.itemId)
             is AudioPlayerUiEvent.RemoveFromQueue -> removeFromQueue(event.index)
+            is AudioPlayerUiEvent.StopRadio -> audioQueueFacade.stopRadio()
             is AudioPlayerUiEvent.UndoLastQueueOperation -> undoLastQueueOperation()
             is AudioPlayerUiEvent.CycleAbLoop -> cycleAbLoop()
             is AudioPlayerUiEvent.SkipToNext -> skipToNext()
@@ -638,7 +558,7 @@ class AudioPlayerViewModel(
         val existing = _currentDownloadItem.value
         if (existing != null && existing.status == com.raulshma.jellyplay.core.model.DownloadStatus.COMPLETED) {
             launch {
-                downloads.remove(existing.id)
+                downloads.deleteDownload(existing.id)
             }
             return
         }

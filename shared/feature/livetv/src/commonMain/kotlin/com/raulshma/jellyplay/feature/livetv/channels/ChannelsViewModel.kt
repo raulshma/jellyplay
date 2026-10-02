@@ -6,8 +6,11 @@ import com.raulshma.jellyplay.core.data.playback.VideoMiniPlayerState
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeStateStore
 import com.raulshma.jellyplay.core.model.LiveTvChannel
+import com.raulshma.jellyplay.core.ui.message.UiMessage
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.core.ui.viewmodel.loadInto
+import com.raulshma.jellyplay.feature.livetv.generated.resources.Res
+import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_error_load_channels
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -19,7 +22,8 @@ import kotlinx.coroutines.flow.stateIn
 data class ChannelsUiState(
     val channels: List<LiveTvChannel> = emptyList(),
     val isLoading: Boolean = false,
-    val error: String? = null,
+    /** The load failure — resolved to text at render ([UiMessage.asText]). */
+    val error: UiMessage? = null,
 )
 
 class ChannelsViewModel(
@@ -59,16 +63,23 @@ class ChannelsViewModel(
                         it.copy(channels = favoritesFirst(channels, favorites), isLoading = false)
                     }
                 },
-                onFailure = { e -> _uiState.update { it.copy(error = e.message, isLoading = false) } },
+                onFailure = { e ->
+                    _uiState.update {
+                        it.copy(error = UiMessage.of(e, Res.string.livetv_error_load_channels), isLoading = false)
+                    }
+                },
             )
         }
     }
 
+    /**
+     * The flip lives on the store ([AppRuntimeStateStore.toggleFavoriteChannel]
+     * — the same command the live player's favorite toggle uses); this site
+     * re-sorts the visible list favorites-first off the returned set.
+     */
     fun toggleFavorite(channelId: String) {
         launch {
-            val current = appRuntimeStateStore.state.value.favoriteChannels
-            val updated = if (channelId in current) current - channelId else current + channelId
-            appRuntimeStateStore.setFavoriteChannels(updated)
+            val updated = appRuntimeStateStore.toggleFavoriteChannel(channelId)
             _uiState.update { state ->
                 state.copy(channels = favoritesFirst(state.channels, updated))
             }

@@ -1,15 +1,21 @@
 package com.raulshma.jellyplay.core.network.api
 
 import com.raulshma.jellyplay.core.model.ActivityLogEntry
+import com.raulshma.jellyplay.core.model.BackupComponentOptions
 import com.raulshma.jellyplay.core.model.DeviceInfo
 import com.raulshma.jellyplay.core.model.FreshnessCeilings
 import com.raulshma.jellyplay.core.model.ItemCounts
 import com.raulshma.jellyplay.core.model.LogFile
 import com.raulshma.jellyplay.core.model.ScheduledTaskInfo
+import com.raulshma.jellyplay.core.model.ServerBackup
 import com.raulshma.jellyplay.core.model.SessionInfo
 import com.raulshma.jellyplay.core.model.SystemInfo
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.model.TaskTriggerInfo
 import com.raulshma.jellyplay.core.model.TtlCache
+import com.raulshma.jellyplay.core.network.NetworkLog
+import org.jellyfin.sdk.api.client.ApiClient
+import org.jellyfin.sdk.api.client.HttpMethod
 import org.jellyfin.sdk.model.api.DayOfWeek
 import org.jellyfin.sdk.model.api.TaskTriggerInfoType
 import org.jellyfin.sdk.model.serializer.toUUID
@@ -158,6 +164,115 @@ class AdminApiClientImpl(
             .decodeToString()
     }
 
+    // ── Backups (Jellyfin backup service, server 10.11+) ──
+    // The SDK has no backup API; list and restore ride the same raw-path
+    // escape hatch as getLogFileContent (api.request), with the wire DTOs and
+    // the key-alias decode from BackupWireDto.kt. Servers without the service
+    // answer GET /Backup with 404 → InvalidStatusException →
+    // ApiException(httpCode = 404), which the repository layer folds into its
+    // `supportsBackups = false` snapshot.
+    private val backupRaw = JellyfinRawRequester(engine)
+
+    override suspend fun listBackups(): Result<List<ServerBackup>> = engine.withApi { api ->
+        val body = fetchBackupListBody(api) ?: return@withApi emptyList()
+        // Wire-drift diagnostic: the manifest keys have already drifted
+        // once (10.11 → 12.x); the Debug line makes the next rename a
+        // logcat read instead of another blank-card hunt.
+        NetworkLog.d(TAG_BACKUPS, "GET /Backup → ${body.take(2_000)}")
+        decodeBackupManifests(body).map { it.toServerBackup() }
+    }
+
+    override suspend fun createBackup(options: BackupComponentOptions): Result<ServerBackup> = engine.withApi(maxRetries = 0) { api ->
+        // The create runs synchronously server-side: the response IS the new
+        // archive's manifest (no progress endpoint, no scheduled-task row). A
+        // Metadata+Database archive of a real library routinely outlasts the
+        // shared client's read timeout (the 15s default preset), so the call
+        // rides a per-call 10-minute client instead of api.request. Retries
+        // are OFF: the POST is not idempotent — each retry would start
+        // ANOTHER server-side archive job (three same-minute archives were
+        // exactly that ladder firing). The body is hand-built so each
+        // component's byte reaches the wire even when false (no
+        // encodeDefaults dependency).
+        val knownPaths = listManifests(api)?.mapNotNull { it.path }?.toSet() ?: emptySet()
+        val outcome = runCatchingRethrowingCancellation {
+            backupRaw.postForText(
+                path = "/Backup/Create",
+                bodyText = buildString {
+                    append("{")
+                    append("\"metadata\":").append(options.metadata).append(',')
+                    append("\"trickplay\":").append(options.trickplay).append(',')
+                    append("\"subtitles\":").append(options.subtitles).append(',')
+                    append("\"database\":").append(options.database)
+                    append("}")
+                },
+                failureMessage = "Backup create failed",
+                callTimeoutSeconds = BACKUP_CREATE_CALL_TIMEOUT_SECONDS,
+            )
+        }
+        val body = outcome.getOrNull()
+        if (body != null) {
+            NetworkLog.d(TAG_BACKUPS, "POST /Backup/Create → ${body.take(2_000)}")
+            return@withApi decodeBackupManifests(body).firstOrNull()?.toServerBackup()
+                ?: throw IllegalStateException("Backup create returned no manifest")
+        }
+        // 12.x quirk, observed on every create: the server finishes the
+        // archive (~30s for Metadata+Database) but the response never reaches
+        // the long-idle mobile connection — the client only sees a transport
+        // timeout while the archive lands server-side. Poll the list for the
+        // new manifest instead of surfacing that failure.
+        val failure = checkNotNull(outcome.exceptionOrNull())
+        NetworkLog.w(TAG_BACKUPS, "POST /Backup/Create transport failure (${failure::class.simpleName}); polling for the archive")
+        pollForNewBackup(api, knownPaths)?.toServerBackup() ?: throw failure
+    }
+
+    /** The raw `GET /Backup` body, or null when blank (the busy / no-archives answer). */
+    private suspend fun fetchBackupListBody(api: ApiClient): String? =
+        api.request(pathTemplate = "/Backup").body.decodeToString().takeUnless(String::isBlank)
+
+    /** `GET /Backup` decoded through the alias table; null when the server is too busy to answer. */
+    private suspend fun listManifests(api: ApiClient): List<BackupManifestDto>? =
+        runCatchingRethrowingCancellation {
+            fetchBackupListBody(api)?.let(::decodeBackupManifests) ?: emptyList()
+        }.getOrNull()
+
+    /**
+     * Polls [listManifests] for an entry whose [BackupManifestDto.path] the
+     * pre-create snapshot didn't carry — the archive the timed-out create
+     * actually wrote. Gives up after [BACKUP_CREATE_POLL_ATTEMPTS] rounds.
+     */
+    private suspend fun pollForNewBackup(api: ApiClient, knownPaths: Set<String>): BackupManifestDto? {
+        repeat(BACKUP_CREATE_POLL_ATTEMPTS) {
+            // Check before sleeping: the archive may already be listed by the
+            // time the transport failure surfaces.
+            val fresh = listManifests(api)
+            if (fresh == null) {
+                // Busy server (the null case): back off like a normal round —
+                // returning early here would burn the remaining rounds with
+                // no gap between the requests.
+                kotlinx.coroutines.delay(BACKUP_CREATE_POLL_INTERVAL_MS)
+                return@repeat
+            }
+            val created = fresh.firstOrNull { entry -> entry.path != null && entry.path !in knownPaths }
+            if (created != null) {
+                NetworkLog.d(TAG_BACKUPS, "create poll found ${created.path}")
+                return created
+            }
+            kotlinx.coroutines.delay(BACKUP_CREATE_POLL_INTERVAL_MS)
+        }
+        return null
+    }
+
+    override suspend fun restoreBackup(archiveFileName: String): Result<Unit> = engine.withApi { api ->
+        // Fire-and-forget: 204, then the server restarts immediately. The
+        // restart/recovery choreography is the caller's (the backups screen's
+        // poll-and-reconnect ladder).
+        api.request(
+            method = HttpMethod.POST,
+            pathTemplate = "/Backup/Restore",
+            requestBody = BackupRestoreRequestDto(archiveFileName = archiveFileName),
+        )
+    }
+
     override suspend fun getActivityLogEntries(startIndex: Int?, limit: Int?, minDate: String?, hasUserId: Boolean?): Result<List<ActivityLogEntry>> = engine.withApi { api ->
         val result = api.activityLogApi.getLogEntries(
             startIndex = startIndex,
@@ -250,6 +365,18 @@ class AdminApiClientImpl(
     private companion object {
         const val KEY_SYSTEM_INFO = "systemInfo"
         const val KEY_ITEM_COUNTS = "itemCounts"
+        const val TAG_BACKUPS = "AdminBackups"
+
+        // Backup creation copies metadata + the database synchronously before
+        // answering; the shared client's read timeout (15s default preset)
+        // gives up long before, so this call carries its own ceiling.
+        const val BACKUP_CREATE_CALL_TIMEOUT_SECONDS = 600L
+
+        // The response-delivery quirk fallback: after a transport failure the
+        // client polls the list for the archive the server actually wrote —
+        // 3 minutes in 5s rounds (observed create: ~30s server-side).
+        const val BACKUP_CREATE_POLL_ATTEMPTS = 36
+        const val BACKUP_CREATE_POLL_INTERVAL_MS = 5_000L
         // The two TTLs used to be private consts here (2 minutes each); both
         // now cite FreshnessCeilings.ADMIN_SYSTEM_INFO_TTL_MS /
         // ADMIN_ITEM_COUNTS_TTL_MS at the construction sites above.

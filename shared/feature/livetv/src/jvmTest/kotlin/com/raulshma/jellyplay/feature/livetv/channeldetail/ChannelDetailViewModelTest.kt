@@ -4,6 +4,9 @@ import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.LiveTvProgram
+import com.raulshma.jellyplay.core.ui.message.UiMessage
+import com.raulshma.jellyplay.feature.livetv.generated.resources.Res
+import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_error_cancel_recording
 import com.raulshma.jellyplay.core.testfixtures.FakeTimeSource
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -254,22 +257,22 @@ class ChannelDetailViewModelTest {
         advanceUntilIdle()
 
         assertEquals(
-            LiveTvUserMessage.Raw("nope"),
+            LiveTvUserMessage.Failure(UiMessage.Raw("nope")),
             viewModel.messages.first(),
         )
     }
 
     @Test
-    fun cancelTimer_failure_with_null_message_emits_fallback_literal() = runTest(mainDispatcher) {
-        // Throwable.message == null must hit the drift-prone fallback literal
-        // (kept byte-identical from the legacy bus call sites).
+    fun cancelTimer_failure_with_null_message_emits_the_resource_fallback() = runTest(mainDispatcher) {
+        // Throwable.message == null falls to the localized fallback resource
+        // (the former baked "Failed to cancel recording" literal).
         coEvery { mediaRepository.cancelTimer(any()) } returns Result.failure(RuntimeException(null as String?))
 
         viewModel.cancelTimer(program(id = "prog-9", name = "X", timerId = "timer-9"))
         advanceUntilIdle()
 
         assertEquals(
-            LiveTvUserMessage.Raw("Failed to cancel recording"),
+            LiveTvUserMessage.Failure(UiMessage.Resource(Res.string.livetv_error_cancel_recording)),
             viewModel.messages.first(),
         )
     }
@@ -284,7 +287,7 @@ class ChannelDetailViewModelTest {
         viewModel.recordProgram(program(id = "prog-9", name = "X"))
         advanceUntilIdle()
 
-        assertEquals(LiveTvUserMessage.Raw("disk full"), viewModel.messages.first())
+        assertEquals(LiveTvUserMessage.Failure(UiMessage.Raw("disk full")), viewModel.messages.first())
         // No refresh: the program list is only re-read after a successful action.
         coVerify(exactly = 0) { mediaRepository.getLiveTvPrograms(any(), any(), any()) }
     }
@@ -308,7 +311,7 @@ class ChannelDetailViewModelTest {
         viewModel.recordSeries(program(id = "prog-9", name = "X"))
         advanceUntilIdle()
 
-        assertEquals(LiveTvUserMessage.Raw("nope"), viewModel.messages.first())
+        assertEquals(LiveTvUserMessage.Failure(UiMessage.Raw("nope")), viewModel.messages.first())
     }
 
     @Test

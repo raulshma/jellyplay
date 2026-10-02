@@ -38,6 +38,10 @@ class DeepLinkGrammarTest {
         assertEquals("jellyplay://settings", DeepLinkGrammar.settingsLink())
         assertEquals("jellyplay://downloads", DeepLinkGrammar.downloadsLink())
         assertEquals("jellyplay://library", DeepLinkGrammar.libraryLink())
+        assertEquals(
+            "jellyplay://syncplay/abc-def-123",
+            DeepLinkGrammar.syncPlayJoinLink("abc-def-123"),
+        )
     }
 
     // --- custom-scheme parsing ---
@@ -194,6 +198,23 @@ class DeepLinkGrammarTest {
         assertEquals(Settings, parseLink(DeepLinkGrammar.settingsLink()))
         assertEquals(DeepLinkTarget.Downloads, parseLink(DeepLinkGrammar.downloadsLink()))
         assertEquals(Library, parseLink(DeepLinkGrammar.libraryLink()))
+    }
+
+    @Test
+    fun syncPlayJoinSecretRoundTripsToTheGroupId() {
+        // The Discord Rich Presence Join secret payload (feature 4.2): the
+        // emitted string is the secret; the join handler decodes it back to
+        // the group id it was built from.
+        assertEquals(
+            DeepLinkTarget.SyncPlayJoin("abc-def-123"),
+            parseLink(DeepLinkGrammar.syncPlayJoinLink("abc-def-123")),
+        )
+    }
+
+    @Test
+    fun syncPlayJoinWithoutGroupIdIsRejected() {
+        assertNull(DeepLinkGrammar.parseCustom("syncplay", emptyList()))
+        assertNull(DeepLinkGrammar.parseCustom("syncplay", listOf("")))
     }
 
     @Test

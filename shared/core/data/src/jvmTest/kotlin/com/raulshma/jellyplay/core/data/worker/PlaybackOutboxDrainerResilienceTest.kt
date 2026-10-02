@@ -7,7 +7,7 @@ import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxEventType
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxRepository
 import com.raulshma.jellyplay.core.data.repository.MediaCacheInvalidator
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
-import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.data.worker.PlaybackOutboxReplay
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import io.mockk.coEvery
@@ -48,7 +48,7 @@ import kotlin.test.assertTrue
 class PlaybackOutboxDrainerResilienceTest {
 
     private val outbox: PlaybackOutboxRepository = mockk(relaxed = true)
-    private val playbackRepository: PlaybackRepository = mockk(relaxed = true)
+    private val outboxReplay: PlaybackOutboxReplay = mockk(relaxed = true)
     private val offlineModeManager: OfflineModeManager = mockk()
     private val playedStateSync: PlayedStateSync = mockk(relaxed = true)
     private val offlineRepository: OfflineRepository = mockk(relaxed = true)
@@ -59,7 +59,7 @@ class PlaybackOutboxDrainerResilienceTest {
     @BeforeTest
     fun setup() {
         every { offlineModeManager.isOffline } returns false
-        coEvery { playbackRepository.replayOutboxEntry(any()) } returns true
+        coEvery { outboxReplay.replayOutboxEntry(any()) } returns true
         coEvery { outbox.drain() } returns emptyList()
         coEvery { offlineRepository.getDownloadedItemIds() } returns emptyList()
         coEvery { outbox.hasUnsyncedPlayedIntent(any()) } returns false
@@ -74,7 +74,7 @@ class PlaybackOutboxDrainerResilienceTest {
     private fun drainer(notifier: PlaybackOutboxDrainer.Notifier = PlaybackOutboxDrainer.Notifier.NONE): PlaybackOutboxDrainer =
         PlaybackOutboxDrainerImpl(
             outbox = outbox,
-            playbackRepository = playbackRepository,
+            outboxReplay = outboxReplay,
             offlineModeManager = offlineModeManager,
             playedStateSync = playedStateSync,
             offlineRepository = offlineRepository,
@@ -103,11 +103,11 @@ class PlaybackOutboxDrainerResilienceTest {
         // Only the PLAYED intent is replayed; both telemetry rows are dropped
         // in place — replaying either would re-poison the server row.
         coVerify(exactly = 1) {
-            playbackRepository.replayOutboxEntry(match { it.eventType == PlaybackOutboxEventType.PLAYED })
+            outboxReplay.replayOutboxEntry(match { it.eventType == PlaybackOutboxEventType.PLAYED })
         }
         coVerify(exactly = 0) {
-            playbackRepository.replayOutboxEntry(match { it.eventType == PlaybackOutboxEventType.STOP })
-            playbackRepository.replayOutboxEntry(match { it.eventType == PlaybackOutboxEventType.PROGRESS })
+            outboxReplay.replayOutboxEntry(match { it.eventType == PlaybackOutboxEventType.STOP })
+            outboxReplay.replayOutboxEntry(match { it.eventType == PlaybackOutboxEventType.PROGRESS })
         }
         coVerify(exactly = 3) { outbox.delete(any()) }
     }
@@ -124,7 +124,7 @@ class PlaybackOutboxDrainerResilienceTest {
         val result = drainer().drainOnce(attempt = 0)
 
         assertFalse(result.retriesPending)
-        coVerify(exactly = 1) { playbackRepository.replayOutboxEntry(any()) }
+        coVerify(exactly = 1) { outboxReplay.replayOutboxEntry(any()) }
         coVerify(exactly = 1) { outbox.delete("e1") }
         // No mirror row → no derivation; markPlayed must not fire blind.
         coVerify(exactly = 0) { mediaRepository.markPlayed(any()) }
@@ -146,7 +146,7 @@ class PlaybackOutboxDrainerResilienceTest {
         val result = drainer().drainOnce(attempt = 0)
 
         assertFalse(result.retriesPending)
-        coVerify(exactly = 1) { playbackRepository.replayOutboxEntry(any()) }
+        coVerify(exactly = 1) { outboxReplay.replayOutboxEntry(any()) }
         coVerify(exactly = 1) { outbox.delete("e1") }
         coVerify(exactly = 0) { mediaRepository.markPlayed(any()) }
     }

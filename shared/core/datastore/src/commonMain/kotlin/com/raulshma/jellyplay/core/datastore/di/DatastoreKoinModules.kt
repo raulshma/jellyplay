@@ -15,6 +15,7 @@ import com.raulshma.jellyplay.core.datastore.audiocache.AudioCacheStore
 import com.raulshma.jellyplay.core.datastore.audioeffects.AudioEffectsStore
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
 import com.raulshma.jellyplay.core.datastore.engine.PlayerEngineStore
+import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalFeatureGate
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore
 import com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
@@ -104,6 +105,8 @@ val datastoreCommonModule = module {
         DownloadsStore(
             get(DatastoreQualifiers.userPreferencesDataStore),
             get(DatastoreQualifiers.applicationScope),
+            // The per-user auto-download allow-list namespace (u_<userId>::).
+            get<ServerIdentityStore>(),
         )
     }
 
@@ -117,6 +120,13 @@ val datastoreCommonModule = module {
     single {
         ExperimentalStore(
             get(DatastoreQualifiers.userPreferencesDataStore),
+            get(DatastoreQualifiers.applicationScope),
+        )
+    }
+
+    single {
+        ExperimentalFeatureGate(
+            get<ExperimentalStore>(),
             get(DatastoreQualifiers.applicationScope),
         )
     }

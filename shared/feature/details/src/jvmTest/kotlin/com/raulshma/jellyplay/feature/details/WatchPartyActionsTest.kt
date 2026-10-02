@@ -24,6 +24,12 @@ import com.raulshma.jellyplay.feature.details.generated.resources.Res
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_msg_watch_party_failed
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_watch_party_default_name
 
+/**
+ * The bootstrap is a TWO-step sequence since the createGroup deepening: one
+ * [SyncPlayManager.createGroup] call owns create→join-MY-group (the old
+ * snapshot/recover/join steps — and their duplicate-name disambiguation —
+ * live there now, pinned in SyncPlayManagerTest), then the queue push.
+ */
 class WatchPartyActionsTest {
 
     private val mediaRepository: SyncPlayRepository = mockk(relaxed = true)
@@ -32,7 +38,7 @@ class WatchPartyActionsTest {
     private val strings = fakeDetailStrings()
     private val messages = RecordingMessages()
 
-    private val group = SyncPlayGroup(
+    private val joinedGroup = SyncPlayGroup(
         groupId = "g1",
         groupName = "My Movie",
         participantCount = 1,
@@ -56,6 +62,13 @@ class WatchPartyActionsTest {
         syncPlayManager = syncPlayManager,
     )
 
+    private fun stubCreateSuccess(group: SyncPlayGroup = joinedGroup) {
+        coEvery { syncPlayManager.createGroup(group.groupName) } returns Result.success(group)
+        coEvery {
+            mediaRepository.syncPlaySetNewQueue(any(), any(), any(), any())
+        } returns Result.success(Unit)
+    }
+
     // ── Screen-item entry point (title/source resolution moved here) ─────
 
     @Test
@@ -64,18 +77,13 @@ class WatchPartyActionsTest {
             item = MediaItem(id = "m1", name = "My Movie", mediaType = MediaType.MOVIE),
             mediaSources = listOf(MediaSource(id = "src1", name = "Source")),
         )
-        coEvery { mediaRepository.createSyncPlayGroup(any()) } returns Result.success(Unit)
-        coEvery { mediaRepository.getSyncPlayGroups() } returns Result.success(listOf(group))
-        coEvery { syncPlayManager.joinGroup(any()) } returns Result.success(Unit)
-        coEvery {
-            mediaRepository.syncPlaySetNewQueue(any(), any(), any(), any())
-        } returns Result.success(Unit)
+        stubCreateSuccess()
 
         actions(this, MutableStateFlow(DetailSession(itemId = "m1", detail = detail))).startScreenItem()
         advanceUntilIdle()
 
         // Group titled from the item name; queue seeded with the default source.
-        coVerify(exactly = 1) { mediaRepository.createSyncPlayGroup("My Movie") }
+        coVerify(exactly = 1) { syncPlayManager.createGroup("My Movie") }
         coVerify(exactly = 1) {
             mediaRepository.syncPlaySetNewQueue(
                 itemIds = listOf("m1"),
@@ -92,11 +100,9 @@ class WatchPartyActionsTest {
         val detail = MediaDetail(
             item = MediaItem(id = "m1", name = "", mediaType = MediaType.MOVIE),
         )
-        coEvery { mediaRepository.createSyncPlayGroup(any()) } returns Result.success(Unit)
-        coEvery { mediaRepository.getSyncPlayGroups() } returns Result.success(
-            listOf(group.copy(groupName = strings.get(Res.string.detail_watch_party_default_name)))
-        )
-        coEvery { syncPlayManager.joinGroup(any()) } returns Result.success(Unit)
+        coEvery {
+            syncPlayManager.createGroup(strings.get(Res.string.detail_watch_party_default_name))
+        } returns Result.success(joinedGroup.copy(groupName = strings.get(Res.string.detail_watch_party_default_name)))
         coEvery {
             mediaRepository.syncPlaySetNewQueue(any(), any(), any(), any())
         } returns Result.success(Unit)
@@ -105,7 +111,7 @@ class WatchPartyActionsTest {
         advanceUntilIdle()
 
         coVerify(exactly = 1) {
-            mediaRepository.createSyncPlayGroup(strings.get(Res.string.detail_watch_party_default_name))
+            syncPlayManager.createGroup(strings.get(Res.string.detail_watch_party_default_name))
         }
     }
 
@@ -114,6 +120,7 @@ class WatchPartyActionsTest {
         actions(this).startScreenItem()
         advanceUntilIdle()
 
+        coVerify(exactly = 0) { syncPlayManager.createGroup(any()) }
         coVerify(exactly = 0) { mediaRepository.createSyncPlayGroup(any()) }
         assertTrue(messages.recorded.isEmpty())
     }
@@ -121,13 +128,8 @@ class WatchPartyActionsTest {
     // ── Happy path ──────────────────────────────────────────────────────
 
     @Test
-    fun `start success creates group, recovers it by name, joins, seeds queue and emits WatchPartyStarted`() = runTest {
-        coEvery { mediaRepository.createSyncPlayGroup(any()) } returns Result.success(Unit)
-        coEvery { mediaRepository.getSyncPlayGroups() } returns Result.success(listOf(group))
-        coEvery { syncPlayManager.joinGroup(any()) } returns Result.success(Unit)
-        coEvery {
-            mediaRepository.syncPlaySetNewQueue(any(), any(), any(), any())
-        } returns Result.success(Unit)
+    fun `start success creates and joins via one manager call, seeds queue and emits WatchPartyStarted`() = runTest {
+        stubCreateSuccess()
 
         val result = actions(this).start(
             itemId = "m1",
@@ -137,10 +139,10 @@ class WatchPartyActionsTest {
 
         assertTrue(result.isSuccess)
         assertTrue(messages.recorded.contains(DetailMessage.WatchPartyStarted("m1")))
-        coVerify(exactly = 1) { mediaRepository.createSyncPlayGroup("My Movie") }
-        // Snapshot (pre-create) + recover (post-create) = two reads.
-        coVerify(exactly = 2) { mediaRepository.getSyncPlayGroups() }
-        coVerify(exactly = 1) { syncPlayManager.joinGroup("g1") }
+        coVerify(exactly = 1) { syncPlayManager.createGroup("My Movie") }
+        // The manager owns the join — the bootstrap never re-joins.
+        coVerify(exactly = 0) { syncPlayManager.joinGroup(any()) }
+        coVerify(exactly = 0) { mediaRepository.getSyncPlayGroups() }
         coVerify(exactly = 1) {
             mediaRepository.syncPlaySetNewQueue(
                 itemIds = listOf("m1"),
@@ -152,65 +154,23 @@ class WatchPartyActionsTest {
     }
 
     @Test
-    fun `start success invokes the four steps in order`() = runTest {
+    fun `start success invokes the two steps in order`() = runTest {
         val calls = mutableListOf<String>()
-        coEvery { mediaRepository.createSyncPlayGroup(any()) } answers { calls += "create"; Result.success(Unit) }
-        coEvery { mediaRepository.getSyncPlayGroups() } answers { calls += "getGroups"; Result.success(listOf(group)) }
-        coEvery { syncPlayManager.joinGroup(any()) } answers { calls += "join"; Result.success(Unit) }
+        coEvery { syncPlayManager.createGroup(any()) } answers { calls += "createJoin"; Result.success(joinedGroup) }
         coEvery {
             mediaRepository.syncPlaySetNewQueue(any(), any(), any(), any())
         } answers { calls += "setQueue"; Result.success(Unit) }
 
         actions(this).start("m1", "My Movie", null)
 
-        // Snapshot read precedes create; recover read follows it.
-        assertEquals(listOf("getGroups", "create", "getGroups", "join", "setQueue"), calls)
+        assertEquals(listOf("createJoin", "setQueue"), calls)
     }
 
     // ── Failure short-circuits ─────────────────────────────────────────
 
     @Test
-    fun `start when createSyncPlayGroup fails returns failure, emits message and skips join and setNewQueue`() = runTest {
-        // The pre-create snapshot read still happens; stub it so the relaxed
-        // mock doesn't synthesise a bad Result.
-        coEvery { mediaRepository.getSyncPlayGroups() } returns Result.success(emptyList())
-        coEvery { mediaRepository.createSyncPlayGroup(any()) } returns Result.failure(RuntimeException("server"))
-
-        val result = actions(this).start("m1", "My Movie", null)
-
-        assertTrue(result.isFailure)
-        assertTrue(
-            messages.recorded.contains(
-                DetailMessage.Text(strings.get(Res.string.detail_msg_watch_party_failed))
-            )
-        )
-        coVerify(exactly = 0) { syncPlayManager.joinGroup(any()) }
-        coVerify(exactly = 0) { mediaRepository.syncPlaySetNewQueue(any(), any(), any(), any()) }
-    }
-
-    @Test
-    fun `start when the created group is not found returns failure and skips join and setNewQueue`() = runTest {
-        coEvery { mediaRepository.createSyncPlayGroup(any()) } returns Result.success(Unit)
-        // The group list does not contain a group matching the title.
-        coEvery { mediaRepository.getSyncPlayGroups() } returns Result.success(emptyList())
-
-        val result = actions(this).start("m1", "My Movie", null)
-
-        assertTrue(result.isFailure)
-        assertTrue(
-            messages.recorded.contains(
-                DetailMessage.Text(strings.get(Res.string.detail_msg_watch_party_failed))
-            )
-        )
-        coVerify(exactly = 0) { syncPlayManager.joinGroup(any()) }
-        coVerify(exactly = 0) { mediaRepository.syncPlaySetNewQueue(any(), any(), any(), any()) }
-    }
-
-    @Test
-    fun `start when joinGroup fails returns failure and skips setNewQueue`() = runTest {
-        coEvery { mediaRepository.createSyncPlayGroup(any()) } returns Result.success(Unit)
-        coEvery { mediaRepository.getSyncPlayGroups() } returns Result.success(listOf(group))
-        coEvery { syncPlayManager.joinGroup(any()) } returns Result.failure(RuntimeException("ws"))
+    fun `start when the deepened createGroup fails returns failure, emits message and skips setNewQueue`() = runTest {
+        coEvery { syncPlayManager.createGroup(any()) } returns Result.failure(RuntimeException("server"))
 
         val result = actions(this).start("m1", "My Movie", null)
 
@@ -225,9 +185,7 @@ class WatchPartyActionsTest {
 
     @Test
     fun `start when setNewQueue fails returns failure`() = runTest {
-        coEvery { mediaRepository.createSyncPlayGroup(any()) } returns Result.success(Unit)
-        coEvery { mediaRepository.getSyncPlayGroups() } returns Result.success(listOf(group))
-        coEvery { syncPlayManager.joinGroup(any()) } returns Result.success(Unit)
+        stubCreateSuccess()
         coEvery {
             mediaRepository.syncPlaySetNewQueue(any(), any(), any(), any())
         } returns Result.failure(RuntimeException("queue"))
@@ -242,30 +200,5 @@ class WatchPartyActionsTest {
         )
         // No WatchPartyStarted may be emitted on any failure path.
         assertTrue(messages.recorded.none { it is DetailMessage.WatchPartyStarted })
-    }
-
-    // ── Group disambiguation ───────────────────────────────────────────
-
-    @Test
-    fun `start joins the freshly-created group, not a pre-existing same-named one`() = runTest {
-        val stale = SyncPlayGroup(groupId = "stale", groupName = "My Movie", participantCount = 5)
-        val fresh = SyncPlayGroup(groupId = "fresh", groupName = "My Movie", participantCount = 1)
-        coEvery { mediaRepository.createSyncPlayGroup(any()) } returns Result.success(Unit)
-        // First read = pre-create snapshot (only the stale group exists);
-        // second read = post-create recover (the new group now exists too).
-        coEvery { mediaRepository.getSyncPlayGroups() } returnsMany listOf(
-            Result.success(listOf(stale)),
-            Result.success(listOf(stale, fresh)),
-        )
-        coEvery { syncPlayManager.joinGroup(any()) } returns Result.success(Unit)
-        coEvery {
-            mediaRepository.syncPlaySetNewQueue(any(), any(), any(), any())
-        } returns Result.success(Unit)
-
-        val result = actions(this).start("m1", "My Movie", null)
-
-        assertTrue(result.isSuccess)
-        coVerify { syncPlayManager.joinGroup("fresh") }
-        coVerify(exactly = 0) { syncPlayManager.joinGroup("stale") }
     }
 }

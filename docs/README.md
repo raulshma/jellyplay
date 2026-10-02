@@ -15,6 +15,7 @@ built with Kotlin and Jetpack Compose.
 | [SyncPlay watch parties](./syncplay-guide.md) | Synchronized group playback with friends |
 | [Offline downloads](./offline-downloads.md) | Download media for travel and low-connectivity |
 | [Music player & synced lyrics](./lyrics-music-player.md) | Get the most out of your music library |
+| [Android Auto](./android-auto.md) | Browse and play your music from the car |
 | [Book reader](./book-reader.md) | Read comics (CBZ/CBR), PDFs, and EPUB books in-app |
 | [Player engines comparison](./player-engines.md) | Choose between ExoPlayer, libmpv, and LibVLC |
 | [Playback progress sync](./playback-progress-sync.md) | How watch progress is reported and synced |

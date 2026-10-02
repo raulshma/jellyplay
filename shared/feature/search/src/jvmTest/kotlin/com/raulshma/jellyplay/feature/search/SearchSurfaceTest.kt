@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.search
 
+import com.raulshma.jellyplay.core.ui.components.PagedRefreshPhase
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -7,23 +8,24 @@ import kotlin.test.assertEquals
  * Pins [computeSearchSurface] — the render-branch fold that replaced the
  * search screen's six-term no-results predicate and refresh-state ladder.
  * Pure JVM over the fold's inputs, the `HomeSurfaceTest` pattern: every
- * precedence rule the screen used to decide inline is asserted here.
+ * precedence rule the screen used to decide inline is asserted here. The
+ * paging sub-decision is delegated to the core:ui chassis's
+ * [PagedRefreshPhase] (its `LoadState` mapping is pinned by the chassis's
+ * own `PagedCollectionLadderTest`), so the fold consumes the resolved phase.
  */
 class SearchSurfaceTest {
 
     private fun surface(
         itemCount: Int = 0,
         queryHasText: Boolean = true,
-        isRefreshing: Boolean = false,
-        refreshFailed: Boolean = false,
+        refreshPhase: PagedRefreshPhase = PagedRefreshPhase.SETTLED,
         showSeerr: Boolean = false,
         showSeerrError: Boolean = false,
         showOffline: Boolean = false,
     ) = computeSearchSurface(
         itemCount = itemCount,
         queryHasText = queryHasText,
-        isRefreshing = isRefreshing,
-        refreshFailed = refreshFailed,
+        refreshPhase = refreshPhase,
         showSeerr = showSeerr,
         showSeerrError = showSeerrError,
         showOffline = showOffline,
@@ -41,7 +43,7 @@ class SearchSurfaceTest {
         // A query whose only matches are on-device downloads is not "no
         // results" — the on-device section renders instead.
         assertEquals(
-            SearchSurface.Content(SearchSurface.RefreshPhase.IDLE),
+            SearchSurface.Content(PagedRefreshPhase.SETTLED),
             surface(showOffline = true),
         )
     }
@@ -49,7 +51,7 @@ class SearchSurfaceTest {
     @Test
     fun `a seerr pane beats the empty state`() {
         assertEquals(
-            SearchSurface.Content(SearchSurface.RefreshPhase.IDLE),
+            SearchSurface.Content(PagedRefreshPhase.SETTLED),
             surface(showSeerr = true),
         )
     }
@@ -57,7 +59,7 @@ class SearchSurfaceTest {
     @Test
     fun `a seerr error strip beats the empty state`() {
         assertEquals(
-            SearchSurface.Content(SearchSurface.RefreshPhase.IDLE),
+            SearchSurface.Content(PagedRefreshPhase.SETTLED),
             surface(showSeerrError = true),
         )
     }
@@ -66,8 +68,8 @@ class SearchSurfaceTest {
     fun `an in-flight refresh beats the empty state`() {
         // Zero items mid-refresh is a pending answer, not "no results".
         assertEquals(
-            SearchSurface.Content(SearchSurface.RefreshPhase.LOADING),
-            surface(isRefreshing = true),
+            SearchSurface.Content(PagedRefreshPhase.LOADING),
+            surface(refreshPhase = PagedRefreshPhase.LOADING),
         )
     }
 
@@ -77,7 +79,7 @@ class SearchSurfaceTest {
         // first-branch-wins ordering: the empty state wins over the error
         // overlay (the retry affordance for a settled empty query is the
         // query itself, not a full-screen error).
-        assertEquals(SearchSurface.NoResults, surface(refreshFailed = true))
+        assertEquals(SearchSurface.NoResults, surface(refreshPhase = PagedRefreshPhase.ERROR))
     }
 
     // ── Initial ──────────────────────────────────────────────────────────────
@@ -92,7 +94,7 @@ class SearchSurfaceTest {
         // Seerr results arrive from the header chip without a typed query;
         // the grid slot then renders Content (empty grid under the pane).
         assertEquals(
-            SearchSurface.Content(SearchSurface.RefreshPhase.IDLE),
+            SearchSurface.Content(PagedRefreshPhase.SETTLED),
             surface(queryHasText = false, showSeerr = true),
         )
     }
@@ -102,34 +104,24 @@ class SearchSurfaceTest {
     @Test
     fun `a non-empty query renders the grid`() {
         assertEquals(
-            SearchSurface.Content(SearchSurface.RefreshPhase.IDLE),
+            SearchSurface.Content(PagedRefreshPhase.SETTLED),
             surface(itemCount = 24),
         )
     }
 
     @Test
-    fun `the refresh ladder maps loading, error and idle`() {
+    fun `the refresh phase carries through to the content surface`() {
         assertEquals(
-            SearchSurface.Content(SearchSurface.RefreshPhase.LOADING),
-            surface(itemCount = 24, isRefreshing = true),
+            SearchSurface.Content(PagedRefreshPhase.LOADING),
+            surface(itemCount = 24, refreshPhase = PagedRefreshPhase.LOADING),
         )
         assertEquals(
-            SearchSurface.Content(SearchSurface.RefreshPhase.ERROR),
-            surface(itemCount = 24, refreshFailed = true),
+            SearchSurface.Content(PagedRefreshPhase.ERROR),
+            surface(itemCount = 24, refreshPhase = PagedRefreshPhase.ERROR),
         )
         assertEquals(
-            SearchSurface.Content(SearchSurface.RefreshPhase.IDLE),
-            surface(itemCount = 24, isRefreshing = false, refreshFailed = false),
-        )
-    }
-
-    @Test
-    fun `loading outranks error in the refresh ladder`() {
-        // During paging a refresh can be loading while the previous state
-        // was an error; the spinner, not a stale error screen, renders.
-        assertEquals(
-            SearchSurface.Content(SearchSurface.RefreshPhase.LOADING),
-            surface(itemCount = 24, isRefreshing = true, refreshFailed = true),
+            SearchSurface.Content(PagedRefreshPhase.SETTLED),
+            surface(itemCount = 24, refreshPhase = PagedRefreshPhase.SETTLED),
         )
     }
 }

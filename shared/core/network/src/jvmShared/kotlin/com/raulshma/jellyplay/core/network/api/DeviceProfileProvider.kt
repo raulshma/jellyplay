@@ -1,10 +1,15 @@
 package com.raulshma.jellyplay.core.network.api
 
+import com.raulshma.jellyplay.core.model.AudioPassthroughCodec
+import com.raulshma.jellyplay.core.model.MaxAudioChannelsEnum
 import com.raulshma.jellyplay.core.model.PlayerType
+import org.jellyfin.sdk.model.api.CodecType
 import org.jellyfin.sdk.model.api.DlnaProfileType
 import org.jellyfin.sdk.model.api.EncodingContext
 import org.jellyfin.sdk.model.api.MediaStreamProtocol
+import org.jellyfin.sdk.model.api.ProfileConditionValue
 import org.jellyfin.sdk.model.api.SubtitleDeliveryMethod
+import org.jellyfin.sdk.model.deviceprofile.buildCodecProfile
 import org.jellyfin.sdk.model.deviceprofile.buildDeviceProfile
 
 /**
@@ -39,15 +44,91 @@ class DeviceProfileProvider(
      * `false` (default), they are omitted from the profile so the server burns
      * them into the video track. Named for PGS (the common case) but covers
      * the full image-subtitle family.
+     * @param audioPassthrough the master passthrough toggle: the per-codec
+     * allow-list ([passthroughCodecs]) only shapes delivery while it is on.
+     * @param passthroughCodecs the enabled per-codec passthrough allow-list.
+     * A disabled codec is removed from the direct-play audio lists (MPV and
+     * LibVLC — the engines with a bitstream surface), so the server
+     * transcodes that codec to one the user allows instead of handing back a
+     * stream the receiver chain rejects. ExoPlayer has no passthrough surface
+     * (it decodes everything to PCM), so its set is untouched.
+     * @param maxAudioChannels the speaker-layout cap (`AUTO` = uncapped).
+     * Advertised as a `VideoAudioCodec` LessThanEqual `AudioChannels`
+     * condition so the server transcodes (or the client downmixes) sources
+     * wider than the cap — the jellyfin-web mechanism; the SDK's
+     * `DeviceProfile` has no `maxAudioChannels` property.
      */
     fun forPlayer(
         playerType: PlayerType,
         pgsDirectPlay: Boolean = false,
-    ): org.jellyfin.sdk.model.api.DeviceProfile = when (playerType) {
-        PlayerType.MPV -> if (pgsDirectPlay) mpvProfilePgsDirectPlay else mpvProfileDefault
-        PlayerType.EXO_PLAYER, PlayerType.LIBVLC -> hardwareProfile
-        PlayerType.EXTERNAL -> hardwareProfile
+        audioPassthrough: Boolean = false,
+        passthroughCodecs: Set<AudioPassthroughCodec> = AudioPassthroughCodec.ALL,
+        maxAudioChannels: MaxAudioChannelsEnum = MaxAudioChannelsEnum.AUTO,
+    ): org.jellyfin.sdk.model.api.DeviceProfile {
+        val base = when (playerType) {
+            PlayerType.MPV -> if (pgsDirectPlay) mpvProfilePgsDirectPlay else mpvProfileDefault
+            PlayerType.EXO_PLAYER, PlayerType.LIBVLC -> hardwareProfile
+            PlayerType.EXTERNAL -> hardwareProfile
+        }
+        val removedTokens = directPlayRemovals(playerType, audioPassthrough, passthroughCodecs)
+        val capChannels = maxAudioChannels.channelCount
+        // The memoised default profiles stand while the prefs ask for nothing
+        // this provider honours (the historical behaviour, byte for byte).
+        if (removedTokens.isEmpty() && capChannels == null) return base
+        return base.copy(
+            directPlayProfiles = base.directPlayProfiles.map { profile ->
+                val audio = profile.audioCodec
+                if (removedTokens.isEmpty() || audio.isNullOrBlank()) {
+                    profile
+                } else {
+                    profile.copy(
+                        audioCodec = audio.split(',')
+                            .filterNot { it.trim() in removedTokens }
+                            .joinToString(","),
+                    )
+                }
+            },
+            codecProfiles = if (capChannels == null) {
+                base.codecProfiles
+            } else {
+                base.codecProfiles + channelCapProfile(capChannels)
+            },
+        )
     }
+
+    /**
+     * The direct-play codec tokens the enabled passthrough set removes, or
+     * empty when nothing may be removed: the master toggle is off (engines
+     * decode to PCM — every advertised codec is decodable) or the engine has
+     * no bitstream surface (ExoPlayer; EXTERNAL hands off to an app this
+     * profile does not command).
+     */
+    private fun directPlayRemovals(
+        playerType: PlayerType,
+        audioPassthrough: Boolean,
+        passthroughCodecs: Set<AudioPassthroughCodec>,
+    ): Set<String> {
+        val hasPassthroughSurface = playerType == PlayerType.MPV || playerType == PlayerType.LIBVLC
+        if (!audioPassthrough || !hasPassthroughSurface) return emptySet()
+        return AudioPassthroughCodec.entries
+            .filterNot { it in passthroughCodecs }
+            .flatMap { it.jellyfinKeys }
+            .toSet()
+    }
+
+    /**
+     * The `VideoAudioCodec` LessThanEqual [audio-channels][ProfileConditionValue.AUDIO_CHANNELS]
+     * condition advertising [maxChannels] as the widest layout the server may
+     * direct-play/transcode to — the jellyfin-web channel-cap mechanism (the
+     * SDK's `DeviceProfile` has no `maxAudioChannels` property).
+     */
+    private fun channelCapProfile(maxChannels: Int): org.jellyfin.sdk.model.api.CodecProfile =
+        buildCodecProfile {
+            type = CodecType.VIDEO_AUDIO
+            applyConditions {
+                lowerThanOrEquals(ProfileConditionValue.AUDIO_CHANNELS, maxChannels)
+            }
+        }
 
     /**
      * Subtitle delivery map shared by every profile: deliver SRT/ASS/VTT/etc.

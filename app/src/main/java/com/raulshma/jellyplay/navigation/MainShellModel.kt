@@ -3,7 +3,9 @@ package com.raulshma.jellyplay.navigation
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.OfflineMode
 import com.raulshma.jellyplay.core.ui.navigation.Route
+import com.raulshma.jellyplay.navigation.ExternalPlaybackOutcome
 import com.raulshma.jellyplay.navigation.playbackhost.ExternalPlayerLaunch
+import com.raulshma.jellyplay.navigation.playbackhost.ExternalPlayerRequest
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 
@@ -64,16 +66,22 @@ internal interface MainShellModel {
     /** Acks the pending search query after the Search entry consumed it. */
     fun consumePendingSearchQuery()
 
-    /** Resolves the external-player launch for an item (completed download or server stream URL). */
-    suspend fun buildExternalPlayerLaunch(
-        itemId: String,
-        mediaSourceId: String?,
-        startPositionTicks: Long,
-    ): ExternalPlayerLaunch?
+    /**
+     * Resolves the external-player launch for an [ExternalPlayerRequest]
+     * (completed download or server stream URL, plus the external-subtitle
+     * payload and the preferred-app targeting state read off the preference
+     * pipeline). The request's `subtitleStreamIndex` is the route's selected
+     * subtitle track (feeds the launch's `subs.enable` extra).
+     */
+    suspend fun buildExternalPlayerLaunch(request: ExternalPlayerRequest): ExternalPlayerLaunch?
 
     /** Reports an external-player playback start to the server. */
     fun reportExternalPlaybackStart(playerLaunch: ExternalPlayerLaunch)
 
-    /** Reports an external-player playback stop, crediting watched progress. */
-    fun reportExternalPlaybackStopped(playerLaunch: ExternalPlayerLaunch, finalPositionTicks: Long)
+    /**
+     * Reports an external-player playback stop, mapping the parsed outcome:
+     * completion marks the item played, a mid-stream stop credits its
+     * position, a cancellation credits the start position.
+     */
+    fun reportExternalPlaybackStopped(playerLaunch: ExternalPlayerLaunch, outcome: ExternalPlaybackOutcome)
 }

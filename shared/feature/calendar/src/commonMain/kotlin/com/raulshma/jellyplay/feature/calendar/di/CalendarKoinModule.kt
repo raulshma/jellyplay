@@ -13,8 +13,9 @@ import org.koin.dsl.module
  * Koin-native in the shared graph — no platform interop edges at all:
  *  - ArrRepository + SeerrRepository resolve from dataJvmModule
  *    (:shared:core:data) on both platforms;
- *  - ExperimentalStore resolves from datastoreCommonModule
- *    (:shared:core:datastore).
+ *  - ExperimentalFeatureGate resolves from datastoreCommonModule
+ *    (:shared:core:datastore) — the shared eagerly-shared Direct-*arr gate,
+ *    replacing this VM's hand-rolled `stateIn(Eagerly)` copy.
  * The desktop registration is therefore fully live (first conveyor
  * module with zero platform-shaped defs): nav v1 renders calendarSection in
  * the rail.
@@ -24,7 +25,7 @@ val calendarModule: Module = module {
         UpcomingCalendarViewModel(
             arrRepository = get(),
             seerrRepository = get(),
-            experimentalStore = get(),
+            experimentalGate = get(),
         )
     }
 }

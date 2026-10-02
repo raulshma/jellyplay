@@ -1,6 +1,9 @@
 package com.raulshma.jellyplay.feature.player.video
 
 import com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager
+import com.raulshma.jellyplay.core.data.playback.focus.NoopPlaybackFocus
+import com.raulshma.jellyplay.core.data.playback.focus.PlaybackFocus
+import com.raulshma.jellyplay.core.data.playback.focus.VideoPlaybackSurface
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastStore
 import com.raulshma.jellyplay.core.model.PlaybackMode
@@ -18,8 +21,9 @@ import com.raulshma.jellyplay.feature.player.video.trickplay.TrickplayController
  * implements each member with the exact body the ViewModel/PlayerSessionManager
  * used to inline (ActivityManager low-RAM lookup, ContentResolver subtitle
  * IO, MediaMetadataRetriever probing, and construction of the androidMain
- * trickplay / cast-controller / audio-lifecycle collaborators). The jvmMain
- * actual is a no-op stub (desktop playback host is queued work).
+ * trickplay / cast-controller / becoming-noisy collaborators). The jvmMain
+ * actual is a no-op stub for the platform-only members (desktop playback
+ * host is live; the media-only seams stay queued).
  */
 interface VideoPlayerPlatform : SubtitleContentGateway {
 
@@ -50,6 +54,7 @@ interface VideoPlayerPlatform : SubtitleContentGateway {
      */
     fun createCastController(
         playbackRepository: PlaybackRepository,
+        imageUrlProvider: com.raulshma.jellyplay.core.data.util.ImageUrlProvider,
         adaptiveBitrateManager: AdaptiveBitrateManager,
         syncPlayCastStore: SyncPlayCastStore,
         getEngine: () -> MediaEngine?,
@@ -58,15 +63,30 @@ interface VideoPlayerPlatform : SubtitleContentGateway {
     ): PlayerCastController
 
     /**
-     * Constructs the audio-focus/becoming-noisy lifecycle owner. The getters
-     * are re-read on every platform callback so engine swaps and mute changes
-     * are observed live — the same contract the legacy inline adapter had.
+     * Constructs the becoming-noisy auto-pause owner (headphone unplug →
+     * pause). The getters are re-read on every callback so engine swaps are
+     * observed live — the same contract the legacy inline adapter had. The
+     * audio-focus half of the former `createAudioLifecycle` seam died with
+     * the video focus slice (the seat moved into core:data's PlaybackFocus).
      */
-    fun createAudioLifecycle(
+    fun createBecomingNoisy(
         getEngine: () -> MediaEngine?,
-        isMuted: () -> Boolean,
-        onRegain: (() -> Unit)?,
     ): VideoPlayerAudio
+
+    /**
+     * The video focus slice's two seams (ADR-0004), routed through this
+     * aggregate because the ViewModel's ctor line-ceiling ratchet forbids
+     * two more constructor slots: the module-owned exclusivity authority the
+     * wiring claims [com.raulshma.jellyplay.core.data.playback.focus.PlaybackSurfaceId.VIDEO]
+     * on (Koin resolves the bound DefaultPlaybackFocus; headless harnesses
+     * carry the vacuous [NoopPlaybackFocus] default), and the VIDEO-family
+     * commandable surface singleton the wiring binds its engine into (null
+     * where the platform focus binding registers no video surface — desktop —
+     * where the displaced-holder self-pause rides the wiring's claimState
+     * observer).
+     */
+    val playbackFocus: PlaybackFocus get() = NoopPlaybackFocus
+    val videoFocusSurface: VideoPlaybackSurface? get() = null
 }
 
 /**

@@ -402,7 +402,7 @@ class DownloadTransferGateTest {
         assertEquals(2, client.requests.size)
         assertTrue(client.requests[0].head, "the first request must be the HEAD re-probe")
         assertEquals("bytes=100-", client.requests[1].range)
-        coVerify { dao.updateProgressWithSpeed("dl-1", 1024L, DownloadStatus.COMPLETED.name, 0L) }
+        coVerify { dao.markCompleted("dl-1", 1024L, any()) }
         // Resume never re-writes the total (updateTotalSize is fresh-start-only).
         coVerify(exactly = 0) { dao.updateTotalSize(any(), any()) }
         // The healed summary refresh reached the port on the resume path too.
@@ -435,7 +435,7 @@ class DownloadTransferGateTest {
 
         assertEquals(TransferOutcome.Success, outcome)
         assertEquals(total, tempFile.length())
-        coVerify { dao.updateProgressWithSpeed("dl-1", total, DownloadStatus.COMPLETED.name, 0L) }
+        coVerify { dao.markCompleted("dl-1", total, any()) }
         // The multi path is identifiable through the port (the strategy's
         // start promotion), and the healed summary refresh PRECEDED it —
         // execute pushes it through the port before the dispatch on BOTH

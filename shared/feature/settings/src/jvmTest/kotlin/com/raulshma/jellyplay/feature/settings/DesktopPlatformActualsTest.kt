@@ -139,9 +139,15 @@ class DesktopPlatformActualsTest {
         assertFalse(caps.supportsAudioCache, "no desktop audio cache to clear")
         assertFalse(caps.supportsScreenOrientation)
         assertFalse(caps.supportsTouchGestures)
+        assertFalse(
+            caps.supportsAppLock,
+            "the lock gate (AppLockState/PinGateController/AuthChallengeScreen) is Android-only — " +
+                "desktop persists PIN state but never challenges, so the PIN rows stay hidden",
+        )
         assertFalse(caps.supportsBiometric, "rememberBiometricGate returns null (DesktopBiometricGate)")
         assertFalse(caps.supportsSystemNotificationSettings)
         assertFalse(caps.supportsLogSharing)
+        assertFalse(caps.supportsPip, "desktop binds NoOpPipController — the auto-PiP row stays hidden")
     }
 
     @Test
@@ -200,6 +206,31 @@ class DesktopPlatformActualsTest {
         assertTrue(
             settingsCapabilities.supportsIdleAmbientScreen,
             "the desktop shell owns the idle ambient monitor + overlay",
+        )
+    }
+
+    @Test
+    fun `desktop is the one platform backing the Discord presence rows`() {
+        // The Discord Rich Presence toggle is DESKTOP-backed — the
+        // hand-rolled Discord IPC client + presence service live in
+        // apps/desktop (the named-pipe / Unix-socket transport has no
+        // Android counterpart). Mirror half: apps/desktop's
+        // DiscordPresenceService + its Koin wiring.
+        assertTrue(
+            settingsCapabilities.supportsDiscordPresence,
+            "the desktop shell owns the Discord IPC presence service",
+        )
+    }
+
+    @Test
+    fun `desktop is the one platform backing the shell hook rows`() {
+        // The playback-event shell hooks are DESKTOP-backed —
+        // DesktopHookRunner executes the configured commands via
+        // ProcessBuilder, which has no Android counterpart. Mirror half:
+        // apps/desktop's DesktopHookRunner + its Koin wiring.
+        assertTrue(
+            settingsCapabilities.supportsShellHooks,
+            "the desktop shell owns the ProcessBuilder hook runner",
         )
     }
 

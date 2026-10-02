@@ -12,9 +12,9 @@ internal object SubtitleDefaults {
     /**
      * The reference subtitle font size (sp) every engine scales relative to.
      *
-     * - mpv: `sub-font-size` is pinned to [MPV_LIBASS_REFERENCE_FONT_SIZE]
-     *   (libass's 720p canvas default) and the user's size is applied as
-     *   `sub-scale = fontSize / [REFERENCE_FONT_SIZE]`.
+     * - mpv: `sub-font-size` is pinned to MpvStyleMapping's
+     *   MPV_LIBASS_REFERENCE_FONT_SIZE (libass's 720p canvas default) and the
+     *   user's size is applied as `sub-scale = fontSize / [REFERENCE_FONT_SIZE]`.
      * - VLC: used as the absolute `:freetype-fontsize` bundled-default fallback
      *   when `applyCustomStyle` is false.
      * - Compose overlay ([MpvSubtitleOverlay]): stroke width scales with
@@ -22,11 +22,4 @@ internal object SubtitleDefaults {
      *   ratio, and the default fallback style uses this as its font size.
      */
     const val REFERENCE_FONT_SIZE: Int = 24
-
-    /**
-     * mpv's `sub-font-size` reference value — libass's default for a 720p
-     * canvas. The user's size is applied multiplicatively via `sub-scale`
-     * so libass layout matches across container sizes.
-     */
-    const val MPV_LIBASS_REFERENCE_FONT_SIZE: Int = 55
 }

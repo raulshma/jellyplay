@@ -62,7 +62,7 @@ import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchItem
 import com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchProvider
 import com.raulshma.jellyplay.core.testfixtures.FakeUserDataMutator
-import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import com.raulshma.jellyplay.core.network.api.AuthApiClient
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -203,14 +203,14 @@ class HomeViewModelTest {
 
     /**
      * Identity plumbing for the VM's HomeSession collector (the single
-     * identity detector): a mock JellyfinApiClient exposes a real atomic
+     * identity detector): a mock AuthApiClient exposes a real atomic
      * session flow, and the shared real [HomeSession] runs on the rule's test
      * dispatcher so `runCurrent()` drives classification → transition → VM
      * routing deterministically. [userFlow] above still feeds the separate
      * uiState.currentUser mirror collector.
      */
     private val sessionFlow = MutableStateFlow<ActiveSession?>(null)
-    private val sessionApiClient: JellyfinApiClient = mockk(relaxed = true)
+    private val sessionApiClient: AuthApiClient = mockk(relaxed = true)
     private val homeSession: HomeSession by lazy {
         HomeSession(sessionApiClient, CoroutineScope(SupervisorJob() + mainDispatcher))
     }
@@ -307,7 +307,6 @@ class HomeViewModelTest {
         mediaRepository = mediaRepository,
         imageUrlProvider = imageUrlProvider,
         photoFolderPrefetcher = photoFolderPrefetcher,
-        seriesDownloads = seriesDownloads,
         downloadIntake = downloadIntake,
         quickDownloadActions = quickDownloadActions,
         offlineRepository = offlineRepository,
@@ -318,10 +317,10 @@ class HomeViewModelTest {
             appearance = appearanceStore,
             experimental = experimentalStore,
             playback = playbackStore,
+            seerrPreferences = seerrPreferencesStore,
         ),
         preferencesEditor = preferencesEditor,
         seerrRequestDelegate = seerrRequestDelegate,
-        seerrPreferencesStore = seerrPreferencesStore,
         authRepository = authRepository,
         homeSession = homeSession,
         userMessageBus = userMessageBus,
@@ -344,6 +343,13 @@ class HomeViewModelTest {
                 playbackSyncScheduler = playbackSyncScheduler,
                 offlineFirstItemResolver = offlineFirstItemResolver,
             ),
+        ),
+        homeSheetsFactory = HomeSheetsFactory(
+            episodeCatalogue = episodeCatalogue,
+            seriesDownloads = seriesDownloads,
+            downloadIntake = downloadIntake,
+            userMessageBus = userMessageBus,
+            offlineRepository = offlineRepository,
         ),
     )
 

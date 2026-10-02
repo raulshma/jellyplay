@@ -5,6 +5,8 @@ import com.raulshma.jellyplay.core.data.download.MediaDownloadActions
 import com.raulshma.jellyplay.core.data.download.QuickDownloadActions
 import com.raulshma.jellyplay.core.data.repository.DownloadEnqueueCoordinator
 import com.raulshma.jellyplay.core.data.repository.DownloadProgressNotifier
+import com.raulshma.jellyplay.core.data.repository.DownloadRecoveryCore
+import com.raulshma.jellyplay.core.data.repository.DownloadRecoveryPort
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.DownloadRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.DownloadStorageLayoutContract
@@ -59,6 +61,7 @@ internal val dataDownloadsConveyorModule: Module = module {
             downloadEnqueuer = get<DownloadEnqueueCoordinator>(),
             imagePreloader = get<OfflineImagePreloader>(),
             playbackRepository = get(),
+            imageUrlProvider = get(),
             playbackIdentity = get(),
             httpClient = get(),
             json = get(),
@@ -81,6 +84,7 @@ internal val dataDownloadsConveyorModule: Module = module {
         DownloadDelegate(
             writer = get<OfflineDownloadWriterCore>(),
             playbackRepository = get(),
+            imageUrlProvider = get(),
         )
     }
 
@@ -93,7 +97,7 @@ internal val dataDownloadsConveyorModule: Module = module {
             database = get(),
             mediaRepository = get<MediaRepositoryAccess>(),
             episodeCatalogue = get(),
-            playbackRepository = get(),
+            imageUrlProvider = get(),
             downloadsStore = get(),
             storagePolicy = get(),
             downloadEnqueuer = get<DownloadEnqueueCoordinator>(),
@@ -130,4 +134,22 @@ internal val dataDownloadsConveyorModule: Module = module {
     // MediaDownloadActions single (the class implements QuickDownloadActions
     // directly — the DownloadIntake precedent, no verbatim-forward adapter).
     single<QuickDownloadActions> { get<MediaDownloadActions>() }
+
+    // D5: the cold-start row-state recovery policy moved here from the app
+    // module's DownloadRecoveryInitializer (which injected DownloadDao
+    // directly — the one non-test DAO consumer above core:data). The app's
+    // startup shell now resolves this port and only fires recover(); the
+    // three passes' bodies are verbatim. The enqueue edge goes through the
+    // coordinator seam like every other engine collaborator: Android's
+    // actual (DownloadEnqueuer) bypasses the schedule/network gate for
+    // recovered rows; desktop's default delegates to the plain kick. Desktop
+    // does not invoke the port — its DesktopDownloadManager.start() keeps
+    // its own narrower cold-start recovery — so the definition is inert
+    // there (Koin definitions are lazy).
+    single<DownloadRecoveryPort> {
+        DownloadRecoveryCore(
+            downloadDao = get(),
+            downloadEnqueuer = get<DownloadEnqueueCoordinator>(),
+        )
+    }
 }

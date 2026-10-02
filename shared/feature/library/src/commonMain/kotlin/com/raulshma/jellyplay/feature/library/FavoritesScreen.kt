@@ -44,7 +44,6 @@ import androidx.compose.ui.unit.dp
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.paging.LoadState
 import androidx.paging.compose.collectAsLazyPagingItems
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
@@ -56,19 +55,24 @@ import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.adaptive.gridCellSize
 import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
+import com.raulshma.jellyplay.core.ui.components.DelayedLoadingScreen
+import com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
+import com.raulshma.jellyplay.core.ui.components.PagedAppendRung
+import com.raulshma.jellyplay.core.ui.components.PagedCollectionGrid
 import com.raulshma.jellyplay.core.ui.components.LocalMediaQuickActionController
 import com.raulshma.jellyplay.core.ui.components.PosterCard
 import com.raulshma.jellyplay.core.ui.components.QuickActionAdapter
 import com.raulshma.jellyplay.core.ui.components.QuickActionIntakeHost
 import com.raulshma.jellyplay.core.ui.components.DeferredRefreshEffect
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
+import com.raulshma.jellyplay.core.ui.components.pagedAppendRung
+import com.raulshma.jellyplay.core.ui.components.toPagedRefreshPhase
 import com.raulshma.jellyplay.core.ui.components.rememberQuickActionIntake
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState
 import com.raulshma.jellyplay.core.ui.model.mediaTypeDisplayNamePlural
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
-import com.raulshma.jellyplay.core.ui.tv.TvFocusableGrid
 import com.raulshma.jellyplay.core.ui.tv.input.onDpadKey
 import com.raulshma.jellyplay.feature.library.generated.resources.Res
 import com.raulshma.jellyplay.feature.library.generated.resources.library_all
@@ -160,79 +164,56 @@ internal fun FavoritesScreen(
                 onTypeSelected = { viewModel.setMediaTypeFilter(it) },
             )
 
-            when {
-                pagingItems.loadState.refresh is LoadState.Loading && pagingItems.itemCount == 0 -> {
-                    com.raulshma.jellyplay.core.ui.components.DelayedLoadingScreen()
-                }
-                pagingItems.loadState.refresh is LoadState.Error -> {
-                    com.raulshma.jellyplay.core.ui.components.ErrorScreen(
-                        message = (pagingItems.loadState.refresh as LoadState.Error).error.message
-                            ?: stringResource(Res.string.library_failed_to_load_favorites),
-                        onRetry = { pagingItems.retry() },
-                    )
-                }
-                pagingItems.itemCount == 0 && pagingItems.loadState.refresh is LoadState.NotLoading -> {
-                    com.raulshma.jellyplay.core.ui.components.ScreenEmptyState(
-                        icon = Tabler.Outline.Heart,
-                        title = stringResource(Res.string.library_no_favorites),
-                        description = stringResource(Res.string.library_no_favorites_description),
-                    )
-                }
-                else -> {
-                    val gridState = rememberLazyGridState()
-                    // Shared adaptive metrics (LibraryScreen/GroupedLibraryContent/
-                    // PhotoAlbumScreen precedent) instead of the hand-rolled
-                    // isTv constants — declared visual change: favorites cells
-                    // now match the library grid's sizing and spacing on the
-                    // same device class. Horizontal inset comes from the
-                    // enclosing Column's shared content padding, so the grid
-                    // only pads vertically; the bottom keeps the scaffold
-                    // inset plus the shared bottom padding (the former
-                    // hardcoded 80.dp).
-                    TvFocusableGrid(
-                        itemCount = pagingItems.itemCount,
-                        key = { index -> pagingItems[index]?.id ?: index },
-                        columns = GridCells.Adaptive(adaptiveInfo.gridCellSize(isTv)),
-                        contentType = { "mediaItem" },
-                        state = gridState,
-                        onFocusedIndexChange = { index -> pagingItems[index]?.let { quickActionIntake.tvFocusedItem = it } },
-                        contentPadding = PaddingValues(
-                            top = 8.dp,
-                            bottom = innerPadding.calculateBottomPadding() + adaptiveInfo.bottomPadding(isTv),
-                        ),
-                        horizontalArrangement = Arrangement.spacedBy(adaptiveInfo.itemSpacing(isTv)),
-                        verticalArrangement = Arrangement.spacedBy(adaptiveInfo.itemSpacing(isTv)),
-                        modifier = Modifier.fillMaxSize(),
-                        extraContent = {
-                            if (pagingItems.loadState.append is LoadState.Loading) {
-                                item {
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(16.dp),
-                                        contentAlignment = Alignment.Center,
-                                    ) {
-                                        com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator(
-                                            color = MaterialTheme.colorScheme.primary,
-                                        )
-                                    }
-                                }
+            // The shared paged-collection renderer (core:ui). This screen's
+            // per-site variants stay declared here: the delayed first-load
+            // spinner (vs the renderer's immediate one), the described empty
+            // state, no pull-to-refresh, and the load-more footer as the
+            // grid's last item (the renderer's bottom-center append overlay —
+            // Loading and Retry arms alike — is suppressed, as before).
+            PagedCollectionGrid(
+                items = pagingItems,
+                itemKey = { it.id },
+                state = rememberLazyGridState(),
+                columns = GridCells.Adaptive(adaptiveInfo.gridCellSize(isTv)),
+                contentPadding = PaddingValues(
+                    top = 8.dp,
+                    bottom = innerPadding.calculateBottomPadding() + adaptiveInfo.bottomPadding(isTv),
+                ),
+                horizontalArrangement = Arrangement.spacedBy(adaptiveInfo.itemSpacing(isTv)),
+                verticalArrangement = Arrangement.spacedBy(adaptiveInfo.itemSpacing(isTv)),
+                onFocusedIndexChange = { index -> pagingItems[index]?.let { quickActionIntake.tvFocusedItem = it } },
+                pullToRefresh = false,
+                initialLoadingContent = { DelayedLoadingScreen() },
+                emptyIcon = Tabler.Outline.Heart,
+                emptyTitle = stringResource(Res.string.library_no_favorites),
+                emptyDescription = stringResource(Res.string.library_no_favorites_description),
+                errorFallbackMessage = stringResource(Res.string.library_failed_to_load_favorites),
+                appendFooter = {},
+                extraContent = {
+                    if (pagedAppendRung(pagingItems.loadState.append.toPagedRefreshPhase()) == PagedAppendRung.Loading) {
+                        item {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                JellyPlayLoadingIndicator(
+                                    color = MaterialTheme.colorScheme.primary,
+                                )
                             }
-                        },
-                    ) { index, itemModifier ->
-                        val item = pagingItems[index]
-                        if (item != null) {
-                            PosterCard(
-                                item = item,
-                                imageUrl = remember(item.id) { viewModel.getImageUrl(item.id) },
-                                blurHash = item.blurHashes.primary,
-                                onClick = { onItemClick(item.id, item.mediaType, item.parentId, item.name) },
-                                photoFolderChildImageUrls = photoFolderChildUrls[item.id].orEmpty(),
-                                modifier = itemModifier,
-                            )
                         }
                     }
-                }
+                },
+            ) { item, itemModifier ->
+                PosterCard(
+                    item = item,
+                    imageUrl = remember(item.id) { viewModel.getImageUrl(item.id) },
+                    blurHash = item.blurHashes.primary,
+                    onClick = { onItemClick(item.id, item.mediaType, item.parentId, item.name) },
+                    photoFolderChildImageUrls = photoFolderChildUrls[item.id].orEmpty(),
+                    modifier = itemModifier,
+                )
             }
         } // close Column
         } // close scaffold content lambda

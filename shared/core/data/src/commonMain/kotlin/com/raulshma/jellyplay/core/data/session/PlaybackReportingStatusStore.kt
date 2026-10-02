@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.core.data.session
 
 import com.raulshma.jellyplay.core.model.PlaybackReportingStatus
-import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import com.raulshma.jellyplay.core.network.api.MediaInfoApiClient
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -47,7 +47,7 @@ import kotlinx.coroutines.flow.asStateFlow
  * exactly "as of the last refresh".
  */
 class PlaybackReportingStatusStore(
-    private val apiClient: JellyfinApiClient,
+    private val apiClient: MediaInfoApiClient,
     private val sessionCacheRegistry: SessionCacheRegistry,
 ) {
 

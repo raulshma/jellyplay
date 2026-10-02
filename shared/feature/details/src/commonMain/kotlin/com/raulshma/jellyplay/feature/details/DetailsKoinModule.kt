@@ -62,7 +62,11 @@ val detailsModule: Module = module {
         ManageSeriesViewModel(
             strings = get(),
             mediaRepository = get(),
-            arrRepository = get(),
+            // The Sonarr series-management seam — resolved as the
+            // ArrRepositoryImpl single (dataSeerrArrModule binds
+            // SonarrSeriesOperations over it, the same over-the-impl pattern
+            // as ArrRepository itself).
+            sonarr = get(),
         )
     }
     viewModel {

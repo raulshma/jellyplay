@@ -1,6 +1,5 @@
 package com.raulshma.jellyplay.feature.syncplay
 
-import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.data.repository.SyncPlayRepository
 import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastStore
@@ -11,6 +10,7 @@ import com.raulshma.jellyplay.core.model.SyncPlayGroupInfo
 import com.raulshma.jellyplay.core.model.SyncPlayJoinBehavior
 import com.raulshma.jellyplay.core.model.SyncPlayRepeatMode
 import com.raulshma.jellyplay.core.model.SyncPlayShuffleMode
+import com.raulshma.jellyplay.core.ui.message.UiMessage
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.core.ui.viewmodel.loadInto
 import com.raulshma.jellyplay.feature.syncplay.generated.resources.Res
@@ -20,32 +20,10 @@ import com.raulshma.jellyplay.feature.syncplay.generated.resources.syncplay_erro
 import com.raulshma.jellyplay.feature.syncplay.generated.resources.syncplay_error_load_groups
 import com.raulshma.jellyplay.feature.syncplay.generated.resources.syncplay_join_disabled
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
-import org.jetbrains.compose.resources.StringResource
-import org.jetbrains.compose.resources.stringResource
-
-/**
- * Error/notification message seam for the SyncPlay screen (music conveyor's
- * MixErrorMessage shape): the message stays unresolved until render time (the
- * commonMain VM seam has no Context) — [SyncPlayMessage.Resource] carries the
- * localized [StringResource] and [SyncPlayMessage.Raw] an already-final string
- * (failure cause). The screen collapses it with [SyncPlayMessage.asText]
- * where it renders.
- */
-sealed interface SyncPlayMessage {
-    data class Resource(val res: StringResource) : SyncPlayMessage
-    data class Raw(val text: String) : SyncPlayMessage
-}
-
-@Composable
-fun SyncPlayMessage.asText(): String = when (this) {
-    is SyncPlayMessage.Resource -> stringResource(res)
-    is SyncPlayMessage.Raw -> text
-}
 
 /**
  * GROUP-LIST state for the SyncPlay screen (renamed from `SyncPlayUiState`:
@@ -93,6 +71,21 @@ class SyncPlayViewModel(
     private var autoJoinGroupId: String? = null
 
     init {
+        // Seed membership from the session's live truth BEFORE the first group
+        // load: re-opening the screen while a session is already active (the
+        // manager is a process-wide single) must show the in-group UI and —
+        // critically — must not let the auto-accept-invites machinery below
+        // auto-join `result.first()` on top of the existing membership (the
+        // former guard read this VM's never-seeded mirror, always false at
+        // init). loadCurrentGroup + the event listener ride the same arms the
+        // join success path runs.
+        if (syncPlaySession.activeGroupId != null) {
+            _uiState.update { it.copy(isInGroup = true) }
+            launch {
+                loadCurrentGroup()
+                startEventListener()
+            }
+        }
         loadGroups()
     }
 
@@ -113,7 +106,11 @@ class SyncPlayViewModel(
                             joinGroup(target.groupId)
                         }
                     }
-                    if (autoJoinGroupId == null && result.isNotEmpty() && !_uiState.value.isInGroup) {
+                    if (autoJoinGroupId == null && result.isNotEmpty() && syncPlaySession.activeGroupId == null) {
+                        // The guard reads the SESSION's live membership, not a
+                        // VM mirror: a user already inside group A (joined
+                        // from the player bridge or a previous screen) can
+                        // never be auto-joined onto `result.first()` here.
                         val prefs = syncPlayCastStore.syncPlayCast.value
                         if (prefs.syncPlayAutoAcceptInvites) {
                             joinGroup(result.first().groupId)
@@ -123,8 +120,7 @@ class SyncPlayViewModel(
                 onFailure = {
                     _uiState.update { state ->
                         state.copy(
-                            error = it.message?.let { msg -> SyncPlayMessage.Raw(msg) }
-                                ?: SyncPlayMessage.Resource(Res.string.syncplay_error_load_groups),
+                            error = UiMessage.of(it, Res.string.syncplay_error_load_groups),
                         )
                     }
                 },
@@ -143,7 +139,7 @@ class SyncPlayViewModel(
         when (syncPlayCastStore.syncPlayCast.value.syncPlayJoinBehavior) {
             SyncPlayJoinBehavior.ALWAYS_JOIN -> joinGroup(group.groupId)
             SyncPlayJoinBehavior.ASK -> _uiState.update { it.copy(joinConfirmation = it.joinConfirmation.hold(group)) }
-            SyncPlayJoinBehavior.NEVER_JOIN -> _notifications.tryEmit(SyncPlayMessage.Resource(Res.string.syncplay_join_disabled))
+            SyncPlayJoinBehavior.NEVER_JOIN -> _notifications.tryEmit(UiMessage.Resource(Res.string.syncplay_join_disabled))
         }
     }
 
@@ -182,8 +178,7 @@ class SyncPlayViewModel(
                 onFailure = {
                     _uiState.update { state ->
                         state.copy(
-                            error = it.message?.let { msg -> SyncPlayMessage.Raw(msg) }
-                                ?: SyncPlayMessage.Resource(Res.string.syncplay_error_join_group),
+                            error = UiMessage.of(it, Res.string.syncplay_error_join_group),
                         )
                     }
                 },
@@ -203,37 +198,42 @@ class SyncPlayViewModel(
                 .onFailure {
                     _uiState.update { state ->
                         state.copy(
-                            error = it.message?.let { msg -> SyncPlayMessage.Raw(msg) }
-                                ?: SyncPlayMessage.Resource(Res.string.syncplay_error_leave_group),
+                            error = UiMessage.of(it, Res.string.syncplay_error_leave_group),
                         )
                     }
                 }
         }
     }
 
+    /**
+     * Creates a group and lands the user in it with ONE repository call: the
+     * deepened [SyncPlayRepository.createSyncPlayGroup] owns the whole
+     * create→join-MY-group choreography (the old name-match of a refetched
+     * group list after a blind `delay(500)` could misjoin a same-named group
+     * or strand the user on a slow server — that recovery lives below now).
+     * What remains here is state writes: close the dialog, mark membership,
+     * load the current group, attach the event listener — the same success
+     * arms [joinGroup]'s funnel runs. The invite autoJoin machinery in
+     * [loadGroups] stays (it serves invites, not creation).
+     */
     fun createGroup(name: String) {
         launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
             syncPlayRepository.createSyncPlayGroup(name)
                 .onSuccess {
-                    _uiState.update { it.copy(showCreateDialog = false) }
-                    delay(500)
-                    val updatedGroups = syncPlayRepository.getSyncPlayGroups().getOrElse { emptyList() }
-                    val newGroup = updatedGroups.find { it.groupName == name }
-                    if (newGroup != null) {
-                        _uiState.update { it.copy(groups = updatedGroups) }
-                        joinGroup(newGroup.groupId)
-                    } else {
-                        autoJoinGroupId = null
-                        _uiState.update { it.copy(groups = updatedGroups) }
-                        loadGroups()
-                    }
+                    _uiState.update { it.copy(showCreateDialog = false, isInGroup = true) }
+                    loadCurrentGroup()
+                    startEventListener()
+                    // The legacy flow refreshed the visible group list with
+                    // its post-create refetch; refreshGroups keeps that
+                    // freshness without the join machinery (membership is
+                    // already true, so no invite autoJoin can fire).
+                    refreshGroups()
                 }
                 .onFailure {
                     _uiState.update { state ->
                         state.copy(
-                            error = it.message?.let { msg -> SyncPlayMessage.Raw(msg) }
-                                ?: SyncPlayMessage.Resource(Res.string.syncplay_error_create_group),
+                            error = UiMessage.of(it, Res.string.syncplay_error_create_group),
                         )
                     }
                 }
@@ -269,10 +269,18 @@ class SyncPlayViewModel(
                     is SyncPlaySessionEvent.GroupUpdate -> {
                         if (event.groupName.isBlank() && event.participantCount == 0) {
                             // An empty GroupUpdate normally means the server ejected us.
-                            // But the server can emit a transient empty update right after
-                            // a WebSocket reconnect (before membership is re-asserted); in
-                            // that window treat it as a soft signal and re-confirm via the
-                            // live group info rather than flipping to "left".
+                            // But this arm is NOT pure mirror-masking: the session's
+                            // activeGroupId does NOT model reconnect races — the manager
+                            // keeps activeGroupId set across a WebSocket drop while its
+                            // reconnect watcher re-asserts membership, and the server can
+                            // emit a transient empty update inside that window. An empty
+                            // update there is a soft signal, not an ejection: within the
+                            // grace window below we re-confirm via the live group info
+                            // instead of flipping to "left" (outside the window, or when
+                            // the re-confirm fails, we treat it as the ejection it is —
+                            // the dedicated GroupLeft event clears the session itself,
+                            // so a real ejection without the empty update is covered
+                            // upstream too).
                             val lastReconnect = syncPlaySession.lastReconnectMs
                             val recentlyReconnected = lastReconnect > 0L &&
                                 wallNowMillis() - lastReconnect < RECONNECT_GRACE_MS
@@ -287,7 +295,7 @@ class SyncPlayViewModel(
                         }
                     }
                     is SyncPlaySessionEvent.Notification -> {
-                        _notifications.tryEmit(SyncPlayMessage.Raw(event.message))
+                        _notifications.tryEmit(UiMessage.Raw(event.message))
                     }
                     else -> {}
                 }
@@ -349,7 +357,16 @@ class SyncPlayViewModel(
         launch {
             syncPlayRepository.getSyncPlayGroups()
                 .onSuccess { groups -> _uiState.update { it.copy(groups = groups) } }
-                .onFailure { }
+                .onFailure {
+                    // Surfaced on the tab's error field (the loadGroups fold):
+                    // a silent background poll can hide a dead server behind a
+                    // stale list forever. The screen renders the error only
+                    // over an empty group list, so a stale-but-nonempty list
+                    // still shows with the header status flagging it.
+                    _uiState.update { state ->
+                        state.copy(error = UiMessage.of(it, Res.string.syncplay_error_load_groups))
+                    }
+                }
         }
     }
 

@@ -14,11 +14,11 @@ import kotlin.test.assertTrue
  * counted separately — matching the impl's override count), and pins that
  * count so it can only move DOWN.
  *
- * Baseline 15 is the count at the MediaRepository facade split: the fifteen
- * members moved verbatim from MediaRepositoryImpl to
- * [LiveTvRepositoryImpl] (every one a stateless forward over the
- * LiveTvApiClient/MediaInfoApiClient family seams — no shared cache state,
- * no force lever ever grew on this family).
+ * Baseline 1 since the pass-through mirror retired: the fourteen forwarded
+ * members live on the extended [com.raulshma.jellyplay.core.network.api.LiveTvApiClient]
+ * (interface inheritance — the interface re-declares nothing), and the one
+ * member declared here is the family's real routing decision
+ * ([LiveTvRepository.deleteRecording] → MediaInfoApiClient.deleteItem).
  *
  * Lower [maxInterfaceMembers] when another member retires; never raise it.
  * A genuinely new Live capability should land as a narrow collaborator over
@@ -27,7 +27,7 @@ import kotlin.test.assertTrue
 class LiveTvRepositorySurfaceTest {
 
     /** The maximum allowed member count of [LiveTvRepository] (see class KDoc). */
-    private val maxInterfaceMembers = 15
+    private val maxInterfaceMembers = 1
 
     /** Walks up from the working dir to the module root that owns src/commonMain/kotlin. */
     private fun moduleRoot(): File {
@@ -121,13 +121,12 @@ class LiveTvRepositorySurfaceTest {
     @Test
     fun `interface body parse actually sees members`() {
         val body = interfaceBody()
-        // Sanity: the parse actually sees declarations, so an empty/false
-        // body can never satisfy the ratchet above. No members have been
-        // retired from this surface yet, so there is no absence list to pin
-        // (the PlaybackRepository precedent's second half) — this guard is
-        // the whole vacuity defense until one retires.
+        // Sanity: the parse actually sees the routing member, so an
+        // empty/false body can never satisfy the ratchet above — and the
+        // routing decision must stay ON this surface (the client-inherited
+        // fourteen ride the supertype, not this file).
         assertTrue(
-            countMembers(body) > 0 && body.contains("getLiveTvChannels") && body.contains("cancelSeriesTimer"),
+            countMembers(body) > 0 && body.contains("deleteRecording"),
             "interface body parse found no members — the ratchet is vacuous",
         )
     }

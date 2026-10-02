@@ -18,8 +18,10 @@ import com.raulshma.jellyplay.core.network.arr.SonarrApiClient
  * identical shapes, bound to one [ArrServerConfig] so call sites stop
  * hand-writing the `if (kind == RADARR) radarr.x(...) else sonarr.x(...)`
  * ladder. Adapters are thin delegates over the injected
- * [RadarrApiClient] / [SonarrApiClient] — no caching, no retry (the
- * [ArrRepositoryImpl] fan-out owns per-server failure degradation).
+ * [RadarrApiClient] / [SonarrApiClient], forwarding the bound [ArrServerConfig]
+ * connection whole (the clients read its `baseUrl` + `apiKey` themselves) —
+ * no caching, no retry (the [ArrRepositoryImpl] fan-out owns per-server
+ * failure degradation).
  *
  * [postCommand] carries the union of the two clients' command parameters
  * (`movieIds` is Radarr's, `seriesId`/`seasonNumber` are Sonarr's); each
@@ -157,33 +159,33 @@ internal class RadarrServiceClient(
     private val server: ArrServerConfig,
 ) : ArrServiceClient {
     override val serviceName: String = "Radarr"
-    override suspend fun getQueue(): Result<List<ArrQueueItem>> = client.getQueue(server.baseUrl, server.apiKey)
+    override suspend fun getQueue(): Result<List<ArrQueueItem>> = client.getQueue(server)
     override suspend fun deleteQueueItem(id: Int, options: ArrQueueDeleteOptions): Result<Unit> =
-        client.deleteQueueItem(server.baseUrl, server.apiKey, id, options)
+        client.deleteQueueItem(server, id, options)
     override suspend fun deleteQueueItems(ids: List<Int>, options: ArrQueueDeleteOptions): Result<Unit> =
-        client.deleteQueueItems(server.baseUrl, server.apiKey, ids, options)
-    override suspend fun grabQueueItem(id: Int): Result<Unit> = client.grabQueueItem(server.baseUrl, server.apiKey, id)
+        client.deleteQueueItems(server, ids, options)
+    override suspend fun grabQueueItem(id: Int): Result<Unit> = client.grabQueueItem(server, id)
     override suspend fun importQueueItem(downloadId: String): Result<Unit> =
-        client.importQueueItem(server.baseUrl, server.apiKey, downloadId)
+        client.importQueueItem(server, downloadId)
     override suspend fun getCalendar(start: String, end: String): Result<List<ArrCalendarItem>> =
-        client.getCalendar(server.baseUrl, server.apiKey, start, end)
+        client.getCalendar(server, start, end)
     override suspend fun getBlocklist(): Result<List<ArrBlocklistItem>> =
-        client.getBlocklist(server.baseUrl, server.apiKey)
+        client.getBlocklist(server)
     override suspend fun deleteBlocklistItem(id: Int): Result<Unit> =
-        client.deleteBlocklistItem(server.baseUrl, server.apiKey, id)
+        client.deleteBlocklistItem(server, id)
     override suspend fun deleteBlocklistItems(ids: List<Int>): Result<Unit> =
-        client.deleteBlocklistItems(server.baseUrl, server.apiKey, ids)
+        client.deleteBlocklistItems(server, ids)
     override suspend fun postCommand(
         commandName: ArrCommandName,
         movieIds: List<Int>?,
         episodeIds: List<Int>?,
         seriesId: Int?,
         seasonNumber: Int?,
-    ): Result<ArrCommand> = client.postCommand(server.baseUrl, server.apiKey, commandName, movieIds, episodeIds)
-    override suspend fun testConnection(): Result<Unit> = client.testConnection(server.baseUrl, server.apiKey)
+    ): Result<ArrCommand> = client.postCommand(server, commandName, movieIds, episodeIds)
+    override suspend fun testConnection(): Result<Unit> = client.testConnection(server)
 
     override suspend fun lookup(ref: ArrRedownloadRef): ArrRedownloadLookup {
-        val result = client.getMovieForTmdb(server.baseUrl, server.apiKey, ref.tmdbId)
+        val result = client.getMovieForTmdb(server, ref.tmdbId)
         val movie = result.getOrNull()
         if (result.isFailure) {
             return ArrRedownloadLookup.Aborted("Radarr lookup failed: ${result.exceptionOrNull()?.message}.")
@@ -202,12 +204,12 @@ internal class RadarrServiceClient(
     }
 
     override suspend fun deleteFile(fileId: Int): Boolean =
-        client.deleteMovieFile(server.baseUrl, server.apiKey, fileId).isSuccess
+        client.deleteMovieFile(server, fileId).isSuccess
 
     override suspend fun verifyDeleted(item: ArrRedownloadItem): ArrRedownloadStepResult {
         // Re-query; an inconclusive (failed) re-query counts as verified —
         // `rechecked?.hasFile != true` is true when it returns null too.
-        val rechecked = client.getMovieForTmdb(server.baseUrl, server.apiKey, item.tmdbId).getOrNull()
+        val rechecked = client.getMovieForTmdb(server, item.tmdbId).getOrNull()
         val verified = rechecked?.hasFile != true
         return ArrRedownloadStepResult(
             ArrRedownloadStep.VERIFY_DELETED,
@@ -217,10 +219,10 @@ internal class RadarrServiceClient(
     }
 
     override suspend fun monitor(id: Int): Boolean =
-        client.monitorMovies(server.baseUrl, server.apiKey, listOf(id), monitored = true).isSuccess
+        client.monitorMovies(server, listOf(id), monitored = true).isSuccess
 
     override suspend fun search(id: Int): Boolean =
-        client.postCommand(server.baseUrl, server.apiKey, ArrCommandName.SEARCH_MOVIE, movieIds = listOf(id)).isSuccess
+        client.postCommand(server, ArrCommandName.SEARCH_MOVIE, movieIds = listOf(id)).isSuccess
 }
 
 /** [ArrServiceClient] over a [SonarrApiClient] (the bound server is a Sonarr kind). */
@@ -229,22 +231,22 @@ internal class SonarrServiceClient(
     private val server: ArrServerConfig,
 ) : ArrServiceClient {
     override val serviceName: String = "Sonarr"
-    override suspend fun getQueue(): Result<List<ArrQueueItem>> = client.getQueue(server.baseUrl, server.apiKey)
+    override suspend fun getQueue(): Result<List<ArrQueueItem>> = client.getQueue(server)
     override suspend fun deleteQueueItem(id: Int, options: ArrQueueDeleteOptions): Result<Unit> =
-        client.deleteQueueItem(server.baseUrl, server.apiKey, id, options)
+        client.deleteQueueItem(server, id, options)
     override suspend fun deleteQueueItems(ids: List<Int>, options: ArrQueueDeleteOptions): Result<Unit> =
-        client.deleteQueueItems(server.baseUrl, server.apiKey, ids, options)
-    override suspend fun grabQueueItem(id: Int): Result<Unit> = client.grabQueueItem(server.baseUrl, server.apiKey, id)
+        client.deleteQueueItems(server, ids, options)
+    override suspend fun grabQueueItem(id: Int): Result<Unit> = client.grabQueueItem(server, id)
     override suspend fun importQueueItem(downloadId: String): Result<Unit> =
-        client.importQueueItem(server.baseUrl, server.apiKey, downloadId)
+        client.importQueueItem(server, downloadId)
     override suspend fun getCalendar(start: String, end: String): Result<List<ArrCalendarItem>> =
-        client.getCalendar(server.baseUrl, server.apiKey, start, end)
+        client.getCalendar(server, start, end)
     override suspend fun getBlocklist(): Result<List<ArrBlocklistItem>> =
-        client.getBlocklist(server.baseUrl, server.apiKey)
+        client.getBlocklist(server)
     override suspend fun deleteBlocklistItem(id: Int): Result<Unit> =
-        client.deleteBlocklistItem(server.baseUrl, server.apiKey, id)
+        client.deleteBlocklistItem(server, id)
     override suspend fun deleteBlocklistItems(ids: List<Int>): Result<Unit> =
-        client.deleteBlocklistItems(server.baseUrl, server.apiKey, ids)
+        client.deleteBlocklistItems(server, ids)
     override suspend fun postCommand(
         commandName: ArrCommandName,
         movieIds: List<Int>?,
@@ -252,16 +254,16 @@ internal class SonarrServiceClient(
         seriesId: Int?,
         seasonNumber: Int?,
     ): Result<ArrCommand> = client.postCommand(
-        server.baseUrl, server.apiKey, commandName,
+        server, commandName,
         seriesId = seriesId, episodeIds = episodeIds, seasonNumber = seasonNumber,
     )
-    override suspend fun testConnection(): Result<Unit> = client.testConnection(server.baseUrl, server.apiKey)
+    override suspend fun testConnection(): Result<Unit> = client.testConnection(server)
 
     override suspend fun lookup(ref: ArrRedownloadRef): ArrRedownloadLookup {
         if (ref.tvdbId == null || ref.seasonNumber == null || ref.episodeNumber == null) {
             return ArrRedownloadLookup.Aborted("Missing tvdb id or season/episode number.")
         }
-        val seriesResult = client.findSeriesByTvdb(server.baseUrl, server.apiKey, ref.tvdbId)
+        val seriesResult = client.findSeriesByTvdb(server, ref.tvdbId)
         // Distinguish a genuine "not tracked" (null) from a network/parse error
         // (failure) so the message is actionable instead of misleading.
         val seriesId = seriesResult.getOrNull()
@@ -273,7 +275,7 @@ internal class SonarrServiceClient(
         }
 
         val episodeResult = client.getEpisodeInfo(
-            server.baseUrl, server.apiKey, seriesId, ref.seasonNumber, ref.episodeNumber,
+            server, seriesId, ref.seasonNumber, ref.episodeNumber,
         )
         val episode = episodeResult.getOrNull()
         if (episodeResult.isFailure) {
@@ -285,7 +287,7 @@ internal class SonarrServiceClient(
             // *does* have so the user can see the discrepancy. A season with a
             // null first episode number (empty summary row) renders bare —
             // `first()` would throw and lose the whole step table.
-            val diag = client.getSeasonSummaries(server.baseUrl, server.apiKey, seriesId)
+            val diag = client.getSeasonSummaries(server, seriesId)
                 .getOrNull()
                 ?.takeIf { it.isNotEmpty() }
                 ?.joinToString(", ") { summ ->
@@ -324,11 +326,11 @@ internal class SonarrServiceClient(
     }
 
     override suspend fun deleteFile(fileId: Int): Boolean =
-        client.deleteEpisodeFile(server.baseUrl, server.apiKey, fileId).isSuccess
+        client.deleteEpisodeFile(server, fileId).isSuccess
 
     override suspend fun verifyDeleted(item: ArrRedownloadItem): ArrRedownloadStepResult {
         val recheckResult = client.getEpisodeInfo(
-            server.baseUrl, server.apiKey, item.seriesId, item.seasonNumber, item.episodeNumber,
+            server, item.seriesId, item.seasonNumber, item.episodeNumber,
         )
         val rechecked = recheckResult.getOrNull()
         return when {
@@ -356,8 +358,8 @@ internal class SonarrServiceClient(
     }
 
     override suspend fun monitor(id: Int): Boolean =
-        client.monitorEpisodes(server.baseUrl, server.apiKey, listOf(id), monitored = true).isSuccess
+        client.monitorEpisodes(server, listOf(id), monitored = true).isSuccess
 
     override suspend fun search(id: Int): Boolean =
-        client.postCommand(server.baseUrl, server.apiKey, ArrCommandName.SEARCH_EPISODES, episodeIds = listOf(id)).isSuccess
+        client.postCommand(server, ArrCommandName.SEARCH_EPISODES, episodeIds = listOf(id)).isSuccess
 }

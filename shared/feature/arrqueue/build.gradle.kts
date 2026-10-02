@@ -1,5 +1,3 @@
-import org.gradle.api.plugins.ExtensionAware
-
 plugins {
     id("jellyplay.kmp.library.compose")
     alias(libs.plugins.kotlin.serialization)
@@ -15,38 +13,18 @@ kotlin {
             implementation(project(":shared:core:model"))
             implementation(project(":shared:core:designsystem"))
             implementation(project(":shared:core:data"))
+            // (the former core:network edge dropped: the /release cache-miss
+            // leak folded into the data seam's ArrReleaseCacheUnavailable —
+            // the sheet branches on the seam type, never a network exception.)
             // ExperimentalStore — the DIRECT_ARR_INTEGRATION flag gate behind
             // the combined-queue screen.
             implementation(project(":shared:core:datastore"))
             implementation(project(":shared:core:ui"))
-            // JetBrains CMP distribution (see catalog note): Android targets
-            // redirect to the androidx artifacts.
-            implementation(libs.jb.compose.runtime)
-            implementation(libs.jb.compose.ui)
-            implementation(libs.jb.compose.foundation)
-            implementation(libs.jb.compose.animation)
-            implementation(libs.jb.compose.material3)
-            // Compose-resources runtime (stringResource/StringResource API).
-            implementation(compose.components.resources)
-            implementation(libs.tabler.icons.outline)
-            implementation(libs.tabler.icons.filled)
-            // Nav3 ships KMP variants from google maven directly — no mirror.
             // (The legacy build's lifecycle-viewmodel-navigation3 edge was
             // dropped with the syncplay move: no arrqueue file imports it —
             // the navigation entry uses entry<Route> from the nav3 runtime/ui
             // artifacts only.)
-            implementation(libs.navigation3.runtime)
-            implementation(libs.navigation3.ui)
-            implementation(libs.lifecycle.viewmodel)
-            // collectAsStateWithLifecycle in the screen.
-            implementation(libs.lifecycle.runtime.compose)
             implementation(libs.coil.compose)
-            // Koin owns the arrqueue ViewModel (V3 feature conveyor: one
-            // framework per type — the Hilt annotations were stripped at the
-            // move).
-            implementation(libs.koin.core)
-            implementation(libs.koin.compose)
-            implementation(libs.koin.compose.viewmodel)
         }
         // (kotlin("test") comes from the convention plugin.)
         getByName("jvmTest").dependencies {
@@ -61,9 +39,7 @@ kotlin {
     }
 }
 
-// `compose.resources` is a nested extension with no generated Kotlin-DSL
-// accessor; configure it explicitly. Same package as the legacy :feature:arrqueue
-// so migrated files keep their `com.raulshma.jellyplay.feature.arrqueue` imports;
-// generated accessors land in `...feature.arrqueue.generated.resources`.
-val composeResources = (compose as ExtensionAware).extensions.getByName("resources") as org.jetbrains.compose.resources.ResourcesExtension
-composeResources.packageOfResClass = "com.raulshma.jellyplay.feature.arrqueue.generated.resources"
+// The compose-resources `packageOfResClass`
+// (`...feature.arrqueue.generated.resources`, same as the legacy value) is a
+// path-derived default from the convention plugin now — see
+// KmpLibraryComposePlugin.

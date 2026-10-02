@@ -189,6 +189,22 @@ enum class DeinterlaceMode(val key: String, val displayName: String) {
  * the global settings"; "Inherit" clears the override, never writes OFF into
  * it (an explicit OFF pack override IS meaningful: "this series looks wrong
  * upscaled").
+ *
+ * Recorded direction (review candidate A2 TIER 2, descoped): this family
+ * ([MpvShaderPack]/[MpvToneMapping]/[MpvRenderQuality] + this override row)
+ * stays deliberately mpv-typed. Generalizing it engine-neutrally — either an
+ * AspectRatio-style neutral vocabulary the adapters map, or a
+ * capability-declared settings surface off [EngineCapabilities] — has no
+ * counterpart to map to: ExoPlayer/libVLC expose no shader-chain or
+ * tone-mapping surface at all, so a neutral vocabulary would either lose the
+ * mpv knobs or fake generality. The seam to revisit lives HERE (the persisted
+ * per-item row) and in the contract's `engineSpecific` slot this file's
+ * variants already share: a future engine with real render knobs would add
+ * its own variant beside [MpvRenderOverrides] and a capability gate on the
+ * sheet's menu entry, not a shared enum. Not attempted in the review wave —
+ * render profiles + the multi-range seek bar just shipped (59592e350,
+ * 636f2dcff) and the rework would churn a fresh, pinned feature for zero
+ * current-engine gain.
  */
 @Immutable
 @Serializable
@@ -428,4 +444,46 @@ data class ExoPlayerEngineConfig(
     val audioOffloadMode: ExoAudioOffloadMode = ExoAudioOffloadMode.DISABLED,
     val backBufferDurationMs: Int = 0,
     val enableDecoderFallback: Boolean = true,
+) : EngineSpecificConfig
+
+/**
+ * File-path view of the app-level client certificate for engines that do
+ * their own TLS (mpv/ffmpeg). Paths are the normalized PEM pair written at
+ * import; [caPath] is the optional trust-anchor override.
+ */
+@Immutable
+@Serializable
+data class PlaybackTls(
+    val clientCertificatePath: String,
+    val clientKeyPath: String,
+    val caPath: String? = null,
+)
+
+/**
+ * The request-side per-engine payload riding [com.raulshma.jellyplay.feature.player.video.engine.PlaybackRequest]'s
+ * `engineSpecific` slot — the members that only SOME adapters consume, kept
+ * out of the universal request shape:
+ *  - [normalizationGain] — the per-track ReplayGain value (dB) from the
+ *    media item; consumed by [ExoPlayerEngineConfig]'s engine (the in-sink
+ *    loudness normalization). `null` = the server provided no gain.
+ *  - [mimeType] — the primary media item's MIME hint (downloaded files whose
+ *    on-disk extension does not match their container); the same engine uses
+ *    it in preference to URI-extension inference.
+ *  - [tls] — the client-certificate file paths for engines with their own
+ *    networking (the mpv engines via ffmpeg); OkHttp-backed engines inherit
+ *    the certificate through the shared TLS layer and ignore it.
+ *
+ * ONE variant, not one per engine: engine selection happens at load time
+ * from this same request, so a single request must simultaneously carry the
+ * ExoPlayer- and mpv-consumed specifics. Each adapter unpacks only what it
+ * consumes (the request exposes a typed `requestSpecific` projection); the
+ * config-side [EngineSpecificConfig] variants (the `*EngineConfig`s above)
+ * remain the per-engine run-time settings channel.
+ */
+@Immutable
+@Serializable
+data class PlaybackRequestSpecific(
+    val normalizationGain: Float? = null,
+    val mimeType: String? = null,
+    val tls: PlaybackTls? = null,
 ) : EngineSpecificConfig

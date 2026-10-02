@@ -10,13 +10,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -50,7 +46,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import org.jetbrains.compose.resources.stringResource
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.feature.auth.generated.resources.Res
 import com.raulshma.jellyplay.feature.auth.generated.resources.auth_add_user
@@ -71,9 +66,9 @@ import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
 import com.raulshma.jellyplay.core.ui.components.AddListRow
 import com.raulshma.jellyplay.core.ui.components.CircleBgBackButton
-import com.raulshma.jellyplay.core.ui.components.LocalFloatingNavOffset
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
+import com.raulshma.jellyplay.core.ui.components.clearFloatingNav
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
@@ -106,7 +101,6 @@ fun UserSelectionScreen(
 
     val isSynthwave = LocalIsSynthwave.current
     val backgroundColorState = rememberScreenBackgroundColorState()
-    val navOffsetPx = LocalFloatingNavOffset.current
 
     Scaffold(
         containerColor = backgroundColorState.value,
@@ -197,21 +191,18 @@ fun UserSelectionScreen(
 
             if (!isTv) {
                 val fabFocusState = rememberTvFocusState(focusedScale = 1.05f)
+                // Presence-gated nav clearance — see ServerListScreen's FAB for
+                // the full rationale (signed-out host paints no floating nav;
+                // the Scaffold consumes the navigationBars inset, hence
+                // includeSystemInset = false).
                 ExtendedFloatingActionButton(
                     onClick = onAddUser,
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
                         .then(fabFocusState.focusModifier)
                         .tvFocusIndicator(fabFocusState, ShapeCache.smooth16)
-                        .padding(
-                            end = 16.dp,
-                            bottom = 16.dp + Dimensions.floatingNavHeight,
-                        )
-                        .offset {
-                            val maxOffset = Dimensions.floatingNavHeight.toPx()
-                            val yOffset = (-navOffsetPx()).coerceAtMost(maxOffset)
-                            IntOffset(x = 0, y = yOffset.toInt())
-                        },
+                        .padding(end = 16.dp)
+                        .clearFloatingNav(includeSystemInset = false),
                     icon = { Icon(Tabler.Outline.Plus, contentDescription = null) },
                     text = { Text(stringResource(Res.string.auth_add_user)) },
                 )

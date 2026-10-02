@@ -5,10 +5,14 @@ import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.DvrTimer
 import com.raulshma.jellyplay.core.model.LiveTvRecording
+import com.raulshma.jellyplay.core.ui.message.UiMessage
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.feature.livetv.components.RecordActions
 import com.raulshma.jellyplay.feature.livetv.components.RecordOutcome
 import com.raulshma.jellyplay.feature.livetv.formatLiveTvDateLabel
+import com.raulshma.jellyplay.feature.livetv.generated.resources.Res
+import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_error_cancel_recording
+import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_error_load_schedule
 
 /** Timers grouped by their start date, matching jellyfin-web `getTimersHtml`. */
 @Immutable
@@ -22,7 +26,8 @@ data class ScheduleUiState(
     val activeRecordings: List<LiveTvRecording> = emptyList(),
     val upcomingGroups: List<TimerDateGroup> = emptyList(),
     val isLoading: Boolean = false,
-    val error: String? = null,
+    /** The load/cancel failure — resolved to text at render ([UiMessage.asText]). */
+    val error: UiMessage? = null,
     /** Selected timer for the detail/cancel sheet; null = hidden. */
     val selectedTimer: DvrTimer? = null,
 )
@@ -51,7 +56,8 @@ class ScheduleViewModel(
                 _uiState.update { it.copy(selectedTimer = null) }
                 load()
             }
-            is RecordOutcome.Error -> _uiState.update { it.copy(error = outcome.message) }
+            is RecordOutcome.Error ->
+                _uiState.update { it.copy(error = UiMessage.of(outcome.message, Res.string.livetv_error_cancel_recording)) }
             is RecordOutcome.Requesting, RecordOutcome.Idle -> Unit
         }
     }
@@ -63,8 +69,12 @@ class ScheduleViewModel(
             _uiState.update { it.copy(isLoading = true, error = null) }
             val active = mediaRepository.getRecordings(isInProgress = true)
             val upcoming = mediaRepository.getTimers(isActive = false, isScheduled = true)
-            active.onFailure { _uiState.update { s -> s.copy(error = it.message) } }
-            upcoming.onFailure { _uiState.update { s -> s.copy(error = it.message) } }
+            active.onFailure {
+                _uiState.update { s -> s.copy(error = UiMessage.of(it, Res.string.livetv_error_load_schedule)) }
+            }
+            upcoming.onFailure {
+                _uiState.update { s -> s.copy(error = UiMessage.of(it, Res.string.livetv_error_load_schedule)) }
+            }
             _uiState.update { s ->
                 s.copy(
                     activeRecordings = active.getOrDefault(emptyList()),

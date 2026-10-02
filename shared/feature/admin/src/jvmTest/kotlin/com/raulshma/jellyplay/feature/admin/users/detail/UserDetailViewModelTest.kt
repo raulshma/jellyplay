@@ -29,6 +29,7 @@ import kotlin.test.assertTrue
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
+import com.raulshma.jellyplay.core.ui.message.UiMessage
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class UserDetailViewModelTest {
@@ -191,7 +192,7 @@ class UserDetailViewModelTest {
         // screen ever rendered it — so only this saveError path remains, which
         // UserDetailScreen shows.
         assertNotNull(vm.uiState.value.saveError)
-        assertEquals(AdminUserMessage.Resource(Res.string.admin_could_not_reload), vm.uiState.value.saveError)
+        assertEquals(UiMessage.Resource(Res.string.admin_could_not_reload), vm.uiState.value.saveError)
     }
 
     @Test

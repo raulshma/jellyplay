@@ -1,5 +1,3 @@
-import org.gradle.api.plugins.ExtensionAware
-
 plugins {
     id("jellyplay.kmp.library.compose")
 }
@@ -22,6 +20,10 @@ kotlin {
             implementation(project(":shared:core:data"))
             implementation(project(":shared:core:datastore"))
             implementation(project(":shared:core:ui"))
+            // The shared player-chrome policies (controlsAutoHideTimeoutMs —
+            // the TV doubling the reader's auto-hide timeout also folds
+            // through; one implementation for every auto-hiding surface).
+            implementation(project(":shared:core:player-contract"))
             // NetworkQualifiers.streamingHttpClient — the reader-cache fetcher
             // rides the same streaming client the players use.
             implementation(project(":shared:core:network"))
@@ -31,26 +33,6 @@ kotlin {
             // okio.Path is the commonMain file handle the document/opener
             // seams pass around.
             implementation(libs.okio)
-            // JetBrains CMP distribution (see catalog note): Android targets
-            // redirect to the androidx artifacts.
-            implementation(libs.jb.compose.runtime)
-            implementation(libs.jb.compose.ui)
-            implementation(libs.jb.compose.foundation)
-            implementation(libs.jb.compose.animation)
-            implementation(libs.jb.compose.material3)
-            // Compose-resources runtime (stringResource/StringResource API).
-            implementation(compose.components.resources)
-            implementation(libs.tabler.icons.outline)
-            implementation(libs.tabler.icons.filled)
-            // Nav3 ships KMP variants from google maven directly — no mirror.
-            implementation(libs.navigation3.runtime)
-            implementation(libs.navigation3.ui)
-            implementation(libs.lifecycle.viewmodel)
-            implementation(libs.lifecycle.runtime.compose)
-            // Koin owns the book-reader ViewModel (one framework per type).
-            implementation(libs.koin.core)
-            implementation(libs.koin.compose)
-            implementation(libs.koin.compose.viewmodel)
         }
         getByName("jvmShared").dependencies {
             // Plain GET streaming for the reader cache (BookContentResolver).
@@ -82,6 +64,10 @@ kotlin {
             // Desktop PDF rendering. Android intentionally uses the platform
             // android.graphics.pdf.PdfRenderer (no dependency there).
             implementation(libs.pdfbox)
+            // Windows SAPI read-aloud (ISpVoice via late-bound IDispatch; the
+            // desktop TtsBinding). jna-platform carries the COM plumbing the
+            // raw jna artifact (libmpv) lacks.
+            implementation(libs.jna.platform)
             // Desktop EPUB host — KCEF/Chromium; the screen owns KCEF.init and
             // shows the first-run CEF download progress.
             implementation(libs.compose.webview.multiplatform)
@@ -89,8 +75,12 @@ kotlin {
     }
 }
 
-// `compose.resources` is a nested extension with no generated Kotlin-DSL
-// accessor; configure it explicitly. Generated accessors land in
-// `...feature.book.generated.resources`.
-val composeResources = (compose as ExtensionAware).extensions.getByName("resources") as org.jetbrains.compose.resources.ResourcesExtension
-composeResources.packageOfResClass = "com.raulshma.jellyplay.feature.book.generated.resources"
+// The convention plugin derives `compose.resources.packageOfResClass` from the
+// module path (`...feature.player.book.generated.resources`), but this
+// module's legacy Res package predates that convention: the generated
+// accessors land in `...feature.book.generated.resources` (the legacy module
+// had already collapsed the `player` segment — the namespace carries the same
+// legacy shape). Explicit override:
+jellyplay {
+    resPackage = "com.raulshma.jellyplay.feature.book.generated.resources"
+}

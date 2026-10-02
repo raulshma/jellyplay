@@ -77,7 +77,7 @@ class PreferenceProjections constructor(
                 videoSeekDurationMs = video.videoSeekDurationMs,
                 videoDefaultOrientation = video.videoDefaultOrientation,
                 videoControlsTimeoutMs = video.videoControlsTimeoutMs,
-                videoGesturesEnabled = video.videoGesturesEnabled,
+                videoGestureMode = video.videoGestureMode,
                 videoHoldSpeedEnabled = video.videoHoldSpeedEnabled,
                 videoHoldSpeedMultiplier = video.videoHoldSpeedMultiplier,
                 videoDefaultSpeed = video.videoDefaultSpeed,
@@ -243,6 +243,10 @@ class PreferenceProjections constructor(
                 downloadQuality = downloads.downloadQuality,
                 smartDownloadsEnabled = downloads.smartDownloadsEnabled,
                 autoDownloadNewEpisodes = downloads.autoDownloadNewEpisodes,
+                autoDownloadLookahead = downloads.autoDownloadLookahead,
+                autoDownloadMaxPerPass = downloads.autoDownloadMaxPerPass,
+                autoDownloadKeepDays = downloads.autoDownloadKeepDays,
+                autoDownloadServers = downloads.autoDownloadServers,
                 maxDownloadStorageGb = downloads.maxDownloadStorageGb,
                 downloadStorageLocation = downloads.downloadStorageLocation,
                 autoDeleteAfterWatch = downloads.autoDeleteAfterWatch,
@@ -334,8 +338,9 @@ class PreferenceProjections constructor(
     /**
      * Fields read by `HomeSettingsScreen` — a single-store slice over
      * [HomeDiscoveryStore] so the home config hub recomposes only on
-     * home-discovery writes. The card-display toggles stay out (app-wide card
-     * settings owned by the Appearance screen).
+     * home-discovery writes. Includes the card-display quartet since the
+     * finished Appearance → HomeSettings move (PS-4): the knobs are
+     * home-discovery state and their rows render on the hub's Cards group.
      */
     val homeScreenPreferences: StateFlow<HomeScreenPreferences> =
         stores.homeDiscovery.homeDiscovery.map { home ->
@@ -348,14 +353,20 @@ class PreferenceProjections constructor(
                 hideTopHeaderOnScroll = home.hideTopHeaderOnScroll,
                 continueWatchingClickBehavior = home.continueWatchingClickBehavior,
                 hiddenCwItemIds = home.hiddenCwItemIds,
+                nextUpExcludedSeriesIds = home.nextUpExcludedSeriesIds,
                 mergeContinueWatchingAndNextUp = home.mergeContinueWatchingAndNextUp,
                 nextUpMaxDays = home.nextUpMaxDays,
                 nextUpRewatching = home.nextUpRewatching,
+                classicRows = home.classicRows,
                 enabledHomeSectionTypes = home.enabledHomeSectionTypes,
                 homeSectionOrder = home.homeSectionOrder,
                 pinnedHomeSections = home.pinnedHomeSections,
                 discoverRows = home.discoverRows,
                 homeLayoutPresets = home.homeLayoutPresets,
+                showUnwatchedBadge = home.showUnwatchedBadge,
+                showWatchedCheckmark = home.showWatchedCheckmark,
+                hideWatchedItems = home.hideWatchedItems,
+                showExternalRatings = home.showExternalRatings,
             )
         }.distinctUntilChanged()
             .stateIn(scope, SharingStarted.WhileSubscribed(5_000), HomeScreenPreferences())
@@ -416,6 +427,8 @@ class PreferenceProjections constructor(
             episodesDescending = library.episodesDescending,
             compactEpisodeList = library.compactEpisodeList,
             showDetailUpNext = library.showDetailUpNext,
+            showMissingEpisodes = library.showMissingEpisodes,
+            preferLogos = library.preferLogos,
         )
     }.distinctUntilChanged()
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), DetailPreferences())
@@ -449,7 +462,7 @@ class PreferenceProjections constructor(
             preferredPlayer = g1.playback.preferredPlayer,
             streamingQuality = g1.playback.streamingQuality,
             videoSeekDurationMs = g2.video.videoSeekDurationMs,
-            videoGesturesEnabled = g2.video.videoGesturesEnabled,
+            videoGestureMode = g2.video.videoGestureMode,
             videoDefaultOrientation = g2.video.videoDefaultOrientation,
             videoAutoplayNext = g2.video.videoAutoplayNext,
             audioDefaultSpeed = g2.audio.audioDefaultSpeed,
@@ -500,8 +513,18 @@ class PreferenceProjections constructor(
             dreamShowTitle = g2.screensaver.dreamShowTitle,
             dreamKenBurnsEnabled = g2.screensaver.dreamKenBurnsEnabled,
             dreamTransitionStyle = g2.screensaver.dreamTransitionStyle,
+            dreamMaxParentalRating = g2.screensaver.dreamMaxParentalRating,
+            dreamDimAfterMs = g2.screensaver.dreamDimAfterMs,
+            dreamDimPercent = g2.screensaver.dreamDimPercent,
             idleAmbientEnabled = g2.screensaver.idleAmbientEnabled,
             idleAmbientTimeoutMin = g2.screensaver.idleAmbientTimeoutMin,
+            discordPresenceEnabled = g2.screensaver.discordPresenceEnabled,
+            hooksEnabled = g2.screensaver.hooksEnabled,
+            hooksPlayCmd = g2.screensaver.hooksPlayCmd,
+            hooksStopCmd = g2.screensaver.hooksStopCmd,
+            hooksEndedCmd = g2.screensaver.hooksEndedCmd,
+            hooksIdleCmd = g2.screensaver.hooksIdleCmd,
+            hooksIdleEndedCmd = g2.screensaver.hooksIdleEndedCmd,
             enabledExperimentalFeatures = g2.experimental.enabledExperimentalFeatures,
         )
     }.distinctUntilChanged()

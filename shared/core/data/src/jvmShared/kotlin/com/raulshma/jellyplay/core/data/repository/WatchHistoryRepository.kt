@@ -10,7 +10,8 @@ import com.raulshma.jellyplay.core.model.PlaybackReportingDetail
 import com.raulshma.jellyplay.core.model.PlaybackReportingStatus
 import com.raulshma.jellyplay.core.model.TimeSource
 import androidx.compose.runtime.Immutable
-import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import com.raulshma.jellyplay.core.network.api.AuthApiClient
+import com.raulshma.jellyplay.core.network.api.MediaInfoApiClient
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import java.util.concurrent.atomic.AtomicLong
@@ -43,7 +44,16 @@ interface WatchHistoryRepository {
 }
 
 class WatchHistoryRepositoryImpl constructor(
-    private val apiClient: JellyfinApiClient,
+    /**
+     * The identity source for the per-user scans (`currentUser.first()?.id`)
+     * — the AuthApiClient family seam.
+     */
+    private val authApiClient: AuthApiClient,
+    /**
+     * The paged played-items / plugin-activity reads (`getItemsWithUserData`,
+     * `getPlaybackReporting*`) — the MediaInfoApiClient family seam.
+     */
+    private val mediaInfoApiClient: MediaInfoApiClient,
     /**
      * The ONE owner of the Playback Reporting plugin status (a StateFlow +
      * refresh, registered with `SessionCacheRegistry` for identity
@@ -106,9 +116,9 @@ class WatchHistoryRepositoryImpl constructor(
     private val playedItemsFlight = SingleFlight<PlayedItemsKey, List<MediaItem>>(epoch = AtomicLong(0L))
 
     override suspend fun getMinimumActivityDate(): String? {
-        val user = apiClient.currentUser.first() ?: return null
+        val user = authApiClient.currentUser.first() ?: return null
         return try {
-            val result = apiClient.getItemsWithUserData(
+            val result = mediaInfoApiClient.getItemsWithUserData(
                 userId = user.id,
                 isPlayed = true,
                 sortBy = "DatePlayed",
@@ -153,7 +163,7 @@ class WatchHistoryRepositoryImpl constructor(
 
         val isPluginAvailable = playbackReportingStatus.value == PlaybackReportingStatus.AVAILABLE
         val points = if (isPluginAvailable) {
-            apiClient.getPlaybackReportingPlayActivity(
+            mediaInfoApiClient.getPlaybackReportingPlayActivity(
                 days = days,
                 dataType = "count",
                 filter = filterParam,
@@ -180,7 +190,7 @@ class WatchHistoryRepositoryImpl constructor(
     }
 
     override suspend fun getItemsForDay(date: String, filter: HeatmapFilter): List<PlaybackReportingDetail> {
-        val user = apiClient.currentUser.first() ?: return emptyList()
+        val user = authApiClient.currentUser.first() ?: return emptyList()
         val filterParam = when (filter) {
             HeatmapFilter.VIDEO -> "Movie,Episode"
             HeatmapFilter.MUSIC -> "Audio"
@@ -189,7 +199,7 @@ class WatchHistoryRepositoryImpl constructor(
 
         val isPluginAvailable = playbackReportingStatus.value == PlaybackReportingStatus.AVAILABLE
         val details = if (isPluginAvailable) {
-            apiClient.getPlaybackReportingUserItems(
+            mediaInfoApiClient.getPlaybackReportingUserItems(
                 userId = user.id,
                 date = date,
                 filter = filterParam,
@@ -260,14 +270,14 @@ class WatchHistoryRepositoryImpl constructor(
     }
 
     private suspend fun fetchPlayedItems(year: Int, filter: HeatmapFilter): List<MediaItem> {
-        val user = apiClient.currentUser.first() ?: return emptyList()
+        val user = authApiClient.currentUser.first() ?: return emptyList()
         val types = filter.itemTypes
         val allItems = mutableListOf<MediaItem>()
         var startIndex = 0
         val batchSize = 200
 
         do {
-            val result = apiClient.getItemsWithUserData(
+            val result = mediaInfoApiClient.getItemsWithUserData(
                 userId = user.id,
                 includeItemTypes = types,
                 isPlayed = true,

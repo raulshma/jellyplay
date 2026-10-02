@@ -3,6 +3,14 @@ package com.raulshma.jellyplay.core.network.seerr
 import com.raulshma.jellyplay.core.model.arr.ArrServiceKind
 import com.raulshma.jellyplay.core.model.seerr.*
 
+/**
+ * The Seerr/Overseerr transport seam. Read members return core/model READ
+ * models — the wire shapes (page envelopes, raw status ints, TMDB-only
+ * fields) decode into this package's internal `SeerrWireDtos` and map at the
+ * seam: search/discover/trending/recommendations/similar fold their envelope
+ * to the item list, the requests page folds to [com.raulshma.jellyplay.core.model.seerr.SeerrRequestPage],
+ * and every status column arrives enum-interpreted.
+ */
 interface SeerrApiClient {
 
     suspend fun loginJellyfin(
@@ -27,7 +35,7 @@ interface SeerrApiClient {
         credentials: SeerrCredentials,
         query: String,
         page: Int = 1,
-    ): Result<SeerrSearchResponse>
+    ): Result<List<SeerrSearchItem>>
 
     suspend fun getMovieDetails(
         baseUrl: String,
@@ -71,28 +79,28 @@ interface SeerrApiClient {
         credentials: SeerrCredentials,
         tmdbId: Int,
         page: Int = 1,
-    ): Result<SeerrSearchResponse>
+    ): Result<List<SeerrSearchItem>>
 
     suspend fun getMovieSimilar(
         baseUrl: String,
         credentials: SeerrCredentials,
         tmdbId: Int,
         page: Int = 1,
-    ): Result<SeerrSearchResponse>
+    ): Result<List<SeerrSearchItem>>
 
     suspend fun getTvRecommendations(
         baseUrl: String,
         credentials: SeerrCredentials,
         tmdbId: Int,
         page: Int = 1,
-    ): Result<SeerrSearchResponse>
+    ): Result<List<SeerrSearchItem>>
 
     suspend fun getTvSimilar(
         baseUrl: String,
         credentials: SeerrCredentials,
         tmdbId: Int,
         page: Int = 1,
-    ): Result<SeerrSearchResponse>
+    ): Result<List<SeerrSearchItem>>
 
     suspend fun requestMedia(
         baseUrl: String,
@@ -155,7 +163,7 @@ interface SeerrApiClient {
         baseUrl: String,
         credentials: SeerrCredentials,
         page: Int = 1,
-    ): Result<SeerrSearchResponse>
+    ): Result<List<SeerrSearchItem>>
 
     suspend fun getDiscoverMovies(
         baseUrl: String,
@@ -163,7 +171,7 @@ interface SeerrApiClient {
         page: Int = 1,
         primaryReleaseDateGte: String? = null,
         params: SeerrDiscoverParams? = null,
-    ): Result<SeerrSearchResponse>
+    ): Result<List<SeerrSearchItem>>
 
     suspend fun getDiscoverTv(
         baseUrl: String,
@@ -171,7 +179,7 @@ interface SeerrApiClient {
         page: Int = 1,
         firstAirDateGte: String? = null,
         params: SeerrDiscoverParams? = null,
-    ): Result<SeerrSearchResponse>
+    ): Result<List<SeerrSearchItem>>
 
     suspend fun getRequests(
         baseUrl: String,
@@ -184,7 +192,7 @@ interface SeerrApiClient {
         requestedBy: Int? = null,
         mediaType: String? = null,
         search: String? = null,
-    ): Result<SeerrRequestListResponse>
+    ): Result<SeerrRequestPage>
 
     suspend fun getRequest(
         baseUrl: String,

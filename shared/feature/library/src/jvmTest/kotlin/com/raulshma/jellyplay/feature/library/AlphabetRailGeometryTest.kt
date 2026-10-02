@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.library
 
+import com.raulshma.jellyplay.core.model.LibraryViewMode
 import com.raulshma.jellyplay.core.ui.components.FisheyeRailMath
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -50,5 +51,41 @@ class AlphabetRailGeometryTest {
         val flat = AlphabetRailGeometry(letters, rowPx = 0f)
         assertEquals(0f, flat.indexAt(123f))
         assertEquals(letters.first(), flat.letterAt(123f))
+    }
+
+    // ── per-mode rail scroll folds (LibraryRailScrollTarget) ─────────────
+
+    @Test
+    fun rail_scroll_target_matches_the_former_inline_when() {
+        assertEquals(LibraryRailScrollTarget.LIST, libraryRailScrollTarget(LibraryViewMode.LIST))
+        assertEquals(LibraryRailScrollTarget.STAGGERED, libraryRailScrollTarget(LibraryViewMode.MASONRY))
+        // Every other mode rides the poster grid state.
+        assertEquals(LibraryRailScrollTarget.GRID, libraryRailScrollTarget(LibraryViewMode.GRID))
+        assertEquals(LibraryRailScrollTarget.GRID, libraryRailScrollTarget(LibraryViewMode.THUMB))
+    }
+
+    @Test
+    fun rail_first_visible_index_reads_list_only_in_list_mode() {
+        assertEquals(
+            7,
+            libraryRailFirstVisibleItemIndex(
+                viewMode = LibraryViewMode.LIST,
+                listFirstVisibleItemIndex = 7,
+                gridFirstVisibleItemIndex = 99,
+            ),
+        )
+        // GRID/THUMB — and deliberately MASONRY, whose staggered index is not
+        // consulted (shipped behavior the extraction must not "fix").
+        for (mode in listOf(LibraryViewMode.GRID, LibraryViewMode.THUMB, LibraryViewMode.MASONRY)) {
+            assertEquals(
+                42,
+                libraryRailFirstVisibleItemIndex(
+                    viewMode = mode,
+                    listFirstVisibleItemIndex = 7,
+                    gridFirstVisibleItemIndex = 42,
+                ),
+                "mode $mode",
+            )
+        }
     }
 }

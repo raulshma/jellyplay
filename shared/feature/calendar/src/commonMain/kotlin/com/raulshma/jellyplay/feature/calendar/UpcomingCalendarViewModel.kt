@@ -5,19 +5,15 @@ import androidx.compose.runtime.State
 import androidx.compose.runtime.snapshotFlow
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
-import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore
-import com.raulshma.jellyplay.core.datastore.experimental.directArrEnabled
+import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalFeatureGate
 import com.raulshma.jellyplay.core.model.arr.ArrCalendarItem
 import com.raulshma.jellyplay.core.model.arr.ArrMediaType
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.core.ui.viewmodel.loadInto
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
@@ -50,24 +46,19 @@ data class UpcomingCalendarUiState(
 class UpcomingCalendarViewModel(
     private val arrRepository: ArrRepository,
     private val seerrRepository: SeerrRepository,
-    experimentalStore: com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore,
+    experimentalGate: ExperimentalFeatureGate,
 ) : JellyPlayViewModel() {
 
     private val _state = composeState(UpcomingCalendarUiState())
     val state: State<UpcomingCalendarUiState> = _state.asState()
 
     /**
-     * Whether the Direct *arr Integration experimental flag is enabled.
-     *
-     * Eagerly shared (not `WhileSubscribed`) so the value is always available
-     * to [refresh] reads via `.value`; mirrors the rationale in
-     * `RequestsViewModel.directArrEnabled` / `ArrQueueViewModel`.
+     * Whether the Direct *arr Integration experimental flag is enabled —
+     * [ExperimentalFeatureGate.directArrEnabled] verbatim (rationale and
+     * init-timing notes live on the gate). Exposed so the screen can render
+     * the feature-disabled state.
      */
-    private val directArrEnabled: StateFlow<Boolean> = experimentalStore.directArrEnabled()
-        .stateIn(scope, SharingStarted.Eagerly, false)
-
-    /** Exposed so the screen can render the feature-disabled state. */
-    val featureEnabled: StateFlow<Boolean> = directArrEnabled
+    val featureEnabled: StateFlow<Boolean> = experimentalGate.directArrEnabled
 
     /**
      * Bounds the number of concurrent Seerr enrichment lookups so a month with
@@ -162,7 +153,7 @@ class UpcomingCalendarViewModel(
 
     /** Re-fetches the calendar for the visible month. Never throws. */
     fun refresh() {
-        if (!directArrEnabled.value) {
+        if (!featureEnabled.value) {
             _state.value = _state.value.copy(isLoading = false, error = null)
             return
         }

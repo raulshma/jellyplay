@@ -30,9 +30,6 @@ import androidx.compose.ui.unit.dp
  * val scrollState = rememberBackdropScrollState(listState, backdropHeight)
  * BackdropLayer(scrollTranslationY = { -scrollState.scrollOffsetState.value * 0.5f },
  *               scrollAlpha = { 1f - (scrollState.scrollFractionState.value * 0.8f) }, ...)
- * TransparentTopBar(containerColor = scrollState.containerColor,
- *                   titleAlpha = scrollState.titleAlpha,
- *                   scrollCollapsed = scrollState.scrollCollapsed, ...)
  * ```
  *
  * @param listState the screen's [LazyListState]. The first item MUST be the

@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.core.data.network
 
 import com.raulshma.jellyplay.core.model.ServerHealth
-import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import com.raulshma.jellyplay.core.network.api.AuthApiClient
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -17,7 +17,7 @@ import com.raulshma.jellyplay.core.data.testutil.FakeTimeSource
 
 class ServerHealthMonitorTest {
 
-    private lateinit var apiClient: JellyfinApiClient
+    private lateinit var apiClient: AuthApiClient
     private lateinit var monitor: ServerHealthMonitor
 
     @BeforeTest

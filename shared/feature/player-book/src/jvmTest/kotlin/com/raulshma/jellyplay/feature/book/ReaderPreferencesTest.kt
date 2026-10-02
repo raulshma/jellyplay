@@ -270,4 +270,11 @@ class ReaderPreferencesTest {
         coVerify(exactly = 0) { readerStore.setAnimatedPageTurns(any()) }
         coVerify(exactly = 0) { readerStore.setTocRailVisible(any()) }
     }
+
+    @Test
+    fun `the controls-timeout knob defaults to the legacy 4 s`() =
+        runTest(mainDispatcher) {
+            preferences.attach("item-1")
+            assertEquals(DEFAULT_READER_CONTROLS_TIMEOUT_MS, preferences.snapshot.value.controlsTimeoutMs)
+        }
 }

@@ -82,4 +82,7 @@
     <string name="library_year_to">Hasta %1$d</string>
     <string name="data_download_started">Descarga iniciada</string>
     <string name="data_download_start_failed">No se pudo iniciar la descarga</string>
+    <string name="library_filter_has_subtitles">Con subtítulos</string>
+    <string name="library_filter_has_trailer">Con tráiler</string>
+    <string name="library_filter_subtitles">Subtítulos</string>
 </resources>

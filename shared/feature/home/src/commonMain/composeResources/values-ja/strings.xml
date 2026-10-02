@@ -100,4 +100,15 @@
     <string name="home_download_start_failed">ダウンロードを開始できませんでした</string>
     <string name="home_series_download_queued">エピソードのダウンロードをキューに追加しました</string>
     <string name="home_see_all">すべて見る</string>
+    <string name="next_up_hidden_title">「次のエピソード」から非表示</string>
+    <string name="next_up_hidden_empty">非表示なし</string>
+    <string name="next_up_hidden_empty_subtitle">「次のエピソード」行から削除したシリーズは、ここから復元できます。</string>
+    <string name="next_up_hidden_restore_all">すべて復元</string>
+    <string name="next_up_hidden_restore_all_cd">非表示のシリーズをすべて「次のエピソード」に戻す</string>
+    <string name="next_up_hidden_restore_all_title">すべて「次のエピソード」に戻しますか？</string>
+    <string name="next_up_hidden_restore_all_message">非表示の %1$d 件のシリーズが「次のエピソード」行に再び表示されます。</string>
+    <string name="next_up_hidden_restore_cd">%1$sを「次のエピソード」に戻す</string>
+    <string name="next_up_hidden_unknown">不明なシリーズ</string>
+    <string name="a11y_mode_video">動画モード</string>
+    <string name="a11y_mode_music">音楽モード</string>
 </resources>

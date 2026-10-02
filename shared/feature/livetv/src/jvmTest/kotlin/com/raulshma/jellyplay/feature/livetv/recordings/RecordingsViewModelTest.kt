@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.livetv.recordings
 import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.LiveTvRecording
+import com.raulshma.jellyplay.core.ui.message.UiMessage
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -71,7 +72,7 @@ class RecordingsViewModelTest {
         viewModel.load()
         advanceUntilIdle()
 
-        assertTrue(viewModel.uiState.value.error?.contains("boom") == true)
+        assertEquals("boom", (viewModel.uiState.value.error as UiMessage.Raw).text)
     }
 
     // ── Delete confirmation flow ─────────────────────────────────────────────
@@ -83,11 +84,11 @@ class RecordingsViewModelTest {
     fun showDeleteDialog_and_dismissDeleteDialog_round_trip() = runTest(mainDispatcher) {
         val rec = recording("r1")
         viewModel.showDeleteDialog(rec)
-        assertEquals(rec, viewModel.uiState.value.pendingDelete)
+        assertEquals(rec, viewModel.deleteConfirmation.item)
 
         viewModel.dismissDeleteDialog()
 
-        assertEquals(null, viewModel.uiState.value.pendingDelete)
+        assertEquals(null, viewModel.deleteConfirmation.item)
     }
 
     @Test
@@ -99,7 +100,7 @@ class RecordingsViewModelTest {
         advanceUntilIdle()
 
         coVerify(exactly = 1) { mediaRepository.deleteRecording("r1") }
-        assertEquals(null, viewModel.uiState.value.pendingDelete)
+        assertEquals(null, viewModel.deleteConfirmation.item)
         assertFalse(viewModel.uiState.value.isDeleting)
         assertEquals(null, viewModel.uiState.value.error)
         // init load + post-delete reload.
@@ -128,9 +129,9 @@ class RecordingsViewModelTest {
         viewModel.deleteRecording()
         advanceUntilIdle()
 
-        assertEquals("locked", viewModel.uiState.value.error)
+        assertEquals("locked", (viewModel.uiState.value.error as UiMessage.Raw).text)
         assertFalse(viewModel.uiState.value.isDeleting)
-        assertEquals(rec, viewModel.uiState.value.pendingDelete)
+        assertEquals(rec, viewModel.deleteConfirmation.item)
     }
 
     @Test
@@ -153,11 +154,11 @@ class RecordingsViewModelTest {
         assertTrue(viewModel.uiState.value.isDeleting)
 
         viewModel.dismissDeleteDialog()
-        assertEquals(recording("r1"), viewModel.uiState.value.pendingDelete)
+        assertEquals(recording("r1"), viewModel.deleteConfirmation.item)
 
         gate.complete(Unit)
         advanceUntilIdle()
-        assertEquals(null, viewModel.uiState.value.pendingDelete)
+        assertEquals(null, viewModel.deleteConfirmation.item)
     }
 
     // The null-tag policy itself lives on the interface default now (pinned

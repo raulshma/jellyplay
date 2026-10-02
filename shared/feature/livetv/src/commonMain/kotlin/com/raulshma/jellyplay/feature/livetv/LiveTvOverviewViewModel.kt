@@ -8,7 +8,10 @@ import kotlinx.coroutines.coroutineScope
 
 /**
  * Per-tab badge counts for the Live TV host bar. A value of `0` means "no
- * badge"; a positive value renders a count pill, `-1` a plain dot.
+ * badge"; a positive value renders a count pill — except [recordings], which
+ * is presence-only (the overview's `getRecordings(limit = 1)` fetch costs one
+ * item, and the repository exposes no cheap server-side count, so the tab bar
+ * renders it as a plain dot: there is no honest number to show).
  */
 @Immutable
 data class LiveTvBadges(

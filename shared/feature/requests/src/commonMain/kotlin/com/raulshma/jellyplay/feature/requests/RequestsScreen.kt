@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -36,7 +35,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.composables.icons.tabler.Tabler
@@ -47,7 +45,10 @@ import com.composables.icons.tabler.outline.Inbox
 import com.composables.icons.tabler.outline.X
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestItem
-import com.raulshma.jellyplay.core.ui.components.JellyPlayCircularProgressIndicator
+import com.raulshma.jellyplay.core.ui.components.ErrorScreen
+import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
+import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
+import com.raulshma.jellyplay.core.ui.components.SelectionActionBar
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.generated.resources.Res as CoreUiRes
@@ -57,7 +58,6 @@ import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.feature.requests.generated.resources.Res
 import com.raulshma.jellyplay.feature.requests.generated.resources.requests_action_approve
 import com.raulshma.jellyplay.feature.requests.generated.resources.requests_action_decline
-import com.raulshma.jellyplay.feature.requests.generated.resources.requests_action_retry
 import com.raulshma.jellyplay.feature.requests.generated.resources.requests_empty_subtitle
 import com.raulshma.jellyplay.feature.requests.generated.resources.requests_empty_title
 import com.raulshma.jellyplay.feature.requests.generated.resources.requests_error_unknown
@@ -120,58 +120,18 @@ fun RequestsScreen(
                     modifier = Modifier.weight(1f),
                 ) {
                     if (state.isLoading && state.requests.isEmpty()) {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            JellyPlayCircularProgressIndicator(modifier = Modifier.size(48.dp))
-                        }
+                        ScreenLoadingState()
                     } else if (state.error != null && state.requests.isEmpty()) {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(
-                                    text = state.error ?: stringResource(Res.string.requests_error_unknown),
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = MaterialTheme.colorScheme.error,
-                                )
-                                Spacer(Modifier.height(12.dp))
-                                androidx.compose.material3.TextButton(
-                                    onClick = { viewModel.loadRequests(refresh = true) },
-                                    modifier = Modifier.focusIndicator(),
-                                ) {
-                                    Text(stringResource(Res.string.requests_action_retry))
-                                }
-                            }
-                        }
+                        ErrorScreen(
+                            message = state.error ?: stringResource(Res.string.requests_error_unknown),
+                            onRetry = { viewModel.loadRequests(refresh = true) },
+                        )
                     } else if (state.requests.isEmpty()) {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Icon(
-                                    Tabler.Outline.Inbox,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(64.dp),
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                                Spacer(Modifier.height(16.dp))
-                                Text(
-                                    stringResource(Res.string.requests_empty_title),
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                                Spacer(Modifier.height(4.dp))
-                                Text(
-                                    stringResource(Res.string.requests_empty_subtitle),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                        }
+                        ScreenEmptyState(
+                            icon = Tabler.Outline.Inbox,
+                            title = stringResource(Res.string.requests_empty_title),
+                            description = stringResource(Res.string.requests_empty_subtitle),
+                        )
                     } else {
                         LazyColumn(
                             modifier = Modifier
@@ -319,74 +279,35 @@ fun RequestsScreen(
             // Bulk-selection action bar.
             if (state.selectionMode) {
                 SelectionActionBar(
+                    countLabel = stringResource(Res.string.requests_selected_count, state.selectedRequestIds.size),
                     selectedCount = state.selectedRequestIds.size,
-                    actionInProgress = state.actionInProgress,
+                    selectAllLabel = stringResource(Res.string.requests_select_all),
+                    clearLabel = stringResource(CoreUiRes.string.core_cancel),
                     onSelectAll = { viewModel.selectAll() },
                     onClear = { viewModel.clearSelection() },
-                    onApprove = { viewModel.approveSelected() },
-                    onDecline = { viewModel.declineSelected() },
+                    actionInProgress = state.actionInProgress,
+                    actions = { actionsEnabled ->
+                        androidx.compose.material3.FilledTonalButton(
+                            onClick = { viewModel.approveSelected() },
+                            enabled = actionsEnabled,
+                        ) {
+                            Text(stringResource(Res.string.requests_action_approve))
+                        }
+                        androidx.compose.material3.FilledTonalButton(
+                            onClick = { viewModel.declineSelected() },
+                            enabled = actionsEnabled,
+                            colors = androidx.compose.material3.ButtonDefaults.filledTonalButtonColors(
+                                containerColor = MaterialTheme.colorScheme.errorContainer,
+                                contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                            ),
+                        ) {
+                            Text(stringResource(Res.string.requests_action_decline))
+                        }
+                    },
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth()
                         .padding(16.dp),
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun SelectionActionBar(
-    selectedCount: Int,
-    actionInProgress: Boolean,
-    onSelectAll: () -> Unit,
-    onClear: () -> Unit,
-    onApprove: () -> Unit,
-    onDecline: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    androidx.compose.material3.Surface(
-        modifier = modifier,
-        shape = ShapeCache.smooth16,
-        color = MaterialTheme.colorScheme.surfaceContainer,
-        tonalElevation = 3.dp,
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Text(
-                text = stringResource(Res.string.requests_selected_count, selectedCount),
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.weight(1f),
-            )
-            androidx.compose.material3.TextButton(onClick = onSelectAll, enabled = !actionInProgress) {
-                Text(stringResource(Res.string.requests_select_all))
-            }
-            androidx.compose.material3.FilledTonalButton(
-                onClick = onApprove,
-                enabled = !actionInProgress && selectedCount > 0,
-            ) {
-                Text(stringResource(Res.string.requests_action_approve))
-            }
-            androidx.compose.material3.FilledTonalButton(
-                onClick = onDecline,
-                enabled = !actionInProgress && selectedCount > 0,
-                colors = androidx.compose.material3.ButtonDefaults.filledTonalButtonColors(
-                    containerColor = MaterialTheme.colorScheme.errorContainer,
-                    contentColor = MaterialTheme.colorScheme.onErrorContainer,
-                ),
-            ) {
-                Text(stringResource(Res.string.requests_action_decline))
-            }
-            androidx.compose.material3.IconButton(onClick = onClear, enabled = !actionInProgress) {
-                Icon(
-                    Tabler.Outline.X,
-                    contentDescription = stringResource(CoreUiRes.string.core_cancel),
                 )
             }
         }

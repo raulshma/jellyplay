@@ -19,6 +19,7 @@ import com.raulshma.jellyplay.core.network.api.AuthApiClient
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.network.api.MetadataApiClient
 import com.raulshma.jellyplay.core.network.api.PlaybackApiClient
+import com.raulshma.jellyplay.core.network.api.UserDataWrite
 import com.raulshma.jellyplay.core.network.playback.buildBookDownloadUrl
 import com.raulshma.jellyplay.core.network.playback.resolveDeliveryUrl
 import com.raulshma.jellyplay.core.network.playback.resolveDeliveryUrlWithApiKey
@@ -31,7 +32,7 @@ import java.util.concurrent.atomic.AtomicLong
 class PlaybackRepositoryImpl(
     /** Telemetry, URL builders, PlaybackInfo, segments, subtitle delivery, trickplay. */
     private val playbackApiClient: PlaybackApiClient,
-    /** Image URLs + the played/favorite flips the outbox drain replays. */
+    /** The played/favorite flips the outbox drain replays. */
     private val libraryApiClient: LibraryApiClient,
     /** Server URL + access token for the absolute-ize URL folds. */
     private val authApiClient: AuthApiClient,
@@ -60,7 +61,8 @@ class PlaybackRepositoryImpl(
      * without a WS echo. Lazy keeps the construction graph acyclic.
      */
     private val mediaRepository: Lazy<MediaRepository>,
-) : PlaybackRepository {
+) : PlaybackRepository,
+    com.raulshma.jellyplay.core.data.worker.PlaybackOutboxReplay {
 
     private val segmentsCache = TtlCache<List<MediaSegment>>(
         maxSize = MAX_CACHE_ENTRIES,
@@ -244,23 +246,14 @@ class PlaybackRepositoryImpl(
             PlaybackOutboxEventType.BOOK_PROGRESS ->
                 playbackApiClient.reportBookProgress(entry.itemId, entry.positionTicks).isSuccess
             PlaybackOutboxEventType.PLAYED ->
-                libraryApiClient.markPlayed(entry.itemId).isSuccess
+                libraryApiClient.writeUserData(UserDataWrite.MarkPlayed(entry.itemId)).isSuccess
             PlaybackOutboxEventType.UNPLAYED ->
-                libraryApiClient.markUnplayed(entry.itemId).isSuccess
+                libraryApiClient.writeUserData(UserDataWrite.MarkUnplayed(entry.itemId)).isSuccess
             PlaybackOutboxEventType.FAVORITE ->
-                libraryApiClient.setFavorite(entry.itemId, isFavorite = true).isSuccess
+                libraryApiClient.writeUserData(UserDataWrite.SetFavorite(entry.itemId, isFavorite = true)).isSuccess
             PlaybackOutboxEventType.UNFAVORITE ->
-                libraryApiClient.setFavorite(entry.itemId, isFavorite = false).isSuccess
+                libraryApiClient.writeUserData(UserDataWrite.SetFavorite(entry.itemId, isFavorite = false)).isSuccess
         }
-
-    override fun getImageUrl(itemId: String, imageType: String, maxWidth: Int?): String =
-        libraryApiClient.getImageUrl(itemId, imageType, maxWidth)
-
-    override fun getChapterImageUrl(itemId: String, imageIndex: Int, tag: String?, maxWidth: Int?): String =
-        libraryApiClient.getImageUrl(itemId, imageType = "Chapter", maxWidth = maxWidth, imageIndex = imageIndex, tag = tag)
-
-    override fun getBackdropUrl(itemId: String, maxWidth: Int): String =
-        libraryApiClient.getBackdropImageUrl(itemId, maxWidth)
 
     override suspend fun getItemImageBytes(itemId: String, imageType: String, maxWidth: Int): ByteArray? =
         playbackApiClient.getItemImageBytes(itemId, imageType, maxWidth)

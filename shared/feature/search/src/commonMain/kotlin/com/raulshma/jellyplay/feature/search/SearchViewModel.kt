@@ -22,6 +22,7 @@ import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.model.SearchResult
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.model.seerr.buildPosterUrl
+import com.raulshma.jellyplay.core.ui.components.seerr.SeerrRequestDialogHolder
 import com.raulshma.jellyplay.core.ui.viewmodel.DeferredUserDataRefresher
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -38,11 +39,15 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import com.raulshma.jellyplay.core.data.util.FilterCodec
-import com.raulshma.jellyplay.core.data.util.loadListWithRetry
+import com.raulshma.jellyplay.core.data.util.FilterDimensionsHolder
 
 @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
 internal class SearchViewModel(
     private val mediaRepository: MediaRepository,
+    /** The browse-facet seam (the filter row's tag list — off the union). */
+    private val mediaBrowseReads: com.raulshma.jellyplay.core.data.repository.MediaBrowseReads,
+    /** The SearchResult-shaped reads (the empty-search suggestions — off the union). */
+    private val mediaCollectionReads: com.raulshma.jellyplay.core.data.repository.MediaCollectionReads,
     private val userDataMutator: com.raulshma.jellyplay.core.data.repository.UserDataMutator,
     private val imageUrlProvider: ImageUrlProvider,
     private val seerrRepository: SeerrRepository,
@@ -60,11 +65,15 @@ internal class SearchViewModel(
     private val _filters = stateFlow(LibraryFilters())
     val filters: StateFlow<LibraryFilters> = _filters.flow
 
-    private val _genres = stateFlow<List<Genre>>(emptyList())
-    val genres: StateFlow<List<Genre>> = _genres.flow
-
-    private val _tags = stateFlow<List<String>>(emptyList())
-    val tags: StateFlow<List<String>> = _tags.flow
+    // Genre/tag filter dimensions live on the shared core:data holder (the
+    // library/search/editor triple); the public exposure shape is unchanged.
+    private val filterDimensions = FilterDimensionsHolder(
+        scope = scope,
+        getGenres = { force -> mediaRepository.getGenres(force = force) },
+        getTags = { mediaBrowseReads.getTags() },
+    )
+    val genres: StateFlow<List<Genre>> = filterDimensions.genres
+    val tags: StateFlow<List<String>> = filterDimensions.tags
 
     private val _showFilters = stateFlow(false)
     val showFilters: StateFlow<Boolean> = _showFilters.flow
@@ -155,8 +164,7 @@ internal class SearchViewModel(
     )
 
     init {
-        loadGenres()
-        loadTags()
+        filterDimensions.load()
         loadSearchHistory()
         loadSuggestions()
         loadSideSearches()
@@ -218,7 +226,7 @@ internal class SearchViewModel(
         if (suggestionsLoaded) return
         suggestionsLoaded = true
         launch {
-            val result = mediaRepository.getSearchSuggestions(limit = 20)
+            val result = mediaCollectionReads.getSearchSuggestions(limit = 20)
             _suggestions.set(result.getOrElse { SearchResult(emptyList(), 0, 0) }.items)
         }
     }
@@ -323,24 +331,10 @@ internal class SearchViewModel(
                 seerrRequestState.requestMedia(
                     event.item, event.seasons, event.serverId, event.profileId, event.rootFolder, event.tags,
                 )
-            is SearchUiEvent.OpenSeerrRequestDialog -> seerrRequestState.openRequestDialog(event.item)
-            is SearchUiEvent.DismissSeerrRequestDialog -> seerrRequestState.dismissRequestDialog()
+            is SearchUiEvent.OpenSeerrRequestDialog -> seerrRequestDialog.open(event.item)
+            is SearchUiEvent.DismissSeerrRequestDialog -> seerrRequestDialog.dismiss()
             is SearchUiEvent.PrefetchSeerrDetails ->
                 seerrRequestState.prefetchDetails(event.tmdbId, event.mediaType, event.onDone)
-        }
-    }
-
-    private fun loadGenres() {
-        launch {
-            // Retry once after a short delay so a transient network blip doesn't
-            // leave the filter sheet permanently missing its Genres section.
-            loadListWithRetry(mediaRepository::getGenres) { _genres.set(it) }
-        }
-    }
-
-    private fun loadTags() {
-        launch {
-            loadListWithRetry(mediaRepository::getTags) { _tags.set(it) }
         }
     }
 
@@ -359,6 +353,18 @@ internal class SearchViewModel(
 
     private val seerrRequestState = SeerrRequestStateHolder(scope, seerrRequestDelegate)
 
+    // The dialog half of the request lifecycle: which item the request dialog
+    // is open for (frozen at open) plus the open/dismiss choreography. The
+    // data half (service details, seasons, result) stays in the holder above,
+    // reached through the two constructor seams.
+    private val seerrRequestDialog = SeerrRequestDialogHolder(
+        prepare = seerrRequestState::prepare,
+        clearRequestResult = seerrRequestState::clearRequestResult,
+    )
+
     /** Seerr request lifecycle state (the holder's single snapshot interface). */
     val seerrSnapshot: StateFlow<SeerrRequestSnapshot> = seerrRequestState.snapshotIn(scope)
+
+    /** The item the request dialog is open for (null = closed) — the render gate. */
+    val seerrDialogItem: StateFlow<SeerrSearchItem?> = seerrRequestDialog.item
 }

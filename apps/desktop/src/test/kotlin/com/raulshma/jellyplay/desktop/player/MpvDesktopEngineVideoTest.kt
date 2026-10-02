@@ -20,7 +20,7 @@ import org.junit.jupiter.api.io.TempDir
 
 /**
  *  real-libmpv slice for the closed V2 cuts — the live `vf` /
- * `video-rotate` application ([DesktopVideoEffectChain] through
+ * `video-rotate` application ([MpvVideoEffectChain] through
  * [MpvDesktopEngine.updateConfig]), the [MpvDesktopEngine.captureVideoFrame]
  * screenshot path, and the [MediaEngine.currentCues] live-cue history. Cases
  * mirror the real-engine af test's property-level assertion style:
@@ -215,7 +215,10 @@ class MpvDesktopEngineVideoTest {
 
             // sub-add "auto" selects nothing — pick the sidecar explicitly
             // (also regression-covers the NODE_ARRAY readNode fix:
-            // this was empty before it).
+            // this was empty before it). The catalog is now coalesced
+            // (shared TrackRefreshCoalescer, Android parity) — it lands one
+            // debounce window after the FILE_LOADED burst.
+            waitUntil(5_000) { engine.availableTracks.value.any { it.type == TrackType.SUBTITLE } }
             val subTrack = engine.availableTracks.value.firstOrNull { it.type == TrackType.SUBTITLE }
             assertNotNull(subTrack, "sidecar subtitle track listed")
             engine.selectTrack(TrackType.SUBTITLE, subTrack.index)

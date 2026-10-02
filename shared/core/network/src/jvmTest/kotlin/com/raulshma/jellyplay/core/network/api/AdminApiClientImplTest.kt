@@ -1,8 +1,11 @@
 package com.raulshma.jellyplay.core.network.api
 
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import okhttp3.OkHttpClient
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.ResponseBody.Companion.toResponseBody
 import org.jellyfin.sdk.Jellyfin
 import org.jellyfin.sdk.model.api.DayOfWeek as SdkDayOfWeek
 import org.jellyfin.sdk.model.api.GeneralCommandType
@@ -27,22 +30,34 @@ import kotlin.test.assertTrue
  *     play → PLAY_NOW, general command → SET_VOLUME with the nil controller id
  *     and empty arguments; STOP playstate travels in the path;
  *  5. task-trigger updates map day-of-week case-insensitively and degrade an
- *     unknown trigger type to INTERVAL_TRIGGER.
+ *     unknown trigger type to INTERVAL_TRIGGER;
+ *  6. the backup create's raw-OkHttp POST leg (endpoint, method, auth scheme
+ *     and the hand-built per-component body) is pinned through an interceptor.
  */
 class AdminApiClientImplTest {
 
     private lateinit var engine: JellyfinApiEngine
     private lateinit var client: RecordingApiClient
     private lateinit var admin: AdminApiClientImpl
+    private val rawRecorder = RawRequestRecorder()
 
     @BeforeTest
     fun setup() {
         client = RecordingApiClient()
+        // The router is a relaxed mock with a permanently-null activeAddress:
+        // a REAL router + updateSession makes the engine's rebuild collector
+        // call the SDK's createApi default-args static, which NPEs on the
+        // mock Jellyfin's null options (see AuthApiClientTest's full-arity
+        // note). With the flow stuck at null the collector never fires, and
+        // requireSession falls back to the published server address — the
+        // shape requireSession is documented to produce.
+        val router = mockk<com.raulshma.jellyplay.core.network.failover.ServerAddressRouter>(relaxed = true)
+        every { router.activeAddress } returns kotlinx.coroutines.flow.MutableStateFlow(null)
         engine = JellyfinApiEngine(
             jellyfinLazy = LazyProvider { mockk<Jellyfin>(relaxed = true) },
-            okHttpClientLazy = LazyProvider { OkHttpClient() },
+            okHttpClientLazy = LazyProvider { OkHttpClient.Builder().addInterceptor(rawRecorder).build() },
             deviceProfileProvider = DeviceProfileProvider(DesktopDeviceCodecCapabilities()),
-            addressRouter = com.raulshma.jellyplay.core.network.failover.ServerAddressRouter(),
+            addressRouter = router,
         )
         engine.updateApi(client)
         admin = AdminApiClientImpl(engine)
@@ -50,6 +65,9 @@ class AdminApiClientImplTest {
 
     private class RecordingApiClient : org.jellyfin.sdk.api.client.ApiClient() {
         var nextBody: String = "{}"
+        /** Per-request bodies consumed before [nextBody] (multi-call flows). */
+        private val bodyQueue = ArrayDeque<String>()
+        fun enqueueBody(body: String) = bodyQueue.addLast(body)
         val requests = mutableListOf<RecordedRequest>()
         override val baseUrl = "https://test.example.com"
         override val accessToken = "token-123"
@@ -71,7 +89,8 @@ class AdminApiClientImplTest {
             requestBody: Any?,
         ): org.jellyfin.sdk.api.client.RawResponse {
             requests += RecordedRequest(method.name, pathTemplate, pathParameters, queryParameters, requestBody)
-            return org.jellyfin.sdk.api.client.RawResponse(nextBody.toByteArray(), 200, emptyMap())
+            val body = if (bodyQueue.isNotEmpty()) bodyQueue.removeFirst() else nextBody
+            return org.jellyfin.sdk.api.client.RawResponse(body.toByteArray(), 200, emptyMap())
         }
     }
 
@@ -82,6 +101,23 @@ class AdminApiClientImplTest {
         val queryParameters: Map<String, Any?>,
         val requestBody: Any?,
     )
+
+    /** Answers the raw-OkHttp escape-hatch legs (e.g. the backup create POST) with a canned 200 and records each request. */
+    private class RawRequestRecorder : okhttp3.Interceptor {
+        val requests = mutableListOf<okhttp3.Request>()
+        var responseBody: String = "{}"
+        override fun intercept(chain: okhttp3.Interceptor.Chain): okhttp3.Response {
+            val request = chain.request()
+            requests += request
+            return okhttp3.Response.Builder()
+                .request(request)
+                .protocol(okhttp3.Protocol.HTTP_1_1)
+                .code(200)
+                .message("OK")
+                .body(responseBody.toResponseBody("application/json".toMediaType()))
+                .build()
+        }
+    }
 
     @Test
     fun `getSystemInfo is served from the TTL cache on a back-to-back read`() = runTest {
@@ -238,5 +274,117 @@ class AdminApiClientImplTest {
         val request = client.requests.single()
         assertEquals("/System/Logs/Log", request.pathTemplate)
         assertEquals("server-6381.log", request.queryParameters["name"])
+    }
+
+    // ── Backups: the raw-path request shapes (the /System/Logs/Log hatch) ──
+
+    @Test
+    fun `listBackups issues GET Backup and decodes the manifest array`() = runTest {
+        client.nextBody = """
+            [{"backupEngineVersion":"1.0.0.0","dateCreated":"2026-09-28T10:15:00Z",
+              "options":{"metadata":true,"trickplay":false,"subtitles":true,"database":true},
+              "path":"/backups/jf.zip","serverVersion":"10.11.2"}]
+        """.trimIndent()
+
+        val backups = admin.listBackups().getOrThrow()
+
+        val request = client.requests.single()
+        assertEquals("GET", request.method)
+        assertEquals("/Backup", request.pathTemplate)
+        val backup = backups.single()
+        assertEquals("/backups/jf.zip", backup.path)
+        assertEquals("10.11.2", backup.serverVersion)
+        assertEquals(true, backup.options.database)
+        assertEquals(false, backup.options.trickplay)
+    }
+
+    @Test
+    fun `createBackup posts Backup-Create with the SDK auth scheme and every component byte on the wire`() = runTest {
+        // The POST rides JellyfinRawRequester (raw OkHttp), not the recorded
+        // ApiClient — the interceptor answers it and pins the exact wire
+        // shape. The body is hand-built so a FALSE component's byte still
+        // travels (the manifest's options block is what the settings screen
+        // reads back, so a dropped `false` would silently archive MORE than
+        // asked), and the auth scheme must stay `MediaBrowser Token=…` — the
+        // legacy X-Emby-Token header 401s against Jellyfin 12.x.
+        engine.updateSession(
+            com.raulshma.jellyplay.core.model.ServerInfo(id = "server-1", name = "Test", address = "https://test.example.com"),
+            com.raulshma.jellyplay.core.model.UserInfo(
+                id = "user-1",
+                name = "test",
+                serverAddress = "https://test.example.com",
+                accessToken = "token-123",
+            ),
+        )
+        rawRecorder.responseBody = """
+            [{"path":"/backups/created.zip","serverVersion":"10.11.2",
+              "options":{"metadata":true,"trickplay":false,"subtitles":true,"database":true}}]
+        """.trimIndent()
+        client.enqueueBody("[]") // the pre-create snapshot GET
+
+        val created = admin.createBackup(
+            com.raulshma.jellyplay.core.model.BackupComponentOptions(
+                metadata = true,
+                trickplay = false,
+                subtitles = true,
+                database = true,
+            ),
+        ).getOrThrow()
+
+        assertEquals("/backups/created.zip", created.path)
+        assertEquals(true, created.options.database)
+        val post = rawRecorder.requests.single()
+        assertEquals("POST", post.method)
+        assertEquals("/Backup/Create", post.url.encodedPath)
+        assertEquals("""MediaBrowser Token="token-123"""", post.header("Authorization"))
+        assertEquals(
+            """{"metadata":true,"trickplay":false,"subtitles":true,"database":true}""",
+            okio.Buffer().also { post.body!!.writeTo(it) }.readUtf8(),
+        )
+        assertEquals(1, client.requests.size, "only the snapshot rides the recorded client — the POST must not fall back to the list poll")
+    }
+
+    @Test
+    fun `createBackup recovers the archive through the list poll when the response never lands`() = runTest {
+        // The create's transport leg (raw POST with per-call long timeouts, no
+        // retries — it is not idempotent) is pinned on-device; this harness
+        // pins the RECOVERY contract against the 12.x response-delivery quirk:
+        // a transport failure must not surface while the list poll can still
+        // find the archive the server actually wrote. Round 1: snapshot
+        // (empty), the raw POST fails without a session, first poll round
+        // discovers the new manifest.
+        client.enqueueBody("[]")
+        client.enqueueBody(
+            """[{"path":"/backups/new.zip","serverVersion":"10.11.2",
+                 "options":{"metadata":true,"trickplay":false,"subtitles":true,"database":true}}]""",
+        )
+
+        val created = admin.createBackup(
+            com.raulshma.jellyplay.core.model.BackupComponentOptions(
+                metadata = true,
+                trickplay = false,
+                subtitles = true,
+                database = true,
+            ),
+        ).getOrThrow()
+
+        assertEquals("/backups/new.zip", created.path)
+        assertEquals(true, created.options.database)
+        assertEquals(
+            listOf("GET", "GET"),
+            client.requests.map { it.method },
+            "snapshot + first poll round — the POST itself rides the raw requester, not the recorded client",
+        )
+    }
+
+    @Test
+    fun `restoreBackup posts Backup-Restore naming the archive`() = runTest {
+        admin.restoreBackup("jellyfin-20260928.zip").getOrThrow()
+
+        val request = client.requests.single()
+        assertEquals("POST", request.method)
+        assertEquals("/Backup/Restore", request.pathTemplate)
+        val body = request.requestBody as BackupRestoreRequestDto
+        assertEquals("jellyfin-20260928.zip", body.archiveFileName)
     }
 }

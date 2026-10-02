@@ -126,4 +126,6 @@
     <string name="audio_cast_to_device">Auf Gerät übertragen</string>
     <string name="audio_cast_no_devices">Keine Übertragungsgeräte gefunden. Stellen Sie sicher, dass Ihr Gerät im selben Netzwerk ist.</string>
     <string name="audio_cast_ok">OK</string>
+    <string name="audio_queue_radio">Radio</string>
+    <string name="audio_queue_radio_stop">Tippen, um das Radio zu stoppen</string>
 </resources>

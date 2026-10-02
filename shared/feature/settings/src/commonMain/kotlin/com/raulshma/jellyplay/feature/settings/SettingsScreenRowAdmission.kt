@@ -41,12 +41,14 @@ internal sealed interface RowAdmission {
             RowAdmissionCapability.ScreenOrientation -> flags.supportsScreenOrientation
             RowAdmissionCapability.TouchGestures -> flags.supportsTouchGestures
             RowAdmissionCapability.SystemNotificationSettings -> flags.supportsSystemNotificationSettings
+            RowAdmissionCapability.AppLock -> flags.supportsAppLock
             RowAdmissionCapability.Biometric -> flags.supportsBiometric
             RowAdmissionCapability.AudioDeviceSelection -> flags.supportsAudioDeviceSelection
             RowAdmissionCapability.MpvRenderProfiles -> flags.supportsMpvRenderProfiles
             RowAdmissionCapability.VolumeMemory -> flags.supportsVolumeMemory
             RowAdmissionCapability.IdleAmbientScreen -> flags.supportsIdleAmbientScreen
             RowAdmissionCapability.AppLocaleOverride -> flags.supportsAppLocaleOverride
+            RowAdmissionCapability.Pip -> flags.supportsPip
         }
     }
 
@@ -81,7 +83,7 @@ internal sealed interface RowAdmission {
 }
 
 /** The [RowAdmission.Platform] capability vocabulary — one entry per gating flag. */
-internal enum class RowAdmissionCapability { ScreenOrientation, TouchGestures, SystemNotificationSettings, Biometric, AudioDeviceSelection, MpvRenderProfiles, VolumeMemory, IdleAmbientScreen, AppLocaleOverride }
+internal enum class RowAdmissionCapability { ScreenOrientation, TouchGestures, SystemNotificationSettings, AppLock, Biometric, AudioDeviceSelection, MpvRenderProfiles, VolumeMemory, IdleAmbientScreen, AppLocaleOverride, Pip }
 
 /**
  * The inputs a [RowAdmission] evaluates against. The capability flags default
@@ -95,6 +97,8 @@ internal data class RowAdmissionFlags(
     val supportsTouchGestures: Boolean = settingsCapabilities.supportsTouchGestures,
     /** The system-notification-settings row's platform-intent capability. */
     val supportsSystemNotificationSettings: Boolean = settingsCapabilities.supportsSystemNotificationSettings,
+    /** The PIN-lock rows' capability flag (the Android-only lock-gate stack). */
+    val supportsAppLock: Boolean = settingsCapabilities.supportsAppLock,
     /** The biometric row's capability flag — the screen passes its gate-aware computed value. */
     val supportsBiometric: Boolean = settingsCapabilities.supportsBiometric,
     /** The desktop mpv audio-device rows' capability flag. */
@@ -107,6 +111,8 @@ internal data class RowAdmissionFlags(
     val supportsIdleAmbientScreen: Boolean = settingsCapabilities.supportsIdleAmbientScreen,
     /** The per-app display-language row's capability flag (the `AppLocaleSetter` seam). */
     val supportsAppLocaleOverride: Boolean = settingsCapabilities.supportsAppLocaleOverride,
+    /** The auto-PiP toggle's capability flag (Android's PlayerActivity PiP stack). */
+    val supportsPip: Boolean = settingsCapabilities.supportsPip,
     /** Parent row ids whose toggle is currently on — [RowAdmission.WhenOn] resolution. */
     val parentsOn: Set<String> = emptySet(),
 )
@@ -126,6 +132,18 @@ internal fun rowParentsOn(vararg toggles: Pair<String, Boolean>): Set<String> =
  */
 internal fun List<SettingsRowRecord>.admissionsByAdvancedFlag(): Map<String, RowAdmission> =
     associate { record -> record.id to if (record.isAdvanced) RowAdmission.Advanced else RowAdmission.Always }
+
+/**
+ * The catalog-list twin of [admissionsByAdvancedFlag]: the derived
+ * `*SearchItems` projection carries each row's effective advanced flag —
+ * from the spec declaration for spec-derived rows, from the residual
+ * record's own flag otherwise — so a CONVERTED group's admissions base
+ * derives from the list it actually renders (the record lists' reduced
+ * screen-face records carry no advanced flag anymore).
+ */
+@JvmName("admissionsByAdvancedFlagOfItems")
+internal fun List<SettingsSearchItem>.admissionsByAdvancedFlag(): Map<String, RowAdmission> =
+    associate { item -> item.id to if (item.isAdvanced) RowAdmission.Advanced else RowAdmission.Always }
 
 /**
  * THE row-total derivation: how many of [SettingsSearchItemGroup.items] the
@@ -177,9 +195,11 @@ internal fun playbackEngineScreenRowTotal(
 
 /**
  * The appearance screen's "Library & Cards" group: the declared library rows
- * (every row renders unconditionally, so the declaration size is the whole
- * gate state) plus the confirm-library-reset action row (a screen-local row
- * with no search entry — the explicit +1 term).
+ * — every one declared [RowAdmission.Always] in
+ * [AppearanceLibraryRowAdmissions] (the shipped always-on rows; their records
+ * carry a legacy advanced tag the screen never honored) — plus the
+ * confirm-library-reset action row (a screen-local row with no search entry —
+ * the explicit +1 term).
  */
 internal fun appearanceLibraryScreenRowTotal(): Int =
-    SettingsScreenGroups.appearanceLibrary.items.size + 1
+    rowTotalFor(SettingsScreenGroups.appearanceLibrary, RowAdmissionFlags()) + 1

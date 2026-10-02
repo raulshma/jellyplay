@@ -1,20 +1,18 @@
 package com.raulshma.jellyplay.core.data.repository
 
 import com.raulshma.jellyplay.core.database.dao.HomeSectionCacheDao
-import com.raulshma.jellyplay.core.database.entity.HomeSectionCacheEntity
 import com.raulshma.jellyplay.core.data.testutil.FakeTimeSource
 import com.raulshma.jellyplay.core.model.DiscoverRowConfig
 import com.raulshma.jellyplay.core.model.HomeFreshness
 import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionQuery
-import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.HomeSectionsResult
 import com.raulshma.jellyplay.core.model.MediaItem
-import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.ActiveSession
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import com.raulshma.jellyplay.core.network.library.HomeSectionsCachePort
 import com.raulshma.jellyplay.core.network.realtime.UserDataRealtimeChannel
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueImpl
 import com.raulshma.jellyplay.core.data.session.HomeSession
@@ -34,8 +32,6 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertNotNull
-import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -52,10 +48,10 @@ import kotlin.test.assertTrue
  * observers run on `Dispatchers.Unconfined` (see [buildRepository]), so each
  * session assignment has processed the identity chain by the time it returns.
  *
- * Also covers the two freshness policies that had zero expiry coverage before
- * HomeFreshness: the 60s in-memory TTL and the 24h Room SWR staleness ceiling
- * (both via [FakeTimeSource]; the ceiling additionally stubs
- * `HomeSectionCacheEntity.fetchedAt`).
+ * Also covers the in-memory half of the freshness policy: the 60s TTL via
+ * [FakeTimeSource] (the PERSISTED half's 24h Room SWR staleness ceiling is
+ * pinned by HomeSectionsSnapshotStoreTest — the extracted store's direct
+ * suite).
  */
 class MediaRepositoryHomeSectionsCacheTest {
 
@@ -65,6 +61,12 @@ class MediaRepositoryHomeSectionsCacheTest {
     // observer used to combine.
     private val sessionFlow = MutableStateFlow<ActiveSession?>(null)
     private val apiClient: JellyfinApiClient = mockk(relaxed = true)
+    /**
+     * The home cache-maintenance port (the dice roll's per-row drop/seed and
+     * the sub-call cache drop) — the network verbs moved off LibraryApiClient
+     * onto this seam, so the reroll pins verify against it.
+     */
+    private val homeSectionsCachePort: HomeSectionsCachePort = mockk(relaxed = true)
     private val homeSectionCacheDao: HomeSectionCacheDao = mockk(relaxed = true) {
         coEvery { get(any(), any(), any()) } returns null
     }
@@ -96,9 +98,25 @@ class MediaRepositoryHomeSectionsCacheTest {
             homeSession,
             sessionCacheRegistry,
         )
-        return MediaRepositoryImpl(
-            apiClient,
+        // Snapshot-store extraction: the persisted home pipeline (whose pins
+        // moved to HomeSectionsSnapshotStoreTest) rides this store — the same
+        // single the Koin graph wires. The suite's remaining pins are the
+        // repo-level IN-MEMORY choreography, which never touches the rows.
+        val homeSnapshotStore = HomeSectionsSnapshotStore(
             homeSectionCacheDao,
+            homeSession,
+            fakeTimeSource,
+        )
+        return MediaRepositoryImpl(
+            // One union mock covers both family seams (the JellyfinApiClient
+            // mock implements each of them).
+            apiClient,
+            apiClient,
+            // The home cache-maintenance port (the write/roll paths' verbs —
+            // verified directly in the reroll pins below).
+            homeSectionsCachePort,
+            apiClient,
+            homeSnapshotStore,
             playedStateSync,
             episodeCatalogue,
             mockk<UserDataRealtimeChannel>(relaxed = true),
@@ -108,6 +126,8 @@ class MediaRepositoryHomeSectionsCacheTest {
             // Facade split: the detail cluster now lives on the shared
             // internals holder (construction-only ctor re-point).
             MediaRepositoryInternals(apiClient, homeSession),
+            // The deepened createSyncPlayGroup's engine (inert here).
+            mockk(relaxed = true),
         )
     }
 
@@ -191,9 +211,9 @@ class MediaRepositoryHomeSectionsCacheTest {
         val result = repository.rerollDiscoverRow(row)
 
         assertEquals(rolledItems, result.getOrNull())
-        coVerify(exactly = 1) { apiClient.invalidateDiscoverRowCache(row.id) }
+        coVerify(exactly = 1) { homeSectionsCachePort.invalidateDiscoverRow(row.id) }
         coVerify(exactly = 1) { apiClient.getDiscoverRowItems(row) }
-        coVerify(exactly = 1) { apiClient.seedDiscoverRowCache(row, rolledItems) }
+        coVerify(exactly = 1) { homeSectionsCachePort.seedDiscoverRow(row, rolledItems) }
     }
 
     @Test
@@ -259,8 +279,8 @@ class MediaRepositoryHomeSectionsCacheTest {
         val result = repository.rerollDiscoverRow(row)
 
         assertTrue(result.isFailure)
-        coVerify(exactly = 1) { apiClient.invalidateDiscoverRowCache(row.id) }
-        coVerify(exactly = 0) { apiClient.seedDiscoverRowCache(any(), any()) }
+        coVerify(exactly = 1) { homeSectionsCachePort.invalidateDiscoverRow(row.id) }
+        coVerify(exactly = 0) { homeSectionsCachePort.seedDiscoverRow(any(), any()) }
     }
 
     @Test
@@ -433,60 +453,9 @@ class MediaRepositoryHomeSectionsCacheTest {
         coVerify(exactly = 2) { apiClient.getHomeSections(any(), any()) }
     }
 
-    @Test
-    fun `getCachedHomeSections returns null when the Room snapshot is stale`() = runBlocking {
-        // A 25h-old SWR row must not instant-paint on cold open — the 24h
-        // ceiling (HomeFreshness.ROOM_SWR_STALE_MS) turns it into a miss so
-        // the UI shows a spinner and the normal refresh re-persists.
-        val repository = buildRepository()
-        signIn("server-1", "user-A")
-        fakeTimeSource.nowMs = NOW_WALL_MS
-        coEvery { homeSectionCacheDao.get(any(), any(), any()) } returns
-            swrEntity(fetchedAt = NOW_WALL_MS - 25 * 60 * 60_000L)
-
-        assertNull(repository.getCachedHomeSections(HomeSectionQuery()))
-    }
-
-    @Test
-    fun `getCachedHomeSections returns payload when the Room snapshot is fresh`() = runBlocking {
-        // 1h old — inside the ceiling: the cold open instant-paints from Room.
-        val repository = buildRepository()
-        signIn("server-1", "user-A")
-        fakeTimeSource.nowMs = NOW_WALL_MS
-        coEvery { homeSectionCacheDao.get(any(), any(), any()) } returns
-            swrEntity(fetchedAt = NOW_WALL_MS - 1 * 60 * 60_000L)
-
-        val cached = repository.getCachedHomeSections(HomeSectionQuery())
-
-        assertNotNull(cached)
-        assertEquals(1, cached.sections.size)
-    }
-
-    /** Arbitrary fixed epoch the SWR tests measure fetchedAt against. */
-    private companion object {
-        const val NOW_WALL_MS = 1_800_000_000_000L
-    }
-
-    /** DAO-shaped SWR row with a real, encodable payload (the read path decodes it). */
-    private fun swrEntity(fetchedAt: Long): HomeSectionCacheEntity {
-        val payload = HomeSectionsResult(
-            sections = listOf(
-                HomeSection(
-                    id = "cw",
-                    title = "Continue Watching",
-                    type = HomeSectionType.CONTINUE_WATCHING,
-                    items = listOf(MediaItem(id = "item-1", name = "Item 1", mediaType = MediaType.MOVIE)),
-                ),
-            ),
-        )
-        return HomeSectionCacheEntity(
-            serverId = "server-1",
-            userId = "user-A",
-            cacheKey = "irrelevant-get-is-stubbed-with-any",
-            payloadJson = com.raulshma.jellyplay.core.database.Converters.encodeHomeSectionsResult(payload),
-            fetchedAt = fetchedAt,
-        )
-    }
+    // (The Room SWR staleness-ceiling pins — null past 24h, payload when
+    // fresh — moved to HomeSectionsSnapshotStoreTest: the ceiling check lives
+    // in the extracted store now.)
 
     private fun userInfo(id: String) = UserInfo(
         id = id,

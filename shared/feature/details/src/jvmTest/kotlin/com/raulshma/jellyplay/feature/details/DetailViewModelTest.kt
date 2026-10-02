@@ -6,10 +6,13 @@ import com.raulshma.jellyplay.core.data.playback.AudioQueueOutcome
 import com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
 import com.raulshma.jellyplay.core.data.repository.AppliedMutation
+import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.DetailLoadState
 import com.raulshma.jellyplay.core.data.repository.DetailLoadError
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaDetailProvider
+import com.raulshma.jellyplay.core.data.repository.MetadataEditorRepository
+import com.raulshma.jellyplay.core.data.repository.MediaExtrasReads
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
@@ -111,6 +114,7 @@ class DetailViewModelTest {
     // relaxed mocks — no VM test exercises those helpers directly; their own
     // suites do).
     private lateinit var mediaRepository: MediaRepository
+    private lateinit var mediaExtrasReads: MediaExtrasReads
     private lateinit var mediaDetailProvider: MediaDetailProvider
     private lateinit var userDataMutator: FakeUserDataMutator
     private lateinit var playbackRepository: PlaybackRepository
@@ -132,6 +136,8 @@ class DetailViewModelTest {
     @BeforeTest
     fun setUp() {
         mediaRepository = mockk(relaxed = true)
+
+        mediaExtrasReads = mockk(relaxed = true)
         mediaDetailProvider = mockk(relaxed = false)
         playbackRepository = mockk(relaxed = true)
         offlineRepository = mockk(relaxed = true)
@@ -153,7 +159,7 @@ class DetailViewModelTest {
         // Default stub for the special-features fetch so its REMOTE side-effect
         // launch doesn't crash casting the relaxed-mock Result default. Individual
         // tests override this to drive the specialFeatures list.
-        coEvery { mediaRepository.getSpecialFeatures(any()) } returns Result.success(emptyList())
+        coEvery { mediaExtrasReads.getSpecialFeatures(any()) } returns Result.success(emptyList())
         // Default stub for the media-segments pre-warm fetch so its REMOTE
         // side-effect launch doesn't crash casting the relaxed-mock Result default.
         // Individual tests override this to drive the availability booleans.
@@ -216,11 +222,17 @@ class DetailViewModelTest {
                 syncPlayRepository = mockk<SyncPlayRepository>(relaxed = true),
                 syncPlayManager = mockk<SyncPlayManager>(relaxed = true),
             ),
+            metadataAdmin = MetadataAdminActions.Factory(
+                editorRepository = mockk<MetadataEditorRepository>(relaxed = true),
+                mediaRepository = mockk(relaxed = true),
+                authRepository = mockk<AuthRepository>(relaxed = true),
+            ),
         )
         viewModel = DetailViewModel(
             storageProbe = mockk<DetailStorageProbe>(relaxed = true),
             strings = strings,
             mediaRepository = mediaRepository,
+            mediaExtrasReads = mediaExtrasReads,
             userDataMutator = userDataMutator,
             mediaDetailProvider = mediaDetailProvider,
             playbackRepository = playbackRepository,
@@ -243,6 +255,11 @@ class DetailViewModelTest {
             themeMusicPlayer = themeMusicPlayer,
             actionFactories = actionFactories,
             mediaDownloadActions = mockk<com.raulshma.jellyplay.core.data.download.MediaDownloadActions>(relaxed = true),
+            // Smart-play resolution rides the test scheduler: the production
+            // Default-dispatcher launch races `advanceUntilIdle` (the flake in
+            // smartPlay_resumeTakesPrecedenceOverNextUp), the injected
+            // dispatcher makes the post-load uiState read deterministic.
+            smartPlayDispatcher = mainDispatcher,
         )
     }
 
@@ -748,6 +765,144 @@ class DetailViewModelTest {
         assertEquals("e1", target.episode.id)
     }
 
+    // ---- SEASON detail entries (#168) --------------------------------------
+    // A season opened from the home rows carries the parent series' catalogue
+    // snapshot; the smart target must scope to the entry season and the
+    // season-scope mutations must route through the parent series.
+
+    /** An episode bound to an arbitrary series/season (the [episode] helper pins s1/season1). */
+    private fun episodeIn(
+        seriesId: String,
+        seasonId: String,
+        id: String,
+        season: Int,
+        ep: Int,
+        isPlayed: Boolean = false,
+        positionTicks: Long? = null,
+    ) = MediaItem(
+        id = id,
+        name = "Episode $ep",
+        mediaType = MediaType.EPISODE,
+        seasonNumber = season,
+        episodeNumber = ep,
+        indexNumber = ep,
+        isPlayed = isPlayed,
+        playbackPositionTicks = positionTicks,
+        seriesId = seriesId,
+        seasonId = seasonId,
+    )
+
+    /** Stubs a SEASON detail entry: `seasonId` of series s1, snapshot carrying both seasons' episodes. */
+    private fun stubSeasonEntry(
+        seasonId: String,
+        entryEpisodes: List<MediaItem>,
+        otherSeasonId: String = "season1",
+        otherEpisodes: List<MediaItem> = emptyList(),
+    ): MutableStateFlow<DetailLoadState> {
+        val seasons = listOf(
+            MediaItem(id = otherSeasonId, name = "Season 1", mediaType = MediaType.SEASON, indexNumber = 1, seriesId = "s1"),
+            MediaItem(id = seasonId, name = "Season 2", mediaType = MediaType.SEASON, indexNumber = 2, seriesId = "s1"),
+        )
+        val detail = MediaDetail(
+            item = MediaItem(
+                id = seasonId,
+                name = "Season 2",
+                mediaType = MediaType.SEASON,
+                seriesId = "s1",
+                seriesName = "Show",
+            ),
+        )
+        val comparator = playbackOrderComparator()
+        return stubProvider(
+            seasonId,
+            remoteSnapshot(
+                detail = detail,
+                seasons = seasons,
+                episodesBySeason = mapOf(otherSeasonId to otherEpisodes, seasonId to entryEpisodes),
+                fetchedSeasonIds = setOf(otherSeasonId, seasonId),
+                sortedEpisodes = (otherEpisodes + entryEpisodes).sortedWith(comparator),
+            ),
+        )
+    }
+
+    @Test
+    fun smartPlay_seasonEntry_resolvesWithinThatSeason() = runTest(mainDispatcher) {
+        backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+        // S1 has an unplayed episode; S2 has a resume candidate. The entry is
+        // S2 — S1's unplayed episode must not win the target.
+        stubSeasonEntry(
+            seasonId = "season2",
+            entryEpisodes = listOf(
+                episodeIn("s1", "season2", "s2e1", 2, 1, isPlayed = true),
+                episodeIn("s1", "season2", "s2e2", 2, 2, positionTicks = 50_000_000L),
+            ),
+            otherEpisodes = listOf(episodeIn("s1", "season1", "s1e1", 1, 1)),
+        )
+
+        viewModel.onEvent(DetailUiEvent.LoadItem("season2"))
+        advanceUntilIdle()
+
+        val target = viewModel.uiState.value.smartPlayTarget
+        assertNotNull(target)
+        assertEquals("s2e2", target!!.episode.id)
+        assertEquals("Resume S2:E2", target.label)
+    }
+
+    @Test
+    fun smartPlay_seasonEntryWithNoPlayableEpisodes_clearsTarget() = runTest(mainDispatcher) {
+        backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+        // The entry season has only a virtual (unaired) episode — nothing the
+        // resolver may pick; the other season's playable episode must not leak
+        // into the entry season's target either.
+        stubSeasonEntry(
+            seasonId = "season2",
+            entryEpisodes = listOf(
+                episodeIn("s1", "season2", "s2e1", 2, 1).copy(
+                    isVirtual = true,
+                    missingReason = com.raulshma.jellyplay.core.model.MissingEpisodeReason.UNAIRED,
+                ),
+            ),
+            otherEpisodes = listOf(episodeIn("s1", "season1", "s1e1", 1, 1)),
+        )
+
+        viewModel.onEvent(DetailUiEvent.LoadItem("season2"))
+        advanceUntilIdle()
+
+        assertNull(viewModel.uiState.value.smartPlayTarget)
+    }
+
+    @Test
+    fun markSeasonPlayed_onSeasonEntry_routesThroughParentSeries() = runTest(mainDispatcher) {
+        backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+        val entryEpisodes = listOf(
+            episodeIn("s1", "season2", "s2e1", 2, 1),
+            episodeIn("s1", "season2", "s2e2", 2, 2),
+        )
+        val flow = stubSeasonEntry("season2", entryEpisodes)
+        coEvery { mediaDetailProvider.applyOptimisticSeasonRewrite("s1", "season2", any()) } answers {
+            val transform = thirdArg<(List<MediaItem>) -> List<MediaItem>>()
+            val current = (flow.value as DetailLoadState.Loaded).snapshot
+            flow.value = DetailLoadState.Loaded(
+                current.copy(
+                    episodesBySeason = mapOf("season2" to transform(entryEpisodes)),
+                    sortedEpisodes = transform(entryEpisodes).sortedWith(playbackOrderComparator()),
+                    contentGeneration = current.contentGeneration + 1,
+                ),
+            )
+        }
+
+        viewModel.onEvent(DetailUiEvent.LoadItem("season2"))
+        advanceUntilIdle()
+
+        viewModel.onEvent(DetailUiEvent.MarkSeasonPlayed("season2"))
+        advanceUntilIdle()
+
+        // The screen's series scope (seriesIdForDetail) drives the mutator, not
+        // the season id — the optimistic rewrite matches the season-entry session.
+        assertEquals(listOf(Triple("s1", "season2", true)), userDataMutator.seasonCalls)
+        assertTrue(viewModel.uiState.value.episodes["season2"]!!.all { it.isPlayed })
+    }
+
     // ---- Item-level mark played / unplayed ----------------------------------
 
     @Test
@@ -1057,10 +1212,10 @@ class DetailViewModelTest {
                 com.raulshma.jellyplay.core.model.seerr.SeerrMovieDetails(),
             )
             coEvery { seerrRepository.getRecommendations(123, MediaType.MOVIE) } returns Result.success(
-                com.raulshma.jellyplay.core.model.seerr.SeerrSearchResponse(results = listOf(recItem)),
+                listOf(recItem),
             )
             coEvery { seerrRepository.getSimilar(123, MediaType.MOVIE) } returns Result.success(
-                com.raulshma.jellyplay.core.model.seerr.SeerrSearchResponse(results = listOf(recItem)),
+                listOf(recItem),
             )
 
             viewModel.onEvent(DetailUiEvent.LoadItem("m1"))
@@ -1103,6 +1258,60 @@ class DetailViewModelTest {
             advanceUntilIdle()
 
             assertEquals(listOf(review), viewModel.uiState.value.tmdbReviews)
+        }
+
+    // ── Staleness guard (DetailLoadGuard) ─────────────────────────────────
+    // The VM is shared across detail navigations. A Seerr fetch that resolves
+    // after the user navigated on must drop its write at the post-suspension
+    // epoch re-check instead of painting the previous item's videos onto the
+    // new screen.
+
+    @Test
+    fun loadSeerrData_inFlightFetchLandingAfterNavigation_isDiscarded() =
+        runTest(mainDispatcher) {
+            backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+
+            stubProvider(
+                "m1",
+                remoteSnapshot(
+                    MediaDetail(
+                        item = MediaItem(id = "m1", name = "Movie", mediaType = MediaType.MOVIE),
+                        providerIds = mapOf("tmdb" to "123"),
+                    ),
+                ),
+            )
+            // Park m1's TMDB videos fetch so it stays in flight across the
+            // navigation below; it eventually resolves with data that belongs
+            // to the PREVIOUS item's screen.
+            val gate = CompletableDeferred<Unit>()
+            val staleVideo = com.raulshma.jellyplay.core.model.seerr.SeerrRelatedVideo(key = "stale")
+            coEvery { seerrRepository.getTmdbVideos(123, MediaType.MOVIE) } coAnswers {
+                gate.await()
+                Result.success(listOf(staleVideo))
+            }
+
+            viewModel.onEvent(DetailUiEvent.LoadItem("m1"))
+            advanceUntilIdle()
+
+            // Navigate to a second movie. No tmdb provider id, so its own
+            // Seerr load exits at the tmdbId gate and cannot overwrite the
+            // assertion below with a fresh fetch of its own.
+            stubProvider(
+                "m2",
+                remoteSnapshot(
+                    MediaDetail(item = MediaItem(id = "m2", name = "Other", mediaType = MediaType.MOVIE)),
+                ),
+            )
+            viewModel.onEvent(DetailUiEvent.LoadItem("m2"))
+            advanceUntilIdle()
+            assertEquals("m2", viewModel.uiState.value.detail?.item?.id)
+
+            // The stale fetch resolves now — the epoch it captured is no
+            // longer current, so its write must be discarded.
+            gate.complete(Unit)
+            advanceUntilIdle()
+
+            assertTrue(viewModel.uiState.value.relatedVideos.isEmpty())
         }
 
     // ── Live refresh on server UserDataChanged pushes ─────────────────────
@@ -1462,7 +1671,7 @@ class DetailViewModelTest {
         }
 
     // ── Special features / extras ───────────────────────────────────────────
-    // A REMOTE load fires mediaRepository.getSpecialFeatures (sourced from
+    // A REMOTE load fires mediaExtrasReads.getSpecialFeatures (sourced from
     // Jellyfin's /Items/{id}/SpecialFeatures) and projects the result onto
     // uiState.specialFeatures so the "Special Features" row can render.
 
@@ -1478,13 +1687,13 @@ class DetailViewModelTest {
                 MediaItem(id = "extra-1", name = "Making Of", mediaType = MediaType.MOVIE),
                 MediaItem(id = "extra-2", name = "Deleted Scenes", mediaType = MediaType.MOVIE),
             )
-            coEvery { mediaRepository.getSpecialFeatures("m1") } returns Result.success(extras)
+            coEvery { mediaExtrasReads.getSpecialFeatures("m1") } returns Result.success(extras)
 
             viewModel.onEvent(DetailUiEvent.LoadItem("m1"))
             advanceUntilIdle()
 
             // The fetch fired exactly once for the resolved item.
-            coVerify(exactly = 1) { mediaRepository.getSpecialFeatures("m1") }
+            coVerify(exactly = 1) { mediaExtrasReads.getSpecialFeatures("m1") }
             // The extras landed on uiState for the detail row.
             assertEquals(extras, viewModel.uiState.value.specialFeatures)
         }
@@ -1499,7 +1708,7 @@ class DetailViewModelTest {
                 remoteSnapshot(MediaDetail(item = MediaItem(id = "m1", name = "Movie", mediaType = MediaType.MOVIE))),
             )
             val extras = listOf(MediaItem(id = "extra-1", name = "Making Of", mediaType = MediaType.MOVIE))
-            coEvery { mediaRepository.getSpecialFeatures("m1") } returns Result.success(extras)
+            coEvery { mediaExtrasReads.getSpecialFeatures("m1") } returns Result.success(extras)
             viewModel.onEvent(DetailUiEvent.LoadItem("m1"))
             advanceUntilIdle()
             assertEquals(extras, viewModel.uiState.value.specialFeatures)
@@ -1524,7 +1733,7 @@ class DetailViewModelTest {
 
             assertTrue(viewModel.uiState.value.specialFeatures.isEmpty())
             // A LOCAL origin short-circuits remote discovery — no extras fetch.
-            coVerify(exactly = 0) { mediaRepository.getSpecialFeatures("s1") }
+            coVerify(exactly = 0) { mediaExtrasReads.getSpecialFeatures("s1") }
         }
 
     // ── Instant Mix ───────────────────────────────────────────────────────

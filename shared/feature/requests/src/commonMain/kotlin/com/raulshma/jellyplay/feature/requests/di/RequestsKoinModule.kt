@@ -14,8 +14,10 @@ import org.koin.dsl.module
  * already Koin-native before this feature moved (no Hilt interop at all):
  *  - SeerrRepository and ArrRepository resolve from dataJvmModule (the legacy
  *    SeerrModule/ArrModule @Provides are the reverse bridge, Hilt→Koin);
- *  - ExperimentalStore resolves from the C4 shared-datastore graph
- *    (datastoreCommonModule; SharedStoreModule bridges legacy injectors).
+ *  - ExperimentalFeatureGate resolves from the C4 shared-datastore graph
+ *    (datastoreCommonModule; SharedStoreModule bridges legacy injectors) — the
+ *    shared eagerly-shared Direct-*arr gate, replacing this VM's hand-rolled
+ *    `stateIn(Eagerly)` copy.
  * The whole dep graph resolves on BOTH platforms — the desktop startKoin
  * (dataJvmModule + datastoreCommonModule) can instantiate it directly once a
  * desktop nav entry exists (calendar, landed just before, was the first with
@@ -26,7 +28,7 @@ val requestsModule: Module = module {
         RequestsViewModel(
             seerrRepository = get(),
             arrRepository = get(),
-            experimentalStore = get(),
+            experimentalGate = get(),
         )
     }
 }

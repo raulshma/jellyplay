@@ -10,9 +10,11 @@ import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.MediaSource
 import com.raulshma.jellyplay.core.model.MediaStreamSelection
 import com.raulshma.jellyplay.core.model.isWatchedPercentage
 import com.raulshma.jellyplay.core.model.PlaybackMode
+import com.raulshma.jellyplay.core.model.PlaybackStartInfo
 import com.raulshma.jellyplay.core.model.PlayMethod
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.StreamingQuality
@@ -142,13 +144,14 @@ internal fun resolveResumeTicks(
  *   AFTER release(), the same cancel-after-release ordering it has always
  *   applied);
  * - [PlayerSessionManager] and [PlaybackProgressReporter] are injected as
- *   already-constructed instances. The reporter keeps being built inside the
- *   ViewModel (its ui-state handle wiring stays VM-side by design) and is
+ *   already-constructed instances. The reporter is built in the wiring
+ *   builder ([PlayerWiring], the composition module that owns the whole
+ *   collaborator graph — the former in-ViewModel constructions) and is
  *   handed over here as an object;
- * - the [SessionLoadPipeline] is CONSTRUCTED in the ViewModel — its outputs
- *   and hooks own every ui-state touch — and injected here as an object: the
- *   session owns when a load starts, never how the pipeline reaches the ui
- *   state;
+ * - the [SessionLoadPipeline] is CONSTRUCTED in the wiring builder — its
+ *   outputs and hooks own every ui-state touch — and injected here as an
+ *   object: the session owns when a load starts, never how the pipeline
+ *   reaches the ui state;
  * - the same no-ui-state rule applies to the B2–B4 additions: the
  *   media-session controller is injected as an already-constructed instance,
  *   the process-death position persistence is reached ONLY through the
@@ -223,6 +226,13 @@ internal class PlaybackSession(
     private val directPlayFallbackNotice: suspend (String) -> String,
     /** Pass-out protection hours; values <= 0 disable the poller. */
     private val passOutHours: Flow<Int>,
+    /**
+     * Whether the still-watching mode includes HOURS (feature 1.3): a tripped
+     * pass-out pause then arrives as [SessionEvent.StillWatchingPrompt] (the
+     * confirm overlay) instead of the bare [SessionEvent.PassOutPause] toast.
+     * Synchronous read, the [getPlaybackMode] seam shape.
+     */
+    private val upgradesPassOutToOverlay: () -> Boolean,
     /**
      * Invoked after a disposed coordinator was re-created: the VM restarts
      * its engine-mirror collectors (play/buffering ui-state writes) against
@@ -340,7 +350,17 @@ internal class PlaybackSession(
             }
             EngineDecision.PassOutPause -> {
                 playerSessionManager.engine?.pause()
-                engineEventShell.emitEvent(SessionEvent.PassOutPause)
+                // Hours arm of the still-watching mode (feature 1.3): the same
+                // pause arrives as the confirm prompt instead of the silent
+                // toast; the toast survives where the overlay doesn't take
+                // over (mode OFF/EPISODES).
+                if (upgradesPassOutToOverlay()) {
+                    engineEventShell.emitEvent(
+                        SessionEvent.StillWatchingPrompt(StillWatchingReason.HOURS_IDLE)
+                    )
+                } else {
+                    engineEventShell.emitEvent(SessionEvent.PassOutPause)
+                }
             }
             is EngineDecision.InformUser -> engineEventShell.emitEvent(
                 SessionEvent.InformUser(decision.message)
@@ -740,6 +760,23 @@ internal class PlaybackSession(
         }
     }
 
+    /**
+     * Switches the playing version (media source) of the current item at the
+     * current position — the Version sheet's pick. The pending stream-index
+     * hints are CLEARED first: indices of the previous version are
+     * meaningless server-side (and would bake the old audio/sub choice into
+     * the new version's re-POST), so the new version starts on its own
+     * defaults.
+     */
+    fun switchMediaSource(mediaSourceId: String) {
+        if (playerSessionManager.engine == null) return
+        val positionMs = getReportPositionMs()
+        scope.launch {
+            setPendingStreams(null)
+            playerSessionManager.switchMediaSource(mediaSourceId, positionMs)
+        }
+    }
+
     // ── Mini-player reclaim (body moved from the VM at B4) ──────────────────
 
     /**
@@ -949,6 +986,28 @@ internal class PlaybackSession(
                 // the provider; detail-screen re-entry force re-resolves.
             }
         }
+    }
+
+    /**
+     * The server start report, incognito-gated: incognito never reaches the
+     * server (the same invariant [reportCurrentPlaybackStopped] enforces).
+     * The play-session id resolves through [currentPlaySessionId] — the same
+     * single-value resolver this session's stop reports and persists use
+     * (the deleted [VideoSessionHost] carried a duplicate resolver on the VM
+     * for exactly this hook; the deduplication is the point of the move).
+     * Reached through the load spine's `reportPlaybackStart` hook at stage
+     * 10, directly before position/progress tracking starts.
+     */
+    internal suspend fun reportPlaybackStart(itemId: String, source: MediaSource?, playMethod: PlayMethod) {
+        if (getIncognitoModeEnabled()) return
+        playbackRepository.reportPlaybackStart(
+            PlaybackStartInfo(
+                itemId = itemId,
+                sessionId = currentPlaySessionId,
+                mediaSourceId = source?.id,
+                playMethod = playMethod,
+            )
+        )
     }
 
     /**
@@ -1326,20 +1385,6 @@ internal interface SessionLifecycleHooks {
 }
 
 /**
- * The merged ViewModel seam: ONE interface covering both halves the
- * ViewModel implements for the session stack — [SessionLoadOutputs] (the
- * load pipeline's uiState-shaped outputs) and [SessionLifecycleHooks] (the
- * initialize/release lifecycle slices). The VM used to implement the two as
- * separate object literals with identical statelessness; it now implements
- * this single host and passes the one object to both consumers
- * ([SessionLoadPipeline.outputs], [PlaybackSession.hooks]). The halves stay
- * separate interfaces so their test fakes (SessionLoadPipelineTest's
- * recording outputs, the session suites' recording hooks) keep implementing
- * just the half they exercise.
- */
-internal interface SessionHost : SessionLoadOutputs, SessionLifecycleHooks
-
-/**
  * Event surface a [PlaybackSession] exposes to the ViewModel: the VM stays
  * the single forwarder, mapping each event into its existing sinks (the
  * close-player channel, the uiState error fields, the user-message bus, the
@@ -1371,26 +1416,24 @@ sealed interface SessionEvent {
 
     /** Pass-out protection triggered a pause. */
     data object PassOutPause : SessionEvent
+
+    /**
+     * The "Still watching?" confirm prompt (feature 1.3) — the hours arm:
+     * the pass-out protection tripped while the still-watching mode includes
+     * HOURS, so the silent pause arrives bundled with the confirm overlay
+     * (the engine is already paused; the overlay's Continue resumes).
+     * The episode arm is raised by the ViewModel's end-of-playback gate,
+     * which raises the same overlay directly.
+     */
+    data class StillWatchingPrompt(val reason: StillWatchingReason) : SessionEvent
 }
 
-/**
- * Narrow persistence seam for the session's resume position: the four
- * SavedStateHandle keys (item id, position, play-session id, persisted-at
- * epoch) behind read accessors, so the session can persist and restore a
- * process-death resume position without touching the handle type.
- *
- * Live since B3: [SavedStateHandlePositionStore] is the production
- * implementation, constructed by the ViewModel (which keeps the handle as a
- * constructor parameter solely to build the store) and injected into
- * [PlaybackSession].
- */
-interface SessionPositionStore {
-    fun persist(itemId: String, positionMs: Long, playSessionId: String, nowMs: Long)
-    fun savedItemId(): String?
-    fun savedPositionMs(): Long?
-    fun savedPersistedAtMs(): Long?
-    fun savedPlaySessionId(): String?
-}
+// [SessionPositionStore] moved to :shared:core:player-contract (SAME package,
+// zero consumer import churn — the PlayerLifecycleCallbacks precedent) so the
+// shared test-fixtures module's FakePositionStore can implement it through
+// that module's existing player-contract edge. [SavedStateHandlePositionStore]
+// below stays here: it is the production implementation and touches the
+// SavedStateHandle type.
 
 /**
  * Production [SessionPositionStore]: a thin wrapper over the ViewModel's

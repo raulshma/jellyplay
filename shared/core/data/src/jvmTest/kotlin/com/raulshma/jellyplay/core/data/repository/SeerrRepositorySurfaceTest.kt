@@ -28,6 +28,18 @@ import kotlin.test.assertTrue
  * differing list element types, the servers pair) are the known next folds
  * where a clean shape exists.
  *
+ * 37 after the family-seam split: `SeerrServiceDirectory` (the *arr
+ * service-discovery family — ArrRepositoryImpl, its clean sole consumer,
+ * injects the seam), `SeerrRequestLifecycle` (the moderation commands +
+ * poll start/stop; the requests feature is still a mixed consumer, so only
+ * zero-caller editRequest left the union) and `SeerrAuthenticator` (the
+ * login trio — the Seerr settings screen's connection probe is the clean
+ * sole consumer) now carry their families over the same impl; with them,
+ * getRadarrSettings, getSonarrSettings, editRequest, loginJellyfin,
+ * loginLocal and testApiKeyConnection retired off the union. testConnection
+ * stays on the core's connection/prefs family with zero callers today — the
+ * next retirement candidate.
+ *
  * Lower [maxInterfaceMembers] when a pair folds or a member retires; never
  * raise it. A genuinely new Seerr capability should land as a narrow
  * collaborator rather than growing this surface.
@@ -35,7 +47,7 @@ import kotlin.test.assertTrue
 class SeerrRepositorySurfaceTest {
 
     /** The maximum allowed member count of [SeerrRepository] (see class KDoc). */
-    private val maxInterfaceMembers = 43
+    private val maxInterfaceMembers = 37
 
     /** Members folded away from the interface; their re-addition must fail this suite. */
     private val retiredMembers = listOf(
@@ -43,6 +55,15 @@ class SeerrRepositorySurfaceTest {
         "getServiceSonarrDetail",
         "getRadarrServiceDetail",
         "getSonarrServiceDetail",
+        // Family-seam retirements (see class KDoc): these live on
+        // SeerrServiceDirectory / SeerrRequestLifecycle / SeerrAuthenticator
+        // now — the impl single satisfies both declarations.
+        "getRadarrSettings",
+        "getSonarrSettings",
+        "editRequest",
+        "loginJellyfin",
+        "loginLocal",
+        "testApiKeyConnection",
     )
 
     /** Walks up from the working dir to the module root that owns src/commonMain/kotlin. */
@@ -142,7 +163,9 @@ class SeerrRepositorySurfaceTest {
                 Regex("""\b$member\s*\(""").containsMatchIn(body),
                 "$member reappeared on the SeerrRepository surface — it was folded into the " +
                     "kind-parameterized getServiceDetail(id, kind) over the SeerrServiceDetail " +
-                    "sealed parent. Do not reintroduce the kind twin as an interface member.",
+                    "sealed parent, or moved to a family seam (SeerrServiceDirectory / " +
+                    "SeerrRequestLifecycle / SeerrAuthenticator). Do not reintroduce it as an " +
+                    "interface member.",
             )
         }
         // Sanity: the parse actually sees declarations, so an empty/false

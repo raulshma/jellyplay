@@ -404,4 +404,22 @@
     <string name="admin_plugin_config_unavailable">La configurazione del plugin non è disponibile su questa piattaforma.</string>
 
     <string name="admin_no_delete_permission">Il tuo account non ha l'autorizzazione per eliminare contenuti. Contatta l'amministratore del server.</string>
+    <string name="admin_backups_title">Backup</string>
+    <string name="admin_backups_create">Crea backup</string>
+    <string name="admin_backups_create_title">Crea backup</string>
+    <string name="admin_backups_empty">Ancora nessun backup</string>
+    <string name="admin_backups_empty_hint">Esegui un backup per acquisire configurazione e dati di questo server.</string>
+    <string name="admin_backups_unsupported_title">Backup non disponibili</string>
+    <string name="admin_backups_unsupported_body">Questo server Jellyfin non supporta i backup. È richiesto un server con Jellyfin 10.11 o successivo.</string>
+    <string name="admin_backups_component_metadata">Metadati</string>
+    <string name="admin_backups_component_trickplay">Trickplay</string>
+    <string name="admin_backups_component_subtitles">Sottotitoli</string>
+    <string name="admin_backups_component_database">Database</string>
+    <string name="admin_backups_restore">Ripristina</string>
+    <string name="admin_backups_restore_confirm_title">Ripristinare il backup?</string>
+    <string name="admin_backups_restore_confirm_body">Il server si riavvia immediatamente e tutti i dati attuali vengono sostituiti con il contenuto di "%1$s". Questa azione non può essere annullata.</string>
+    <string name="admin_backups_restoring">Ripristino in corso — il server si sta riavviando</string>
+    <string name="admin_backups_reconnecting">Il server è tornato — riconnessione…</string>
+    <string name="admin_backups_restore_complete">Ripristino completato — riconnesso al server.</string>
+    <string name="admin_backups_restore_server_unreachable">Il server non è tornato dopo il ripristino. Verifica che sia in esecuzione, quindi accedi di nuovo.</string>
 </resources>

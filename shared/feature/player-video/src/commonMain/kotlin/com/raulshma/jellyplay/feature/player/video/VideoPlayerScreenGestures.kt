@@ -215,7 +215,7 @@ internal fun playerBoxKeyInputModifier(
 
 /** The surface Box's tap / double-tap / pinch-zoom gesture tier (the two pointerInput modifiers verbatim). */
 internal fun Modifier.playerTapAndZoomGestures(
-    gesturesEnabled: Boolean,
+    tapGesturesEnabled: Boolean,
     isScreenLocked: Boolean,
     onUserInteraction: () -> Unit,
     isHoldSpeedActive: () -> Boolean,
@@ -234,9 +234,9 @@ internal fun Modifier.playerTapAndZoomGestures(
     // reader/setter LAMBDA invoked at event time — a captured VALUE would
     // freeze until the next key change (the staleness the inline lambdas
     // avoided by reading through the parent's state delegates).
-    pointerInput(gesturesEnabled, isScreenLocked) {
+    pointerInput(tapGesturesEnabled, isScreenLocked) {
         if (isScreenLocked) return@pointerInput
-        if (!gesturesEnabled) return@pointerInput
+        if (!tapGesturesEnabled) return@pointerInput
         detectTapGestures(
             onTap = {
                 onUserInteraction()
@@ -261,9 +261,9 @@ internal fun Modifier.playerTapAndZoomGestures(
             },
         )
     }
-        .pointerInput(gesturesEnabled, isScreenLocked) {
+        .pointerInput(tapGesturesEnabled, isScreenLocked) {
             if (isScreenLocked) return@pointerInput
-            if (!gesturesEnabled) return@pointerInput
+            if (!tapGesturesEnabled) return@pointerInput
             awaitEachGesture {
                 var prevDistance = 0f
                 do {
@@ -296,7 +296,7 @@ internal fun PlayerGestureOverlayTier(
     seekState: DpadSeekState,
     gestureController: GestureSeekController,
     gestureIndicatorSide: GestureIndicatorSide,
-    gesturesEnabled: Boolean,
+    swipeGesturesEnabled: Boolean,
     swipeSeekMaxMs: Long,
     showControls: Boolean,
     onShowControlsChange: (Boolean) -> Unit,
@@ -311,7 +311,7 @@ internal fun PlayerGestureOverlayTier(
         brightnessFlow = gestureController.brightnessOverlay,
         volumeFlow = gestureController.volumeOverlay,
         indicatorSide = gestureIndicatorSide,
-        gesturesEnabled = gesturesEnabled,
+        swipeGesturesEnabled = swipeGesturesEnabled,
         swipeSeekMaxMs = swipeSeekMaxMs,
         onSeekGesture = remember(gestureController) { { totalDeltaMs -> gestureController.onSeekGesture(totalDeltaMs) } },
         onBrightnessGesture = remember(gestureController) { { delta -> gestureController.onBrightnessGesture(delta) } },

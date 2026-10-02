@@ -19,6 +19,7 @@ import com.raulshma.jellyplay.core.model.ColorStyle
 import com.raulshma.jellyplay.core.model.ContrastLevel
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.HomeSectionType
+import com.raulshma.jellyplay.core.model.GestureMode
 import com.raulshma.jellyplay.core.model.OnboardingPreferences
 import com.raulshma.jellyplay.core.model.OrientationMode
 import com.raulshma.jellyplay.core.model.PlayerType
@@ -265,7 +266,7 @@ class OnboardingViewModelTest {
         vm.edit { it.playback.setPreferredPlayer(PlayerType.MPV) }
         vm.edit { it.playback.setStreamingQuality(StreamingQuality.FHD_1080P) }
         vm.edit { it.videoPlayer.setVideoSeekDurationMs(30_000L) }
-        vm.edit { it.videoPlayer.setVideoGesturesEnabled(false) }
+        vm.edit { it.videoPlayer.setVideoGestureMode(GestureMode.NONE) }
         vm.edit { it.videoPlayer.setVideoDefaultOrientation(OrientationMode.SENSOR) }
         vm.edit { it.videoPlayer.setVideoAutoplayNext(false) }
         advanceUntilIdle()
@@ -273,7 +274,7 @@ class OnboardingViewModelTest {
         coVerify(exactly = 1) { playbackStore.setPreferredPlayer(PlayerType.MPV) }
         coVerify(exactly = 1) { playbackStore.setStreamingQuality(StreamingQuality.FHD_1080P) }
         coVerify(exactly = 1) { videoPlayerStore.setVideoSeekDurationMs(30_000L) }
-        coVerify(exactly = 1) { videoPlayerStore.setVideoGesturesEnabled(false) }
+        coVerify(exactly = 1) { videoPlayerStore.setVideoGestureMode(GestureMode.NONE) }
         coVerify(exactly = 1) { videoPlayerStore.setVideoDefaultOrientation(OrientationMode.SENSOR) }
         coVerify(exactly = 1) { videoPlayerStore.setVideoAutoplayNext(false) }
     }

@@ -11,12 +11,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -71,15 +67,15 @@ import com.raulshma.jellyplay.feature.auth.generated.resources.server_health_hea
 import com.raulshma.jellyplay.feature.auth.generated.resources.server_health_unreachable
 import org.koin.compose.viewmodel.koinViewModel
 import com.raulshma.jellyplay.core.model.ServerInfo
-import androidx.compose.ui.unit.IntOffset
 import com.raulshma.jellyplay.core.designsystem.theme.Dimensions
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
 import com.raulshma.jellyplay.core.ui.components.AddListRow
-import com.raulshma.jellyplay.core.ui.components.LocalFloatingNavOffset
+import com.raulshma.jellyplay.core.ui.components.DotLabel
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
+import com.raulshma.jellyplay.core.ui.components.clearFloatingNav
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
@@ -103,8 +99,6 @@ fun ServerListScreen(
 
     val isSynthwave = LocalIsSynthwave.current
     val backgroundColorState = rememberScreenBackgroundColorState()
-
-    val navOffsetPx = LocalFloatingNavOffset.current
 
     // One-shot reachability ping per saved server on screen entry.
     LaunchedEffect(servers.map { it.address }) {
@@ -190,21 +184,21 @@ fun ServerListScreen(
 
             if (!isTv) {
                 val fabFocusState = rememberTvFocusState(focusedScale = 1.05f)
+                // The signed-out auth host composes this screen with NO floating
+                // nav bar at all — reserving its height there parked the FAB a
+                // phantom bar-height above the bottom edge. clearFloatingNav
+                // presence-gates the bar-height term and its ride-up offset
+                // self-collapses where the nav is absent; includeSystemInset is
+                // false because the Scaffold above already consumes the
+                // navigationBars inset and hands it to this Box's padding.
                 ExtendedFloatingActionButton(
                     onClick = onAddServer,
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
                         .then(fabFocusState.focusModifier)
                         .tvFocusIndicator(fabFocusState, ShapeCache.smooth16)
-                        .padding(
-                            end = 16.dp,
-                            bottom = 16.dp + Dimensions.floatingNavHeight,
-                        )
-                        .offset {
-                            val maxOffset = Dimensions.floatingNavHeight.toPx()
-                            val yOffset = (-navOffsetPx()).coerceAtMost(maxOffset)
-                            IntOffset(x = 0, y = yOffset.toInt())
-                        },
+                        .padding(end = 16.dp)
+                        .clearFloatingNav(includeSystemInset = false),
                     icon = { Icon(Tabler.Outline.Plus, contentDescription = null) },
                     text = { Text(stringResource(Res.string.auth_add_server)) },
                 )
@@ -322,18 +316,5 @@ private fun ServerHealthBadge(
         is ServerHealth.Unknown -> MaterialTheme.colorScheme.outline to
             stringResource(Res.string.server_health_checking)
     }
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(
-            modifier = Modifier
-                .size(8.dp)
-                .clip(CircleShape)
-                .background(dotColor),
-        )
-        Spacer(modifier = Modifier.width(6.dp))
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
+    DotLabel(text = label, dotColor = dotColor)
 }

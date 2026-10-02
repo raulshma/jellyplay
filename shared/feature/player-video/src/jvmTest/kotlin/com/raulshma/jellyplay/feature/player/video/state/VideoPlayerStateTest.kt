@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.player.video.state
 
 import com.raulshma.jellyplay.core.model.DecoderMode
+import com.raulshma.jellyplay.core.model.GestureMode
 import com.raulshma.jellyplay.core.model.OrientationMode
 import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.StreamingQuality
@@ -68,13 +69,13 @@ class VideoPlayerStateTest {
     @Test
     fun gesturePrefsState_defaultValuesAndCopy() {
         val state = GesturePrefsState()
-        assertTrue(state.gesturesEnabled)
+        assertTrue(state.tapGesturesEnabled)
         assertTrue(state.holdSpeedEnabled)
         assertEquals(2.0f, state.holdSpeedMultiplier, 0.001f)
         assertEquals(10_000L, state.seekDurationMs)
 
-        val updated = state.copy(gesturesEnabled = false, holdSpeedMultiplier = 3.0f)
-        assertFalse(updated.gesturesEnabled)
+        val updated = state.copy(gestureMode = GestureMode.NONE, holdSpeedMultiplier = 3.0f)
+        assertFalse(updated.tapGesturesEnabled)
         assertEquals(3.0f, updated.holdSpeedMultiplier, 0.001f)
     }
 

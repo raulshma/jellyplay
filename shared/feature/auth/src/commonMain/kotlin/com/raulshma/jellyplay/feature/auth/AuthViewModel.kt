@@ -1,6 +1,5 @@
 package com.raulshma.jellyplay.feature.auth
 
-import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.model.ServerHealth
 import com.raulshma.jellyplay.core.model.ServerInfo
@@ -19,6 +18,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlin.time.TimeSource
+import com.raulshma.jellyplay.core.ui.message.UiMessage
 
 sealed class QuickConnectUiState {
     data object Idle : QuickConnectUiState()
@@ -128,8 +128,7 @@ class AuthViewModel(
             if (enabledResult.isFailure) {
                 _quickConnectState.set(
                     QuickConnectUiState.Error(
-                        UserErrorMessages.rawOrNull(enabledResult)?.let { AuthMessage.Raw(it) }
-                            ?: AuthMessage.Resource(Res.string.auth_qc_error_check_availability)
+                        UiMessage.of(enabledResult, Res.string.auth_qc_error_check_availability)
                     )
                 )
                 return@launch
@@ -137,7 +136,7 @@ class AuthViewModel(
             if (enabledResult.getOrNull() != true) {
                 _quickConnectState.set(
                     QuickConnectUiState.Error(
-                        AuthMessage.Resource(Res.string.auth_qc_error_not_enabled)
+                        UiMessage.Resource(Res.string.auth_qc_error_not_enabled)
                     )
                 )
                 return@launch
@@ -147,8 +146,7 @@ class AuthViewModel(
             if (initiateResult.isFailure) {
                 _quickConnectState.set(
                     QuickConnectUiState.Error(
-                        UserErrorMessages.rawOrNull(initiateResult)?.let { AuthMessage.Raw(it) }
-                            ?: AuthMessage.Resource(Res.string.auth_qc_error_initiate)
+                        UiMessage.of(initiateResult, Res.string.auth_qc_error_initiate)
                     )
                 )
                 return@launch
@@ -173,8 +171,7 @@ class AuthViewModel(
                     if (pollResult.isFailure) {
                         _quickConnectState.set(
                             QuickConnectUiState.Error(
-                                UserErrorMessages.rawOrNull(pollResult)?.let { AuthMessage.Raw(it) }
-                                    ?: AuthMessage.Resource(Res.string.auth_qc_error_polling)
+                                UiMessage.of(pollResult, Res.string.auth_qc_error_polling)
                             )
                         )
                         return@launch
@@ -191,8 +188,7 @@ class AuthViewModel(
                         } else {
                             _quickConnectState.set(
                                 QuickConnectUiState.Error(
-                                    UserErrorMessages.rawOrNull(loginResult)?.let { AuthMessage.Raw(it) }
-                                        ?: AuthMessage.Resource(Res.string.auth_qc_error_auth)
+                                    UiMessage.of(loginResult, Res.string.auth_qc_error_auth)
                                 )
                             )
                         }
@@ -201,7 +197,7 @@ class AuthViewModel(
                 }
                 _quickConnectState.set(
                     QuickConnectUiState.Error(
-                        AuthMessage.Resource(Res.string.auth_qc_error_timeout)
+                        UiMessage.Resource(Res.string.auth_qc_error_timeout)
                     )
                 )
             }

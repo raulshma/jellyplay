@@ -42,6 +42,7 @@ import com.raulshma.jellyplay.feature.player.video.components.NextEpisodeOverlay
 import com.raulshma.jellyplay.feature.player.video.components.PinLockOverlay
 import com.raulshma.jellyplay.feature.player.video.components.SegmentSkipOverlay
 import com.raulshma.jellyplay.feature.player.video.components.SlideToUnlockOverlay
+import com.raulshma.jellyplay.feature.player.video.components.StillWatchingOverlay
 import com.raulshma.jellyplay.feature.player.video.components.SubtitleDelayOverlay
 import com.raulshma.jellyplay.feature.player.video.components.TrickplayOverlay
 import com.raulshma.jellyplay.feature.player.video.generated.resources.Res
@@ -87,6 +88,8 @@ internal fun BoxScope.PlayerCenterOverlayTier(
     isSheetOpen: Boolean,
     isScreenLocked: Boolean,
     playbackIntended: Boolean,
+    /** The "Still watching?" confirm state; null = hidden (feature 1.3). */
+    stillWatchingPrompt: StillWatchingPromptState?,
 ) {
     // Trickplay overlay for seek gestures
     AnimatedVisibility(
@@ -167,8 +170,10 @@ internal fun BoxScope.PlayerCenterOverlayTier(
     }
 
     if (nextEpisode != null) {
+        // The confirm overlay suppresses the up-next card while visible —
+        // the answer decides the advance, the card must not race it.
         NextEpisodeOverlay(
-            isVisible = shouldShowUpNext,
+            isVisible = shouldShowUpNext && stillWatchingPrompt == null,
             episodeTitle = nextEpisode.name,
             seriesName = nextEpisode.seriesName,
             seasonNumber = nextEpisode.seasonNumber,
@@ -188,6 +193,18 @@ internal fun BoxScope.PlayerCenterOverlayTier(
                 .padding(bottom = 40.dp, end = 40.dp),
         )
     }
+
+    // "Still watching?" confirm (feature 1.3), centered beside the up-next
+    // card; the countdown reuses the card's pauseCountdown hook so a sheet or
+    // the screen lock doesn't rush the answer, and expiry lands as Stop.
+    StillWatchingOverlay(
+        state = stillWatchingPrompt,
+        onContinue = { viewModel.onEvent(VideoPlayerUiEvent.StillWatchingContinue) },
+        onStop = { viewModel.onEvent(VideoPlayerUiEvent.StillWatchingStop) },
+        onTick = { viewModel.onEvent(VideoPlayerUiEvent.StillWatchingTick) },
+        pauseCountdown = isSheetOpen || isScreenLocked,
+        modifier = Modifier.align(Alignment.Center),
+    )
 
     HdrBadge(
         hdrType = uiState.hdrType,

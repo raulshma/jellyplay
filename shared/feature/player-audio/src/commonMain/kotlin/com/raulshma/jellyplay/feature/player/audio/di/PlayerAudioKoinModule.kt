@@ -23,8 +23,9 @@ import org.koin.dsl.module
  *    module-local AudioPlayerCast seam is bridged app-side
  *    (`androidAppInteropAdaptersModule` adapter over the Koin-owned
  *    CastManager — the details DetailThemeMusic precedent);
- *  - AudioSleepTimerManager (dataJvmModule aliases the interface onto the
- *    SleepTimerManager single),
+ *  - SleepCountdown (the commonMain sleep-timer countdown core; the shared
+ *    single is Koin-owned by dataJvmModule's dataSessionPlaybackModule over the
+ *    TimeSource single),
  *    MediaRepository /
  *    UserDataMutator (shared data
  *    cluster) and the download window TrackDownloadStatusWindow (core:data's
@@ -68,6 +69,7 @@ val playerAudioModule: Module = module {
             effectsManager = get(),
             engine = get(),
             cast = get(),
+            audioQueueFacade = get(),
             projections = get(),
             audioStore = get(),
             audioEffectsStore = get(),
@@ -76,7 +78,7 @@ val playerAudioModule: Module = module {
             userDataMutator = get(),
             downloads = get(),
             trackDownloadActions = get(),
-            sleepTimerManager = get(),
+            sleepCountdown = get(),
         )
     }
 }

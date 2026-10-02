@@ -3,7 +3,8 @@ package com.raulshma.jellyplay.desktop.player
 import com.raulshma.jellyplay.core.data.playback.AudioLyricsManager
 import com.raulshma.jellyplay.core.data.playback.DesktopAudioQueueManager
 import com.raulshma.jellyplay.core.data.playback.QueuePersistenceHelper
-import com.raulshma.jellyplay.core.data.playback.SleepTimerManager
+import com.raulshma.jellyplay.core.data.playback.SleepCountdown
+import com.raulshma.jellyplay.core.data.playback.SleepCountdownClock
 import com.raulshma.jellyplay.core.data.playback.focus.DefaultPlaybackFocus
 import com.raulshma.jellyplay.core.data.playback.focus.FocusAudioAttributes
 import com.raulshma.jellyplay.core.data.playback.focus.FocusClaimState
@@ -14,6 +15,10 @@ import com.raulshma.jellyplay.core.data.playback.focus.FocusUsage
 import com.raulshma.jellyplay.core.data.playback.focus.NoopPlaybackFocus
 import com.raulshma.jellyplay.core.data.playback.focus.PlaybackFocus
 import com.raulshma.jellyplay.core.data.playback.focus.PlaybackSurfaceId
+// The shared MediaEngine double (fixtures merge): the desktop twin was
+// deleted — its hardcoded AUTO_PLAY personality is this class's
+// LoadBehavior.AUTO_PLAY, passed at every construction below.
+import com.raulshma.jellyplay.core.testfixtures.FakeMediaEngine
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -78,9 +83,9 @@ class DesktopAudioQueueManagerFocusTest {
             // next test's uncaught-exception gate (the RealEngine suites get
             // this from manager.start(); the focus harness never starts).
             lyricsManager = AudioLyricsManager(FakeLyricsRepository()).also { it.initialize(scope) },
-            sleepTimerManager = SleepTimerManager(TestTimeSource()),
+            sleepCountdown = SleepCountdown(SleepCountdownClock { TestTimeSource().nowElapsedRealtimeMillis() }),
             scope = scope,
-            engineFactory = { FakeMediaEngine().also { engines += it } },
+            engineFactory = { FakeMediaEngine(FakeMediaEngine.LoadBehavior.AUTO_PLAY).also { engines += it } },
             mainThreadGuard = false,
             playbackFocus = focusFor(this),
         )

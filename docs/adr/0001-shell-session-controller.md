@@ -76,3 +76,15 @@ and `ServerIdentityStore` are final classes without narrow commonMain interfaces
 the transport-surface dependency (`RealtimeConnection`'s KDoc: "split out of
 AuthRepository so the session shell depends on the transport surface alone") is the
 recorded intent this amendment makes explicit.
+
+## Amendment (2026-10-01) — ShellHostHooks is five grouped values
+
+The flat 13-member hook list (each addition costing factory + two shells'
+wiring edits) is regrouped into five cohesive data-class values —
+`ShellHomeHooks`, `ShellAudioClicks`, `ShellSettingsHooks`, `ShellAdminHooks`,
+`ShellSearchHooks` — so `RememberShellHost` takes 6 params and the
+remember-key discipline is per-group structural equality. This is the
+`rememberShellAdminGate` bundling precedent applied to the whole surface; the
+signature rule (no `*Repository` crosses any surface) is unchanged. Hook #14,
+when it comes, is a new member of one bundle plus its bundle's remember —
+not a factory-wide edit.

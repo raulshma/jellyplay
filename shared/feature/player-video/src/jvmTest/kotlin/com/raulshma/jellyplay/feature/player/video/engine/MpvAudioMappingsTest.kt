@@ -1,8 +1,11 @@
 package com.raulshma.jellyplay.feature.player.video.engine
 
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
+import com.raulshma.jellyplay.core.model.AudioPassthroughCodec
 import com.raulshma.jellyplay.core.model.ChannelMixMode
 import com.raulshma.jellyplay.core.model.DecoderMode
+import com.raulshma.jellyplay.core.model.MaxAudioChannelsEnum
+import com.raulshma.jellyplay.core.model.MpvAudioOutputMode
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -89,5 +92,125 @@ class MpvAudioMappingsTest {
     @Test
     fun afFilter_none_isOmittedFromTheChain() {
         assertNull(audioNormalizationModeToAfFilter(AudioNormalizationMode.NONE))
+    }
+
+    // ── MpvConfigMapping.audioSpdif codec-set composition ──────────────────
+
+    @Test
+    fun spdif_autoPassthroughFullSet_reproducesTheLegacyList() {
+        assertEquals(
+            MpvConfigMapping.SPDIF_LEGACY_PASSTHROUGH,
+            MpvConfigMapping.audioSpdif(
+                MpvAudioOutputMode.AUTO,
+                passthroughFallback = true,
+                passthroughCodecs = AudioPassthroughCodec.ALL,
+            ),
+        )
+    }
+
+    @Test
+    fun spdif_autoPassthroughOff_clearsTheList() {
+        assertNull(
+            MpvConfigMapping.audioSpdif(
+                MpvAudioOutputMode.AUTO,
+                passthroughFallback = false,
+                passthroughCodecs = AudioPassthroughCodec.ALL,
+            ),
+        )
+    }
+
+    @Test
+    fun spdif_disabledCodecs_dropFromTheComposedList() {
+        assertEquals(
+            "ac3,dts",
+            MpvConfigMapping.audioSpdif(
+                MpvAudioOutputMode.AUTO,
+                passthroughFallback = true,
+                passthroughCodecs = setOf(AudioPassthroughCodec.AC3, AudioPassthroughCodec.DTS),
+            ),
+        )
+    }
+
+    @Test
+    fun spdif_emptyEnabledSet_composesNothing() {
+        assertNull(
+            MpvConfigMapping.audioSpdif(
+                MpvAudioOutputMode.HDMI,
+                passthroughFallback = true,
+                passthroughCodecs = emptySet(),
+            ),
+        )
+    }
+
+    @Test
+    fun spdif_opticalMode_composesOnlyItsOwnCodecTable() {
+        // The OPTICAL composition never carried the surround-only codecs, so
+        // enabling them adds nothing; disabling one removes just its token.
+        assertEquals(
+            "ac3,dts",
+            MpvConfigMapping.audioSpdif(
+                MpvAudioOutputMode.OPTICAL,
+                passthroughFallback = true,
+                passthroughCodecs = AudioPassthroughCodec.ALL,
+            ),
+        )
+        assertEquals(
+            "ac3",
+            MpvConfigMapping.audioSpdif(
+                MpvAudioOutputMode.OPTICAL,
+                passthroughFallback = true,
+                passthroughCodecs = setOf(AudioPassthroughCodec.AC3, AudioPassthroughCodec.DTS_HD),
+            ),
+        )
+    }
+
+    // ── MpvConfigMapping.effectiveAudioChannels channel cap ────────────────
+
+    @Test
+    fun audioChannels_capAppliesWhenNoEffectHasAnOpinion() {
+        assertEquals(
+            "5.1",
+            MpvConfigMapping.effectiveAudioChannels(
+                MpvAudioOutputMode.AUTO,
+                ChannelMixMode.AUTO,
+                channelMixEnabled = false,
+                maxAudioChannels = MaxAudioChannelsEnum.FIVE_POINT_ONE,
+            ),
+        )
+        assertEquals(
+            "mono",
+            MpvConfigMapping.effectiveAudioChannels(
+                MpvAudioOutputMode.AUTO,
+                ChannelMixMode.AUTO,
+                channelMixEnabled = false,
+                maxAudioChannels = MaxAudioChannelsEnum.MONO,
+            ),
+        )
+    }
+
+    @Test
+    fun audioChannels_effectsOpinionWinsOverTheCap() {
+        assertEquals(
+            "stereo",
+            MpvConfigMapping.effectiveAudioChannels(
+                MpvAudioOutputMode.AUTO,
+                ChannelMixMode.STEREO_DOWNMIX,
+                channelMixEnabled = true,
+                maxAudioChannels = MaxAudioChannelsEnum.FIVE_POINT_ONE,
+            ),
+        )
+    }
+
+    @Test
+    fun audioChannels_autoCap_defersToTheMpvDefault() {
+        assertEquals(
+            "auto",
+            MpvConfigMapping.effectiveAudioChannels(
+                MpvAudioOutputMode.AUTO,
+                ChannelMixMode.AUTO,
+                channelMixEnabled = false,
+                maxAudioChannels = MaxAudioChannelsEnum.AUTO,
+            ),
+        )
     }
 }

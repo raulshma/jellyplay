@@ -2,7 +2,9 @@ package com.raulshma.jellyplay.screensaver
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ContentTransform
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
@@ -35,6 +37,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.raulshma.jellyplay.core.datastore.screensaver.MAX_DREAM_DIM_PERCENT
 import com.raulshma.jellyplay.core.model.DreamImage
 import com.raulshma.jellyplay.core.model.DreamTransitionStyle
 import kotlinx.coroutines.delay
@@ -48,6 +51,8 @@ fun DreamSlideshow(
     kenBurnsEnabled: Boolean,
     transitionStyle: DreamTransitionStyle,
     showTitle: Boolean,
+    dimAfterMs: Long,
+    dimPercent: Int,
     modifier: Modifier = Modifier,
 ) {
     var currentIndex by remember { mutableIntStateOf(0) }
@@ -62,6 +67,13 @@ fun DreamSlideshow(
             delay(intervalMs)
             currentIndex = (currentIndex + 1) % images.size
         }
+    }
+
+    // The dim scrim's timer runs on slideshow runtime; any wake tears the
+    // whole dream down, so there is no un-dim path.
+    val dimState = remember(dimAfterMs) { DreamDimState(dimAfterMs) }
+    LaunchedEffect(dimState) {
+        dimState.run()
     }
 
     // Capture in composable scope; AnimatedContent's transitionSpec is not composable.
@@ -83,7 +95,7 @@ fun DreamSlideshow(
             ) { index ->
                 val image = images[index % images.size]
                 KenBurnsImage(
-                    imageUrl = image.backdropUrl,
+                    imageUrl = image.imageUrl,
                     durationMs = intervalMs,
                     enabled = kenBurnsEnabled,
                 )
@@ -97,12 +109,49 @@ fun DreamSlideshow(
                         com.raulshma.jellyplay.core.model.DreamImageCategory.MOVIES -> "Movie"
                         com.raulshma.jellyplay.core.model.DreamImageCategory.SERIES -> "TV Show"
                         com.raulshma.jellyplay.core.model.DreamImageCategory.MUSIC -> "Music"
+                        com.raulshma.jellyplay.core.model.DreamImageCategory.PHOTOS -> "Photos"
                     },
                 )
             }
         }
+
+        // The dim scrim sits over the whole dream view (content keeps running
+        // beneath) and crossfades in after the dim delay.
+        AnimatedVisibility(
+            visible = dimState.isActive,
+            enter = fadeIn(animationSpec = tween(DIM_CROSSFADE_MS)),
+            exit = fadeOut(animationSpec = tween(DIM_CROSSFADE_MS)),
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = dimPercent.coerceIn(0, MAX_DREAM_DIM_PERCENT) / 100f)),
+            )
+        }
     }
 }
+
+/**
+ * The dim-scrim timing state: arms a timer for [dimAfterMs] of slideshow
+ * runtime, then flips [isActive] — the scrim the composable crossfades in.
+ * A 0 [dimAfterMs] is off (never activates). Pure coroutines over Compose
+ * state so the virtual-time test can drive it with no Android fixtures.
+ */
+internal class DreamDimState(private val dimAfterMs: Long) {
+    var isActive: Boolean by mutableStateOf(false)
+        private set
+
+    suspend fun run() {
+        isActive = false
+        if (dimAfterMs > 0) {
+            delay(dimAfterMs)
+            isActive = true
+        }
+    }
+}
+
+/** The dim scrim's crossfade duration — slow enough to read as a fade, not a cut. */
+private const val DIM_CROSSFADE_MS = 2_000
 
 @Composable
 private fun DreamTitleOverlay(

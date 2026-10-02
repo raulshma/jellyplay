@@ -22,10 +22,45 @@ import com.raulshma.jellyplay.core.designsystem.theme.Dimensions
  * composition-local. Use for [androidx.compose.foundation.lazy.LazyColumn]
  * `contentPadding` (so the last item scrolls clear of the FAB/nav) and anywhere
  * else a plain dp value is needed.
+ *
+ * Presence-aware: where the nav bar is not painted at all
+ * ([LocalFloatingNavPresent] `false` — signed-out auth host, TV, expanded
+ * layouts, full-screen routes) the bar's height collapses and only
+ * the system inset remains, so callers don't reserve space for a bar that
+ * never shows.
  */
 val floatingNavClearanceDp: Dp
-    @Composable get() =
-        Dimensions.floatingNavHeight + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    @Composable get() {
+        val navBarBottomInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+        return floatingNavReservationDp(
+            navPresent = LocalFloatingNavPresent.current,
+            navHeight = Dimensions.floatingNavHeight,
+            extraBottom = 0.dp,
+            systemInset = navBarBottomInset,
+        )
+    }
+
+/**
+ * The pure, presence-gated clearance arithmetic behind [floatingNavClearanceDp]
+ * and [clearFloatingNav]'s static reservation: extra margin, plus the floating
+ * bar's height ONLY when a bar is actually painted ([LocalFloatingNavPresent]),
+ * plus the system navigation-bar inset. Extracted so the fold is pin-testable
+ * off-UI (see FloatingNavPaddingTest).
+ */
+internal fun floatingNavReservationDp(
+    navPresent: Boolean,
+    navHeight: Dp,
+    extraBottom: Dp,
+    systemInset: Dp,
+): Dp = extraBottom + (if (navPresent) navHeight else 0.dp) + systemInset
+
+/**
+ * The pure ride-up half of [clearFloatingNav]'s dynamic offset: the nav's
+ * slide-down offset (positive when hidden) negated so the rider moves up,
+ * clamped to one nav-height of travel.
+ */
+internal fun navRideUpOffsetPx(navOffsetPx: Float, navHeightPx: Float): Float =
+    (-navOffsetPx).coerceAtMost(navHeightPx)
 
 /**
  * Modifier that lifts a bottom-floating element (FAB, selection bar, mini-player)
@@ -37,12 +72,18 @@ val floatingNavClearanceDp: Dp
  *
  * Two parts:
  *  1. **Static reservation** — [extraBottom] margin plus `Dimensions.floatingNavHeight`
- *     plus the system `navigationBars` bottom inset. This alone guarantees the
- *     element never overlaps the fully-shown nav bar.
+ *     plus the system `navigationBars` bottom inset (unless [includeSystemInset]
+ *     is `false`). This alone guarantees the
+ *     element never overlaps the fully-shown nav bar. The bar's height term is
+ *     presence-gated ([LocalFloatingNavPresent]): where no floating nav is
+ *     painted (signed-out auth host, TV, expanded/rail layouts, full-screen
+ *     routes) only the margin + inset remain, so the element sits at
+ *     its natural resting place instead of a phantom bar-height above it.
  *  2. **Dynamic ride-up** — reads [LocalFloatingNavOffset] inside the `offset`
  *     lambda (layout phase, no recomposition) so the element translates upward
  *     with the nav bar's slide animation, negated and clamped to one nav-height
- *     of travel.
+ *     of travel. Where the nav is absent the provided getter reads `0f`, so
+ *     the offset collapses to zero with no extra gating at the call site.
  *
  * The caller keeps `.align(Alignment.BottomEnd)` and any TV focus wiring
  * (`.then(focusState.focusModifier)` / `.tvFocusIndicator(...)`) — those vary
@@ -50,18 +91,36 @@ val floatingNavClearanceDp: Dp
  *
  * @param extraBottom extra margin below the clearance (default 16.dp). Pass 0.dp
  *  if the caller already adds its own bottom margin.
+ * @param includeSystemInset whether the system `navigationBars` bottom inset is
+ *  part of the clearance (default). Pass `false` when the enclosing `Scaffold`
+ *  already consumes that inset and hands it to content via its `PaddingValues`,
+ *  so it isn't applied twice.
  */
 @Composable
-fun Modifier.clearFloatingNav(extraBottom: Dp = 16.dp): Modifier {
+fun Modifier.clearFloatingNav(
+    extraBottom: Dp = 16.dp,
+    includeSystemInset: Boolean = true,
+): Modifier {
     val navOffsetPx = LocalFloatingNavOffset.current
-    val navBarBottomInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val navBarBottomInset = if (includeSystemInset) {
+        WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    } else {
+        0.dp
+    }
     val maxOffsetPx = with(LocalDensity.current) { Dimensions.floatingNavHeight.toPx() }
     return this
-        .padding(bottom = extraBottom + Dimensions.floatingNavHeight + navBarBottomInset)
+        .padding(
+            bottom = floatingNavReservationDp(
+                navPresent = LocalFloatingNavPresent.current,
+                navHeight = Dimensions.floatingNavHeight,
+                extraBottom = extraBottom,
+                systemInset = navBarBottomInset,
+            ),
+        )
         .offset {
             // navOffsetPx() is positive when the bar has slid down (hidden) —
             // negate so the element moves up, clamped to one nav-height.
-            val yOffset = (-navOffsetPx()).coerceAtMost(maxOffsetPx)
+            val yOffset = navRideUpOffsetPx(navOffsetPx(), maxOffsetPx)
             IntOffset(x = 0, y = yOffset.toInt())
         }
 }

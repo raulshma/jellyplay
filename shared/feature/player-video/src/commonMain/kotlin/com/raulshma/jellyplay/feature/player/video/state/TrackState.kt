@@ -16,4 +16,6 @@ data class TrackState(
     val hasSeriesSubtitlePref: Boolean = false,
     val hasSeriesSubtitleOffPref: Boolean = false,
     val hasSeriesDialogueBoostPref: Boolean = false,
+    /** A preferred version (media source) is remembered for the current item/series (the Version sheet's footer toggle). */
+    val hasPreferredMediaSource: Boolean = false,
 )

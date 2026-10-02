@@ -8,15 +8,13 @@ import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.datasource.DataSource
-import androidx.media3.datasource.DefaultDataSource
-import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import kotlinx.coroutines.flow.MutableStateFlow
-import com.raulshma.jellyplay.core.network.auth.JellyfinAuthorizationHeader
 import com.raulshma.jellyplay.feature.player.live.LiveFallbackPhase
+import com.raulshma.jellyplay.feature.player.video.engine.authenticatedDataSourceFactory
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import okhttp3.OkHttpClient
@@ -93,14 +91,17 @@ class ExoLiveEngine(
     @Volatile
     private var released: Boolean = false
 
-    private val httpDataSourceFactory = OkHttpDataSource.Factory(streamingClient)
-        .setUserAgent("JellyPlay")
-        .setDefaultRequestProperties(
-            config.authToken?.let { mapOf(JellyfinAuthorizationHeader.tokenOnlyHeader(it)) } ?: emptyMap()
-        )
-
-    private val dataSourceFactory: DataSource.Factory =
-        DefaultDataSource.Factory(appContext, httpDataSourceFactory)
+    // The shared authenticated data-source seam (player-contract) — the
+    // former inline OkHttpDataSource.Factory + setUserAgent("JellyPlay") +
+    // tokenOnlyHeader + DefaultDataSource.Factory block, now the one factory
+    // both Exo engines consume. The token header construction hides inside
+    // the seam; the live-tuned DefaultLoadControl below stays local (it is
+    // load control, not data sourcing).
+    private val dataSourceFactory: DataSource.Factory = authenticatedDataSourceFactory(
+        context = appContext,
+        okHttpClient = streamingClient,
+        authToken = config.authToken,
+    )
 
     private val loadControl = DefaultLoadControl.Builder()
         .setBufferDurationsMs(config.minBufferMs, config.maxBufferMs, 1_000, config.rebufferMs)

@@ -18,8 +18,32 @@ import kotlin.test.assertTrue
  * and the read side (the state flows, the image-URL getters, the click-time
  * selected-*-index reads, the storage probe) stays public as queries.
  *
- * Baseline: 22 members after the DetailUiEvent intent fold. Before the fold
- * the VM exposed ~48 members: the same 22 read/helper/funnel surfaces minus
+ * Baseline: 23 members — the 22 of the DetailUiEvent intent fold plus ONE
+ * seam for the metadata-maintenance feature (MetadataAdminActions hosts both
+ * refresh and identify behind a single accessor; its admin gate rides the
+ * DetailUiState bag as `canManageMetadata`, not a member).
+ *
+ * 2026-09-27, ceiling 23 → 24 (documented, one-time): the Seerr
+ * request-dialog extraction moved the dialog cell OUT of core:data's
+ * SeerrRequestStateHolder and core:model's SeerrRequestSnapshot (the
+ * presentation vocabulary no longer rides the data snapshot) into the
+ * feature-facing SeerrRequestDialogHolder — the extracted-module shape this
+ * ratchet prescribes. Its VM wiring is one accessor (`seerrRequestDialog`),
+ * replacing the `dialogItem` field every snapshot consumer previously
+ * carried: the net surface across VM + snapshot did not grow, it moved to
+ * the layer that owns it. This is a member RELOCATION, not accretion; the
+ * ceiling stays 24 unless another relocation removes it.
+ * 2026-09-28, ceiling 24 → 25 (documented, one-time): the "prefer logos"
+ * display mode added one read-side query, `getLogoUrl(itemId)` — the
+ * clear-logo URL getter for the detail title block, the exact query shape of
+ * its [DetailViewModel.getImageUrl]/getBackdropUrl/getChapterImageUrl
+ * siblings (a one-line delegate to the ImageUrlProvider seam; the screen
+ * remembers it into `ArtworkCallbacks` and the body consumes it). Not an
+ * intent and not behaviour: a read-side URL getter cannot fold into
+ * [DetailUiEvent]. This admits exactly one member; never raise it again
+ * without a relocation or deletion to offset it.
+ * Before the fold
+ * the VM exposed ~48 members: the same read/helper/funnel surfaces minus
  * onEvent, plus 27 public command funs (loadItem, forceRefresh,
  * loadEpisodesForSeason, selectSubtitle, selectAudio, selectLocalSubtitle,
  * setEpisodesDescending, setCompactEpisodeList, playAlbum, playLocalTrack,
@@ -38,7 +62,7 @@ import kotlin.test.assertTrue
 class DetailViewModelOwnershipTest {
 
     /** The maximum allowed public + internal members (see class KDoc). */
-    private val maxPublicInternalMembers = 22
+    private val maxPublicInternalMembers = 25
 
     /**
      * A class-body declaration line at the ViewModel's single level of

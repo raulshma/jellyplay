@@ -5,7 +5,9 @@ import com.raulshma.jellyplay.core.data.download.DownloadIntake
 import com.raulshma.jellyplay.core.data.network.NetworkMonitor
 import com.raulshma.jellyplay.core.data.network.OkHttpConfigProviderImpl
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
+import com.raulshma.jellyplay.core.data.repository.ArrReleaseOperations
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
+import com.raulshma.jellyplay.core.data.repository.SonarrSeriesOperations
 import com.raulshma.jellyplay.core.data.repository.AdminRepository
 import com.raulshma.jellyplay.core.data.repository.AdminStatisticsRepository
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
@@ -15,10 +17,18 @@ import com.raulshma.jellyplay.core.data.repository.DownloadStorageLayoutContract
 import com.raulshma.jellyplay.core.data.repository.LyricsRepository
 import com.raulshma.jellyplay.core.data.repository.LyricsRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.LocalStreamProbe
+import com.raulshma.jellyplay.core.data.repository.MediaBrowseReads
+import com.raulshma.jellyplay.core.data.repository.MediaCollectionReads
 import com.raulshma.jellyplay.core.data.repository.MediaDetailProvider
+import com.raulshma.jellyplay.core.data.repository.MediaExtrasReads
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryAccess
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryCacheInvalidation
+import com.raulshma.jellyplay.core.data.repository.MusicCatalogue
+import com.raulshma.jellyplay.core.data.repository.SeerrAuthenticator
+import com.raulshma.jellyplay.core.data.repository.SeerrRequestLifecycle
+import com.raulshma.jellyplay.core.data.repository.SeerrServiceDirectory
+import com.raulshma.jellyplay.core.data.repository.UserDataWriteOperations
 import com.raulshma.jellyplay.core.data.repository.OfflineDownloadWriter
 import com.raulshma.jellyplay.core.data.repository.OfflineDownloadWriterCore
 import com.raulshma.jellyplay.core.data.repository.OfflineFirstItemResolver
@@ -38,7 +48,6 @@ import com.raulshma.jellyplay.core.data.session.HomeSession
 import com.raulshma.jellyplay.core.data.session.SessionCacheRegistry
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager
 import com.raulshma.jellyplay.core.data.util.DownloadDelegate
-import com.raulshma.jellyplay.core.data.update.AppUpdateRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.TimeSource
 import com.raulshma.jellyplay.core.data.widget.ContinueWatchingBroadcaster
@@ -148,6 +157,65 @@ class DataKoinModulesTest {
             assertResolves<OfflineRepository>(koin)
             assertResolves<SeerrRepository>(koin)
             assertResolves<ArrRepository>(koin)
+            // The Manage-Series Sonarr series-management seam must resolve to
+            // the SAME ArrRepositoryImpl single as the aggregate — one impl,
+            // two seams (the RealtimeConnection alias precedent).
+            assertTrue(
+                koin.get<SonarrSeriesOperations>() === koin.get<ArrRepository>(),
+                "SonarrSeriesOperations must alias the ArrRepositoryImpl single (one impl, two seams)",
+            )
+            // The release sheet's search & grab seam — same alias contract
+            // (one impl, three seams over the ArrRepositoryImpl single).
+            assertTrue(
+                koin.get<ArrReleaseOperations>() === koin.get<ArrRepository>(),
+                "ArrReleaseOperations must alias the ArrRepositoryImpl single (one impl, three seams)",
+            )
+            // The family seams of the two widest repository interfaces follow
+            // the same alias contract: MediaRepository's music-catalogue and
+            // user-data-write families, and SeerrRepository's
+            // service-directory / request-lifecycle / auth families — each
+            // resolves to the SAME impl single as its union, never a second
+            // repository instance.
+            assertTrue(
+                koin.get<MusicCatalogue>() === koin.get<MediaRepository>(),
+                "MusicCatalogue must alias the MediaRepositoryImpl single (one impl, two seams)",
+            )
+            assertTrue(
+                koin.get<UserDataWriteOperations>() === koin.get<MediaRepository>(),
+                "UserDataWriteOperations must alias the MediaRepositoryImpl single (one impl, two seams)",
+            )
+            // The uncached browse-read families are their OWN impl single
+            // (MediaUncachedReadsImpl over LibraryApiClient — not a view of the
+            // media single), with the three seams aliasing it.
+            assertResolves<MediaExtrasReads>(koin)
+            assertResolves<MediaBrowseReads>(koin)
+            assertResolves<MediaCollectionReads>(koin)
+            assertTrue(
+                koin.get<MediaExtrasReads>() === koin.get<MediaBrowseReads>() &&
+                    koin.get<MediaBrowseReads>() === koin.get<MediaCollectionReads>(),
+                "the three uncached-read seams must alias the MediaUncachedReadsImpl single (one impl, three seams)",
+            )
+            assertTrue(
+                koin.get<SeerrServiceDirectory>() === koin.get<SeerrRepository>(),
+                "SeerrServiceDirectory must alias the SeerrRepositoryImpl single (one impl, two seams)",
+            )
+            assertTrue(
+                koin.get<SeerrRequestLifecycle>() === koin.get<SeerrRepository>(),
+                "SeerrRequestLifecycle must alias the SeerrRepositoryImpl single (one impl, two seams)",
+            )
+            assertTrue(
+                koin.get<SeerrAuthenticator>() === koin.get<SeerrRepository>(),
+                "SeerrAuthenticator must alias the SeerrRepositoryImpl single (one impl, two seams)",
+            )
+            // The home cache-maintenance port aliases the LibraryApiClientImpl
+            // single (the client is the port's adapter onto the fetcher) — the
+            // write/roll paths' verb seam, resolved from the network module.
+            assertResolves<com.raulshma.jellyplay.core.network.library.HomeSectionsCachePort>(koin)
+            assertTrue(
+                koin.get<com.raulshma.jellyplay.core.network.library.HomeSectionsCachePort>() ===
+                    koin.get<com.raulshma.jellyplay.core.network.api.LibraryApiClient>(),
+                "HomeSectionsCachePort must alias the LibraryApiClientImpl single (one impl, two seams)",
+            )
             assertResolves<StoragePolicy>(koin)
             assertResolves<TimeSource>(koin)
             assertResolves<HomeSession>(koin)
@@ -157,6 +225,9 @@ class DataKoinModulesTest {
             // The auth-cluster narrow seam the Server Management screen's
             // trust toggle resolves (stateless impl single — no ctor graph).
             assertResolves<SelfSignedTrustRepository>(koin)
+            // The certificate half of the same screen: delegates to the
+            // ClientCertificateFacade single the desktop network module binds.
+            assertResolves<com.raulshma.jellyplay.core.data.repository.ClientCertificateRepository>(koin)
 
             // The @IntoMap subtitle fan-out flipped to Koin: same two keys the
             // legacy SubtitleProviderModule built, values wrapped resilient.
@@ -249,12 +320,15 @@ class DataKoinModulesTest {
             assertResolves<PluginAdminRepository>(koin)
 
             // ── AppUpdate split ──────────────────────────────────
-            // The update repository resolves on desktop (About's update-check
-            // row): GitHubReleasesApi from networkJvmModule, the download
-            // client from desktopNetworkModule's qualified single, and the
-            // no-self-update platform inputs (appdata updates dir, sentinel
-            // version, "desktop" flavor) from desktopDataModule.
-            assertResolves<AppUpdateRepository>(koin)
+            // NOT asserted anymore: core:data's desktop data module ships no
+            // update family. The desktop AppUpdateRepository definition is
+            // apps/desktop's desktopAppUpdateModule — the installed version
+            // it compares against (desktop-build.properties) is a
+            // desktop-shell input core:data cannot see
+            // (docs/adr/desktop-auto-update.md). The shared seams it
+            // consumes (GitHubReleasesApi via WhatsNewRepository below, the
+            // qualified download HTTP client, TimeSource) still resolve in
+            // this graph.
 
             // ── What's-New family module ────────────────────────
             // The release-notes feed repository: GitHubReleasesApi from

@@ -54,4 +54,24 @@
     <string name="arrqueue_remove_only">削除のみ</string>
     <string name="arrqueue_remove_search">削除して再検索</string>
     <string name="arrqueue_blocklist_search">ブロックリスト＆検索</string>
+    <string name="releaseSearch_title">リリースを検索</string>
+    <string name="releaseSearch_loading">インデクサーを検索中 — 最大1分かかる場合があります。</string>
+    <string name="releaseSearch_empty">リリースが見つかりません</string>
+    <string name="releaseSearch_cache_miss_body">サーバーにキャッシュされた検索結果の有効期限が切れました。もう一度検索してください。</string>
+    <string name="releaseSearch_search_again">再検索</string>
+    <string name="releaseSearch_retry">再試行</string>
+    <string name="releaseSearch_sort_score">スコア</string>
+    <string name="releaseSearch_sort_seeders">シーダー</string>
+    <string name="releaseSearch_sort_age">経過時間</string>
+    <string name="releaseSearch_approved">承認済み</string>
+    <string name="releaseSearch_rejected">拒否済み</string>
+    <string name="releaseSearch_grab_anyway">それでも取得</string>
+    <string name="releaseSearch_grab_title">リリースを取得しますか？</string>
+    <string name="releaseSearch_grab_message">「%1$s」をダウンロードクライアントに送信しますか？</string>
+    <string name="releaseSearch_grab_rejected_message">「%1$s」は拒否されました: %2$s。それでも取得しますか？</string>
+    <string name="releaseSearch_grab_sent">「%1$s」の取得を送信しました</string>
+    <string name="releaseSearch_history_grabbed">以前に取得済み</string>
+    <string name="releaseSearch_history_failed">以前に失敗</string>
+    <string name="releaseSearch_full_season">シーズン全体</string>
+    <string name="releaseSearch_seeders_leechers">シーダー %1$d · リーチャー %2$d</string>
 </resources>

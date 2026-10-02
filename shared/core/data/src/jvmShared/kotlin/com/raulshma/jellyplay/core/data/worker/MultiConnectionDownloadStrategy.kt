@@ -8,6 +8,7 @@ import com.raulshma.jellyplay.core.data.repository.applyTo
 import com.raulshma.jellyplay.core.database.dao.DownloadDao
 import com.raulshma.jellyplay.core.database.entity.DownloadEntity
 import com.raulshma.jellyplay.core.model.DownloadStatus
+import com.raulshma.jellyplay.core.model.wallNowMillis
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -221,7 +222,7 @@ object MultiConnectionDownloadStrategy {
             }
 
             dao.updateErrorMessage(downloadId, null)
-            dao.updateProgressWithSpeed(downloadId, finalBytes, DownloadStatus.COMPLETED.name, 0L)
+            dao.markCompleted(downloadId, finalBytes, wallNowMillis())
             // A successful download clears the auto-retry budget.
             dao.resetRetryCount(downloadId)
             notifications.dismissNotification(notificationId)

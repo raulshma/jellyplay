@@ -23,10 +23,14 @@ import org.jetbrains.compose.resources.stringResource
  *    from exactly one place in code: this record. Null only for the
  *    documented exceptions whose screen face has no single title resource
  *    (hand-built pickers / enum-driven rows — see the per-file lists).
- *  - [searchTitleRes] — the search hit's title resource (`ss_*_title`). Where
- *    it differs from [titleRes] (deliberately descriptive), the field NAME
- *    marks it: the ss_* resource stays, now marked-by-position instead of
- *    being an orphan twin.
+ *  - [searchTitleRes] — the search hit's title resource (`ss_*_title`), or
+ *    null where the search hit merely restates the row's screen title: the
+ *    default-title fold ([toSearchItem]'s `searchTitleRes ?: titleRes`)
+ *    resolves those hits to [titleRes], so a restating declaration names ONE
+ *    resource instead of a value-twin pair. Where the search title genuinely
+ *    differs from [titleRes] (deliberately descriptive, or a translation that
+ *    diverged in any locale), the field NAME marks it: the ss_* resource
+ *    stays, marked-by-position instead of being an orphan twin.
  *  - [searchSubtitleRes] — the search hit's subtitle resource
  *    (`ss_*_subtitle`), the deliberately-more-descriptive search-only text.
  *
@@ -38,19 +42,36 @@ import org.jetbrains.compose.resources.stringResource
  * IS the row record, and the catalog projection adds only the shared
  * `ss_cat_*` category resource.
  *
- * Both string resources of every twin pair stay in strings.xml (all locales)
- * — nothing was deleted; the record only pins which face is which.
+ * **Spec-derived rows carry a SCREEN FACE only.** In the domains the
+ * spec-derived catalog covers, the search faces live on the datastore-side
+ * spec declarations and the record reduces to `(id, [titleRes], [icon])` — [route] null and
+ * the search faces defaulted — because the row's title/icon still serve
+ * [rowTitle] / [rowIcon]. The projection for those rows is
+ * `List<SettingsRowRecord>.toSearchItems(List<PreferenceSearchSpec>, …)`
+ * (SettingsSearchBinding.kt); a converted record that still carried hand
+ * search faces fails the derivation loudly.
+ *
+ * A defaulted (null) [searchTitleRes] means the search hit reuses the row's
+ * screen title; the ss_* twins that only ever restated that title were
+ * deleted from the resource files, and the deliberately-distinct search
+ * titles stay pinned by the explicit field.
  */
 internal data class SettingsRowRecord(
     val id: String,
     /** The settings-screen row's title resource (`settings_*`), or null for the documented no-screen-title exceptions. */
     val titleRes: StringResource?,
-    /** The search hit's title resource (`ss_*_title`) — named separately even where it equals [titleRes]. */
-    val searchTitleRes: StringResource,
-    /** The search hit's deliberately-more-descriptive subtitle resource (`ss_*_subtitle`). */
-    val searchSubtitleRes: StringResource,
-    val keywords: List<String>,
-    val route: Route,
+    /**
+     * The search hit's title resource (`ss_*_title`), or null where the search
+     * hit restates the row's screen title (the default-title fold resolves it
+     * to [titleRes] — same resource id, or values equal in every locale).
+     * Also null for spec-derived rows (they carry no hand search faces).
+     */
+    val searchTitleRes: StringResource? = null,
+    /** The search hit's subtitle resource; null for spec-derived rows. */
+    val searchSubtitleRes: StringResource? = null,
+    val keywords: List<String> = emptyList(),
+    /** The deep-link route; null for spec-derived rows (the spec's routeKind owns the route). */
+    val route: Route? = null,
     val icon: ImageVector,
     val isAdvanced: Boolean = false,
     val platforms: Set<PlatformKind> = PlatformKind.entries.toSet(),
@@ -61,15 +82,26 @@ internal data class SettingsRowRecord(
  * faces + shared `ss_cat_*` [categoryRes]. Pure — the item list derived from
  * a record list is byte-identical in behavior to the retired hand-written
  * declarations (the `SettingsSearchCatalogTest` ratchets pin the result).
+ * The title is the default-title fold: an explicit [SettingsRowRecord.searchTitleRes]
+ * wins; a null one resolves to the record's [SettingsRowRecord.titleRes] —
+ * the same resource the restating declaration used to restate, so the
+ * projected hit is unchanged. A record that declares NEITHER face cannot
+ * project and fails loudly (the [rowTitle] miss pattern).
  */
 internal fun SettingsRowRecord.toSearchItem(categoryRes: StringResource): SettingsSearchItem =
     SettingsSearchItem(
         id = id,
-        titleRes = searchTitleRes,
-        subtitleRes = searchSubtitleRes,
+        titleRes = requireNotNull(searchTitleRes ?: titleRes) {
+            "settings row \"$id\" declares neither a search title nor a screen title to default to"
+        },
+        subtitleRes = requireNotNull(searchSubtitleRes) {
+            "settings row \"$id\" declares no search subtitle (hand rows must carry the full search faces; spec-derived rows project through toSearchItems(List<PreferenceSearchSpec>, …))"
+        },
         categoryRes = categoryRes,
         keywords = keywords,
-        route = route,
+        route = requireNotNull(route) {
+            "settings row \"$id\" declares no route (hand rows must carry the full search faces; spec-derived rows project through toSearchItems(List<PreferenceSearchSpec>, …))"
+        },
         icon = icon,
         isAdvanced = isAdvanced,
         platforms = platforms,
@@ -98,6 +130,7 @@ internal object SettingsRowRecords {
         HomeDisplayRowRecords,
         HomeNextUpRowRecords,
         HomeLayoutRowRecords,
+        HomeCardsRowRecords,
         AppearanceThemeRowRecords,
         AppearanceNavigationRowRecords,
         AppearanceLibraryRowRecords,
@@ -109,6 +142,7 @@ internal object SettingsRowRecords {
         MpvEngineRowRecords,
         VlcEngineRowRecords,
         ExoPlayerEngineRowRecords,
+        ExternalEngineRowRecords,
         SyncPlayRowRecords,
         CastingRowRecords,
         LiveTvRowRecords,

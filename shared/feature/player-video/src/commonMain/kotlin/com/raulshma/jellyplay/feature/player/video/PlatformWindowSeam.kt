@@ -16,8 +16,16 @@ import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
  * jvmMain actual is a stateless no-op singleton because a desktop window has
  * no system bars, no Activity orientation lock, and no OS brightness override
  * (the window manager owns those).
+ *
+ * Public because the LIVE player's screen cites the same seam: its
+ * androidMain window effects moved off their byte-identical
+ * `WindowCompat`/`FLAG_` inline code onto these ops (the shared-policy
+ * precedent — [com.raulshma.jellyplay.feature.player.video.chrome.PlayerChromePolicies]
+ * — both player screens must cite ONE host-window vocabulary instead of
+ * carrying parallel copies). Only the type surface is public; the actuals stay
+ * module-private implementation details behind [rememberPlayerWindowOps].
  */
-internal interface PlayerWindowOps {
+interface PlayerWindowOps {
 
     /**
      * Synchronously-current PiP flag of the host (the collected
@@ -97,9 +105,10 @@ internal interface PlayerWindowOps {
 /**
  * Platform-neutral orientation requests. The androidMain actual maps each
  * value to the `ActivityInfo` screen-orientation constant the screen used
- * before the split.
+ * before the split. Public alongside [PlayerWindowOps] — the live player's
+ * screen passes its entry locks through the same vocabulary.
  */
-internal enum class PlayerOrientationLock {
+enum class PlayerOrientationLock {
     SENSOR_LANDSCAPE,
     SENSOR_PORTRAIT,
     SENSOR,
@@ -109,13 +118,20 @@ internal enum class PlayerOrientationLock {
     TV_LANDSCAPE,
     /** Follow the user (cast-connected phones). */
     USER,
+    /**
+     * Landscape following the user's rotation lock — the live player's
+     * non-TV entry lock (its pre-seam inline code requested
+     * `SCREEN_ORIENTATION_USER_LANDSCAPE`; distinct from [USER], which also
+     * allows portrait).
+     */
+    USER_LANDSCAPE,
     /** Restore the OS default on player exit. */
     UNSPECIFIED,
 }
 
 /** The host-window operations for the current composition (see [PlayerWindowOps]). */
 @Composable
-internal expect fun rememberPlayerWindowOps(): PlayerWindowOps
+expect fun rememberPlayerWindowOps(): PlayerWindowOps
 
 /**
  * STREAM_MUSIC volume nudge for the hardware-keyboard volume shortcuts.

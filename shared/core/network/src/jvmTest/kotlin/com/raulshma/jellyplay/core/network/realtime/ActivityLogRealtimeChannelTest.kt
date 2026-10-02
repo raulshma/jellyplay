@@ -2,7 +2,8 @@ package com.raulshma.jellyplay.core.network.realtime
 
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.model.ActivityLogEntry
-import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import com.raulshma.jellyplay.core.network.api.AdminApiClient
+import com.raulshma.jellyplay.core.network.api.AuthApiClient
 import com.raulshma.jellyplay.core.network.api.JellyfinApiEngine
 import io.mockk.coEvery
 import io.mockk.every
@@ -30,7 +31,8 @@ import java.util.concurrent.TimeUnit
 class ActivityLogRealtimeChannelTest {
 
     private lateinit var server: MockWebServer
-    private lateinit var apiClient: JellyfinApiClient
+    private lateinit var authApiClient: AuthApiClient
+    private lateinit var adminApiClient: AdminApiClient
     private lateinit var engine: JellyfinApiEngine
     private lateinit var serverIdentityStore: ServerIdentityStore
     private lateinit var channel: ActivityLogRealtimeChannel
@@ -42,14 +44,15 @@ class ActivityLogRealtimeChannelTest {
     fun setUp() {
         server = MockWebServer()
         server.start()
-        apiClient = mockk()
+        authApiClient = mockk()
+        adminApiClient = mockk()
         engine = mockk()
         serverIdentityStore = mockk()
         every { engine.okHttpClient } returns OkHttpClient()
-        every { apiClient.getServerUrl() } returns server.url("/").toString().trimEnd('/')
-        every { apiClient.getAccessToken() } returns "token-123"
+        every { authApiClient.getServerUrl() } returns server.url("/").toString().trimEnd('/')
+        every { authApiClient.getAccessToken() } returns "token-123"
         coEvery { serverIdentityStore.ensureDeviceId() } returns "device-1"
-        channel = ActivityLogRealtimeChannel(apiClient, engine, serverIdentityStore)
+        channel = ActivityLogRealtimeChannel(authApiClient, adminApiClient, engine, serverIdentityStore)
     }
 
     @AfterTest
@@ -164,7 +167,7 @@ class ActivityLogRealtimeChannelTest {
     @Test
     fun `polling fallback emits only unseen entries`() = runTest {
         val seen = mutableSetOf(1L, 2L)
-        coEvery { apiClient.getActivityLogEntries(limit = 10) } returns Result.success(
+        coEvery { adminApiClient.getActivityLogEntries(limit = 10) } returns Result.success(
             listOf(
                 ActivityLogEntry(id = 1, name = "seen"),
                 ActivityLogEntry(id = 2, name = "seen"),
@@ -183,7 +186,7 @@ class ActivityLogRealtimeChannelTest {
     fun `polling fallback keeps polling until new entries appear`() = runTest {
         val seen = mutableSetOf<Long>()
         var call = 0
-        coEvery { apiClient.getActivityLogEntries(limit = 10) } answers {
+        coEvery { adminApiClient.getActivityLogEntries(limit = 10) } answers {
             call++
             Result.success(
                 if (call < 3) emptyList() else listOf(ActivityLogEntry(id = 9, name = "late")),

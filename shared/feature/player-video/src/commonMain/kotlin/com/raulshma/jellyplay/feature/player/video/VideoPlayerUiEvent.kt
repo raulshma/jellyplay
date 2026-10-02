@@ -95,7 +95,11 @@ sealed interface VideoPlayerUiEvent {
      */
     data class TransportPlay(val play: Boolean) : VideoPlayerUiEvent
 
-    /** Seeks the engine to an absolute [positionMs] (user-initiated — segment-clamped). */
+    /**
+     * The transport seek funnel (the [TransportPlay] companion): SyncPlay
+     * group first, cast receiver second, local engine last — the local arm
+     * is user-initiated and segment-clamped.
+     */
     data class SeekTo(val positionMs: Long) : VideoPlayerUiEvent
 
     /** Steps the seek by the configured window ([direction] < 0 back, else forward). */
@@ -170,6 +174,21 @@ sealed interface VideoPlayerUiEvent {
     /** Clears the stored subtitle-track override. */
     data object ResetSubtitleTrack : VideoPlayerUiEvent
 
+    /**
+     * Switches the playing version (media source) of the current item. The
+     * swap re-resolves playback at the current position via
+     * [com.raulshma.jellyplay.feature.player.video.PlayerSessionManager.switchMediaSource].
+     */
+    data class SelectMediaSource(val mediaSourceId: String) : VideoPlayerUiEvent
+
+    /**
+     * Saves/clears the "remember this version" preference for the current
+     * item/series. When [remember] is true the CURRENT media source id is
+     * pinned (SERIES scope for an episode, ITEM scope otherwise); false
+     * forgets both scopes.
+     */
+    data class SetPreferredMediaVersion(val remember: Boolean) : VideoPlayerUiEvent
+
     /** Saves/clears the per-series preferred audio language (null forgets). */
     data class SetSeriesAudioLanguagePreference(val language: String?) : VideoPlayerUiEvent
 
@@ -218,6 +237,15 @@ sealed interface VideoPlayerUiEvent {
 
     /** Cancels the pending autoplay countdown (Up Next overlay). */
     data object CancelAutoplay : VideoPlayerUiEvent
+
+    /** Answers the "Still watching?" confirm overlay with "keep going" (feature 1.3). */
+    data object StillWatchingContinue : VideoPlayerUiEvent
+
+    /** Answers the "Still watching?" confirm overlay with Stop (or its countdown expired). */
+    data object StillWatchingStop : VideoPlayerUiEvent
+
+    /** One second elapsed on the visible confirm overlay (its auto-dismiss tick). */
+    data object StillWatchingTick : VideoPlayerUiEvent
 
     /** Flips the autoplay-next-episode preference (Up Next card toggle). */
     data class SetVideoAutoplayNext(val enabled: Boolean) : VideoPlayerUiEvent

@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.player.video
 
 import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.DownloadStatus
+import com.raulshma.jellyplay.core.model.OfflinePlaybackPreference
 import java.io.File
 
 /**
@@ -51,13 +52,26 @@ sealed interface PlaybackSource {
  * the download is [DownloadStatus.COMPLETED] and the underlying file still
  * exists on disk; otherwise returns [PlaybackSource.Online].
  *
+ * [offlinePlaybackPreference] inverts the default for a usable download:
+ * `PREFER_STREAMING` plays the server copy instead — but only while
+ * [online]; with no reachable server the stored file is the only thing that
+ * can play, so the offline resolution is unchanged there.
+ *
  * Extracted as a top-level function so it is trivially unit-testable without
  * instantiating the full session manager.
  */
-internal fun PlaybackSource.Auto.resolve(download: DownloadItem?): PlaybackSource {
+internal fun PlaybackSource.Auto.resolve(
+    download: DownloadItem?,
+    online: Boolean = true,
+    offlinePlaybackPreference: OfflinePlaybackPreference = OfflinePlaybackPreference.PREFER_DOWNLOADED,
+): PlaybackSource {
     val file = download?.let { File(it.downloadPath).takeIf { f -> f.exists() } }
     return if (download != null && file != null && download.status == DownloadStatus.COMPLETED) {
-        PlaybackSource.Offline(itemId, download.downloadPath)
+        if (online && offlinePlaybackPreference == OfflinePlaybackPreference.PREFER_STREAMING) {
+            PlaybackSource.Online(itemId, mediaSourceId)
+        } else {
+            PlaybackSource.Offline(itemId, download.downloadPath)
+        }
     } else {
         PlaybackSource.Online(itemId, mediaSourceId)
     }

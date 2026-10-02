@@ -44,6 +44,11 @@ import androidx.room3.PrimaryKey
  * blob (serialized `MpvRenderOverrides` — shader pack / tone mapping) for the
  * desktop render-profile feature (`RenderProfileResolver`/`RenderSheet`).
  * Added in migration 56→57.
+ *
+ * `preferredMediaSourceId` persists the version (media-source id) the user
+ * pinned for this item/series in the player's "Version" sheet, so the next
+ * playback starts on that version instead of the server's first. Nullable:
+ * NULL = "no version remembered". Added in migration 57→58.
  */
 @Entity(
     tableName = "item_playback_preferences",
@@ -71,5 +76,6 @@ data class ItemPlaybackPreferenceEntity(
     val rememberedSubtitleIndex: Int? = null,
     val rememberedSubtitleCodec: String? = null,
     val renderProfile: String? = null,
+    val preferredMediaSourceId: String? = null,
     val updatedAt: Long,
 )

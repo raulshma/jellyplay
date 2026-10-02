@@ -814,6 +814,51 @@ class MigrationTest {
     }
 
     /**
+     * Verifies the v58→v59 migration adds `downloads.completedAt` (the
+     * auto-download keep-days retention sweep's age column) plus its
+     * (status, completedAt) index: the starting schema is executed from the
+     * exported `58.json`, then the full chain re-opens the file — Room
+     * validates the post-migration schema against the v59 entities. The
+     * backfill anchors every pre-existing COMPLETED row's completion stamp to
+     * its `createdAt` (a just-upgraded library keeps its real age instead of
+     * reading as brand-new), while non-completed rows stay at the column
+     * default 0. The retention age query then resolves rows through the new
+     * column end-to-end.
+     */
+    @Test
+    fun migrateV58_59_backfillsDownloadCompletedAt() = runTest {
+        createDatabase(58) { db ->
+            execSchema(db, 58)
+            db.execSQL(
+                "INSERT INTO downloads (id, mediaItemId, name, mediaType, downloadPath, downloadUrl, totalSizeBytes, downloadedBytes, status, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                arrayOf<Any>("dl-old", "item-1", "Old Movie", "MOVIE", "/p/old", "https://u/old", 1_000L, 1_000L, "COMPLETED", 1_700_000_000_000L),
+            )
+            db.execSQL(
+                "INSERT INTO downloads (id, mediaItemId, name, mediaType, downloadPath, downloadUrl, totalSizeBytes, downloadedBytes, status, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                arrayOf<Any>("dl-active", "item-2", "Active Movie", "MOVIE", "/p/active", "https://u/active", 2_000L, 200L, "DOWNLOADING", 1_700_000_000_001L),
+            )
+        }
+
+        val db = openWithMigrations()
+        // The completed row's stamp is backfilled from its creation time…
+        val completed = db.downloadDao().getDownloadById("dl-old")
+        assertNotNull(completed)
+        assertEquals(1_700_000_000_000L, completed!!.completedAt)
+        // …the in-flight row stays at the "never completed" default.
+        val active = db.downloadDao().getDownloadById("dl-active")
+        assertNotNull(active)
+        assertEquals(0L, active!!.completedAt)
+        // The retention age query resolves through the new column.
+        val older = db.downloadDao().getCompletedOlderThan(1_700_000_000_500L)
+        assertEquals(listOf("dl-old"), older.map { it.id })
+        // And a completion write lands the stamp for real (the transfer
+        // strategies' markCompleted path).
+        db.downloadDao().markCompleted("dl-active", bytes = 2_000L, completedAt = 1_800_000_000_000L)
+        assertEquals(1_800_000_000_000L, db.downloadDao().getDownloadById("dl-active")!!.completedAt)
+        db.close()
+    }
+
+    /**
      * Verifies the v54→v55 migration creates the local-first reader-marks
      * tables (`book_bookmarks` + `book_annotations`, each with its itemId
      * index) exactly in the shape Room expects: the starting schema is
@@ -973,6 +1018,53 @@ class MigrationTest {
             """{"shaderPack":"ANIME4K_A","toneMapping":"BT2390"}""",
             saved.renderProfile,
         )
+        db.close()
+    }
+
+    /**
+     * Verifies the v57→v58 migration adds the nullable `preferredMediaSourceId`
+     * column to `item_playback_preferences` (the "remember this version"
+     * memory, 1.2). Additive: pre-existing rows pick up NULL. The starting
+     * schema is created from the tracked `57.json` via room3's
+     * [MigrationTestHelper] and the migrated result is validated against the
+     * tracked `58.json` with the same TableInfo comparison Room 3 itself runs
+     * on open — a drift between [MIGRATION_57_58]'s DDL and the entity
+     * declarations fails loudly here.
+     */
+    @Test
+    fun migrateV57_58_addsPreferredMediaSourceColumn() = runTest {
+        val helper = room3Helper("migrate-v57-58.db")
+        val v57 = helper.createDatabase(57)
+        v57.execSQL(
+            "INSERT INTO item_playback_preferences (scope, key, audioLanguage, subtitleLanguage, updatedAt) " +
+                "VALUES ('ITEM', 'item-1', 'deu', 'eng', 1)"
+        )
+        v57.close()
+
+        val db = helper.runMigrationsAndValidate(58, listOf(MIGRATION_57_58))
+
+        // The pre-existing row picks up NULL (no version remembered).
+        db.prepare(
+            "SELECT scope, key, preferredMediaSourceId FROM item_playback_preferences ORDER BY id"
+        ).use { c ->
+            assertTrue(c.step())
+            assertEquals("ITEM", c.getText(0))
+            assertEquals("item-1", c.getText(1))
+            assertTrue(c.isNull(2))
+            assertFalse(c.step())
+        }
+        // A fresh write round-trips the new column.
+        db.execSQL(
+            "INSERT INTO item_playback_preferences (scope, key, audioLanguage, subtitleLanguage, preferredMediaSourceId, updatedAt) " +
+                "VALUES ('ITEM', 'item-2', NULL, NULL, 'source-4k', 3)"
+        )
+        db.prepare(
+            "SELECT preferredMediaSourceId FROM item_playback_preferences WHERE key = 'item-2'"
+        ).use { c ->
+            assertTrue(c.step())
+            assertEquals("source-4k", c.getText(0))
+            assertFalse(c.step())
+        }
         db.close()
     }
 

@@ -16,18 +16,18 @@ import com.raulshma.jellyplay.core.datastore.ParsedCache
 import com.raulshma.jellyplay.core.datastore.PreferenceCodec
 import com.raulshma.jellyplay.core.datastore.dataDegradingToDefaults
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
-import com.raulshma.jellyplay.core.datastore.toEnumOrNull
+import com.raulshma.jellyplay.core.datastore.UserNamespacedKeys
+import com.raulshma.jellyplay.core.model.HomeSectionPrefs
+import com.raulshma.jellyplay.core.model.HomeSectionQuery
+import com.raulshma.jellyplay.core.model.HomeSectionType
+import com.raulshma.jellyplay.core.model.PreferenceResetCategory
+import com.raulshma.jellyplay.core.model.withDiscoverRowEnabled
+import com.raulshma.jellyplay.core.model.withDiscoverRowMoved
 import com.raulshma.jellyplay.core.model.ContinueWatchingClickBehavior
 import com.raulshma.jellyplay.core.model.DiscoverRowConfig
 import com.raulshma.jellyplay.core.model.HomeLayoutPreset
 import com.raulshma.jellyplay.core.model.HomeMode
-import com.raulshma.jellyplay.core.model.HomeSectionPrefs
-import com.raulshma.jellyplay.core.model.HomeSectionQuery
-import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.PinnedHomeSection
-import com.raulshma.jellyplay.core.model.PreferenceResetCategory
-import com.raulshma.jellyplay.core.model.withDiscoverRowEnabled
-import com.raulshma.jellyplay.core.model.withDiscoverRowMoved
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
@@ -52,6 +52,19 @@ import kotlinx.serialization.Serializable
  * keys, its setters (including the read-modify-write JSON list/map invariants),
  * its read projection, its legacy migration, and its reset-key list end-to-end.
  * Mirrors the `PlaybackStore` / `AppearanceStore` shape.
+ *
+ * **Spec derivation**: every key this store owns is declared exactly once as a row in
+ * [HomeDiscoveryPreferenceSpecs] (wire name, default, reset category, encoding
+ * where the row carries one) and the machinery below is derived from those
+ * rows — each [Keys] member rebuilds its row's typed key from the row's wire
+ * name, the per-user read projection delegates each plain knob to its row
+ * encoding through the spec-side per-user hook, the setters and [restore]
+ * write through the rows' namespace-rebuilt keys, [resetKeysFor] filters the
+ * rows by reset category, and the namespace migration's per-type copy lists
+ * are the rows filtered by declared storage. The read-modify-write commands,
+ * the enabled-set version-union decode (whose per-user parse cache a row
+ * encoding cannot carry) and the first-user-claims migration stay hand-written
+ * by decision — see the spec KDoc.
  *
  * **Storage:** reuses the shared `"user_prefs"` DataStore file, but every key
  * this store owns is namespaced per active user as `u_<userId>::<canonical>`
@@ -133,129 +146,66 @@ class HomeDiscoveryStore constructor(
         }
     } ?: fallback
 
+    /**
+     * The store's DataStore keys, each derived from its
+     * [HomeDiscoveryPreferenceSpecs] row — the member rebuilds the row's
+     * typed key from the row's single-declared wire name (`Preferences.Key`
+     * equality is name-based, so these interoperate with any hand-built key
+     * of the same name). Kept as a plain object rather than folded into the
+     * rows because it is the reflection anchor for the JVM reset-coverage
+     * guard and the key-identity reference for the hand-written migration
+     * logic below.
+     */
     internal object Keys {
-        val HOME_MODE = stringPreferencesKey("home_mode")
-        val HOME_HERO_ENABLED = booleanPreferencesKey("home_hero_enabled")
-        val HOME_BACKDROP_ENABLED = booleanPreferencesKey("home_backdrop_enabled")
-        val HOME_ENABLED_SECTION_TYPES = stringPreferencesKey("home_enabled_section_types")
-        /**
-         * Schema version of [HOME_ENABLED_SECTION_TYPES], stamped by every
-         * write of that set. A persisted set read at an older version is
-         * unioned with the sections shipped in each intervening version (see
-         * [HomeDiscoveryStore]`.UserReader.readEnabledHomeSectionTypes`) —
-         * newly-shipped sections default to visible instead of staying
-         * invisible to every user whose set predates them, while a user who
-         * then disables the section keeps that choice.
-         */
-        val HOME_ENABLED_SECTION_TYPES_VERSION = intPreferencesKey("home_enabled_section_types_version")
-        const val HOME_ENABLED_SECTION_TYPES_CURRENT_VERSION = 2
-        /**
-         * The version at which [HomeSectionType.CONTINUE_READING] shipped —
-         * a persisted set stamped older than this unions it in on read (see
-         * [HomeDiscoveryStore]`.UserReader.readEnabledHomeSectionTypes`).
-         * Distinct from [HOME_ENABLED_SECTION_TYPES_CURRENT_VERSION] on
-         * purpose: a future section bump advances the latter and adds a new
-         * shipped-at entry, never editing this one.
-         */
-        const val CONTINUE_READING_SHIPPED_AT_VERSION = 1
-        /**
-         * The version at which [HomeSectionType.DISCOVER] (the custom discover
-         * rows block) shipped — same union-in mechanics as
-         * [CONTINUE_READING_SHIPPED_AT_VERSION]: without the entry, every
-         * user whose enabled-set predates the section would never see the
-         * DISCOVER block render, no matter their row config.
-         */
-        const val DISCOVER_SHIPPED_AT_VERSION = 2
-        val HOME_SECTION_ORDER = stringPreferencesKey("home_section_order")
-        val HOME_LIBRARY_SECTION_OVERRIDES = stringPreferencesKey("home_library_section_overrides")
+        val HOME_MODE = stringPreferencesKey(HomeDiscoveryPreferenceSpecs.HOME_MODE.keyName)
+        val HOME_HERO_ENABLED = booleanPreferencesKey(HomeDiscoveryPreferenceSpecs.HOME_HERO_ENABLED.keyName)
+        val HOME_BACKDROP_ENABLED = booleanPreferencesKey(HomeDiscoveryPreferenceSpecs.HOME_BACKDROP_ENABLED.keyName)
+        val HOME_ENABLED_SECTION_TYPES = stringPreferencesKey(HomeDiscoveryPreferenceSpecs.HOME_ENABLED_SECTION_TYPES.keyName)
+        val HOME_ENABLED_SECTION_TYPES_VERSION = intPreferencesKey(HomeDiscoveryPreferenceSpecs.HOME_ENABLED_SECTION_TYPES_VERSION.keyName)
+        val HOME_SECTION_ORDER = stringPreferencesKey(HomeDiscoveryPreferenceSpecs.HOME_SECTION_ORDER.keyName)
+        val HOME_LIBRARY_SECTION_OVERRIDES = stringPreferencesKey(HomeDiscoveryPreferenceSpecs.HOME_LIBRARY_SECTION_OVERRIDES.keyName)
         /** Legacy all-or-nothing "hide library from home" key — kept only to migrate. */
-        val HOME_HIDDEN_LIBRARY_SECTION_IDS = stringPreferencesKey("home_hidden_library_section_ids")
-        val PINNED_HOME_SECTIONS = stringPreferencesKey("pinned_home_sections")
-        /**
-         * The user's custom Discover rows, as one JSON `List<DiscoverRowConfig>`
-         * blob (list order = within-block render order). Same lifecycle as the
-         * pinned sections blob.
-         */
-        val HOME_DISCOVER_ROWS = stringPreferencesKey("home_discover_rows")
-        val HOME_LAYOUT_PRESETS = stringPreferencesKey("home_layout_presets")
-        val CONTINUE_WATCHING_CLICK_BEHAVIOR = stringPreferencesKey("continue_watching_click_behavior")
-        val SHOW_UNWATCHED_BADGE = booleanPreferencesKey("show_unwatched_badge")
-        val HIDE_WATCHED_ITEMS = booleanPreferencesKey("hide_watched_items")
-        val SHOW_WATCHED_CHECKMARK = booleanPreferencesKey("show_watched_checkmark")
-        val SHOW_EXTERNAL_RATINGS = booleanPreferencesKey("show_external_ratings")
-        val MERGE_CONTINUE_WATCHING_NEXT_UP = booleanPreferencesKey("merge_continue_watching_next_up")
-        val NEXT_UP_MAX_DAYS = intPreferencesKey("next_up_max_days")
-        val NEXT_UP_REWATCHING = booleanPreferencesKey("next_up_rewatching")
-        val NEXT_UP_EXCLUDED_SERIES_IDS = stringPreferencesKey("next_up_excluded_series_ids")
-        val HIDDEN_CW_ITEM_IDS = stringPreferencesKey("hidden_cw_item_ids")
-        /**
-         * Per-series last-viewed season tab (seriesId → seasonId). Lets the
-         * series detail screen reopen on the season the user was browsing
-         * instead of always the smart-play default. Stored as a JSON map.
-         */
-        val LAST_VIEWED_SEASON_BY_SERIES = stringPreferencesKey("last_viewed_season_by_series")
-        val SHOW_CLOCK_ON_HOME = booleanPreferencesKey("show_clock_on_home")
-        val SHOW_SETTINGS_IN_HOME_SEARCH = booleanPreferencesKey("show_settings_in_home_search")
-        val HIDE_TOP_HEADER_ON_SCROLL = booleanPreferencesKey("hide_top_header_on_scroll")
-        /**
-         * Global one-time marker for the legacy flat-key → per-user-namespace
-         * migration ([ensureNamespacedMigration]). Deliberately **global**, not
-         * per-user: the legacy flat values belonged to the one user who used
-         * the install, so they are claimed exactly once — a per-user marker
-         * would let every later user inherit them.
-         */
-        val HOME_NS_MIGRATED = booleanPreferencesKey("home_ns_migrated")
+        val HOME_HIDDEN_LIBRARY_SECTION_IDS = stringPreferencesKey(HomeDiscoveryPreferenceSpecs.HOME_HIDDEN_LIBRARY_SECTION_IDS.keyName)
+        val PINNED_HOME_SECTIONS = stringPreferencesKey(HomeDiscoveryPreferenceSpecs.PINNED_HOME_SECTIONS.keyName)
+        val HOME_DISCOVER_ROWS = stringPreferencesKey(HomeDiscoveryPreferenceSpecs.HOME_DISCOVER_ROWS.keyName)
+        val HOME_LAYOUT_PRESETS = stringPreferencesKey(HomeDiscoveryPreferenceSpecs.HOME_LAYOUT_PRESETS.keyName)
+        val CONTINUE_WATCHING_CLICK_BEHAVIOR = stringPreferencesKey(HomeDiscoveryPreferenceSpecs.CONTINUE_WATCHING_CLICK_BEHAVIOR.keyName)
+        val SHOW_UNWATCHED_BADGE = booleanPreferencesKey(HomeDiscoveryPreferenceSpecs.SHOW_UNWATCHED_BADGE.keyName)
+        val HIDE_WATCHED_ITEMS = booleanPreferencesKey(HomeDiscoveryPreferenceSpecs.HIDE_WATCHED_ITEMS.keyName)
+        val SHOW_WATCHED_CHECKMARK = booleanPreferencesKey(HomeDiscoveryPreferenceSpecs.SHOW_WATCHED_CHECKMARK.keyName)
+        val SHOW_EXTERNAL_RATINGS = booleanPreferencesKey(HomeDiscoveryPreferenceSpecs.SHOW_EXTERNAL_RATINGS.keyName)
+        val MERGE_CONTINUE_WATCHING_NEXT_UP = booleanPreferencesKey(HomeDiscoveryPreferenceSpecs.MERGE_CONTINUE_WATCHING_NEXT_UP.keyName)
+        val NEXT_UP_MAX_DAYS = intPreferencesKey(HomeDiscoveryPreferenceSpecs.NEXT_UP_MAX_DAYS.keyName)
+        val NEXT_UP_REWATCHING = booleanPreferencesKey(HomeDiscoveryPreferenceSpecs.NEXT_UP_REWATCHING.keyName)
+        val CLASSIC_ROWS = booleanPreferencesKey(HomeDiscoveryPreferenceSpecs.CLASSIC_ROWS.keyName)
+        val NEXT_UP_EXCLUDED_SERIES_IDS = stringPreferencesKey(HomeDiscoveryPreferenceSpecs.NEXT_UP_EXCLUDED_SERIES_IDS.keyName)
+        val HIDDEN_CW_ITEM_IDS = stringPreferencesKey(HomeDiscoveryPreferenceSpecs.HIDDEN_CW_ITEM_IDS.keyName)
+        val LAST_VIEWED_SEASON_BY_SERIES = stringPreferencesKey(HomeDiscoveryPreferenceSpecs.LAST_VIEWED_SEASON_BY_SERIES.keyName)
+        val SHOW_CLOCK_ON_HOME = booleanPreferencesKey(HomeDiscoveryPreferenceSpecs.SHOW_CLOCK_ON_HOME.keyName)
+        val SHOW_SETTINGS_IN_HOME_SEARCH = booleanPreferencesKey(HomeDiscoveryPreferenceSpecs.SHOW_SETTINGS_IN_HOME_SEARCH.keyName)
+        val HIDE_TOP_HEADER_ON_SCROLL = booleanPreferencesKey(HomeDiscoveryPreferenceSpecs.HIDE_TOP_HEADER_ON_SCROLL.keyName)
+        val HOME_NS_MIGRATED = booleanPreferencesKey(HomeDiscoveryPreferenceSpecs.HOME_NS_MIGRATED.keyName)
     }
 
     // ------------------------------------------------------------------
-    // Per-user key namespacing: u_<userId>::<canonical>
+    // Per-user key namespacing: u_<userId>::<canonical>. The grammar itself
+    // (name build + recognition) is [UserNamespacedKeys]' — the one shared
+    // implementation (DownloadsStore's allow-list key namespaces through it
+    // too). The per-row spellings live on the rows as the spec-side
+    // key-rebuild hook ([HomeDiscoveryPreferenceSpecs.userKey] and friends),
+    // so a namespaced slot is always the canonical row transformed by the
+    // grammar — never a second key literal.
     // ------------------------------------------------------------------
 
-    /** Namespaced key name for [userId]: `u_<userId>::<canonical>`. */
-    private fun namespaced(userId: String, canonical: String): String = "u_$userId::$canonical"
-
-    private fun userStringKey(userId: String, canonical: Preferences.Key<String>): Preferences.Key<String> =
-        stringPreferencesKey(namespaced(userId, canonical.name))
-
-    private fun userBooleanKey(userId: String, canonical: Preferences.Key<Boolean>): Preferences.Key<Boolean> =
-        booleanPreferencesKey(namespaced(userId, canonical.name))
-
-    private fun userIntKey(userId: String, canonical: Preferences.Key<Int>): Preferences.Key<Int> =
-        intPreferencesKey(namespaced(userId, canonical.name))
-
-    // Canonical keys by declared type. The migration copies each list with its
-    // typed reader so a legacy STRING slot (pre-typed-migration install — the
-    // typed-key migration is an unordered concurrent init launch, so this edit
-    // may win the race) is parsed into the TYPED namespaced slot instead of
-    // being skipped; readers disable the string fallback once the global
-    // typed-migration flag is set, so a raw string copy would read as default.
-    private val booleanLegacyKeys: List<Preferences.Key<Boolean>> = listOf(
-        Keys.HOME_HERO_ENABLED, Keys.HOME_BACKDROP_ENABLED, Keys.SHOW_UNWATCHED_BADGE,
-        Keys.HIDE_WATCHED_ITEMS, Keys.SHOW_WATCHED_CHECKMARK, Keys.SHOW_EXTERNAL_RATINGS,
-        Keys.MERGE_CONTINUE_WATCHING_NEXT_UP, Keys.NEXT_UP_REWATCHING,
-        Keys.SHOW_CLOCK_ON_HOME, Keys.SHOW_SETTINGS_IN_HOME_SEARCH, Keys.HIDE_TOP_HEADER_ON_SCROLL,
-    )
-
-    private val intLegacyKeys: List<Preferences.Key<Int>> =
-        listOf(Keys.NEXT_UP_MAX_DAYS, Keys.HOME_ENABLED_SECTION_TYPES_VERSION)
-
-    private val stringLegacyKeys: List<Preferences.Key<String>> = listOf(
-        Keys.HOME_MODE, Keys.HOME_ENABLED_SECTION_TYPES, Keys.HOME_SECTION_ORDER,
-        Keys.HOME_LIBRARY_SECTION_OVERRIDES, Keys.PINNED_HOME_SECTIONS,
-        Keys.HOME_DISCOVER_ROWS,
-        Keys.HOME_LAYOUT_PRESETS, Keys.CONTINUE_WATCHING_CLICK_BEHAVIOR,
-        Keys.NEXT_UP_EXCLUDED_SERIES_IDS, Keys.HIDDEN_CW_ITEM_IDS,
-        Keys.LAST_VIEWED_SEASON_BY_SERIES,
-    )
-
     /**
-     * Every canonical key this store owns, in its legacy flat form. Doubles as
-     * (a) the canonical-suffix set for the migration copy lists above and (b)
-     * the legacy/canonical layer that factory reset must also strip. Includes
-     * the legacy [Keys.HOME_HIDDEN_LIBRARY_SECTION_IDS] migration source.
+     * Every canonical key this store owns, in its legacy flat form — derived
+     * from the [HomeDiscoveryPreferenceSpecs] rows (every row except the
+     * global `home_ns_migrated` marker). Doubles as (a) the canonical-suffix
+     * set for the migration copy lists below and (b) the legacy/canonical
+     * layer that factory reset must also strip. Includes the legacy
+     * [Keys.HOME_HIDDEN_LIBRARY_SECTION_IDS] migration source.
      */
-    internal val legacyKeys: List<Preferences.Key<*>> =
-        booleanLegacyKeys + intLegacyKeys + stringLegacyKeys + Keys.HOME_HIDDEN_LIBRARY_SECTION_IDS
+    internal val legacyKeys: List<Preferences.Key<*>> = HomeDiscoveryPreferenceSpecs.legacyKeys
 
     /**
      * ONE-TIME, GLOBAL, FIRST-USER-CLAIMS migration from the legacy flat keys
@@ -296,14 +246,17 @@ class HomeDiscoveryStore constructor(
                 // matter (both are idempotent). The hidden-library key itself
                 // is a migration source only, never a copy destination.
                 migrateHiddenLibrarySectionIds(prefs)
-                booleanLegacyKeys.forEach {
-                    copyIntoNamespace(prefs, it, userId, ::booleanPreferencesKey) { raw -> raw.toBoolean() }
+                // The per-type copy lists are the spec rows filtered by their
+                // declared storage — a row's parse (toBoolean / toIntOrNull /
+                // verbatim) follows its slot type.
+                HomeDiscoveryPreferenceSpecs.booleanCopyRows.forEach {
+                    copyIntoNamespace(prefs, it.typedKey(), userId, ::booleanPreferencesKey) { raw -> raw.toBoolean() }
                 }
-                intLegacyKeys.forEach {
-                    copyIntoNamespace(prefs, it, userId, ::intPreferencesKey) { raw -> raw.toIntOrNull() }
+                HomeDiscoveryPreferenceSpecs.intCopyRows.forEach {
+                    copyIntoNamespace(prefs, it.typedKey(), userId, ::intPreferencesKey) { raw -> raw.toIntOrNull() }
                 }
-                stringLegacyKeys.forEach {
-                    copyIntoNamespace(prefs, it, userId, ::stringPreferencesKey) { raw -> raw }
+                HomeDiscoveryPreferenceSpecs.stringCopyRows.forEach {
+                    copyIntoNamespace(prefs, it.typedKey(), userId, ::stringPreferencesKey) { raw -> raw }
                 }
                 prefs[Keys.HOME_NS_MIGRATED] = true
             }
@@ -333,7 +286,7 @@ class HomeDiscoveryStore constructor(
         keyFactory: (String) -> Preferences.Key<T>,
         fromString: (String) -> T?,
     ) {
-        val target = namespaced(userId, canonical.name)
+        val target = UserNamespacedKeys.name(userId, canonical.name)
         if (prefs.asMap().keys.any { it.name == target }) return
         val typed = try { prefs[canonical] as T? } catch (_: ClassCastException) { null }
         val value = typed ?: prefs[stringPreferencesKey(canonical.name)]?.let(fromString) ?: return
@@ -392,85 +345,65 @@ class HomeDiscoveryStore constructor(
      * active-user emission in [homeDiscovery], so a user switch can never serve
      * another user's cached parse — stale cross-user parse-cache hits are
      * precisely the leak class the namespacing closes.
+     *
+     * Every namespaced key is rebuilt from its
+     * [HomeDiscoveryPreferenceSpecs] row through the per-user hook
+     * ([HomeDiscoveryPreferenceSpecs.userKey] / `rawUserKey`); the plain
+     * knobs' reads delegate to the rows' encodings via the per-user read
+     * helpers, and only the JSON blobs keep store-supplied codecs (their
+     * per-user parse caches live here).
      */
     private inner class UserReader(private val userId: String) {
 
-        // Namespaced keys — same canonical names as the legacy flat keys, so
-        // the backup/export format is unchanged.
-        private val homeModeKey = userStringKey(userId, Keys.HOME_MODE)
-        private val homeHeroEnabledKey = userBooleanKey(userId, Keys.HOME_HERO_ENABLED)
-        private val homeBackdropEnabledKey = userBooleanKey(userId, Keys.HOME_BACKDROP_ENABLED)
-        private val enabledSectionTypesKey = userStringKey(userId, Keys.HOME_ENABLED_SECTION_TYPES)
-        private val enabledSectionTypesVersionKey = userIntKey(userId, Keys.HOME_ENABLED_SECTION_TYPES_VERSION)
-        private val sectionOrderKey = userStringKey(userId, Keys.HOME_SECTION_ORDER)
-        private val librarySectionOverridesKey = userStringKey(userId, Keys.HOME_LIBRARY_SECTION_OVERRIDES)
-        private val pinnedSectionsKey = userStringKey(userId, Keys.PINNED_HOME_SECTIONS)
-        private val discoverRowsKey = userStringKey(userId, Keys.HOME_DISCOVER_ROWS)
-        private val layoutPresetsKey = userStringKey(userId, Keys.HOME_LAYOUT_PRESETS)
-        private val continueWatchingClickBehaviorKey = userStringKey(userId, Keys.CONTINUE_WATCHING_CLICK_BEHAVIOR)
-        private val showUnwatchedBadgeKey = userBooleanKey(userId, Keys.SHOW_UNWATCHED_BADGE)
-        private val hideWatchedItemsKey = userBooleanKey(userId, Keys.HIDE_WATCHED_ITEMS)
-        private val showWatchedCheckmarkKey = userBooleanKey(userId, Keys.SHOW_WATCHED_CHECKMARK)
-        private val showExternalRatingsKey = userBooleanKey(userId, Keys.SHOW_EXTERNAL_RATINGS)
-        private val mergeCwNextUpKey = userBooleanKey(userId, Keys.MERGE_CONTINUE_WATCHING_NEXT_UP)
-        private val nextUpMaxDaysKey = userIntKey(userId, Keys.NEXT_UP_MAX_DAYS)
-        private val nextUpRewatchingKey = userBooleanKey(userId, Keys.NEXT_UP_REWATCHING)
-        private val nextUpExcludedSeriesIdsKey = userStringKey(userId, Keys.NEXT_UP_EXCLUDED_SERIES_IDS)
-        private val hiddenCwItemIdsKey = userStringKey(userId, Keys.HIDDEN_CW_ITEM_IDS)
-        private val lastViewedSeasonBySeriesKey = userStringKey(userId, Keys.LAST_VIEWED_SEASON_BY_SERIES)
-        private val showClockOnHomeKey = userBooleanKey(userId, Keys.SHOW_CLOCK_ON_HOME)
-        private val showSettingsInHomeSearchKey = userBooleanKey(userId, Keys.SHOW_SETTINGS_IN_HOME_SEARCH)
-        private val hideTopHeaderOnScrollKey = userBooleanKey(userId, Keys.HIDE_TOP_HEADER_ON_SCROLL)
-
         // Parse caches — per-user by construction: one UserReader per user.
-        private var cachedEnabledHomeSectionTypes = ParsedCache<Set<HomeSectionType>>(null, HomeSectionType.CONFIGURABLE.toSet())
-        private var cachedHomeSectionOrder = ParsedCache<List<HomeSectionType>>(null, HomeSectionType.CONFIGURABLE)
-        private var cachedLibraryHomeSectionOverrides = ParsedCache<Map<String, Set<HomeSectionType>>>(null, emptyMap())
-        private var cachedPinnedHomeSections = ParsedCache<List<PinnedHomeSection>>(null, emptyList())
-        private var cachedDiscoverRows = ParsedCache<List<DiscoverRowConfig>>(null, emptyList())
-        private var cachedHomeLayoutPresets = ParsedCache<List<HomeLayoutPreset>>(null, emptyList())
-        private var cachedNextUpExcludedSeriesIds = ParsedCache<Set<String>>(null, emptySet())
-        private var cachedHiddenCwItemIds = ParsedCache<Set<String>>(null, emptySet())
-        private var cachedLastViewedSeasonBySeries = ParsedCache<Map<String, String>>(null, emptyMap())
-
-        /** The [key.name] pass-through keeps PreferenceCodec's legacy string fallback pointed at the namespaced slot. */
-        private fun readBool(prefs: Preferences, key: Preferences.Key<Boolean>, default: Boolean): Boolean =
-            PreferenceCodec.readBool(prefs, key, key.name, default)
-
-        private fun readInt(prefs: Preferences, key: Preferences.Key<Int>, default: Int): Int =
-            PreferenceCodec.readInt(prefs, key, key.name, default)
+        private var cachedEnabledHomeSectionTypes =
+            ParsedCache<Set<HomeSectionType>>(null, HomeDiscoveryPreferenceSpecs.HOME_ENABLED_SECTION_TYPES.default)
+        private var cachedHomeSectionOrder =
+            ParsedCache<List<HomeSectionType>>(null, HomeDiscoveryPreferenceSpecs.HOME_SECTION_ORDER.default)
+        private var cachedLibraryHomeSectionOverrides =
+            ParsedCache<Map<String, Set<HomeSectionType>>>(null, HomeDiscoveryPreferenceSpecs.HOME_LIBRARY_SECTION_OVERRIDES.default)
+        private var cachedPinnedHomeSections =
+            ParsedCache<List<PinnedHomeSection>>(null, HomeDiscoveryPreferenceSpecs.PINNED_HOME_SECTIONS.default)
+        private var cachedDiscoverRows =
+            ParsedCache<List<DiscoverRowConfig>>(null, HomeDiscoveryPreferenceSpecs.HOME_DISCOVER_ROWS.default)
+        private var cachedHomeLayoutPresets =
+            ParsedCache<List<HomeLayoutPreset>>(null, HomeDiscoveryPreferenceSpecs.HOME_LAYOUT_PRESETS.default)
+        private var cachedNextUpExcludedSeriesIds =
+            ParsedCache<Set<String>>(null, HomeDiscoveryPreferenceSpecs.NEXT_UP_EXCLUDED_SERIES_IDS.default)
+        private var cachedHiddenCwItemIds =
+            ParsedCache<Set<String>>(null, HomeDiscoveryPreferenceSpecs.HIDDEN_CW_ITEM_IDS.default)
+        private var cachedLastViewedSeasonBySeries =
+            ParsedCache<Map<String, String>>(null, HomeDiscoveryPreferenceSpecs.LAST_VIEWED_SEASON_BY_SERIES.default)
 
         fun slice(prefs: Preferences): HomeDiscoverySlice = HomeDiscoverySlice(
-            homeMode = readHomeMode(prefs),
-            homeHeroEnabled = readBool(prefs, homeHeroEnabledKey, true),
-            homeBackdropEnabled = readBool(prefs, homeBackdropEnabledKey, true),
+            homeMode = HomeDiscoveryPreferenceSpecs.HOME_MODE.readEnumForUser(prefs, userId),
+            homeHeroEnabled = HomeDiscoveryPreferenceSpecs.HOME_HERO_ENABLED.readBoolForUser(prefs, userId),
+            homeBackdropEnabled = HomeDiscoveryPreferenceSpecs.HOME_BACKDROP_ENABLED.readBoolForUser(prefs, userId),
             enabledHomeSectionTypes = readEnabledHomeSectionTypes(prefs),
             homeSectionOrder = readHomeSectionOrder(prefs),
             libraryHomeSectionOverrides = readLibraryHomeSectionOverrides(prefs),
             pinnedHomeSections = readPinnedHomeSections(prefs),
             discoverRows = readDiscoverRows(prefs),
             homeLayoutPresets = readHomeLayoutPresets(prefs),
-            continueWatchingClickBehavior = readContinueWatchingClickBehavior(prefs),
-            showUnwatchedBadge = readBool(prefs, showUnwatchedBadgeKey, true),
-            hideWatchedItems = readBool(prefs, hideWatchedItemsKey, false),
-            showWatchedCheckmark = readBool(prefs, showWatchedCheckmarkKey, true),
-            showExternalRatings = readBool(prefs, showExternalRatingsKey, true),
-            mergeContinueWatchingAndNextUp = readBool(prefs, mergeCwNextUpKey, false),
-            nextUpMaxDays = readInt(prefs, nextUpMaxDaysKey, 0),
-            nextUpRewatching = readBool(prefs, nextUpRewatchingKey, false),
+            continueWatchingClickBehavior = HomeDiscoveryPreferenceSpecs.CONTINUE_WATCHING_CLICK_BEHAVIOR
+                .readEnumForUser(prefs, userId),
+            showUnwatchedBadge = HomeDiscoveryPreferenceSpecs.SHOW_UNWATCHED_BADGE.readBoolForUser(prefs, userId),
+            hideWatchedItems = HomeDiscoveryPreferenceSpecs.HIDE_WATCHED_ITEMS.readBoolForUser(prefs, userId),
+            showWatchedCheckmark = HomeDiscoveryPreferenceSpecs.SHOW_WATCHED_CHECKMARK.readBoolForUser(prefs, userId),
+            showExternalRatings = HomeDiscoveryPreferenceSpecs.SHOW_EXTERNAL_RATINGS.readBoolForUser(prefs, userId),
+            mergeContinueWatchingAndNextUp = HomeDiscoveryPreferenceSpecs.MERGE_CONTINUE_WATCHING_NEXT_UP
+                .readBoolForUser(prefs, userId),
+            nextUpMaxDays = HomeDiscoveryPreferenceSpecs.NEXT_UP_MAX_DAYS.readIntForUser(prefs, userId),
+            nextUpRewatching = HomeDiscoveryPreferenceSpecs.NEXT_UP_REWATCHING.readBoolForUser(prefs, userId),
+            classicRows = HomeDiscoveryPreferenceSpecs.CLASSIC_ROWS.readBoolForUser(prefs, userId),
             nextUpExcludedSeriesIds = readNextUpExcludedSeriesIds(prefs),
             hiddenCwItemIds = readHiddenCwItemIds(prefs),
             lastViewedSeasonBySeries = readLastViewedSeasonBySeries(prefs),
-            showClockOnHome = readBool(prefs, showClockOnHomeKey, false),
-            showSettingsInHomeSearch = readBool(prefs, showSettingsInHomeSearchKey, true),
-            hideTopHeaderOnScroll = readBool(prefs, hideTopHeaderOnScrollKey, false),
+            showClockOnHome = HomeDiscoveryPreferenceSpecs.SHOW_CLOCK_ON_HOME.readBoolForUser(prefs, userId),
+            showSettingsInHomeSearch = HomeDiscoveryPreferenceSpecs.SHOW_SETTINGS_IN_HOME_SEARCH
+                .readBoolForUser(prefs, userId),
+            hideTopHeaderOnScroll = HomeDiscoveryPreferenceSpecs.HIDE_TOP_HEADER_ON_SCROLL.readBoolForUser(prefs, userId),
         )
-
-        private fun readHomeMode(prefs: Preferences): HomeMode =
-            prefs[homeModeKey].toEnumOrNull() ?: HomeMode.VIDEO
-
-        private fun readContinueWatchingClickBehavior(prefs: Preferences): ContinueWatchingClickBehavior =
-            prefs[continueWatchingClickBehaviorKey].toEnumOrNull() ?: ContinueWatchingClickBehavior.DETAILS
 
         /**
          * Sections the versioned set shipped after versioning began, each
@@ -478,21 +411,21 @@ class HomeDiscoveryStore constructor(
          * [readEnabledHomeSectionTypes] folds in for every set persisted
          * before that version. A future section appends its
          * `(shipped-at, section)` entry here and bumps
-         * [Keys.HOME_ENABLED_SECTION_TYPES_CURRENT_VERSION]; existing entries
-         * are never edited.
+         * [HomeDiscoveryPreferenceSpecs.HOME_ENABLED_SECTION_TYPES_CURRENT_VERSION];
+         * existing entries are never edited.
          */
         private val sectionsShippedByVersion: List<Pair<Int, HomeSectionType>> = listOf(
             // v1: reading-experience 2.0's Continue Reading row
-            Keys.CONTINUE_READING_SHIPPED_AT_VERSION to HomeSectionType.CONTINUE_READING,
+            HomeDiscoveryPreferenceSpecs.CONTINUE_READING_SHIPPED_AT_VERSION to HomeSectionType.CONTINUE_READING,
             // v2: the custom discover rows block (Home Screen settings hub)
-            Keys.DISCOVER_SHIPPED_AT_VERSION to HomeSectionType.DISCOVER,
+            HomeDiscoveryPreferenceSpecs.DISCOVER_SHIPPED_AT_VERSION to HomeSectionType.DISCOVER,
         )
 
         /**
          * The persisted set is decoded verbatim, then unioned with every
          * section shipped AFTER the version stamp the set was written at
-         * ([Keys.HOME_ENABLED_SECTION_TYPES_VERSION], absent = predates the
-         * versioning itself): a set persisted before a section existed cannot
+         * ([HomeDiscoveryPreferenceSpecs.HOME_ENABLED_SECTION_TYPES_VERSION],
+         * absent = predates the versioning itself): a set persisted before a section existed cannot
          * contain it, and reading it verbatim would keep the new section
          * invisible to exactly the users who ever touched section config. The
          * one-shot shape matters — every write of the set stamps the current
@@ -500,19 +433,19 @@ class HomeDiscoveryStore constructor(
          * choice, not a not-yet-shipped section, and stays respected.
          */
         private fun readEnabledHomeSectionTypes(prefs: Preferences): Set<HomeSectionType> {
-            val raw = prefs[enabledSectionTypesKey]
+            val raw = prefs[HomeDiscoveryPreferenceSpecs.HOME_ENABLED_SECTION_TYPES.rawUserKey(userId)]
             // The union folds in the version stamp, so the parse cache keys on
             // BOTH: a pre-version read caches raw → raw∪{CONTINUE_READING},
             // and the CR disable that follows rewrites the SAME encoded set
             // (the write's read-modify-write drops exactly the unioned
             // member) under the new stamp. Keyed on raw alone, that write
             // would serve the stale unioned value until process restart.
-            val version = prefs[enabledSectionTypesVersionKey] ?: 0
+            val version = prefs[HomeDiscoveryPreferenceSpecs.HOME_ENABLED_SECTION_TYPES_VERSION.userKey(userId)] ?: 0
             return PreferenceCodec.cachedJson(
                 raw = raw,
                 cacheKey = "v$version:$raw",
                 cache = cachedEnabledHomeSectionTypes,
-                default = HomeSectionType.CONFIGURABLE.toSet(),
+                default = HomeDiscoveryPreferenceSpecs.HOME_ENABLED_SECTION_TYPES.default,
                 parse = { encoded ->
                     val persisted = json.decodeFromString<Set<String>>(encoded)
                         .mapNotNull { name -> HomeSectionType.entries.find { e -> e.name == name } }
@@ -527,9 +460,9 @@ class HomeDiscoveryStore constructor(
         }
 
         private fun readHomeSectionOrder(prefs: Preferences): List<HomeSectionType> = PreferenceCodec.cachedJson(
-            raw = prefs[sectionOrderKey],
+            raw = prefs[HomeDiscoveryPreferenceSpecs.HOME_SECTION_ORDER.rawUserKey(userId)],
             cache = cachedHomeSectionOrder,
-            default = HomeSectionType.CONFIGURABLE,
+            default = HomeDiscoveryPreferenceSpecs.HOME_SECTION_ORDER.default,
             parse = { raw ->
                 // Dual-format: the list is canonical, but the legacy format was
                 // a Set — decode either.
@@ -558,7 +491,7 @@ class HomeDiscoveryStore constructor(
          * strays do not constrain), or leads the list when none does.
          */
         private fun insertMissingAtDefaultPositions(persisted: List<HomeSectionType>): List<HomeSectionType> {
-            if (persisted.isEmpty()) return HomeSectionType.CONFIGURABLE
+            if (persisted.isEmpty()) return HomeDiscoveryPreferenceSpecs.HOME_SECTION_ORDER.default
             val defaultIndex = HomeSectionType.CONFIGURABLE.withIndex().associate { (index, type) -> type to index }
             var result = persisted
             for (section in HomeSectionType.CONFIGURABLE.filterNot { it in persisted }) {
@@ -580,9 +513,9 @@ class HomeDiscoveryStore constructor(
          */
         private fun readLibraryHomeSectionOverrides(prefs: Preferences): Map<String, Set<HomeSectionType>> =
             PreferenceCodec.cachedJson(
-                raw = prefs[librarySectionOverridesKey],
+                raw = prefs[HomeDiscoveryPreferenceSpecs.HOME_LIBRARY_SECTION_OVERRIDES.rawUserKey(userId)],
                 cache = cachedLibraryHomeSectionOverrides,
-                default = emptyMap(),
+                default = HomeDiscoveryPreferenceSpecs.HOME_LIBRARY_SECTION_OVERRIDES.default,
                 parse = { json.decodeFromString<Map<String, Set<HomeSectionType>>>(it) },
                 cacheRef = { cachedLibraryHomeSectionOverrides = it },
                 nullPolicy = CachedJsonNullPolicy.MemoizeNull,
@@ -590,9 +523,9 @@ class HomeDiscoveryStore constructor(
 
         private fun readPinnedHomeSections(prefs: Preferences): List<PinnedHomeSection> =
             PreferenceCodec.cachedJson(
-                raw = prefs[pinnedSectionsKey],
+                raw = prefs[HomeDiscoveryPreferenceSpecs.PINNED_HOME_SECTIONS.rawUserKey(userId)],
                 cache = cachedPinnedHomeSections,
-                default = emptyList(),
+                default = HomeDiscoveryPreferenceSpecs.PINNED_HOME_SECTIONS.default,
                 parse = { json.decodeFromString<List<PinnedHomeSection>>(it) },
                 cacheRef = { cachedPinnedHomeSections = it },
                 nullPolicy = CachedJsonNullPolicy.MemoizeNull,
@@ -600,9 +533,9 @@ class HomeDiscoveryStore constructor(
 
         private fun readDiscoverRows(prefs: Preferences): List<DiscoverRowConfig> =
             PreferenceCodec.cachedJson(
-                raw = prefs[discoverRowsKey],
+                raw = prefs[HomeDiscoveryPreferenceSpecs.HOME_DISCOVER_ROWS.rawUserKey(userId)],
                 cache = cachedDiscoverRows,
-                default = emptyList(),
+                default = HomeDiscoveryPreferenceSpecs.HOME_DISCOVER_ROWS.default,
                 parse = { json.decodeFromString<List<DiscoverRowConfig>>(it) },
                 cacheRef = { cachedDiscoverRows = it },
                 nullPolicy = CachedJsonNullPolicy.MemoizeNull,
@@ -610,9 +543,9 @@ class HomeDiscoveryStore constructor(
 
         private fun readHomeLayoutPresets(prefs: Preferences): List<HomeLayoutPreset> =
             PreferenceCodec.cachedJson(
-                raw = prefs[layoutPresetsKey],
+                raw = prefs[HomeDiscoveryPreferenceSpecs.HOME_LAYOUT_PRESETS.rawUserKey(userId)],
                 cache = cachedHomeLayoutPresets,
-                default = emptyList(),
+                default = HomeDiscoveryPreferenceSpecs.HOME_LAYOUT_PRESETS.default,
                 parse = { json.decodeFromString<List<HomeLayoutPreset>>(it) },
                 cacheRef = { cachedHomeLayoutPresets = it },
                 nullPolicy = CachedJsonNullPolicy.MemoizeNull,
@@ -620,9 +553,9 @@ class HomeDiscoveryStore constructor(
 
         private fun readNextUpExcludedSeriesIds(prefs: Preferences): Set<String> =
             PreferenceCodec.cachedJson(
-                raw = prefs[nextUpExcludedSeriesIdsKey],
+                raw = prefs[HomeDiscoveryPreferenceSpecs.NEXT_UP_EXCLUDED_SERIES_IDS.rawUserKey(userId)],
                 cache = cachedNextUpExcludedSeriesIds,
-                default = emptySet(),
+                default = HomeDiscoveryPreferenceSpecs.NEXT_UP_EXCLUDED_SERIES_IDS.default,
                 parse = { json.decodeFromString<Set<String>>(it) },
                 cacheRef = { cachedNextUpExcludedSeriesIds = it },
                 nullPolicy = CachedJsonNullPolicy.MemoizeNull,
@@ -630,9 +563,9 @@ class HomeDiscoveryStore constructor(
 
         private fun readHiddenCwItemIds(prefs: Preferences): Set<String> =
             PreferenceCodec.cachedJson(
-                raw = prefs[hiddenCwItemIdsKey],
+                raw = prefs[HomeDiscoveryPreferenceSpecs.HIDDEN_CW_ITEM_IDS.rawUserKey(userId)],
                 cache = cachedHiddenCwItemIds,
-                default = emptySet(),
+                default = HomeDiscoveryPreferenceSpecs.HIDDEN_CW_ITEM_IDS.default,
                 parse = { json.decodeFromString<Set<String>>(it) },
                 cacheRef = { cachedHiddenCwItemIds = it },
                 nullPolicy = CachedJsonNullPolicy.MemoizeNull,
@@ -640,9 +573,9 @@ class HomeDiscoveryStore constructor(
 
         private fun readLastViewedSeasonBySeries(prefs: Preferences): Map<String, String> =
             PreferenceCodec.cachedJson(
-                raw = prefs[lastViewedSeasonBySeriesKey],
+                raw = prefs[HomeDiscoveryPreferenceSpecs.LAST_VIEWED_SEASON_BY_SERIES.rawUserKey(userId)],
                 cache = cachedLastViewedSeasonBySeries,
-                default = emptyMap(),
+                default = HomeDiscoveryPreferenceSpecs.LAST_VIEWED_SEASON_BY_SERIES.default,
                 parse = { json.decodeFromString<Map<String, String>>(it) },
                 cacheRef = { cachedLastViewedSeasonBySeries = it },
                 nullPolicy = CachedJsonNullPolicy.MemoizeNull,
@@ -650,7 +583,10 @@ class HomeDiscoveryStore constructor(
     }
 
     // ------------------------------------------------------------------
-    // Setters
+    // Setters — every write goes through the row's namespace-rebuilt key
+    // (the spec-side per-user hook), so the wire name stays declared once
+    // on the row. The read-modify-write commands and the enabled-set's
+    // version-stamp fold stay hand-written below.
     // ------------------------------------------------------------------
 
     /**
@@ -669,29 +605,29 @@ class HomeDiscoveryStore constructor(
     }
 
     suspend fun setHomeMode(mode: HomeMode) = editForUser { prefs, userId ->
-        prefs[userStringKey(userId, Keys.HOME_MODE)] = mode.name
+        prefs[HomeDiscoveryPreferenceSpecs.HOME_MODE.rawUserKey(userId)] = mode.name
     }
 
     suspend fun setHomeHeroEnabled(enabled: Boolean) = editForUser { prefs, userId ->
-        prefs[userBooleanKey(userId, Keys.HOME_HERO_ENABLED)] = enabled
+        prefs[HomeDiscoveryPreferenceSpecs.HOME_HERO_ENABLED.userKey(userId)] = enabled
     }
 
     suspend fun setHomeBackdropEnabled(enabled: Boolean) = editForUser { prefs, userId ->
-        prefs[userBooleanKey(userId, Keys.HOME_BACKDROP_ENABLED)] = enabled
+        prefs[HomeDiscoveryPreferenceSpecs.HOME_BACKDROP_ENABLED.userKey(userId)] = enabled
     }
 
     /**
      * The ONE in-edit write of the persisted enabled-section set: encodes
-     * [types] and stamps [Keys.HOME_ENABLED_SECTION_TYPES_VERSION] with the
-     * current version in the same breath. The stamp is what makes the read
-     * side's version-union one-shot, so no write path may encode the set
-     * without it — this fold exists so a future writer cannot forget.
+     * [types] and stamps the version row with the current version in the same
+     * breath. The stamp is what makes the read side's version-union one-shot,
+     * so no write path may encode the set without it — this fold exists so a
+     * future writer cannot forget.
      */
     private fun writeEnabledHomeSectionTypes(prefs: MutablePreferences, userId: String, types: Set<HomeSectionType>) {
-        prefs[userStringKey(userId, Keys.HOME_ENABLED_SECTION_TYPES)] =
+        prefs[HomeDiscoveryPreferenceSpecs.HOME_ENABLED_SECTION_TYPES.rawUserKey(userId)] =
             json.encodeToString(types.map { t -> t.name }.toSet())
-        prefs[userIntKey(userId, Keys.HOME_ENABLED_SECTION_TYPES_VERSION)] =
-            Keys.HOME_ENABLED_SECTION_TYPES_CURRENT_VERSION
+        prefs[HomeDiscoveryPreferenceSpecs.HOME_ENABLED_SECTION_TYPES_VERSION.userKey(userId)] =
+            HomeDiscoveryPreferenceSpecs.HOME_ENABLED_SECTION_TYPES_CURRENT_VERSION
     }
 
     suspend fun setEnabledHomeSectionTypes(types: Set<HomeSectionType>) = editForUser { prefs, userId ->
@@ -699,7 +635,7 @@ class HomeDiscoveryStore constructor(
     }
 
     suspend fun setHomeSectionOrder(order: List<HomeSectionType>) = editForUser { prefs, userId ->
-        prefs[userStringKey(userId, Keys.HOME_SECTION_ORDER)] =
+        prefs[HomeDiscoveryPreferenceSpecs.HOME_SECTION_ORDER.rawUserKey(userId)] =
             json.encodeToString(normalizedSectionOrder(order).map { t -> t.name })
     }
 
@@ -718,7 +654,7 @@ class HomeDiscoveryStore constructor(
         // Drop entries with empty disabled-sets so the map stays clean and
         // "fully enabled" libraries simply have no key.
         val cleaned = overrides.filterValues { it.isNotEmpty() }
-        prefs[userStringKey(userId, Keys.HOME_LIBRARY_SECTION_OVERRIDES)] = json.encodeToString(cleaned)
+        prefs[HomeDiscoveryPreferenceSpecs.HOME_LIBRARY_SECTION_OVERRIDES.rawUserKey(userId)] = json.encodeToString(cleaned)
     }
 
     /**
@@ -736,7 +672,7 @@ class HomeDiscoveryStore constructor(
 
     suspend fun moveSection(type: HomeSectionType, up: Boolean) = editForUser { prefs, userId ->
         val updated = read(prefs).toSectionPrefs().withSectionMoved(type, up) ?: return@editForUser
-        prefs[userStringKey(userId, Keys.HOME_SECTION_ORDER)] =
+        prefs[HomeDiscoveryPreferenceSpecs.HOME_SECTION_ORDER.rawUserKey(userId)] =
             json.encodeToString(normalizedSectionOrder(updated.homeSectionOrder).map { t -> t.name })
     }
 
@@ -749,25 +685,25 @@ class HomeDiscoveryStore constructor(
             .withLibrarySectionVisible(libraryId, type, visible)
         // Same empty-set drop as [setLibraryHomeSectionOverrides]: a library
         // whose disabled-set empties again simply loses its key.
-        prefs[userStringKey(userId, Keys.HOME_LIBRARY_SECTION_OVERRIDES)] =
+        prefs[HomeDiscoveryPreferenceSpecs.HOME_LIBRARY_SECTION_OVERRIDES.rawUserKey(userId)] =
             json.encodeToString(updated.query.libraryHomeSectionOverrides.filterValues { it.isNotEmpty() })
     }
 
     suspend fun setPinnedHomeSections(sections: List<PinnedHomeSection>) = editForUser { prefs, userId ->
-        prefs[userStringKey(userId, Keys.PINNED_HOME_SECTIONS)] = json.encodeToString(sections)
+        prefs[HomeDiscoveryPreferenceSpecs.PINNED_HOME_SECTIONS.rawUserKey(userId)] = json.encodeToString(sections)
     }
 
     suspend fun addPinnedHomeSection(section: PinnedHomeSection) = editForUser { prefs, userId ->
-        val key = userStringKey(userId, Keys.PINNED_HOME_SECTIONS)
-        val current = decodeOrDefault(prefs, key, emptyList<PinnedHomeSection>())
+        val key = HomeDiscoveryPreferenceSpecs.PINNED_HOME_SECTIONS.rawUserKey(userId)
+        val current = decodeOrDefault(prefs, key, HomeDiscoveryPreferenceSpecs.PINNED_HOME_SECTIONS.default)
         if (current.none { it.id == section.id }) {
             prefs[key] = json.encodeToString(current + section)
         }
     }
 
     suspend fun removePinnedHomeSection(sectionId: String) = editForUser { prefs, userId ->
-        val key = userStringKey(userId, Keys.PINNED_HOME_SECTIONS)
-        val current = decodeOrDefault(prefs, key, emptyList<PinnedHomeSection>())
+        val key = HomeDiscoveryPreferenceSpecs.PINNED_HOME_SECTIONS.rawUserKey(userId)
+        val current = decodeOrDefault(prefs, key, HomeDiscoveryPreferenceSpecs.PINNED_HOME_SECTIONS.default)
         prefs[key] = json.encodeToString(current.filterNot { it.id == sectionId })
     }
 
@@ -775,13 +711,13 @@ class HomeDiscoveryStore constructor(
 
     /** Wholesale replace (layout presets, reset). */
     suspend fun setDiscoverRows(rows: List<DiscoverRowConfig>) = editForUser { prefs, userId ->
-        prefs[userStringKey(userId, Keys.HOME_DISCOVER_ROWS)] = json.encodeToString(rows)
+        prefs[HomeDiscoveryPreferenceSpecs.HOME_DISCOVER_ROWS.rawUserKey(userId)] = json.encodeToString(rows)
     }
 
     /** Add-or-replace by id — the editor's save. */
     suspend fun upsertDiscoverRow(row: DiscoverRowConfig) = editForUser { prefs, userId ->
-        val key = userStringKey(userId, Keys.HOME_DISCOVER_ROWS)
-        val current = decodeOrDefault(prefs, key, emptyList<DiscoverRowConfig>())
+        val key = HomeDiscoveryPreferenceSpecs.HOME_DISCOVER_ROWS.rawUserKey(userId)
+        val current = decodeOrDefault(prefs, key, HomeDiscoveryPreferenceSpecs.HOME_DISCOVER_ROWS.default)
         val next = if (current.any { it.id == row.id }) {
             current.map { if (it.id == row.id) row else it }
         } else {
@@ -791,31 +727,31 @@ class HomeDiscoveryStore constructor(
     }
 
     suspend fun removeDiscoverRow(rowId: String) = editForUser { prefs, userId ->
-        val key = userStringKey(userId, Keys.HOME_DISCOVER_ROWS)
-        val current = decodeOrDefault(prefs, key, emptyList<DiscoverRowConfig>())
+        val key = HomeDiscoveryPreferenceSpecs.HOME_DISCOVER_ROWS.rawUserKey(userId)
+        val current = decodeOrDefault(prefs, key, HomeDiscoveryPreferenceSpecs.HOME_DISCOVER_ROWS.default)
         prefs[key] = json.encodeToString(current.filterNot { it.id == rowId })
     }
 
     suspend fun setDiscoverRowEnabled(rowId: String, enabled: Boolean) = editForUser { prefs, userId ->
-        val key = userStringKey(userId, Keys.HOME_DISCOVER_ROWS)
-        val current = decodeOrDefault(prefs, key, emptyList<DiscoverRowConfig>())
+        val key = HomeDiscoveryPreferenceSpecs.HOME_DISCOVER_ROWS.rawUserKey(userId)
+        val current = decodeOrDefault(prefs, key, HomeDiscoveryPreferenceSpecs.HOME_DISCOVER_ROWS.default)
         prefs[key] = json.encodeToString(current.withDiscoverRowEnabled(rowId, enabled))
     }
 
     suspend fun moveDiscoverRow(rowId: String, up: Boolean) = editForUser { prefs, userId ->
-        val key = userStringKey(userId, Keys.HOME_DISCOVER_ROWS)
-        val current = decodeOrDefault(prefs, key, emptyList<DiscoverRowConfig>())
+        val key = HomeDiscoveryPreferenceSpecs.HOME_DISCOVER_ROWS.rawUserKey(userId)
+        val current = decodeOrDefault(prefs, key, HomeDiscoveryPreferenceSpecs.HOME_DISCOVER_ROWS.default)
         val moved = current.withDiscoverRowMoved(rowId, up) ?: return@editForUser
         prefs[key] = json.encodeToString(moved)
     }
 
     suspend fun setHomeLayoutPresets(presets: List<HomeLayoutPreset>) = editForUser { prefs, userId ->
-        prefs[userStringKey(userId, Keys.HOME_LAYOUT_PRESETS)] = json.encodeToString(presets)
+        prefs[HomeDiscoveryPreferenceSpecs.HOME_LAYOUT_PRESETS.rawUserKey(userId)] = json.encodeToString(presets)
     }
 
     suspend fun saveHomeLayoutPreset(preset: HomeLayoutPreset) = editForUser { prefs, userId ->
-        val key = userStringKey(userId, Keys.HOME_LAYOUT_PRESETS)
-        val current = decodeOrDefault(prefs, key, emptyList<HomeLayoutPreset>())
+        val key = HomeDiscoveryPreferenceSpecs.HOME_LAYOUT_PRESETS.rawUserKey(userId)
+        val current = decodeOrDefault(prefs, key, HomeDiscoveryPreferenceSpecs.HOME_LAYOUT_PRESETS.default)
         val next = if (current.any { it.id == preset.id }) {
             current.map { if (it.id == preset.id) preset else it }
         } else {
@@ -825,57 +761,66 @@ class HomeDiscoveryStore constructor(
     }
 
     suspend fun deleteHomeLayoutPreset(presetId: String) = editForUser { prefs, userId ->
-        val key = userStringKey(userId, Keys.HOME_LAYOUT_PRESETS)
-        val current = decodeOrDefault(prefs, key, emptyList<HomeLayoutPreset>())
+        val key = HomeDiscoveryPreferenceSpecs.HOME_LAYOUT_PRESETS.rawUserKey(userId)
+        val current = decodeOrDefault(prefs, key, HomeDiscoveryPreferenceSpecs.HOME_LAYOUT_PRESETS.default)
         prefs[key] = json.encodeToString(current.filterNot { it.id == presetId })
     }
 
     suspend fun setContinueWatchingClickBehavior(behavior: ContinueWatchingClickBehavior) = editForUser { prefs, userId ->
-        prefs[userStringKey(userId, Keys.CONTINUE_WATCHING_CLICK_BEHAVIOR)] = behavior.name
+        prefs[HomeDiscoveryPreferenceSpecs.CONTINUE_WATCHING_CLICK_BEHAVIOR.rawUserKey(userId)] = behavior.name
     }
 
     suspend fun setShowUnwatchedBadge(enabled: Boolean) = editForUser { prefs, userId ->
-        prefs[userBooleanKey(userId, Keys.SHOW_UNWATCHED_BADGE)] = enabled
+        prefs[HomeDiscoveryPreferenceSpecs.SHOW_UNWATCHED_BADGE.userKey(userId)] = enabled
     }
 
     suspend fun setHideWatchedItems(enabled: Boolean) = editForUser { prefs, userId ->
-        prefs[userBooleanKey(userId, Keys.HIDE_WATCHED_ITEMS)] = enabled
+        prefs[HomeDiscoveryPreferenceSpecs.HIDE_WATCHED_ITEMS.userKey(userId)] = enabled
     }
 
     suspend fun setShowWatchedCheckmark(enabled: Boolean) = editForUser { prefs, userId ->
-        prefs[userBooleanKey(userId, Keys.SHOW_WATCHED_CHECKMARK)] = enabled
+        prefs[HomeDiscoveryPreferenceSpecs.SHOW_WATCHED_CHECKMARK.userKey(userId)] = enabled
     }
 
     suspend fun setShowExternalRatings(enabled: Boolean) = editForUser { prefs, userId ->
-        prefs[userBooleanKey(userId, Keys.SHOW_EXTERNAL_RATINGS)] = enabled
+        prefs[HomeDiscoveryPreferenceSpecs.SHOW_EXTERNAL_RATINGS.userKey(userId)] = enabled
     }
 
     suspend fun setMergeContinueWatchingAndNextUp(enabled: Boolean) = editForUser { prefs, userId ->
-        prefs[userBooleanKey(userId, Keys.MERGE_CONTINUE_WATCHING_NEXT_UP)] = enabled
+        prefs[HomeDiscoveryPreferenceSpecs.MERGE_CONTINUE_WATCHING_NEXT_UP.userKey(userId)] = enabled
     }
 
     suspend fun setNextUpMaxDays(days: Int) = editForUser { prefs, userId ->
-        prefs[userIntKey(userId, Keys.NEXT_UP_MAX_DAYS)] = days.coerceAtLeast(0)
+        prefs[HomeDiscoveryPreferenceSpecs.NEXT_UP_MAX_DAYS.userKey(userId)] = days.coerceAtLeast(0)
     }
 
     suspend fun setNextUpRewatching(enabled: Boolean) = editForUser { prefs, userId ->
-        prefs[userBooleanKey(userId, Keys.NEXT_UP_REWATCHING)] = enabled
+        prefs[HomeDiscoveryPreferenceSpecs.NEXT_UP_REWATCHING.userKey(userId)] = enabled
+    }
+
+    suspend fun setClassicRows(enabled: Boolean) = editForUser { prefs, userId ->
+        prefs[HomeDiscoveryPreferenceSpecs.CLASSIC_ROWS.userKey(userId)] = enabled
     }
 
     suspend fun setNextUpExcludedSeriesIds(ids: Set<String>) = editForUser { prefs, userId ->
-        prefs[userStringKey(userId, Keys.NEXT_UP_EXCLUDED_SERIES_IDS)] = json.encodeToString(ids)
+        prefs[HomeDiscoveryPreferenceSpecs.NEXT_UP_EXCLUDED_SERIES_IDS.rawUserKey(userId)] = json.encodeToString(ids)
     }
 
     suspend fun excludeSeriesFromNextUp(seriesId: String) = editForUser { prefs, userId ->
-        val key = userStringKey(userId, Keys.NEXT_UP_EXCLUDED_SERIES_IDS)
-        val current = decodeOrDefault(prefs, key, emptySet<String>())
+        val key = HomeDiscoveryPreferenceSpecs.NEXT_UP_EXCLUDED_SERIES_IDS.rawUserKey(userId)
+        val current = decodeOrDefault(prefs, key, HomeDiscoveryPreferenceSpecs.NEXT_UP_EXCLUDED_SERIES_IDS.default)
         prefs[key] = json.encodeToString(current + seriesId)
     }
 
     suspend fun includeSeriesInNextUp(seriesId: String) = editForUser { prefs, userId ->
-        val key = userStringKey(userId, Keys.NEXT_UP_EXCLUDED_SERIES_IDS)
-        val current = decodeOrDefault(prefs, key, emptySet<String>())
+        val key = HomeDiscoveryPreferenceSpecs.NEXT_UP_EXCLUDED_SERIES_IDS.rawUserKey(userId)
+        val current = decodeOrDefault(prefs, key, HomeDiscoveryPreferenceSpecs.NEXT_UP_EXCLUDED_SERIES_IDS.default)
         prefs[key] = json.encodeToString(current - seriesId)
+    }
+
+    /** Bulk restore — every Next Up exclusion dropped at once (the "Restore all" action). */
+    suspend fun clearNextUpExclusions() = editForUser { prefs, userId ->
+        prefs.remove(HomeDiscoveryPreferenceSpecs.NEXT_UP_EXCLUDED_SERIES_IDS.rawUserKey(userId))
     }
 
     /**
@@ -884,41 +829,41 @@ class HomeDiscoveryStore constructor(
      * series→season map and upserts the entry (overwrites if already present).
      */
     suspend fun setLastViewedSeason(seriesId: String, seasonId: String) = editForUser { prefs, userId ->
-        val key = userStringKey(userId, Keys.LAST_VIEWED_SEASON_BY_SERIES)
-        val current = decodeOrDefault(prefs, key, emptyMap<String, String>())
+        val key = HomeDiscoveryPreferenceSpecs.LAST_VIEWED_SEASON_BY_SERIES.rawUserKey(userId)
+        val current = decodeOrDefault(prefs, key, HomeDiscoveryPreferenceSpecs.LAST_VIEWED_SEASON_BY_SERIES.default)
         prefs[key] = json.encodeToString(current + (seriesId to seasonId))
     }
 
     suspend fun setHiddenCwItemIds(ids: Set<String>) = editForUser { prefs, userId ->
-        prefs[userStringKey(userId, Keys.HIDDEN_CW_ITEM_IDS)] = json.encodeToString(ids)
+        prefs[HomeDiscoveryPreferenceSpecs.HIDDEN_CW_ITEM_IDS.rawUserKey(userId)] = json.encodeToString(ids)
     }
 
     suspend fun hideCwItem(itemId: String) = editForUser { prefs, userId ->
-        val key = userStringKey(userId, Keys.HIDDEN_CW_ITEM_IDS)
-        val current = decodeOrDefault(prefs, key, emptySet<String>())
+        val key = HomeDiscoveryPreferenceSpecs.HIDDEN_CW_ITEM_IDS.rawUserKey(userId)
+        val current = decodeOrDefault(prefs, key, HomeDiscoveryPreferenceSpecs.HIDDEN_CW_ITEM_IDS.default)
         prefs[key] = json.encodeToString(current + itemId)
     }
 
     suspend fun unhideCwItem(itemId: String) = editForUser { prefs, userId ->
-        val key = userStringKey(userId, Keys.HIDDEN_CW_ITEM_IDS)
-        val current = decodeOrDefault(prefs, key, emptySet<String>())
+        val key = HomeDiscoveryPreferenceSpecs.HIDDEN_CW_ITEM_IDS.rawUserKey(userId)
+        val current = decodeOrDefault(prefs, key, HomeDiscoveryPreferenceSpecs.HIDDEN_CW_ITEM_IDS.default)
         prefs[key] = json.encodeToString(current - itemId)
     }
 
     suspend fun unhideAllCwItems() = editForUser { prefs, userId ->
-        prefs.remove(userStringKey(userId, Keys.HIDDEN_CW_ITEM_IDS))
+        prefs.remove(HomeDiscoveryPreferenceSpecs.HIDDEN_CW_ITEM_IDS.rawUserKey(userId))
     }
 
     suspend fun setShowClockOnHome(enabled: Boolean) = editForUser { prefs, userId ->
-        prefs[userBooleanKey(userId, Keys.SHOW_CLOCK_ON_HOME)] = enabled
+        prefs[HomeDiscoveryPreferenceSpecs.SHOW_CLOCK_ON_HOME.userKey(userId)] = enabled
     }
 
     suspend fun setShowSettingsInHomeSearch(enabled: Boolean) = editForUser { prefs, userId ->
-        prefs[userBooleanKey(userId, Keys.SHOW_SETTINGS_IN_HOME_SEARCH)] = enabled
+        prefs[HomeDiscoveryPreferenceSpecs.SHOW_SETTINGS_IN_HOME_SEARCH.userKey(userId)] = enabled
     }
 
     suspend fun setHideTopHeaderOnScroll(enabled: Boolean) = editForUser { prefs, userId ->
-        prefs[userBooleanKey(userId, Keys.HIDE_TOP_HEADER_ON_SCROLL)] = enabled
+        prefs[HomeDiscoveryPreferenceSpecs.HIDE_TOP_HEADER_ON_SCROLL.userKey(userId)] = enabled
     }
 
     /**
@@ -928,24 +873,27 @@ class HomeDiscoveryStore constructor(
      * belong to [com.raulshma.jellyplay.core.datastore.library.LibraryStore] and
      * [com.raulshma.jellyplay.core.datastore.navigation.NavigationStore].
      *
-     * The static list covers the legacy/canonical flat keys plus the global
-     * migration marker; the per-user namespaced keys are dynamic and are
-     * stripped by [removeDynamicResetKeys] inside the reset edit.
+     * Derived from the [HomeDiscoveryPreferenceSpecs] rows (the union of the
+     * [resetKeysFor] category lists). The static list covers the legacy/
+     * canonical flat keys plus the global migration marker; the per-user
+     * namespaced keys are dynamic and are stripped by [removeDynamicResetKeys]
+     * inside the reset edit.
      */
-    internal val resetKeys: List<Preferences.Key<*>> = legacyKeys + Keys.HOME_NS_MIGRATED
+    internal val resetKeys: List<Preferences.Key<*>> =
+        PreferenceResetCategory.entries.flatMap(::resetKeysFor)
 
     /**
-     * Category reset participation: every key owned here sits in the single
-     * legacy `HOME_DISCOVERY` bucket (the home section of the legacy category
-     * map; the library/nav keys that shared that category are owned by
-     * `LibraryStore` / `NavigationStore`). Delegates to [resetKeys] so the owned
-     * key list lives in exactly one place — the legacy
-     * `HOME_HIDDEN_LIBRARY_SECTION_IDS` migration source is included via it.
+     * Category reset participation: the subset of [resetKeys] that belongs to
+     * [category] — the [HomeDiscoveryPreferenceSpecs] rows whose declared
+     * reset category matches, mapped to their derived keys. Every key owned
+     * here sits in the single legacy `HOME_DISCOVERY` bucket (the home
+     * section of the legacy category map; the library/nav keys that shared
+     * that category are owned by `LibraryStore` / `NavigationStore`). The
+     * `HOME_HIDDEN_LIBRARY_SECTION_IDS` migration source is included via its
+     * row.
      */
-    internal fun resetKeysFor(category: PreferenceResetCategory): List<Preferences.Key<*>> = when (category) {
-        PreferenceResetCategory.HOME_DISCOVERY -> resetKeys
-        else -> emptyList()
-    }
+    internal fun resetKeysFor(category: PreferenceResetCategory): List<Preferences.Key<*>> =
+        HomeDiscoveryPreferenceSpecs.resetKeysFor(category)
 
     /**
      * Factory-reset participation for this store's **dynamic** keys. The static
@@ -953,71 +901,70 @@ class HomeDiscoveryStore constructor(
      * set per user that has ever signed in), so the reset machinery calls this
      * inside its edit: it strips every namespaced home key — for ANY user —
      * plus the global migration marker, alongside the static legacy/canonical
-     * keys removed via [resetKeysFor]. Canonical-suffix matching keeps this
-     * precise: an unrelated key that merely starts with `u_` is never touched.
+     * keys removed via [resetKeysFor]. Canonical-suffix matching
+     * ([UserNamespacedKeys.isNamespaced]) keeps this precise: an unrelated key
+     * that merely starts with `u_` is never touched.
      */
     internal fun removeDynamicResetKeys(category: PreferenceResetCategory, prefs: MutablePreferences) {
         if (category != PreferenceResetCategory.HOME_DISCOVERY) return
         val canonicalNames = legacyKeys.mapTo(mutableSetOf()) { it.name }
         prefs.asMap().keys
-            .filter { key -> key.name.isNamespacedHomeKey(canonicalNames) }
+            .filter { key -> UserNamespacedKeys.isNamespaced(key.name, canonicalNames) }
             .forEach { prefs.remove(it) }
         prefs.remove(Keys.HOME_NS_MIGRATED)
     }
 
     /**
-     * `u_<userId>::<canonical>` with a canonical suffix this store owns. Splits
-     * on the LAST `::`: no canonical name contains `::`, but a user id might
-     * (`setActiveUser` input is unvalidated) — splitting on the first separator
-     * would mis-parse `u_a::b::home_mode` as canonical `b::home_mode` and never
-     * strip that user's keys on factory reset. lastIndexOf matches the
-     * construction side for every id, `::`-containing or not.
-     */
-    private fun String.isNamespacedHomeKey(canonicalNames: Set<String>): Boolean {
-        if (!startsWith("u_")) return false
-        val separator = lastIndexOf("::")
-        if (separator <= 2) return false // "u_" alone is not a user id
-        return substring(separator + 2) in canonicalNames
-    }
-
-    /**
      * Faithful inverse of [read]: writes every field of [slice] back to the
-     * DataStore — into the CURRENT active user's namespace — using the same
-     * encoding as [restorePreferences] (section types and order encoded as
-     * name-string sets/lists via [json]).
+     * DataStore — into the CURRENT active user's namespace — through the
+     * rows' namespace-rebuilt keys, using the same encoding as
+     * `restorePreferences` (section types and order encoded as name-string
+     * sets/lists via [json]).
      */
     suspend fun restore(slice: HomeDiscoverySlice) {
-        editForUser { it, userId ->
-            it[userStringKey(userId, Keys.HOME_MODE)] = slice.homeMode.name
-            it[userBooleanKey(userId, Keys.HOME_HERO_ENABLED)] = slice.homeHeroEnabled
-            it[userBooleanKey(userId, Keys.HOME_BACKDROP_ENABLED)] = slice.homeBackdropEnabled
-            writeEnabledHomeSectionTypes(it, userId, slice.enabledHomeSectionTypes)
-            it[userStringKey(userId, Keys.HOME_SECTION_ORDER)] = json.encodeToString(slice.homeSectionOrder.map { section -> section.name })
-            it[userStringKey(userId, Keys.HOME_LIBRARY_SECTION_OVERRIDES)] = json.encodeToString(slice.libraryHomeSectionOverrides)
-            it[userStringKey(userId, Keys.PINNED_HOME_SECTIONS)] = json.encodeToString(slice.pinnedHomeSections)
-            it[userStringKey(userId, Keys.HOME_DISCOVER_ROWS)] = json.encodeToString(slice.discoverRows)
-            it[userStringKey(userId, Keys.HOME_LAYOUT_PRESETS)] = json.encodeToString(slice.homeLayoutPresets)
-            it[userStringKey(userId, Keys.CONTINUE_WATCHING_CLICK_BEHAVIOR)] = slice.continueWatchingClickBehavior.name
-            it[userBooleanKey(userId, Keys.SHOW_UNWATCHED_BADGE)] = slice.showUnwatchedBadge
-            it[userBooleanKey(userId, Keys.HIDE_WATCHED_ITEMS)] = slice.hideWatchedItems
-            it[userBooleanKey(userId, Keys.SHOW_WATCHED_CHECKMARK)] = slice.showWatchedCheckmark
-            it[userBooleanKey(userId, Keys.SHOW_EXTERNAL_RATINGS)] = slice.showExternalRatings
-            it[userBooleanKey(userId, Keys.MERGE_CONTINUE_WATCHING_NEXT_UP)] = slice.mergeContinueWatchingAndNextUp
-            it[userIntKey(userId, Keys.NEXT_UP_MAX_DAYS)] = slice.nextUpMaxDays
-            it[userBooleanKey(userId, Keys.NEXT_UP_REWATCHING)] = slice.nextUpRewatching
-            it[userStringKey(userId, Keys.NEXT_UP_EXCLUDED_SERIES_IDS)] = json.encodeToString(slice.nextUpExcludedSeriesIds)
-            it[userStringKey(userId, Keys.HIDDEN_CW_ITEM_IDS)] = json.encodeToString(slice.hiddenCwItemIds)
-            it[userBooleanKey(userId, Keys.SHOW_CLOCK_ON_HOME)] = slice.showClockOnHome
-            it[userBooleanKey(userId, Keys.SHOW_SETTINGS_IN_HOME_SEARCH)] = slice.showSettingsInHomeSearch
-            it[userBooleanKey(userId, Keys.HIDE_TOP_HEADER_ON_SCROLL)] = slice.hideTopHeaderOnScroll
-            it[userStringKey(userId, Keys.LAST_VIEWED_SEASON_BY_SERIES)] = json.encodeToString(slice.lastViewedSeasonBySeries)
+        editForUser { prefs, userId ->
+            prefs[HomeDiscoveryPreferenceSpecs.HOME_MODE.rawUserKey(userId)] = slice.homeMode.name
+            prefs[HomeDiscoveryPreferenceSpecs.HOME_HERO_ENABLED.userKey(userId)] = slice.homeHeroEnabled
+            prefs[HomeDiscoveryPreferenceSpecs.HOME_BACKDROP_ENABLED.userKey(userId)] = slice.homeBackdropEnabled
+            writeEnabledHomeSectionTypes(prefs, userId, slice.enabledHomeSectionTypes)
+            prefs[HomeDiscoveryPreferenceSpecs.HOME_SECTION_ORDER.rawUserKey(userId)] =
+                json.encodeToString(slice.homeSectionOrder.map { section -> section.name })
+            prefs[HomeDiscoveryPreferenceSpecs.HOME_LIBRARY_SECTION_OVERRIDES.rawUserKey(userId)] =
+                json.encodeToString(slice.libraryHomeSectionOverrides)
+            prefs[HomeDiscoveryPreferenceSpecs.PINNED_HOME_SECTIONS.rawUserKey(userId)] =
+                json.encodeToString(slice.pinnedHomeSections)
+            prefs[HomeDiscoveryPreferenceSpecs.HOME_DISCOVER_ROWS.rawUserKey(userId)] =
+                json.encodeToString(slice.discoverRows)
+            prefs[HomeDiscoveryPreferenceSpecs.HOME_LAYOUT_PRESETS.rawUserKey(userId)] =
+                json.encodeToString(slice.homeLayoutPresets)
+            prefs[HomeDiscoveryPreferenceSpecs.CONTINUE_WATCHING_CLICK_BEHAVIOR.rawUserKey(userId)] =
+                slice.continueWatchingClickBehavior.name
+            prefs[HomeDiscoveryPreferenceSpecs.SHOW_UNWATCHED_BADGE.userKey(userId)] = slice.showUnwatchedBadge
+            prefs[HomeDiscoveryPreferenceSpecs.HIDE_WATCHED_ITEMS.userKey(userId)] = slice.hideWatchedItems
+            prefs[HomeDiscoveryPreferenceSpecs.SHOW_WATCHED_CHECKMARK.userKey(userId)] = slice.showWatchedCheckmark
+            prefs[HomeDiscoveryPreferenceSpecs.SHOW_EXTERNAL_RATINGS.userKey(userId)] = slice.showExternalRatings
+            prefs[HomeDiscoveryPreferenceSpecs.MERGE_CONTINUE_WATCHING_NEXT_UP.userKey(userId)] =
+                slice.mergeContinueWatchingAndNextUp
+            prefs[HomeDiscoveryPreferenceSpecs.NEXT_UP_MAX_DAYS.userKey(userId)] = slice.nextUpMaxDays
+            prefs[HomeDiscoveryPreferenceSpecs.NEXT_UP_REWATCHING.userKey(userId)] = slice.nextUpRewatching
+            prefs[HomeDiscoveryPreferenceSpecs.CLASSIC_ROWS.userKey(userId)] = slice.classicRows
+            prefs[HomeDiscoveryPreferenceSpecs.NEXT_UP_EXCLUDED_SERIES_IDS.rawUserKey(userId)] =
+                json.encodeToString(slice.nextUpExcludedSeriesIds)
+            prefs[HomeDiscoveryPreferenceSpecs.HIDDEN_CW_ITEM_IDS.rawUserKey(userId)] =
+                json.encodeToString(slice.hiddenCwItemIds)
+            prefs[HomeDiscoveryPreferenceSpecs.SHOW_CLOCK_ON_HOME.userKey(userId)] = slice.showClockOnHome
+            prefs[HomeDiscoveryPreferenceSpecs.SHOW_SETTINGS_IN_HOME_SEARCH.userKey(userId)] = slice.showSettingsInHomeSearch
+            prefs[HomeDiscoveryPreferenceSpecs.HIDE_TOP_HEADER_ON_SCROLL.userKey(userId)] = slice.hideTopHeaderOnScroll
+            prefs[HomeDiscoveryPreferenceSpecs.LAST_VIEWED_SEASON_BY_SERIES.rawUserKey(userId)] =
+                json.encodeToString(slice.lastViewedSeasonBySeries)
         }
     }
 }
 
 /**
  * The home discovery preference slice. Plain data class. Defaults mirror the
- * projection defaults in [HomeDiscoveryStore.read].
+ * projection defaults in [HomeDiscoveryStore.read] (declared on the
+ * [HomeDiscoveryPreferenceSpecs] rows).
  */
 @Immutable
 @Serializable
@@ -1040,6 +987,11 @@ data class HomeDiscoverySlice(
     val mergeContinueWatchingAndNextUp: Boolean = false,
     val nextUpMaxDays: Int = 0,
     val nextUpRewatching: Boolean = false,
+    /**
+     * Classic (pre-Jellyfin-12) home-row semantics (#168). Default `false` —
+     * modern server behavior. Projected into [HomeSectionQuery.classicRows].
+     */
+    val classicRows: Boolean = false,
     val nextUpExcludedSeriesIds: Set<String> = emptySet(),
     val hiddenCwItemIds: Set<String> = emptySet(),
     /**
@@ -1073,6 +1025,7 @@ fun HomeDiscoverySlice.toSectionPrefs(): HomeSectionPrefs = HomeSectionPrefs(
         libraryHomeSectionOverrides = libraryHomeSectionOverrides,
         nextUpRewatching = nextUpRewatching,
         nextUpMaxDays = nextUpMaxDays,
+        classicRows = classicRows,
         nextUpExcludedSeriesIds = nextUpExcludedSeriesIds,
         hiddenCwItemIds = hiddenCwItemIds,
         pinnedSections = pinnedHomeSections,

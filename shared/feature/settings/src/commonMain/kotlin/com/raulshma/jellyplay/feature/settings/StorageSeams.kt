@@ -52,6 +52,26 @@ fun interface AutoDownloadSync {
     fun sync()
 }
 
+/** What one keep-days retention pass reclaimed — the "Clean up now" summary. */
+data class AutoDownloadCleanupSummary(
+    val deletedCount: Int,
+    val bytesReclaimed: Long,
+)
+
+/**
+ * Seam behind the storage screen's "Clean up now" action: one on-demand pass of
+ * the auto-download keep-days retention sweep
+ * (`DownloadRepository.sweepExpiredAutoDownloads` — watched completed downloads
+ * older than the keep-days window; unwatched ones are never deleted). Bound at
+ * the Koin edge like [AutoDownloadSync]: the Android app module wraps the
+ * repository single; the desktop platform module resolves it directly
+ * (feature/settings cannot see core:data's repository types from its common
+ * source set — the same visibility split [StorageAreas] documents).
+ */
+fun interface AutoDownloadCleanup {
+    suspend fun cleanupNow(): AutoDownloadCleanupSummary
+}
+
 /**
  * Platform seam enumerating the download destinations the user can pick.
  * The Android actual (platform/AndroidStorageMountsProvider) inlines the pure

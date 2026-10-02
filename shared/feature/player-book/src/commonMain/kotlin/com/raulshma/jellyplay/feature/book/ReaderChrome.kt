@@ -14,15 +14,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -61,6 +57,7 @@ import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_speec
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_speech_start
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_speech_stop
 import com.raulshma.jellyplay.feature.book.generated.resources.book_reader_title_fallback
+import com.raulshma.jellyplay.feature.player.video.chrome.controlsAutoHideTimeoutMs
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 import org.jetbrains.compose.resources.stringResource
@@ -72,6 +69,16 @@ import org.jetbrains.compose.resources.stringResource
  * veils' container, the sheet title and the copy-confirmation toast. Pure
  * presentation — every action is a callback, the ViewModel owns the state
  * (video-player screen conventions).
+ *
+ * Scope note (honest test surface): the bar/veil/row composables here are
+ * presentation-only shells — the module pins their DECISIONS, not their
+ * rendering. What is pinned: the auto-hide timeout selection
+ * ([ReaderPrefsSnapshot.controlsAutoHideTimeoutMs] + [AutoHideControlsEffect]'s
+ * parameterized delay — ReaderAutoHidePolicyTest), the slider settle folds
+ * (ReaderCommitSliderTest), the brightness dim math (ReaderAppearanceTest),
+ * and the sheet admission fold (ReaderSheetStackTest). The visual shells
+ * themselves have no Compose UI-test lane in this module and are accepted as
+ * presentation-only.
  */
 
 /**
@@ -188,9 +195,10 @@ internal fun BrightnessDimOverlay(
 
 /**
  * The compact sun-icon + slider brightness row embedded in the bottom bars.
- * Local drag state with commit-on-settle (the page-slider convention) — the
- * veil itself follows the persisted value once the drag finishes. [leading]
- * slots an optional action before the sun icon (the paged bar's TOC entry).
+ * Commit-on-settle via the shared [CommitSlider] (the page-slider convention)
+ * — the veil itself follows the persisted value once the drag finishes, the
+ * settle fold being [committedBrightnessPct]. [leading] slots an optional
+ * action before the sun icon (the paged bar's TOC entry).
  */
 @Composable
 private fun BrightnessSliderRow(
@@ -198,8 +206,6 @@ private fun BrightnessSliderRow(
     onBrightnessChange: (Int) -> Unit,
     leading: (@Composable () -> Unit)? = null,
 ) {
-    var dragging by remember { mutableStateOf(false) }
-    var dragValue by remember { mutableStateOf(100f) }
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
@@ -210,14 +216,10 @@ private fun BrightnessSliderRow(
             contentDescription = stringResource(Res.string.book_reader_brightness),
             tint = Color.White,
         )
-        Slider(
-            value = if (dragging) dragValue else brightnessPct.toFloat(),
-            onValueChange = { dragging = true; dragValue = it },
-            onValueChangeFinished = {
-                dragging = false
-                onBrightnessChange(dragValue.roundToInt().coerceIn(0, 100))
-            },
+        CommitSlider(
+            value = brightnessPct.toFloat(),
             valueRange = 0f..100f,
+            onCommit = { raw -> onBrightnessChange(committedBrightnessPct(raw)) },
             modifier = Modifier.weight(1f).padding(start = 12.dp),
         )
     }
@@ -253,17 +255,10 @@ internal fun PagedBottomBar(
                     null
                 },
             )
-            var dragging by remember { mutableStateOf(false) }
-            var dragValue by remember { mutableStateOf(1f) }
-            Slider(
-                value = if (dragging) dragValue else (currentPage + 1).toFloat(),
-                onValueChange = { dragging = true; dragValue = it },
-                onValueChangeFinished = {
-                    dragging = false
-                    val target = dragValue.toInt().coerceIn(1, pageCount)
-                    onSeekPage(target - 1)
-                },
+            CommitSlider(
+                value = (currentPage + 1).toFloat(),
                 valueRange = 1f..pageCount.coerceAtLeast(1).toFloat(),
+                onCommit = { raw -> onSeekPage(pagedSliderSeekTarget(raw, pageCount)) },
             )
             Text(
                 text = stringResource(
@@ -527,24 +522,67 @@ internal fun SheetEmptyText(text: String) {
     )
 }
 
+/** The section label the settings sheets repeat between groups (ReaderSheetState.kt's sheets). */
+@Composable
+internal fun SectionLabel(text: String, topPadding: androidx.compose.ui.unit.Dp = 20.dp) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelLarge,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(horizontal = 24.dp).padding(top = topPadding),
+    )
+}
+
+/** A label + Switch row (justify / scroll mode / behavior toggles). */
+@Composable
+internal fun SettingsSwitchRow(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(top = 4.dp),
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.weight(1f),
+        )
+        Switch(checked = checked, onCheckedChange = onChange)
+    }
+}
+
 /**
- * Auto-hide the reader chrome like player controls. [suppressed] are the
- * "a sheet holds the screen" flags (settings sheet, TOC, marks) that pause
- * the countdown; any flip restarts it.
+ * The reader's chrome auto-hide timeout: the snapshot's pref knob
+ * ([ReaderPrefsSnapshot.controlsTimeoutMs], default
+ * [DEFAULT_READER_CONTROLS_TIMEOUT_MS]) folded through the shared
+ * player-chrome TV doubling ([controlsAutoHideTimeoutMs] in core:player-contract —
+ * the same fold the VOD and live players pass their preference-sourced base
+ * timeout through: TV keeps controls twice as long, since a remote user reads
+ * the chrome from a distance while a touch user just tapped it). Pure — the
+ * selection is pinned by ReaderAutoHidePolicyTest.
+ */
+internal fun ReaderPrefsSnapshot.controlsAutoHideTimeoutMs(isTv: Boolean): Long =
+    controlsAutoHideTimeoutMs(controlsTimeoutMs, isTv)
+
+/**
+ * Auto-hide the reader chrome like player controls. [timeoutMs] is the
+ * pref-sourced, TV-folded delay ([ReaderPrefsSnapshot.controlsAutoHideTimeoutMs]
+ * is the selection the call sites feed in). [suppressed] are the "a sheet
+ * holds the screen" flags (settings sheet, TOC, marks) that pause the
+ * countdown; any flip restarts it. Pure presentation shell — the gate and
+ * delay live here, the timeout SELECTION is pinned pure.
  */
 @Composable
 internal fun AutoHideControlsEffect(
     visible: Boolean,
+    timeoutMs: Long,
     vararg suppressed: Boolean,
     onTimeout: () -> Unit,
 ) {
-    LaunchedEffect(visible, *suppressed.toTypedArray()) {
+    LaunchedEffect(visible, timeoutMs, *suppressed.toTypedArray()) {
         if (visible && suppressed.all { !it }) {
-            delay(CONTROLS_TIMEOUT_MS)
+            delay(timeoutMs)
             onTimeout()
         }
     }
 }
 
-internal val CONTROLS_TIMEOUT_MS = 4_000L
 internal val ERROR_AUTO_BACK_MS = 2_500L

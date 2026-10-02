@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.core.data.repository
 import com.raulshma.jellyplay.core.model.CultureInfo
 import com.raulshma.jellyplay.core.model.LiveStreamOption
 import com.raulshma.jellyplay.core.model.MediaSegment
+import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.PlaybackInfoResult
 import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.PlaybackProgress
@@ -48,31 +49,11 @@ interface PlaybackRepository {
      */
     suspend fun reportBookProgress(itemId: String, positionTicks: Long, final: Boolean = false): Result<Unit>
 
-    /**
-     * Replays a single staged [entry] straight to the server, returning whether
-     * it landed. This is the drain counterpart to the `reportPlayback*` capture
-     * methods: it performs a **pure** dispatch (no offline check, no enqueue on
-     * failure) so [com.raulshma.jellyplay.core.data.worker.PlaybackSyncWorker]
-     * can retry a failing entry without recursing back into the outbox.
-     *
-     * Collocating the entry-type → API-call mapping here keeps playback
-     * reporting in one module — the worker drives the drain loop (delete on
-     * success, retry/dead-letter on failure, reconcile) and delegates the
-     * dispatch to the repository.
-     */
-    suspend fun replayOutboxEntry(entry: PlaybackOutboxEntry): Boolean
-
-    fun getImageUrl(itemId: String, imageType: String = "Primary", maxWidth: Int? = 400): String
-
-    /**
-     * Resolves a chapter thumbnail: Jellyfin's `/Items/{itemId}/Images/Chapter/{imageIndex}`
-     * endpoint, keyed on the chapter's list position + optional image tag. The detail
-     * screen's chapter row is the only consumer; the primary image path ([getImageUrl])
-     * is untouched so the hot poster/backdrop path stays unchanged.
-     */
-    fun getChapterImageUrl(itemId: String, imageIndex: Int, tag: String? = null, maxWidth: Int? = 400): String
-
-    fun getBackdropUrl(itemId: String, maxWidth: Int = 1280): String
+    // getImageUrl/getChapterImageUrl/getBackdropUrl were retired from this
+    // surface: the three pure image-URL builders moved to the narrow
+    // [com.raulshma.jellyplay.core.data.util.ImageUrlProvider] module the
+    // actual readers inject, whose impl builds them through the same
+    // LibraryApiClient this impl delegated to (byte-for-byte identical URLs).
 
     /** Fetches an item's image bytes via the authenticated API (for offline storage). */
     suspend fun getItemImageBytes(itemId: String, imageType: String, maxWidth: Int): ByteArray?
@@ -154,6 +135,33 @@ interface PlaybackRepository {
         index: Int,
         codec: String?,
     ): String
+
+    /**
+     * The shared subtitle URL ladder both side-load paths resolve through
+     * (the in-app engines' side-loading and the external-player hand-off):
+     * a server-issued `deliveryUrl` resolves verbatim through
+     * [getSubtitleDeliveryUrl] (the one arm image subs can ride); any other
+     * stream goes through [buildSubtitleDeliveryUrl], which refuses image
+     * codecs and hands back "" — the endpoint serves text only. Embedded
+     * (non-external) streams resolve only when [includeEmbedded]: the
+     * external hand-off never embeds (the target player demuxes the
+     * container itself), while the in-app path embeds exactly when not
+     * direct-playing (transcoded HLS does not reliably expose embedded
+     * tracks in-manifest). Null = no URL for this stream — skip it.
+     */
+    fun resolveSubtitleStreamUrl(
+        stream: MediaStream,
+        itemId: String,
+        mediaSourceId: String,
+        includeEmbedded: Boolean,
+    ): String? {
+        stream.deliveryUrl?.takeIf { it.isNotBlank() }?.let { delivery ->
+            return getSubtitleDeliveryUrl(delivery).takeIf { it.isNotBlank() }
+        }
+        if (!stream.isExternal && !includeEmbedded) return null
+        return buildSubtitleDeliveryUrl(itemId, mediaSourceId, stream.index, stream.codec)
+            .takeIf { it.isNotBlank() }
+    }
 
     /**
      * Server-reported reasons the current session is transcoding [itemId]

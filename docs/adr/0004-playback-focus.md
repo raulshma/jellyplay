@@ -100,3 +100,29 @@ pause whom" had NO owner:
   the holder side needed an enforcement leg (an OS loss now commands the
   suspended holder's surface pause, because only displaced claimants have
   a `claimState` observer).
+
+## Landed addendum (2026-10-01) — slice 2 VIDEO: the closed world is complete
+
+Video (VOD and live) migrated onto the matrix. `isGrantable(VIDEO)=true`;
+`osLegClaimants` includes VIDEO with USAGE_MEDIA/CONTENT_TYPE_MOVIE
+attributes; `FocusLossDirective` (`Pause | Duck(volume)`) adds the duck
+vocabulary this ADR deferred — video-only (music/read-aloud stay
+pause-only, manual-resume), driven by the `VideoFocusPolicyInput`
+preference seam (the OS seat runs when EITHER pref is on — the legacy
+duck seat was registered on `duckOnTransientFocusLoss` alone, so
+pause-off/duck-on still ducked through phone calls; both prefs off ⇒
+publish-state-only, no OS seat request; `duckOnTransientFocusLoss` ⇒
+Duck on transient loss, restore
+on regain; permanent loss suspends+pauses even for duck rows, and the claim
+stays Held through a duck). `VideoPlaybackSurface` (+`FocusCommandTarget`)
+is the commandable video surface adapter on Android; desktop video claims
+through the same matrix with an observer-side pause (no duck — desktop has
+no duck). `PlayerAudioLifecycle` is DELETED; becoming-noisy moved to
+core:data's `BecomingNoisyPauseReceiver` (the one broadcast chassis; the
+VOD adapter `AndroidVideoPlayerBecomingNoisy` and
+`Media3LivePlayerAudio` supply only their pause targets). ExoPlayer
+engines force `handleAudioFocus=false` (one-seat invariant, mirroring the
+music migration). One deliberate semantic delta vs the legacy path: regain
+after a *pause* ruling stays manual-resume (module law) where ExoPlayer's
+built-in focus used to auto-resume. Pinning: `PlaybackFocusTest` (31 tests,
+VIDEO seat/eviction/pref-gates/duck) + `VideoPlaybackSurfaceTest`.

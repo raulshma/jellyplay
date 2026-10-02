@@ -6,7 +6,8 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.raulshma.jellyplay.core.database.dao.ScanStateDao
 import com.raulshma.jellyplay.core.model.MediaCleanupConfig
-import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import com.raulshma.jellyplay.core.network.api.AuthApiClient
+import com.raulshma.jellyplay.core.network.api.MediaInfoApiClient
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.first
 import java.io.IOException
@@ -14,7 +15,8 @@ import java.io.IOException
 class WatchedMediaScanWorker(
     appContext: Context,
     workerParams: WorkerParameters,
-    private val apiClient: JellyfinApiClient,
+    private val authApiClient: AuthApiClient,
+    private val mediaInfoApiClient: MediaInfoApiClient,
     private val scanStateDao: ScanStateDao,
 ) : CoroutineWorker(appContext, workerParams) {
 
@@ -24,7 +26,7 @@ class WatchedMediaScanWorker(
 
         return try {
             val config = ScanWorkerHelper.json.decodeFromString<MediaCleanupConfig>(entity.configJson)
-            val adminUserId = apiClient.currentUser.first()?.id ?: return Result.failure()
+            val adminUserId = authApiClient.currentUser.first()?.id ?: return Result.failure()
 
             ScanWorkerHelper.executePaginatedScan(
                 scanId = scanId,
@@ -32,7 +34,7 @@ class WatchedMediaScanWorker(
                 entity = entity,
                 isStopped = { isStopped },
                 fetchPage = { startIndex, limit ->
-                    apiClient.getWatchedItems(
+                    mediaInfoApiClient.getWatchedItems(
                         userId = adminUserId,
                         includeItemTypes = config.includeItemTypes.toList(),
                         minDaysSincePlayed = config.minDaysSinceWatched,

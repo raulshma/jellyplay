@@ -6,7 +6,7 @@ import com.raulshma.jellyplay.core.model.MediaSegmentType
 import com.raulshma.jellyplay.core.model.SegmentBehavior
 
 /**
- * Raw segment/chapter data fed to [com.raulshma.jellyplay.feature.player.video.engine.SegmentCalculator].
+ * Raw segment/chapter data fed to [com.raulshma.jellyplay.feature.player.video.SegmentCalculator].
  * The derived overlay (active segment, intro/credits, up-next) lives in
  * [com.raulshma.jellyplay.feature.player.video.SegmentOverlayState] on the ViewModel.
  */

@@ -40,6 +40,14 @@ import kotlin.test.assertTrue
  * Lower [maxInterfaceMembers] when another member retires; never raise it. A
  * new SyncPlay capability that player plumbing fires without awaiting should
  * land on SyncPlayController (the fire-and-forget wrapper home), not here.
+ *
+ * Signature deepening (no member-count change): `createSyncPlayGroup` went
+ * `Result<Unit>` → `Result<SyncPlayGroupInfo>` — the jvmShared impl now
+ * delegates to `SyncPlayManager.createGroup`, the ONE owner of the
+ * create→join-MY-group choreography (bounded discovery/settle windows,
+ * snapshot-disambiguated recovery), and returns the joined group's id + name.
+ * The deepening is pinned below so callers can never regress to recovering
+ * the id by name-matching a refetched group list (the duplicate-name misjoin).
  */
 class SyncPlayRepositorySurfaceTest {
 
@@ -150,6 +158,18 @@ class SyncPlayRepositorySurfaceTest {
             "SyncPlayRepository grew to $count members (ratchet baseline $maxInterfaceMembers). " +
                 "Retire a member or route the command through SyncPlayController instead; lower the " +
                 "baseline only when the surface shrinks — never raise it.",
+        )
+    }
+
+    @Test
+    fun `createSyncPlayGroup carries the deepened joined-group signature`() {
+        val body = interfaceBody()
+        assertTrue(
+            Regex("""createSyncPlayGroup\(groupName: String\): Result<SyncPlayGroupInfo>""")
+                .containsMatchIn(body),
+            "createSyncPlayGroup must return the joined group's identifying info — the manager owns " +
+                "create→join MY group (bounded, snapshot-disambiguated), and callers join by the returned " +
+                "id, never by name-matching a refetched group list.",
         )
     }
 

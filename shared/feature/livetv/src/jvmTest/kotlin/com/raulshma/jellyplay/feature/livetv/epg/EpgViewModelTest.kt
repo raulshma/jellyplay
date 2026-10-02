@@ -6,7 +6,10 @@ import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
 import com.raulshma.jellyplay.core.model.EpgGuide
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.LiveTvProgram
+import com.raulshma.jellyplay.core.ui.message.UiMessage
 import com.raulshma.jellyplay.feature.livetv.components.RecordDialogState
+import com.raulshma.jellyplay.feature.livetv.generated.resources.Res
+import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_error_record
 import com.raulshma.jellyplay.core.testfixtures.FakeTimeSource
 import androidx.lifecycle.viewModelScope
 import io.mockk.coEvery
@@ -206,7 +209,7 @@ class EpgViewModelTest {
 
         val vm = createViewModel()
 
-        assertEquals("guide down", vm.error)
+        assertEquals("guide down", (vm.error as UiMessage.Raw).text)
         assertFalse(vm.isLoading)
         assertTrue(vm.channels.isEmpty())
         assertTrue(vm.gridData.rows.isEmpty())
@@ -246,7 +249,7 @@ class EpgViewModelTest {
         vm.confirmRecord()
         mainDispatcher.scheduler.runCurrent()
 
-        assertEquals(RecordDialogState.Error("dvr busy"), vm.recordDialog)
+        assertEquals(RecordDialogState.Error(UiMessage.Raw("dvr busy")), vm.recordDialog)
         vm.stopLoops()
     }
 
@@ -260,7 +263,10 @@ class EpgViewModelTest {
         vm.confirmRecord()
         mainDispatcher.scheduler.runCurrent()
 
-        assertEquals(RecordDialogState.Error("Failed to create recording"), vm.recordDialog)
+        assertEquals(
+            RecordDialogState.Error(UiMessage.Resource(Res.string.livetv_error_record)),
+            vm.recordDialog,
+        )
         vm.stopLoops()
     }
 

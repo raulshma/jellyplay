@@ -122,7 +122,7 @@ class MultiConnectionDownloadStrategyTest {
         assertEquals(4, client.requests.size)
         // Scatter-written offsets cover the whole file.
         assertEquals(total, tempFile.length())
-        coVerify { dao.updateProgressWithSpeed("dl-1", total, DownloadStatus.COMPLETED.name, 0L) }
+        coVerify { dao.markCompleted("dl-1", total, any()) }
     }
 
     @Test
@@ -145,7 +145,7 @@ class MultiConnectionDownloadStrategyTest {
         assertTrue(client.requests.all { it.accessToken == "tok-123" })
         assertFalse(client.requests.any { it.head })
         coVerify { dao.updateErrorMessage("dl-1", null) }
-        coVerify { dao.updateProgressWithSpeed("dl-1", 1000L, DownloadStatus.COMPLETED.name, 0L) }
+        coVerify { dao.markCompleted("dl-1", 1000L, any()) }
         coVerify { dao.resetRetryCount("dl-1") }
     }
 
@@ -288,7 +288,7 @@ class MultiConnectionDownloadStrategyTest {
         // The same aggregate feeds the notification surface.
         assertTrue(notifications.updateNotificationCalls.isNotEmpty())
         // And once the parked chunk is released, the transfer completes whole.
-        coVerify { dao.updateProgressWithSpeed("dl-1", 2048L, DownloadStatus.COMPLETED.name, 0L) }
+        coVerify { dao.markCompleted("dl-1", 2048L, any()) }
     }
 
     // ---- helpers ---------------------------------------------------------------

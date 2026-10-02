@@ -15,7 +15,7 @@ import com.raulshma.jellyplay.core.model.MediaCleanupConfig
 import com.raulshma.jellyplay.core.model.MediaItemStub
 import com.raulshma.jellyplay.core.model.ScanPhase
 import com.raulshma.jellyplay.core.model.StaleMediaItem
-import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import com.raulshma.jellyplay.core.network.api.MediaInfoApiClient
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -54,7 +54,7 @@ import java.io.IOException
 class StaleMediaScanWorkerTest {
 
     private lateinit var context: Context
-    private val apiClient: JellyfinApiClient = mockk(relaxed = true)
+    private val apiClient: MediaInfoApiClient = mockk(relaxed = true)
     private val scanStateDao: ScanStateDao = mockk(relaxed = true)
 
     private val scanId = "scan-stale-1"

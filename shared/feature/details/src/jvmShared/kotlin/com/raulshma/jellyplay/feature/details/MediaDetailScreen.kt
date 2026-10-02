@@ -12,7 +12,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -39,17 +38,20 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
 import com.raulshma.jellyplay.core.ui.components.ConfirmState
 import com.raulshma.jellyplay.core.ui.components.ConfirmTone
-import com.raulshma.jellyplay.core.ui.components.DeleteDownloadedEpisodesSheet
+import com.raulshma.jellyplay.core.ui.components.downloads.DeleteDownloadedEpisodesSheet
 import com.raulshma.jellyplay.core.ui.components.LocalMediaQuickActionController
 import com.raulshma.jellyplay.core.ui.components.QuickActionAdapter
 import com.raulshma.jellyplay.core.ui.components.QuickActionIntakeHost
-import com.raulshma.jellyplay.core.ui.components.SeerrRequestDialog
-import com.raulshma.jellyplay.core.ui.components.SeriesDownloadSheet
+import com.raulshma.jellyplay.core.ui.components.downloads.RefreshMetadataSheet
+import com.raulshma.jellyplay.core.ui.components.seerr.SeerrRequestDialog
+import com.raulshma.jellyplay.core.ui.components.downloads.SeriesDownloadSheet
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
-import com.raulshma.jellyplay.core.ui.components.downloadedSeasonSlices
+import com.raulshma.jellyplay.core.ui.components.downloads.downloadedSeasonSlices
 import com.raulshma.jellyplay.core.ui.components.rememberConfirmState
 import com.raulshma.jellyplay.core.ui.components.rememberQuickActionIntake
 import com.raulshma.jellyplay.core.ui.components.rememberVideoClickHandler
+import com.raulshma.jellyplay.core.ui.feedback.SnackbarQueue
+import com.raulshma.jellyplay.core.ui.feedback.SnackbarQueueEffect
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.tv.input.onDpadKey
 import com.raulshma.jellyplay.feature.details.generated.resources.Res
@@ -72,6 +74,9 @@ import com.raulshma.jellyplay.feature.details.generated.resources.detail_mark_se
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_mark_series_watched_confirm_title
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_msg_no_episodes_queued
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_msg_watch_party_started
+import com.raulshma.jellyplay.feature.details.generated.resources.detail_option_split_versions
+import com.raulshma.jellyplay.feature.details.generated.resources.detail_split_confirm_message
+import com.raulshma.jellyplay.feature.details.generated.resources.detail_split_confirm_title
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_episodes_queued
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
@@ -159,7 +164,48 @@ fun MediaDetailScreen(
 
     val outerIsLightTheme = rememberIsLightTheme()
 
-    var showSeriesDownloadSheet by remember { mutableStateOf(false) }
+    // ── Sheet/dialog session. The seven screen-local sheet-visibility flags
+    // (series download / refresh-metadata / version picker / split confirm /
+    // delete-episodes / resync / download-details) plus their open/dismiss
+    // cascades live in the tested [DetailDialogSession] — the series sheet's
+    // reset arm alone used to be hand-repeated in three call sites. The
+    // hosting `if`s stay below (Compose needs them there); the confirm
+    // MACHINES further down ([PendingConfirmation] pair, mark-played
+    // [ConfirmState]) stay screen-local — deferred-call machines, not
+    // open/close flags. ──
+    val dialogSession = remember(viewModel) {
+        DetailDialogSession(
+            cascades = object : DetailDialogSession.Cascades {
+                override fun prepareSeriesDownloadSheet() {
+                    viewModel.downloads.loadDownloadedEpisodeIds()
+                    viewModel.downloads.prepareDownloadSheetEpisodes()
+                }
+
+                override fun resetSeriesDownloadSheetState() {
+                    viewModel.downloads.resetDownloadSheetState()
+                }
+
+                override fun loadDownloadFileInventory() {
+                    viewModel.downloads.loadDownloadFileInventory()
+                }
+
+                override fun clearDownloadFileInventory() {
+                    viewModel.downloads.clearDownloadFileInventory()
+                }
+
+                override fun clearResyncState() {
+                    viewModel.resync.clearResyncState()
+                }
+            },
+        )
+    }
+    /**
+     * The version picked in the version picker for the CURRENT item; null =
+     * the server's default (first) source. Keyed reset on item change so the
+     * pending pick never leaks across items. (The picker's OPEN flag is on
+     * [dialogSession]; this is the selection value the play path reads.)
+     */
+    var selectedVersionId by remember(detail?.item?.id) { mutableStateOf<String?>(null) }
 
     // Route deep-link: a card long-press Download on a series lands here so
     // the user picks seasons/episodes. Seed the sheet once the detail resolves
@@ -167,13 +213,9 @@ fun MediaDetailScreen(
     // the loaded id changes so the flag survives a slow first load.
     LaunchedEffect(openDownloadSheetOnEntry, detail?.item?.id) {
         if (openDownloadSheetOnEntry && detail?.item?.mediaType == MediaType.SERIES) {
-            showSeriesDownloadSheet = true
-            viewModel.downloads.loadDownloadedEpisodeIds()
-            viewModel.downloads.prepareDownloadSheetEpisodes()
+            dialogSession.openSeriesDownloadSheet()
         }
     }
-    /** Series batch-delete sheet (multi-select downloaded episodes). */
-    var showDeleteEpisodesSheet by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
     val screenScope = rememberCoroutineScope()
 
@@ -194,10 +236,6 @@ fun MediaDetailScreen(
     var pendingDelete by remember { mutableStateOf(PendingConfirmation<PendingDelete>()) }
     /** Pending delete of a downloaded episode from the seasons section. */
     var pendingDeleteEpisode by remember { mutableStateOf(PendingConfirmation<PendingEpisodeDelete>()) }
-    /** Resync bottom-sheet visibility (banner tap). */
-    var showResyncSheet by remember { mutableStateOf(false) }
-    /** Full download-details bottom-sheet visibility (DownloadInfoCard tap). */
-    var showDownloadDetailsSheet by remember { mutableStateOf(false) }
 
     // Series/season mark-played cascades recurse into every episode and clear
     // all resume positions, so they're gated behind a confirm. ONE machine:
@@ -293,31 +331,21 @@ fun MediaDetailScreen(
         },
     )
 
-    // Composition state hop for the queued-episodes plural snackbar (see the
-    // SeriesDownload branch below): the plural resolves in composition
-    // (@Composable pluralStringResource — CMP's suspend plural resolver is
-    // internal). FIFO list, NOT a bare Int: a burst of SeriesDownload
-    // messages must queue (a bare field would overwrite earlier counts
-    // before recomposition drops them), and the head is popped only AFTER
-    // showSnackbar returns — restoring the one-at-a-time serialization the
-    // legacy collect loop had. Residual edge: a directly-following
-    // DetailMessage.Text can still win the SnackbarHostState mutex before
-    // this effect's next frame — transient ordering only, accepted.
-    val pendingPluralCounts = remember { mutableStateListOf<Int>() }
-    val headCount = pendingPluralCounts.firstOrNull()
-    if (headCount != null) {
-        val queuedText = pluralStringResource(
-            Res.plurals.detail_episodes_queued,
-            headCount,
-            headCount,
-        )
-        // size joins the key so duplicate counts ([3, 3]) each get their own
-        // showing after the previous pop.
-        LaunchedEffect(headCount, pendingPluralCounts.size) {
-            snackbarHostState.showSnackbar(queuedText)
-            pendingPluralCounts.removeFirstOrNull()
-        }
-    }
+    // ── Queued-episodes plural snackbar (see the SeriesDownload branch
+    // below) — the core/ui SnackbarQueue. The queue owns the one-at-a-time +
+    // FIFO discipline (burst-queued SeriesDownload counts must queue, not
+    // overwrite; the head pops only AFTER showSnackbar returns), and the
+    // count→text resolution is injected here as a @Composable because CMP's
+    // suspend plural resolver is internal. The queue's residual edge — a
+    // directly-following DetailMessage.Text can still win the
+    // SnackbarHostState mutex before this effect's next frame — is documented
+    // and pinned as accepted behaviour on [SnackbarQueue]. ──
+    val snackbarQueue = remember { SnackbarQueue<Int>() }
+    SnackbarQueueEffect(
+        queue = snackbarQueue,
+        snackbarHostState = snackbarHostState,
+        resolve = { count -> pluralStringResource(Res.plurals.detail_episodes_queued, count, count) },
+    )
 
     LaunchedEffect(Unit) {
         viewModel.messages.collect { message ->
@@ -327,13 +355,13 @@ fun MediaDetailScreen(
                     // Plain strings resolve via the suspend compose-resources
                     // resolver inside collect (syncplay flow-escape pattern).
                     // The PLURAL cannot: CMP's suspend plural resolver is
-                    // internal, so the count hops through composition state
-                    // and the effect below renders it with the @Composable
-                    // pluralStringResource.
+                    // internal, so the count is queued in composition-owned
+                    // state ([SnackbarQueue]) and rendered above with the
+                    // @Composable pluralStringResource, one-at-a-time, FIFO.
                     if (message.error != null) {
                         snackbarHostState.showSnackbar(message.error)
                     } else if (message.queuedCount > 0) {
-                        pendingPluralCounts.add(message.queuedCount)
+                        snackbarQueue.enqueue(message.queuedCount)
                     } else {
                         snackbarHostState.showSnackbar(getString(Res.string.detail_msg_no_episodes_queued))
                     }
@@ -395,14 +423,16 @@ fun MediaDetailScreen(
             val downloadFlow = remember(itemId) { viewModel.downloads.downloadFlow(itemId) }
             val activeDownload by downloadFlow.collectAsStateWithLifecycle(initialValue = null)
 
-            // Seerr integration state (the holder's single snapshot, folded
-            // into uiState as-is — its dialogItem gates the request dialog)
+            // Seerr integration state (the data holder's single snapshot,
+            // folded into uiState as-is) plus the dialog holder's frozen-at-open
+            // item — the render gate for the request dialog below.
             val seerrRequest = uiState.seerrRequest
+            val seerrDialogItem by viewModel.seerrRequestDialog.item.collectAsStateWithLifecycle()
 
             // Seerr card loading state for prefetch animation: one root-level
             // bundle of the callback + loading state; descendant rows read them
             // via the composition locals.
-            com.raulshma.jellyplay.core.ui.components.ProvideSeerrCardPrefetching(
+            com.raulshma.jellyplay.core.ui.components.seerr.ProvideSeerrCardPrefetching(
                 prefetchDetail = { tmdbId, mediaType, onDone ->
                     viewModel.seerrRequests.prefetchDetails(tmdbId, mediaType, onDone)
                 }
@@ -412,6 +442,7 @@ fun MediaDetailScreen(
                 val rememberedGetChapterImageUrl = remember(viewModel) {
                     { id: String, index: Int, tag: String? -> viewModel.getChapterImageUrl(id, index, tag) }
                 }
+                val rememberedGetLogoUrl = remember(viewModel) { { id: String -> viewModel.getLogoUrl(id) } }
 
                 // Series id used by season-episode fetches. Keyed on BOTH the
                 // item id and the resolved series id so it recomputes once the
@@ -443,6 +474,7 @@ fun MediaDetailScreen(
                     persistedSeasonId = preferences.lastViewedSeasonBySeries[seriesIdForSeasons],
                     selectedSubtitleIndex = uiState.selectedSubtitleIndex,
                     selectedAudioIndex = uiState.selectedAudioIndex,
+                    selectedVersionId = selectedVersionId,
                     isDownloading = downloads.isDownloading,
                     isDownloadingSeries = downloads.isDownloadingSeries,
                     activeDownload = activeDownload,
@@ -462,6 +494,7 @@ fun MediaDetailScreen(
                     isSeerrRecommendationsEnabled = uiState.isSeerrRecommendationsEnabled,
                     preferences = preferences,
                     canManageSeries = canManageSeries,
+                    canManageMetadata = uiState.canManageMetadata,
                     origin = uiState.origin,
                     detailContext = uiState.detailContext,
                     capabilities = uiState.capabilities,
@@ -493,11 +526,13 @@ fun MediaDetailScreen(
                     rememberedGetImageUrl,
                     rememberedGetBackdropUrl,
                     rememberedGetChapterImageUrl,
+                    rememberedGetLogoUrl,
                 ) {
                     ArtworkCallbacks(
                         getImageUrl = rememberedGetImageUrl,
                         getBackdropUrl = rememberedGetBackdropUrl,
                         getChapterImageUrl = rememberedGetChapterImageUrl,
+                        getLogoUrl = rememberedGetLogoUrl,
                     )
                 }
 
@@ -556,7 +591,9 @@ fun MediaDetailScreen(
                         onAudioSelect = { idx: Int? -> viewModel.onEvent(DetailUiEvent.SelectAudio(idx)) },
                         onSelectLocalSubtitle = { index -> viewModel.onEvent(DetailUiEvent.SelectLocalSubtitle(index)) },
                         onStartInstantMix = { viewModel.onEvent(DetailUiEvent.StartInstantMix) },
+                        onStartRadio = { viewModel.onEvent(DetailUiEvent.StartRadio) },
                         onStartWatchParty = { viewModel.watchParty.startScreenItem() },
+                        onOpenVersionPicker = { dialogSession.openVersionPicker() },
                     )
                 }
 
@@ -567,11 +604,7 @@ fun MediaDetailScreen(
                         onDismissDownloadPicker = { viewModel.downloads.dismissDownloadPicker() },
                         onPendingQualityChange = { viewModel.downloads.setPendingQuality(it) },
                         onPendingSubtitleSelectionChange = { viewModel.downloads.setPendingSubtitleSelection(it) },
-                        onDownloadSeriesClick = {
-                            showSeriesDownloadSheet = true
-                            viewModel.downloads.loadDownloadedEpisodeIds()
-                            viewModel.downloads.prepareDownloadSheetEpisodes()
-                        },
+                        onDownloadSeriesClick = { dialogSession.openSeriesDownloadSheet() },
                         onDeleteDownload = {
                             val target = detail?.item
                             val isEpisode = target?.mediaType == MediaType.EPISODE
@@ -584,7 +617,7 @@ fun MediaDetailScreen(
                                 ),
                             )
                         },
-                        onDeleteDownloadedEpisodes = { showDeleteEpisodesSheet = true },
+                        onDeleteDownloadedEpisodes = { dialogSession.openDeleteEpisodesSheet() },
                         onDeleteEpisode = { episodeId ->
                             val ep = uiState.episodes.values.flatten().firstOrNull { it.id == episodeId }
                             pendingDeleteEpisode = pendingDeleteEpisode.hold(
@@ -594,12 +627,11 @@ fun MediaDetailScreen(
                                 ),
                             )
                         },
-                        onOpenResync = { showResyncSheet = true },
+                        onOpenResync = { dialogSession.openResyncSheet() },
                         onOpenDownloadDetails = {
                             // Load the on-disk inventory (media + sidecars) before showing
                             // the sheet so sizes are fresh; it re-reads on every open.
-                            viewModel.downloads.loadDownloadFileInventory()
-                            showDownloadDetailsSheet = true
+                            dialogSession.openDownloadDetailsSheet()
                         },
                     )
                 }
@@ -645,7 +677,7 @@ fun MediaDetailScreen(
                 val seerrCallbacks = remember(viewModel, onVideoClick) {
                     SeerrCallbacks(
                         onSeerrRequest = { item: SeerrSearchItem ->
-                            viewModel.seerrRequests.openRequestDialog(item)
+                            viewModel.seerrRequestDialog.open(item)
                         },
                         onVideoClick = onVideoClick,
                     )
@@ -685,6 +717,15 @@ fun MediaDetailScreen(
                     )
                 }
 
+                val metadataCallbacks = remember(viewModel) {
+                    MetadataCallbacks(
+                        onRefreshMetadata = { dialogSession.openRefreshMetadataSheet() },
+                        onIdentify = { viewModel.metadataAdmin.openIdentifyScreenItem() },
+                        onOpenMergeVersions = { viewModel.metadataAdmin.openMergeVersions() },
+                        onSplitVersions = { dialogSession.openSplitConfirm() },
+                    )
+                }
+
                 val callbacks = remember(
                     artworkCallbacks,
                     playbackCallbacks,
@@ -695,6 +736,7 @@ fun MediaDetailScreen(
                     addToCallbacks,
                     navigationCallbacks,
                     screenCallbacks,
+                    metadataCallbacks,
                 ) {
                     DetailContentCallbacks(
                         artwork = artworkCallbacks,
@@ -706,6 +748,7 @@ fun MediaDetailScreen(
                         addTo = addToCallbacks,
                         navigation = navigationCallbacks,
                         screen = screenCallbacks,
+                        metadata = metadataCallbacks,
                     )
                 }
 
@@ -724,17 +767,17 @@ fun MediaDetailScreen(
                     )
                 }
 
-                // Seerr request dialog — the holder owns the open cascade and
-                // the dismiss ordering; the screen only gates the render on
-                // the snapshot's dialogItem.
-                seerrRequest.dialogItem?.let { item ->
+                // Seerr request dialog — the dialog holder owns the open
+                // cascade and the dismiss ordering; the screen only gates the
+                // render on its frozen-at-open item.
+                seerrDialogItem?.let { item ->
                     SeerrRequestDialog(
                         item = item,
                         snapshot = seerrRequest,
-                        onConfirm = { serverId, profileId, rootFolder, tags, seasons ->
+                        onConfirm = { (serverId, profileId, rootFolder, tags, seasons) ->
                             viewModel.seerrRequests.requestMedia(item, seasons, serverId, profileId, rootFolder, tags)
                         },
-                        onDismiss = { viewModel.seerrRequests.dismissRequestDialog() },
+                        onDismiss = { viewModel.seerrRequestDialog.dismiss() },
                     )
                 }
             } // CompositionLocalProvider
@@ -803,13 +846,10 @@ fun MediaDetailScreen(
         }
 
         val detailItem = detail?.item
-        if (showSeriesDownloadSheet && detailItem?.mediaType == MediaType.SERIES) {
+        if (dialogSession.showSeriesDownloadSheet && detailItem?.mediaType == MediaType.SERIES) {
             val downloadSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
             TvSafeSheet(
-                onDismissRequest = {
-                    showSeriesDownloadSheet = false
-                    viewModel.downloads.resetDownloadSheetState()
-                },
+                onDismissRequest = { dialogSession.dismissSeriesDownloadSheet() },
                 sheetState = downloadSheetState,
             ) {
                 SeriesDownloadSheet(
@@ -822,17 +862,95 @@ fun MediaDetailScreen(
                     },
                     isDownloading = downloads.isDownloadingSeries,
                     onDownload = { selectedEpisodes ->
-                        showSeriesDownloadSheet = false
                         val nonEmpty = selectedEpisodes.filter { it.value.isNotEmpty() }
-                        viewModel.downloads.downloadSeries(nonEmpty)
-                        viewModel.downloads.resetDownloadSheetState()
+                        dialogSession.seriesDownloadConfirmed {
+                            viewModel.downloads.downloadSeries(nonEmpty)
+                        }
                     },
-                    onDismiss = {
-                        showSeriesDownloadSheet = false
-                        viewModel.downloads.resetDownloadSheetState()
-                    },
+                    onDismiss = { dialogSession.dismissSeriesDownloadSheet() },
                 )
             }
+        }
+
+        // ── Identify sheet (⋮ menu). State lives in the VM's metadataAdmin
+        // helper; a successful apply bumps appliedCount → reload the item so
+        // the screen reflects the server-replaced metadata. ──
+        val identifyState by viewModel.metadataAdmin.identifyState.collectAsStateWithLifecycle()
+        LaunchedEffect(identifyState.appliedCount) {
+            if (identifyState.appliedCount > 0) {
+                viewModel.onEvent(DetailUiEvent.ForceRefresh)
+            }
+        }
+        identifyState.query?.let {
+            IdentifySheet(
+                state = identifyState,
+                onQueryChange = viewModel.metadataAdmin::updateIdentifyQuery,
+                onSearch = { viewModel.metadataAdmin.searchIdentify() },
+                onApply = { result, replaceImages -> viewModel.metadataAdmin.applyIdentify(result, replaceImages) },
+                onDismiss = { viewModel.metadataAdmin.dismissIdentify() },
+            )
+        }
+
+        // ── Version picker (chevron beside Play / ⋮ menu → Version). A pure
+        // UI selection: the pick rides the screen-local state until the next
+        // Play dispatch. ──
+        if (dialogSession.showVersionPicker && detail != null) {
+            VersionPickerSheet(
+                detail = detail,
+                selectedSourceId = selectedVersionId,
+                onSelect = { sourceId -> selectedVersionId = sourceId },
+                onDismiss = { dialogSession.dismissVersionPicker() },
+            )
+        }
+
+        // ── Merge versions sheet (⋮ menu, admin). State lives in the
+        // metadataAdmin helper like Identify; a successful merge/split bumps
+        // mutationCount → reload the item so the screen reflects the
+        // server-side library mutation. ──
+        val mergeState by viewModel.metadataAdmin.mergeState.collectAsStateWithLifecycle()
+        if (mergeState.candidates != null) {
+            MergeVersionsSheet(
+                candidates = mergeState.candidates.orEmpty(),
+                isLoading = mergeState.isLoading,
+                isMerging = mergeState.isMerging,
+                onMerge = { candidateIds -> viewModel.metadataAdmin.mergeVersions(candidateIds) },
+                onDismiss = { viewModel.metadataAdmin.dismissMergeVersions() },
+            )
+        }
+        LaunchedEffect(viewModel.metadataAdmin.mutationCount.collectAsStateWithLifecycle().value) {
+            if (viewModel.metadataAdmin.mutationCount.value > 0) {
+                viewModel.onEvent(DetailUiEvent.ForceRefresh)
+            }
+        }
+
+        // ── Split versions confirm (⋮ menu, admin). Splitting dissolves the
+        // merged entry server-side — strong-confirm before firing. ──
+        if (dialogSession.showSplitConfirm && detailItem != null) {
+            ConfirmDialog(
+                title = stringResource(Res.string.detail_split_confirm_title),
+                message = stringResource(Res.string.detail_split_confirm_message),
+                confirmText = stringResource(Res.string.detail_option_split_versions),
+                dismissText = stringResource(CoreUiRes.string.core_cancel),
+                onConfirm = {
+                    dialogSession.splitConfirmed { viewModel.metadataAdmin.splitScreenItem() }
+                },
+                onDismiss = { dialogSession.dismissSplitConfirm() },
+            )
+        }
+
+        // ── "Refresh metadata" mode sheet (⋮ menu). The sheet body is shared
+        // with the metadata editor (core/ui); the write itself runs through
+        // the VM's MetadataAdminActions helper (admin-gated entry above). ──
+        if (dialogSession.showRefreshMetadataSheet && detailItem != null) {
+            RefreshMetadataSheet(
+                itemName = detailItem.name.orEmpty(),
+                onConfirm = { option ->
+                    dialogSession.refreshMetadataConfirmed {
+                        viewModel.metadataAdmin.refreshScreenItem(option)
+                    }
+                },
+                onDismiss = { dialogSession.dismissRefreshMetadataSheet() },
+            )
         }
 
         // ── Series batch-delete sheet. Replaces the old
@@ -840,7 +958,7 @@ fun MediaDetailScreen(
         // whole seasons / the entire series, then route through the merged
         // DetailViewModel offline-delete methods (which collapse a fully-
         // selected season into a single deleteOfflineSeason transaction). ──
-        if (showDeleteEpisodesSheet && detailItem?.mediaType == MediaType.SERIES) {
+        if (dialogSession.showDeleteEpisodesSheet && detailItem?.mediaType == MediaType.SERIES) {
             // For a LOCAL origin every episode in the snapshot is downloaded;
             // the sheet treats each listed episode as deletable. The shared
             // derivation drops seasons that carry no episodes so the sheet
@@ -855,7 +973,7 @@ fun MediaDetailScreen(
             }
             val deleteSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
             TvSafeSheet(
-                onDismissRequest = { showDeleteEpisodesSheet = false },
+                onDismissRequest = { dialogSession.dismissDeleteEpisodesSheet() },
                 sheetState = deleteSheetState,
             ) {
                 DeleteDownloadedEpisodesSheet(
@@ -864,7 +982,7 @@ fun MediaDetailScreen(
                     totalSizeBytes = totalSizeBytes,
                     episodeSizeBytes = uiState.detailContext?.seriesAggregate?.episodeSizeBytes ?: emptyMap(),
                     onDelete = { episodeIds ->
-                        showDeleteEpisodesSheet = false
+                        dialogSession.dismissDeleteEpisodesSheet()
                         viewModel.offline.deleteOfflineEpisodes(episodeIds.toList())
                         // If every downloaded episode was selected there's nothing
                         // left to show — pop back to where the user came from.
@@ -873,11 +991,11 @@ fun MediaDetailScreen(
                         }
                     },
                     onDeleteEntireSeries = {
-                        showDeleteEpisodesSheet = false
+                        dialogSession.dismissDeleteEpisodesSheet()
                         viewModel.offline.deleteOfflineSeries(itemId)
                         onBack()
                     },
-                    onDismiss = { showDeleteEpisodesSheet = false },
+                    onDismiss = { dialogSession.dismissDeleteEpisodesSheet() },
                 )
             }
         }
@@ -1003,16 +1121,13 @@ fun MediaDetailScreen(
 
         // ── Resync bottom sheet. Lists what changed and offers a
         // resync / re-download action with live status. ──
-        if (showResyncSheet) {
+        if (dialogSession.showResyncSheet) {
             ResyncSheet(
                 syncState = uiState.detailContext?.syncState,
                 resyncState = resyncState,
                 onResync = { viewModel.resync.resync() },
                 onRedownloadMedia = { viewModel.resync.redownloadMedia() },
-                onDismiss = {
-                    showResyncSheet = false
-                    viewModel.resync.clearResyncState()
-                },
+                onDismiss = { dialogSession.dismissResyncSheet() },
             )
         }
 
@@ -1022,7 +1137,7 @@ fun MediaDetailScreen(
         // Opened by tapping the DownloadInfoCard header. Gated on the snapshot
         // item so a mid-open clearance simply dismisses it. ──
         val detailsItem = detail?.item
-        if (showDownloadDetailsSheet && detailsItem != null) {
+        if (dialogSession.showDownloadDetailsSheet && detailsItem != null) {
             val sheetBackdropUrl = uiState.assets.backdropPath
                 ?: viewModel.getBackdropUrl(detailsItem.seriesId ?: detailsItem.id)
 
@@ -1037,10 +1152,7 @@ fun MediaDetailScreen(
                 isLoadingInventory = downloads.isLoadingDownloadFiles,
                 backdropUrl = sheetBackdropUrl,
                 posterUrl = sheetPosterUrl,
-                onDismiss = {
-                    showDownloadDetailsSheet = false
-                    viewModel.downloads.clearDownloadFileInventory()
-                },
+                onDismiss = { dialogSession.dismissDownloadDetailsSheet() },
             )
         }
     } // Box

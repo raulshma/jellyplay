@@ -29,15 +29,36 @@ class AndroidPdfDocument private constructor(
 
     private val renderLock = Any()
 
+    /**
+     * Page boxes filled on demand under [renderLock] (static per document);
+     * filled slots read without the lock — a stale null just re-fills.
+     */
+    private val pageSizes = arrayOfNulls<Size>(pageCount)
+
     /** Page box in PDF points (the raster unit [renderPage]'s scale divides by). */
-    override fun pageSize(pageIndex: Int): Size? {
+    override suspend fun pageSize(pageIndex: Int): Size? {
         if (pageIndex !in 0 until pageCount) return null
-        return synchronized(renderLock) {
-            runCatching {
-                renderer.openPage(pageIndex).use { page -> Size(page.width.toFloat(), page.height.toFloat()) }
-            }.getOrNull()
+        pageSizes[pageIndex]?.let { return it }
+        return withContext(Dispatchers.IO) {
+            pageSizeLocked(pageIndex)
         }
     }
+
+    /**
+     * The pure page-box read — non-suspend on purpose (the ratchet keeps bare
+     * runCatching out of suspend bodies, the [renderPageLocked] precedent):
+     * a read failure maps to null, the same cannot-open contract [open]
+     * hands back.
+     */
+    private fun pageSizeLocked(pageIndex: Int): Size? =
+        synchronized(renderLock) {
+            runCatching {
+                renderer.openPage(pageIndex).use { page ->
+                    Size(page.width.toFloat(), page.height.toFloat())
+                        .also { pageSizes[pageIndex] = it }
+                }
+            }.getOrNull()
+        }
 
     override suspend fun renderPage(pageIndex: Int, widthPx: Int): ImageBitmap? =
         withContext(Dispatchers.IO) {

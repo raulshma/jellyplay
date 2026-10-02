@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.livetv.channeldetail
 
 import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.model.LiveTvProgram
+import com.raulshma.jellyplay.core.ui.message.UiMessage
 
 /**
  * Single-source-of-truth UI state for the channel-detail screen.
@@ -20,7 +21,8 @@ data class ChannelDetailUiState(
     /** BlurHash for the channel's primary image; used as a backdrop placeholder. */
     val channelBlurHash: String? = null,
     val isLoading: Boolean = false,
-    val error: String? = null,
+    /** The load failure — resolved to text at render ([UiMessage.asText]). */
+    val error: UiMessage? = null,
     /** The program currently airing (if any) — drives backdrop + hero progress. */
     val currentProgram: LiveTvProgram? = null,
     /** Today's upcoming programs, sorted by start time ascending. */

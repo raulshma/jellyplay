@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.emptyPreferences
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
+import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalFeatureGate
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore
 import com.raulshma.jellyplay.core.model.ExperimentalFeature
 import com.raulshma.jellyplay.core.model.MediaType
@@ -16,8 +17,6 @@ import com.raulshma.jellyplay.core.model.arr.ArrDownloadSummary
 import com.raulshma.jellyplay.core.model.arr.ArrQueueDeleteOptions
 import com.raulshma.jellyplay.core.model.arr.ArrQueueItem
 import com.raulshma.jellyplay.core.model.arr.ArrRedownloadResult
-import com.raulshma.jellyplay.core.model.arr.ArrSeriesEpisode
-import com.raulshma.jellyplay.core.model.arr.ArrSeriesResolution
 import com.raulshma.jellyplay.core.model.arr.ArrServerConfig
 import com.raulshma.jellyplay.core.model.arr.ArrServiceKind
 import com.raulshma.jellyplay.core.model.arr.ArrServiceSummary
@@ -28,17 +27,14 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrMovieDetails
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
 import com.raulshma.jellyplay.core.model.seerr.SeerrRatings
 import com.raulshma.jellyplay.core.model.seerr.SeerrRadarrServiceDetail
-import com.raulshma.jellyplay.core.model.seerr.SeerrRadarrSettings
 import com.raulshma.jellyplay.core.model.seerr.SeerrRelatedVideo
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestCount
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestItem
-import com.raulshma.jellyplay.core.model.seerr.SeerrRequestListResponse
-import com.raulshma.jellyplay.core.model.seerr.SeerrSearchResponse
+import com.raulshma.jellyplay.core.model.seerr.SeerrRequestPage
 import com.raulshma.jellyplay.core.model.seerr.SeerrSeasonDetail
 import com.raulshma.jellyplay.core.model.seerr.SeerrServiceServer
 import com.raulshma.jellyplay.core.model.seerr.SeerrServiceDetail
 import com.raulshma.jellyplay.core.model.seerr.SeerrSonarrServiceDetail
-import com.raulshma.jellyplay.core.model.seerr.SeerrSonarrSettings
 import com.raulshma.jellyplay.core.model.seerr.SeerrStatusResponse
 import com.raulshma.jellyplay.core.model.seerr.SeerrTvDetails
 import com.raulshma.jellyplay.core.model.seerr.TmdbImageUrls
@@ -120,7 +116,11 @@ class UpcomingCalendarViewModelTest {
     private fun newViewModel() = UpcomingCalendarViewModel(
         arrRepository = arr,
         seerrRepository = seerr,
-        experimentalStore = experimentalStore,
+        // The gate rides the test Main dispatcher (not the store's Unconfined
+        // scope) so it still reports the cold `false` seed while VM init's
+        // synchronous refresh() runs — the HEAD init-timing the flag tests pin
+        // (ExperimentalFeatureGate's KDoc). advanceUntilIdle warms it.
+        experimentalGate = ExperimentalFeatureGate(experimentalStore, CoroutineScope(mainDispatcher)),
     )
 
     private fun item(
@@ -399,6 +399,7 @@ private class FakeArrRepository : ArrRepository {
     override suspend fun testServer(server: ArrServerConfig): Result<Unit> = unused()
     override suspend fun deleteQueueItem(item: ArrQueueItem, options: ArrQueueDeleteOptions): Result<Unit> = unused()
     override suspend fun deleteQueueItems(items: List<ArrQueueItem>, options: ArrQueueDeleteOptions): Result<Unit> = unused()
+    override suspend fun deleteQueueRow(item: ArrQueueItem, blocklist: Boolean, searchAgain: Boolean): Result<Unit> = unused()
     override suspend fun grabQueueItem(item: ArrQueueItem): Result<Unit> = unused()
     override suspend fun importQueueItem(item: ArrQueueItem): Result<Unit> = unused()
     override suspend fun deleteBlocklistItem(item: ArrBlocklistItem): Result<Unit> = unused()
@@ -410,15 +411,6 @@ private class FakeArrRepository : ArrRepository {
         seasonNumber: Int?,
         episodeNumber: Int?,
     ): Result<ArrRedownloadResult> = unused()
-    override suspend fun resolveSonarrSeries(tvdbId: Int): Result<ArrSeriesResolution> = unused()
-    override suspend fun getSonarrEpisodes(tvdbId: Int): Result<List<ArrSeriesEpisode>> = unused()
-    override suspend fun monitorSonarrEpisodes(tvdbId: Int, episodeIds: List<Int>, monitored: Boolean): Result<Unit> = unused()
-    override suspend fun deleteSonarrEpisodeFile(tvdbId: Int, episodeFileId: Int): Result<Unit> = unused()
-    override suspend fun searchSonarrEpisodes(tvdbId: Int, episodeIds: List<Int>): Result<Unit> = unused()
-    override suspend fun searchMonitoredSonarrSeason(tvdbId: Int, seasonNumber: Int): Result<Unit> = unused()
-    override suspend fun refreshSonarrSeries(tvdbId: Int): Result<Unit> = unused()
-    override suspend fun rescanSonarrSeries(tvdbId: Int): Result<Unit> = unused()
-    override suspend fun searchSonarrSeries(tvdbId: Int): Result<Unit> = unused()
 
     private fun unused(): Nothing = error("unused in calendar tests")
 }
@@ -460,18 +452,16 @@ private class FakeSeerrRepository : SeerrRepository {
     }
 
     override suspend fun testConnection(): Result<SeerrStatusResponse> = unused()
-    override suspend fun loginJellyfin(username: String, password: String): Result<SeerrStatusResponse> = unused()
-    override suspend fun loginLocal(email: String, password: String): Result<SeerrStatusResponse> = unused()
-    override suspend fun testApiKeyConnection(): Result<SeerrStatusResponse> = unused()
-    override suspend fun search(query: String, page: Int): Result<SeerrSearchResponse> = unused()
+    // (The auth trio, the *arr settings pair and editRequest moved to the
+    // SeerrAuthenticator / SeerrServiceDirectory / SeerrRequestLifecycle
+    // family seams — no longer members this fake must implement.)
+    override suspend fun search(query: String, page: Int): Result<List<com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem>> = unused()
     override suspend fun getTvSeasonDetails(tvId: Int, seasonNumber: Int): Result<SeerrSeasonDetail> = unused()
     override suspend fun getRatings(tmdbId: Int, mediaType: String): Result<SeerrRatings> = unused()
-    override suspend fun getRecommendations(tmdbId: Int, mediaType: MediaType): Result<SeerrSearchResponse> = unused()
-    override suspend fun getSimilar(tmdbId: Int, mediaType: MediaType): Result<SeerrSearchResponse> = unused()
+    override suspend fun getRecommendations(tmdbId: Int, mediaType: MediaType): Result<List<com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem>> = unused()
+    override suspend fun getSimilar(tmdbId: Int, mediaType: MediaType): Result<List<com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem>> = unused()
     override suspend fun getTmdbVideos(tmdbId: Int, mediaType: MediaType): Result<List<SeerrRelatedVideo>> = unused()
     override suspend fun getTmdbReviews(tmdbId: Int, mediaType: MediaType): Result<List<TmdbReview>> = unused()
-    override suspend fun getRadarrSettings(): Result<List<SeerrRadarrSettings>> = unused()
-    override suspend fun getSonarrSettings(): Result<List<SeerrSonarrSettings>> = unused()
     override suspend fun getServiceRadarrServers(): Result<List<SeerrServiceServer>> = unused()
     override suspend fun getServiceSonarrServers(): Result<List<SeerrServiceServer>> = unused()
     override suspend fun getServiceDetail(id: Int, kind: ArrServiceKind): Result<SeerrServiceDetail> = unused()
@@ -493,23 +483,13 @@ private class FakeSeerrRepository : SeerrRepository {
         requestedBy: Int?,
         mediaType: String?,
         search: String?,
-    ): Result<SeerrRequestListResponse> = unused()
+    ): Result<SeerrRequestPage> = unused()
     override suspend fun getRequest(id: Int): Result<SeerrRequestItem> = unused()
     override suspend fun approveRequest(id: Int): Result<SeerrRequestItem> = unused()
     override suspend fun declineRequest(id: Int): Result<SeerrRequestItem> = unused()
     override suspend fun retryRequest(id: Int): Result<SeerrRequestItem> = unused()
     override suspend fun deleteRequest(id: Int): Result<Unit> = unused()
     override suspend fun deleteMedia(mediaId: Int, is4k: Boolean): Result<Unit> = unused()
-    override suspend fun editRequest(
-        id: Int,
-        mediaType: String,
-        mediaId: Int,
-        serverId: Int?,
-        profileId: Int?,
-        rootFolder: String?,
-        tags: List<Int>?,
-        seasons: List<Int>?,
-    ): Result<SeerrRequestItem> = unused()
     override suspend fun getRequestCount(): Result<SeerrRequestCount> = unused()
     override suspend fun getCurrentUser(): Result<SeerrCurrentUser> = unused()
     override fun isConnected(): Flow<Boolean> = unused()
@@ -518,17 +498,17 @@ private class FakeSeerrRepository : SeerrRepository {
     override fun isRecommendationsEnabled(): Flow<Boolean> = unused()
     override fun isDiscoverEnabled(): Flow<Boolean> = unused()
     override fun getPreferences(): Flow<SeerrPreferences> = unused()
-    override suspend fun getTrending(page: Int): Result<SeerrSearchResponse> = unused()
+    override suspend fun getTrending(page: Int): Result<List<com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem>> = unused()
     override suspend fun getDiscoverMovies(
         page: Int,
         primaryReleaseDateGte: String?,
         params: com.raulshma.jellyplay.core.model.seerr.SeerrDiscoverParams?,
-    ): Result<SeerrSearchResponse> = unused()
+    ): Result<List<com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem>> = unused()
     override suspend fun getDiscoverTv(
         page: Int,
         firstAirDateGte: String?,
         params: com.raulshma.jellyplay.core.model.seerr.SeerrDiscoverParams?,
-    ): Result<SeerrSearchResponse> = unused()
+    ): Result<List<com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem>> = unused()
     override fun isAdmin(): Flow<Boolean> = unused()
     override val currentUser: StateFlow<SeerrCurrentUser?> get() = unused()
     override val pendingRequestCount: StateFlow<Int> get() = unused()

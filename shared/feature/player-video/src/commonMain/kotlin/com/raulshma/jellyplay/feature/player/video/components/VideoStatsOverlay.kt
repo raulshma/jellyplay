@@ -40,6 +40,7 @@ import com.raulshma.jellyplay.feature.player.video.generated.resources.player_vi
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_codec
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_decoder
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_decoder_mode
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_downloaded_badge
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_duration
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_frame_rate
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_play_method
@@ -135,6 +136,9 @@ fun VideoStatsOverlay(
     isPlaying: Boolean,
     playbackState: String,
     playMethod: String,
+    /** True when the session plays a stored download — pins the
+     *  "Downloaded" badge beside the play-method row. */
+    isOfflineSource: Boolean = false,
     streamingQuality: String,
     playerType: String,
     decoderMode: String,
@@ -235,7 +239,11 @@ fun VideoStatsOverlay(
         }
 
         StatsSection(stringResource(Res.string.player_video_stats_network)) {
-            StatsRow(stringResource(Res.string.player_video_play_method), playMethod)
+            StatsRow(
+                stringResource(Res.string.player_video_play_method),
+                playMethod,
+                badge = if (isOfflineSource) stringResource(Res.string.player_video_downloaded_badge) else null,
+            )
             StatsRow(stringResource(Res.string.player_video_stats_quality), streamingQuality)
             if (stats.estimatedBandwidthBps > 0) {
                 StatsRow(stringResource(Res.string.player_video_stats_est_bandwidth), formatBandwidth(stats.estimatedBandwidthBps))
@@ -316,6 +324,7 @@ private fun StatsSection(
 private fun StatsRow(
     label: String,
     value: String,
+    badge: String? = null,
 ) {
     Row(
         modifier = Modifier
@@ -332,15 +341,36 @@ private fun StatsRow(
             ),
             color = playerOnScrim().copy(alpha = 0.85f),
         )
-        Text(
-            text = value,
-            style = MaterialTheme.typography.bodySmall.copy(
-                fontFamily = FontFamily.Monospace,
-                fontWeight = FontWeight.Medium,
-                fontSize = 10.sp,
-            ),
-            color = playerOnScrim(),
-        )
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = value,
+                style = MaterialTheme.typography.bodySmall.copy(
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.Medium,
+                    fontSize = 10.sp,
+                ),
+                color = playerOnScrim(),
+            )
+            // Small trailing pill (e.g. the "Downloaded" source badge) —
+            // rendered only when the caller supplies one.
+            if (badge != null) {
+                Text(
+                    text = badge,
+                    modifier = Modifier
+                        .clip(ShapeCache.smoothPill)
+                        .background(playerOnScrim().copy(alpha = 0.16f))
+                        .padding(horizontal = 6.dp, vertical = 1.dp),
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 9.sp,
+                    ),
+                    color = playerOnScrim(),
+                )
+            }
+        }
     }
 }
 

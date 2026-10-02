@@ -15,9 +15,9 @@ import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerStore
 import com.raulshma.jellyplay.core.datastore.volume.VolumeProfileStore
 
 /**
- * Construction-time bundle of the twelve datastore stores the player feature
+ * Construction-time bundle of the thirteen datastore stores the player feature
  * reads and writes — [VideoPlayerViewModel]'s constructor takes this one bundle
- * instead of twelve store parameters (the same construction seam as
+ * instead of thirteen store parameters (the same construction seam as
  * home's HomeStores/HomeRefresherFactory precedent: a new store dependency
  * widens this bundle and the DI definitions, not the VM's interface).
  *

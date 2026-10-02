@@ -80,4 +80,90 @@ class AutoPlayControllerTest {
         assertFalse(c.enabled)
         assertFalse(c.shouldAutoPlayNext(nextEpisode))
     }
+
+    // ── Still-watching episode counter (feature 1.3) ─────────────────────
+
+    @Test
+    fun stillWatching_disabledAtZeroThreshold() {
+        val c = AutoPlayController()
+        c.setStillWatchingThreshold(0)
+        repeat(10) { c.recordAutoAdvance() }
+        // 0 = off: the streak grows but never triggers the check.
+        assertFalse(c.needsStillWatchingCheck())
+    }
+
+    @Test
+    fun stillWatching_firesOnlyWhenStreakReachesThreshold() {
+        val c = AutoPlayController()
+        c.setStillWatchingThreshold(3)
+        assertFalse(c.needsStillWatchingCheck())
+        c.recordAutoAdvance()
+        c.recordAutoAdvance()
+        assertFalse(c.needsStillWatchingCheck())
+        c.recordAutoAdvance()
+        assertTrue(c.needsStillWatchingCheck())
+        // It stays fired — the gate fires until something user-driven resets.
+        c.recordAutoAdvance()
+        assertTrue(c.needsStillWatchingCheck())
+    }
+
+    @Test
+    fun stillWatching_thresholdCoercedNonNegative() {
+        val c = AutoPlayController()
+        c.setStillWatchingThreshold(-2)
+        repeat(5) { c.recordAutoAdvance() }
+        assertFalse(c.needsStillWatchingCheck())
+    }
+
+    @Test
+    fun stillWatching_userInteractionResetsStreak() {
+        val c = AutoPlayController()
+        c.setStillWatchingThreshold(2)
+        c.recordAutoAdvance()
+        c.recordAutoAdvance()
+        assertTrue(c.needsStillWatchingCheck())
+
+        c.onUserInteraction()
+        assertFalse(c.needsStillWatchingCheck())
+        // One more unattended advance is not enough again.
+        c.recordAutoAdvance()
+        assertFalse(c.needsStillWatchingCheck())
+        c.recordAutoAdvance()
+        assertTrue(c.needsStillWatchingCheck())
+    }
+
+    @Test
+    fun stillWatching_autoAdvanceLoadDoesNotResetStreak() {
+        // resetForNewItem runs on EVERY item load — including an auto-advance
+        // — so the streak must live outside it; only user-driven signals
+        // (onUserInteraction) reset.
+        val c = AutoPlayController()
+        c.setStillWatchingThreshold(2)
+        c.recordAutoAdvance()
+        c.recordAutoAdvance()
+        c.resetForNewItem()
+        assertTrue(c.needsStillWatchingCheck())
+    }
+
+    @Test
+    fun stillWatching_reArmAfterContinueThenReset() {
+        val c = AutoPlayController()
+        c.setEnabled(true)
+        c.setStillWatchingThreshold(2)
+        c.recordAutoAdvance()
+        c.recordAutoAdvance()
+        assertTrue(c.needsStillWatchingCheck())
+
+        // "Continue" resets the counter (the VM's Continue arm)…
+        c.onUserInteraction()
+        assertFalse(c.needsStillWatchingCheck())
+        // …and "Stop" (cancel) doesn't disturb the counter — only the gate's
+        // callers do. The next unattended pair fires again.
+        c.cancel()
+        c.resetForNewItem()
+        assertFalse(c.needsStillWatchingCheck())
+        c.recordAutoAdvance()
+        c.recordAutoAdvance()
+        assertTrue(c.needsStillWatchingCheck())
+    }
 }

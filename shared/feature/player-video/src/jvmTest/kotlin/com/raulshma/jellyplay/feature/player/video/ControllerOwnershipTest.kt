@@ -9,18 +9,39 @@ import java.io.File
 /**
  * Ratchet against reintroducing the god-state wiring pattern.
  *
- * 1. The twelve migrated controllers (`SleepTimerController`,
+ * 1. The eighteen migrated controllers (`SleepTimerController`,
  *    `TrackSelectionHelper`, `SubtitleManager`, `VideoEffectsController`,
  *    `AbRepeatController`, `SyncPlayBridge`, `PlaybackSession`,
  *    `EpisodeNavigator`, `SubtitlePreviewController`,
- *    `SubtitleStyleController`, `MediaContentProjector`, `RenderControls`)
+ *    `SubtitleStyleController`, `MediaContentProjector`, `RenderControls`,
+ *    `EpisodeContinuationController`, `PipTransportController`,
+ *    `EngineAttachController`,
+ *    `StillWatchingController`, `MediaDetailProjection`, `EngineConfigSync`)
  *    must not reference [VideoPlayerUiState] at all — their interface is
  *    their state class plus commands, never the state bag or a state
- *    transformer.
+ *    transformer. (SubtitleFontController and BackgroundCastController left
+ *    the list with their fold-backs: the font funs into
+ *    SubtitleStyleController, the background-cast pair into the VM as two
+ *    private funs. VideoSessionHost left the list with its deletion: the
+ *    pass-through layer was dissolved by the [PlayerWiring] two-phase
+ *    composition — the builder implements the session-facing seams itself
+ *    and, being the VM's construction surface, is the one module besides the
+ *    VM that legitimately names the ui state bag.)
+ *    DECLARED EXCEPTION (the ratchet's ONE sanctioned state transformer):
+ *    the prefs projection [SessionLoadOutputs.onPrefsProjected] forwards is
+ *    spelled through the transparent `PrefsProjection` alias declared beside
+ *    the outputs interface it exists to satisfy. The projection is the
+ *    pipeline's own load-stage vocabulary (the seed the VM applies at the
+ *    pipeline's behest, not state the implementer reads or owns); narrowing
+ *    it to per-field setters would change the outputs interface every load
+ *    fake implements. Exactly this one member — a second aliased transformer
+ *    in a migrated file is a violation, not a precedent.
  * 2. The count of god-state wirings (`getUiState =` / `updateUiState =` /
  *    `uiState = _uiState`) in the module's src/main must never increase.
  *    Baseline: [SettingsProjector] (a deferred, prefs-mirror
  *    writer — 2 wirings) and [PlaybackProgressReporter] (raw handle, 1 wiring).
+ * 3. [VideoPlayerViewModel.kt]'s total line count must never exceed the
+ *    post-extraction ceiling (see [videoPlayerViewModel_totalLineCeiling]).
  *
  * Lower the baseline when another slice migrates; never raise it.
  */
@@ -39,6 +60,12 @@ class ControllerOwnershipTest {
         "SubtitleStyleController.kt",
         "MediaContentProjector.kt",
         "RenderControls.kt",
+        "EpisodeContinuationController.kt",
+        "PipTransportController.kt",
+        "EngineAttachController.kt",
+        "StillWatchingController.kt",
+        "MediaDetailProjection.kt",
+        "EngineConfigSync.kt",
     )
 
     /** The maximum allowed god-state wirings in src/main (see class KDoc). */
@@ -145,27 +172,72 @@ class ControllerOwnershipTest {
     }
 
     @Test
-    fun constructionOrderConvention_controllerPropertiesAboveInit() {
-        // The engine-flow collector launched from the VM's init calls into
-        // trackSelectionHelper; Kotlin initialises properties and init blocks
-        // in declaration order, so the helpers must be declared before init.
-        // The same holds for playbackSession: init's SessionEvent forwarder
-        // collects playbackSession.events.
-        val vm = mainSources().first { it.name == "VideoPlayerViewModel.kt" }.sourceText()
-        val initBlock = vm.indexOf("\n    init {")
-        val helperDecl = vm.indexOf("private val trackSelectionHelper = TrackSelectionHelper(")
-        val resolverDecl = vm.indexOf("private val playbackPreferenceResolver = ItemPlaybackPreferenceResolver(")
-        val sessionDecl = vm.indexOf("private val playbackSession = PlaybackSession(")
-        assertTrue(initBlock >= 0, "VideoPlayerViewModel init block not found")
-        assertTrue(helperDecl >= 0, "trackSelectionHelper declaration not found")
-        assertTrue(resolverDecl >= 0, "playbackPreferenceResolver declaration not found")
-        assertTrue(sessionDecl >= 0, "playbackSession declaration not found")
+    fun videoPlayerViewModel_totalLineCeiling() {
+        // The size ratchet companion to the member-count ceiling in
+        // VideoPlayerViewModelOwnershipTest: the VM shrinks only by moving
+        // clusters into extracted modules (constructor-lambda controllers),
+        // so its TOTAL line count is a one-way ratchet too. Baseline: 2_006
+        // by this suite's lineSequence count (2_005 wc-lines + the trailing
+        // newline's empty line) after the PlayerWiring move — the whole
+        // in-VM collaborator graph (~1,400 construction lines) plus the init
+        // collectors moved into the two-phase PlayerWiring builder and the
+        // deleted VideoSessionHost's seams became builder methods — down
+        // from the VideoSessionHost-era 2_900 (ceiling 2_870), itself down
+        // from the EngineConfigSync-era 3_002 (3_012, 3_016 after
+        // StillWatchingController + MediaDetailProjection, 3_089 before
+        // those), pinned EXACTLY like every other ratchet in this suite.
+        // Lower the ceiling when a slice moves out; never raise it to admit
+        // growth.
+        val maxVideoPlayerViewModelLines = 2_006
+        val vm = mainSources().first { it.name == "VideoPlayerViewModel.kt" }
+        val lines = vm.sourceText().lineSequence().count()
         assertTrue(
-            helperDecl < initBlock && resolverDecl < initBlock,
-            "trackSelectionHelper + playbackPreferenceResolver must be declared before the init block " +
-                "(the engine-flow collector launched from init reaches into them)",
+            lines <= maxVideoPlayerViewModelLines,
+            "VideoPlayerViewModel.kt grew to $lines lines (ceiling " +
+                "$maxVideoPlayerViewModelLines) — new behaviour belongs in an " +
+                "extracted module built from constructor lambdas, with the VM a " +
+                "thin caller. Lower the ceiling when a slice moves out; never " +
+                "raise it.",
         )
-        assertTrue(sessionDecl < initBlock, "playbackSession must be declared before the init block " +
-                "(init's SessionEvent forwarder collects playbackSession.events)")
+    }
+
+    @Test
+    fun constructionOrderConvention_wiringPhaseOneBeforeArm() {
+        // The engine-flow collector launched from the VM's init used to call
+        // into trackSelectionHelper, and the SessionEvent forwarder collected
+        // playbackSession.events — so those properties had to be declared
+        // before the VM's init block. Since the [PlayerWiring] move, the VM
+        // declares ONE wiring property and init only calls [PlayerWiring.arm];
+        // the same invariant is now enforced structurally by the builder and
+        // pinned HERE at the builder's source: every collaborator the arm
+        // phase's collectors drive is constructed in phase 1 (before the arm
+        // function exists in the file), so no collector registration can run
+        // against an uninitialized collaborator.
+        val wiring = mainSources().first { it.name == "PlayerWiring.kt" }.sourceText()
+        val armFun = wiring.indexOf("    fun arm() {")
+        assertTrue(armFun >= 0, "PlayerWiring.arm not found")
+        for ((collaborator, what) in listOf(
+            "internal val playerSessionManager = PlayerSessionManager(" to
+                "the engine-attach + preference collectors' session handle",
+            "internal val playbackSession = PlaybackSession(" to
+                "the session-event forwarder's events flow + the rearm callback",
+            "internal val trackSelectionHelper = TrackSelectionHelper(" to
+                "the engine-attach + resolver collectors' track helper",
+            "private val playbackPreferenceResolver = ItemPlaybackPreferenceResolver(" to
+                "the arm-phase preference collector's resolver",
+            "private val engineAttachController = EngineAttachController(" to
+                "the arm-phase engineFlow collector's choreography",
+            "private val prefsFanout = PlayerPrefsFanout(" to
+                "the aggregate collector's fan-out",
+        )) {
+            val decl = wiring.indexOf(collaborator)
+            assertTrue(decl >= 0, "collaborator declaration not found: $collaborator")
+            assertTrue(
+                decl < armFun,
+                "$what must be constructed in phase 1 (before fun arm) — the arm-phase " +
+                    "collectors register against it and Kotlin initialises properties in " +
+                    "declaration order",
+            )
+        }
     }
 }

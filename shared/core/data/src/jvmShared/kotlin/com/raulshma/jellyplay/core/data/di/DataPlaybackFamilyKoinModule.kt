@@ -11,7 +11,7 @@ import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.network.api.MetadataApiClient
 import com.raulshma.jellyplay.core.network.api.PlaybackApiClient
 import com.raulshma.jellyplay.core.network.config.ClientCertificateManager
-import com.raulshma.jellyplay.feature.player.video.engine.PlaybackTls
+import com.raulshma.jellyplay.core.model.PlaybackTls
 import org.koin.core.module.Module
 import org.koin.dsl.module
 
@@ -42,6 +42,9 @@ internal val dataPlaybackFamilyModule: Module = module {
         )
     }
     single<PlaybackRepository> { get<PlaybackRepositoryImpl>() }
+    // The retired replayOutboxEntry member's narrow port (see worker.PlaybackOutboxReplay) —
+    // same impl single; only the drain loop consumes it.
+    single<com.raulshma.jellyplay.core.data.worker.PlaybackOutboxReplay> { get<PlaybackRepositoryImpl>() }
 
     // The playback session-identity reads (token + base URL) — the narrow
     // module the former PlaybackRepository.getServerUrl/getAccessToken members

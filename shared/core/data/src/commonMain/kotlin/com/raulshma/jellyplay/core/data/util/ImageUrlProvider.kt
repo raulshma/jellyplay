@@ -22,6 +22,18 @@ interface ImageUrlProvider {
 
     fun getBackdropUrl(itemId: String, maxWidth: Int = DEFAULT_BACKDROP_WIDTH): String
 
+    /** Clear-logo image for the detail-screen title block (imageType = Logo). */
+    fun getLogoUrl(itemId: String): String
+
+    /**
+     * The tag-guard fold for logos, mirroring [getImageUrlOrNull]: a null logo
+     * tag means the item HAS no clear-logo → empty string (never a URL for an
+     * image that does not exist); any tag → [getLogoUrl] at its default width.
+     * The tag value itself is dropped on the floor — see [getImageUrlOrNull].
+     */
+    fun getLogoUrlOrNull(itemId: String, logoTag: String?): String =
+        if (logoTag != null) getLogoUrl(itemId) else ""
+
     companion object {
         const val DEFAULT_MAX_WIDTH = 400
         const val MUSIC_MAX_WIDTH = 300

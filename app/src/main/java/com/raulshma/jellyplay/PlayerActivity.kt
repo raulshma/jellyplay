@@ -47,6 +47,7 @@ import com.raulshma.jellyplay.shell.AppLockRedirect
 import com.raulshma.jellyplay.shell.AppLockState
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
@@ -196,20 +197,43 @@ class PlayerActivity : FragmentActivity() {
             }
         }
 
+        // `playbackPreferences` is lazily shared (WhileSubscribed) and its
+        // only other in-player subscriber — the PiP params collector below —
+        // runs just on S+ with system PiP. Warm it on every API level so
+        // shouldAutoEnterPipNow() reads persisted state, not the default,
+        // after a cold start straight into the player (issue #167).
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                preferenceProjections.playbackPreferences.collect {
+                    // No-op — subscription only keeps the shared flow warm.
+                }
+            }
+        }
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
             packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
         ) {
             // One collector drives param application for both the pre-arm path
             // (not yet in PiP: setAutoEnterEnabled + aspect + source rect, no
             // actions) and the in-PiP refresh path (resolution/track swap while
-            // already in PiP: actions + aspect).
+            // already in PiP: actions + aspect). The combined value is only a
+            // CHANGE TRIGGER — the emitted list carries the raw inputs so any
+            // of them flipping (including the auto-PiP preference, mapped to
+            // the single field so unrelated playback-pref writes don't re-fire)
+            // re-applies params; buildPipParams re-derives the effective gate
+            // fresh via shouldAutoEnterPipNow(), so no gate is computed here.
             lifecycleScope.launch {
                 repeatOnLifecycle(Lifecycle.State.STARTED) {
                     combine(
                         pipController.shouldAutoEnterPip,
                         pipController.pipAspectRatio,
                         pipController.isPlaying,
-                    ) { shouldAutoEnter, aspect, isPlaying -> Triple(shouldAutoEnter, aspect, isPlaying) }
+                        preferenceProjections.playbackPreferences
+                            .map { it.autoEnterPip }
+                            .distinctUntilChanged(),
+                    ) { shouldAutoEnter, aspect, isPlaying, autoPipEnabled ->
+                        listOf(shouldAutoEnter, aspect, isPlaying, autoPipEnabled)
+                    }
                         .distinctUntilChanged()
                         .collect {
                             if (isInPictureInPictureMode) {
@@ -286,8 +310,11 @@ class PlayerActivity : FragmentActivity() {
         // doesn't yank the user into PiP, and `!isScreenOffOrLocked()` because
         // several OEMs fire this callback for the power button too (issue
         // #145). Deliberately no isPlaying term — the fallback below adds it.
+        // shouldAutoEnterPipNow() folds the user's auto-PiP preference
+        // (issue #167) with the engine-armed flag: off means Home/recents
+        // simply backgrounds the app.
         if (PipLifecyclePolicy.onUserLeaveHint(
-                shouldAutoEnter = pipController.shouldAutoEnterPip.value,
+                shouldAutoEnter = shouldAutoEnterPipNow(),
                 controlsLocked = pipController.isControlsLocked,
                 screenOffOrLocked = isScreenOffOrLocked(),
             ) == PipLifecyclePolicy.Action.EnterPip
@@ -308,7 +335,7 @@ class PlayerActivity : FragmentActivity() {
             isTopResumed = isTopResumed,
             inPip = isInPictureInPictureMode,
             apiSupportsAutoEnter = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S,
-            shouldAutoEnter = pipController.shouldAutoEnterPip.value,
+            shouldAutoEnter = shouldAutoEnterPipNow(),
             isPlaying = pipController.isPlaying.value,
             controlsLocked = pipController.isControlsLocked,
             // Same lock guard as onUserLeaveHint: the keyguard stealing the
@@ -357,6 +384,10 @@ class PlayerActivity : FragmentActivity() {
     private fun redirectToLockGateIfNeeded(): Boolean {
         val koin = KoinPlatform.getKoin() ?: return false
         val lockState = koin.get<AppLockState>()
+        // An unlocked holder never redirects (the predicate below is
+        // `gateConfigured && !unlocked` for any gateConfigured), so the
+        // persisted-security read is skipped entirely while unlocked.
+        if (lockState.unlocked.value) return false
         val securityStore = koin.get<SecurityStore>()
         // The gate predicate must read the PERSISTED security slice, not the
         // `.security` StateFlow seed: on a cold process (recents-restore of a
@@ -606,6 +637,21 @@ class PlayerActivity : FragmentActivity() {
         Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
             packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
 
+    /**
+     * The user's auto-PiP preference (issue #167) folded with the engine-armed
+     * flag — the single gate all three auto-entry paths consume:
+     * `onUserLeaveHint`, the top-resumed-loss fallback, and the pre-arm
+     * `setAutoEnterEnabled` value in [buildPipParams]. Off means leaving the
+     * app backgrounds it normally (the recents-switch behaviour); manual PiP
+     * entry via the controls button (`enterPipMode()`) is deliberately
+     * ungated. `playbackPreferences` is kept warm while the activity is
+     * started (see onCreate), so this reads the persisted toggle at each
+     * callback rather than the projection's default.
+     */
+    private fun shouldAutoEnterPipNow(): Boolean =
+        pipController.shouldAutoEnterPip.value &&
+            preferenceProjections.playbackPreferences.value.autoEnterPip
+
     /** True when the keyguard is showing or the screen is off (non-interactive). */
     private fun isScreenOffOrLocked(): Boolean {
         val keyguardManager = getSystemService(Context.KEYGUARD_SERVICE) as? android.app.KeyguardManager
@@ -651,7 +697,7 @@ class PlayerActivity : FragmentActivity() {
             // controls-lock term (that system-side flag never gated on it).
             val autoEnter = if (preArm) {
                 PipLifecyclePolicy.systemAutoEnterEnabled(
-                    shouldAutoEnter = pipController.shouldAutoEnterPip.value,
+                    shouldAutoEnter = shouldAutoEnterPipNow(),
                     isPlaying = pipController.isPlaying.value,
                     screenOffOrLocked = isScreenOffOrLocked(),
                 )

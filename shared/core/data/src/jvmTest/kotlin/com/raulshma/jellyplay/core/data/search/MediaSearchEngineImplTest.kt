@@ -15,7 +15,6 @@ import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.model.SearchResult
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
-import com.raulshma.jellyplay.core.model.seerr.SeerrSearchResponse
 import com.raulshma.jellyplay.core.model.toMediaItem
 import io.mockk.Called
 import io.mockk.coEvery
@@ -115,7 +114,7 @@ class MediaSearchEngineImplTest {
             SearchResult(items = listOf(jellyItem("j1"), jellyItem("j2")), totalRecordCount = 2, startIndex = 0)
         )
         coEvery { seerrRepository.search("batman") } returns Result.success(
-            SeerrSearchResponse(results = listOf(seerrItem(1), seerrItem(2), seerrItem(3)))
+            listOf(seerrItem(1), seerrItem(2), seerrItem(3))
         )
 
         val state = engine.preview(flowOf("batman"), seerrLimit = 2).first { !it.isSearching }
@@ -133,7 +132,7 @@ class MediaSearchEngineImplTest {
         coEvery { mediaRepository.search("batman", limit = 8) } returns Result.success(
             SearchResult(items = listOf(jellyItem("j1")), totalRecordCount = 1, startIndex = 0)
         )
-        coEvery { seerrRepository.search("batman") } returns Result.success(SeerrSearchResponse(results = emptyList()))
+        coEvery { seerrRepository.search("batman") } returns Result.success(emptyList())
 
         val states = engine.preview(flowOf("batman")).toList()
 
@@ -152,7 +151,7 @@ class MediaSearchEngineImplTest {
         coEvery { mediaRepository.search("void", limit = 8) } returns Result.success(
             SearchResult(items = emptyList(), totalRecordCount = 0, startIndex = 0)
         )
-        coEvery { seerrRepository.search("void") } returns Result.success(SeerrSearchResponse(results = listOf(seerrItem(1))))
+        coEvery { seerrRepository.search("void") } returns Result.success(listOf(seerrItem(1)))
 
         val state = engine.preview(flowOf("void")).first { !it.isSearching }
 
@@ -165,7 +164,7 @@ class MediaSearchEngineImplTest {
     @Test
     fun `a throwing jellyfin source degrades to an empty jellyfin slot`() = runTest {
         coEvery { mediaRepository.search(any(), any(), any(), any()) } throws RuntimeException("server down")
-        coEvery { seerrRepository.search("batman") } returns Result.success(SeerrSearchResponse(results = listOf(seerrItem(1))))
+        coEvery { seerrRepository.search("batman") } returns Result.success(listOf(seerrItem(1)))
 
         val state = engine.preview(flowOf("batman")).first { !it.isSearching }
 
@@ -274,7 +273,7 @@ class MediaSearchEngineImplTest {
     @Test
     fun `sideSearch lands gated seerr results and offline rows`() = runTest {
         coEvery { seerrRepository.search("batman") } returns Result.success(
-            SeerrSearchResponse(results = (1..12).map { seerrItem(it) })
+            (1..12).map { seerrItem(it) }
         )
         coEvery { offlineRepository.searchOffline("batman", 10) } returns listOf(offlineItem("o1"))
 
@@ -311,7 +310,7 @@ class MediaSearchEngineImplTest {
 
     @Test
     fun `sideSearch swallows a failing offline scan into an empty row`() = runTest {
-        coEvery { seerrRepository.search("batman") } returns Result.success(SeerrSearchResponse(results = emptyList()))
+        coEvery { seerrRepository.search("batman") } returns Result.success(emptyList())
         coEvery { offlineRepository.searchOffline("batman", 10) } throws RuntimeException("db locked")
 
         val completed = engine.sideSearch(flowOf("batman")).toList().last()
@@ -329,7 +328,7 @@ class MediaSearchEngineImplTest {
         // The stale scan parks on a gate: it would publish ONLY if its round
         // were still alive when the gate opens.
         val gate = CompletableDeferred<Unit>()
-        coEvery { seerrRepository.search(any()) } returns Result.success(SeerrSearchResponse(results = emptyList()))
+        coEvery { seerrRepository.search(any()) } returns Result.success(emptyList())
         coEvery { offlineRepository.searchOffline("stale", any()) } coAnswers {
             gate.await()
             listOf(staleItem)

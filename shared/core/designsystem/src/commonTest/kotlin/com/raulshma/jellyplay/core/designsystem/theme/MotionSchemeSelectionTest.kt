@@ -41,6 +41,34 @@ spec is SnapSpec<*>,
 )
     }
 
+    // ------------------------------------------------------------------
+    // The selection fold (motionSchemeFor): the reduced scheme wins when
+    // EITHER flag is on. This is the same fold the theme applies via
+    // LocalPerformanceMode/LocalReduceMotionEnabled — pinned here as a pure
+    // function so the selection itself (not just the scheme contents) has a
+    // regression guard.
+    // ------------------------------------------------------------------
+
+    @Test
+    fun selection_default_isExpressive() {
+        assertTrue(motionSchemeFor(performanceMode = false, reduceMotion = false) === ExpressiveMotionScheme)
+    }
+
+    @Test
+    fun selection_performanceModeAlone_selectsReduced() {
+        assertTrue(motionSchemeFor(performanceMode = true, reduceMotion = false) === ReducedMotionScheme)
+    }
+
+    @Test
+    fun selection_reduceMotionAlone_selectsReduced() {
+        assertTrue(motionSchemeFor(performanceMode = false, reduceMotion = true) === ReducedMotionScheme)
+    }
+
+    @Test
+    fun selection_bothFlags_selectsReduced() {
+        assertTrue(motionSchemeFor(performanceMode = true, reduceMotion = true) === ReducedMotionScheme)
+    }
+
     @Test
     fun reducedScheme_allTokens_areInstant() {
         // Every token in the reduced scheme must be the instant/snap variant.

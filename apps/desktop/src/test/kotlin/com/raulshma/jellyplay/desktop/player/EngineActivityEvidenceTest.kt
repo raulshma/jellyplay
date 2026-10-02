@@ -1,5 +1,7 @@
 package com.raulshma.jellyplay.desktop.player
 
+import com.raulshma.jellyplay.core.testfixtures.FakeMediaEngine
+import com.raulshma.jellyplay.core.testfixtures.pollUntil
 import com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState
 import com.raulshma.jellyplay.feature.player.video.engine.PlaybackRequest
 import kotlinx.coroutines.runBlocking
@@ -13,7 +15,8 @@ import kotlin.test.assertTrue
 /**
  *  session-harness evidence model — the pure classification the
  * harness asserts from (EngineActivitySnapshot), plus the recorder wiring
- * against the existing FakeMediaEngine double (no libmpv, no AWT; the
+ * against the shared FakeMediaEngine double (com.raulshma.jellyplay.core.testfixtures,
+ * the fixtures merge; no libmpv, no AWT; the
  * recorder's collectors run on its own scope, so tests poll the snapshots).
  */
 class EngineActivityEvidenceTest {
@@ -194,7 +197,7 @@ class EngineActivityEvidenceTest {
     @Test
     fun `recorder observes state transitions isPlaying without duplicate transitions`() {
         val recorder = EngineActivityRecorder()
-        val engine = FakeMediaEngine()
+        val engine = FakeMediaEngine(FakeMediaEngine.LoadBehavior.AUTO_PLAY)
         recorder.recordCreated(engine, EngineActivitySnapshot.SURFACE_HWND)
 
         engine.load(PlaybackRequest(uri = "http://server/stream", title = "test"))
@@ -204,7 +207,7 @@ class EngineActivityEvidenceTest {
         val snapshot = recorder.awaitSnapshot({ it.latest() }) { s ->
             s.isPlayingObserved && s.sawState("READY")
         }
-        assertEquals("fake", snapshot.displayName)
+        assertEquals("FakeMediaEngine", snapshot.displayName)
         assertEquals(EngineActivitySnapshot.SURFACE_HWND, snapshot.surface)
         assertTrue(snapshot.playbackVerified(minAdvanceMs = 0)) // playing observed
 
@@ -229,7 +232,7 @@ class EngineActivityEvidenceTest {
     @Test
     fun `recorder samples the playhead and a later freeze reads as zero advance`() = runBlocking {
         val recorder = EngineActivityRecorder()
-        val engine = FakeMediaEngine()
+        val engine = FakeMediaEngine(FakeMediaEngine.LoadBehavior.AUTO_PLAY)
         recorder.recordCreated(engine, EngineActivitySnapshot.SURFACE_HWND)
         engine.load(PlaybackRequest(uri = "http://server/stream", title = "test"))
 
@@ -266,9 +269,9 @@ class EngineActivityEvidenceTest {
     @Test
     fun `latestVideoEngine skips the EXTERNAL no-op record`() {
         val recorder = EngineActivityRecorder()
-        recorder.recordCreated(FakeMediaEngine(), EngineActivitySnapshot.SURFACE_NO_OP)
+        recorder.recordCreated(FakeMediaEngine(FakeMediaEngine.LoadBehavior.AUTO_PLAY), EngineActivitySnapshot.SURFACE_NO_OP)
 
-        val video = FakeMediaEngine()
+        val video = FakeMediaEngine(FakeMediaEngine.LoadBehavior.AUTO_PLAY)
         recorder.recordCreated(video, EngineActivitySnapshot.SURFACE_SOFTWARE)
 
         val snapshot = recorder.awaitSnapshot({ it.latestVideoEngine() }) { it.surface.isNotEmpty() }
@@ -276,7 +279,7 @@ class EngineActivityEvidenceTest {
 
         // And with ONLY a no-op recorded, latestVideoEngine stays NONE.
         val onlyNoOp = EngineActivityRecorder()
-        onlyNoOp.recordCreated(FakeMediaEngine(), EngineActivitySnapshot.SURFACE_NO_OP)
+        onlyNoOp.recordCreated(FakeMediaEngine(FakeMediaEngine.LoadBehavior.AUTO_PLAY), EngineActivitySnapshot.SURFACE_NO_OP)
         assertEquals(EngineActivitySnapshot.NONE, onlyNoOp.latestVideoEngine())
     }
 
@@ -306,7 +309,7 @@ class EngineActivityEvidenceTest {
             // The record is appended on the CALLER's thread before the
             // observers spawn — the factory's cheap poll guard must be true
             // the moment create() returns, never a tick later.
-            recorder.recordCreated(FakeMediaEngine(), EngineActivitySnapshot.SURFACE_HWND)
+            recorder.recordCreated(FakeMediaEngine(FakeMediaEngine.LoadBehavior.AUTO_PLAY), EngineActivitySnapshot.SURFACE_HWND)
             assertTrue(recorder.hasAnyEngine)
             assertEquals(
                 EngineActivitySnapshot.SURFACE_HWND,
@@ -321,7 +324,7 @@ class EngineActivityEvidenceTest {
     @Test
     fun `dispose stops the position sampler`() {
         val recorder = EngineActivityRecorder()
-        val engine = FakeMediaEngine()
+        val engine = FakeMediaEngine(FakeMediaEngine.LoadBehavior.AUTO_PLAY)
         recorder.recordCreated(engine, EngineActivitySnapshot.SURFACE_HWND)
         engine.load(PlaybackRequest(uri = "http://server/stream", title = "test"))
 

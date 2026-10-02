@@ -65,6 +65,7 @@ import com.raulshma.jellyplay.core.ui.components.LocalNetworkStatus
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState
 import com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus
+import com.raulshma.jellyplay.core.ui.message.asText
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
@@ -135,7 +136,7 @@ fun EpgScreen(
         when {
             viewModel.error != null && viewModel.channels.isEmpty() -> {
                 ErrorScreen(
-                    message = viewModel.error!!,
+                    message = viewModel.error!!.asText(),
                     onRetry = { viewModel.loadGuide() },
                 )
             }

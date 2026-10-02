@@ -4,7 +4,7 @@ import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
 import com.raulshma.jellyplay.core.data.remote.RemoteControlReceiver
 import com.raulshma.jellyplay.core.data.remote.RemoteNavigationBridge
 import com.raulshma.jellyplay.core.model.NetworkStatus
-import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
+import com.raulshma.jellyplay.core.ui.message.UserMessageBus
 import kotlinx.coroutines.flow.StateFlow
 
 /**
@@ -24,11 +24,11 @@ import kotlinx.coroutines.flow.StateFlow
  *
  * Every field is a lazy provider, not just
  * [audioPlaybackManagerLazy]. The former eager fields forced MainActivity's
- * onCreate to construct UserMessageBus, NetworkMonitor (whose constructor
+ * onCreate to construct NetworkMonitor (whose constructor
  * registers a connectivity callback) and the remote-control objects on the
  * critical path just to bundle them here; the consumers in JellyPlayApp
- * resolve each provider at its first real use — the bus and the network
- * status flow inside their composition branches, the remote-control pair
+ * resolve each provider at its first real use — the network
+ * status flow inside its composition branch, the remote-control pair
  * inside their post-frame collection effects — so none of that construction
  * gates onCreate (and the auth/onboarding branches skip NetworkMonitor and
  * the remote-control objects entirely, the same deferral
@@ -37,6 +37,14 @@ import kotlinx.coroutines.flow.StateFlow
  * forces these singles to exist, and the first `.value` fires inside the
  * composition (the splash gate reads the session coordinator's restore flag),
  * exactly where the deleted threading parameters resolved.
+ *
+ * [userMessageBusLazy] rides the bundle too: the app-wide bus the shell
+ * publishes through [com.raulshma.jellyplay.core.ui.message.LocalUserMessageBus]
+ * used to be resolved INLINE in JellyPlayApp via
+ * `KoinPlatform.getKoin()!!.get<...>()` — a second, composition-side service
+ * locator beside the bundle's single-resolution-path contract. It now
+ * resolves like every other member (MainActivity owns the Koin lookup, the
+ * composition reads the provider).
  *
  * @param keyDispatcher the activity's key-event synthesis seam:
  *   feeds one Android keycode through the activity's key dispatch (down +
@@ -47,7 +55,6 @@ import kotlinx.coroutines.flow.StateFlow
  *   for the whole of onCreate.
  */
 class ShellInfra(
-    val userMessageBusLazy: Lazy<UserMessageBus>,
     val networkStatusLazy: Lazy<StateFlow<NetworkStatus>>,
     val audioPlaybackManagerLazy: Lazy<AudioPlaybackManager>,
     val remoteNavigationBridgeLazy: Lazy<RemoteNavigationBridge>,
@@ -56,5 +63,6 @@ class ShellInfra(
     val updateCoordinatorLazy: Lazy<UpdateCoordinator>,
     val syncPlayOpenCoordinatorLazy: Lazy<SyncPlayOpenCoordinator>,
     val whatsNewCoordinatorLazy: Lazy<WhatsNewCoordinator>,
+    val userMessageBusLazy: Lazy<UserMessageBus>,
     val keyDispatcher: (Int) -> Boolean,
 )

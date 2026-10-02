@@ -56,26 +56,34 @@ class OfflineLibraryViewModelTest {
 
     /**
      * Subscribes [OfflineLibraryViewModel.offlineLibrary] (WhileSubscribed —
-     * the pipeline stays cold until a collector exists) and settles. The filter
-     * pipeline hops to Dispatchers.Default (real thread), so after the virtual
-     * scheduler drains we give the hop a beat and drain again.
+     * the pipeline stays cold until a collector exists) and lets the virtual
+     * scheduler drain once.
      */
     private fun TestScope.collectAndSettle(): kotlinx.coroutines.Job {
         val job = launch { viewModel.offlineLibrary.collect {} } // keep upstream hot
-        settle()
+        advanceUntilIdle()
         return job
     }
 
-    private fun TestScope.settle() {
-        advanceUntilIdle()
-        // withContext(Dispatchers.Default) hop may resume after the virtual
-        // queue drained; give the (tiny, in-memory) hop a few beats and drain
-        // again — same idiom the FavoritesViewModelTest uses for its Default-
-        // dispatcher projections.
-        repeat(5) {
-            Thread.sleep(20)
+    /**
+     * Waits for [OfflineLibraryViewModel.offlineLibrary] to show [expectedIds].
+     * The filter pipeline hops to Dispatchers.Default and back (a real
+     * thread), and the virtual scheduler cannot see the returning
+     * continuation — so poll with real time until the projection lands, the
+     * same idiom the music suites' awaitGenerated uses. A fixed sleep budget
+     * loses that race on a loaded machine (observed as a sort test asserting
+     * the previous, default-sort emission).
+     */
+    private fun TestScope.awaitLibrary(expectedIds: List<String>) {
+        val deadline = System.currentTimeMillis() + 5_000
+        while (viewModel.offlineLibrary.value.map { it.id } != expectedIds &&
+            System.currentTimeMillis() < deadline
+        ) {
             advanceUntilIdle()
+            Thread.sleep(10)
         }
+        advanceUntilIdle()
+        assertEquals(expectedIds, viewModel.offlineLibrary.value.map { it.id })
     }
 
     // ── Filter tabs ───────────────────────────────────────────────────────
@@ -90,9 +98,8 @@ class OfflineLibraryViewModelTest {
         )
         val job = collectAndSettle()
         viewModel.setFilter(OfflineLibraryFilter.VIDEOS)
-        settle()
 
-        assertEquals(listOf("ser", "mov"), viewModel.offlineLibrary.value.map { it.id })
+        awaitLibrary(listOf("ser", "mov"))
         job.cancel()
     }
 
@@ -106,9 +113,8 @@ class OfflineLibraryViewModelTest {
         )
         val job = collectAndSettle()
         viewModel.setFilter(OfflineLibraryFilter.MUSIC)
-        settle()
 
-        assertEquals(listOf("aud", "mus", "alb"), viewModel.offlineLibrary.value.map { it.id })
+        awaitLibrary(listOf("aud", "mus", "alb"))
         job.cancel()
     }
 
@@ -120,7 +126,7 @@ class OfflineLibraryViewModelTest {
         )
         val job = collectAndSettle()
 
-        assertEquals(listOf("ser", "aud"), viewModel.offlineLibrary.value.map { it.id })
+        awaitLibrary(listOf("ser", "aud"))
         job.cancel()
     }
 
@@ -131,9 +137,8 @@ class OfflineLibraryViewModelTest {
         libraryFlow.value = listOf(offline("a", name = "Alpha"))
         val job = collectAndSettle()
         viewModel.setQuery("A")
-        settle()
 
-        assertEquals(listOf("a"), viewModel.offlineLibrary.value.map { it.id })
+        awaitLibrary(listOf("a"))
         job.cancel()
     }
 
@@ -147,9 +152,8 @@ class OfflineLibraryViewModelTest {
         )
         val job = collectAndSettle()
         viewModel.setQuery("dune")
-        settle()
 
-        assertEquals(listOf("n1", "n2", "n3"), viewModel.offlineLibrary.value.map { it.id })
+        awaitLibrary(listOf("n1", "n2", "n3"))
         job.cancel()
     }
 
@@ -164,9 +168,8 @@ class OfflineLibraryViewModelTest {
         )
         val job = collectAndSettle()
         viewModel.setSort(OfflineLibrarySort.RECENT)
-        settle()
 
-        assertEquals(listOf("new", "mid", "old"), viewModel.offlineLibrary.value.map { it.id })
+        awaitLibrary(listOf("new", "mid", "old"))
         job.cancel()
     }
 
@@ -179,9 +182,8 @@ class OfflineLibraryViewModelTest {
         )
         val job = collectAndSettle()
         viewModel.setSort(OfflineLibrarySort.NAME)
-        settle()
 
-        assertEquals(listOf("a", "b", "c"), viewModel.offlineLibrary.value.map { it.id })
+        awaitLibrary(listOf("a", "b", "c"))
         job.cancel()
     }
 
@@ -194,9 +196,8 @@ class OfflineLibraryViewModelTest {
         )
         val job = collectAndSettle()
         viewModel.setSort(OfflineLibrarySort.RATING)
-        settle()
 
-        assertEquals(listOf("high", "low", "null"), viewModel.offlineLibrary.value.map { it.id })
+        awaitLibrary(listOf("high", "low", "null"))
         job.cancel()
     }
 
@@ -209,9 +210,8 @@ class OfflineLibraryViewModelTest {
         )
         val job = collectAndSettle()
         viewModel.setSort(OfflineLibrarySort.SIZE)
-        settle()
 
-        assertEquals(listOf("big", "mid", "small"), viewModel.offlineLibrary.value.map { it.id })
+        awaitLibrary(listOf("big", "mid", "small"))
         job.cancel()
     }
 

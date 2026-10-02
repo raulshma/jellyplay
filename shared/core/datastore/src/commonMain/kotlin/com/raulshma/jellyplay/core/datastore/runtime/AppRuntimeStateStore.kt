@@ -102,6 +102,26 @@ class AppRuntimeStateStore constructor(
         dataStore.edit { it[Keys.FAVORITE_CHANNELS] = json.encodeToString(channels) }
     }
 
+    /**
+     * The one favorite-channel flip command behind the duplicated
+     * read/±id/write copies (the live player's favorite toggle and the
+     * Channels tab's star): reads the current set INSIDE the [DataStore.edit]
+     * transaction and persists the flipped result, returning the new set so
+     * callers can react (the Channels tab re-sorts favorites-first off it).
+     * A single edit is also race-free where the former
+     * read-`state.first()`-then-write pair could lose one flip of two racing
+     * toggles.
+     */
+    suspend fun toggleFavoriteChannel(channelId: String): Set<String> {
+        var updated: Set<String> = emptySet()
+        dataStore.edit { prefs ->
+            val current = readFavoriteChannels(prefs)
+            updated = if (channelId in current) current - channelId else current + channelId
+            prefs[Keys.FAVORITE_CHANNELS] = json.encodeToString(updated)
+        }
+        return updated
+    }
+
     suspend fun setWatchLaterPlaylistId(playlistId: String?) {
         dataStore.edit {
             if (playlistId != null) it[Keys.WATCH_LATER_PLAYLIST_ID] = playlistId

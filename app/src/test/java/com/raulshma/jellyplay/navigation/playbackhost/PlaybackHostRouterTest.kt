@@ -48,9 +48,12 @@ class PlaybackHostRouterTest {
 
         assertEquals(
             HostDecision.ExternalPlayer(
-                itemId = "item-1",
-                mediaSourceId = "source-1",
-                startPositionTicks = 10_000_000L,
+                ExternalPlayerRequest(
+                    itemId = "item-1",
+                    mediaSourceId = "source-1",
+                    startPositionTicks = 10_000_000L,
+                    subtitleStreamIndex = 3,
+                ),
             ),
             decision,
         )
@@ -61,7 +64,7 @@ class PlaybackHostRouterTest {
         val decision = PlaybackHostRouter.decide(videoMinimalArgs, PlayerType.EXTERNAL)
 
         assertEquals(
-            HostDecision.ExternalPlayer(itemId = "item-min", mediaSourceId = null, startPositionTicks = 0L),
+            HostDecision.ExternalPlayer(ExternalPlayerRequest(itemId = "item-min")),
             decision,
         )
     }
@@ -108,7 +111,7 @@ class PlaybackHostRouterTest {
         val decision = PlaybackHostRouter.decide(liveTv, PlayerType.EXTERNAL)
 
         assertEquals(
-            HostDecision.ExternalPlayer(itemId = "chan-1", mediaSourceId = null, startPositionTicks = 0L),
+            HostDecision.ExternalPlayer(ExternalPlayerRequest(itemId = "chan-1")),
             decision,
         )
     }

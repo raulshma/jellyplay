@@ -24,7 +24,7 @@ import com.raulshma.jellyplay.core.model.cacheThrough
 import com.raulshma.jellyplay.core.model.descriptor
 import com.raulshma.jellyplay.core.model.monotonicNowMillis
 import com.raulshma.jellyplay.core.model.seerr.SeerrDiscoverParams
-import com.raulshma.jellyplay.core.model.seerr.SeerrSearchResponse
+import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import kotlin.concurrent.Volatile
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
@@ -59,11 +59,11 @@ internal expect class DiscoverRowEpoch() {
  * explicitly.
  */
 internal interface HomeSectionSources {
-    suspend fun getContinueWatching(limit: Int): Result<List<MediaItem>>
+    suspend fun getContinueWatching(limit: Int, classicRows: Boolean): Result<List<MediaItem>>
     suspend fun getContinueReading(limit: Int): Result<List<MediaItem>>
     suspend fun getNextUp(limit: Int, enableRewatching: Boolean, maxDays: Int): Result<List<MediaItem>>
     suspend fun getLibraryFolders(): Result<List<LibraryFolder>>
-    suspend fun getLatestMedia(parentId: String, limit: Int): Result<List<MediaItem>>
+    suspend fun getLatestMedia(parentId: String, limit: Int, classicEpisodePool: Int?): Result<List<MediaItem>>
     suspend fun getSimilarItems(itemId: String, limit: Int): Result<List<MediaItem>>
     suspend fun getSearchSuggestions(limit: Int): Result<SearchResult>
     suspend fun getCollectionItems(collectionId: String, startIndex: Int, limit: Int): Result<SearchResult>
@@ -94,9 +94,9 @@ public interface SeerrHomeSectionSources {
     /** Connection + preference probe, read fresh on every home fetch. */
     val seerrAvailable: Boolean
 
-    suspend fun getDiscoverMovies(params: SeerrDiscoverParams?): Result<SeerrSearchResponse>
+    suspend fun getDiscoverMovies(params: SeerrDiscoverParams?): Result<List<SeerrSearchItem>>
 
-    suspend fun getDiscoverTv(params: SeerrDiscoverParams?): Result<SeerrSearchResponse>
+    suspend fun getDiscoverTv(params: SeerrDiscoverParams?): Result<List<SeerrSearchItem>>
 }
 
 /**
@@ -217,7 +217,7 @@ internal class HomeSectionsFetcher(
      * latest/similar rows. The rows carry per-item UserData (played badge,
      * favorite heart, resume bar), so a watched/favorite/progress write must
      * not let this TTL layer serve the pre-write rows — reached from the data
-     * layer through [com.raulshma.jellyplay.core.network.api.LibraryApiClient.invalidateHomeSubcallCaches].
+     * layer through [HomeSectionsCachePort.invalidateSubcallCaches].
      */
     fun invalidateCaches() {
         homeLatestMediaCache.clear()
@@ -273,7 +273,10 @@ internal class HomeSectionsFetcher(
         val identity = cacheIdentity() ?: CacheIdentity.UNKNOWN
 
         val continueWatchingDeferred = async {
-            if (HomeSectionType.CONTINUE_WATCHING in enabledSections) sources.getContinueWatching(limit = 20)
+            if (HomeSectionType.CONTINUE_WATCHING in enabledSections) sources.getContinueWatching(
+                limit = 20,
+                classicRows = query.classicRows,
+            )
             else Result.success(emptyList())
         }
         val continueReadingDeferred = async {
@@ -331,7 +334,15 @@ internal class HomeSectionsFetcher(
                 val recommendationSeeds =
                     continueWatchingResult.getOrDefault(emptyList()) +
                         nextUpResult.getOrDefault(emptyList())
-                async { recommendations(limit = 20, seeds = recommendationSeeds, force = force, identity = identity) }
+                async {
+                    recommendations(
+                        limit = 20,
+                        seeds = recommendationSeeds,
+                        force = force,
+                        identity = identity,
+                        classicRows = query.classicRows,
+                    )
+                }
             } else null
 
         // Latest-media fan-out: one /Items/Latest per non-music folder,
@@ -343,8 +354,18 @@ internal class HomeSectionsFetcher(
             foldersResult.onSuccess { folders ->
                 val filteredFolders = folders
                     .filter { it.collectionType != "music" }
+                val latestRowLimit = 16
                 latestPerFolder = Semaphore(4).mapConcurrent(filteredFolders) { folder ->
-                    folder to getLatestMediaForHome(folder.id, limit = 16, force = force, identity = identity)
+                    folder to getLatestMediaForHome(
+                        parentId = folder.id,
+                        limit = latestRowLimit,
+                        // Classic rows (#168): TV folders fetch a raw-Episode
+                        // pool for the client-side pre-12 grouping; modern
+                        // (default) = unconstrained server behavior.
+                        classicEpisodePool = if (query.classicRows) classicLatestEpisodePool(folder.collectionType, limit = latestRowLimit) else null,
+                        force = force,
+                        identity = identity,
+                    )
                 }
             }
         }
@@ -519,7 +540,7 @@ internal class HomeSectionsFetcher(
             SeerrRowMedia.MOVIE -> seerrSources?.getDiscoverMovies(params)
             SeerrRowMedia.TV -> seerrSources?.getDiscoverTv(params)
         }?.getOrNull() ?: return null
-        val items = response.results.take(row.limit)
+        val items = response.take(row.limit)
         if (items.isEmpty()) return null
         return HomeSection(
             id = HomeSectionType.DISCOVER.descriptor.idFor(row.id),
@@ -534,9 +555,19 @@ internal class HomeSectionsFetcher(
      * Home-path wrapper around [HomeSectionSources.getLatestMedia] that
      * consults [homeLatestMediaCache] first. Only the home path uses this —
      * browse/library screens still go straight to the port for fresh data.
+     * [classicEpisodePool] rides the cache key: a classic-rows flip must not
+     * serve the other mode's rows for the sub-call TTL window.
      */
-    private suspend fun getLatestMediaForHome(parentId: String, limit: Int, force: Boolean, identity: CacheIdentity): Result<List<MediaItem>> =
-        homeLatestMediaCache.cacheThrough(identity, "${parentId}_$limit", force = force) { sources.getLatestMedia(parentId, limit) }
+    private suspend fun getLatestMediaForHome(
+        parentId: String,
+        limit: Int,
+        classicEpisodePool: Int?,
+        force: Boolean,
+        identity: CacheIdentity,
+    ): Result<List<MediaItem>> =
+        homeLatestMediaCache.cacheThrough(identity, "${parentId}_${limit}_pool${classicEpisodePool ?: 0}", force = force) {
+            sources.getLatestMedia(parentId, limit, classicEpisodePool)
+        }
 
     /**
      * Home-path wrapper around [HomeSectionSources.getSimilarItems] that
@@ -560,6 +591,7 @@ internal class HomeSectionsFetcher(
         seeds: List<MediaItem>,
         force: Boolean,
         identity: CacheIdentity,
+        classicRows: Boolean,
     ): Result<RecommendationResult> = runCatchingRethrowingCancellation {
         // Reuse caller-supplied seeds when available (e.g. the home screen has
         // already fetched Continue Watching + Next Up) to avoid duplicate
@@ -567,7 +599,7 @@ internal class HomeSectionsFetcher(
         val seedItems = if (seeds.isNotEmpty()) {
             seeds.distinctBy { it.id }.take(5)
         } else {
-            val continueWatching = sources.getContinueWatching(limit = 5).getOrDefault(emptyList())
+            val continueWatching = sources.getContinueWatching(limit = 5, classicRows = classicRows).getOrDefault(emptyList())
             val nextUp = sources.getNextUp(limit = 5, enableRewatching = false, maxDays = 0).getOrDefault(emptyList())
             (continueWatching + nextUp).distinctBy { it.id }.take(5)
         }

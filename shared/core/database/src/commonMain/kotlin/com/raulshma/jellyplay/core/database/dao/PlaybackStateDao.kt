@@ -150,4 +150,24 @@ interface PlaybackStateDao {
         """
     )
     suspend fun deleteUnreferenced()
+
+    /**
+     * Narrow `(id, isPlayed)` projection for exactly [ids] — the batch
+     * watched-check the keep-days retention sweep performs before deleting
+     * (unwatched downloads are protected). One 2-column query instead of an
+     * N+1 of [getById]; a row absent from `playback_state` (never written)
+     * simply returns no entry, which the sweep's caller treats as unwatched.
+     */
+    @Query("SELECT id, isPlayed FROM playback_state WHERE id IN (:ids)")
+    suspend fun getPlayedFlagsFor(ids: List<String>): List<PlayedFlagRow>
 }
+
+/**
+ * Narrow per-row projection of `playback_state` — see
+ * [PlaybackStateDao.getPlayedFlagsFor]. Carries only the columns the retention
+ * sweep's watched-check consumes.
+ */
+data class PlayedFlagRow(
+    val id: String,
+    val isPlayed: Boolean,
+)

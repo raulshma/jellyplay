@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.network.config
 
+import com.raulshma.jellyplay.core.model.ClientCertificateImport
 import java.io.File
 import java.net.InetAddress
 import java.net.Socket

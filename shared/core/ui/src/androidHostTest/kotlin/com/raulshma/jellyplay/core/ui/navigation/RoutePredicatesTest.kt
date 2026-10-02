@@ -117,6 +117,7 @@ class RoutePredicatesTest {
         Route.ChannelDetail("channel-1"),
         // admin
         Route.AdminDashboard,
+        Route.AdminBackups,
         Route.ScheduledTasks,
         Route.Devices,
         Route.Logs,
@@ -148,6 +149,7 @@ class RoutePredicatesTest {
         Route.UpcomingCalendar,
         Route.Shortcuts,
         Route.SubtitleTester,
+        Route.NextUpExcluded,
     )
 
     /**
@@ -231,6 +233,8 @@ class RoutePredicatesTest {
                 "Newsletter", "Favorites", "PhotoAlbum", "About", "WhatsNew",
                 "Licenses",
                 "WatchProgressHeatmap", "SubtitleTester",
+                // home
+                "NextUpExcluded",
             ),
             descriptorNames() - classified,
         )

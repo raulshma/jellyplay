@@ -63,135 +63,68 @@ jobs:
         with:
           cache-read-only: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/master' }}
 
+      - name: Derive shared module lanes from settings.gradle.kts
+        id: shared-modules
+        # SINGLE SOURCE OF TRUTH for both lanes below: every
+        # include(":shared:…") in settings.gradle.kts gets a
+        # jvmJar+compileAndroidMain pair (build lane) and a jvmTest (test
+        # lane), derived here instead of hand-maintained. The hand lists were
+        # the failure mode twice over: photos/shell/player-book/test-fixtures
+        # shipped full local suites that ran in NO lane, and
+        # :shared:core:test-fixtures was missing from the build lane even
+        # after its tests were added (a module matched the old
+        # SharedModuleCiLaneGuardTest via its jvmTest line alone). Every
+        # shared module applies jellyplay.kmp.library.base and carries both
+        # targets, so all three tasks exist for every include; a future
+        # module that breaks that invariant fails THIS derivation's lane
+        # loudly ("task not found") instead of silently skipping coverage.
+        # The floor (20) only catches regex rot — an include-style change
+        # that makes the scan find nothing — not genuine shrinkage; the
+        # repo-side ratchet for the true floor is
+        # SharedModuleCiLaneGuardTest (:apps:desktop:test).
+        run: |
+          set -eu
+          modules=$(grep -oE 'include\("(:shared:[^"]+)"\)' settings.gradle.kts | sed -E 's/^include\("([^"]+)"\)$/\1/')
+          count=$(printf '%s\n' "$modules" | grep -c . || true)
+          if [ -z "$modules" ] || [ "$count" -lt 20 ]; then
+            echo "::error::Derived $count ':shared:' modules from settings.gradle.kts — the include-scan rotted (include style changed?) or the tree shrank unexpectedly. Fix the scan in the 'Derive shared module lanes' step."
+            exit 1
+          fi
+          build_tasks=""
+          test_tasks=""
+          for m in $modules; do
+            build_tasks="$build_tasks $m:jvmJar $m:compileAndroidMain"
+            test_tasks="$test_tasks $m:jvmTest"
+          done
+          echo "Derived $count shared modules:"
+          printf '  %s\n' $modules
+          echo "build_tasks=$build_tasks" >> "$GITHUB_OUTPUT"
+          echo "test_tasks=$test_tasks" >> "$GITHUB_OUTPUT"
+
       - name: Build shared targets (JVM + Android)
         # The AGP KMP library plugin exposes no per-variant assembleDebug;
         # android target verifies via its single androidMain compilation.
-        # Keep this ONE folded scalar: a blank line inside `run: >` is a hard
-        # newline that splits the invocation into separate shell commands —
-        # blank lines left by the dev/v0.10.7 merge made bash die on an
-        # orphaned ":shared:feature:editor:jvmJar" fragment (exit 127) after
-        # gradle itself had gone green on the truncated task list.
-        # And NO `#` comments inside the scalar either: they fold into the
-        # single command line, bash then treats them and EVERYTHING after as
-        # a shell comment, and the trailing --max-workers/heap overrides
-        # silently never reach gradle — which is why the first two OOM-fix
-        # attempts were no-ops while the build kept dying at the same
-        # "Not enough memory" compiler error. The overrides are runner-sized
-        # because gradle.properties is tuned for an 18-core dev box (6g
-        # daemon, 12 workers) and OOMs the Kotlin daemon on 4-core runners
-        # across the full multi-target graph (same medicine codeql.yml
-        # takes); the full graph only started running on CI at all once the
-        # blank-line bug above was fixed.
-        run: >
-          ./gradlew
-          :shared:core:concurrency:jvmJar
-          :shared:core:concurrency:compileAndroidMain
-          :shared:core:model:jvmJar
-          :shared:core:model:compileAndroidMain
-          :shared:core:designsystem:jvmJar
-          :shared:core:designsystem:compileAndroidMain
-          :shared:core:datastore:jvmJar
-          :shared:core:datastore:compileAndroidMain
-          :shared:core:database:jvmJar
-          :shared:core:database:compileAndroidMain
-          :shared:core:network:jvmJar
-          :shared:core:network:compileAndroidMain
-          :shared:core:data:jvmJar
-          :shared:core:data:compileAndroidMain
-          :shared:core:ui:jvmJar
-          :shared:core:ui:compileAndroidMain
-          :shared:core:player-contract:jvmJar
-          :shared:core:player-contract:compileAndroidMain
-          :shared:feature:search:jvmJar
-          :shared:feature:search:compileAndroidMain
-          :shared:feature:library:jvmJar
-          :shared:feature:library:compileAndroidMain
-          :shared:feature:music:jvmJar
-          :shared:feature:music:compileAndroidMain
-          :shared:feature:livetv:jvmJar
-          :shared:feature:livetv:compileAndroidMain
-          :shared:feature:downloads:jvmJar
-          :shared:feature:downloads:compileAndroidMain
-          :shared:feature:syncplay:jvmJar
-          :shared:feature:syncplay:compileAndroidMain
-          :shared:feature:settings:jvmJar
-          :shared:feature:settings:compileAndroidMain
-          :shared:feature:admin:jvmJar
-          :shared:feature:admin:compileAndroidMain
-          :shared:feature:editor:jvmJar
-          :shared:feature:editor:compileAndroidMain
-          :shared:feature:calendar:jvmJar
-          :shared:feature:calendar:compileAndroidMain
-          :shared:feature:requests:jvmJar
-          :shared:feature:requests:compileAndroidMain
-          :shared:feature:shortcuts:jvmJar
-          :shared:feature:shortcuts:compileAndroidMain
-          :shared:feature:newsletter:jvmJar
-          :shared:feature:newsletter:compileAndroidMain
-          :shared:feature:insights:jvmJar
-          :shared:feature:insights:compileAndroidMain
-          :shared:feature:onboarding:jvmJar
-          :shared:feature:onboarding:compileAndroidMain
-          :shared:feature:subtitle-tester:jvmJar
-          :shared:feature:subtitle-tester:compileAndroidMain
-          :shared:feature:arrqueue:jvmJar
-          :shared:feature:arrqueue:compileAndroidMain
-          :shared:feature:auth:jvmJar
-          :shared:feature:auth:compileAndroidMain
-          :shared:feature:details:jvmJar
-          :shared:feature:details:compileAndroidMain
-          :shared:feature:home:jvmJar
-          :shared:feature:home:compileAndroidMain
-          :shared:feature:player-live:jvmJar
-          :shared:feature:player-live:compileAndroidMain
-          :shared:feature:player-audio:jvmJar
-          :shared:feature:player-audio:compileAndroidMain
-          :shared:feature:player-video:jvmJar
-          :shared:feature:player-video:compileAndroidMain
-          --stacktrace
-          --max-workers=2
-          "-Dorg.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8"
-          "-Pkotlin.daemon.jvmargs=-Xmx5g -XX:+UseParallelGC"
+        # Task list is DERIVED above (settings.gradle.kts is the single
+        # source of truth). One line, no folded scalar: a blank line inside
+        # `run: >` is a hard newline that splits the invocation into separate
+        # shell commands (the dev/v0.10.7 merge made bash die on an orphaned
+        # mid-list task fragment, exit 127), and a `#` inside the scalar
+        # comments out everything after it — which is why the first two
+        # OOM-fix attempts were no-ops. The overrides are
+        # runner-sized because gradle.properties is tuned for an 18-core dev
+        # box (6g daemon, 12 workers) and OOMs the Kotlin daemon on 4-core
+        # runners across the full multi-target graph (same medicine
+        # codeql.yml takes).
+        run: ./gradlew ${{ steps.shared-modules.outputs.build_tasks }} --stacktrace --max-workers=2 "-Dorg.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8" "-Pkotlin.daemon.jvmargs=-Xmx5g -XX:+UseParallelGC"
 
       - name: Shared tests (JVM)
-        run: >
-          ./gradlew
-          :shared:core:concurrency:jvmTest
-          :shared:core:model:jvmTest
-          :shared:core:designsystem:jvmTest
-          :shared:core:datastore:jvmTest
-          :shared:core:database:jvmTest
-          :shared:core:network:jvmTest
-          :shared:core:data:jvmTest
-          :shared:core:ui:jvmTest
-          :shared:core:player-contract:jvmTest
-          :shared:feature:search:jvmTest
-          :shared:feature:library:jvmTest
-          :shared:feature:music:jvmTest
-          :shared:feature:livetv:jvmTest
-          :shared:feature:downloads:jvmTest
-          :shared:feature:syncplay:jvmTest
-          :shared:feature:settings:jvmTest
-          :shared:feature:admin:jvmTest
-          :shared:feature:editor:jvmTest
-          :shared:feature:calendar:jvmTest
-          :shared:feature:requests:jvmTest
-          :shared:feature:shortcuts:jvmTest
-          :shared:feature:newsletter:jvmTest
-          :shared:feature:insights:jvmTest
-          :shared:feature:onboarding:jvmTest
-          :shared:feature:subtitle-tester:jvmTest
-          :shared:feature:arrqueue:jvmTest
-          :shared:feature:details:jvmTest
-          :shared:feature:auth:jvmTest
-          :shared:feature:home:jvmTest
-          :shared:feature:player-live:jvmTest
-          :shared:feature:player-audio:jvmTest
-          :shared:feature:player-video:jvmTest
-          --stacktrace
-          --max-workers=2
-          "-Dorg.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8"
-          "-Pkotlin.daemon.jvmargs=-Xmx5g -XX:+UseParallelGC"
+        # Task list is DERIVED above — every settings.gradle.kts shared
+        # include's jvmTest runs (designsystem's empty suite included, as
+        # before). The photos/shell/player-book/test-fixtures dark-suite
+        # incident can no longer recur: a new include joins the lane by
+        # construction, and SharedModuleCiLaneGuardTest (:apps:desktop:test)
+        # ratchets the derivation itself.
+        run: ./gradlew ${{ steps.shared-modules.outputs.test_tasks }} --stacktrace --max-workers=2 "-Dorg.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8" "-Pkotlin.daemon.jvmargs=-Xmx5g -XX:+UseParallelGC"
 
       - name: Print test failure details
         # Gradle 9's console prints only one-line "FAILED" entries; the
@@ -261,7 +194,7 @@ jobs:
         # :core:ui/:core:data/:core:notification modules dissolved into the
         # shared tree's androidHostTest lanes (worker suites incl. the
         # OfflineWatchSyncContractTest regression pin; the drain-policy
-        # bodies run portable in :shared:core:data:jvmTest above; the former
+        # bodies run portable in the core:data jvmTest lane above; the former
         # instrumented-only sheet/scrim pairs now execute under Robolectric).
         # Runner-sized heap/worker overrides (same medicine as the
         # shared-targets lane above): gradle.properties is tuned for an
@@ -270,7 +203,13 @@ jobs:
         # full shared feature graph for both phone+tv unit-test variants
         # (compileAndroidMain died with "GC overhead limit exceeded" in four
         # feature modules before these were added).
-        run: ./gradlew :app:testPhoneDebugUnitTest :app:testTvDebugUnitTest :shared:core:data:testAndroidHostTest :shared:core:ui:testAndroidHostTest --stacktrace --max-workers=2 "-Dorg.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8" "-Pkotlin.daemon.jvmargs=-Xmx5g -XX:+UseParallelGC"
+        # :shared:feature:{player-video,syncplay}:testAndroidHostTest are the
+        # feature-side hostTest lanes (Robolectric screen/surface suites) —
+        # they compiled in no CI lane before this was added. (HostTest lanes
+        # are NOT part of the derived shared-module scan above: which modules
+        # own an androidHostTest source set is not derivable from
+        # settings.gradle.kts.)
+        run: ./gradlew :app:testPhoneDebugUnitTest :app:testTvDebugUnitTest :shared:core:data:testAndroidHostTest :shared:core:ui:testAndroidHostTest :shared:feature:player-video:testAndroidHostTest :shared:feature:syncplay:testAndroidHostTest --stacktrace --max-workers=2 "-Dorg.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8" "-Pkotlin.daemon.jvmargs=-Xmx5g -XX:+UseParallelGC"
 
       - name: Compose-resources APK guard
         # dependsOn assemblePhoneDebug — the guard opens the built APKs.

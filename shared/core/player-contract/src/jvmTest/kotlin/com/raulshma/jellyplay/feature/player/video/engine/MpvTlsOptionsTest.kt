@@ -1,11 +1,12 @@
 package com.raulshma.jellyplay.feature.player.video.engine
 
+import com.raulshma.jellyplay.core.model.PlaybackTls
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
 /**
  * Exhaustive matrix for [MpvTlsOptions.from]: the ONLY translation
- * from [PlaybackRequest.tls] to mpv's `tls-*` option writes, shared by the
+ * from the request's `requestSpecific.tls` to mpv's `tls-*` option writes, shared by the
  * Android and desktop engines so the emitted set cannot drift. Pins:
  *  - full triple (cert + key + CA) when every path is present;
  *  - CA omitted from the WRITE set when absent (mpv keeps its default — no

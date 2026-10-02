@@ -106,6 +106,8 @@ import com.raulshma.jellyplay.core.model.DreamImageCategory
 import com.raulshma.jellyplay.core.model.DreamTransitionStyle
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.ThemeMode
+import com.raulshma.jellyplay.core.model.PARENTAL_RATING_PICKER_LADDER
+import com.raulshma.jellyplay.core.model.parentalRatingAge
 import androidx.compose.foundation.lazy.itemsIndexed
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
@@ -162,6 +164,7 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_cate
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_categories_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_category_movies
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_category_music
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_category_photos
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_category_tv
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_clear_recents
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_clear_search_cd
@@ -171,6 +174,14 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_defa
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_disabled
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_display_media_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_downloads_storage
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dream_dim_after_1_minute
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dream_dim_after_30_seconds
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dream_dim_after_5_minutes
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dream_dim_after_off
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dream_dim_after_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dream_dim_percent_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dream_max_parental_rating_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dream_rating_none
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dynamic_token
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_early_access_features
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_experimental
@@ -219,6 +230,16 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_setu
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_setup_wizard_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_screensaver
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discord_presence
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discord_presence_enabled_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discord_presence_off
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discord_presence_on
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hooks
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hooks_cmd_not_set
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hooks_enabled_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hooks_off
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hooks_on
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hooks_placeholder_hint
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_idle_ambient
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_idle_ambient_enabled
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_idle_ambient_enabled_subtitle
@@ -1087,491 +1108,40 @@ fun SettingsScreen(
                 }
 
                 if (searchPanel.isSearchActive) {
-                    if (availableCategories.isNotEmpty()) {
-                        LazyRow(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(bottom = 8.dp),
-                            contentPadding = PaddingValues(horizontal = adaptiveInfo.contentPadding(LocalTvMode.current)),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            item(key = "cat_all") {
-                                SettingsCategoryChip(
-                                    label = stringResource(Res.string.settings_filter_all),
-                                    selected = searchPanel.selectedCategory == null,
-                                    onClick = { searchPanel.selectAllCategories() },
-                                )
-                            }
-                            items(availableCategories, key = { it }) { cat ->
-                                SettingsCategoryChip(
-                                    label = cat,
-                                    selected = searchPanel.selectedCategory == cat,
-                                    onClick = { searchPanel.toggleCategory(cat) },
-                                )
-                            }
-                        }
-                    }
-
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f)
-                    ) {
-                        when {
-                            searchPanel.searchQuery.isNotBlank() && displayItems.isNotEmpty() -> {
-                                SearchResultsColumn(
-                                    onBack = { dismissSearchAndRefocus() }
-                                ) {
-                                    itemsIndexed(displayItems, key = { _, item -> item.id }, contentType = { _, _ -> "searchResult" }) { index, item ->
-                                        SettingsSearchResultRow(
-                                            item = item,
-                                            query = searchPanel.searchQuery,
-                                            index = index,
-                                            count = displayItems.size,
-                                            advancedBadgeLabel = advLabel,
-                                            onClick = { onResultClick(item) },
-                                        )
-                                    }
-                                }
-                            }
-                            searchPanel.searchQuery.isNotBlank() && displayItems.isEmpty() -> {
-                                LazyColumn(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .padding(horizontal = adaptiveInfo.contentPadding(LocalTvMode.current)),
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                                    contentPadding = PaddingValues(vertical = 24.dp)
-                                ) {
-                                    item(key = "no_matches_banner") {
-                                        Column(
-                                            horizontalAlignment = Alignment.CenterHorizontally,
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(24.dp)
-                                        ) {
-                                            Surface(
-                                                shape = CircleShape,
-                                                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                                modifier = Modifier.size(56.dp)
-                                            ) {
-                                                Box(contentAlignment = Alignment.Center) {
-                                                    Icon(
-                                                        imageVector = Tabler.Outline.Search,
-                                                        contentDescription = null,
-                                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                        modifier = Modifier.size(28.dp)
-                                                    )
-                                                }
-                                            }
-                                            Spacer(Modifier.height(16.dp))
-                                            Text(
-                                                text = stringResource(Res.string.settings_no_matches),
-                                                style = MaterialTheme.typography.titleMedium,
-                                                fontWeight = FontWeight.Bold,
-                                                color = MaterialTheme.colorScheme.onSurface
-                                            )
-                                            Spacer(Modifier.height(6.dp))
-                                            Text(
-                                                text = stringResource(Res.string.settings_no_matches_hint),
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                textAlign = TextAlign.Center
-                                            )
-                                            if (searchPanel.selectedCategory != null) {
-                                                Spacer(Modifier.height(12.dp))
-                                                TextButton(onClick = { searchPanel.selectAllCategories() }) {
-                                                    Text(stringResource(Res.string.settings_filter_all))
-                                                }
-                                            }
-                                        }
-                                    }
-                                    item(key = "categories_header") {
-                                        Text(
-                                            text = stringResource(Res.string.settings_browse_categories),
-                                            style = MaterialTheme.typography.titleSmall,
-                                            fontWeight = FontWeight.Bold,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(horizontal = 4.dp, vertical = 4.dp)
-                                        )
-                                    }
-                                    item(key = "categories_grid") {
-                                        SettingsQuickCategoriesGrid(
-                                            onNavigate = onNavigate,
-                                            onDismissSearch = { dismissSearchAndRefocus() }
-                                        )
-                                    }
-                                }
-                            }
-                            searchPanel.searchQuery.isBlank() && recentItems.isNotEmpty() -> {
-                                SearchResultsColumn(
-                                    onBack = { dismissSearchAndRefocus() }
-                                ) {
-                                    item(key = "recents_header") {
-                                        Row(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(start = 4.dp, end = 4.dp, top = 4.dp, bottom = 6.dp),
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            verticalAlignment = Alignment.CenterVertically,
-                                        ) {
-                                            Text(
-                                                text = stringResource(Res.string.settings_recents_title),
-                                                style = MaterialTheme.typography.labelLarge,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                fontWeight = FontWeight.SemiBold,
-                                            )
-                                            TextButton(onClick = { searchPanel.clearRecents() }) {
-                                                Text(stringResource(Res.string.settings_clear_recents))
-                                            }
-                                        }
-                                    }
-                                    itemsIndexed(recentItems, key = { _, item -> item.id }, contentType = { _, _ -> "recentResult" }) { index, item ->
-                                        SettingsSearchResultRow(
-                                            item = item,
-                                            query = "",
-                                            index = index,
-                                            count = recentItems.size,
-                                            advancedBadgeLabel = advLabel,
-                                            onClick = { onResultClick(item) },
-                                        )
-                                    }
-                                    item(key = "browse_cats_header") {
-                                        Text(
-                                            text = stringResource(Res.string.settings_browse_categories),
-                                            style = MaterialTheme.typography.titleSmall,
-                                            fontWeight = FontWeight.Bold,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(start = 4.dp, end = 4.dp, top = 16.dp, bottom = 8.dp)
-                                        )
-                                    }
-                                    item(key = "browse_cats_grid") {
-                                        SettingsQuickCategoriesGrid(
-                                            onNavigate = onNavigate,
-                                            onDismissSearch = { dismissSearchAndRefocus() }
-                                        )
-                                    }
-                                }
-                            }
-                            else -> {
-                                LazyColumn(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .padding(horizontal = adaptiveInfo.contentPadding(LocalTvMode.current)),
-                                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                                    contentPadding = PaddingValues(vertical = 16.dp)
-                                ) {
-                                    item(key = "browse_header") {
-                                        Text(
-                                            text = stringResource(Res.string.settings_browse_categories),
-                                            style = MaterialTheme.typography.titleSmall,
-                                            fontWeight = FontWeight.Bold,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(horizontal = 4.dp, vertical = 4.dp)
-                                        )
-                                    }
-                                    item(key = "browse_grid") {
-                                        SettingsQuickCategoriesGrid(
-                                            onNavigate = onNavigate,
-                                            onDismissSearch = { dismissSearchAndRefocus() }
-                                        )
-                                    }
-                                    item(key = "hint") {
-                                        Box(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(16.dp),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Text(
-                                                text = stringResource(Res.string.settings_search_hint),
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                                                textAlign = TextAlign.Center
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
+                    SettingsSearchResultsPane(
+                        searchPanel = searchPanel,
+                        availableCategories = availableCategories,
+                        displayItems = displayItems,
+                        recentItems = recentItems,
+                        advancedBadgeLabel = advLabel,
+                        onResultClick = onResultClick,
+                        onDismissSearch = { dismissSearchAndRefocus() },
+                        onNavigate = onNavigate,
+                        modifier = Modifier.weight(1f),
+                    )
                 } else {
-
-                CompositionLocalProvider(LocalAnimateSettingsEntrance provides animateEntrance) {
-                    LazyColumn(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .imePadding()
-                            .then(Modifier
-                                .tvFocusRestorer()
-                                .focusRequester(listFocusRequester)
-                                .onDpadKeyEvent(
-                                    onBack = { e ->
-                                        if (e.isKeyUp) { onBack() }
-                                        true
-                                    },
-                                )
-                            ),
-                        state = lazyListState,
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
-                        contentPadding = PaddingValues(
-                            start = adaptiveInfo.contentPadding(LocalTvMode.current),
-                            end = adaptiveInfo.contentPadding(LocalTvMode.current),
-                            bottom = adaptiveInfo.bottomPadding(LocalTvMode.current),
-                        ),
-                    ) {
-                        settingsSection("profile", isTv) {
-                            if (userName.isNotBlank()) {
-                                SettingsProfileBanner(
-                                    userName = userName,
-                                    currentUser = viewModel.currentUser,
-                                    serverAddress = currentServerAddress,
-                                    isAdmin = viewModel.currentUser?.isAdmin == true,
-                                    onNewsletterClick = onNewsletterClick,
-                                    onUserManagementClick = { onNavigate(Route.UserManagement(null)) },
-                                    onServerManagementClick = { onNavigate(Route.ServerManagement(null)) },
-                                )
-                            }
-                        }
-
-                        settingsSection("power_user_mode", isTv) {
-                            PowerUserModeCard(
-                                checked = preferences.showAdvancedSettings,
-                                onCheckedChange = { viewModel.edit { scope -> scope.appearance.setShowAdvancedSettings(it) } },
-                            )
-                        }
-
-                        settingsSection("active_devices", isTv) {
-                            if (viewModel.currentUser?.isAdmin == true && viewModel.activeSessions.isNotEmpty()) {
-                                ActiveDevicesRow(
-                                    sessions = viewModel.activeSessions,
-                                    serverAddress = currentServerAddress,
-                                    onSendMessage = viewModel::sendMessageToSession,
-                                )
-                            }
-                        }
-
-                        settingsSection("account", isTv) {
-                            SettingsAccountSection(
-                                userName = userName,
-                                isAdmin = viewModel.currentUser?.isAdmin == true,
-                                openSetting = openSetting,
-                                onSignOut = { fromServer ->
-                                    signOutFromServer = fromServer
-                                    showSignOutConfirm = true
-                                },
-                            )
-                        }
-
-                        settingsSection("activity", isTv) {
-                            SettingsActivitySection(
-                                viewModel = viewModel,
-                                openSetting = openSetting,
-                            )
-                        }
-
-                        settingsSection("system", isTv) {
-                            SettingsSystemSection(
-                                viewModel = viewModel,
-                                openSetting = openSetting,
-                                onSetupWizardClick = {
-                                    lastClickedSettingId = SettingsScreenIds.SETUP_WIZARD
-                                    onSetupWizard()
-                                },
-                            )
-                        }
-
-                        settingsSection("item_home", isTv) {
-                            val homePrefs by viewModel.homePreferences.collectAsStateWithLifecycle()
-                            SettingListItem(
-                                icon = Tabler.Outline.Home,
-                                title = stringResource(Res.string.settings_home_title),
-                                subtitle = stringResource(
-                                    Res.string.settings_home_sections_visible,
-                                    homePrefs.enabledHomeSectionTypes.size,
-                                    HomeSectionType.CONFIGURABLE.size,
-                                ),
-                                index = 0, count = 1,
-                                onClick = { openSetting("home") { Route.HomeSettings(it) } },
-                            )
-                        }
-
-                        settingsSection("item_appearance", isTv) {
-                            SettingListItem(
-                                icon = Tabler.Outline.Palette,
-                                title = stringResource(Res.string.settings_appearance),
-                                subtitle = appearanceSummarySubtitle(preferences),
-                                index = 0, count = 1,
-                                onClick = { openSetting("appearance") { Route.AppearanceSettings(it) } },
-                            )
-                        }
-
-                        settingsSection("item_playback", isTv) {
-                            SettingListItem(
-                                icon = Tabler.Outline.PlayerPlay,
-                                title = stringResource(Res.string.settings_playback),
-                                subtitle = stringResource(Res.string.settings_playback_subtitle, preferences.preferredPlayer.displayName),
-                                index = 0, count = 1,
-                                onClick = { openSetting("playback") { Route.PlaybackSettings(it) } },
-                            )
-                        }
-
-                        settingsSection("item_audio", isTv) {
-                            SettingListItem(
-                                icon = Tabler.Outline.Music,
-                                title = stringResource(Res.string.settings_audio_player),
-                                subtitle = stringResource(Res.string.settings_default_speed_value, if (preferences.audioDefaultSpeed == 1.0f) "1x" else "${preferences.audioDefaultSpeed}x"),
-                                index = 0, count = 1,
-                                onClick = { openSetting("audio") { Route.AudioSettings(it) } },
-                            )
-                        }
-
-                        settingsSection("item_language", isTv) {
-                            SettingListItem(
-                                icon = Tabler.Outline.Language,
-                                title = stringResource(Res.string.settings_language_subtitles),
-                                subtitle = stringResource(Res.string.settings_language_subtitle, preferences.preferredAudioLanguage ?: stringResource(Res.string.settings_lang_default)),
-                                index = 0, count = 1,
-                                onClick = { openSetting("language") { Route.LanguageSettings(it) } },
-                            )
-                        }
-
-                        // No desktop notification backend exists (the
-                        // NotificationSync seam no-ops there) — entry + screen
-                        // stay Android-only.
-                        if (settingsCapabilities.supportsNotifications) {
-                            settingsSection("item_notifications", isTv) {
-                                val notifPrefs = preferences.notificationPreferences
-                                SettingListItem(
-                                    icon = Tabler.Outline.Bell,
-                                    title = stringResource(Res.string.settings_notifications),
-                                    subtitle = if (notifPrefs.enabled) stringResource(Res.string.settings_notifications_checking, notifPrefs.checkFrequency.displayName.lowercase()) else stringResource(Res.string.settings_disabled),
-                                    index = 0, count = 1,
-                                    onClick = { openSetting("notifications") { Route.NotificationSettings(it) } },
-                                )
-                            }
-                        }
-
-                        settingsSection("item_storage", isTv) {
-                            SettingListItem(
-                                icon = Tabler.Outline.Database,
-                                title = stringResource(Res.string.settings_downloads_storage),
-                                subtitle = stringResource(Res.string.settings_cache_subtitle, viewModel.cacheSizeMb),
-                                index = 0, count = 1,
-                                onClick = { openSetting("storage") { Route.StorageSettings(it) } },
-                            )
-                        }
-
-                        settingsSection("item_security", isTv) {
-                            SettingListItem(
-                                icon = Tabler.Outline.Lock,
-                                title = stringResource(Res.string.settings_security),
-                                subtitle = when {
-                                    preferences.pinLockEnabled && preferences.biometricLockEnabled -> stringResource(Res.string.settings_pin_biometric_on)
-                                    preferences.biometricLockEnabled -> stringResource(Res.string.settings_biometric_on)
-                                    preferences.pinLockEnabled -> stringResource(Res.string.settings_pin_on)
-                                    else -> stringResource(Res.string.settings_lock_off)
-                                },
-                                index = 0, count = 1,
-                                onClick = { openSetting("security") { Route.SecuritySettings(it) } },
-                            )
-                        }
-
-                        settingsSection("item_privacy_data", isTv) {
-                            SettingListItem(
-                                icon = Tabler.Outline.ShieldLock,
-                                title = stringResource(Res.string.settings_privacy_data),
-                                subtitle = stringResource(Res.string.settings_privacy_data_subtitle),
-                                index = 0, count = 1,
-                                onClick = { openSetting("privacy_data") { Route.PrivacyData(it) } },
-                            )
-                        }
-
-                        settingsSection("item_backup", isTv) {
-                            SettingListItem(
-                                icon = Tabler.Outline.DatabaseExport,
-                                title = stringResource(Res.string.settings_backup_restore),
-                                subtitle = stringResource(Res.string.settings_backup_restore_subtitle),
-                                index = 0, count = 1,
-                                onClick = { openSetting("backup") { Route.BackupSettings(it) } },
-                            )
-                        }
-
-                        if (isTv) {
-                            settingsSection("group_screensaver", isTv) {
-                                SettingsScreensaverSection(
-                                    preferences = preferences,
-                                    viewModel = viewModel,
-                                    lastClickedSettingId = lastClickedSettingId,
-                                    activeDialog = activeDialogState,
-                                )
-                            }
-                        }
-
-                        // the desktop idle "Ready to play" ambient
-                        // screen rows — capability-gated (structurally absent
-                        // on Android, whose lock-screen/screensaver story owns
-                        // idle display), rendered as their own group beside
-                        // the TV dream group so neither row total entangles.
-                        if (settingsCapabilities.supportsIdleAmbientScreen) {
-                            settingsSection("group_idle_ambient", isTv) {
-                                SettingsIdleAmbientSection(
-                                    preferences = preferences,
-                                    viewModel = viewModel,
-                                    lastClickedSettingId = lastClickedSettingId,
-                                    activeDialog = activeDialogState,
-                                )
-                            }
-                        }
-
-                        settingsSection("item_experimental", isTv) {
-                            SettingListItem(
-                                icon = Tabler.Outline.Flask,
-                                title = stringResource(Res.string.settings_experimental),
-                                subtitle = experimentalSummarySubtitle(preferences),
-                                index = 0, count = 1,
-                                onClick = { openSetting(ExperimentalSettingsIds.EXPERIMENTAL) { Route.ExperimentalSettings(it) } },
-                            )
-                        }
-
-                        settingsSection("item_integrations", isTv) {
-                            SettingListItem(
-                                icon = rowIcon(IntegrationsScreenIds.INTEGRATIONS),
-                                title = rowTitle(IntegrationsScreenIds.INTEGRATIONS),
-                                subtitle = stringResource(Res.string.settings_integrations_subtitle),
-                                index = 0, count = 1,
-                                onClick = { openSetting(IntegrationsScreenIds.INTEGRATIONS) { Route.Integrations(it) } },
-                            )
-                        }
-
-                        settingsSection("item_about", isTv) {
-                            SettingListItem(
-                                icon = Tabler.Outline.InfoCircle,
-                                title = stringResource(Res.string.settings_about),
-                                subtitle = stringResource(Res.string.settings_about_subtitle),
-                                index = 0, count = 1,
-                                onClick = { openSetting("about") { Route.About } },
-                            )
-                        }
-
-                        settingsSection("item_whatsnew", isTv) {
-                            SettingListItem(
-                                icon = Tabler.Outline.Sparkles,
-                                title = stringResource(Res.string.settings_whatsnew_title),
-                                subtitle = stringResource(Res.string.settings_whatsnew_subtitle),
-                                index = 0, count = 1,
-                                onClick = { openSetting("whatsnew") { Route.WhatsNew } },
-                            )
-                        }
-                    }
-                }
+                    SettingsBrowsePane(
+                        viewModel = viewModel,
+                        preferences = preferences,
+                        userName = userName,
+                        currentServerAddress = currentServerAddress,
+                        isTv = isTv,
+                        animateEntrance = animateEntrance,
+                        lazyListState = lazyListState,
+                        listFocusRequester = listFocusRequester,
+                        onBack = onBack,
+                        openSetting = openSetting,
+                        onNavigate = onNavigate,
+                        onSetupWizard = onSetupWizard,
+                        onNewsletterClick = onNewsletterClick,
+                        lastClickedSettingId = lastClickedSettingId,
+                        onLastClickedSettingIdChange = { lastClickedSettingId = it },
+                        onSignOut = { fromServer ->
+                            signOutFromServer = fromServer
+                            showSignOutConfirm = true
+                        },
+                        activeDialogState = activeDialogState,
+                    )
                 }
             }
         }
@@ -1600,6 +1170,572 @@ fun SettingsScreen(
             onDismiss = { activeDialog = null },
         )
     }
+}
+/**
+ * The search-active pane: the category filter chip row above the four-way
+ * result box (live matches / no-matches + quick categories / recent settings /
+ * browse hint). Relocated verbatim from [SettingsScreen]'s inline
+ * `if (searchPanel.isSearchActive)` subtree; [modifier] carries the
+ * Column-scope `weight(1f)` the result box needs (the chips row stays
+ * unweighted above it, exactly as before).
+ */
+@Composable
+private fun SettingsSearchResultsPane(
+    searchPanel: SettingsSearchPanelState,
+    availableCategories: List<String>,
+    displayItems: List<ResolvedSettingsItem>,
+    recentItems: List<ResolvedSettingsItem>,
+    advancedBadgeLabel: String,
+    onResultClick: (ResolvedSettingsItem) -> Unit,
+    onDismissSearch: () -> Unit,
+    onNavigate: (Route) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val adaptiveInfo = LocalAdaptiveInfo.current
+        if (availableCategories.isNotEmpty()) {
+            LazyRow(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 8.dp),
+                contentPadding = PaddingValues(horizontal = adaptiveInfo.contentPadding(LocalTvMode.current)),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                item(key = "cat_all") {
+                    SettingsCategoryChip(
+                        label = stringResource(Res.string.settings_filter_all),
+                        selected = searchPanel.selectedCategory == null,
+                        onClick = { searchPanel.selectAllCategories() },
+                    )
+                }
+                items(availableCategories, key = { it }) { cat ->
+                    SettingsCategoryChip(
+                        label = cat,
+                        selected = searchPanel.selectedCategory == cat,
+                        onClick = { searchPanel.toggleCategory(cat) },
+                    )
+                }
+            }
+        }
+
+        Box(
+            // The Column-scope weight(1f) arrives via [modifier] from the call
+            // site (the pane itself is not a ColumnScope).
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(modifier)
+        ) {
+            when {
+                searchPanel.searchQuery.isNotBlank() && displayItems.isNotEmpty() -> {
+                    SearchResultsColumn(
+                        onBack = onDismissSearch
+                    ) {
+                        itemsIndexed(displayItems, key = { _, item -> item.id }, contentType = { _, _ -> "searchResult" }) { index, item ->
+                            SettingsSearchResultRow(
+                                item = item,
+                                query = searchPanel.searchQuery,
+                                index = index,
+                                count = displayItems.size,
+                                advancedBadgeLabel = advancedBadgeLabel,
+                                onClick = { onResultClick(item) },
+                            )
+                        }
+                    }
+                }
+                searchPanel.searchQuery.isNotBlank() && displayItems.isEmpty() -> {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = adaptiveInfo.contentPadding(LocalTvMode.current)),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                        contentPadding = PaddingValues(vertical = 24.dp)
+                    ) {
+                        item(key = "no_matches_banner") {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(24.dp)
+                            ) {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                    modifier = Modifier.size(56.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            imageVector = Tabler.Outline.Search,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.size(28.dp)
+                                        )
+                                    }
+                                }
+                                Spacer(Modifier.height(16.dp))
+                                Text(
+                                    text = stringResource(Res.string.settings_no_matches),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Spacer(Modifier.height(6.dp))
+                                Text(
+                                    text = stringResource(Res.string.settings_no_matches_hint),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    textAlign = TextAlign.Center
+                                )
+                                if (searchPanel.selectedCategory != null) {
+                                    Spacer(Modifier.height(12.dp))
+                                    TextButton(onClick = { searchPanel.selectAllCategories() }) {
+                                        Text(stringResource(Res.string.settings_filter_all))
+                                    }
+                                }
+                            }
+                        }
+                        item(key = "categories_header") {
+                            Text(
+                                text = stringResource(Res.string.settings_browse_categories),
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 4.dp, vertical = 4.dp)
+                            )
+                        }
+                        item(key = "categories_grid") {
+                            SettingsQuickCategoriesGrid(
+                                onNavigate = onNavigate,
+                                onDismissSearch = onDismissSearch
+                            )
+                        }
+                    }
+                }
+                searchPanel.searchQuery.isBlank() && recentItems.isNotEmpty() -> {
+                    SearchResultsColumn(
+                        onBack = onDismissSearch
+                    ) {
+                        item(key = "recents_header") {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(start = 4.dp, end = 4.dp, top = 4.dp, bottom = 6.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    text = stringResource(Res.string.settings_recents_title),
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                                TextButton(onClick = { searchPanel.clearRecents() }) {
+                                    Text(stringResource(Res.string.settings_clear_recents))
+                                }
+                            }
+                        }
+                        itemsIndexed(recentItems, key = { _, item -> item.id }, contentType = { _, _ -> "recentResult" }) { index, item ->
+                            SettingsSearchResultRow(
+                                item = item,
+                                query = "",
+                                index = index,
+                                count = recentItems.size,
+                                advancedBadgeLabel = advancedBadgeLabel,
+                                onClick = { onResultClick(item) },
+                            )
+                        }
+                        item(key = "browse_cats_header") {
+                            Text(
+                                text = stringResource(Res.string.settings_browse_categories),
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(start = 4.dp, end = 4.dp, top = 16.dp, bottom = 8.dp)
+                            )
+                        }
+                        item(key = "browse_cats_grid") {
+                            SettingsQuickCategoriesGrid(
+                                onNavigate = onNavigate,
+                                onDismissSearch = onDismissSearch
+                            )
+                        }
+                    }
+                }
+                else -> {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = adaptiveInfo.contentPadding(LocalTvMode.current)),
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                        contentPadding = PaddingValues(vertical = 16.dp)
+                    ) {
+                        item(key = "browse_header") {
+                            Text(
+                                text = stringResource(Res.string.settings_browse_categories),
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 4.dp, vertical = 4.dp)
+                            )
+                        }
+                        item(key = "browse_grid") {
+                            SettingsQuickCategoriesGrid(
+                                onNavigate = onNavigate,
+                                onDismissSearch = onDismissSearch
+                            )
+                        }
+                        item(key = "hint") {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = stringResource(Res.string.settings_search_hint),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+}
+
+/**
+ * The browse pane: the settings root list shown while search is inactive —
+ * the CompositionLocalProvider-wrapped LazyColumn wiring the profile /
+ * power-user / devices / account / activity / system groups, the item rows,
+ * and the TV screensaver + platform-gated desktop groups through
+ * [settingsSection]. Relocated verbatim from [SettingsScreen]'s inline `else`
+ * arm; the screen keeps the header chrome, dialogs, and state ownership.
+ */
+@Composable
+private fun SettingsBrowsePane(
+    viewModel: SettingsViewModel,
+    preferences: SettingsScreenPreferences,
+    userName: String,
+    currentServerAddress: String,
+    isTv: Boolean,
+    animateEntrance: Boolean,
+    lazyListState: androidx.compose.foundation.lazy.LazyListState,
+    listFocusRequester: FocusRequester,
+    onBack: () -> Unit,
+    openSetting: (String, (String) -> Route) -> Unit,
+    onNavigate: (Route) -> Unit,
+    onSetupWizard: () -> Unit,
+    onNewsletterClick: () -> Unit,
+    lastClickedSettingId: String?,
+    onLastClickedSettingIdChange: (String?) -> Unit,
+    onSignOut: (fromServer: Boolean) -> Unit,
+    activeDialogState: MutableState<PickerState<*>?>,
+) {
+    val adaptiveInfo = LocalAdaptiveInfo.current
+        CompositionLocalProvider(LocalAnimateSettingsEntrance provides animateEntrance) {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .imePadding()
+                    .then(Modifier
+                        .tvFocusRestorer()
+                        .focusRequester(listFocusRequester)
+                        .onDpadKeyEvent(
+                            onBack = { e ->
+                                if (e.isKeyUp) { onBack() }
+                                true
+                            },
+                        )
+                    ),
+                state = lazyListState,
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                contentPadding = PaddingValues(
+                    start = adaptiveInfo.contentPadding(LocalTvMode.current),
+                    end = adaptiveInfo.contentPadding(LocalTvMode.current),
+                    bottom = adaptiveInfo.bottomPadding(LocalTvMode.current),
+                ),
+            ) {
+                settingsSection("profile", isTv) {
+                    if (userName.isNotBlank()) {
+                        SettingsProfileBanner(
+                            userName = userName,
+                            currentUser = viewModel.currentUser,
+                            serverAddress = currentServerAddress,
+                            isAdmin = viewModel.currentUser?.isAdmin == true,
+                            onNewsletterClick = onNewsletterClick,
+                            onUserManagementClick = { onNavigate(Route.UserManagement(null)) },
+                            onServerManagementClick = { onNavigate(Route.ServerManagement(null)) },
+                        )
+                    }
+                }
+
+                settingsSection("power_user_mode", isTv) {
+                    PowerUserModeCard(
+                        checked = preferences.showAdvancedSettings,
+                        onCheckedChange = { viewModel.edit { scope -> scope.appearance.setShowAdvancedSettings(it) } },
+                    )
+                }
+
+                settingsSection("active_devices", isTv) {
+                    if (viewModel.currentUser?.isAdmin == true && viewModel.activeSessions.isNotEmpty()) {
+                        ActiveDevicesRow(
+                            sessions = viewModel.activeSessions,
+                            serverAddress = currentServerAddress,
+                            onSendMessage = viewModel::sendMessageToSession,
+                        )
+                    }
+                }
+
+                settingsSection("account", isTv) {
+                    SettingsAccountSection(
+                        userName = userName,
+                        isAdmin = viewModel.currentUser?.isAdmin == true,
+                        openSetting = openSetting,
+                        onSignOut = onSignOut,
+                    )
+                }
+
+                settingsSection("activity", isTv) {
+                    SettingsActivitySection(
+                        viewModel = viewModel,
+                        openSetting = openSetting,
+                    )
+                }
+
+                settingsSection("system", isTv) {
+                    SettingsSystemSection(
+                        viewModel = viewModel,
+                        openSetting = openSetting,
+                        onSetupWizardClick = {
+                            onLastClickedSettingIdChange(SettingsScreenIds.SETUP_WIZARD)
+                            onSetupWizard()
+                        },
+                    )
+                }
+
+                settingsSection("item_home", isTv) {
+                    val homePrefs by viewModel.homePreferences.collectAsStateWithLifecycle()
+                    SettingListItem(
+                        icon = Tabler.Outline.Home,
+                        title = stringResource(Res.string.settings_home_title),
+                        subtitle = stringResource(
+                            Res.string.settings_home_sections_visible,
+                            homePrefs.enabledHomeSectionTypes.size,
+                            HomeSectionType.CONFIGURABLE.size,
+                        ),
+                        index = 0, count = 1,
+                        onClick = { openSetting("home") { Route.HomeSettings(it) } },
+                    )
+                }
+
+                settingsSection("item_appearance", isTv) {
+                    SettingListItem(
+                        icon = Tabler.Outline.Palette,
+                        title = stringResource(Res.string.settings_appearance),
+                        subtitle = appearanceSummarySubtitle(preferences),
+                        index = 0, count = 1,
+                        onClick = { openSetting("appearance") { Route.AppearanceSettings(it) } },
+                    )
+                }
+
+                settingsSection("item_playback", isTv) {
+                    SettingListItem(
+                        icon = Tabler.Outline.PlayerPlay,
+                        title = stringResource(Res.string.settings_playback),
+                        subtitle = stringResource(Res.string.settings_playback_subtitle, preferences.preferredPlayer.displayName),
+                        index = 0, count = 1,
+                        onClick = { openSetting("playback") { Route.PlaybackSettings(it) } },
+                    )
+                }
+
+                settingsSection("item_audio", isTv) {
+                    SettingListItem(
+                        icon = Tabler.Outline.Music,
+                        title = stringResource(Res.string.settings_audio_player),
+                        subtitle = stringResource(Res.string.settings_default_speed_value, if (preferences.audioDefaultSpeed == 1.0f) "1x" else "${preferences.audioDefaultSpeed}x"),
+                        index = 0, count = 1,
+                        onClick = { openSetting("audio") { Route.AudioSettings(it) } },
+                    )
+                }
+
+                settingsSection("item_language", isTv) {
+                    SettingListItem(
+                        icon = Tabler.Outline.Language,
+                        title = stringResource(Res.string.settings_language_subtitles),
+                        subtitle = stringResource(Res.string.settings_language_subtitle, preferences.preferredAudioLanguage ?: stringResource(Res.string.settings_lang_default)),
+                        index = 0, count = 1,
+                        onClick = { openSetting("language") { Route.LanguageSettings(it) } },
+                    )
+                }
+
+                // No desktop notification backend exists (the
+                // NotificationSync seam no-ops there) — entry + screen
+                // stay Android-only.
+                if (settingsCapabilities.supportsNotifications) {
+                    settingsSection("item_notifications", isTv) {
+                        val notifPrefs = preferences.notificationPreferences
+                        SettingListItem(
+                            icon = Tabler.Outline.Bell,
+                            title = stringResource(Res.string.settings_notifications),
+                            subtitle = if (notifPrefs.enabled) stringResource(Res.string.settings_notifications_checking, notifPrefs.checkFrequency.displayName.lowercase()) else stringResource(Res.string.settings_disabled),
+                            index = 0, count = 1,
+                            onClick = { openSetting("notifications") { Route.NotificationSettings(it) } },
+                        )
+                    }
+                }
+
+                settingsSection("item_storage", isTv) {
+                    SettingListItem(
+                        icon = Tabler.Outline.Database,
+                        title = stringResource(Res.string.settings_downloads_storage),
+                        subtitle = stringResource(Res.string.settings_cache_subtitle, viewModel.cacheSizeMb),
+                        index = 0, count = 1,
+                        onClick = { openSetting("storage") { Route.StorageSettings(it) } },
+                    )
+                }
+
+                settingsSection("item_security", isTv) {
+                    SettingListItem(
+                        icon = Tabler.Outline.Lock,
+                        title = stringResource(Res.string.settings_security),
+                        subtitle = when {
+                            preferences.pinLockEnabled && preferences.biometricLockEnabled -> stringResource(Res.string.settings_pin_biometric_on)
+                            preferences.biometricLockEnabled -> stringResource(Res.string.settings_biometric_on)
+                            preferences.pinLockEnabled -> stringResource(Res.string.settings_pin_on)
+                            else -> stringResource(Res.string.settings_lock_off)
+                        },
+                        index = 0, count = 1,
+                        onClick = { openSetting("security") { Route.SecuritySettings(it) } },
+                    )
+                }
+
+                settingsSection("item_privacy_data", isTv) {
+                    SettingListItem(
+                        icon = Tabler.Outline.ShieldLock,
+                        title = stringResource(Res.string.settings_privacy_data),
+                        subtitle = stringResource(Res.string.settings_privacy_data_subtitle),
+                        index = 0, count = 1,
+                        onClick = { openSetting("privacy_data") { Route.PrivacyData(it) } },
+                    )
+                }
+
+                settingsSection("item_backup", isTv) {
+                    SettingListItem(
+                        icon = Tabler.Outline.DatabaseExport,
+                        title = stringResource(Res.string.settings_backup_restore),
+                        subtitle = stringResource(Res.string.settings_backup_restore_subtitle),
+                        index = 0, count = 1,
+                        onClick = { openSetting("backup") { Route.BackupSettings(it) } },
+                    )
+                }
+
+                if (isTv) {
+                    settingsSection("group_screensaver", isTv) {
+                        SettingsScreensaverSection(
+                            preferences = preferences,
+                            viewModel = viewModel,
+                            lastClickedSettingId = lastClickedSettingId,
+                            activeDialog = activeDialogState,
+                        )
+                    }
+                }
+
+                // the desktop idle "Ready to play" ambient
+                // screen rows — capability-gated (structurally absent
+                // on Android, whose lock-screen/screensaver story owns
+                // idle display), rendered as their own group beside
+                // the TV dream group so neither row total entangles.
+                if (settingsCapabilities.supportsIdleAmbientScreen) {
+                    settingsSection("group_idle_ambient", isTv) {
+                        SettingsIdleAmbientSection(
+                            preferences = preferences,
+                            viewModel = viewModel,
+                            lastClickedSettingId = lastClickedSettingId,
+                            activeDialog = activeDialogState,
+                        )
+                    }
+                }
+
+                // the desktop Discord Rich Presence toggle (feature
+                // 4.2) — capability-gated like the idle-ambient block
+                // beside it (the IPC client lives in the desktop
+                // shell only), rendered as its own group so neither
+                // row total entangles.
+                if (settingsCapabilities.supportsDiscordPresence) {
+                    settingsSection("group_discord_presence", isTv) {
+                        SettingsDiscordPresenceSection(
+                            preferences = preferences,
+                            viewModel = viewModel,
+                            lastClickedSettingId = lastClickedSettingId,
+                        )
+                    }
+                }
+
+                // the desktop playback-event shell hooks (feature
+                // 4.3) — same capability-gated shape; the command
+                // rows open the shared free-form text editor.
+                if (settingsCapabilities.supportsShellHooks) {
+                    settingsSection("group_shell_hooks", isTv) {
+                        SettingsShellHooksSection(
+                            preferences = preferences,
+                            viewModel = viewModel,
+                            lastClickedSettingId = lastClickedSettingId,
+                            activeDialog = activeDialogState,
+                        )
+                    }
+                }
+
+                settingsSection("item_experimental", isTv) {
+                    SettingListItem(
+                        icon = Tabler.Outline.Flask,
+                        title = stringResource(Res.string.settings_experimental),
+                        subtitle = experimentalSummarySubtitle(preferences),
+                        index = 0, count = 1,
+                        onClick = { openSetting(ExperimentalSettingsIds.EXPERIMENTAL) { Route.ExperimentalSettings(it) } },
+                    )
+                }
+
+                settingsSection("item_integrations", isTv) {
+                    SettingListItem(
+                        icon = rowIcon(IntegrationsScreenIds.INTEGRATIONS),
+                        title = rowTitle(IntegrationsScreenIds.INTEGRATIONS),
+                        subtitle = stringResource(Res.string.settings_integrations_subtitle),
+                        index = 0, count = 1,
+                        onClick = { openSetting(IntegrationsScreenIds.INTEGRATIONS) { Route.Integrations(it) } },
+                    )
+                }
+
+                settingsSection("item_about", isTv) {
+                    SettingListItem(
+                        icon = Tabler.Outline.InfoCircle,
+                        title = stringResource(Res.string.settings_about),
+                        subtitle = stringResource(Res.string.settings_about_subtitle),
+                        index = 0, count = 1,
+                        onClick = { openSetting("about") { Route.About } },
+                    )
+                }
+
+                settingsSection("item_whatsnew", isTv) {
+                    SettingListItem(
+                        icon = Tabler.Outline.Sparkles,
+                        title = stringResource(Res.string.settings_whatsnew_title),
+                        subtitle = stringResource(Res.string.settings_whatsnew_subtitle),
+                        index = 0, count = 1,
+                        onClick = { openSetting("whatsnew") { Route.WhatsNew } },
+                    )
+                }
+            }
+        }
+
 }
 
 // ---------------------------------------------------------------------------
@@ -2308,7 +2444,7 @@ private fun SettingsScreensaverSection(
                                     initiallyExpanded = lastClickedSettingId in SettingsScreenGroups.systemScreensaver.itemIdSet,
                                 ) {
                                     // Row count derived from the screensaver group
-                                    // declaration — the five declared dream rows are
+                                    // declaration — the eight declared dream rows are
                                     // exactly the rows rendered here.
                                     val dreamTotal = SettingsScreenGroups.systemScreensaver.itemIds.size
                                     val slideshowIntervalTitle = rowTitle(SettingsScreenIds.SCREENSAVER_SLIDESHOW_INTERVAL)
@@ -2328,16 +2464,18 @@ private fun SettingsScreensaverSection(
                                     val categoryMovies = stringResource(Res.string.settings_category_movies)
                                     val categoryTv = stringResource(Res.string.settings_category_tv)
                                     val categoryMusic = stringResource(Res.string.settings_category_music)
+                                    val categoryPhotos = stringResource(Res.string.settings_category_photos)
                                     SettingListItem(
                                         icon = rowIcon(SettingsScreenIds.SCREENSAVER_CATEGORIES),
                                         title = rowTitle(SettingsScreenIds.SCREENSAVER_CATEGORIES),
                                         subtitle = stringResource(Res.string.settings_categories_subtitle),
-                                        trailingText = remember(preferences.dreamImageCategories, categoryMovies, categoryTv, categoryMusic) {
+                                        trailingText = remember(preferences.dreamImageCategories, categoryMovies, categoryTv, categoryMusic, categoryPhotos) {
                                             preferences.dreamImageCategories.joinToString(", ") {
                                                 when (it) {
                                                     DreamImageCategory.MOVIES -> categoryMovies
                                                     DreamImageCategory.SERIES -> categoryTv
                                                     DreamImageCategory.MUSIC -> categoryMusic
+                                                    DreamImageCategory.PHOTOS -> categoryPhotos
                                                 }
                                             }
                                         },
@@ -2401,6 +2539,96 @@ private fun SettingsScreensaverSection(
                                                 label = { labels[it] ?: it.name },
                                                 isSelected = { it == preferences.dreamTransitionStyle },
                                                 onSelect = { viewModel.edit { scope -> scope.screensaver.setDreamTransitionStyle(it) } },
+                                            )
+                                        },
+                                    )
+                                    // The (label, canonical age) picker rows; null age =
+                                    // no local cap ("None"). Both the row vocabulary and
+                                    // the age resolution come from the canonical rating
+                                    // table (core:network's LibraryWirePolicy).
+                                    val maxRatingTitle = rowTitle(SettingsScreenIds.SCREENSAVER_MAX_PARENTAL_RATING)
+                                    val maxRatingNoneLabel = stringResource(Res.string.settings_dream_rating_none)
+                                    val maxRatingItems = remember(maxRatingNoneLabel) {
+                                        buildList {
+                                            add(null to maxRatingNoneLabel)
+                                            for (rating in PARENTAL_RATING_PICKER_LADDER) {
+                                                parentalRatingAge(rating)?.let { add(it to rating) }
+                                            }
+                                        }
+                                    }
+                                    SettingListItem(
+                                        icon = rowIcon(SettingsScreenIds.SCREENSAVER_MAX_PARENTAL_RATING),
+                                        title = rowTitle(SettingsScreenIds.SCREENSAVER_MAX_PARENTAL_RATING),
+                                        subtitle = stringResource(Res.string.settings_dream_max_parental_rating_subtitle),
+                                        trailingText = maxRatingItems
+                                            .firstOrNull { it.first == preferences.dreamMaxParentalRating }
+                                            ?.second ?: maxRatingNoneLabel,
+                                        index = 5, count = dreamTotal,
+                                        highlighted = lastClickedSettingId == SettingsScreenIds.SCREENSAVER_MAX_PARENTAL_RATING,
+                                        onClick = {
+                                            activeDialog.value = PickerState.List(
+                                                title = maxRatingTitle,
+                                                items = maxRatingItems,
+                                                label = { it.second },
+                                                isSelected = { it.first == preferences.dreamMaxParentalRating },
+                                                onSelect = { viewModel.edit { scope -> scope.screensaver.setDreamMaxParentalRating(it.first) } },
+                                            )
+                                        },
+                                    )
+                                    val dimAfterTitle = rowTitle(SettingsScreenIds.SCREENSAVER_DIM_AFTER)
+                                    val dimAfterOffLabel = stringResource(Res.string.settings_dream_dim_after_off)
+                                    // The auto-lock ladder minus the 10-minute rung
+                                    // (the shared SETTINGS_TIMER_LADDER_MS —
+                                    // SecuritySettingsScreen takes the whole ladder),
+                                    // each rung zipped to its label so every lookup
+                                    // keys on the ms VALUE, never a hand-built
+                                    // index pairing. An off-ladder stored value
+                                    // falls back to the Off label.
+                                    val dimAfterChoices = SETTINGS_TIMER_LADDER_MS.dropLast(1).zip(
+                                        listOf(
+                                            dimAfterOffLabel,
+                                            stringResource(Res.string.settings_dream_dim_after_30_seconds),
+                                            stringResource(Res.string.settings_dream_dim_after_1_minute),
+                                            stringResource(Res.string.settings_dream_dim_after_5_minutes),
+                                        ),
+                                    )
+                                    fun dimAfterLabel(ms: Long): String =
+                                        dimAfterChoices.firstOrNull { it.first == ms }?.second ?: dimAfterOffLabel
+                                    SettingListItem(
+                                        icon = rowIcon(SettingsScreenIds.SCREENSAVER_DIM_AFTER),
+                                        title = rowTitle(SettingsScreenIds.SCREENSAVER_DIM_AFTER),
+                                        subtitle = stringResource(Res.string.settings_dream_dim_after_subtitle),
+                                        trailingText = dimAfterLabel(preferences.dreamDimAfterMs),
+                                        index = 6, count = dreamTotal,
+                                        highlighted = lastClickedSettingId == SettingsScreenIds.SCREENSAVER_DIM_AFTER,
+                                        onClick = {
+                                            activeDialog.value = PickerState.List(
+                                                title = dimAfterTitle,
+                                                items = dimAfterChoices.map { it.first },
+                                                label = { dimAfterLabel(it) },
+                                                isSelected = { it == preferences.dreamDimAfterMs },
+                                                onSelect = { viewModel.edit { scope -> scope.screensaver.setDreamDimAfterMs(it) } },
+                                            )
+                                        },
+                                    )
+                                    val dimPercentTitle = rowTitle(SettingsScreenIds.SCREENSAVER_DIM_PERCENT)
+                                    SettingListItem(
+                                        icon = rowIcon(SettingsScreenIds.SCREENSAVER_DIM_PERCENT),
+                                        title = rowTitle(SettingsScreenIds.SCREENSAVER_DIM_PERCENT),
+                                        subtitle = stringResource(Res.string.settings_dream_dim_percent_subtitle),
+                                        trailingText = "${preferences.dreamDimPercent}%",
+                                        index = 7, count = dreamTotal,
+                                        highlighted = lastClickedSettingId == SettingsScreenIds.SCREENSAVER_DIM_PERCENT,
+                                        onClick = {
+                                            activeDialog.value = PickerState.Slider(
+                                                title = dimPercentTitle,
+                                                value = preferences.dreamDimPercent.toFloat(),
+                                                valueRange = 0f..95f,
+                                                steps = 18,
+                                                valueLabel = { "${it.toInt()}%" },
+                                                rangeStartLabel = "0%",
+                                                rangeEndLabel = "95%",
+                                                onConfirm = { viewModel.edit { scope -> scope.screensaver.setDreamDimPercent(it.toInt()) } },
                                             )
                                         },
                                     )
@@ -2469,4 +2697,155 @@ private fun SettingsIdleAmbientSection(
                                         },
                                     )
                                 }
+}
+
+/** The `group_discord_presence` section: the Discord Rich Presence toggle (SystemRowRecords discord_ rows). */
+@Composable
+private fun SettingsDiscordPresenceSection(
+    preferences: SettingsScreenPreferences,
+    viewModel: SettingsViewModel,
+    lastClickedSettingId: String?,
+) {
+                                SettingsGroup(
+                                    icon = Tabler.Outline.BrandDiscord,
+                                    title = stringResource(Res.string.settings_discord_presence),
+                                    summary = {
+                                        if (preferences.discordPresenceEnabled) {
+                                            stringResource(Res.string.settings_discord_presence_on)
+                                        } else {
+                                            stringResource(Res.string.settings_discord_presence_off)
+                                        }
+                                    },
+                                    initiallyExpanded = lastClickedSettingId in SettingsScreenGroups.systemDiscordPresence.itemIdSet,
+                                ) {
+                                    val discordTotal = SettingsScreenGroups.systemDiscordPresence.itemIds.size
+                                    SettingToggleItem(
+                                        icon = rowIcon(SettingsScreenIds.DISCORD_PRESENCE_ENABLED),
+                                        title = rowTitle(SettingsScreenIds.DISCORD_PRESENCE_ENABLED),
+                                        subtitle = stringResource(Res.string.settings_discord_presence_enabled_subtitle),
+                                        checked = preferences.discordPresenceEnabled,
+                                        index = 0, count = discordTotal,
+                                        highlighted = lastClickedSettingId == SettingsScreenIds.DISCORD_PRESENCE_ENABLED,
+                                        onCheckedChange = { enabled ->
+                                            viewModel.edit { scope -> scope.screensaver.setDiscordPresenceEnabled(enabled) }
+                                        },
+                                    )
+                                }
+}
+
+/**
+ * The `group_shell_hooks` section: the playback-event shell hooks (feature
+ * 4.3) — the master toggle (whose subtitle carries the safety copy) plus the
+ * five mpv-shim-named command rows, each opened in the shared free-form text
+ * editor with the placeholder hint as its helper text.
+ */
+@Composable
+private fun SettingsShellHooksSection(
+    preferences: SettingsScreenPreferences,
+    viewModel: SettingsViewModel,
+    lastClickedSettingId: String?,
+    activeDialog: MutableState<PickerState<*>?>,
+) {
+                                SettingsGroup(
+                                    icon = Tabler.Outline.Terminal2,
+                                    title = stringResource(Res.string.settings_hooks),
+                                    summary = {
+                                        if (preferences.hooksEnabled) {
+                                            stringResource(Res.string.settings_hooks_on)
+                                        } else {
+                                            stringResource(Res.string.settings_hooks_off)
+                                        }
+                                    },
+                                    initiallyExpanded = lastClickedSettingId in SettingsScreenGroups.systemHooks.itemIdSet,
+                                ) {
+                                    val hooksTotal = SettingsScreenGroups.systemHooks.itemIds.size
+                                    val placeholderHint = stringResource(Res.string.settings_hooks_placeholder_hint)
+                                    SettingToggleItem(
+                                        icon = rowIcon(SettingsScreenIds.HOOKS_ENABLED),
+                                        title = rowTitle(SettingsScreenIds.HOOKS_ENABLED),
+                                        subtitle = stringResource(Res.string.settings_hooks_enabled_subtitle),
+                                        checked = preferences.hooksEnabled,
+                                        index = 0, count = hooksTotal,
+                                        highlighted = lastClickedSettingId == SettingsScreenIds.HOOKS_ENABLED,
+                                        onCheckedChange = { enabled ->
+                                            viewModel.edit { scope -> scope.screensaver.setHooksEnabled(enabled) }
+                                        },
+                                    )
+                                    hooksCommandRow(
+                                        id = SettingsScreenIds.HOOKS_PLAY_CMD,
+                                        command = preferences.hooksPlayCmd,
+                                        index = 1, count = hooksTotal,
+                                        lastClickedSettingId = lastClickedSettingId,
+                                        placeholderHint = placeholderHint,
+                                        activeDialog = activeDialog,
+                                        onSave = { viewModel.edit { scope -> scope.screensaver.setHooksPlayCmd(it) } },
+                                    )
+                                    hooksCommandRow(
+                                        id = SettingsScreenIds.HOOKS_STOP_CMD,
+                                        command = preferences.hooksStopCmd,
+                                        index = 2, count = hooksTotal,
+                                        lastClickedSettingId = lastClickedSettingId,
+                                        placeholderHint = placeholderHint,
+                                        activeDialog = activeDialog,
+                                        onSave = { viewModel.edit { scope -> scope.screensaver.setHooksStopCmd(it) } },
+                                    )
+                                    hooksCommandRow(
+                                        id = SettingsScreenIds.HOOKS_ENDED_CMD,
+                                        command = preferences.hooksEndedCmd,
+                                        index = 3, count = hooksTotal,
+                                        lastClickedSettingId = lastClickedSettingId,
+                                        placeholderHint = placeholderHint,
+                                        activeDialog = activeDialog,
+                                        onSave = { viewModel.edit { scope -> scope.screensaver.setHooksEndedCmd(it) } },
+                                    )
+                                    hooksCommandRow(
+                                        id = SettingsScreenIds.HOOKS_IDLE_CMD,
+                                        command = preferences.hooksIdleCmd,
+                                        index = 4, count = hooksTotal,
+                                        lastClickedSettingId = lastClickedSettingId,
+                                        placeholderHint = placeholderHint,
+                                        activeDialog = activeDialog,
+                                        onSave = { viewModel.edit { scope -> scope.screensaver.setHooksIdleCmd(it) } },
+                                    )
+                                    hooksCommandRow(
+                                        id = SettingsScreenIds.HOOKS_IDLE_ENDED_CMD,
+                                        command = preferences.hooksIdleEndedCmd,
+                                        index = 5, count = hooksTotal,
+                                        lastClickedSettingId = lastClickedSettingId,
+                                        placeholderHint = placeholderHint,
+                                        activeDialog = activeDialog,
+                                        onSave = { viewModel.edit { scope -> scope.screensaver.setHooksIdleEndedCmd(it) } },
+                                    )
+                                }
+}
+
+/** One shell-hook command row: shows the configured command, opens the text editor. */
+@Composable
+private fun hooksCommandRow(
+    id: String,
+    command: String,
+    index: Int,
+    count: Int,
+    lastClickedSettingId: String?,
+    placeholderHint: String,
+    activeDialog: MutableState<PickerState<*>?>,
+    onSave: (String) -> Unit,
+) {
+    val title = rowTitle(id)
+    val notSet = stringResource(Res.string.settings_hooks_cmd_not_set)
+    SettingListItem(
+        icon = rowIcon(id),
+        title = title,
+        subtitle = command.ifBlank { notSet },
+        index = index, count = count,
+        highlighted = lastClickedSettingId == id,
+        onClick = {
+            activeDialog.value = PickerState.Text(
+                title = title,
+                initialText = command,
+                helperText = placeholderHint,
+                onSave = onSave,
+            )
+        },
+    )
 }

@@ -1,24 +1,13 @@
 package com.raulshma.jellyplay.feature.settings
 
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
@@ -27,26 +16,15 @@ import com.raulshma.jellyplay.core.model.ContinueWatchingClickBehavior
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
-import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
-import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
-import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
-import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
-import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.SettingListItem
 import com.raulshma.jellyplay.core.ui.components.SettingToggleItem
 import com.raulshma.jellyplay.core.ui.components.SettingsItemList
-import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.formatIntPattern
 import com.raulshma.jellyplay.core.ui.components.homeSectionIcon
 import com.raulshma.jellyplay.core.ui.navigation.Route
-import com.raulshma.jellyplay.core.ui.tv.CenteredBringIntoView
-import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
-import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
-import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_cancel
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_configure_libraries
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_configure_libraries_desc
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_continue_next_up
@@ -56,9 +34,11 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_disc
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hide_top_header_on_scroll
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hide_top_header_on_scroll_off
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hide_top_header_on_scroll_on
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hide_watched_items_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_backdrop
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_backdrop_off
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_backdrop_on
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_cards
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_display
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_layout_presets
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_layout_presets_brief
@@ -73,34 +53,40 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_merg
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_merge_continue_next_up_on
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_next_up_time_window
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_next_up_time_window_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_next_up_hidden_brief
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_off
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_pinned_home_sections
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_pinned_home_sections_brief
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_reset
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_reset_defaults_cd
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_reset_home_message
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_reset_home_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_rewatching_next_up
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_rewatching_next_up_off
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_classic_rows
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_classic_rows_off
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_classic_rows_on
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_rewatching_next_up_on
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_clock_home
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_clock_off
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_clock_on
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_external_ratings_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_hero_off
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_hero_on
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_hero_section
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_settings_in_home_search
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_settings_in_home_search_off
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_settings_in_home_search_on
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_unwatched_badge_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_watched_checkmark_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_unhide_continue_watching
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_unhide_continue_watching_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_unlimited
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_x_days
-import androidx.compose.foundation.shape.CircleShape
 
 /**
  * The declared Home settings screen groups in LazyColumn order — the
  * derivation source the deep-link scroll resolver consumes (see
- * HighlightScroll.kt). All three groups always compose (no advanced gate on
+ * HighlightScroll.kt). All four groups always compose (no advanced gate on
  * this screen — the dedicated hub IS the discoverability fix), so the
  * adjustment lambda is the identity. Internal so the contract test can pin
  * the derivation against it.
@@ -109,12 +95,13 @@ internal val homeScreenGroups: List<Set<String>> = listOf(
     SettingsScreenGroups.homeDisplay.itemIdSet,
     SettingsScreenGroups.homeNextUp.itemIdSet,
     SettingsScreenGroups.homeLayout.itemIdSet,
+    SettingsScreenGroups.homeCards.itemIdSet,
 )
 
 /**
  * The display group's `SettingsItemList(total = …)` row count, derived by
  * [rowTotalFor] from the [SettingsScreenGroups.homeDisplay] declaration
- * (seven always-rendered config rows — the declared `unhide_cw` admission is
+ * (nine always-rendered config rows — the declared `unhide_cw` admission is
  * deliberately absent, so the strict derivation excludes it) plus the
  * conditional unhide action row, which renders only while hidden
  * continue-watching items exist — a content-state condition with no
@@ -123,6 +110,16 @@ internal val homeScreenGroups: List<Set<String>> = listOf(
  */
 internal fun homeDisplayScreenRowTotal(hiddenCwItems: Int): Int =
     rowTotalFor(SettingsScreenGroups.homeDisplay, RowAdmissionFlags()) + if (hiddenCwItems > 0) 1 else 0
+
+/**
+ * The cards group's `SettingsItemList(total = …)` row count: the four
+ * card-display toggles moved off AppearanceSettingsScreen's "Library & Cards"
+ * group, every one declared [RowAdmission.Always] (the shipped always-on
+ * behavior — no advanced gate on this hub), so the strict derivation counts
+ * them all under the no-flag input.
+ */
+internal fun homeCardsScreenRowTotal(): Int =
+    rowTotalFor(SettingsScreenGroups.homeCards, RowAdmissionFlags())
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class, ExperimentalFoundationApi::class)
 @Composable
@@ -133,55 +130,21 @@ fun HomeSettingsScreen(
     viewModel: HomeSettingsViewModel = koinViewModel(),
 ) {
     val preferences by viewModel.preferences.collectAsStateWithLifecycle()
-    val adaptiveInfo = LocalAdaptiveInfo.current
-    val isTv = LocalTvMode.current
-    val backgroundColorState = com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState()
 
-    val focusRequester = remember { FocusRequester() }
-    TvGrabInitialFocus(
-        focusRequester = focusRequester,
-        itemCount = 1,
-        tag = "home_settings_init",
-    )
-
-    val scrollState = rememberLazyListState()
-    val scrollIndex = rememberHighlightScrollIndex(highlightSettingId, homeScreenGroups)
-    HighlightScrollEffect(scrollState, scrollIndex)
-
-    var showResetDialog by remember { mutableStateOf(false) }
-    var activePicker by remember { mutableStateOf<PickerState<*>?>(null) }
-
-    JellyPlayScreenScaffold(
+    PreferenceScreenScaffold(
         title = stringResource(Res.string.settings_home_title),
         onBack = onBack,
-        backgroundColorState = backgroundColorState,
-        actions = {
-            IconButton(
-                onClick = { showResetDialog = true },
-                modifier = Modifier.focusIndicator(CircleShape),
-            ) {
-                Icon(
-                    Tabler.Outline.Refresh,
-                    contentDescription = stringResource(Res.string.settings_reset_defaults_cd),
-                    tint = MaterialTheme.colorScheme.onSurface,
-                )
-            }
-        },
-    ) { innerPadding ->
-        CenteredBringIntoView {
-        LazyColumn(
-            state = scrollState,
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .tvFocusRestorer()
-                .focusRequester(focusRequester),
-            contentPadding = PaddingValues(
-                start = adaptiveInfo.contentPadding(isTv),
-                end = adaptiveInfo.contentPadding(isTv),
-                bottom = adaptiveInfo.bottomPadding(isTv),
-            ),
-        ) {
+        focusTag = "home_settings_init",
+        highlightSettingId = highlightSettingId,
+        highlightGroups = homeScreenGroups,
+        reset = PreferenceResetAction(
+            iconContentDescription = stringResource(Res.string.settings_reset_defaults_cd),
+            dialogTitle = stringResource(Res.string.settings_reset_home_title),
+            dialogMessage = stringResource(Res.string.settings_reset_home_message),
+            onReset = { viewModel.resetCategory(PreferenceResetCategory.HOME_DISCOVERY) },
+        ),
+        pickerHost = true,
+    ) { activePicker ->
             item {
                 SettingsGroup(
                     icon = Tabler.Outline.Home,
@@ -205,7 +168,7 @@ fun HomeSettingsScreen(
                 ) {
                     // Derived from the declared display group (the derivation
                     // source the row total below reads — one declaration, no
-                    // parallel id list): the seven always-rendered config rows
+                    // parallel id list): the nine always-rendered config rows
                     // in catalog order, plus the unhide row while hidden
                     // continue-watching items exist.
                     val displayItems = remember(preferences.hiddenCwItemIds) {
@@ -287,7 +250,7 @@ fun HomeSettingsScreen(
                                     trailingText = preferences.continueWatchingClickBehavior.displayName,
                                     highlighted = highlightSettingId == HomeSettingsIds.CONTINUE_WATCHING_CLICK,
                                     onClick = {
-                                        activePicker = PickerState.List(
+                                        activePicker.value = PickerState.List(
                                             title = cwTitle,
                                             items = ContinueWatchingClickBehavior.entries,
                                             label = { it.displayName },
@@ -295,6 +258,26 @@ fun HomeSettingsScreen(
                                             onSelect = { viewModel.edit { scope -> scope.homeDiscovery.setContinueWatchingClickBehavior(it) } },
                                         )
                                     },
+                                )
+                            }
+                            HomeSettingsIds.CLASSIC_ROWS -> {
+                                SettingToggleItem(
+                                    icon = Tabler.Outline.History,
+                                    title = rowTitle(HomeSettingsIds.CLASSIC_ROWS),
+                                    subtitle = if (preferences.classicRows) stringResource(Res.string.settings_classic_rows_on) else stringResource(Res.string.settings_classic_rows_off),
+                                    checked = preferences.classicRows,
+                                    highlighted = highlightSettingId == HomeSettingsIds.CLASSIC_ROWS,
+                                    onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setClassicRows(it) } },
+                                )
+                            }
+                            HomeSettingsIds.NEXT_UP_HIDDEN -> {
+                                SettingListItem(
+                                    icon = Tabler.Outline.EyeOff,
+                                    title = rowTitle(HomeSettingsIds.NEXT_UP_HIDDEN),
+                                    subtitle = stringResource(Res.string.settings_next_up_hidden_brief),
+                                    trailingText = if (preferences.nextUpExcludedSeriesIds.isEmpty()) "" else "${preferences.nextUpExcludedSeriesIds.size}",
+                                    highlighted = highlightSettingId == HomeSettingsIds.NEXT_UP_HIDDEN,
+                                    onClick = { navActions.onNavigate(Route.NextUpExcluded) },
                                 )
                             }
                             HomeSettingsIds.UNHIDE_CW -> {
@@ -356,7 +339,7 @@ fun HomeSettingsScreen(
                         highlighted = highlightSettingId == HomeSettingsIds.NEXT_UP_MAX_DAYS,
                         index = 1, count = nextUpTotal,
                         onClick = {
-                            activePicker = PickerState.List(
+                            activePicker.value = PickerState.List(
                                 title = nextUpTitle,
                                 items = listOf(0, 7, 14, 30, 60, 90),
                                 label = { dayLabels[it] ?: formatIntPattern(xDaysFormat, it) },
@@ -454,26 +437,65 @@ fun HomeSettingsScreen(
                     }
                 }
             }
-        }
-        }
-    }
 
-    if (showResetDialog) {
-        ConfirmDialog(
-            title = stringResource(Res.string.settings_reset_home_title),
-            message = stringResource(Res.string.settings_reset_home_message),
-            confirmText = stringResource(Res.string.settings_reset),
-            onConfirm = {
-                viewModel.resetCategory(PreferenceResetCategory.HOME_DISCOVERY)
-                showResetDialog = false
-            },
-            onDismiss = { showResetDialog = false },
-            dismissText = stringResource(Res.string.settings_cancel),
-        )
-    }
+            item {
+                // The card-display toggles moved off AppearanceSettingsScreen's
+                // "Library & Cards" group (PS-4): home-discovery knobs, now
+                // grouped beside the rest of the home hub.
+                SettingsGroup(
+                    icon = Tabler.Outline.Photo,
+                    title = stringResource(Res.string.settings_home_cards),
+                    summary = {
+                        val parts = mutableListOf<String>()
+                        if (preferences.showUnwatchedBadge) parts.add(rowTitle(HomeSettingsIds.SHOW_UNWATCHED_BADGE))
+                        if (preferences.showWatchedCheckmark) parts.add(rowTitle(HomeSettingsIds.SHOW_WATCHED_CHECKMARK))
+                        if (preferences.hideWatchedItems) parts.add(rowTitle(HomeSettingsIds.HIDE_WATCHED_ITEMS))
+                        if (preferences.showExternalRatings) parts.add(rowTitle(HomeSettingsIds.SHOW_EXTERNAL_RATINGS))
+                        parts.joinToString(", ").ifEmpty { stringResource(Res.string.settings_off) }
+                    },
+                    modifier = Modifier.padding(vertical = 8.dp),
+                    initiallyExpanded = highlightSettingId in SettingsScreenGroups.homeCards.itemIdSet,
+                ) {
+                    // Derived by rowTotalFor from the cards declaration (every
+                    // row always renders — no gate on this hub).
+                    SettingsItemList(total = homeCardsScreenRowTotal()) {
+                        SettingToggleItem(
+                            icon = rowIcon(HomeSettingsIds.SHOW_UNWATCHED_BADGE),
+                            title = rowTitle(HomeSettingsIds.SHOW_UNWATCHED_BADGE),
+                            subtitle = stringResource(Res.string.settings_show_unwatched_badge_subtitle),
+                            checked = preferences.showUnwatchedBadge,
+                            highlighted = highlightSettingId == HomeSettingsIds.SHOW_UNWATCHED_BADGE,
+                            onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setShowUnwatchedBadge(it) } },
+                        )
 
-    SettingsPickerDialog(
-        state = activePicker,
-        onDismiss = { activePicker = null },
-    )
+                        SettingToggleItem(
+                            icon = rowIcon(HomeSettingsIds.SHOW_WATCHED_CHECKMARK),
+                            title = rowTitle(HomeSettingsIds.SHOW_WATCHED_CHECKMARK),
+                            subtitle = stringResource(Res.string.settings_show_watched_checkmark_subtitle),
+                            checked = preferences.showWatchedCheckmark,
+                            highlighted = highlightSettingId == HomeSettingsIds.SHOW_WATCHED_CHECKMARK,
+                            onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setShowWatchedCheckmark(it) } },
+                        )
+
+                        SettingToggleItem(
+                            icon = rowIcon(HomeSettingsIds.HIDE_WATCHED_ITEMS),
+                            title = rowTitle(HomeSettingsIds.HIDE_WATCHED_ITEMS),
+                            subtitle = stringResource(Res.string.settings_hide_watched_items_subtitle),
+                            checked = preferences.hideWatchedItems,
+                            highlighted = highlightSettingId == HomeSettingsIds.HIDE_WATCHED_ITEMS,
+                            onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setHideWatchedItems(it) } },
+                        )
+
+                        SettingToggleItem(
+                            icon = rowIcon(HomeSettingsIds.SHOW_EXTERNAL_RATINGS),
+                            title = rowTitle(HomeSettingsIds.SHOW_EXTERNAL_RATINGS),
+                            subtitle = stringResource(Res.string.settings_show_external_ratings_subtitle),
+                            checked = preferences.showExternalRatings,
+                            highlighted = highlightSettingId == HomeSettingsIds.SHOW_EXTERNAL_RATINGS,
+                            onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setShowExternalRatings(it) } },
+                        )
+                    }
+                }
+            }
+    }
 }

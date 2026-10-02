@@ -82,4 +82,7 @@
     <string name="library_year_to">Jusqu'à %1$d</string>
     <string name="data_download_started">Téléchargement démarré</string>
     <string name="data_download_start_failed">Impossible de démarrer le téléchargement</string>
+    <string name="library_filter_has_subtitles">Avec sous-titres</string>
+    <string name="library_filter_has_trailer">Avec bande-annonce</string>
+    <string name="library_filter_subtitles">Sous-titres</string>
 </resources>

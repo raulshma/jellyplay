@@ -7,12 +7,23 @@ import com.raulshma.jellyplay.core.data.util.EpochMillisSource
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.model.LiveTvProgram
 import com.raulshma.jellyplay.core.model.ProgramFilters
+import com.raulshma.jellyplay.core.ui.message.UiMessage
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.core.ui.viewmodel.loadInto
 import com.raulshma.jellyplay.feature.livetv.LIVE_TV_STALENESS_INTERVAL_MS
 import com.raulshma.jellyplay.feature.livetv.components.RecordActions
 import com.raulshma.jellyplay.feature.livetv.components.RecordDialogState
 import com.raulshma.jellyplay.feature.livetv.components.RecordOutcome
+import com.raulshma.jellyplay.feature.livetv.generated.resources.Res
+import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_error_load_programs
+import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_error_record
+import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_programs_kids
+import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_programs_movies
+import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_programs_news
+import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_programs_on_now
+import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_programs_shows
+import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_programs_sports
+import org.jetbrains.compose.resources.StringResource
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlin.concurrent.Volatile
@@ -22,7 +33,8 @@ import kotlin.concurrent.Volatile
 data class ProgramRow(
     /** Stable per-section id ("on-now", "shows", …) — the LazyColumn key. */
     val id: String,
-    val title: String,
+    /** The section title, resolved at render ([org.jetbrains.compose.resources.stringResource]). */
+    val titleRes: StringResource,
     val programs: List<LiveTvProgram>,
 )
 
@@ -31,7 +43,8 @@ data class ProgramsUiState(
     val rows: List<ProgramRow> = emptyList(),
     val isLoading: Boolean = false,
     val refreshing: Boolean = false,
-    val error: String? = null,
+    /** The load failure — resolved to text at render ([UiMessage.asText]). */
+    val error: UiMessage? = null,
     val recordDialog: RecordDialogState = RecordDialogState.Idle,
 )
 
@@ -63,7 +76,7 @@ class ProgramsViewModel(
                 recordDialog = when (outcome) {
                     is RecordOutcome.Requesting -> RecordDialogState.Requesting
                     is RecordOutcome.Success -> RecordDialogState.Success()
-                    is RecordOutcome.Error -> RecordDialogState.Error(outcome.message ?: "Failed")
+                    is RecordOutcome.Error -> RecordDialogState.Error(UiMessage.of(outcome.message, Res.string.livetv_error_record))
                     RecordOutcome.Idle -> it.recordDialog
                 },
             )
@@ -137,9 +150,11 @@ class ProgramsViewModel(
                                 val existing = _uiState.value.rows
                                 val refreshedOnNow = onNow.await().getOrDefault(emptyList())
                                 if (existing.isEmpty()) {
-                                    listOf(ProgramRow("on-now", "On Now", refreshedOnNow))
+                                    listOf(ProgramRow("on-now", Res.string.livetv_programs_on_now, refreshedOnNow))
                                 } else {
-                                    existing.toMutableList().also { it[0] = ProgramRow("on-now", "On Now", refreshedOnNow) }
+                                    existing.toMutableList().also {
+                                        it[0] = ProgramRow("on-now", Res.string.livetv_programs_on_now, refreshedOnNow)
+                                    }
                                 }
                             }
                             lastFullRender = now
@@ -151,7 +166,9 @@ class ProgramsViewModel(
                     _uiState.update { it.copy(rows = rows, isLoading = false, refreshing = false) }
                 },
                 onFailure = { e ->
-                    _uiState.update { it.copy(error = e.message, isLoading = false, refreshing = false) }
+                    _uiState.update {
+                        it.copy(error = UiMessage.of(e, Res.string.livetv_error_load_programs), isLoading = false, refreshing = false)
+                    }
                 },
             )
         }
@@ -165,12 +182,12 @@ class ProgramsViewModel(
         kids: List<LiveTvProgram>,
         news: List<LiveTvProgram>,
     ): List<ProgramRow> = buildList {
-        if (onNow.isNotEmpty()) add(ProgramRow("on-now", "On Now", onNow))
-        if (shows.isNotEmpty()) add(ProgramRow("shows", "Shows", shows))
-        if (movies.isNotEmpty()) add(ProgramRow("movies", "Movies", movies))
-        if (sports.isNotEmpty()) add(ProgramRow("sports", "Sports", sports))
-        if (kids.isNotEmpty()) add(ProgramRow("kids", "Kids", kids))
-        if (news.isNotEmpty()) add(ProgramRow("news", "News", news))
+        if (onNow.isNotEmpty()) add(ProgramRow("on-now", Res.string.livetv_programs_on_now, onNow))
+        if (shows.isNotEmpty()) add(ProgramRow("shows", Res.string.livetv_programs_shows, shows))
+        if (movies.isNotEmpty()) add(ProgramRow("movies", Res.string.livetv_programs_movies, movies))
+        if (sports.isNotEmpty()) add(ProgramRow("sports", Res.string.livetv_programs_sports, sports))
+        if (kids.isNotEmpty()) add(ProgramRow("kids", Res.string.livetv_programs_kids, kids))
+        if (news.isNotEmpty()) add(ProgramRow("news", Res.string.livetv_programs_news, news))
     }
 
     fun getImageUrl(itemId: String, imageTag: String?): String =

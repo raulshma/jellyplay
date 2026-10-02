@@ -7,7 +7,7 @@ import com.raulshma.jellyplay.core.model.FreshnessCeilings
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.TtlCache
-import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import java.util.concurrent.atomic.AtomicLong
 
 //  MediaRepository facade split: this file is the ONE owner of the state the
@@ -48,15 +48,14 @@ internal const val DETAIL_CACHE_MAX_ENTRIES = 30
  */
 internal class MediaRepositoryInternals(
     /**
-     * The union API client: the detail cluster's fetch paths call
-     * getMediaDetail/getSimilarItems/getAlbumTracks/getThemeSongs through
-     * it, exactly as they did when the group lived inside
-     * [MediaRepositoryImpl]. (The extracted family impls that only FORWARD
-     * take the narrow family clients instead — see the PlaybackRepositoryImpl
-     * ctor precedent — but this holder keeps the union because the group's
-     * fetch surface spans families.)
+     * The LibraryApiClient family seam: the detail cluster's fetch paths call
+     * getMediaDetail/getSimilarItems/getAlbumTracks/getThemeSongs through it,
+     * exactly as they did when the group lived inside [MediaRepositoryImpl]
+     * (the PlaybackRepositoryImpl ctor precedent — all four fetches are
+     * LibraryApiClient members, so the family single composes the same impl
+     * the former union delegated to).
      */
-    apiClient: JellyfinApiClient,
+    apiClient: LibraryApiClient,
     homeSession: HomeSession,
 ) {
     /**
@@ -109,7 +108,7 @@ internal class MediaRepositoryInternals(
  * wrong identity is a guaranteed miss by construction.
  */
 internal class DetailCacheGroup(
-    private val apiClient: JellyfinApiClient,
+    private val apiClient: LibraryApiClient,
     private val homeSession: HomeSession,
 ) {
 

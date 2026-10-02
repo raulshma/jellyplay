@@ -1,5 +1,3 @@
-import org.gradle.api.plugins.ExtensionAware
-
 plugins {
     id("jellyplay.kmp.library.compose")
 }
@@ -23,28 +21,10 @@ kotlin {
             // must not swallow cancellation on either platform.
             implementation(project(":shared:core:concurrency"))
             implementation(project(":shared:core:ui"))
-            // JetBrains CMP distribution (see catalog note): Android targets
-            // redirect to the androidx artifacts.
-            implementation(libs.jb.compose.runtime)
-            implementation(libs.jb.compose.ui)
-            implementation(libs.jb.compose.foundation)
-            implementation(libs.jb.compose.animation)
-            implementation(libs.jb.compose.material3)
-            // Compose-resources runtime (stringResource/pluralStringResource
-            // + the Res object the generated accessors hang off).
-            implementation(compose.components.resources)
-            implementation(libs.tabler.icons.outline)
-            implementation(libs.tabler.icons.filled)
-            // Nav3 ships KMP variants from google maven directly — no mirror.
             // (The legacy build's lifecycle-viewmodel-navigation3 edge was
             // dropped: no insights file imports it — the navigation entry
             // uses entry<Route> from the nav3 runtime/ui artifacts only,
             // syncplay/calendar/requests precedent.)
-            implementation(libs.navigation3.runtime)
-            implementation(libs.navigation3.ui)
-            implementation(libs.lifecycle.viewmodel)
-            // collectAsStateWithLifecycle in the screen.
-            implementation(libs.lifecycle.runtime.compose)
             // Coil for the screen's direct `coil3.size.Size` request-sizing
             // argument to MediaImage (admin PluginCatalogCard / editor
             // ImagesTab precedent — shared/core:ui's own coil dep is not
@@ -53,12 +33,6 @@ kotlin {
             // MediaImage, whose image loading already rides the app-level
             // network fetcher.
             implementation(libs.coil.compose)
-            // Koin owns the insights ViewModel (V3 feature conveyor: one
-            // framework per type — the Hilt annotations were stripped at the
-            // move).
-            implementation(libs.koin.core)
-            implementation(libs.koin.compose)
-            implementation(libs.koin.compose.viewmodel)
         }
         // (kotlin("test") comes from the convention plugin.)
         getByName("jvmTest").dependencies {
@@ -74,10 +48,7 @@ kotlin {
     }
 }
 
-// `compose.resources` is a nested extension with no generated Kotlin-DSL
-// accessor; configure it explicitly. Same package as the legacy
-// feature:insights so migrated files keep their
-// `com.raulshma.jellyplay.feature.insights` imports; generated accessors land
-// in `...feature.insights.generated.resources`.
-val composeResources = (compose as ExtensionAware).extensions.getByName("resources") as org.jetbrains.compose.resources.ResourcesExtension
-composeResources.packageOfResClass = "com.raulshma.jellyplay.feature.insights.generated.resources"
+// The compose-resources `packageOfResClass`
+// (`...feature.insights.generated.resources`, same as the legacy value) is a
+// path-derived default from the convention plugin now — see
+// KmpLibraryComposePlugin.

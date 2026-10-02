@@ -3,7 +3,8 @@ package com.raulshma.jellyplay.core.network.realtime
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.model.ActivityLogEntry
 import com.raulshma.jellyplay.core.model.trimToSize
-import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import com.raulshma.jellyplay.core.network.api.AdminApiClient
+import com.raulshma.jellyplay.core.network.api.AuthApiClient
 import com.raulshma.jellyplay.core.network.WebSocketBackoffPolicy
 import com.raulshma.jellyplay.core.network.api.JellyfinApiEngine
 import com.raulshma.jellyplay.core.network.api.toActivityLogEntry
@@ -43,7 +44,10 @@ import java.util.concurrent.atomic.AtomicInteger
  * replay entries the caller already shows.
  */
 class ActivityLogRealtimeChannel(
-    private val apiClient: JellyfinApiClient,
+    /** Server URL + access token for the socket handshake. */
+    private val authApiClient: AuthApiClient,
+    /** The REST polling fallback's activity-log page reads. */
+    private val adminApiClient: AdminApiClient,
     private val engine: JellyfinApiEngine,
     private val serverIdentityStore: ServerIdentityStore,
 ) {
@@ -71,8 +75,8 @@ class ActivityLogRealtimeChannel(
         }
 
         suspend fun connect() {
-            val serverUrl = apiClient.getServerUrl() ?: return
-            val token = apiClient.getAccessToken() ?: return
+            val serverUrl = authApiClient.getServerUrl() ?: return
+            val token = authApiClient.getAccessToken() ?: return
             val device = serverIdentityStore.ensureDeviceId()
 
             val wsUrl = buildSocketUrl(
@@ -145,7 +149,7 @@ class ActivityLogRealtimeChannel(
     internal fun pollingFallbackFlow(seenIds: MutableSet<Long>): Flow<ActivityLogEntry> = flow {
         while (true) {
             delay(POLL_INTERVAL_MS)
-            val result = apiClient.getActivityLogEntries(limit = POLL_PAGE_SIZE)
+            val result = adminApiClient.getActivityLogEntries(limit = POLL_PAGE_SIZE)
             result.onSuccess { entries ->
                 entries.filter { it.id !in seenIds }.forEach { entry ->
                     seenIds.addCapped(entry.id)

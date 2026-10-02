@@ -21,6 +21,7 @@ import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
+import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import androidx.compose.ui.focus.FocusDirection
@@ -29,7 +30,7 @@ import androidx.compose.ui.focus.focusProperties
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.feature.music.components.RecentlyPlayedSection
 import com.raulshma.jellyplay.feature.music.components.ArtistsSection
-import com.raulshma.jellyplay.feature.music.components.AudioPlayerScreensSection
+import com.raulshma.jellyplay.feature.music.components.MusicHomeQuickLinks
 import com.raulshma.jellyplay.feature.music.components.NewReleasesSection
 import com.raulshma.jellyplay.feature.music.generated.resources.Res
 import com.raulshma.jellyplay.feature.music.generated.resources.music_check_jellyfin_libraries
@@ -52,7 +53,7 @@ import androidx.compose.runtime.rememberCoroutineScope
  *
  * Seven actions are plain navigator pushes (identical per shell, wired once in
  * the shared section graph). [onNowPlayingClick] and [onAmbientClick] are the
- * Now Playing / Ambient cards' host-supplied actions — each shell reads its
+ * Now Playing / Ambient quick links' host-supplied actions — each shell reads its
  * own audio core at click time, so they arrive via the shell's
  * `ShellHostHooks` rather than the shared graph.
  *
@@ -100,12 +101,14 @@ fun MusicHomeScreen(
     val scope = rememberCoroutineScope()
 
     val adaptiveInfo = LocalAdaptiveInfo.current
+    val isExpanded = adaptiveInfo.windowSizeClass != WindowSizeClass.Compact
     val isTv = LocalTvMode.current
 
     val initialFocusRequester = remember { FocusRequester() }
+    val quickLinksFirstAction = remember { FocusRequester() }
 
     // Focus groups for each section to build a vertical chain
-    val playerScreensRow = remember { FocusRequester() }
+    val quickLinksRow = remember { FocusRequester() }
 
     val artistsHeader = remember { FocusRequester() }
     val artistsRow = remember { FocusRequester() }
@@ -162,13 +165,21 @@ fun MusicHomeScreen(
                     val topRatedAlbumsSection = section(MusicHomeSectionType.TOP_RATED_ALBUMS)
                     val recentlyPlayedSection = section(MusicHomeSectionType.RECENTLY_PLAYED)
                     val favoriteTracksSection = section(MusicHomeSectionType.FAVORITE_TRACKS)
+                    val spotlightSection = listOfNotNull(
+                        recentlyPlayedSection,
+                        latestAlbumsSection,
+                        favoriteTracksSection,
+                        artistsSection,
+                        topRatedAlbumsSection,
+                    ).firstOrNull() ?: sections.first()
+                    val spotlightItem = spotlightSection.items.first()
 
                     // Dynamic list of active sections/cards to build the vertical chain.
-                    // Each entry is (headerFocusRequester?, rowFocusRequester); the Player Screens
+                    // Each entry is (headerFocusRequester?, rowFocusRequester); the quick-links
                     // row has no header so its header slot is null.
                     val activeChain = remember(sections) {
                         buildList {
-                            add(Pair(null as FocusRequester?, playerScreensRow))
+                            add(Pair(null as FocusRequester?, quickLinksRow))
                             if (artistsSection != null) add(Pair(artistsHeader, artistsRow))
                             if (latestAlbumsSection != null) add(Pair(latestAlbumsHeader, latestAlbumsRow))
                             if (topRatedAlbumsSection != null) add(Pair(topRatedAlbumsHeader, topRatedAlbumsRow))
@@ -203,16 +214,43 @@ fun MusicHomeScreen(
                     LazyColumn(
                         state = rememberLazyListState(),
                         modifier = Modifier.fillMaxSize(),
+                        horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
                         contentPadding = PaddingValues(
                             bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + adaptiveInfo.bottomPadding(isTv)
                         ),
                     ) {
-                        item {
-                            val index = activeChain.indexOfFirst { it.second == playerScreensRow }
+                        item(key = "music_spotlight") {
+                            Spacer(modifier = Modifier.height(72.dp))
+                            MusicHomeSpotlight(
+                                item = spotlightItem,
+                                eyebrow = stringResource(spotlightSection.type.displayNameRes),
+                                imageUrl = viewModel.getImageUrl(spotlightItem.id),
+                                isExpanded = isExpanded,
+                                isTv = isTv,
+                                playFocusRequester = initialFocusRequester,
+                                downFocusRequester = quickLinksFirstAction,
+                                onPlay = {
+                                    when (spotlightSection.type) {
+                                        MusicHomeSectionType.FAVORITE_ARTISTS -> viewModel.playArtist(spotlightItem.id)
+                                        MusicHomeSectionType.LATEST_ALBUMS,
+                                        MusicHomeSectionType.TOP_RATED_ALBUMS -> viewModel.playAlbum(spotlightItem.id)
+                                        MusicHomeSectionType.RECENTLY_PLAYED,
+                                        MusicHomeSectionType.FAVORITE_TRACKS -> viewModel.playAll(listOf(spotlightItem))
+                                    }
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .widthIn(max = 1440.dp)
+                                    .padding(horizontal = 24.dp),
+                            )
+                        }
+
+                        item(key = "music_quick_links") {
+                            val index = activeChain.indexOfFirst { it.second == quickLinksRow }
                             val (_, downLink) = getRowFocusLinks(index)
 
-                            Spacer(modifier = Modifier.height(100.dp))
-                            AudioPlayerScreensSection(
+                            Spacer(modifier = Modifier.height(28.dp))
+                            MusicHomeQuickLinks(
                                 onNowPlayingClick = onNowPlayingClick,
                                 onAmbientClick = onAmbientClick,
                                 onTracksClick = onTracksClick,
@@ -220,15 +258,18 @@ fun MusicHomeScreen(
                                 onArtistsClick = onArtistsClick,
                                 onGenresClick = onGenresClick,
                                 onPlaylistsClick = onPlaylistsClick,
-                                firstFocusRequester = initialFocusRequester,
-                                rowFocusRequester = playerScreensRow,
+                                firstFocusRequester = quickLinksFirstAction,
+                                rowFocusRequester = quickLinksRow,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .widthIn(max = 1440.dp),
                                 rowModifier = Modifier.focusProperties {
                                     @Suppress("DEPRECATION")
                                     exit = { direction ->
-                                        if (direction == FocusDirection.Down) {
-                                            downLink ?: FocusRequester.Default
-                                        } else {
-                                            FocusRequester.Default
+                                        when (direction) {
+                                            FocusDirection.Up -> initialFocusRequester
+                                            FocusDirection.Down -> downLink ?: FocusRequester.Default
+                                            else -> FocusRequester.Default
                                         }
                                     }
                                 }
@@ -252,6 +293,7 @@ fun MusicHomeScreen(
                                     },
                                     onViewAllClick = onArtistsClick,
                                     imageUrlBuilder = { viewModel.getImageUrl(it) },
+                                    modifier = Modifier.fillMaxWidth().widthIn(max = 1440.dp),
                                     headerFocusRequester = artistsHeader,
                                     rowFocusRequester = artistsRow,
                                     upFocusRequester = headerUp,
@@ -280,6 +322,7 @@ fun MusicHomeScreen(
                                         viewModel.shuffleAlbums(section.items)
                                     },
                                     imageUrlBuilder = { viewModel.getImageUrl(it) },
+                                    modifier = Modifier.fillMaxWidth().widthIn(max = 1440.dp),
                                     headerFocusRequester = latestAlbumsHeader,
                                     rowFocusRequester = latestAlbumsRow,
                                     upFocusRequester = headerUp,
@@ -308,6 +351,7 @@ fun MusicHomeScreen(
                                         viewModel.shuffleAlbums(section.items)
                                     },
                                     imageUrlBuilder = { viewModel.getImageUrl(it) },
+                                    modifier = Modifier.fillMaxWidth().widthIn(max = 1440.dp),
                                     title = stringResource(section.type.displayNameRes),
                                     subtitle = stringResource(section.type.subtitleRes),
                                     headerFocusRequester = topRatedAlbumsHeader,
@@ -338,6 +382,7 @@ fun MusicHomeScreen(
                                         viewModel.shufflePlay(section.items)
                                     },
                                     imageUrlBuilder = { viewModel.getImageUrl(it) },
+                                    modifier = Modifier.fillMaxWidth().widthIn(max = 1440.dp),
                                     headerFocusRequester = recentlyPlayedHeader,
                                     rowFocusRequester = recentlyPlayedRow,
                                     upFocusRequester = headerUp,
@@ -366,6 +411,7 @@ fun MusicHomeScreen(
                                         viewModel.shufflePlay(section.items)
                                     },
                                     imageUrlBuilder = { viewModel.getImageUrl(it) },
+                                    modifier = Modifier.fillMaxWidth().widthIn(max = 1440.dp),
                                     title = stringResource(section.type.displayNameRes),
                                     subtitle = stringResource(section.type.subtitleRes),
                                     headerFocusRequester = favoriteTracksHeader,

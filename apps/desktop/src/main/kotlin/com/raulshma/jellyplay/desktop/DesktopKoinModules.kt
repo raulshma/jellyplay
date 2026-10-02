@@ -9,7 +9,9 @@ import com.raulshma.jellyplay.core.datastore.di.desktopDatastoreModule
 import com.raulshma.jellyplay.core.network.di.desktopNetworkModule
 import com.raulshma.jellyplay.core.network.di.networkJvmModule
 import com.raulshma.jellyplay.core.ui.di.coreUiMessageModule
+import com.raulshma.jellyplay.desktop.integration.desktopIntegrationModule
 import com.raulshma.jellyplay.desktop.player.desktopPlayerModule
+import com.raulshma.jellyplay.desktop.update.DesktopInstalledVersion
 import com.raulshma.jellyplay.desktop.update.desktopAppUpdateModule
 import com.raulshma.jellyplay.feature.details.desktopDetailsPlatformModule
 import com.raulshma.jellyplay.feature.music.feedback.desktopMusicMessageBusModule
@@ -29,15 +31,14 @@ import org.koin.dsl.module
  * shared/feature/shell — both JVM shells consume it; the per-module
  * conveyor history rides that declaration).
  *
- * Koin 4 dropped the per-definition override flag; Main.kt runs its startKoin
- * with `allowOverride(true)` for exactly ONE deliberate replacement — the
- * [desktopAppUpdateModule] at the END of this list REPLACES
- * [desktopDataModule]'s sentinel-bound AppUpdateRepository single (the
- * desktopUpdateModule family definition — core:data's
- * DesktopUpdateKoinModule.kt, which carries the mirrored pointer) with the
- * real-version desktop auto-update actual (docs/adr/desktop-auto-update.md).
- * Loaded last so it wins; the KoinModuleRegistrationGuardTest ratchets every
- * other registration.
+ * The graph loads under Koin's default no-override policy — Main.kt's
+ * startKoin sets no allowOverride and every definition is keyed and unique.
+ * The desktop auto-update binding ([desktopAppUpdateModule]) is the ONE
+ * `AppUpdateRepository` definition: core:data's desktopDataModule ships no
+ * update family, so there is no sentinel to replace and no
+ * later-module-wins dance (docs/adr/desktop-auto-update.md). Its installed
+ * version rides the [DesktopInstalledVersion] single bound beside
+ * [DesktopPaths] below.
  */
 internal fun desktopKoinModules(paths: DesktopPaths): List<Module> = listOf(
     // The resolved bundle itself, for platform modules that resolve the full
@@ -45,6 +46,14 @@ internal fun desktopKoinModules(paths: DesktopPaths): List<Module> = listOf(
     // PlayerEngineFactory + Anime4KShaderInstaller); the modules below take
     // their path slices as parameters instead.
     module { single { paths } },
+    // The installed-version classification for the desktop auto-update
+    // binding (desktopAppUpdateModule resolves it): read once from the
+    // generated desktop-build.properties classpath resource — the same
+    // resource the About screen's DesktopAppMetaProvider reads. CI
+    // release-lane builds classify Release and compare against the GitHub
+    // feed for real; every dev/IDE build classifies DevBuild and stays
+    // "up to date" by construction (docs/adr/desktop-auto-update.md).
+    module { single { DesktopInstalledVersion.read() } },
     datastoreCommonModule,
     desktopDatastoreModule(paths.dataDir),
     databaseDaosModule,
@@ -85,18 +94,25 @@ internal fun desktopKoinModules(paths: DesktopPaths): List<Module> = listOf(
     desktopBookPlayerModule(paths.dataDir),
 
     // ── Desktop auto-update (ADR desktop-auto-update) ────────────────
-    // DELIBERATE OVERRIDE (the only one; see this file's KDoc on
-    // allowOverride): replaces desktopDataModule's sentinel-bound
-    // AppUpdateRepository — the desktopUpdateModule family single, whose
-    // file (core:data's DesktopUpdateKoinModule.kt) carries the mirrored
-    // pointer — (`999999.0.0` — isUpdateAvailable could never
-    // fire) with the real-version desktop actual. The installed version
-    // comes from the generated desktop-build.properties (channel=release
-    // only on CI release lanes); dev builds stay "up to date" by
-    // construction, and an available update opens the release page in the
-    // user's browser (DesktopAppRoot's About row) — never a silent install.
-    // Last in the list so the later definition wins the mapping.
+    // The ONE AppUpdateRepository definition in this graph — no override:
+    // core:data's desktopDataModule ships no update family, so Main.kt's
+    // startKoin runs under Koin's default no-override policy. Resolves the
+    // DesktopInstalledVersion single above (release-lane builds report
+    // genuine newer releases from the GitHub feed; dev builds stay "up to
+    // date" by construction), and an available update opens the release
+    // page in the user's browser (DesktopAppRoot's About row) — never a
+    // silent install. List position is inert (definitions are keyed); it
+    // sits here with the rest of this shell's own sections.
     desktopAppUpdateModule(paths.dataDirNio),
+
+    // ── Desktop shell integrations (features 4.2 + 4.3) ─────────────
+    // The Discord Rich Presence stack (hand-rolled DiscordIpcClient +
+    // DiscordPresenceService over the shared NowPlayingReporter spine) and
+    // the playback-event shell hooks (DesktopHookRunner). Both start from
+    // launchDesktopStartup (idempotent; the settings toggles gate the
+    // behavior) and live here because every collaborator is a desktop-shell
+    // or shared-graph type. List position is inert (definitions are keyed).
+    desktopIntegrationModule(),
 
     // …subtitle-tester, the FINAL conveyor feature, deliberately has NO
     // registration here: the entire feature (ViewModel, screen, preview

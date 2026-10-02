@@ -22,7 +22,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import com.raulshma.jellyplay.core.ui.components.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -45,15 +44,13 @@ import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
-import com.raulshma.jellyplay.core.ui.components.ErrorScreen
-import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
-import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
 import com.raulshma.jellyplay.core.ui.components.rememberStableCallback
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import com.raulshma.jellyplay.feature.livetv.components.LiveTvTabScaffold
 import com.raulshma.jellyplay.feature.livetv.components.RecordDialog
 import com.raulshma.jellyplay.feature.livetv.generated.resources.Res
 import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_live
@@ -83,54 +80,45 @@ fun ProgramsScreen(
     val onItemLongPress = remember(viewModel) { { program: LiveTvProgram -> viewModel.requestRecord(program) } }
     val getImageUrl = remember(viewModel) { { id: String, tag: String? -> viewModel.getImageUrl(id, tag) } }
 
-    when {
-        uiState.isLoading && uiState.rows.isEmpty() -> {
-            ScreenLoadingState(modifier = Modifier.fillMaxSize())
-        }
-        uiState.error != null && uiState.rows.isEmpty() -> {
-            ErrorScreen(message = uiState.error!!, onRetry = { viewModel.load() })
-        }
-        uiState.rows.isEmpty() && !uiState.isLoading -> {
-            ScreenEmptyState(
-                icon = Tabler.Outline.DeviceTv,
-                title = stringResource(Res.string.livetv_no_programs_available),
-            )
-        }
-        else -> {
-            PullToRefreshBox(
-                isRefreshing = uiState.refreshing,
-                onRefresh = { viewModel.load() },
-            ) {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .focusGroup()
-                        .tvFocusRestorer()
-                        .focusRequester(focusRequester),
-                    contentPadding = PaddingValues(top = 8.dp, bottom = bottomPad),
-                    verticalArrangement = Arrangement.spacedBy(spacing + 8.dp),
-                ) {
-                    items(
-                        items = uiState.rows,
-                        // Section ids are fixed-distinct per ProgramsViewModel,
-                        // so the id alone is a stable collision-free key (a
-                        // title key would crash on duplicate titles) that
-                        // survives "On Now" refreshes (a program-id-keyed row
-                        // would lose scroll position whenever the top program
-                        // rotates).
-                        key = { row -> row.id },
-                        contentType = { "program_row" },
-                    ) { row ->
-                        ProgramRowSection(
-                            row = row,
-                            contentPad = contentPad,
-                            spacing = spacing,
-                            onItemClick = onProgramClick,
-                            onItemLongPress = onItemLongPress,
-                            getImageUrl = getImageUrl,
-                        )
-                    }
-                }
+    // The shared tab ladder: loading / error / empty rungs + the
+    // pull-to-refresh content rung (the former hand-copied when-ladder).
+    LiveTvTabScaffold(
+        isLoading = uiState.isLoading,
+        error = uiState.error,
+        isEmpty = uiState.rows.isEmpty(),
+        emptyIcon = Tabler.Outline.DeviceTv,
+        emptyTitleRes = Res.string.livetv_no_programs_available,
+        isRefreshing = uiState.refreshing,
+        onRefresh = { viewModel.load() },
+    ) {
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .focusGroup()
+                .tvFocusRestorer()
+                .focusRequester(focusRequester),
+            contentPadding = PaddingValues(top = 8.dp, bottom = bottomPad),
+            verticalArrangement = Arrangement.spacedBy(spacing + 8.dp),
+        ) {
+            items(
+                items = uiState.rows,
+                // Section ids are fixed-distinct per ProgramsViewModel,
+                // so the id alone is a stable collision-free key (a
+                // title key would crash on duplicate titles) that
+                // survives "On Now" refreshes (a program-id-keyed row
+                // would lose scroll position whenever the top program
+                // rotates).
+                key = { row -> row.id },
+                contentType = { "program_row" },
+            ) { row ->
+                ProgramRowSection(
+                    row = row,
+                    contentPad = contentPad,
+                    spacing = spacing,
+                    onItemClick = onProgramClick,
+                    onItemLongPress = onItemLongPress,
+                    getImageUrl = getImageUrl,
+                )
             }
         }
     }
@@ -159,7 +147,7 @@ private fun ProgramRowSection(
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Text(
-            text = row.title,
+            text = stringResource(row.titleRes),
             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(horizontal = contentPad, vertical = 4.dp),

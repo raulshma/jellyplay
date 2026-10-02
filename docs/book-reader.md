@@ -34,6 +34,11 @@ back to the server so you can pick up on any device.
   behavior section.
 - 🎛️ **Reading direction toggle** — comic pages can be flipped
   left-to-right or right-to-left (manga) per book.
+- 📖 **Double-page (spread) mode** — paged books (comics/PDF) can show two
+  pages side by side, per book, persisted like the direction. The cover
+  renders alone, then pages pair up manga-style (1,2), (3,4), …; one turn
+  steps a whole spread, and progress, bookmarks, and TOC/page jumps stay
+  page-indexed underneath.
 - 🎨 **EPUB typography** — reflowable books offer light/sepia/dark themes
   (sepia is a true paper tone), adjustable type size, font family
   (system/serif/sans/mono), line height, page margins, justification, and
@@ -50,11 +55,13 @@ back to the server so you can pick up on any device.
   into very large scans softens slightly instead of re-rastering.
 - ☀️ **Brightness** — an in-reader dim slider lives in the bottom chrome of
   both readers.
-- 🔊 **Read aloud (Android)** — EPUBs can be spoken with the system TTS
-  voice: the current paragraph is highlighted, pages follow along, and
-  chapters advance automatically, with sentence-level skip forward/back.
-  Speed and pitch are adjustable. Desktop reports the feature as
-  unavailable (roadmap: future).
+- 🔊 **Read aloud (Android + Windows)** — EPUBs can be spoken aloud:
+  Android uses the system TTS voice, Windows speaks through SAPI. The
+  current paragraph is highlighted, pages follow along, and chapters
+  advance automatically, with sentence-level skip forward/back. Speed and
+  pitch are adjustable (pitch applies on Android; SAPI has no pitch
+  property and accepts-but-ignores it). macOS/Linux report the feature as
+  unavailable (no bundled engine).
 - 🌙 **Sleep timer & auto-scroll** — stop read-aloud/auto-scroll after
   5–60 minutes or at the end of the chapter; scroll-mode EPUBs gain
   auto-scroll with a persisted speed slider and tap-to-pause.
@@ -168,7 +175,8 @@ the native view — use the system brightness).
 
 ## Limitations
 
-- **Read aloud is Android-only** — desktop has no bundled TTS engine; the
+- **Read aloud is Android + Windows only** — Android uses the system TTS,
+  Windows speaks through SAPI; macOS/Linux have no bundled engine, so the
   controls report the feature as unavailable there instead of failing
   mid-book.
 - **Marks stay on the device** — bookmarks, highlights, and notes are

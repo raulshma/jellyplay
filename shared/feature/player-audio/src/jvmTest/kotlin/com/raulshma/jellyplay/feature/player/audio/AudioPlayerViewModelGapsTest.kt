@@ -5,7 +5,7 @@ import com.raulshma.jellyplay.core.data.download.TrackDownloadStatusWindow
 import com.raulshma.jellyplay.core.data.playback.AudioEffectsManager
 import com.raulshma.jellyplay.core.data.playback.AudioPlayerEngine
 import com.raulshma.jellyplay.core.data.playback.AudioQueueManager
-import com.raulshma.jellyplay.core.data.playback.AudioSleepTimerManager
+import com.raulshma.jellyplay.core.data.playback.SleepCountdown
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
 import com.raulshma.jellyplay.core.datastore.audio.AudioSlice
@@ -86,7 +86,7 @@ class AudioPlayerViewModelGapsTest {
     private lateinit var userDataMutator: com.raulshma.jellyplay.core.data.repository.UserDataMutator
     private lateinit var downloads: TrackDownloadStatusWindow
     private lateinit var trackDownloadActions: TrackDownloadActions
-    private lateinit var sleepTimerManager: AudioSleepTimerManager
+    private lateinit var sleepCountdown: SleepCountdown
     private lateinit var cast: AudioPlayerCast
 
     private lateinit var viewModel: AudioPlayerViewModel
@@ -134,8 +134,14 @@ class AudioPlayerViewModelGapsTest {
         userDataMutator = mockk(relaxed = true)
         downloads = mockk<TrackDownloadStatusWindow>(relaxed = true).apply { every { isSupported } returns true }
         trackDownloadActions = mockk(relaxed = true)
-        sleepTimerManager = mockk<AudioSleepTimerManager>(relaxed = true)
+        sleepCountdown = mockk<SleepCountdown>(relaxed = true)
+        // Real flows for the countdown sources: the uiState projection is
+        // ONE combine over all sources, so a relaxed (never-emitting) mock
+        // here would block every mirror.
+        every { sleepCountdown.isSleepTimerActive } returns MutableStateFlow(false)
+        every { sleepCountdown.isEndOfEpisodeMode } returns MutableStateFlow(false)
         cast = mockk(relaxed = true)
+        val audioQueueFacade = mockk<com.raulshma.jellyplay.core.data.playback.AudioQueueFacade>(relaxed = true)
 
         every { projections.audioPlayerUiPreferences } returns MutableStateFlow(AudioPlayerUiPreferences())
         every { audioStore.audio } returns MutableStateFlow(AudioSlice())
@@ -170,7 +176,7 @@ class AudioPlayerViewModelGapsTest {
         every { engine.getImageUrl(any()) } returns "https://srv/Items/x/Images/Primary"
         every { engine.undoLastQueueOperation() } returns false
         every {
-            downloads.downloadsFor(any())
+            downloads.getDownloadsByMediaItemIdsFlow(any())
         } answers {
             // Per-id state flows behind the window's single IN-query read, so
             // per-item state changes propagate to the fake like a live Room
@@ -197,8 +203,9 @@ class AudioPlayerViewModelGapsTest {
             userDataMutator = userDataMutator,
             downloads = downloads,
             trackDownloadActions = trackDownloadActions,
-            sleepTimerManager = sleepTimerManager,
+            sleepCountdown = sleepCountdown,
             cast = cast,
+            audioQueueFacade = audioQueueFacade,
         )
     }
 
@@ -448,7 +455,7 @@ class AudioPlayerViewModelGapsTest {
 
         viewModel.onEvent(AudioPlayerUiEvent.DownloadCurrentTrack)
 
-        coVerify(exactly = 1) { downloads.remove("dl-1") }
+        coVerify(exactly = 1) { downloads.deleteDownload("dl-1") }
         coVerify(exactly = 0) { trackDownloadActions.flip(any()) }
     }
 
@@ -459,7 +466,7 @@ class AudioPlayerViewModelGapsTest {
 
         viewModel.onEvent(AudioPlayerUiEvent.DownloadCurrentTrack)
 
-        coVerify(exactly = 0) { downloads.remove(any()) }
+        coVerify(exactly = 0) { downloads.deleteDownload(any()) }
         coVerify(exactly = 1) { trackDownloadActions.flip("track-1") }
     }
 
@@ -469,7 +476,7 @@ class AudioPlayerViewModelGapsTest {
 
         viewModel.onEvent(AudioPlayerUiEvent.DownloadCurrentTrack)
 
-        coVerify(exactly = 0) { downloads.remove(any()) }
+        coVerify(exactly = 0) { downloads.deleteDownload(any()) }
         coVerify(exactly = 0) { trackDownloadActions.flip(any()) }
     }
 
@@ -524,7 +531,7 @@ class AudioPlayerViewModelGapsTest {
     fun sleepTimerExpiry_pausesTheEngine_ratherThanToggling() {
         val onExpired = slot<() -> Unit>()
         viewModel.onEvent(AudioPlayerUiEvent.StartSleepTimer(60_000L))
-        verify { sleepTimerManager.setOnTimerExpired(capture(onExpired)) }
+        verify { sleepCountdown.setOnTimerExpired(capture(onExpired)) }
 
         // Simulate the manager firing after the countdown: the callback must
         // PAUSE — if the user paused manually after arming, a toggle would

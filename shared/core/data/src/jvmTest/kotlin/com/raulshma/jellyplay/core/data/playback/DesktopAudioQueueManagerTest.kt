@@ -79,7 +79,7 @@ class DesktopAudioQueueManagerTest {
             imageUrlProvider = FakeImages(),
             queuePersistenceHelper = QueuePersistenceHelper(dao),
             lyricsManager = AudioLyricsManager(FakeLyricsRepository()),
-            sleepTimerManager = SleepTimerManager(TestTimeSource()),
+            sleepCountdown = SleepCountdown(SleepCountdownClock { TestTimeSource().nowElapsedRealtimeMillis() }),
             scope = scope,
             // The shared union fake in its AUTO_PLAY (desktop-mpv) personality:
             // auto-play on load, READY parks, play-from-ENDED replays at zero.

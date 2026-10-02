@@ -1,5 +1,3 @@
-import org.gradle.api.plugins.ExtensionAware
-
 plugins {
     id("jellyplay.kmp.library.compose")
     alias(libs.plugins.kotlin.serialization)
@@ -29,29 +27,7 @@ kotlin {
             // semantics without masking cancellation).
             implementation(project(":shared:core:concurrency"))
             implementation(project(":shared:core:ui"))
-            // JetBrains CMP distribution (see catalog note): Android targets
-            // redirect to the androidx artifacts.
-            implementation(libs.jb.compose.runtime)
-            implementation(libs.jb.compose.ui)
-            implementation(libs.jb.compose.foundation)
-            implementation(libs.jb.compose.animation)
-            implementation(libs.jb.compose.material3)
-            // Compose-resources runtime (stringResource/StringResource API).
-            implementation(compose.components.resources)
-            implementation(libs.tabler.icons.outline)
-            // Nav3 ships KMP variants from google maven directly — no mirror.
-            implementation(libs.navigation3.runtime)
-            implementation(libs.navigation3.ui)
-            implementation(libs.lifecycle.viewmodel)
-            // collectAsStateWithLifecycle in the screens.
-            implementation(libs.lifecycle.runtime.compose)
             implementation(libs.coil.compose)
-            // Koin owns the admin ViewModels (V3 feature conveyor: one
-            // framework per type — the Hilt annotations were stripped at the
-            // move).
-            implementation(libs.koin.core)
-            implementation(libs.koin.compose)
-            implementation(libs.koin.compose.viewmodel)
             // Stale-media / watched-removal scan JSON payloads.
             implementation(libs.kotlinx.serialization.json)
         }
@@ -73,9 +49,7 @@ kotlin {
     }
 }
 
-// `compose.resources` is a nested extension with no generated Kotlin-DSL
-// accessor; configure it explicitly. Same package as the legacy :feature:admin
-// so migrated files keep their `com.raulshma.jellyplay.feature.admin` imports;
-// generated accessors land in `...feature.admin.generated.resources`.
-val composeResources = (compose as ExtensionAware).extensions.getByName("resources") as org.jetbrains.compose.resources.ResourcesExtension
-composeResources.packageOfResClass = "com.raulshma.jellyplay.feature.admin.generated.resources"
+// The compose-resources `packageOfResClass`
+// (`...feature.admin.generated.resources`, same as the legacy value) is a
+// path-derived default from the convention plugin now — see
+// KmpLibraryComposePlugin.

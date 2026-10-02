@@ -1,9 +1,11 @@
 package com.raulshma.jellyplay.feature.admin.di
 
+import com.raulshma.jellyplay.core.data.repository.AdminBackupRepository
 import com.raulshma.jellyplay.core.data.repository.AdminRepository
 import com.raulshma.jellyplay.core.data.repository.AdminStatisticsRepository
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.PluginAdminRepository
+import com.raulshma.jellyplay.feature.admin.backups.AdminBackupsViewModel
 import com.raulshma.jellyplay.feature.admin.dashboard.AdminDashboardViewModel
 import com.raulshma.jellyplay.feature.admin.devices.DevicesViewModel
 import com.raulshma.jellyplay.feature.admin.logs.LogsViewModel
@@ -54,6 +56,12 @@ val adminModule: Module = module {
     viewModel {
         LogsViewModel(
             adminRepository = get(),
+        )
+    }
+    viewModel {
+        AdminBackupsViewModel(
+            backupRepository = get<AdminBackupRepository>(),
+            authRepository = get<AuthRepository>(),
         )
     }
     viewModel {

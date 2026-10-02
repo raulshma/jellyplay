@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.core.data.syncplay
 
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
+import com.raulshma.jellyplay.core.model.SyncPlayGroup
 import com.raulshma.jellyplay.core.model.SyncPlayGroupInfo
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
 import com.raulshma.jellyplay.core.network.websocket.JellyfinWebSocketClient
@@ -104,25 +105,103 @@ class SyncPlayManagerTest {
         assertEquals(expected, manager.remoteNow())
     }
 
-    @Test
-    fun `createGroup calls API`() = runTest {
-        coEvery { apiClient.createSyncPlayGroup("Test Group") } returns Result.success(Unit)
-
-        val result = manager.createGroup("Test Group")
-
-        assertTrue(result.isSuccess)
-        coEvery { apiClient.createSyncPlayGroup("Test Group") }
+    /**
+     * Arms the socket-lifecycle input [joinGroup] touches (called through
+     * [SyncPlayManager.createGroup] now): no persisted server means
+     * connectWebSocket() returns early — the [armReconnectWatcher] precedent,
+     * isolating the test from the real socket lifecycle.
+     */
+    private fun armJoinForCreate() {
+        every { authRepository.currentServer } returns MutableStateFlow(null)
+        // startListening / startReconnectWatcher subscribe these; relaxed
+        // mocks answer the generic collect with Nothing (the
+        // armReconnectWatcher precedent arms real shared flows instead).
+        every { webSocketClient.events } returns MutableSharedFlow()
+        every { webSocketClient.reconnects } returns MutableSharedFlow()
     }
 
     @Test
-    fun `createGroup returns success even when API returns failure`() = runTest {
-        coEvery { apiClient.postCapabilities() } returns Result.success(Unit)
+    fun `createGroup creates, joins MY group and returns it`() = runTest {
+        armJoinForCreate()
+        coEvery { apiClient.getSyncPlayGroups() } returnsMany listOf(
+            // Pre-create snapshot, then the discovery read finds the new group.
+            Result.success(emptyList()),
+            Result.success(listOf(SyncPlayGroup(groupId = "g9", groupName = "Party", participantCount = 1))),
+        )
+        coEvery { apiClient.createSyncPlayGroup("Party") } returns Result.success(Unit)
+        coEvery { apiClient.getSyncPlayInfo("g9") } returns
+            Result.success(SyncPlayGroupInfo(groupId = "g9", groupName = "Party"))
+
+        val result = manager.createGroup("Party")
+
+        assertTrue(result.isSuccess)
+        assertEquals("g9", result.getOrNull()?.groupId)
+        assertEquals("g9", manager.activeGroupId)
+        coVerify(exactly = 1) { apiClient.joinSyncPlayGroup("g9") }
+    }
+
+    @Test
+    fun `createGroup propagates the wire failure instead of reporting success`() = runTest {
+        coEvery { apiClient.getSyncPlayGroups() } returns Result.success(emptyList())
         coEvery { apiClient.createSyncPlayGroup("Test Group") } returns
             Result.failure(Exception("Network error"))
 
         val result = manager.createGroup("Test Group")
 
+        assertTrue(result.isFailure)
+        coVerify(exactly = 0) { apiClient.joinSyncPlayGroup(any()) }
+    }
+
+    @Test
+    fun `createGroup joins the freshly-created group, not a pre-existing same-named one`() = runTest {
+        armJoinForCreate()
+        val stale = SyncPlayGroup(groupId = "stale", groupName = "Party", participantCount = 5)
+        val fresh = SyncPlayGroup(groupId = "fresh", groupName = "Party", participantCount = 1)
+        coEvery { apiClient.getSyncPlayGroups() } returnsMany listOf(
+            Result.success(listOf(stale)),
+            Result.success(listOf(stale, fresh)),
+        )
+        coEvery { apiClient.createSyncPlayGroup("Party") } returns Result.success(Unit)
+        coEvery { apiClient.getSyncPlayInfo("fresh") } returns
+            Result.success(SyncPlayGroupInfo(groupId = "fresh", groupName = "Party"))
+
+        val result = manager.createGroup("Party")
+
         assertTrue(result.isSuccess)
+        assertEquals("fresh", result.getOrNull()?.groupId)
+        coVerify(exactly = 1) { apiClient.joinSyncPlayGroup("fresh") }
+        coVerify(exactly = 0) { apiClient.joinSyncPlayGroup("stale") }
+    }
+
+    @Test
+    fun `createGroup polls the group list for a slow server within the discovery window`() = runTest {
+        armJoinForCreate()
+        coEvery { apiClient.getSyncPlayGroups() } returnsMany listOf(
+            Result.success(emptyList()),                    // pre-create snapshot
+            Result.success(emptyList()),                    // first poll — server lags
+            Result.success(                                 // second poll — the group lands
+                listOf(SyncPlayGroup(groupId = "g9", groupName = "Party", participantCount = 1)),
+            ),
+        )
+        coEvery { apiClient.createSyncPlayGroup("Party") } returns Result.success(Unit)
+        coEvery { apiClient.getSyncPlayInfo("g9") } returns
+            Result.success(SyncPlayGroupInfo(groupId = "g9", groupName = "Party"))
+
+        val result = manager.createGroup("Party")
+
+        assertTrue(result.isSuccess, "the bounded poll outlives the lagging server list")
+        assertEquals("g9", result.getOrNull()?.groupId)
+    }
+
+    @Test
+    fun `createGroup fails when the group never surfaces within the discovery window`() = runTest {
+        coEvery { apiClient.getSyncPlayGroups() } returns Result.success(emptyList())
+        coEvery { apiClient.createSyncPlayGroup("Party") } returns Result.success(Unit)
+
+        val result = manager.createGroup("Party")
+
+        assertTrue(result.isFailure, "no group in the list inside the window — no blind join")
+        coVerify(exactly = 0) { apiClient.joinSyncPlayGroup(any()) }
     }
 
     @Test

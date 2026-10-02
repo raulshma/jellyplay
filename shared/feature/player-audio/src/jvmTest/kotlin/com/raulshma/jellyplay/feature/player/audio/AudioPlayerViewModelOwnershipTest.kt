@@ -20,7 +20,14 @@ import kotlin.test.assertTrue
  * now-playing/queue/effects snapshot fold) — with the VM left a thin
  * caller that owns the uiState writes.
  *
- * Baseline: 27 members (81 before the AudioPlayerUiEvent intent fold: the
+ * Baseline: 25 members — the 27 of the intent fold plus the read-only
+ * endless-radio status (`radioState`; the stop command rides the existing
+ * AudioPlayerUiEvent funnel), minus the three effects-strength mirror getters
+ * (`dialogueBoostStrength`/`nightModeStrength`/`bassBoostStrength` — dead
+ * re-exposures of the `effectsState` slice; the screen reads the slice
+ * directly, and the engine/queue/prefs flow mirrors collapsed into the
+ * [AudioStateProjection] fold). 81 before the AudioPlayerUiEvent intent fold:
+ * the
  * same flows/getters/slices plus 45 per-action command funs the funnel
  * replaced and 10 dead ones deleted outright — the `onCastDisconnected`
  * no-op, the cast play/pause/seek/volume forwards (the screen drives
@@ -33,7 +40,7 @@ import kotlin.test.assertTrue
 class AudioPlayerViewModelOwnershipTest {
 
     /** The maximum allowed public + internal members (see class KDoc). */
-    private val maxPublicInternalMembers = 27
+    private val maxPublicInternalMembers = 25
 
     /**
      * A class-body declaration line at the ViewModel's single level of

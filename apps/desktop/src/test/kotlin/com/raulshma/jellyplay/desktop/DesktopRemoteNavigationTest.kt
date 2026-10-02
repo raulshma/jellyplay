@@ -1,68 +1,30 @@
 package com.raulshma.jellyplay.desktop
 
 import androidx.compose.ui.focus.FocusDirection
-import androidx.navigation3.runtime.NavKey
-import com.raulshma.jellyplay.core.model.remote.NavigationTarget
 import com.raulshma.jellyplay.core.model.remote.RemoteFocusDirection
-import com.raulshma.jellyplay.core.model.remote.RemoteTopLevelDestination
-import com.raulshma.jellyplay.core.ui.navigation.Route
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
 /**
- * Pins the desktop remote-navigation collector — the per-shell LADDER
- * DISPATCH half (the pure folds it routes through — the target→route mapping
- * and the Jellyfin-web "Stop" pop — live in shared/feature/shell and are
- * pinned by its `RemoteNavigationRoutingTest`): the ladder's back / focus /
- * select / context-menu dispatch through fake lambdas — the
- * NavRequestCollector shape. Also pins [composeFocusDirection], the
- * four-branch remote→Compose focus mapping extracted from the scaffold's
- * moveFocus adapter (plain constant objects — no focus tree needed).
+ * Pins the desktop remote-navigation declarations that remain after the
+ * `DesktopRemoteNavCollector` wrapper folded into [DesktopShellServices]:
+ * the class was eight forwarded constructor params around shared/feature
+ * shell's `RemoteNavigationDispatcher` plus one string constant and a
+ * collect() one-liner, so its ladder-coverage rows here duplicated
+ * `RemoteNavigationDispatcherTest` (which pins every NavigationTarget
+ * case's sink, the GoToTopLevel select-not-pop fork, ClosePlayer's
+ * multi-stack pop and the context-menu fallback) — those rows collapsed
+ * into references to the shared test. What is genuinely desktop-owned
+ * stays pinned HERE:
+ *
+ *  - [composeFocusDirection], the four-branch remote→Compose focus mapping
+ *    extracted from the scaffold's moveFocus adapter (plain constant
+ *    objects — no focus tree needed);
+ *  - [DESKTOP_CONTEXT_MENU_UNAVAILABLE], the context-menu fallback wording
+ *    the desktop seam passes the shared ladder (the desktop shell has no
+ *    context-menu affordance, so every OpenContextMenu lands on it).
  */
 class DesktopRemoteNavigationTest {
-
-    // ── DesktopRemoteNavCollector ────────────────────────────────────────
-
-    private class RecordingShell {
-        val events = mutableListOf<String>()
-        val stacks = mutableListOf<MutableList<NavKey>>()
-        val collector = DesktopRemoteNavCollector(
-            navigate = { route -> events += "navigate:$route" },
-            goBack = { events += "goBack" },
-            backStacks = { stacks },
-            moveFocus = { direction -> events += "focus:$direction" },
-            invokeSelect = { events += "select" },
-            presentMessage = { message -> events += "message:$message" },
-        )
-    }
-
-    @Test
-    fun `the collector dispatches every ladder target to its seam`() = kotlinx.coroutines.runBlocking {
-        val shell = RecordingShell()
-        shell.collector.collect(
-            kotlinx.coroutines.flow.flowOf(
-                NavigationTarget.GoBack,
-                NavigationTarget.MoveFocus(RemoteFocusDirection.LEFT),
-                NavigationTarget.InvokeSelect,
-                NavigationTarget.OpenContextMenu,
-                NavigationTarget.GoToTopLevel(RemoteTopLevelDestination.HOME),
-                NavigationTarget.OpenMediaDetail("d"),
-                NavigationTarget.ClosePlayer,
-            ),
-        )
-
-        assertEquals(
-            listOf(
-                "goBack",
-                "focus:LEFT",
-                "select",
-                "message:Context menu not available here",
-                "navigate:${Route.Home}",
-                "navigate:${Route.MediaDetail("d")}",
-            ),
-            shell.events,
-        )
-    }
 
     // ── composeFocusDirection ───────────────────────────────────────────
 
@@ -72,5 +34,15 @@ class DesktopRemoteNavigationTest {
         assertEquals(FocusDirection.Down, composeFocusDirection(RemoteFocusDirection.DOWN))
         assertEquals(FocusDirection.Left, composeFocusDirection(RemoteFocusDirection.LEFT))
         assertEquals(FocusDirection.Right, composeFocusDirection(RemoteFocusDirection.RIGHT))
+    }
+
+    // ── DESKTOP_CONTEXT_MENU_UNAVAILABLE ────────────────────────────────
+
+    @Test
+    fun `the context menu fallback names its unavailability`() {
+        // The exact user-facing string the shared dispatcher's fallback
+        // presents for a remote OpenContextMenu on this shell (the ladder's
+        // delivery of it is RemoteNavigationDispatcherTest's row).
+        assertEquals("Context menu not available here", DESKTOP_CONTEXT_MENU_UNAVAILABLE)
     }
 }

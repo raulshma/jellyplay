@@ -4,6 +4,11 @@ import com.raulshma.jellyplay.core.data.playback.PipAction
 import com.raulshma.jellyplay.core.data.playback.PipController
 import com.raulshma.jellyplay.core.data.playback.PipTransport
 import com.raulshma.jellyplay.core.data.playback.PlaybackIdentity
+import com.raulshma.jellyplay.core.data.playback.focus.FocusClaimState
+import com.raulshma.jellyplay.core.data.playback.focus.FocusOutcome
+import com.raulshma.jellyplay.core.data.playback.focus.PlaybackFocus
+import com.raulshma.jellyplay.core.data.playback.focus.PlaybackSurfaceId
+import com.raulshma.jellyplay.core.data.playback.focus.VideoFocusPolicyInput
 import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.util.EpochMillisSource
@@ -51,6 +56,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import com.raulshma.jellyplay.core.ui.message.UiMessage
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class LiveTvPlayerViewModelTest {
@@ -95,9 +101,15 @@ class LiveTvPlayerViewModelTest {
         every { lastChannelStore.observeLastChannelId() } returns flowOf(null)
         every { appRuntimeStateStore.state } returns appRuntimeFlow
         every { playbackStore.playback } returns playbackFlow
-        coEvery { appRuntimeStateStore.setFavoriteChannels(any()) } answers {
-            val newFavs = firstArg<Set<String>>()
-            appRuntimeFlow.value = appRuntimeFlow.value.copy(favoriteChannels = newFavs)
+        // The store's flip command (AppRuntimeStateStore.toggleFavoriteChannel):
+        // the set is read inside the update transaction and the flipped result
+        // returned — mirror that against the flow-backed fake.
+        coEvery { appRuntimeStateStore.toggleFavoriteChannel(any()) } answers {
+            val channelId = firstArg<String>()
+            val current = appRuntimeFlow.value.favoriteChannels
+            val updated = if (channelId in current) current - channelId else current + channelId
+            appRuntimeFlow.value = appRuntimeFlow.value.copy(favoriteChannels = updated)
+            updated
         }
         every { playbackIdentity.accessToken() } returns "tok"
         every { fakeEngine.state } returns engineStateFlow
@@ -205,8 +217,8 @@ class LiveTvPlayerViewModelTest {
         // The commonMain VM keeps the message unresolved until render time:
         // the resolve-failure resource carries the channel name as its arg.
         val error = vm.state.value.errorMessage
-        assertTrue(error is LivePlayerMessage.Resource, "expected Resource error, was $error")
-        assertEquals(Res.string.live_error_resolve_failed, (error as LivePlayerMessage.Resource).res)
+        assertTrue(error is UiMessage.Resource, "expected Resource error, was $error")
+        assertEquals(Res.string.live_error_resolve_failed, (error as UiMessage.Resource).res)
         assertEquals(listOf("Channel 0"), error.args)
     }
 
@@ -395,8 +407,8 @@ class LiveTvPlayerViewModelTest {
         // "No channels available" text via a Context mock; the commonMain VM
         // now carries the resource itself).
         val error = vm.state.value.errorMessage
-        assertTrue(error is LivePlayerMessage.Resource, "expected Resource error, was $error")
-        assertEquals(Res.string.live_error_no_channels, (error as LivePlayerMessage.Resource).res)
+        assertTrue(error is UiMessage.Resource, "expected Resource error, was $error")
+        assertEquals(Res.string.live_error_no_channels, (error as UiMessage.Resource).res)
         assertNull(vm.state.value.currentChannel)
     }
 
@@ -492,8 +504,8 @@ class LiveTvPlayerViewModelTest {
         // Failure path keeps the old behavior: no-channels error, no crash,
         // and no tune attempted (the zap must not retry the load).
         val error = vm.state.value.errorMessage
-        assertTrue(error is LivePlayerMessage.Resource, "expected Resource error, was $error")
-        assertEquals(Res.string.live_error_no_channels, (error as LivePlayerMessage.Resource).res)
+        assertTrue(error is UiMessage.Resource, "expected Resource error, was $error")
+        assertEquals(Res.string.live_error_no_channels, (error as UiMessage.Resource).res)
         assertNull(vm.state.value.currentChannel)
         assertTrue(capturedRequests.isEmpty())
 
@@ -665,6 +677,24 @@ class LiveTvPlayerViewModelTest {
         }
     }
 
+    /**
+     * Recording fake of the focus authority that also implements the
+     * [VideoFocusPolicyInput] seam — captures the policy pushes the VM's
+     * init must make (the live legacy-policy assertion).
+     */
+    private class FakePlaybackFocus : PlaybackFocus, VideoFocusPolicyInput {
+        override val claimState = MutableStateFlow<FocusClaimState>(FocusClaimState.Idle)
+        val policies = mutableListOf<Pair<Boolean, Boolean>>()
+
+        override fun acquire(claimant: PlaybackSurfaceId): FocusOutcome = FocusOutcome.Granted
+
+        override fun release(claimant: PlaybackSurfaceId) {}
+
+        override fun onVideoFocusPolicy(osLegEnabled: Boolean, duckOnTransientLoss: Boolean) {
+            policies += osLegEnabled to duckOnTransientLoss
+        }
+    }
+
     @Test
     fun `pip seam arms auto-enter on tune and mirrors play state and aspect`() = runTest {
         coEvery {
@@ -827,7 +857,24 @@ class LiveTvPlayerViewModelTest {
         assertEquals(2, pip.consumedAutoExits.size)
     }
 
-    private fun createVm(pip: PipController? = null): LiveTvPlayerViewModel = LiveTvPlayerViewModel(
+    @Test
+    fun `live asserts its legacy focus policy once at init`() = runTest {
+        // The legacy Media3LivePlayerAudio registered the OS focus seat
+        // unconditionally at engine creation and always ducked on a transient
+        // loss (restore on regain) — live had no pref gate. The VM must
+        // assert that legacy-faithful policy (osLeg on + duck on) into the
+        // module's policy holder on every live start; the VOD wiring pushes
+        // its own prefs while VOD plays, so this re-assertion is what keeps
+        // live from inheriting them.
+        val focus = FakePlaybackFocus()
+        createVm(playbackFocus = focus)
+        assertEquals(listOf(true to true), focus.policies)
+    }
+
+    private fun createVm(
+        pip: PipController? = null,
+        playbackFocus: PlaybackFocus = com.raulshma.jellyplay.core.data.playback.focus.NoopPlaybackFocus,
+    ): LiveTvPlayerViewModel = LiveTvPlayerViewModel(
         liveTvRepository = liveTvRepo,
         playbackRepository = playbackRepo,
         playbackIdentity = playbackIdentity,
@@ -839,5 +886,6 @@ class LiveTvPlayerViewModelTest {
         engineFactory = LiveEngineFactory { _, _ -> fakeEngine },
         imageUrlProvider = imageUrlProvider,
         pip = pip,
+        playbackFocus = playbackFocus,
     )
 }

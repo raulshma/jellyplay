@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.raulshma.jellyplay.core.datastore.TestDataStoreProvider
+import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.model.DownloadQuality
 import com.raulshma.jellyplay.core.model.DownloadScheduleWindow
 import kotlinx.coroutines.CoroutineScope
@@ -17,6 +18,7 @@ import kotlinx.coroutines.test.runTest
 import kotlin.test.assertEquals
 import kotlin.test.BeforeTest
 import kotlin.test.Test
+import kotlin.test.assertTrue
 
 /**
  * Exercises the downloads preference store, focusing on the
@@ -36,7 +38,7 @@ class DownloadsStoreTest {
             // Robolectric reuses the same DataStore file across tests; start clean.
             dataStore = TestDataStoreProvider.get()
             dataStore.edit { it.clear() }
-            store = DownloadsStore(dataStore, scope)
+            store = DownloadsStore(dataStore, scope, ServerIdentityStore(dataStore, scope))
             // Drain the Eagerly-cached slice so the cleared state is observed
             // before each test writes + reads.
             store.downloads.first()
@@ -109,5 +111,85 @@ class DownloadsStoreTest {
         assertEquals(2, slice.downloadScheduleWindow.startHour)
         assertEquals(5, slice.downloadScheduleWindow.endHour)
         assertEquals(false, slice.downloadScheduleWindow.wifiOnly)
+    }
+
+    // ── Auto-download retention policy ────────────────────────────────
+
+    @Test
+    fun `retention defaults - lookahead 3, per-pass 0, keep-days 0, empty allow-list`() = runTest {
+        val slice = store.downloads.first()
+        assertEquals(3, slice.autoDownloadLookahead)
+        assertEquals(0, slice.autoDownloadMaxPerPass)
+        assertEquals(0, slice.autoDownloadKeepDays)
+        assertEquals(emptySet(), slice.autoDownloadServers)
+    }
+
+    @Test
+    fun `retention setters coerce - lookahead band, per-pass band, keep-days floor`() = runTest {
+        store.setAutoDownloadLookahead(99)
+        store.setAutoDownloadMaxPerPass(99)
+        store.setAutoDownloadKeepDays(-5)
+        val slice = store.downloads.first()
+        assertEquals(10, slice.autoDownloadLookahead)
+        assertEquals(50, slice.autoDownloadMaxPerPass)
+        assertEquals(0, slice.autoDownloadKeepDays)
+
+        store.setAutoDownloadLookahead(-1)
+        store.setAutoDownloadMaxPerPass(-1)
+        assertEquals(0, store.downloads.first().autoDownloadLookahead)
+        assertEquals(0, store.downloads.first().autoDownloadMaxPerPass)
+    }
+
+    @Test
+    fun `read clamps raw above-band retention values`() = runTest {
+        // Write directly under the keys, bypassing the setters' coerce, to
+        // confirm the READ projection also enforces the bands.
+        dataStore.edit {
+            it[intPreferencesKey("auto_download_lookahead")] = 99
+            it[intPreferencesKey("auto_download_max_per_pass")] = 99
+        }
+        val slice = store.downloads.first()
+        assertEquals(10, slice.autoDownloadLookahead)
+        assertEquals(50, slice.autoDownloadMaxPerPass)
+    }
+
+    @Test
+    fun `auto-download servers round-trips into the active user's namespace`() = runTest {
+        val identity = ServerIdentityStore(dataStore, scope)
+        identity.setActiveUser("user-1")
+
+        store.setAutoDownloadServers(setOf("srv-1", "srv-2"))
+
+        val slice = store.downloads.first()
+        assertEquals(setOf("srv-1", "srv-2"), slice.autoDownloadServers)
+        // The key lives under u_<userId>::, never as a flat canonical key.
+        assertTrue(dataStore.data.first().asMap().keys.any { it.name == "u_user-1::auto_download_servers" })
+        assertTrue(dataStore.data.first().asMap().keys.none { it.name == "auto_download_servers" })
+    }
+
+    @Test
+    fun `auto-download servers are per-user - a second user reads the default`() = runTest {
+        val identity = ServerIdentityStore(dataStore, scope)
+        identity.setActiveUser("user-1")
+        store.setAutoDownloadServers(setOf("srv-1"))
+
+        identity.setActiveUser("user-2")
+        assertEquals(emptySet(), store.downloads.first().autoDownloadServers)
+
+        identity.setActiveUser("user-1")
+        assertEquals(setOf("srv-1"), store.downloads.first().autoDownloadServers)
+    }
+
+    @Test
+    fun `auto-download servers write is skipped pre-login and corrupt JSON degrades to default`() = runTest {
+        // No active user: no namespace to write into.
+        store.setAutoDownloadServers(setOf("srv-1"))
+        assertEquals(emptySet(), store.downloads.first().autoDownloadServers)
+
+        // A corrupted blob under the namespaced key degrades to the default.
+        val identity = ServerIdentityStore(dataStore, scope)
+        identity.setActiveUser("user-1")
+        dataStore.edit { it[stringPreferencesKey("u_user-1::auto_download_servers")] = "nonsense" }
+        assertEquals(emptySet(), store.downloads.first().autoDownloadServers)
     }
 }

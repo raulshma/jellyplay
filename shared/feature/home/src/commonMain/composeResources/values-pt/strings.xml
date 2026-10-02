@@ -100,4 +100,15 @@
     <string name="home_download_start_failed">Não foi possível iniciar o download</string>
     <string name="home_series_download_queued">Episódios na fila para download</string>
     <string name="home_see_all">Ver tudo</string>
+    <string name="next_up_hidden_title">Ocultado de A seguir</string>
+    <string name="next_up_hidden_empty">Nada ocultado</string>
+    <string name="next_up_hidden_empty_subtitle">As séries que remover da fila A seguir aparecem aqui para restauração.</string>
+    <string name="next_up_hidden_restore_all">Restaurar tudo</string>
+    <string name="next_up_hidden_restore_all_cd">Restaurar todas as séries ocultadas em A seguir</string>
+    <string name="next_up_hidden_restore_all_title">Restaurar tudo em A seguir?</string>
+    <string name="next_up_hidden_restore_all_message">Todas as %1$d séries ocultadas voltarão a aparecer na fila A seguir.</string>
+    <string name="next_up_hidden_restore_cd">Restaurar %1$s em A seguir</string>
+    <string name="next_up_hidden_unknown">Série desconhecida</string>
+    <string name="a11y_mode_video">Modo vídeo</string>
+    <string name="a11y_mode_music">Modo música</string>
 </resources>

@@ -57,7 +57,7 @@ import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.model.SortOption
 import com.raulshma.jellyplay.core.model.descriptor
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
-import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import com.raulshma.jellyplay.core.network.api.AuthApiClient
 import com.raulshma.jellyplay.core.ui.message.UiText
 import com.raulshma.jellyplay.core.ui.message.UserMessageBus
 import com.raulshma.jellyplay.core.ui.navigation.Route
@@ -174,7 +174,7 @@ class HomeViewModelEventsTest {
 
     private val userFlow = MutableStateFlow<UserInfo?>(null)
     private val sessionFlow = MutableStateFlow<ActiveSession?>(null)
-    private val sessionApiClient: JellyfinApiClient = mockk(relaxed = true)
+    private val sessionApiClient: AuthApiClient = mockk(relaxed = true)
     private val homeSession: HomeSession by lazy {
         HomeSession(sessionApiClient, CoroutineScope(SupervisorJob() + mainDispatcher))
     }
@@ -265,7 +265,6 @@ class HomeViewModelEventsTest {
         mediaRepository = mediaRepository,
         imageUrlProvider = imageUrlProvider,
         photoFolderPrefetcher = photoFolderPrefetcher,
-        seriesDownloads = seriesDownloads,
         downloadIntake = downloadIntake,
         quickDownloadActions = quickDownloadActions,
         offlineRepository = offlineRepository,
@@ -276,10 +275,10 @@ class HomeViewModelEventsTest {
             appearance = appearanceStore,
             experimental = experimentalStore,
             playback = playbackStore,
+            seerrPreferences = seerrPreferencesStore,
         ),
         preferencesEditor = preferencesEditor,
         seerrRequestDelegate = seerrRequestDelegate,
-        seerrPreferencesStore = seerrPreferencesStore,
         authRepository = authRepository,
         homeSession = homeSession,
         userMessageBus = userMessageBus,
@@ -302,6 +301,13 @@ class HomeViewModelEventsTest {
                 playbackSyncScheduler = playbackSyncScheduler,
                 offlineFirstItemResolver = offlineFirstItemResolver,
             ),
+        ),
+        homeSheetsFactory = HomeSheetsFactory(
+            episodeCatalogue = episodeCatalogue,
+            seriesDownloads = seriesDownloads,
+            downloadIntake = downloadIntake,
+            userMessageBus = userMessageBus,
+            offlineRepository = offlineRepository,
         ),
     )
 

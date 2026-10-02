@@ -5,7 +5,9 @@ import com.raulshma.jellyplay.feature.music.MusicQueuePlayer
 import com.raulshma.jellyplay.core.data.download.ActiveDownloadCount
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.feature.music.MusicTrackWithAlbumFallback
+import com.raulshma.jellyplay.core.data.repository.MediaCollectionReads
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.MusicCatalogue
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.home.HomeDiscoverySlice
 import com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore
@@ -66,6 +68,8 @@ class MusicHomeViewModelTest {
     private val mainDispatcher = StandardTestDispatcher()
 
     private val mediaRepository: MediaRepository = mockk()
+    private val musicCatalogue: MusicCatalogue = mockk()
+    private val mediaCollectionReads: MediaCollectionReads = mockk()
     private val imageUrlProvider: ImageUrlProvider = mockk(relaxed = true)
     private val audioQueueFacade: MusicQueuePlayer = mockk()
     private val activeDownloads: ActiveDownloadCount = mockk()
@@ -86,7 +90,7 @@ class MusicHomeViewModelTest {
         Dispatchers.setMain(mainDispatcher)
         every { homeDiscoveryStore.homeDiscovery } returns homeModeFlow
         every { offlineModeManager.offlineMode } returns offlineModeFlow
-        every { activeDownloads.activeDownloadCount() } returns flowOf(0)
+        every { activeDownloads.getActiveDownloadCount() } returns flowOf(0)
         every { userMessageBus.error(any()) } just Runs
         every { offlineModeManager.toggleManualOffline() } just Runs
         // The deferred refresher collects this for the whole VM lifetime.
@@ -107,12 +111,12 @@ class MusicHomeViewModelTest {
      * shape has exactly ONE active answer (no stub-precedence ambiguity).
      */
     private fun stubHomeQueries(favoriteArtists: List<MediaItem> = emptyList()) {
-        coEvery { mediaRepository.getFavorites(mediaTypes = listOf(MediaType.ARTIST), limit = 20) } returns
+        coEvery { mediaCollectionReads.getFavorites(mediaTypes = listOf(MediaType.ARTIST), limit = 20) } returns
             Result.success(SearchResult(favoriteArtists, favoriteArtists.size, 0))
-        coEvery { mediaRepository.getFavorites(mediaTypes = listOf(MediaType.AUDIO), limit = 20) } returns
+        coEvery { mediaCollectionReads.getFavorites(mediaTypes = listOf(MediaType.AUDIO), limit = 20) } returns
             Result.success(SearchResult(emptyList(), 0, 0))
         coEvery {
-            mediaRepository.getMediaItems(any(), any(), any(), any(), any(), any())
+            mediaCollectionReads.getMediaItems(any(), any(), any(), any(), any(), any())
         } returns Result.success(SearchResult(emptyList(), 0, 0))
     }
 
@@ -120,6 +124,8 @@ class MusicHomeViewModelTest {
     private fun createViewModel() {
         viewModel = MusicHomeViewModel(
             mediaRepository = mediaRepository,
+            musicCatalogue = musicCatalogue,
+            mediaCollectionReads = mediaCollectionReads,
             imageUrlProvider = imageUrlProvider,
             audioQueueFacade = audioQueueFacade,
             activeDownloads = activeDownloads,
@@ -147,10 +153,10 @@ class MusicHomeViewModelTest {
         val recent = listOf(item("r1", "Recent Track"))
         val top = listOf(item("t1", "Top Album"))
         val favTracks = listOf(item("f1", "Fav Track"))
-        coEvery { mediaRepository.getFavorites(mediaTypes = listOf(MediaType.ARTIST), limit = 20) } returns
+        coEvery { mediaCollectionReads.getFavorites(mediaTypes = listOf(MediaType.ARTIST), limit = 20) } returns
             Result.success(SearchResult(artists, 1, 0))
         coEvery {
-            mediaRepository.getMediaItems(
+            mediaCollectionReads.getMediaItems(
                 parentId = null,
                 filters = LibraryFilters(mediaTypes = listOf(MediaType.ALBUM), sortBy = SortOption.DATE_ADDED),
                 studioIds = null,
@@ -160,7 +166,7 @@ class MusicHomeViewModelTest {
             )
         } returns Result.success(SearchResult(latest, 1, 0))
         coEvery {
-            mediaRepository.getMediaItems(
+            mediaCollectionReads.getMediaItems(
                 parentId = null,
                 filters = LibraryFilters(mediaTypes = listOf(MediaType.AUDIO), sortBy = SortOption.DATE_PLAYED),
                 studioIds = null,
@@ -170,7 +176,7 @@ class MusicHomeViewModelTest {
             )
         } returns Result.success(SearchResult(recent, 1, 0))
         coEvery {
-            mediaRepository.getMediaItems(
+            mediaCollectionReads.getMediaItems(
                 parentId = null,
                 filters = LibraryFilters(mediaTypes = listOf(MediaType.ALBUM), sortBy = SortOption.RATING),
                 studioIds = null,
@@ -179,7 +185,7 @@ class MusicHomeViewModelTest {
                 kindFilter = ItemKindFilter.TOP_LEVEL,
             )
         } returns Result.success(SearchResult(top, 1, 0))
-        coEvery { mediaRepository.getFavorites(mediaTypes = listOf(MediaType.AUDIO), limit = 20) } returns
+        coEvery { mediaCollectionReads.getFavorites(mediaTypes = listOf(MediaType.AUDIO), limit = 20) } returns
             Result.success(SearchResult(favTracks, 1, 0))
         createViewModel()
 
@@ -224,12 +230,12 @@ class MusicHomeViewModelTest {
         createViewModel()
 
         advanceUntilIdle()
-        coVerify(exactly = 1) { mediaRepository.getFavorites(mediaTypes = listOf(MediaType.ARTIST), limit = 20) }
+        coVerify(exactly = 1) { mediaCollectionReads.getFavorites(mediaTypes = listOf(MediaType.ARTIST), limit = 20) }
 
         viewModel.loadSections()
         advanceUntilIdle()
 
-        coVerify(exactly = 2) { mediaRepository.getFavorites(mediaTypes = listOf(MediaType.ARTIST), limit = 20) }
+        coVerify(exactly = 2) { mediaCollectionReads.getFavorites(mediaTypes = listOf(MediaType.ARTIST), limit = 20) }
         assertEquals(1, viewModel.uiState.value.sections.size)
         assertFalse(viewModel.uiState.value.isLoading)
     }
@@ -256,16 +262,16 @@ class MusicHomeViewModelTest {
 
         advanceUntilIdle()
 
-        coVerify(exactly = 0) { mediaRepository.getFavorites(any(), any(), any()) }
-        coVerify(exactly = 0) { mediaRepository.getMediaItems(any(), any(), any(), any(), any(), any()) }
+        coVerify(exactly = 0) { mediaCollectionReads.getFavorites(any(), any(), any()) }
+        coVerify(exactly = 0) { mediaCollectionReads.getMediaItems(any(), any(), any(), any(), any(), any()) }
         assertTrue(viewModel.uiState.value.sections.isEmpty())
     }
 
     @Test
     fun loadSections_failureWithNoSections_setsErrorStateOnly() = runTest(mainDispatcher) {
-        coEvery { mediaRepository.getFavorites(any(), any(), any()) } throws RuntimeException("boom")
+        coEvery { mediaCollectionReads.getFavorites(any(), any(), any()) } throws RuntimeException("boom")
         coEvery {
-            mediaRepository.getMediaItems(any(), any(), any(), any(), any(), any())
+            mediaCollectionReads.getMediaItems(any(), any(), any(), any(), any(), any())
         } returns Result.success(SearchResult(emptyList(), 0, 0))
         createViewModel()
 
@@ -282,7 +288,7 @@ class MusicHomeViewModelTest {
         // One answer per matcher; the artist query succeeds on the first load
         // and throws on the refresh — no stub re-recording.
         var artistQueries = 0
-        coEvery { mediaRepository.getFavorites(mediaTypes = listOf(MediaType.ARTIST), limit = 20) } answers {
+        coEvery { mediaCollectionReads.getFavorites(mediaTypes = listOf(MediaType.ARTIST), limit = 20) } answers {
             if (++artistQueries == 1) {
                 Result.success(SearchResult(listOf(item("a1", "Artist")), 1, 0))
             } else {
@@ -321,20 +327,20 @@ class MusicHomeViewModelTest {
         createViewModel()
         advanceUntilIdle()
         assertEquals(1, viewModel.uiState.value.sections.size)
-        coVerify(exactly = 1) { mediaRepository.getFavorites(mediaTypes = listOf(MediaType.ARTIST), limit = 20) }
+        coVerify(exactly = 1) { mediaCollectionReads.getFavorites(mediaTypes = listOf(MediaType.ARTIST), limit = 20) }
 
         // A write confirmed while the screen is off-screen marks stale only.
         viewModel.deferredRefresher.onScreenActiveChanged(false)
         userDataEvents.emit(UserDataChange("user-1", listOf("t1")))
         advanceUntilIdle()
-        coVerify(exactly = 1) { mediaRepository.getFavorites(mediaTypes = listOf(MediaType.ARTIST), limit = 20) }
+        coVerify(exactly = 1) { mediaCollectionReads.getFavorites(mediaTypes = listOf(MediaType.ARTIST), limit = 20) }
 
         // Re-entry regenerates — silently: no isLoading flip (the
         // pull-to-refresh spinner keys off it), no error reset, no toast.
         viewModel.deferredRefresher.onScreenActiveChanged(true)
         advanceUntilIdle()
 
-        coVerify(exactly = 2) { mediaRepository.getFavorites(mediaTypes = listOf(MediaType.ARTIST), limit = 20) }
+        coVerify(exactly = 2) { mediaCollectionReads.getFavorites(mediaTypes = listOf(MediaType.ARTIST), limit = 20) }
         assertEquals(1, viewModel.uiState.value.sections.size)
         assertFalse(viewModel.uiState.value.isLoading)
         assertNull(viewModel.uiState.value.error)
@@ -347,7 +353,7 @@ class MusicHomeViewModelTest {
         // One answer per matcher: the artist query succeeds on the initial
         // load and fails on the silent regeneration (no stub re-recording).
         var artistQueries = 0
-        coEvery { mediaRepository.getFavorites(mediaTypes = listOf(MediaType.ARTIST), limit = 20) } answers {
+        coEvery { mediaCollectionReads.getFavorites(mediaTypes = listOf(MediaType.ARTIST), limit = 20) } answers {
             if (++artistQueries == 1) {
                 Result.success(SearchResult(listOf(item("a1", "Artist")), 1, 0))
             } else {
@@ -367,7 +373,7 @@ class MusicHomeViewModelTest {
         // The regeneration ran, its favorite-artists read failed, and nothing
         // was published: the stale sections stay (serve-stale-while-revalidate)
         // — no dropped rows, no toast, no error, no spinner.
-        coVerify(exactly = 2) { mediaRepository.getFavorites(mediaTypes = listOf(MediaType.ARTIST), limit = 20) }
+        coVerify(exactly = 2) { mediaCollectionReads.getFavorites(mediaTypes = listOf(MediaType.ARTIST), limit = 20) }
         assertEquals(1, viewModel.uiState.value.sections.size)
         assertNull(viewModel.uiState.value.error)
         assertFalse(viewModel.uiState.value.isLoading)
@@ -379,7 +385,7 @@ class MusicHomeViewModelTest {
         viewModel.deferredRefresher.onScreenActiveChanged(false)
         viewModel.deferredRefresher.onScreenActiveChanged(true)
         advanceUntilIdle()
-        coVerify(exactly = 3) { mediaRepository.getFavorites(mediaTypes = listOf(MediaType.ARTIST), limit = 20) }
+        coVerify(exactly = 3) { mediaCollectionReads.getFavorites(mediaTypes = listOf(MediaType.ARTIST), limit = 20) }
         assertEquals(1, viewModel.uiState.value.sections.size)
     }
 
@@ -395,7 +401,7 @@ class MusicHomeViewModelTest {
         assertEquals(1, viewModel.uiState.value.sections.size)
 
         val gate = CompletableDeferred<Unit>()
-        coEvery { mediaRepository.getFavorites(mediaTypes = listOf(MediaType.ARTIST), limit = 20) } coAnswers {
+        coEvery { mediaCollectionReads.getFavorites(mediaTypes = listOf(MediaType.ARTIST), limit = 20) } coAnswers {
             gate.await()
             Result.success(SearchResult(listOf(item("a2", "Artist 2")), 1, 0))
         }
@@ -436,14 +442,14 @@ class MusicHomeViewModelTest {
         advanceUntilIdle()
         viewModel.deferredRefresher.onScreenActiveChanged(true)
         advanceUntilIdle()
-        coVerify(exactly = 1) { mediaRepository.getFavorites(mediaTypes = listOf(MediaType.ARTIST), limit = 20) }
+        coVerify(exactly = 1) { mediaCollectionReads.getFavorites(mediaTypes = listOf(MediaType.ARTIST), limit = 20) }
 
         // Returning online regenerates loudly via the offline-mode
         // collector — the change heals even though the silent path could
         // not run while offline.
         offlineModeFlow.value = OfflineMode.ONLINE
         advanceUntilIdle()
-        coVerify(exactly = 2) { mediaRepository.getFavorites(mediaTypes = listOf(MediaType.ARTIST), limit = 20) }
+        coVerify(exactly = 2) { mediaCollectionReads.getFavorites(mediaTypes = listOf(MediaType.ARTIST), limit = 20) }
     }
 
     @Test
@@ -453,7 +459,7 @@ class MusicHomeViewModelTest {
         // load and throws on every later one (the loud refresh and the
         // over-armed silent retry it promises).
         var artistQueries = 0
-        coEvery { mediaRepository.getFavorites(mediaTypes = listOf(MediaType.ARTIST), limit = 20) } answers {
+        coEvery { mediaCollectionReads.getFavorites(mediaTypes = listOf(MediaType.ARTIST), limit = 20) } answers {
             if (++artistQueries == 1) {
                 Result.success(SearchResult(listOf(item("a1", "Artist")), 1, 0))
             } else {
@@ -477,7 +483,7 @@ class MusicHomeViewModelTest {
 
         // The over-armed regeneration ran and stayed silent: the retry's own
         // failure keeps the stale sections and raises no second toast.
-        coVerify(exactly = 3) { mediaRepository.getFavorites(mediaTypes = listOf(MediaType.ARTIST), limit = 20) }
+        coVerify(exactly = 3) { mediaCollectionReads.getFavorites(mediaTypes = listOf(MediaType.ARTIST), limit = 20) }
         assertEquals(1, viewModel.uiState.value.sections.size)
         assertFalse(viewModel.uiState.value.isLoading)
         verify(exactly = 1) { userMessageBus.error(any()) }
@@ -491,7 +497,7 @@ class MusicHomeViewModelTest {
         // "successfully" minus the artist row; query 3 (the re-armed silent
         // twin) heals it.
         var artistQueries = 0
-        coEvery { mediaRepository.getFavorites(mediaTypes = listOf(MediaType.ARTIST), limit = 20) } answers {
+        coEvery { mediaCollectionReads.getFavorites(mediaTypes = listOf(MediaType.ARTIST), limit = 20) } answers {
             if (++artistQueries == 2) {
                 Result.failure(RuntimeException("artists blip"))
             } else {
@@ -518,7 +524,7 @@ class MusicHomeViewModelTest {
         viewModel.deferredRefresher.onScreenActiveChanged(true)
         advanceUntilIdle()
 
-        coVerify(exactly = 3) { mediaRepository.getFavorites(mediaTypes = listOf(MediaType.ARTIST), limit = 20) }
+        coVerify(exactly = 3) { mediaCollectionReads.getFavorites(mediaTypes = listOf(MediaType.ARTIST), limit = 20) }
         assertEquals(1, viewModel.uiState.value.sections.size)
     }
 
@@ -526,7 +532,7 @@ class MusicHomeViewModelTest {
     fun surpriseMe_invokesCallbackWithRandomTrackId() = runTest(mainDispatcher) {
         stubHomeQueries()
         coEvery {
-            mediaRepository.getMediaItems(
+            mediaCollectionReads.getMediaItems(
                 parentId = null,
                 filters = LibraryFilters(mediaTypes = listOf(MediaType.AUDIO), sortBy = SortOption.RANDOM),
                 studioIds = null,
@@ -591,7 +597,7 @@ class MusicHomeViewModelTest {
     fun playAlbum_fetchesTracksAndPlays() = runTest(mainDispatcher) {
         stubHomeQueries()
         val tracks = listOf(item("t1"))
-        coEvery { mediaRepository.getAlbumTracks("al1") } returns Result.success(tracks)
+        coEvery { musicCatalogue.getAlbumTracks("al1", force = false) } returns Result.success(tracks)
         coEvery { audioQueueFacade.playTracks(any(), any(), any(), any(), any()) } returns
             MusicQueueOutcome.Started(emptyList(), 0)
         createViewModel()
@@ -609,8 +615,8 @@ class MusicHomeViewModelTest {
         stubHomeQueries()
         val albumA = MediaItem(id = "a1", name = "Album A", mediaType = MediaType.ALBUM)
         val albumB = MediaItem(id = "a2", name = "Album B", mediaType = MediaType.ALBUM)
-        coEvery { mediaRepository.getAlbumTracks("a1") } returns Result.success(listOf(item("t1")))
-        coEvery { mediaRepository.getAlbumTracks("a2") } returns Result.success(listOf(item("t2")))
+        coEvery { musicCatalogue.getAlbumTracks("a1", force = false) } returns Result.success(listOf(item("t1")))
+        coEvery { musicCatalogue.getAlbumTracks("a2", force = false) } returns Result.success(listOf(item("t2")))
         coEvery { audioQueueFacade.playTracks(any<List<MusicTrackWithAlbumFallback>>(), any(), any(), any()) } returns
             MusicQueueOutcome.Started(emptyList(), 0)
         createViewModel()
@@ -635,8 +641,8 @@ class MusicHomeViewModelTest {
     fun playArtist_expandsAlbumsIntoPairedQueue() = runTest(mainDispatcher) {
         stubHomeQueries()
         val albumA = MediaItem(id = "a1", name = "Album A", mediaType = MediaType.ALBUM)
-        coEvery { mediaRepository.getArtistAlbums("ar1") } returns Result.success(listOf(albumA))
-        coEvery { mediaRepository.getAlbumTracks("a1") } returns Result.success(listOf(item("t1")))
+        coEvery { musicCatalogue.getArtistAlbums("ar1", 50) } returns Result.success(listOf(albumA))
+        coEvery { musicCatalogue.getAlbumTracks("a1", force = false) } returns Result.success(listOf(item("t1")))
         coEvery { audioQueueFacade.playTracks(any<List<MusicTrackWithAlbumFallback>>(), any(), any(), any()) } returns
             MusicQueueOutcome.Started(emptyList(), 0)
         createViewModel()

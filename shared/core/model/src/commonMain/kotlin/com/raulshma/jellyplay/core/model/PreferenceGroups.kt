@@ -19,7 +19,7 @@ data class VideoPlayerPreferences(
     val videoSeekDurationMs: Long = 10_000L,
     val videoDefaultOrientation: OrientationMode = OrientationMode.SENSOR_LANDSCAPE,
     val videoControlsTimeoutMs: Long = 5_000L,
-    val videoGesturesEnabled: Boolean = true,
+    val videoGestureMode: GestureMode = GestureMode.ALL,
     val videoHoldSpeedEnabled: Boolean = true,
     val videoHoldSpeedMultiplier: Float = 2.0f,
     val videoDefaultSpeed: Float = 1.0f,
@@ -179,8 +179,24 @@ data class AppearancePreferences(
 @Serializable
 data class PlaybackPreferences(
     val preferredPlayer: PlayerType = PlayerType.EXO_PLAYER,
+    /** Which third-party app the EXTERNAL arm hands off to (chooser when unset). */
+    val preferredExternalPlayer: ExternalPlayerApp = ExternalPlayerApp.SYSTEM_CHOOSER,
     val decoderMode: DecoderMode = DecoderMode.HW_PREFERRED,
     val audioPassthrough: Boolean = false,
+    /**
+     * The per-codec passthrough allow-list under the master
+     * [audioPassthrough] toggle — a codec left out is neither bitstreamed
+     * nor advertised for direct play (the server transcodes it to an
+     * allowed codec instead).
+     */
+    val audioPassthroughCodecs: Set<AudioPassthroughCodec> = AudioPassthroughCodec.ALL,
+    /** The speaker-layout cap applied by every engine (`AUTO` = uncapped). */
+    val maxAudioChannels: MaxAudioChannelsEnum = MaxAudioChannelsEnum.AUTO,
+    /**
+     * Stereo-downmix loudness compensation in dB (0–12); 0 = off. Feeds the
+     * loudness-enhancer gain on engines that expose one.
+     */
+    val downmixBoostDb: Float = 0f,
     val frameRateMatching: Boolean = false,
     /**
      * Granular refresh-rate / resolution switching mode. Supersedes
@@ -191,7 +207,7 @@ data class PlaybackPreferences(
     val videoSeekDurationMs: Long = 10_000L,
     val videoDefaultOrientation: OrientationMode = OrientationMode.SENSOR_LANDSCAPE,
     val videoControlsTimeoutMs: Long = 5_000L,
-    val videoGesturesEnabled: Boolean = true,
+    val videoGestureMode: GestureMode = GestureMode.ALL,
     val videoHoldSpeedEnabled: Boolean = true,
     val videoHoldSpeedMultiplier: Float = 2.0f,
     val videoDefaultSpeed: Float = 1.0f,
@@ -199,6 +215,13 @@ data class PlaybackPreferences(
     val videoAutoplayNext: Boolean = true,
     val trailerAutoplay: Boolean = true,
     val cinemaModeEnabled: Boolean = false,
+    /**
+     * "Still watching?" confirm prompt: which trigger arms are on
+     * (see [StillWatchingMode]). The rows ride the autoplay toggle.
+     */
+    val stillWatchingMode: StillWatchingMode = StillWatchingMode.OFF,
+    /** The episode arm's threshold — consecutive auto-played episodes; 0 = off. */
+    val stillWatchingEpisodeThreshold: Int = 0,
     val videoSwipeSeekMaxMs: Long = 120_000L,
     val videoRememberBrightness: Boolean = true,
     val videoBrightnessLevel: Float = 0.5f,
@@ -222,12 +245,21 @@ data class PlaybackPreferences(
     val dialogueBoostStrength: EffectStrength = EffectStrength.MODERATE,
     val audioDelayMs: Long = 0L,
     val backgroundVideoAudioEnabled: Boolean = false,
+    /**
+     * Whether leaving the player during playback auto-enters picture-in-picture
+     * (issue #167). Default `true` keeps the historical behaviour; off makes
+     * Home/recents background the app normally. Manual PiP entry via the
+     * controls button is unaffected. Android-only surface (no desktop PiP).
+     */
+    val autoEnterPip: Boolean = true,
     val autoPlayCountdownSec: Int = 10,
     val incognitoModeEnabled: Boolean = false,
     val showClockInPlayer: Boolean = false,
     val tvZoomModePercent: Float = 0f,
     val streamingQuality: StreamingQuality = StreamingQuality.AUTO,
     val liveStreamOption: LiveStreamOption = LiveStreamOption.AUTO,
+    /** Which copy plays when a download and a reachable server both exist. */
+    val offlinePlaybackPreference: OfflinePlaybackPreference = OfflinePlaybackPreference.PREFER_DOWNLOADED,
     val mpvConfig: MpvEngineConfig = MpvEngineConfig(),
     val libVlcConfig: LibVlcEngineConfig = LibVlcEngineConfig(),
     val exoPlayerConfig: ExoPlayerEngineConfig = ExoPlayerEngineConfig(),
@@ -305,6 +337,10 @@ data class StoragePreferences(
     val downloadQuality: DownloadQuality = DownloadQuality.ORIGINAL,
     val smartDownloadsEnabled: Boolean = false,
     val autoDownloadNewEpisodes: Boolean = false,
+    val autoDownloadLookahead: Int = 3,
+    val autoDownloadMaxPerPass: Int = 0,
+    val autoDownloadKeepDays: Int = 0,
+    val autoDownloadServers: Set<String> = emptySet(),
     val maxDownloadStorageGb: Int = 0,
     val downloadStorageLocation: String = "INTERNAL",
     val autoDeleteAfterWatch: Boolean = false,
@@ -365,9 +401,11 @@ data class ExperimentalPreferences(
 
 /**
  * Fields read by `AppearanceSettingsScreen`. This is the broadest slice because
- * the Appearance screen surfaces theme, home layout, discovery, newsletter, and
- * accessibility settings together. Navigation-customization fields are excluded
- * — they live in [navigationCustomization].
+ * the Appearance screen surfaces theme, layout, library-card display,
+ * newsletter, and accessibility settings together. Navigation-customization
+ * fields are excluded — they live in [navigationCustomization]; the
+ * home-discovery card-display quartet is excluded too — it moved (with its
+ * rows) to `HomeScreenPreferences` (PS-4).
  */
 @Immutable
 @Serializable
@@ -397,6 +435,7 @@ data class AppearanceScreenPreferences(
     val dateFormatPreference: DateFormatPreference = DateFormatPreference.SYSTEM,
     val colorBlindMode: ColorBlindMode = ColorBlindMode.NONE,
     val handMode: HandMode = HandMode.RIGHT,
+    val layoutMode: LayoutMode = LayoutMode.AUTO,
     val hapticsEnabled: Boolean = true,
     val scheduledThemeStartHour: Int = 22,
     val scheduledThemeEndHour: Int = 7,
@@ -410,19 +449,19 @@ data class AppearanceScreenPreferences(
     val homeLayoutPresets: List<HomeLayoutPreset> = emptyList(),
     val libraryHomeSectionOverrides: Map<String, Set<HomeSectionType>> = emptyMap(),
     val hiddenCwItemIds: Set<String> = emptySet(),
-    val showUnwatchedBadge: Boolean = true,
-    val hideWatchedItems: Boolean = false,
     val mergeContinueWatchingAndNextUp: Boolean = false,
     val nextUpMaxDays: Int = 0,
     val nextUpRewatching: Boolean = false,
     val continueWatchingClickBehavior: ContinueWatchingClickBehavior = ContinueWatchingClickBehavior.DETAILS,
-    val showWatchedCheckmark: Boolean = true,
     val hideEpisodeThumbnails: Boolean = false,
     val skipSpecials: Boolean = false,
     val compactEpisodeList: Boolean = false,
+    /** Whether virtual (missing/unaired) episodes appear in season views. */
+    val showMissingEpisodes: Boolean = false,
+    /** Render the server clear-logo as the detail-screen title instead of text. */
+    val preferLogos: Boolean = false,
     /** Whether the library "Reset" pill shows a confirmation dialog before clearing. */
     val confirmLibraryReset: Boolean = true,
-    val showExternalRatings: Boolean = true,
     val showShareMediaOption: Boolean = true,
     val hideSearchHistory: Boolean = false,
     val showClockOnHome: Boolean = false,
@@ -450,11 +489,11 @@ data class AppearanceScreenPreferences(
 
 /**
  * Fields read by `HomeSettingsScreen` — the home-screen config hub (display
- * rows, Continue Watching / Next Up behavior, and the home layout editor).
- * Everything here projects from the single [HomeDiscoveryStore] slice; the
- * card-display toggles (unwatched badge, watched checkmark, hide watched,
- * external ratings) are deliberately excluded because they are app-wide card
- * settings that stay on the Appearance screen.
+ * rows, Continue Watching / Next Up behavior, the home layout editor, and —
+ * since the finished Appearance → HomeSettings move, PS-4 — the card-display
+ * toggles: unwatched badge, watched checkmark, hide watched, external
+ * ratings). Everything here projects from the single [HomeDiscoveryStore]
+ * slice.
  */
 @Immutable
 @Serializable
@@ -467,13 +506,22 @@ data class HomeScreenPreferences(
     val hideTopHeaderOnScroll: Boolean = false,
     val continueWatchingClickBehavior: ContinueWatchingClickBehavior = ContinueWatchingClickBehavior.DETAILS,
     val hiddenCwItemIds: Set<String> = emptySet(),
+    /** The series excluded from the home Next Up row (the hidden-list management screen's count). */
+    val nextUpExcludedSeriesIds: Set<String> = emptySet(),
     val mergeContinueWatchingAndNextUp: Boolean = false,
     val nextUpMaxDays: Int = 0,
     val nextUpRewatching: Boolean = false,
+    /** Classic (pre-Jellyfin-12) home-row semantics (#168). Default false. */
+    val classicRows: Boolean = false,
     val enabledHomeSectionTypes: Set<HomeSectionType> = HomeSectionType.CONFIGURABLE.toSet(),
     val homeSectionOrder: List<HomeSectionType> = HomeSectionType.CONFIGURABLE,
     val pinnedHomeSections: List<PinnedHomeSection> = emptyList(),
     /** The user's custom Discover rows (config order). */
     val discoverRows: List<DiscoverRowConfig> = emptyList(),
     val homeLayoutPresets: List<HomeLayoutPreset> = emptyList(),
+    /** The card-display quartet, moved here with its rows (PS-4). */
+    val showUnwatchedBadge: Boolean = true,
+    val showWatchedCheckmark: Boolean = true,
+    val hideWatchedItems: Boolean = false,
+    val showExternalRatings: Boolean = true,
 )

@@ -103,7 +103,7 @@ class SyncPlayPlaybackCoreCorrectionPulseTest {
     @Test
     fun `precise position never pulses the sync chip`() = runTest(scheduler) {
         val cb = RecordingCallbacks(position = { truePosMs(System.currentTimeMillis()) })
-        core.setCallbacks(cb)
+        core.attachCallbacks(cb)
         core.applyCommand(unpauseCommand())
         advanceTimeBy(12_000)
         // The correction loop is an intentional infinite while(syncEnabled)
@@ -126,7 +126,7 @@ class SyncPlayPlaybackCoreCorrectionPulseTest {
         val cb = RecordingCallbacks(position = {
             (truePosMs(System.currentTimeMillis()) / 1000L) * 1000L
         })
-        core.setCallbacks(cb)
+        core.attachCallbacks(cb)
         core.applyCommand(unpauseCommand())
         advanceTimeBy(12_000)
         core.reset()

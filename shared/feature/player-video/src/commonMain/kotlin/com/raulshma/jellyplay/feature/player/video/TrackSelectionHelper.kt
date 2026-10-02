@@ -906,9 +906,14 @@ internal class TrackSelectionHelper(
         val newSub = isSeries && (pref.subtitleLanguage != null || pref.subtitleDisabled == true)
         val newSubOff = isSeries && pref.subtitleDisabled == true
         val newBoost = isSeries && pref.dialogueBoostStrength != null
+        // The preferred-version memory applies at BOTH scopes (a standalone
+        // movie pins its own ITEM row), so it is not series-gated like the
+        // language/boost flags above.
+        val newPreferredSource = pref?.preferredMediaSourceId != null
         val s = _state.value
         if (s.hasSeriesAudioPref != newAudio || s.hasSeriesSubtitlePref != newSub ||
-            s.hasSeriesSubtitleOffPref != newSubOff || s.hasSeriesDialogueBoostPref != newBoost
+            s.hasSeriesSubtitleOffPref != newSubOff || s.hasSeriesDialogueBoostPref != newBoost ||
+            s.hasPreferredMediaSource != newPreferredSource
         ) {
             _state.update {
                 it.copy(
@@ -916,6 +921,7 @@ internal class TrackSelectionHelper(
                     hasSeriesSubtitlePref = newSub,
                     hasSeriesSubtitleOffPref = newSubOff,
                     hasSeriesDialogueBoostPref = newBoost,
+                    hasPreferredMediaSource = newPreferredSource,
                 )
             }
         }

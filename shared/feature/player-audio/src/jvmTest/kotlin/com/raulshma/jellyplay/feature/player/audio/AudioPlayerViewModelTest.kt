@@ -5,7 +5,7 @@ import com.raulshma.jellyplay.core.data.download.TrackDownloadStatusWindow
 import com.raulshma.jellyplay.core.data.playback.AudioEffectsManager
 import com.raulshma.jellyplay.core.data.playback.AudioPlayerEngine
 import com.raulshma.jellyplay.core.data.playback.AudioQueueManager
-import com.raulshma.jellyplay.core.data.playback.AudioSleepTimerManager
+import com.raulshma.jellyplay.core.data.playback.SleepCountdown
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
 import com.raulshma.jellyplay.core.datastore.audio.AudioSlice
@@ -53,7 +53,7 @@ class AudioPlayerViewModelTest {
     private lateinit var userDataMutator: com.raulshma.jellyplay.core.data.repository.UserDataMutator
     private lateinit var downloads: TrackDownloadStatusWindow
     private lateinit var trackDownloadActions: TrackDownloadActions
-    private lateinit var sleepTimerManager: AudioSleepTimerManager
+    private lateinit var sleepCountdown: SleepCountdown
     private lateinit var cast: AudioPlayerCast
 
     private lateinit var viewModel: AudioPlayerViewModel
@@ -72,8 +72,13 @@ class AudioPlayerViewModelTest {
         userDataMutator = mockk(relaxed = true)
         downloads = mockk<TrackDownloadStatusWindow>(relaxed = true).apply { every { isSupported } returns true }
         trackDownloadActions = mockk(relaxed = true)
-        sleepTimerManager = mockk<AudioSleepTimerManager>(relaxed = true)
+        sleepCountdown = mockk<SleepCountdown>(relaxed = true)
+        // Real flows: the uiState projection's ONE combine needs every
+        // source emitting (a relaxed mock would block it forever).
+        every { sleepCountdown.isSleepTimerActive } returns MutableStateFlow(false)
+        every { sleepCountdown.isEndOfEpisodeMode } returns MutableStateFlow(false)
         cast = mockk(relaxed = true)
+        val audioQueueFacade = mockk<com.raulshma.jellyplay.core.data.playback.AudioQueueFacade>(relaxed = true)
 
         every { projections.audioPlayerUiPreferences } returns MutableStateFlow(AudioPlayerUiPreferences())
         every { audioStore.audio } returns MutableStateFlow(AudioSlice())
@@ -94,8 +99,9 @@ class AudioPlayerViewModelTest {
             userDataMutator = userDataMutator,
             downloads = downloads,
             trackDownloadActions = trackDownloadActions,
-            sleepTimerManager = sleepTimerManager,
+            sleepCountdown = sleepCountdown,
             cast = cast,
+            audioQueueFacade = audioQueueFacade,
         )
     }
 
@@ -368,8 +374,8 @@ class AudioPlayerViewModelTest {
             assertFalse(endOfEpisode)
             assertEquals(15 * 60 * 1000L, lastUsedDurationMs)
         }
-        verify { sleepTimerManager.setOnTimerExpired(any()) }
-        verify { sleepTimerManager.startSleepTimer(15 * 60 * 1000L) }
+        verify { sleepCountdown.setOnTimerExpired(any()) }
+        verify { sleepCountdown.startSleepTimer(15 * 60 * 1000L) }
         coVerify { audioStore.setSleepTimerDurationMs(15 * 60 * 1000L) }
         coVerify { audioStore.setSleepTimerEndOfEpisode(false) }
     }
@@ -382,8 +388,8 @@ class AudioPlayerViewModelTest {
             assertTrue(active)
             assertTrue(endOfEpisode)
         }
-        verify { sleepTimerManager.setOnTimerExpired(any()) }
-        verify { sleepTimerManager.startEndOfEpisodeTimer() }
+        verify { sleepCountdown.setOnTimerExpired(any()) }
+        verify { sleepCountdown.startEndOfEpisodeTimer() }
         coVerify { audioStore.setSleepTimerEndOfEpisode(true) }
     }
 
@@ -396,7 +402,7 @@ class AudioPlayerViewModelTest {
             assertFalse(active)
             assertFalse(endOfEpisode)
         }
-        verify { sleepTimerManager.cancelSleepTimer() }
+        verify { sleepCountdown.cancelSleepTimer() }
     }
 
     // ─── Queue operations ──────────────────────────────────────────────────────

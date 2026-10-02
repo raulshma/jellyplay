@@ -88,6 +88,36 @@ interface DownloadDao {
     @Query("SELECT COALESCE(SUM(downloadedBytes), 0) FROM downloads WHERE status = 'COMPLETED'")
     suspend fun getTotalDownloadedBytes(): Long
 
+    /**
+     * Completed rows whose [DownloadEntity.completedAt] is older than
+     * [cutoffMs] — the keep-days retention sweep's candidate read. The
+     * `completedAt > 0` guard keeps never-completed rows (column default 0,
+     * which every cutoff excludes anyway) out of the result explicitly. Full
+     * rows: the caller deletes through the shared deletion choreography, which
+     * needs the paths + ids. Served by the (status, completedAt) index.
+     */
+    @Query("SELECT * FROM downloads WHERE status = 'COMPLETED' AND completedAt > 0 AND completedAt < :cutoffMs")
+    suspend fun getCompletedOlderThan(cutoffMs: Long): List<DownloadEntity>
+
+    /**
+     * Sum of [DownloadEntity.totalSizeBytes] over exactly [ids] — the
+     * retention sweep's reclaimed-bytes read, taken before the rows are
+     * deleted so the summary reports what the pass freed.
+     */
+    @Query("SELECT COALESCE(SUM(totalSizeBytes), 0) FROM downloads WHERE id IN (:ids)")
+    suspend fun getTotalBytesFor(ids: List<String>): Long
+
+    /**
+     * One-statement completion write: final bytes + `COMPLETED` + the
+     * completion timestamp the keep-days retention sweep ages on, with the
+     * speed column zeroed (the same end state the transfer strategies' former
+     * `updateProgressWithSpeed(id, bytes, COMPLETED, 0L)` produced, plus the
+     * timestamp). Both completion points (single-connection transfer runner
+     * and multi-connection strategy) write through this.
+     */
+    @Query("UPDATE downloads SET downloadedBytes = :bytes, status = 'COMPLETED', speedBytesPerSec = 0, completedAt = :completedAt WHERE id = :id")
+    suspend fun markCompleted(id: String, bytes: Long, completedAt: Long)
+
     @Query("UPDATE downloads SET downloadedBytes = :bytes, status = :status WHERE id = :id")
     suspend fun updateProgress(id: String, bytes: Long, status: String)
 

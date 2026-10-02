@@ -726,9 +726,12 @@ fun AudioPlayerScreen(
 
     // ── Bottom sheets (unchanged functionality) ──
     if (sheets.showQueue && queueState.queue.isNotEmpty()) {
+        val radioState by viewModel.radioState.collectAsStateWithLifecycle()
         QueueSheet(
             queue = queueState.queue,
             currentIndex = queueState.currentIndex,
+            isRadioActive = radioState.active,
+            onStopRadio = { viewModel.onEvent(AudioPlayerUiEvent.StopRadio) },
             onSelect = { index ->
                 viewModel.onEvent(AudioPlayerUiEvent.PlayFromQueue(index))
                 sheets.hide(AudioPlayerSheet.Queue)

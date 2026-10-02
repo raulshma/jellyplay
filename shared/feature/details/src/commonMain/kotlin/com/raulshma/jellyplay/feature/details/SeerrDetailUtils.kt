@@ -7,6 +7,8 @@ import com.composables.icons.tabler.outline.CloudDownload
 import com.composables.icons.tabler.outline.Ticket
 import com.raulshma.jellyplay.core.model.seerr.SeerrAggregateCast
 import com.raulshma.jellyplay.core.model.seerr.SeerrCast
+import com.raulshma.jellyplay.core.model.seerr.SeerrReleaseDateType
+import com.raulshma.jellyplay.core.model.seerr.TmdbImageUrls
 import com.raulshma.jellyplay.core.ui.components.formatDurationFromMinutes
 import com.raulshma.jellyplay.feature.details.generated.resources.Res
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_cd_release_digital
@@ -98,6 +100,28 @@ internal fun youTubeThumbnailUrl(site: String?, key: String?): String? =
     } else null
 
 /**
+ * Resolves a TMDB watch-provider logo URL for the streaming-providers row
+ * (the TMDB-shape decoding the former `StreamingProvidersRow` composable
+ * carried inline, moved here verbatim so it gains test surface beside the
+ * other TMDB URL builders — the composable shell stays in composition).
+ *
+ * Two hosts, same rule as the inline code: a configured Seerr server proxies
+ * the logo through its own `/imageproxy/tmdb/t/p/w45` endpoint (keeping the
+ * request on the allowlisted host); otherwise TMDB's public CDN serves the
+ * w45 art ([TmdbImageUrls.LOGO_W45]). Null [logoPath] → null (no logo to
+ * render); a leading slash is stripped so the path always splices cleanly.
+ */
+internal fun seerrProviderLogoUrl(logoPath: String?, seerrServerUrl: String): String? {
+    if (logoPath == null) return null
+    val cleanPath = logoPath.trimStart('/')
+    return if (seerrServerUrl.isNotBlank()) {
+        "${seerrServerUrl.trimEnd('/')}/imageproxy/tmdb/t/p/w45/$cleanPath"
+    } else {
+        "${TmdbImageUrls.LOGO_W45}/$cleanPath"
+    }
+}
+
+/**
  * Converts a 2-letter ISO country code into its flag emoji.
  *
  * Extracted verbatim from `SeerrDetailScreen.kt`; purification moved
@@ -182,7 +206,7 @@ internal fun formatUsCurrency(amount: Long): String {
 /**
  * The icon + label for one TMDB release-date type marker, resolved by
  * [releaseTypePresentation]; the composable shell that renders it
- * (`ReleaseTypeIcon` in SeerrDetailScreen) stays in composition.
+ * (`ReleaseTypeIcon` in SeerrDetailSections) stays in composition.
  */
 internal data class ReleaseTypePresentation(
     val icon: ImageVector,
@@ -190,15 +214,25 @@ internal data class ReleaseTypePresentation(
 )
 
 /**
- * TMDB release-date type → marker mapping, verbatim from the former
- * `ReleaseTypeIcon` `when`: 3 = theatrical (ticket), 4 = digital
- * (cloud download), 5 = physical (disc) — every other type renders NO
- * marker (the release row filters to 3..5 upstream, but the table keeps
- * the null contract the old `when`'s fall-through had).
+ * The release types the detail row renders markers for — theatrical, digital
+ * and physical (the wire's 3/4/5); `ReleaseDateRow` filters upstream to these.
  */
-internal fun releaseTypePresentation(type: Int): ReleaseTypePresentation? = when (type) {
-    3 -> ReleaseTypePresentation(Tabler.Outline.Ticket, Res.string.detail_cd_release_theatrical)
-    4 -> ReleaseTypePresentation(Tabler.Outline.CloudDownload, Res.string.detail_cd_release_digital)
-    5 -> ReleaseTypePresentation(Tabler.Outline.Circle, Res.string.detail_cd_release_physical)
+internal val renderedReleaseTypes: Set<SeerrReleaseDateType> = setOf(
+    SeerrReleaseDateType.THEATRICAL,
+    SeerrReleaseDateType.DIGITAL,
+    SeerrReleaseDateType.PHYSICAL,
+)
+
+/**
+ * TMDB release-date type → marker mapping, verbatim from the former
+ * `ReleaseTypeIcon` `when`: theatrical (ticket), digital (cloud download),
+ * physical (disc) — every other type renders NO marker (the release row
+ * filters upstream to [renderedReleaseTypes], but the table keeps the null
+ * contract the old `when`'s fall-through had).
+ */
+internal fun releaseTypePresentation(type: SeerrReleaseDateType): ReleaseTypePresentation? = when (type) {
+    SeerrReleaseDateType.THEATRICAL -> ReleaseTypePresentation(Tabler.Outline.Ticket, Res.string.detail_cd_release_theatrical)
+    SeerrReleaseDateType.DIGITAL -> ReleaseTypePresentation(Tabler.Outline.CloudDownload, Res.string.detail_cd_release_digital)
+    SeerrReleaseDateType.PHYSICAL -> ReleaseTypePresentation(Tabler.Outline.Circle, Res.string.detail_cd_release_physical)
     else -> null
 }

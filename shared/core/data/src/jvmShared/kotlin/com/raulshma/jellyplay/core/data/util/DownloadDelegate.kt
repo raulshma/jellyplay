@@ -56,6 +56,8 @@ class DownloadDelegate(
     // and lets the recipe be tested with a fake writer.
     private val writer: OfflineDownloadWriter,
     private val playbackRepository: PlaybackRepository,
+    /** Poster/backdrop URLs for the request + the offline artwork rows. */
+    private val imageUrlProvider: ImageUrlProvider,
 ) {
 
     /**
@@ -87,7 +89,7 @@ class DownloadDelegate(
             )
         }
         if (downloadUrl.isBlank()) return null
-        val imageUrl = playbackRepository.getImageUrl(item.id, maxWidth = 300)
+        val imageUrl = imageUrlProvider.getImageUrl(item.id, maxWidth = 300)
         val mediaType = when (item.mediaType) {
             MediaType.AUDIO, MediaType.MUSIC -> MediaType.AUDIO.name
             else -> item.mediaType.name
@@ -207,7 +209,7 @@ class DownloadDelegate(
                             request.imageUrl
                         }
                         val localBackdrop = if (parentDir != null) {
-                            val backdropUrl = playbackRepository.getBackdropUrl(request.mediaItemId, maxWidth = 1280)
+                            val backdropUrl = imageUrlProvider.getBackdropUrl(request.mediaItemId, maxWidth = 1280)
                             writer.downloadOfflineImage(
                                 request.mediaItemId, "Backdrop", 1280, parentDir,
                                 com.raulshma.jellyplay.core.data.repository.DownloadArtifacts.backdropFile(request.mediaItemId),

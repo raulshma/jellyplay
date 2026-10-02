@@ -5,6 +5,7 @@ import com.raulshma.jellyplay.core.data.download.TrackFlipResult
 import com.raulshma.jellyplay.core.data.download.TrackDownloadStatusWindow
 import com.raulshma.jellyplay.core.data.playback.AudioQueueItem
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.MusicCatalogue
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.DownloadStatus
@@ -16,11 +17,9 @@ import com.raulshma.jellyplay.feature.music.MusicQueueOutcome
 import com.raulshma.jellyplay.feature.music.MusicQueuePlayer
 import com.raulshma.jellyplay.feature.music.generated.resources.Res
 import com.raulshma.jellyplay.feature.music.generated.resources.music_mix_unavailable
-import io.mockk.Runs
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
-import io.mockk.just
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -40,6 +39,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertSame
+import com.raulshma.jellyplay.core.ui.message.UiMessage
 
 /**
  * First ViewModel test in feature/music (plan 04): verifies delegation to
@@ -54,6 +54,7 @@ class AlbumDetailViewModelTest {
     private val mainDispatcher = StandardTestDispatcher()
 
     private val mediaRepository: MediaRepository = mockk()
+    private val musicCatalogue: MusicCatalogue = mockk()
     private val imageUrlProvider: ImageUrlProvider = mockk(relaxed = true)
     private val audioQueueFacade: MusicQueuePlayer = mockk()
     private val trackDownloads: TrackDownloadStatusWindow = mockk()
@@ -73,11 +74,12 @@ class AlbumDetailViewModelTest {
     @BeforeTest
     fun setUp() {
         Dispatchers.setMain(mainDispatcher)
-        every { trackDownloads.downloadsFor(any()) } returns flowOf(emptyList())
+        every { trackDownloads.getDownloadsByMediaItemIdsFlow(any()) } returns flowOf(emptyList())
         // The deferred refresher collects this for the whole VM lifetime.
         every { mediaRepository.userDataChanges } returns userDataEvents
         viewModel = AlbumDetailViewModel(
             mediaRepository = mediaRepository,
+            musicCatalogue = musicCatalogue,
             imageUrlProvider = imageUrlProvider,
             audioQueueFacade = audioQueueFacade,
             downloads = trackDownloads,
@@ -95,7 +97,7 @@ class AlbumDetailViewModelTest {
         coEvery { mediaRepository.getMediaDetail("album1") } returns Result.success(
             MediaDetail(item = MediaItem(id = "album1", name = albumName, mediaType = MediaType.ALBUM)),
         )
-        coEvery { mediaRepository.getAlbumTracks("album1") } returns Result.success(albumTracks)
+        coEvery { musicCatalogue.getAlbumTracks("album1", force = false) } returns Result.success(albumTracks)
         viewModel.loadAlbum("album1")
     }
 
@@ -129,7 +131,7 @@ class AlbumDetailViewModelTest {
         viewModel.startInstantMix("album1")
         advanceUntilIdle()
 
-        assertSame(Res.string.music_mix_unavailable, (viewModel.error as MixErrorMessage.Resource).res)
+        assertSame(Res.string.music_mix_unavailable, (viewModel.error as UiMessage.Resource).res)
         assertNull(viewModel.mixFirstTrackId)
         assertFalse(viewModel.isStartingMix)
     }
@@ -144,7 +146,7 @@ class AlbumDetailViewModelTest {
         viewModel.startInstantMix("album1")
         advanceUntilIdle()
 
-        assertEquals("boom", (viewModel.error as MixErrorMessage.Raw).message)
+        assertEquals("boom", (viewModel.error as UiMessage.Raw).text)
         assertNull(viewModel.mixFirstTrackId)
         assertFalse(viewModel.isStartingMix)
     }
@@ -212,7 +214,7 @@ class AlbumDetailViewModelTest {
     fun loadAlbum_detailFailure_setsRawErrorOverNoContent() = runTest(mainDispatcher) {
         coEvery { mediaRepository.getMediaDetail("album1", any()) } returns
             Result.failure(RuntimeException("no album"))
-        coEvery { mediaRepository.getAlbumTracks("album1") } returns Result.success(albumTracks)
+        coEvery { musicCatalogue.getAlbumTracks("album1", force = false) } returns Result.success(albumTracks)
 
         viewModel.loadAlbum("album1")
         advanceUntilIdle()
@@ -221,7 +223,7 @@ class AlbumDetailViewModelTest {
         // the whole fetch, so the error owns the screen (the screen renders
         // ErrorScreen whenever error != null — the fresh tracks half was
         // never visible there) and no half-pair is published.
-        assertEquals("no album", (viewModel.error as MixErrorMessage.Raw).message)
+        assertEquals("no album", (viewModel.error as UiMessage.Raw).text)
         assertNull(viewModel.detail)
         assertEquals(emptyList(), viewModel.tracks)
         assertFalse(viewModel.isLoading)
@@ -232,14 +234,14 @@ class AlbumDetailViewModelTest {
         coEvery { mediaRepository.getMediaDetail("album1", any()) } returns Result.success(
             MediaDetail(item = MediaItem(id = "album1", name = "Album", mediaType = MediaType.ALBUM)),
         )
-        coEvery { mediaRepository.getAlbumTracks("album1") } returns Result.failure(RuntimeException("no tracks"))
+        coEvery { musicCatalogue.getAlbumTracks("album1", force = false) } returns Result.failure(RuntimeException("no tracks"))
 
         viewModel.loadAlbum("album1")
         advanceUntilIdle()
 
         // The tracks error wins (the half whose failure surfaces); the fresh
         // detail half stays unpublished — all-or-nothing, as above.
-        assertEquals("no tracks", (viewModel.error as MixErrorMessage.Raw).message)
+        assertEquals("no tracks", (viewModel.error as UiMessage.Raw).text)
         assertNull(viewModel.detail)
         assertFalse(viewModel.isLoading)
     }
@@ -247,14 +249,14 @@ class AlbumDetailViewModelTest {
     @Test
     fun loadAlbum_thrownRepoFailure_clearsSpinnerSetsErrorAndReloadsOnReEntry() = runTest(mainDispatcher) {
         coEvery { mediaRepository.getMediaDetail("album1", any()) } throws IllegalStateException("engine blew up")
-        coEvery { mediaRepository.getAlbumTracks("album1") } returns Result.success(albumTracks)
+        coEvery { musicCatalogue.getAlbumTracks("album1", force = false) } returns Result.success(albumTracks)
 
         viewModel.loadAlbum("album1")
         advanceUntilIdle()
 
         // The coordinator swallows the throw (re-arm + no uncaught handler);
         // without the error hook the spinner would stay up with no error UI.
-        assertEquals("engine blew up", (viewModel.error as MixErrorMessage.Raw).message)
+        assertEquals("engine blew up", (viewModel.error as UiMessage.Raw).text)
         assertFalse(viewModel.isLoading)
 
         // The throw must count as a failed loud load: re-entry reloads
@@ -277,7 +279,7 @@ class AlbumDetailViewModelTest {
         coEvery { mediaRepository.getMediaDetail("album1", true) } returns Result.success(
             MediaDetail(item = MediaItem(id = "album1", name = "Album", mediaType = MediaType.ALBUM)),
         )
-        coEvery { mediaRepository.getAlbumTracks("album1", true) } returns Result.success(albumTracks)
+        coEvery { musicCatalogue.getAlbumTracks("album1", force = true) } returns Result.success(albumTracks)
 
         viewModel.refreshAlbum("album1")
         advanceUntilIdle()
@@ -297,7 +299,7 @@ class AlbumDetailViewModelTest {
         advanceUntilIdle()
 
         coVerify(exactly = 1) { mediaRepository.getMediaDetail("album1") }
-        coVerify(exactly = 1) { mediaRepository.getAlbumTracks("album1") }
+        coVerify(exactly = 1) { musicCatalogue.getAlbumTracks("album1", force = false) }
         assertFalse(viewModel.isLoading)
     }
 
@@ -312,16 +314,16 @@ class AlbumDetailViewModelTest {
             MusicQueueOutcome.Failed(RuntimeException("mix boom"))
         viewModel.startInstantMix("album1")
         advanceUntilIdle()
-        assertEquals("mix boom", (viewModel.error as MixErrorMessage.Raw).message)
+        assertEquals("mix boom", (viewModel.error as UiMessage.Raw).text)
 
         viewModel.loadAlbum("album1")
         advanceUntilIdle()
 
         coVerify(exactly = 1) { mediaRepository.getMediaDetail("album1") }
-        coVerify(exactly = 1) { mediaRepository.getAlbumTracks("album1") }
+        coVerify(exactly = 1) { musicCatalogue.getAlbumTracks("album1", force = false) }
         assertFalse(viewModel.isLoading)
         // The mix error survives the skipped re-entry.
-        assertEquals("mix boom", (viewModel.error as MixErrorMessage.Raw).message)
+        assertEquals("mix boom", (viewModel.error as UiMessage.Raw).text)
     }
 
     @Test
@@ -333,19 +335,19 @@ class AlbumDetailViewModelTest {
         coEvery { mediaRepository.getMediaDetail("album1") } returns Result.success(
             MediaDetail(item = MediaItem(id = "album1", name = "Album", mediaType = MediaType.ALBUM)),
         )
-        coEvery { mediaRepository.getAlbumTracks("album1") } returns Result.failure(RuntimeException("no tracks"))
+        coEvery { musicCatalogue.getAlbumTracks("album1", force = false) } returns Result.failure(RuntimeException("no tracks"))
         viewModel.loadAlbum("album1")
         advanceUntilIdle()
-        assertEquals("no tracks", (viewModel.error as MixErrorMessage.Raw).message)
+        assertEquals("no tracks", (viewModel.error as UiMessage.Raw).text)
         assertNull(viewModel.detail)
 
         // Re-entry retries the loud load and heals the failed half.
-        coEvery { mediaRepository.getAlbumTracks("album1") } returns Result.success(albumTracks)
+        coEvery { musicCatalogue.getAlbumTracks("album1", force = false) } returns Result.success(albumTracks)
         viewModel.loadAlbum("album1")
         advanceUntilIdle()
 
         coVerify(exactly = 2) { mediaRepository.getMediaDetail("album1") }
-        coVerify(exactly = 2) { mediaRepository.getAlbumTracks("album1") }
+        coVerify(exactly = 2) { musicCatalogue.getAlbumTracks("album1", force = false) }
         assertNull(viewModel.error)
     }
 
@@ -356,17 +358,17 @@ class AlbumDetailViewModelTest {
         coEvery { mediaRepository.getMediaDetail("album1") } returns Result.success(
             MediaDetail(item = MediaItem(id = "album1", name = "Album", mediaType = MediaType.ALBUM)),
         )
-        coEvery { mediaRepository.getAlbumTracks("album1") } returns Result.failure(RuntimeException("no tracks"))
+        coEvery { musicCatalogue.getAlbumTracks("album1", force = false) } returns Result.failure(RuntimeException("no tracks"))
         viewModel.loadAlbum("album1")
         advanceUntilIdle()
-        assertEquals("no tracks", (viewModel.error as MixErrorMessage.Raw).message)
+        assertEquals("no tracks", (viewModel.error as UiMessage.Raw).text)
 
         // The deferred silent regeneration succeeds and heals the screen.
         viewModel.deferredRefresher.onScreenActiveChanged(false)
         coEvery { mediaRepository.getMediaDetail("album1", true) } returns Result.success(
             MediaDetail(item = MediaItem(id = "album1", name = "Album", mediaType = MediaType.ALBUM)),
         )
-        coEvery { mediaRepository.getAlbumTracks("album1", true) } returns Result.success(albumTracks)
+        coEvery { musicCatalogue.getAlbumTracks("album1", force = true) } returns Result.success(albumTracks)
         userDataEvents.emit(com.raulshma.jellyplay.core.model.UserDataChange("user-1", listOf("t1")))
         advanceUntilIdle()
         viewModel.deferredRefresher.onScreenActiveChanged(true)
@@ -398,7 +400,7 @@ class AlbumDetailViewModelTest {
         coEvery { mediaRepository.getMediaDetail("album1", true) } returns Result.success(
             MediaDetail(item = MediaItem(id = "album1", name = "Album", mediaType = MediaType.ALBUM)),
         )
-        coEvery { mediaRepository.getAlbumTracks("album1", true) } returns Result.success(albumTracks)
+        coEvery { musicCatalogue.getAlbumTracks("album1", force = true) } returns Result.success(albumTracks)
         userDataEvents.emit(com.raulshma.jellyplay.core.model.UserDataChange("user-1", listOf("t1")))
         advanceUntilIdle()
 
@@ -420,7 +422,7 @@ class AlbumDetailViewModelTest {
 
         viewModel.deferredRefresher.onScreenActiveChanged(false)
         coEvery { mediaRepository.getMediaDetail("album1", true) } returns Result.failure(RuntimeException("offline blip"))
-        coEvery { mediaRepository.getAlbumTracks("album1", true) } returns Result.success(albumTracks)
+        coEvery { musicCatalogue.getAlbumTracks("album1", force = true) } returns Result.success(albumTracks)
         userDataEvents.emit(com.raulshma.jellyplay.core.model.UserDataChange("user-1", listOf("t1")))
         advanceUntilIdle()
         viewModel.deferredRefresher.onScreenActiveChanged(true)
@@ -457,7 +459,7 @@ class AlbumDetailViewModelTest {
         coEvery { mediaRepository.getMediaDetail("album1", true) } returns Result.success(
             MediaDetail(item = MediaItem(id = "album1", name = "Album 2", mediaType = MediaType.ALBUM)),
         )
-        coEvery { mediaRepository.getAlbumTracks("album1", true) } returns Result.failure(RuntimeException("tracks blip"))
+        coEvery { musicCatalogue.getAlbumTracks("album1", force = true) } returns Result.failure(RuntimeException("tracks blip"))
         userDataEvents.emit(com.raulshma.jellyplay.core.model.UserDataChange("user-1", listOf("t1")))
         advanceUntilIdle()
         viewModel.deferredRefresher.onScreenActiveChanged(true)
@@ -522,17 +524,17 @@ class AlbumDetailViewModelTest {
         // must not read the whole table for an empty screen).
         subscribeTrackDownloads()
         advanceUntilIdle()
-        coVerify(exactly = 0) { trackDownloads.downloadsFor(any()) }
+        coVerify(exactly = 0) { trackDownloads.getDownloadsByMediaItemIdsFlow(any()) }
 
         // Loaded album → the query is scoped to exactly the loaded track ids
         // and the rows are keyed by mediaItemId for the per-row UI.
         val downloading = download("d1", "t1", DownloadStatus.DOWNLOADING)
-        every { trackDownloads.downloadsFor(listOf("t1", "t2")) } returns
+        every { trackDownloads.getDownloadsByMediaItemIdsFlow(listOf("t1", "t2")) } returns
             flowOf(listOf(downloading))
         loadAlbum()
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { trackDownloads.downloadsFor(listOf("t1", "t2")) }
+        coVerify(exactly = 1) { trackDownloads.getDownloadsByMediaItemIdsFlow(listOf("t1", "t2")) }
         assertEquals(mapOf("t1" to downloading), viewModel.trackDownloads.value)
     }
 
@@ -540,16 +542,16 @@ class AlbumDetailViewModelTest {
     fun downloadTrack_completedDownload_deletesItInsteadOfRestarting() = runTest(mainDispatcher) {
         loadAlbum()
         advanceUntilIdle()
-        every { trackDownloads.downloadsFor(any()) } returns
+        every { trackDownloads.getDownloadsByMediaItemIdsFlow(any()) } returns
             flowOf(listOf(download("d1", "t1", DownloadStatus.COMPLETED)))
         subscribeTrackDownloads()
         advanceUntilIdle()
-        coEvery { trackDownloads.remove(any()) } just Runs
+        coEvery { trackDownloads.deleteDownload(any()) } returns Result.success(Unit)
 
         viewModel.downloadTrack(albumTracks[0])
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { trackDownloads.remove("d1") }
+        coVerify(exactly = 1) { trackDownloads.deleteDownload("d1") }
         coVerify(exactly = 0) { downloadIntake.start(any()) }
     }
 
@@ -557,7 +559,7 @@ class AlbumDetailViewModelTest {
     fun downloadTrack_notYetDownloaded_flipsThroughTheIntakeSeam() = runTest(mainDispatcher) {
         loadAlbum()
         advanceUntilIdle()
-        every { trackDownloads.downloadsFor(any()) } returns flowOf(emptyList())
+        every { trackDownloads.getDownloadsByMediaItemIdsFlow(any()) } returns flowOf(emptyList())
         subscribeTrackDownloads()
         advanceUntilIdle()
 
@@ -567,14 +569,14 @@ class AlbumDetailViewModelTest {
         // The resolve-detail leg lives inside DownloadIntake.flipTrack (pinned
         // in core:data); at this seam the VM only routes the track id through.
         coVerify(exactly = 1) { downloadIntake.flipTrack("t1") }
-        coVerify(exactly = 0) { trackDownloads.remove(any()) }
+        coVerify(exactly = 0) { trackDownloads.deleteDownload(any()) }
     }
 
     @Test
     fun downloadTrack_skippedByTheIntake_startsNothing() = runTest(mainDispatcher) {
         loadAlbum()
         advanceUntilIdle()
-        every { trackDownloads.downloadsFor(any()) } returns flowOf(emptyList())
+        every { trackDownloads.getDownloadsByMediaItemIdsFlow(any()) } returns flowOf(emptyList())
         subscribeTrackDownloads()
         advanceUntilIdle()
         coEvery { downloadIntake.flipTrack("t1") } returns TrackFlipResult.Skipped
@@ -583,14 +585,14 @@ class AlbumDetailViewModelTest {
         advanceUntilIdle()
 
         coVerify(exactly = 0) { downloadIntake.start(any()) }
-        coVerify(exactly = 0) { trackDownloads.remove(any()) }
+        coVerify(exactly = 0) { trackDownloads.deleteDownload(any()) }
     }
 
     @Test
     fun downloadAlbum_skipsCompletedTracksAndDownloadsTheRest() = runTest(mainDispatcher) {
         loadAlbum()
         advanceUntilIdle()
-        every { trackDownloads.downloadsFor(any()) } returns
+        every { trackDownloads.getDownloadsByMediaItemIdsFlow(any()) } returns
             flowOf(listOf(download("d1", "t1", DownloadStatus.COMPLETED)))
         subscribeTrackDownloads()
         advanceUntilIdle()
@@ -602,7 +604,7 @@ class AlbumDetailViewModelTest {
         // flipped through the intake seam (detail resolution pinned in core:data).
         coVerify(exactly = 0) { downloadIntake.flipTrack("t1") }
         coVerify(exactly = 1) { downloadIntake.flipTrack("t2") }
-        coVerify(exactly = 0) { trackDownloads.remove(any()) }
+        coVerify(exactly = 0) { trackDownloads.deleteDownload(any()) }
     }
 
     @Test
@@ -618,16 +620,16 @@ class AlbumDetailViewModelTest {
     fun deleteAlbumDownloads_deletesOnlyExistingDownloadRows() = runTest(mainDispatcher) {
         loadAlbum()
         advanceUntilIdle()
-        every { trackDownloads.downloadsFor(any()) } returns
+        every { trackDownloads.getDownloadsByMediaItemIdsFlow(any()) } returns
             flowOf(listOf(download("d1", "t1", DownloadStatus.PAUSED)))
         subscribeTrackDownloads()
         advanceUntilIdle()
-        coEvery { trackDownloads.remove(any()) } just Runs
+        coEvery { trackDownloads.deleteDownload(any()) } returns Result.success(Unit)
 
         viewModel.deleteAlbumDownloads()
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { trackDownloads.remove("d1") }
-        coVerify(exactly = 1) { trackDownloads.remove(any()) } // only t1's row
+        coVerify(exactly = 1) { trackDownloads.deleteDownload("d1") }
+        coVerify(exactly = 1) { trackDownloads.deleteDownload(any()) } // only t1's row
     }
 }

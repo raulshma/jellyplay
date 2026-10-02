@@ -10,6 +10,7 @@ import com.raulshma.jellyplay.core.model.ColorStyle
 import com.raulshma.jellyplay.core.model.ContrastLevel
 import com.raulshma.jellyplay.core.model.DateFormatPreference
 import com.raulshma.jellyplay.core.model.HandMode
+import com.raulshma.jellyplay.core.model.LayoutMode
 import com.raulshma.jellyplay.core.model.ThemeMode
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -132,6 +133,24 @@ class AppearanceStoreTest {
     }
 
     @Test
+    fun `setLayoutMode round-trips and defaults to AUTO`() = runTest {
+        assertEquals(LayoutMode.AUTO, store.appearance.first().layoutMode)
+        store.setLayoutMode(LayoutMode.TABLET)
+        assertEquals(LayoutMode.TABLET, store.appearance.first().layoutMode)
+        store.setLayoutMode(LayoutMode.PHONE)
+        assertEquals(LayoutMode.PHONE, store.appearance.first().layoutMode)
+    }
+
+    @Test
+    fun `corrupt layout_mode falls back to AUTO`() = runTest {
+        store.setLayoutMode(LayoutMode.TABLET)
+        dataStore.edit {
+            it[AppearanceStore.Keys.LAYOUT_MODE] = "wide"
+        }
+        assertEquals(LayoutMode.AUTO, store.appearance.first().layoutMode)
+    }
+
+    @Test
     fun `corrupt enum values fall back to defaults, siblings keep real values`() = runTest {
         store.setHapticsEnabled(false)
         dataStore.edit {
@@ -174,6 +193,7 @@ class AppearanceStoreTest {
             scheduledThemeEndHour = 6,
             colorBlindMode = ColorBlindMode.DEUTERANOPIA,
             handMode = HandMode.LEFT,
+            layoutMode = LayoutMode.PHONE,
         )
 
         store.restore(slice)

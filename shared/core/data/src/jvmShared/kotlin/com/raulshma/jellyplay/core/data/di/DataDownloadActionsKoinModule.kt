@@ -27,8 +27,9 @@ internal val dataDownloadActionsModule: Module = module {
     // never grow their own wall-crossing template.
     //  - TrackDownloadStatusWindow: the audio player's and the album
     //    screen's row window over the DownloadRepository single (its
-    //    downloadsFor IS the single getDownloadsByMediaItemIdsFlow IN-query
-    //    — the N per-id-flow divergence of the deleted adapter is reverted);
+    //    getDownloadsByMediaItemIdsFlow IS the repository's single IN-query
+    //    read — the N per-id-flow divergence of the deleted adapter is
+    //    reverted);
     //  - ActiveDownloadCount: the music-home transfer badge;
     //  - SeriesEpisodeDownloads: the home series-download sheet's
     //    episode-id read;

@@ -35,8 +35,9 @@ import kotlinx.coroutines.flow.Flow
  *    user-editor's library folders;
  *  - [LiveTvApiClient]: the users-detail auxiliary channels tab;
  *  - [LibraryApiClient]: tags (the editor's tag picker).
- * The union's other injectors are unchanged — [JellyfinApiClient] itself keeps
- * its composition and its remaining consumers.
+ * The follow-up narrowing batch took every remaining production injector off
+ * the union — [JellyfinApiClient] survives as the networkJvmModule binding
+ * over the same impl, not a constructor seam.
  */
 class AdminRepositoryImpl constructor(
     private val adminApiClient: AdminApiClient,

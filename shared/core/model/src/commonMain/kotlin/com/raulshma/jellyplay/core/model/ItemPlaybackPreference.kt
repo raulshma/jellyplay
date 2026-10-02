@@ -99,5 +99,11 @@ data class ItemPlaybackPreference(
     val rememberedAudioTrack: RememberedTrack? = null,
     val rememberedSubtitleTrack: RememberedTrack? = null,
     val renderProfile: MpvRenderOverrides? = null,
+    /**
+     * The version (media-source id) pinned for this item/series in the
+     * player's "Version" sheet, or null to start on the server's default
+     * (first) source. Persisted as a plain id column (migration 57→58).
+     */
+    val preferredMediaSourceId: String? = null,
     val updatedAt: Long = wallNowMillis(),
 )

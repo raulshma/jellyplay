@@ -8,6 +8,8 @@ import com.raulshma.jellyplay.core.data.repository.SubtitleProviderRepository
 import com.raulshma.jellyplay.core.model.EditableItemMetadata
 import com.raulshma.jellyplay.core.model.EditorPerson
 import com.raulshma.jellyplay.core.model.ImageInfo
+import com.raulshma.jellyplay.core.model.MetadataRefreshOption
+import com.raulshma.jellyplay.core.model.MetadataRefreshParams
 import com.raulshma.jellyplay.core.model.ImageProviderInfo
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
@@ -159,7 +161,7 @@ class EditorViewModelMetadataTest {
         coEvery {
             editorRepository.getRemoteImages(any(), any(), any(), any(), any())
         } returns Result.success(RemoteImageResult())
-        coEvery { editorRepository.refreshItemMetadata(any(), any(), any(), any(), any()) } returns Result.success(Unit)
+        coEvery { editorRepository.refreshItemMetadata(any(), any<com.raulshma.jellyplay.core.model.MetadataRefreshParams>()) } returns Result.success(Unit)
 
         viewModel = EditorViewModel(
             editorRepository,
@@ -491,17 +493,21 @@ class EditorViewModelMetadataTest {
     }
 
     @Test
-    fun `refreshMetadata forwards the mode to both metadata and image refresh`() = runTest {
+    fun `refreshMetadata maps the chosen option to the endpoint refresh params`() = runTest {
         viewModel.onEvent(EditorUiEvent.LoadEditorData(itemId))
         advanceUntilIdle()
 
-        viewModel.onEvent(EditorUiEvent.RefreshMetadata())
+        viewModel.onEvent(EditorUiEvent.RefreshMetadata(MetadataRefreshOption.FULL_VALIDATION))
         advanceUntilIdle()
-        coVerify(exactly = 1) { editorRepository.refreshItemMetadata(itemId, "FullRefresh", "FullRefresh", false, false) }
+        coVerify(exactly = 1) { editorRepository.refreshItemMetadata(itemId, MetadataRefreshParams("FullRefresh", "Default", replaceAllMetadata = false, replaceAllImages = false)) }
 
-        viewModel.onEvent(EditorUiEvent.RefreshMetadata("Default", replaceAllMetadata = true, replaceAllImages = true))
+        viewModel.onEvent(EditorUiEvent.RefreshMetadata(MetadataRefreshOption.REPLACE_ALL_METADATA))
         advanceUntilIdle()
-        coVerify(exactly = 1) { editorRepository.refreshItemMetadata(itemId, "Default", "Default", true, true) }
+        coVerify(exactly = 1) { editorRepository.refreshItemMetadata(itemId, MetadataRefreshParams("FullRefresh", "FullRefresh", replaceAllMetadata = true, replaceAllImages = false)) }
+
+        viewModel.onEvent(EditorUiEvent.RefreshMetadata(MetadataRefreshOption.REPLACE_IMAGES))
+        advanceUntilIdle()
+        coVerify(exactly = 1) { editorRepository.refreshItemMetadata(itemId, MetadataRefreshParams("None", "FullRefresh", replaceAllMetadata = false, replaceAllImages = true)) }
         assertNull(viewModel.uiState.value.error)
     }
 }

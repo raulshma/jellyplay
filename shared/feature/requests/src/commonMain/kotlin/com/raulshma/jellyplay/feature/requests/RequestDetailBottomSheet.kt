@@ -33,7 +33,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
-import com.composables.icons.tabler.outline.Ban
 import com.composables.icons.tabler.outline.Check
 import com.composables.icons.tabler.outline.ExternalLink
 import com.composables.icons.tabler.outline.Refresh
@@ -48,6 +47,7 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrRequestStatus
 import com.raulshma.jellyplay.core.model.seerr.effectiveMediaStatus
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.rememberInlineConfirm
+import com.raulshma.jellyplay.core.ui.components.downloads.QueueDeleteConfirmActions
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.feature.requests.generated.resources.Res
@@ -117,7 +117,7 @@ fun RequestDetailBottomSheet(
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    val requestStatus = remember(request.status) { SeerrRequestStatus.fromValue(request.status) }
+    val requestStatus = request.status
     val deleteConfirm = rememberInlineConfirm(request.id)
     val removeFromServiceConfirm = rememberInlineConfirm(request.id)
     val mediaStatus = remember(request.is4k, request.media.status, request.media.status4k) {
@@ -269,33 +269,21 @@ fun RequestDetailBottomSheet(
 
             // ── Direct *arr queue management actions ──
             // Shown only when a live queue item exists for this request and
-            // the caller wires the callbacks. Each action confirms first
-            // because they are destructive (remove download client data).
+            // the caller wires the callbacks. The two legs are core:ui's
+            // shared QueueDeleteConfirmActions cluster rendered horizontally
+            // (the arrqueue screen stacks the same cluster's three legs inside
+            // its confirm dialog) — this host's labels differ per locale, so
+            // they stay this side's resources.
             if (downloadProgress != null && onRemoveFromQueue != null) {
                 HorizontalDivider(color = colorScheme.outlineVariant.copy(alpha = 0.3f))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    OutlinedButton(
-                        onClick = { onRemoveFromQueue(false, true) },
-                        modifier = Modifier.weight(1f),
-                        shape = ShapeCache.smooth12,
-                    ) {
-                        Icon(Tabler.Outline.X, contentDescription = null)
-                        Spacer(Modifier.width(8.dp))
-                        Text(stringResource(Res.string.requests_action_remove_search))
-                    }
-                    OutlinedButton(
-                        onClick = { onRemoveFromQueue(true, true) },
-                        modifier = Modifier.weight(1f),
-                        shape = ShapeCache.smooth12,
-                    ) {
-                        Icon(Tabler.Outline.Ban, contentDescription = null)
-                        Spacer(Modifier.width(8.dp))
-                        Text(stringResource(Res.string.requests_action_blocklist_search))
-                    }
-                }
+                QueueDeleteConfirmActions(
+                    onChoose = onRemoveFromQueue,
+                    removeSearchLabel = stringResource(Res.string.requests_action_remove_search),
+                    blocklistSearchLabel = stringResource(Res.string.requests_action_blocklist_search),
+                    horizontal = true,
+                    searchActionIcon = Tabler.Outline.X,
+                    buttonShape = ShapeCache.smooth12,
+                )
             }
 
             HorizontalDivider(color = colorScheme.outlineVariant.copy(alpha = 0.3f))

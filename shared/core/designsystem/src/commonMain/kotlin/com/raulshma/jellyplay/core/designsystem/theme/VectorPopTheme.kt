@@ -33,20 +33,10 @@ fun getVectorPopColorScheme(accent: String, isDark: Boolean): ColorScheme {
 
 /** Vector Pop typography — geometric Poppins, poster-clean. */
 val VectorPopTypography: Typography
-    @Composable get() = Typography(
-    displayLarge = JellyPlayTypography.displayLarge.copy(fontFamily = vectorPopFontFamily, textGeometricTransform = null),
-    displayMedium = JellyPlayTypography.displayMedium.copy(fontFamily = vectorPopFontFamily, textGeometricTransform = null),
-    displaySmall = JellyPlayTypography.displaySmall.copy(fontFamily = vectorPopFontFamily, textGeometricTransform = null),
-    headlineLarge = JellyPlayTypography.headlineLarge.copy(fontFamily = vectorPopFontFamily),
-    headlineMedium = JellyPlayTypography.headlineMedium.copy(fontFamily = vectorPopFontFamily),
-    headlineSmall = JellyPlayTypography.headlineSmall.copy(fontFamily = vectorPopFontFamily),
-    titleLarge = JellyPlayTypography.titleLarge.copy(fontFamily = vectorPopFontFamily),
-    titleMedium = JellyPlayTypography.titleMedium.copy(fontFamily = vectorPopFontFamily),
-    titleSmall = JellyPlayTypography.titleSmall.copy(fontFamily = vectorPopFontFamily),
-    bodyLarge = JellyPlayTypography.bodyLarge.copy(fontFamily = vectorPopFontFamily),
-    bodyMedium = JellyPlayTypography.bodyMedium.copy(fontFamily = vectorPopFontFamily),
-    bodySmall = JellyPlayTypography.bodySmall.copy(fontFamily = vectorPopFontFamily),
-    labelLarge = JellyPlayTypography.labelLarge.copy(fontFamily = vectorPopFontFamily),
-    labelMedium = JellyPlayTypography.labelMedium.copy(fontFamily = vectorPopFontFamily),
-    labelSmall = JellyPlayTypography.labelSmall.copy(fontFamily = vectorPopFontFamily),
-)
+    @Composable get() = variantTypography(JellyPlayTypography, vectorPopFontFamily) {
+        copy(
+            displayLarge = displayLarge.copy(textGeometricTransform = null),
+            displayMedium = displayMedium.copy(textGeometricTransform = null),
+            displaySmall = displaySmall.copy(textGeometricTransform = null),
+        )
+    }

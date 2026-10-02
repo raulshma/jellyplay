@@ -61,6 +61,7 @@ internal class FakeImages : ImageUrlProvider {
         "img://$itemId"
     override fun getChapterImageUrl(itemId: String, imageIndex: Int, tag: String?): String = ""
     override fun getBackdropUrl(itemId: String, maxWidth: Int): String = ""
+    override fun getLogoUrl(itemId: String): String = ""
 }
 
 internal data class StartRecord(
@@ -90,16 +91,12 @@ internal class FakePlaybackRepository : PlaybackRepository {
         return Result.success(Unit)
     }
 
-    override suspend fun replayOutboxEntry(entry: PlaybackOutboxEntry): Boolean = true
     override suspend fun reportBookProgress(
         itemId: String,
         positionTicks: Long,
         final: Boolean,
     ): Result<Unit> = Result.success(Unit)
     override fun getBookDownloadUrl(itemId: String): String = ""
-    override fun getImageUrl(itemId: String, imageType: String, maxWidth: Int?) = "img://$itemId"
-    override fun getChapterImageUrl(itemId: String, imageIndex: Int, tag: String?, maxWidth: Int?) = ""
-    override fun getBackdropUrl(itemId: String, maxWidth: Int) = ""
     override suspend fun getItemImageBytes(itemId: String, imageType: String, maxWidth: Int): ByteArray? = null
 
     override fun getStreamUrl(itemId: String, mediaSourceId: String, startTimeTicks: Long, liveStreamId: String?) =

@@ -14,7 +14,7 @@ import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxEventType
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxRepository
 import com.raulshma.jellyplay.core.data.repository.MediaCacheInvalidator
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
-import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.data.worker.PlaybackOutboxReplay
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -56,7 +56,7 @@ class PlaybackSyncWorkerResilienceTest {
 
     private lateinit var context: Context
     private val outbox: PlaybackOutboxRepository = mockk(relaxed = true)
-    private val playbackRepository: PlaybackRepository = mockk(relaxed = true)
+    private val outboxReplay: PlaybackOutboxReplay = mockk(relaxed = true)
     private val offlineModeManager: OfflineModeManager = mockk()
     private val playedStateSync: PlayedStateSync = mockk(relaxed = true)
     private val offlineRepository: OfflineRepository = mockk(relaxed = true)
@@ -72,7 +72,7 @@ class PlaybackSyncWorkerResilienceTest {
             Configuration.Builder().setMinimumLoggingLevel(android.util.Log.DEBUG).build(),
         )
         every { offlineModeManager.isOffline } returns false
-        coEvery { playbackRepository.replayOutboxEntry(any()) } returns true
+        coEvery { outboxReplay.replayOutboxEntry(any()) } returns true
         coEvery { outbox.drain() } returns emptyList()
         coEvery { offlineRepository.getDownloadedItemIds() } returns emptyList()
         coEvery { outbox.hasUnsyncedPlayedIntent(any()) } returns false
@@ -102,7 +102,7 @@ class PlaybackSyncWorkerResilienceTest {
                     createDrainer = { notifier ->
                         PlaybackOutboxDrainerImpl(
                             outbox = outbox,
-                            playbackRepository = playbackRepository,
+                            outboxReplay = outboxReplay,
                             offlineModeManager = offlineModeManager,
                             playedStateSync = playedStateSync,
                             offlineRepository = offlineRepository,
@@ -133,7 +133,7 @@ class PlaybackSyncWorkerResilienceTest {
         val result = buildWorker().doWork()
 
         assertTrue(result is androidx.work.ListenableWorker.Result.Success)
-        coVerify(exactly = 1) { playbackRepository.replayOutboxEntry(any()) }
+        coVerify(exactly = 1) { outboxReplay.replayOutboxEntry(any()) }
         coVerify(exactly = 1) { outbox.delete("e1") }
     }
 
@@ -150,7 +150,7 @@ class PlaybackSyncWorkerResilienceTest {
         val result = buildWorker().doWork()
 
         assertTrue(result is androidx.work.ListenableWorker.Result.Success)
-        coVerify(exactly = 2) { playbackRepository.replayOutboxEntry(any()) }
+        coVerify(exactly = 2) { outboxReplay.replayOutboxEntry(any()) }
         coVerify(exactly = 2) { outbox.delete(any()) }
     }
 
@@ -174,7 +174,7 @@ class PlaybackSyncWorkerResilienceTest {
     @Test
     fun `a retries-pending drain maps to WorkManager retry`() = runTest {
         coEvery { outbox.drain() } returns listOf(entry("e1", ITEM_ID, PlaybackOutboxEventType.PLAYED))
-        coEvery { playbackRepository.replayOutboxEntry(any()) } returns false
+        coEvery { outboxReplay.replayOutboxEntry(any()) } returns false
 
         val result = buildWorker().doWork()
 

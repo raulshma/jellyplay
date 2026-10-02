@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.core.data.paging
 import androidx.paging.PagingConfig
 import androidx.paging.PagingSource
 import androidx.paging.PagingState
+import com.raulshma.jellyplay.core.data.repository.MediaCollectionReads
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.model.ItemKindFilter
 import com.raulshma.jellyplay.core.model.LibraryFilters
@@ -38,12 +39,18 @@ class JellyfinPagingSourceTest {
 
     private val repository: MediaRepository = mockk()
 
+    // The items-query family left the union (MediaCollectionReads): the MEDIA
+    // and FAVORITES flavors build over the seam mock — the same shape the
+    // migrated production sites use — while SEARCH stays on the union
+    // (searchPagingSource remains MediaRepository's projection).
+    private val mediaCollectionReads: MediaCollectionReads = mockk()
+
     private enum class Flavor { MEDIA, FAVORITES, SEARCH }
 
     /** Builds each flavor through the same wiring its production call site uses. */
     private fun source(flavor: Flavor): PagingSource<Int, MediaItem> = when (flavor) {
         Flavor.MEDIA -> JellyfinPagingSource { startIndex, limit ->
-            repository.getMediaItems(
+            mediaCollectionReads.getMediaItems(
                 parentId = null,
                 filters = LibraryFilters(),
                 studioIds = null,
@@ -53,7 +60,7 @@ class JellyfinPagingSourceTest {
             )
         }
         Flavor.FAVORITES -> JellyfinPagingSource { startIndex, limit ->
-            repository.getFavorites(mediaTypes = null, limit = limit, startIndex = startIndex)
+            mediaCollectionReads.getFavorites(mediaTypes = null, limit = limit, startIndex = startIndex)
         }
         Flavor.SEARCH -> repository.searchPagingSource(query = "batman")
     }
@@ -67,16 +74,16 @@ class JellyfinPagingSourceTest {
         val items = (0 until count).map { mediaItem(startIndex + it) }
         val result = Result.success(SearchResult(items = items, totalRecordCount = totalRecordCount, startIndex = startIndex))
         when (flavor) {
-            Flavor.MEDIA -> coEvery { repository.getMediaItems(any(), any(), any(), any(), any(), any()) } returns result
-            Flavor.FAVORITES -> coEvery { repository.getFavorites(any(), any(), any()) } returns result
+            Flavor.MEDIA -> coEvery { mediaCollectionReads.getMediaItems(any(), any(), any(), any(), any(), any()) } returns result
+            Flavor.FAVORITES -> coEvery { mediaCollectionReads.getFavorites(any(), any(), any()) } returns result
             Flavor.SEARCH -> coEvery { repository.search(any(), any(), any(), any()) } returns result
         }
     }
 
     private fun stubFailure(flavor: Flavor, failure: Throwable) {
         when (flavor) {
-            Flavor.MEDIA -> coEvery { repository.getMediaItems(any(), any(), any(), any(), any(), any()) } returns Result.failure(failure)
-            Flavor.FAVORITES -> coEvery { repository.getFavorites(any(), any(), any()) } returns Result.failure(failure)
+            Flavor.MEDIA -> coEvery { mediaCollectionReads.getMediaItems(any(), any(), any(), any(), any(), any()) } returns Result.failure(failure)
+            Flavor.FAVORITES -> coEvery { mediaCollectionReads.getFavorites(any(), any(), any()) } returns Result.failure(failure)
             Flavor.SEARCH -> coEvery { repository.search(any(), any(), any(), any()) } returns Result.failure(failure)
         }
     }
@@ -198,10 +205,10 @@ class JellyfinPagingSourceTest {
         for (flavor in Flavor.values()) {
             when (flavor) {
                 Flavor.MEDIA -> coEvery {
-                    repository.getMediaItems(any(), any(), any(), any(), any(), any())
+                    mediaCollectionReads.getMediaItems(any(), any(), any(), any(), any(), any())
                 } throws IllegalStateException("connection pool shut down")
                 Flavor.FAVORITES -> coEvery {
-                    repository.getFavorites(any(), any(), any())
+                    mediaCollectionReads.getFavorites(any(), any(), any())
                 } throws IllegalStateException("connection pool shut down")
                 Flavor.SEARCH -> coEvery {
                     repository.search(any(), any(), any(), any())
@@ -234,7 +241,7 @@ class JellyfinPagingSourceTest {
         val filters = LibraryFilters(genres = listOf("Sci-Fi"))
         stubSuccess(Flavor.MEDIA, startIndex = 0, count = 1, totalRecordCount = 1)
         val pagingSource = JellyfinPagingSource { startIndex, limit ->
-            repository.getMediaItems(
+            mediaCollectionReads.getMediaItems(
                 parentId = "lib-1",
                 filters = filters,
                 studioIds = null,
@@ -249,7 +256,7 @@ class JellyfinPagingSourceTest {
         )
 
         coVerify(exactly = 1) {
-            repository.getMediaItems(
+            mediaCollectionReads.getMediaItems(
                 parentId = "lib-1",
                 filters = filters,
                 studioIds = null,
@@ -264,19 +271,19 @@ class JellyfinPagingSourceTest {
     fun `mediaTypes selection passes through to getFavorites`() = runTest {
         val mediaTypes = listOf(MediaType.MOVIE, MediaType.SERIES)
         coEvery {
-            repository.getFavorites(mediaTypes = mediaTypes, limit = 30, startIndex = 0)
+            mediaCollectionReads.getFavorites(mediaTypes = mediaTypes, limit = 30, startIndex = 0)
         } returns Result.success(
             SearchResult(items = (0 until 30).map(::mediaItem), totalRecordCount = 45, startIndex = 0),
         )
         val pagingSource = JellyfinPagingSource { startIndex, limit ->
-            repository.getFavorites(mediaTypes = mediaTypes, limit = limit, startIndex = startIndex)
+            mediaCollectionReads.getFavorites(mediaTypes = mediaTypes, limit = limit, startIndex = startIndex)
         }
 
         pagingSource.load(
             PagingSource.LoadParams.Refresh(key = null, loadSize = 30, placeholdersEnabled = false),
         )
 
-        coVerify(exactly = 1) { repository.getFavorites(mediaTypes = mediaTypes, limit = 30, startIndex = 0) }
+        coVerify(exactly = 1) { mediaCollectionReads.getFavorites(mediaTypes = mediaTypes, limit = 30, startIndex = 0) }
     }
 
     @Test

@@ -5,11 +5,15 @@ import com.raulshma.jellyplay.core.data.util.EpochMillisSource
 import com.raulshma.jellyplay.core.model.EpgGuide
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.LiveTvProgram
+import com.raulshma.jellyplay.core.ui.message.UiMessage
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.feature.livetv.LIVE_TV_STALENESS_INTERVAL_MS
 import com.raulshma.jellyplay.feature.livetv.components.RecordActions
 import com.raulshma.jellyplay.feature.livetv.components.RecordDialogState
 import com.raulshma.jellyplay.feature.livetv.components.RecordOutcome
+import com.raulshma.jellyplay.feature.livetv.generated.resources.Res
+import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_error_load_guide
+import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_error_record
 import com.raulshma.jellyplay.feature.livetv.nowInstant
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Instant
@@ -57,8 +61,8 @@ class EpgViewModel(
     private val _isLoading = composeState(false)
     val isLoading: Boolean get() = _isLoading.value
 
-    private val _error = composeState<String?>(null)
-    val error: String? get() = _error.value
+    private val _error = composeState<UiMessage?>(null)
+    val error: UiMessage? get() = _error.value
 
     /** Ticking "now" timestamp so the time ruler + live indicator stay live. */
     val now: StateFlow<Instant> = flow {
@@ -90,7 +94,7 @@ class EpgViewModel(
                 loadGuide()
             }
             is RecordOutcome.Error ->
-                _recordDialog.value = RecordDialogState.Error(outcome.message ?: "Failed to create recording")
+                _recordDialog.value = RecordDialogState.Error(UiMessage.of(outcome.message, Res.string.livetv_error_record))
             RecordOutcome.Idle -> Unit
         }
     }
@@ -187,7 +191,7 @@ class EpgViewModel(
             _isLoading.value = true
             _error.value = null
             fetchGuideIntoState()
-                .onFailure { _error.value = it.message }
+                .onFailure { _error.value = UiMessage.of(it, Res.string.livetv_error_load_guide) }
             _isLoading.value = false
         }
     }

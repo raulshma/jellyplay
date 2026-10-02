@@ -70,7 +70,14 @@ class SeerrRepositoryImpl(
      * binding. Nullable; a null manager skips the offline gate.
      */
     private val offlineModeManager: OfflineModeManager? = null,
-) : SeerrRepository {
+) : SeerrRepository,
+    // Family seams (the SonarrSeriesOperations over-the-impl pattern): the
+    // same single carries the service-directory, request-lifecycle and auth
+    // families alongside the union — [SeerrServiceDirectory] /
+    // [SeerrRequestLifecycle] / [SeerrAuthenticator].
+    SeerrServiceDirectory,
+    SeerrRequestLifecycle,
+    SeerrAuthenticator {
 
     // Both fields carried @Volatile on the pre-15B JVM sources; the promotion
     // keeps it via kotlin.concurrent.Volatile (common;
@@ -185,7 +192,7 @@ class SeerrRepositoryImpl(
         return seerrApiClient.testConnection(url, SeerrCredentials.ApiKey(apiKey))
     }
 
-    override suspend fun search(query: String, page: Int): Result<SeerrSearchResponse> =
+    override suspend fun search(query: String, page: Int): Result<List<SeerrSearchItem>> =
         withSeerrSession { url, credentials ->
             seerrApiClient.search(url, credentials, query, page)
         }
@@ -233,9 +240,9 @@ class SeerrRepositoryImpl(
         tmdbId: Int,
         mediaType: MediaType,
         unsupportedMessage: String,
-        movieCall: suspend (url: String, credentials: SeerrCredentials) -> Result<SeerrSearchResponse>,
-        tvCall: suspend (url: String, credentials: SeerrCredentials) -> Result<SeerrSearchResponse>,
-    ): Result<SeerrSearchResponse> =
+        movieCall: suspend (url: String, credentials: SeerrCredentials) -> Result<List<SeerrSearchItem>>,
+        tvCall: suspend (url: String, credentials: SeerrCredentials) -> Result<List<SeerrSearchItem>>,
+    ): Result<List<SeerrSearchItem>> =
         detailCache.getOrFetchTyped({ sessionIdentity.cacheIdentity() }, "${keyPrefix}_${tmdbId}_${mediaType.name}") {
             withSeerrSession { url, credentials ->
                 val typeStr = if (mediaType == MediaType.MOVIE) "movie" else "tv"
@@ -243,11 +250,11 @@ class SeerrRepositoryImpl(
                     MediaType.MOVIE -> movieCall(url, credentials)
                     MediaType.SERIES -> tvCall(url, credentials)
                     else -> Result.failure(Exception(unsupportedMessage))
-                }).map { response -> backfillMediaType(response, typeStr) }
+                }).map { items -> backfillMediaType(items, typeStr) }
             }
         }
 
-    override suspend fun getRecommendations(tmdbId: Int, mediaType: MediaType): Result<SeerrSearchResponse> =
+    override suspend fun getRecommendations(tmdbId: Int, mediaType: MediaType): Result<List<SeerrSearchItem>> =
         cachedBackfilledList(
             "recommendations", tmdbId, mediaType,
             unsupportedMessage = "Unsupported media type for recommendations",
@@ -255,7 +262,7 @@ class SeerrRepositoryImpl(
             tvCall = { url, credentials -> seerrApiClient.getTvRecommendations(url, credentials, tmdbId) },
         )
 
-    override suspend fun getSimilar(tmdbId: Int, mediaType: MediaType): Result<SeerrSearchResponse> =
+    override suspend fun getSimilar(tmdbId: Int, mediaType: MediaType): Result<List<SeerrSearchItem>> =
         cachedBackfilledList(
             "similar", tmdbId, mediaType,
             unsupportedMessage = "Unsupported media type for similar items",
@@ -325,7 +332,7 @@ class SeerrRepositoryImpl(
 
     override fun getPreferences(): Flow<SeerrPreferences> = seerrPreferencesStore.preferences
 
-    override suspend fun getTrending(page: Int): Result<SeerrSearchResponse> =
+    override suspend fun getTrending(page: Int): Result<List<SeerrSearchItem>> =
         withSeerrSession { url, credentials ->
             seerrApiClient.getTrending(url, credentials, page)
         }
@@ -334,20 +341,20 @@ class SeerrRepositoryImpl(
         page: Int,
         primaryReleaseDateGte: String?,
         params: com.raulshma.jellyplay.core.model.seerr.SeerrDiscoverParams?,
-    ): Result<SeerrSearchResponse> =
+    ): Result<List<SeerrSearchItem>> =
         withSeerrSession { url, credentials ->
             seerrApiClient.getDiscoverMovies(url, credentials, page, primaryReleaseDateGte, params)
-                .map { response -> backfillMediaType(response, "movie") }
+                .map { items -> backfillMediaType(items, "movie") }
         }
 
     override suspend fun getDiscoverTv(
         page: Int,
         firstAirDateGte: String?,
         params: com.raulshma.jellyplay.core.model.seerr.SeerrDiscoverParams?,
-    ): Result<SeerrSearchResponse> =
+    ): Result<List<SeerrSearchItem>> =
         withSeerrSession { url, credentials ->
             seerrApiClient.getDiscoverTv(url, credentials, page, firstAirDateGte, params)
-                .map { response -> backfillMediaType(response, "tv") }
+                .map { items -> backfillMediaType(items, "tv") }
         }
 
     override suspend fun getRequests(
@@ -359,7 +366,7 @@ class SeerrRepositoryImpl(
         requestedBy: Int?,
         mediaType: String?,
         search: String?,
-    ): Result<SeerrRequestListResponse> =
+    ): Result<SeerrRequestPage> =
         withSeerrSession { url, credentials ->
             seerrApiClient.getRequests(url, credentials, take, skip, filter, sort, sortDirection, requestedBy, mediaType, search)
         }
@@ -544,10 +551,8 @@ class SeerrRepositoryImpl(
      * mediaType; stamp the endpoint's own type onto the blank ones so callers
      * can route by it.
      */
-    private fun backfillMediaType(response: SeerrSearchResponse, mediaType: String): SeerrSearchResponse =
-        response.copy(
-            results = response.results.map { item ->
-                if (item.mediaType.isBlank()) item.copy(mediaType = mediaType) else item
-            },
-        )
+    private fun backfillMediaType(items: List<SeerrSearchItem>, mediaType: String): List<SeerrSearchItem> =
+        items.map { item ->
+            if (item.mediaType.isBlank()) item.copy(mediaType = mediaType) else item
+        }
 }

@@ -2,14 +2,14 @@ package com.raulshma.jellyplay.feature.settings
 
 import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
+import com.raulshma.jellyplay.core.data.repository.ClientCertificateRepository
 import com.raulshma.jellyplay.core.data.repository.SelfSignedTrustRepository
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore
+import com.raulshma.jellyplay.core.model.ClientCertificateImport
+import com.raulshma.jellyplay.core.model.ClientCertificateStatus
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.normalizeServerAddress
-import com.raulshma.jellyplay.core.network.config.ClientCertificateFacade
-import com.raulshma.jellyplay.core.network.config.ClientCertificateImport
-import com.raulshma.jellyplay.core.network.config.ClientCertificateStatus
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
@@ -40,7 +40,7 @@ class ServerManagementViewModel(
     private val serverIdentityStore: ServerIdentityStore,
     private val networkOfflineStore: NetworkOfflineStore,
     private val selfSignedTrustRepository: SelfSignedTrustRepository,
-    private val clientCertificate: ClientCertificateFacade,
+    private val clientCertificate: ClientCertificateRepository,
 ) : JellyPlayViewModel() {
 
     private val _servers = composeState<List<ServerInfo>>(emptyList())

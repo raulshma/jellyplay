@@ -126,4 +126,6 @@
     <string name="audio_cast_to_device">기기에 캐스트</string>
     <string name="audio_cast_no_devices">캐스트 기기를 찾을 수 없습니다. 기기가 같은 네트워크에 있는지 확인하세요.</string>
     <string name="audio_cast_ok">확인</string>
+    <string name="audio_queue_radio">라디오</string>
+    <string name="audio_queue_radio_stop">탭하여 라디오 중지</string>
 </resources>

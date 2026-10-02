@@ -93,6 +93,7 @@ class DownloadRepositoryImplSubtitlesTest {
         downloadEnqueuer = mockk(relaxed = true),
         imagePreloader = mockk(relaxed = true),
         playbackRepository = playbackRepository,
+        imageUrlProvider = mockk(relaxed = true),
         playbackIdentity = playbackIdentity,
         httpClient = testClient,
         json = json,
@@ -108,7 +109,8 @@ class DownloadRepositoryImplSubtitlesTest {
         database = database,
         mediaRepository = MediaRepositoryAccess { mediaRepository },
         episodeCatalogue = mockk(relaxed = true),
-        playbackRepository = playbackRepository,
+        imageUrlProvider = mockk(relaxed = true),
+
         downloadsStore = preferencesStore,
         storagePolicy = mockk(relaxed = true),
         downloadEnqueuer = mockk(relaxed = true),

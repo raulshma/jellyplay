@@ -9,6 +9,7 @@ import com.raulshma.jellyplay.core.data.cast.CastMediaOptions
 import com.raulshma.jellyplay.core.data.cast.CastSessionEvent
 import com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastStore
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.PlaybackMode
@@ -46,10 +47,11 @@ import kotlinx.coroutines.flow.StateFlow
  *    `backgroundCastingEnabled` (the background-cast transport controls live in
  *    the VM because they own the system [MediaSession]).
  *
- * NOT owned here: [VideoPlayerViewModel.detachForBackgroundCast] /
- * [reattachFromBackgroundCast] — those rebuild the system [MediaSession] around
- * the cast / local player through the media-session controller; they stay in
- * the VM until media-session ownership is itself extracted.
+ * NOT owned here: the background-cast detach/reattach pair — those rebuild
+ * the system [MediaSession] around the cast / local player through the
+ * media-session controller; they live on the [VideoPlayerViewModel] itself
+ * (folded back from the deleted BackgroundCastController — the VM routes its
+ * Detach/Reattach events to the two private funs directly).
  *
  * (renamed from `PlayerCastController` — the commonMain
  * [PlayerCastController] seam interface took the old name; this class is its
@@ -64,6 +66,8 @@ import kotlinx.coroutines.flow.StateFlow
 internal class AndroidPlayerCastController(
     private val castManager: CastManager,
     private val playbackRepository: PlaybackRepository,
+    /** Cast artwork URL (the ImageUrlProvider seam; the stream URL stays on the repository). */
+    private val imageUrlProvider: ImageUrlProvider,
     private val adaptiveBitrateManager: AdaptiveBitrateManager,
     private val syncPlayCastStore: com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastStore,
     private val getEngine: () -> MediaEngine?,
@@ -136,7 +140,7 @@ internal class AndroidPlayerCastController(
         if (url.isBlank()) return
 
         val artworkUri = try {
-            Uri.parse(playbackRepository.getImageUrl(currentItemId, maxWidth = 300))
+            Uri.parse(imageUrlProvider.getImageUrl(currentItemId, maxWidth = 300))
         } catch (_: Exception) { null }
 
         val subtitleConfigs = buildCastSubtitleConfigurations(

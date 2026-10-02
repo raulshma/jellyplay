@@ -143,6 +143,70 @@ class EpisodeCatalogueNextEpisodeTest {
         assertNull(next)
     }
 
+    // ── virtual (missing/unaired) exclusion ─────────────────────────────
+
+    @Test
+    fun forSorted_skipsVirtualEpisodeWhenPickingNextUnplayed() {
+        // e2 is unaired (virtual): the initial queue item must land past it.
+        val ep1 = episode("e1", 1, 1, isPlayed = true)
+        val ep2 = MediaItem(
+            id = "e2",
+            name = "Episode 2",
+            mediaType = MediaType.EPISODE,
+            seasonNumber = 1,
+            episodeNumber = 2,
+            isVirtual = true,
+            missingReason = com.raulshma.jellyplay.core.model.MissingEpisodeReason.UNAIRED,
+        )
+        val ep3 = episode("e3", 1, 3, isPlayed = false)
+
+        val result = NextEpisode.forSorted(listOf(ep1, ep2, ep3))
+
+        assertEquals(NextUpKind.NEXT_UP, result.kind)
+        assertEquals("e3", result.episode?.id)
+    }
+
+    @Test
+    fun forSorted_onlyVirtualEpisodes_returnsNone() {
+        val eps = listOf(
+            MediaItem(
+                id = "e1",
+                name = "Episode 1",
+                mediaType = MediaType.EPISODE,
+                seasonNumber = 1,
+                episodeNumber = 1,
+                isVirtual = true,
+                missingReason = com.raulshma.jellyplay.core.model.MissingEpisodeReason.MISSING_FILE,
+            ),
+        )
+
+        val result = NextEpisode.forSorted(eps)
+
+        assertEquals(NextUpKind.NONE, result.kind)
+        assertNull(result.episode)
+    }
+
+    @Test
+    fun neighbors_skipOverVirtualEpisodes() {
+        val virtual = MediaItem(
+            id = "e2",
+            name = "Episode 2",
+            mediaType = MediaType.EPISODE,
+            seasonNumber = 1,
+            episodeNumber = 2,
+            isVirtual = true,
+            missingReason = com.raulshma.jellyplay.core.model.MissingEpisodeReason.MISSING_FILE,
+        )
+        val eps = listOf(episode("e1", 1, 1), virtual, episode("e3", 1, 3))
+
+        val (previous, next) = NextEpisode.neighbors(eps, "e1")
+
+        // Next must hop over the virtual e2 to e3; from e3 back, it hops e2 to e1.
+        assertEquals("e3", next?.id)
+        val (previousFromE3, _) = NextEpisode.neighbors(eps, "e3")
+        assertEquals("e1", previousFromE3?.id)
+    }
+
     private fun episode(
         id: String,
         season: Int,

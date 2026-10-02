@@ -109,7 +109,7 @@ class SyncPlayPlaybackCoreReconcileTest {
     @Test
     fun `queue-update reconcile does not seek within its 300ms tolerance but mirrors playback`() = runTest(scheduler) {
         val cb = RecordingCallbacks(position = 0L, playing = false)
-        core.setCallbacks(cb)
+        core.attachCallbacks(cb)
 
         // 200ms of drift: under the 300ms queue-update tolerance → no seek,
         // but the group is playing and the engine is paused → play mirror.
@@ -129,7 +129,7 @@ class SyncPlayPlaybackCoreReconcileTest {
     @Test
     fun `queue-update reconcile seeks beyond its 300ms tolerance`() = runTest(scheduler) {
         val cb = RecordingCallbacks(position = 0L, playing = false)
-        core.setCallbacks(cb)
+        core.attachCallbacks(cb)
 
         // 400ms of drift: over the tolerance → one seek to the estimated
         // (clamped) server position, plus the play mirror.
@@ -148,7 +148,7 @@ class SyncPlayPlaybackCoreReconcileTest {
     @Test
     fun `queue-update reconcile clamps the estimated position to the media duration`() = runTest(scheduler) {
         val cb = RecordingCallbacks(position = 0L, playing = false, duration = 1_000L)
-        core.setCallbacks(cb)
+        core.attachCallbacks(cb)
 
         core.reconcileToServerPosition(
             serverTicks = msToTicks(6_000L),
@@ -164,7 +164,7 @@ class SyncPlayPlaybackCoreReconcileTest {
     @Test
     fun `queue-update reconcile pauses a playing engine when the group is paused`() = runTest(scheduler) {
         val cb = RecordingCallbacks(position = 0L, playing = true)
-        core.setCallbacks(cb)
+        core.attachCallbacks(cb)
 
         core.reconcileToServerPosition(
             serverTicks = msToTicks(200L),
@@ -192,7 +192,7 @@ class SyncPlayPlaybackCoreReconcileTest {
     @Test
     fun `unpause within the 500ms echo tolerance moves nothing`() = runTest(scheduler) {
         val cb = RecordingCallbacks(position = 5_000L, playing = true)
-        core.setCallbacks(cb)
+        core.attachCallbacks(cb)
 
         core.applyCommand(unpauseCommand(positionMs = 5_000L))
         runCurrent()
@@ -207,7 +207,7 @@ class SyncPlayPlaybackCoreReconcileTest {
     @Test
     fun `unpause beyond the 500ms echo tolerance lands the engine on the server position`() = runTest(scheduler) {
         val cb = RecordingCallbacks(position = 5_000L, playing = true)
-        core.setCallbacks(cb)
+        core.attachCallbacks(cb)
 
         core.applyCommand(unpauseCommand(positionMs = 5_600L))
         runCurrent()
@@ -223,7 +223,7 @@ class SyncPlayPlaybackCoreReconcileTest {
     @Test
     fun `commands drop while an item load is pending and apply after READY clears it`() = runTest(scheduler) {
         val cb = RecordingCallbacks(position = 0L, playing = false)
-        core.setCallbacks(cb)
+        core.attachCallbacks(cb)
 
         val pause = SyncPlayPlaybackCommand(
             command = "Pause",

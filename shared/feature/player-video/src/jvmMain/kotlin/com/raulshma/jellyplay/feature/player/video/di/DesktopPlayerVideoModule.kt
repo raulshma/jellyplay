@@ -45,7 +45,17 @@ import org.koin.dsl.module
  * jvmTest suite never resolves Koin — it builds its own fakes.
  */
 val desktopPlayerVideoModule: Module = module {
-    single<VideoPlayerPlatform> { DesktopVideoPlayerPlatform() }
+    single<VideoPlayerPlatform> {
+        DesktopVideoPlayerPlatform(
+            // The video focus slice (ADR-0004): the desktop graph binds
+            // DefaultPlaybackFocus (DesktopPlayerModule) — VIDEO claims ride
+            // the wiring's play edge through it. No video surface is bound
+            // here (the desktop executor's surface list registers only the
+            // music one): the displaced-holder self-pause rides the wiring's
+            // claimState observer.
+            playbackFocus = get(),
+        )
+    }
     single<VideoMediaSessionFactory> { NoOpMediaSessionFactory }
     single<CastManager> { NoOpCastManager }
     single<JellyfinRemotePlayCastStrategy> { NoOpJellyfinRemotePlayCastStrategy }
@@ -63,6 +73,7 @@ val desktopPlayerVideoModule: Module = module {
         VideoPlayerViewModel(
             platform = get(),
             mediaRepository = get(),
+            mediaExtrasReads = get(),
             lyricsRepository = get(),
             playbackRepository = get(),
             playbackIdentity = get(),
@@ -100,7 +111,7 @@ val desktopPlayerVideoModule: Module = module {
             playerLifecycleManager = get(),
             pipController = get(),
             videoMiniPlayerState = get(),
-            sleepTimerManager = get(),
+            sleepCountdown = get(),
             offlineModeManager = get(),
             userMessageBus = get(),
             playerEngineFactory = get(),
@@ -108,6 +119,7 @@ val desktopPlayerVideoModule: Module = module {
             savedStateHandle = params.get(),
             subtitlePreviewRepository = get(),
             userDataMutator = get(),
+            nowPlayingReporter = get(),
         )
     }
 }

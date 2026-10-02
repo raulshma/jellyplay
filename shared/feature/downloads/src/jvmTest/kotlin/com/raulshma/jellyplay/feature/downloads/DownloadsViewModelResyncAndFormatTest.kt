@@ -8,6 +8,9 @@ import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.OfflineSyncUpdate
 import com.raulshma.jellyplay.core.model.ResyncBatchProgress
+import com.raulshma.jellyplay.core.model.formatBytes
+import com.raulshma.jellyplay.core.model.formatEta
+import com.raulshma.jellyplay.core.model.formatSpeed
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
@@ -36,9 +39,10 @@ import kotlin.test.assertEquals
  * 2. The reactive appbar/sheet state holders ([DownloadsViewModel.updatesAvailable],
  *    [DownloadsViewModel.updateRows]) mirror the repository flows and keep
  *    their WhileSubscribed defaults (0 / empty) before an emission.
- * 3. The pass-through formatting helpers delegate to the core-model
- *    ByteFormatter semantics (B/KB/MB/GB steps, empty speed ≤ 0, empty ETA
- *    for zero-speed or fully-downloaded items).
+ * 3. The core-model ByteFormatter semantics the screen consumes directly
+ *    (B/KB/MB/GB steps, empty speed ≤ 0, empty ETA for zero-speed or
+ *    fully-downloaded items) — the ViewModel's formatter forwards are
+ *    deleted, so these pin the shared extensions themselves.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class DownloadsViewModelResyncAndFormatTest {
@@ -63,9 +67,9 @@ class DownloadsViewModelResyncAndFormatTest {
         offlineRepository = mockk(relaxed = true)
         syncManager = mockk<OfflineResync>(relaxed = true)
         downloadsFlow = MutableStateFlow(emptyList())
-        every { downloadRepository.allDownloads() } returns downloadsFlow
-        every { downloadRepository.activeDownloadProgress() } returns MutableStateFlow(emptyMap())
-        coEvery { downloadRepository.allDownloadsSnapshot() } answers { downloadsFlow.value }
+        every { downloadRepository.getAllDownloads() } returns downloadsFlow
+        every { downloadRepository.getActiveDownloadProgress() } returns MutableStateFlow(emptyMap())
+        coEvery { downloadRepository.getAllDownloadsSnapshot() } answers { downloadsFlow.value }
         every { syncManager.batchProgress } returns MutableStateFlow(ResyncBatchProgress())
         every { offlineRepository.getUpdatesCount() } returns updatesCount
         every { offlineRepository.getItemsWithUpdates() } returns updateRows
@@ -125,7 +129,7 @@ class DownloadsViewModelResyncAndFormatTest {
         // The snapshot read is uncapped; a UI list that hasn't emitted (or an
         // empty one) must not hide downloaded items from the picker.
         downloadsFlow.value = emptyList()
-        coEvery { downloadRepository.allDownloadsSnapshot() } returns listOf(
+        coEvery { downloadRepository.getAllDownloadsSnapshot() } returns listOf(
             item("snap", status = DownloadStatus.COMPLETED),
         )
         advanceUntilIdle()
@@ -154,34 +158,34 @@ class DownloadsViewModelResyncAndFormatTest {
         rowsJob.cancel()
     }
 
-    // ── Formatting pass-throughs (ByteFormatter semantics) ───────────────
+    // ── ByteFormatter semantics the downloads UI consumes directly ───────
 
     @Test
     fun formatBytes_steps_through_byte_units() {
-        assertEquals("512 B", viewModel.formatBytes(512L))
-        assertEquals("1.0 KB", viewModel.formatBytes(1024L))
-        assertEquals("1.0 MB", viewModel.formatBytes(1024L * 1024))
-        assertEquals("1.0 GB", viewModel.formatBytes(1024L * 1024 * 1024))
+        assertEquals("512 B", 512L.formatBytes())
+        assertEquals("1.0 KB", 1024L.formatBytes())
+        assertEquals("1.0 MB", (1024L * 1024).formatBytes())
+        assertEquals("1.0 GB", (1024L * 1024 * 1024).formatBytes())
     }
 
     @Test
     fun formatSpeed_is_empty_for_non_positive_speeds() {
-        assertEquals("", viewModel.formatSpeed(0L))
-        assertEquals("", viewModel.formatSpeed(-5L))
-        assertEquals("2.0 KB/s", viewModel.formatSpeed(2048L))
+        assertEquals("", 0L.formatSpeed())
+        assertEquals("", (-5L).formatSpeed())
+        assertEquals("2.0 KB/s", 2048L.formatSpeed())
     }
 
     @Test
     fun formatEta_boundaries() {
         // Zero total / zero speed / already-complete → empty.
-        assertEquals("", viewModel.formatEta(0L, 0L, 100L))
-        assertEquals("", viewModel.formatEta(0L, 1000L, 0L))
-        assertEquals("", viewModel.formatEta(1000L, 1000L, 100L))
+        assertEquals("", formatEta(0L, 0L, 100L))
+        assertEquals("", formatEta(0L, 1000L, 0L))
+        assertEquals("", formatEta(1000L, 1000L, 100L))
         // 50s remaining → seconds branch.
-        assertEquals("50s left", viewModel.formatEta(0L, 5000L, 100L))
+        assertEquals("50s left", formatEta(0L, 5000L, 100L))
         // 90s remaining → minutes branch.
-        assertEquals("1m 30s left", viewModel.formatEta(0L, 9000L, 100L))
+        assertEquals("1m 30s left", formatEta(0L, 9000L, 100L))
         // 2h + 1s remaining → hours branch.
-        assertEquals("2h 0m left", viewModel.formatEta(0L, 7201L * 1000, 1000L))
+        assertEquals("2h 0m left", formatEta(0L, 7201L * 1000, 1000L))
     }
 }

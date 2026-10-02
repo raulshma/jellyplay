@@ -283,8 +283,6 @@ fun JellyPlayTheme(
     oledMode: Boolean = false,
     contrastLevel: ContrastLevel = ContrastLevel.DEFAULT,
     isTv: Boolean = false,
-    performanceMode: Boolean = false,
-    reduceMotion: Boolean = false,
     accentColorSwatch: String = "dynamic",
     colorStyle: ColorStyle = ColorStyle.TONAL_SPOT,
     themeVariant: String = "standard",
@@ -502,7 +500,14 @@ fun JellyPlayTheme(
             colorScheme = colorScheme,
             typography = typography,
             shapes = shapes,
-            motionScheme = if (performanceMode || reduceMotion) ReducedMotionScheme else ExpressiveMotionScheme,
+            // Motion flags come from the CompositionLocals (LocalMotionFlags.kt),
+            // not parameters: JellyPlayPreferenceTheme provides them once ABOVE this
+            // call, so the scheme and every LocalReducedMotion call-site guard read
+            // the same single source and can't drift apart.
+            motionScheme = motionSchemeFor(
+                performanceMode = LocalPerformanceMode.current,
+                reduceMotion = LocalReduceMotionEnabled.current,
+            ),
             content = content,
         )
     }

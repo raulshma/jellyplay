@@ -12,8 +12,6 @@ import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.feature.player.video.engine.AspectRatio
 import com.raulshma.jellyplay.feature.player.video.engine.EngineCapabilities
 import com.raulshma.jellyplay.feature.player.video.engine.EngineVideoStats
-import com.raulshma.jellyplay.feature.player.video.engine.SegmentCalculator
-import com.raulshma.jellyplay.feature.player.video.engine.SegmentCalculatorInput
 import com.raulshma.jellyplay.feature.player.video.state.AutoplayState
 import com.raulshma.jellyplay.feature.player.video.state.EpisodeBrowserState
 import com.raulshma.jellyplay.feature.player.video.state.GesturePrefsState
@@ -221,7 +219,8 @@ data class VideoPlayerUiState(
     val uiPrefs: PlayerUiPrefsState = PlayerUiPrefsState(),
     /**
      * Gesture / hold-speed / seek-window / brightness / frame-rate prefs.
-     * Formerly flat fields (`gesturesEnabled` / `holdSpeedEnabled` /
+     * Formerly flat fields (`gesturesEnabled` (now the tap/swipe tier pair) /
+     * `holdSpeedEnabled` /
      * `holdSpeedMultiplier` / `isHoldSpeedActive` / `defaultSpeed` /
      * `swipeSeekMaxMs` / `seekDurationMs` / `rememberBrightness` /
      * `brightnessLevel` / `gestureIndicatorSide` / `frameRateMatching` /

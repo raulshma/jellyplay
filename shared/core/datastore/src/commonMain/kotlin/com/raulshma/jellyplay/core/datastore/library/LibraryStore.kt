@@ -50,7 +50,9 @@ class LibraryStore constructor(
         val SKIP_SPECIALS = booleanPreferencesKey("skip_specials")
         val COMPACT_EPISODE_LIST = booleanPreferencesKey("compact_episode_list")
         val SHOW_DETAIL_UP_NEXT = booleanPreferencesKey("show_detail_up_next")
+        val SHOW_MISSING_EPISODES = booleanPreferencesKey("show_missing_episodes")
         val LIBRARY_POSTER_SIZE = floatPreferencesKey("library_poster_size")
+        val PREFER_LOGOS = booleanPreferencesKey("prefer_logos")
         val LIBRARY_GROUP_BY = stringPreferencesKey("library_group_by")
         val CONFIRM_LIBRARY_RESET = booleanPreferencesKey("confirm_library_reset")
     }
@@ -72,7 +74,9 @@ class LibraryStore constructor(
         skipSpecials = PreferenceCodec.readBool(prefs, Keys.SKIP_SPECIALS, "skip_specials", false),
         compactEpisodeList = PreferenceCodec.readBool(prefs, Keys.COMPACT_EPISODE_LIST, "compact_episode_list", false),
         showDetailUpNext = PreferenceCodec.readBool(prefs, Keys.SHOW_DETAIL_UP_NEXT, "show_detail_up_next", true),
+        showMissingEpisodes = PreferenceCodec.readBool(prefs, Keys.SHOW_MISSING_EPISODES, "show_missing_episodes", false),
         libraryPosterSize = prefs[Keys.LIBRARY_POSTER_SIZE] ?: DEFAULT_POSTER_SIZE,
+        preferLogos = PreferenceCodec.readBool(prefs, Keys.PREFER_LOGOS, "prefer_logos", false),
         libraryGroupBy = readGroupBy(prefs),
         confirmLibraryReset = readConfirmLibraryReset(prefs),
     )
@@ -176,8 +180,16 @@ class LibraryStore constructor(
         dataStore.edit { it[Keys.SHOW_DETAIL_UP_NEXT] = enabled }
     }
 
+    suspend fun setShowMissingEpisodes(enabled: Boolean) {
+        dataStore.edit { it[Keys.SHOW_MISSING_EPISODES] = enabled }
+    }
+
     suspend fun setLibraryPosterSize(size: Float) {
         dataStore.edit { it[Keys.LIBRARY_POSTER_SIZE] = size.coerceIn(POSTER_SIZE_MIN, POSTER_SIZE_MAX) }
+    }
+
+    suspend fun setPreferLogos(enabled: Boolean) {
+        dataStore.edit { it[Keys.PREFER_LOGOS] = enabled }
     }
 
     suspend fun setLibraryGroupBy(groupBy: GroupBy) {
@@ -210,7 +222,8 @@ class LibraryStore constructor(
             Keys.DEFAULT_LIBRARY_SORT_ORDERS, Keys.LIBRARY_VIEW_MODES, Keys.LIBRARY_FILTERS,
             Keys.HIDE_EPISODE_THUMBNAILS, Keys.EPISODES_DESCENDING, Keys.SKIP_SPECIALS,
             Keys.COMPACT_EPISODE_LIST, Keys.SHOW_DETAIL_UP_NEXT,
-            Keys.LIBRARY_POSTER_SIZE, Keys.LIBRARY_GROUP_BY,
+            Keys.SHOW_MISSING_EPISODES,
+            Keys.LIBRARY_POSTER_SIZE, Keys.PREFER_LOGOS, Keys.LIBRARY_GROUP_BY,
             Keys.CONFIRM_LIBRARY_RESET,
         )
         else -> emptyList()
@@ -232,7 +245,9 @@ class LibraryStore constructor(
             it[Keys.SKIP_SPECIALS] = slice.skipSpecials
             it[Keys.COMPACT_EPISODE_LIST] = slice.compactEpisodeList
             it[Keys.SHOW_DETAIL_UP_NEXT] = slice.showDetailUpNext
+            it[Keys.SHOW_MISSING_EPISODES] = slice.showMissingEpisodes
             it[Keys.LIBRARY_POSTER_SIZE] = slice.libraryPosterSize
+            it[Keys.PREFER_LOGOS] = slice.preferLogos
             it[Keys.LIBRARY_GROUP_BY] = slice.libraryGroupBy.name
             it[Keys.CONFIRM_LIBRARY_RESET] = slice.confirmLibraryReset
         }
@@ -264,7 +279,11 @@ data class LibrarySlice(
     val skipSpecials: Boolean = false,
     val compactEpisodeList: Boolean = false,
     val showDetailUpNext: Boolean = true,
+    /** Whether virtual (missing/unaired) episodes appear in season views. */
+    val showMissingEpisodes: Boolean = false,
     val libraryPosterSize: Float = DEFAULT_POSTER_SIZE,
+    /** Render the server clear-logo as the detail-screen title instead of text. */
+    val preferLogos: Boolean = false,
     val libraryGroupBy: GroupBy = GroupBy.NONE,
     val confirmLibraryReset: Boolean = true,
 )

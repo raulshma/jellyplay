@@ -7,16 +7,25 @@ import com.raulshma.jellyplay.core.model.arr.ArrCommandName
 import com.raulshma.jellyplay.core.model.arr.ArrHistoryItem
 import com.raulshma.jellyplay.core.model.arr.ArrQueueDeleteOptions
 import com.raulshma.jellyplay.core.model.arr.ArrQueueItem
+import com.raulshma.jellyplay.core.model.arr.ArrRelease
 import com.raulshma.jellyplay.core.model.arr.ArrSeriesEpisode
+import com.raulshma.jellyplay.core.model.arr.ArrServerConfig
 import com.raulshma.jellyplay.core.model.arr.ArrWantedItem
 
 /**
  * Direct client for a Sonarr v4 instance.
  *
  * Mirrors [com.raulshma.jellyplay.core.network.seerr.SeerrApiClient]: every
- * method is `suspend`, takes `baseUrl` + `apiKey`, returns [Result], and
- * targets the `/api/v3` root (the v3 API is authoritative for Sonarr v4 — see
- * the official docs) with `X-Api-Key` auth. Sonarr differs from Radarr in two
+ * method is `suspend` and returns [Result], targeting the `/api/v3` root (the
+ * v3 API is authoritative for Sonarr v4 — see the official docs) with
+ * `X-Api-Key` auth. One deliberate divergence from that template, shared with
+ * [RadarrApiClient]: every method takes one [ArrServerConfig] `server`
+ * connection as its first parameter where Seerr takes a bare `baseUrl` +
+ * credential pair — the formerly-unnamed `(baseUrl, apiKey)` couple gets one
+ * name and one construction site (the repository's resolved server list);
+ * only [ArrServerConfig.baseUrl] + [ArrServerConfig.apiKey] are read here.
+ * Seerr's shape is deliberately untouched (cookie-carrying; see the
+ * `ArrClientSupport` KDoc). Sonarr differs from Radarr in two
  * ways that affect the contract:
  *
  * - `/queue` returns a `{ records: [...] }` envelope (same shape Radarr uses);
@@ -39,15 +48,14 @@ import com.raulshma.jellyplay.core.model.arr.ArrWantedItem
 interface SonarrApiClient {
 
     /** `GET /api/v3/queue?includeSeries=true&includeEpisode=true` — unwraps the `records` envelope. */
-    suspend fun getQueue(baseUrl: String, apiKey: String): Result<List<ArrQueueItem>>
+    suspend fun getQueue(server: ArrServerConfig): Result<List<ArrQueueItem>>
 
     /**
      * `DELETE /api/v3/queue/{id}` — removes one queue row. [options] maps to
      * the `removeFromClient` / `blocklist` / `skipRedownload` query params.
      */
     suspend fun deleteQueueItem(
-        baseUrl: String,
-        apiKey: String,
+        server: ArrServerConfig,
         id: Int,
         options: ArrQueueDeleteOptions = ArrQueueDeleteOptions(),
     ): Result<Unit>
@@ -56,14 +64,13 @@ interface SonarrApiClient {
      * `DELETE /api/v3/queue/bulk` — removes multiple queue rows in one call.
      */
     suspend fun deleteQueueItems(
-        baseUrl: String,
-        apiKey: String,
+        server: ArrServerConfig,
         ids: List<Int>,
         options: ArrQueueDeleteOptions = ArrQueueDeleteOptions(),
     ): Result<Unit>
 
     /** `POST /api/v3/queue/grab/{id}` — force-send a queued release to the download client. */
-    suspend fun grabQueueItem(baseUrl: String, apiKey: String, id: Int): Result<Unit>
+    suspend fun grabQueueItem(server: ArrServerConfig, id: Int): Result<Unit>
 
     /**
      * Force-imports an already-importable release via the documented 2-step
@@ -78,14 +85,13 @@ interface SonarrApiClient {
      * [downloadId] is the download-client guid from the queue row (NOT the
      * queue id). Fails with a friendly 404 when no importable files are found.
      */
-    suspend fun importQueueItem(baseUrl: String, apiKey: String, downloadId: String): Result<Unit>
+    suspend fun importQueueItem(server: ArrServerConfig, downloadId: String): Result<Unit>
 
     /**
      * `GET /api/v3/calendar?start=...&end=...` — one row per airing episode.
      */
     suspend fun getCalendar(
-        baseUrl: String,
-        apiKey: String,
+        server: ArrServerConfig,
         start: String,
         end: String,
     ): Result<List<ArrCalendarItem>>
@@ -94,29 +100,26 @@ interface SonarrApiClient {
      * `GET /api/v3/history?eventType=...` — recent grab/import/fail events.
      */
     suspend fun getHistory(
-        baseUrl: String,
-        apiKey: String,
+        server: ArrServerConfig,
         eventType: Int? = null,
     ): Result<List<ArrHistoryItem>>
 
     /** `GET /api/v3/blocklist` — paginated blocklist (rejected releases). */
     suspend fun getBlocklist(
-        baseUrl: String,
-        apiKey: String,
+        server: ArrServerConfig,
         page: Int = 1,
         pageSize: Int = 50,
     ): Result<List<ArrBlocklistItem>>
 
     /** `DELETE /api/v3/blocklist/{id}` — remove one blocklist entry (re-enables search). */
-    suspend fun deleteBlocklistItem(baseUrl: String, apiKey: String, id: Int): Result<Unit>
+    suspend fun deleteBlocklistItem(server: ArrServerConfig, id: Int): Result<Unit>
 
     /** `DELETE /api/v3/blocklist/bulk` — remove multiple blocklist entries. */
-    suspend fun deleteBlocklistItems(baseUrl: String, apiKey: String, ids: List<Int>): Result<Unit>
+    suspend fun deleteBlocklistItems(server: ArrServerConfig, ids: List<Int>): Result<Unit>
 
     /** `GET /api/v3/wanted/missing` — monitored episodes without a file. */
     suspend fun getWanted(
-        baseUrl: String,
-        apiKey: String,
+        server: ArrServerConfig,
         page: Int = 1,
         pageSize: Int = 50,
     ): Result<List<ArrWantedItem>>
@@ -128,13 +131,43 @@ interface SonarrApiClient {
      * Returns the queued [ArrCommand].
      */
     suspend fun postCommand(
-        baseUrl: String,
-        apiKey: String,
+        server: ArrServerConfig,
         commandName: ArrCommandName,
         seriesId: Int? = null,
         episodeIds: List<Int>? = null,
         seasonNumber: Int? = null,
     ): Result<ArrCommand>
+
+    /**
+     * `GET /api/v3/release` — the interactive release-search rows, keyed one
+     * of two ways: [episodeId] alone (a single episode's releases — the fast
+     * path) or [seriesId] + [seasonNumber] (a whole season's). Exactly one of
+     * the two forms must be complete; anything else fails before the request.
+     * Fails with [ArrReleaseCacheMiss] when the server has no cached search
+     * results (the search command must run first / the ~30 min decision cache
+     * expired) — the UI offers "Search again" on that failure.
+     */
+    suspend fun searchReleases(
+        server: ArrServerConfig,
+        episodeId: Int? = null,
+        seriesId: Int? = null,
+        seasonNumber: Int? = null,
+    ): Result<List<ArrRelease>>
+
+    /**
+     * `POST /api/v3/release` — grabs [release] (its `guid` + `indexerId` form
+     * the required identity). With [shouldOverride] the grab additionally
+     * carries [seriesId] + [episodeIds] (Sonarr's identity fields for the
+     * override arm) and the release's own quality prefill, so a release
+     * Sonarr rejected can be grabbed anyway.
+     */
+    suspend fun grabRelease(
+        server: ArrServerConfig,
+        release: ArrRelease,
+        seriesId: Int? = null,
+        episodeIds: List<Int> = emptyList(),
+        shouldOverride: Boolean = false,
+    ): Result<Unit>
 
     /**
      * `GET /api/v3/series?tvdbId=...` — resolves the Sonarr internal series id
@@ -143,7 +176,7 @@ interface SonarrApiClient {
      * translate a Jellyfin episode's tvdb id → the Sonarr series id that
      * episode + command endpoints key off.
      */
-    suspend fun findSeriesByTvdb(baseUrl: String, apiKey: String, tvdbId: Int): Result<Int?>
+    suspend fun findSeriesByTvdb(server: ArrServerConfig, tvdbId: Int): Result<Int?>
 
     /**
      * Resolves the single episode matching S/E, returning the fields the
@@ -166,8 +199,7 @@ interface SonarrApiClient {
      * Use [getSeasonSummaries] on the null path to build a diagnostic message.
      */
     suspend fun getEpisodeInfo(
-        baseUrl: String,
-        apiKey: String,
+        server: ArrServerConfig,
         seriesId: Int,
         seasonNumber: Int,
         episodeNumber: Int,
@@ -180,8 +212,7 @@ interface SonarrApiClient {
      * for S5E12"). Not needed when [getEpisodeInfo] resolves successfully.
      */
     suspend fun getSeasonSummaries(
-        baseUrl: String,
-        apiKey: String,
+        server: ArrServerConfig,
         seriesId: Int,
     ): Result<List<SonarrSeasonSummary>>
 
@@ -193,7 +224,7 @@ interface SonarrApiClient {
      * or empty (surfaced as an actionable error). Safe to 404 if the file was
      * already removed.
      */
-    suspend fun deleteEpisodeFile(baseUrl: String, apiKey: String, episodeFileId: Int): Result<Unit>
+    suspend fun deleteEpisodeFile(server: ArrServerConfig, episodeFileId: Int): Result<Unit>
 
     /**
      * `PUT /api/v3/episode/monitor` — toggles the monitored flag on one or more
@@ -202,8 +233,7 @@ interface SonarrApiClient {
      * on file delete by default, so this is a safety net, not always required).
      */
     suspend fun monitorEpisodes(
-        baseUrl: String,
-        apiKey: String,
+        server: ArrServerConfig,
         episodeIds: List<Int>,
         monitored: Boolean,
     ): Result<Unit>
@@ -218,7 +248,7 @@ interface SonarrApiClient {
      * [findSeriesByTvdb], the `?tvdbId=` query param is treated as untrusted —
      * the result is filtered client-side because some Sonarr versions ignore it.
      */
-    suspend fun getSeriesInfo(baseUrl: String, apiKey: String, tvdbId: Int): Result<SonarrSeriesInfo?>
+    suspend fun getSeriesInfo(server: ArrServerConfig, tvdbId: Int): Result<SonarrSeriesInfo?>
 
     /**
      * `GET /api/v3/episode?seriesId=...` — the rich projection used by the
@@ -230,12 +260,12 @@ interface SonarrApiClient {
      * flow) and [getSeasonSummaries] (compact diagnostic index): this returns
      * every episode and the full field set the management UI needs.
      */
-    suspend fun getEpisodesForSeries(baseUrl: String, apiKey: String, seriesId: Int): Result<List<ArrSeriesEpisode>>
+    suspend fun getEpisodesForSeries(server: ArrServerConfig, seriesId: Int): Result<List<ArrSeriesEpisode>>
 
     /**
      * `GET /api/v3/system/status` — connection probe. Succeeds iff 2xx.
      */
-    suspend fun testConnection(baseUrl: String, apiKey: String): Result<Unit>
+    suspend fun testConnection(server: ArrServerConfig): Result<Unit>
 }
 
 /**

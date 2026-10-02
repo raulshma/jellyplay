@@ -107,10 +107,6 @@
     <string name="core_ui_color_style_title">Farbstil</string>
     <string name="core_ui_color_style_subtitle">Bestimmen Sie die visuelle Stimmung generierter Paletten</string>
     <string name="core_ui_dynamic_colors">Dynamische Hintergrundfarben</string>
-    <string name="core_ui_synthwave_accent_title">Synthwave-Akzent</string>
-    <string name="core_ui_synthwave_accent_subtitle">Benutzerdefinierte Neon-Akzentfarbe auswählen</string>
-    <string name="core_ui_soothing_accent_title">Sanfter Akzent</string>
-    <string name="core_ui_soothing_accent_subtitle">Beruhigende Akzentfarbe auswählen</string>
     <string name="core_ui_variant_accent_title">%1$s-Akzent</string>
     <string name="core_ui_variant_accent_subtitle">Akzentfarbe für diesen Designstil auswählen</string>
 
@@ -120,7 +116,6 @@
     <string name="core_ui_read">Lesen</string>
     <string name="core_ui_backspace">Rücklöschtaste</string>
     <string name="core_ui_request">Anfordern</string>
-    <string name="core_ui_watched">Gesehen</string>
     <string name="core_ui_downloaded">Heruntergeladen</string>
     <string name="core_ui_cd_loading">Lädt</string>
     <string name="core_ui_cd_error">Fehler</string>
@@ -184,8 +179,6 @@
     <string name="player_speed_slider_label">Wiedergabegeschwindigkeit anpassen</string>
 
     <!-- Barrierefreiheit: Video-/Musikmodus-Schalter (P5 §3.2) -->
-    <string name="a11y_mode_video">Videomodus</string>
-    <string name="a11y_mode_music">Musikmodus</string>
 
     <!-- DeleteDownloadedEpisodesSheet (shared by media detail + offline home). -->
     <string name="detail_delete_downloads_title">Downloads löschen</string>
@@ -258,15 +251,34 @@
     <string name="core_ui_auth_use_screen_lock">Gerätesperre verwenden</string>
     <string name="core_ui_auth_unlock_screen_lock">Mit Gerätesperre entsperren</string>
     <string name="core_ui_auth_device_credential_prompt">Gerätesperre zum Entsperren verwenden</string>
+    <string name="core_ui_auth_no_unlock_method">Unlock is unavailable: no biometrics or screen lock are usable on this device. Clear app data to reset the lock.</string>
     <string name="core_show_password">Passwort anzeigen</string>
     <string name="core_hide_password">Passwort ausblenden</string>
     <!-- What's New chrome -->
-    <string name="core_ui_whatsnew_sheet_title">Was ist neu</string>
-    <string name="core_ui_whatsnew_release_title">Neu in v%1$s</string>
-    <string name="core_ui_whatsnew_category_new">Neu</string>
-    <string name="core_ui_whatsnew_category_improvement">Verbessert</string>
-    <string name="core_ui_whatsnew_category_fix">Behoben</string>
-    <string name="core_ui_whatsnew_take_me_there">Direkt hin</string>
-    <string name="core_ui_whatsnew_got_it">Verstanden</string>
     <string name="core_ui_whatsnew_archive_empty">Noch keine Release-Highlights.</string>
+    <string name="core_refresh_metadata_title">Metadaten aktualisieren</string>
+    <string name="core_refresh_metadata_message">Wähle, wie der Server Metadaten und Bilder für „%s“ aktualisiert.</string>
+    <string name="core_refresh_metadata_mode_default">Nach neuen und aktualisierten Dateien suchen</string>
+    <string name="core_refresh_metadata_mode_default_desc">Lädt nur fehlende Metadaten und Bilder herunter.</string>
+    <string name="core_refresh_metadata_mode_full_validation">Fehlende Metadaten suchen</string>
+    <string name="core_refresh_metadata_mode_full_validation_desc">Prüft jedes Feld erneut, behält aktuelle Werte als Basis.</string>
+    <string name="core_refresh_metadata_mode_replace_all">Alle Metadaten ersetzen</string>
+    <string name="core_refresh_metadata_mode_replace_all_desc">Überschreibt aktuelle Metadaten mit Anbieterdaten. Bei einer Serie werden auch die Folgen aktualisiert.</string>
+    <string name="core_refresh_metadata_mode_replace_images">Alle Bilder ersetzen</string>
+    <string name="core_refresh_metadata_mode_replace_images_desc">Lädt alle Bilder neu von Anbietern herunter, Metadaten bleiben.</string>
+    <!-- Played/progress filter chips + clear-all (kept beside
+         core_filter_has_* below, mirroring the default file grouping). -->
+    <string name="core_filter_played_all">Alle</string>
+    <string name="core_filter_played_played">Gespielt</string>
+    <string name="core_filter_played_unplayed">Ungespielt</string>
+    <string name="core_filter_rating_plus">%1$s+</string>
+    <string name="core_filter_in_progress">In Arbeit</string>
+    <string name="core_clear_all">Alle löschen</string>
+    <string name="core_filter_has_subtitles">Mit Untertiteln</string>
+    <string name="core_filter_has_trailer">Mit Trailer</string>
+
+    <!-- Media-card footer meta (the shared MediaCardFooterMetaRow renderer
+         for PosterCard/WideMediaCard). -->
+    <string name="core_ui_card_percent_complete">%1$d% abgeschlossen</string>
+    <string name="core_ui_card_time_left">noch %1$s</string>
 </resources>

@@ -36,6 +36,19 @@ kotlin {
         getByName("commonTest").dependencies {
             implementation(libs.coroutines.test)
         }
+        // AuthenticatedDataSourceFactory (the shared media data-source seam
+        // both Exo engines consume — see its KDoc): media3's datasource
+        // surface + OkHttp + the JellyfinAuthorizationHeader builder, kept to
+        // androidMain so the JVM target (apps/desktop) never sees media3.
+        // core:network is a core leaf (model/concurrency/datastore) — no
+        // Room/workers drag in, which is exactly why the factory lives HERE
+        // and not in core:data.
+        getByName("androidMain").dependencies {
+            implementation(libs.media3.datasource)
+            implementation(libs.media3.datasource.okhttp)
+            implementation(libs.okhttp)
+            implementation(project(":shared:core:network"))
+        }
         // EngineCapabilityMatrixTest moved here from :feature:player:video's
         // unit-test source set with the subtitle-tester conveyor (feature
         // seventeen): the matrix itself moved to this module's commonMain

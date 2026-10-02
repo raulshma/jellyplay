@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Phone-flavor overlay: Android Auto / Android Automotive media-app
+     declaration. Kept out of src/main so the TV flavor doesn't advertise
+     car capability to Play (the head unit would list an app that has no
+     business there). The descriptor itself lives at
+     src/phone/res/xml/automotive_app_desc.xml. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application>
+
+        <meta-data
+            android:name="com.google.android.gms.car.application"
+            android:resource="@xml/automotive_app_desc" />
+
+        <meta-data
+            android:name="com.android.automotive"
+            android:resource="@xml/automotive_app_desc" />
+
+    </application>
+
+</manifest>

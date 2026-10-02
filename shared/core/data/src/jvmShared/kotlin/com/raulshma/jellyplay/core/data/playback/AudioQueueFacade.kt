@@ -1,10 +1,12 @@
 package com.raulshma.jellyplay.core.data.playback
 
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.MusicCatalogue
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.PlaylistItem
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.withContext
 
 /**
@@ -63,14 +65,20 @@ sealed interface AudioQueueOutcome {
  * `Dispatchers.Default` → `playQueue` violations in `DetailViewModel.playAlbum`
  * and `InstantMixActions.startInstantMix`.
  *
- * The facade holds no mutable state — every method is a straight pipeline over
- * the same [AudioPlaybackManager] singleton, so it adds no lifetime and cannot
- * reorder against other queue mutations.
+ * The facade holds no mutable queue state — every play/enqueue method is a
+ * straight pipeline over the same [AudioPlaybackManager] singleton, so it adds
+ * no lifetime and cannot reorder against other queue mutations. The one
+ * stateful adjunct is the lazily-created [AudioRadioController] (endless
+ * radio), which observes the queue through the manager's flows and appends
+ * via [enqueueTracks] — it introduces no new queue-mutation path.
  */
 interface AudioQueueFacade {
 
     /**
      * Plays [tracks] as a fresh queue starting at [startIndex].
+     *
+     * A fresh queue implicitly disarms any live endless radio (see
+     * [stopRadio]) — only [startRadio] leaves one armed.
      *
      * @param shuffled pre-shuffles the list (`List.shuffled()`) before mapping
      *   — the "pre-shuffled list" MusicHome shuffle semantics, NOT the
@@ -141,8 +149,31 @@ interface AudioQueueFacade {
     ): AudioQueueOutcome
 
     /**
-     * Plays playlist items as a fresh queue. `PlaylistItem` carries no image
-     * reference, so the existing imageless mapper (`imageUrl = null`) applies.
+     * Starts an endless radio: plays an instant mix seeded off [seedItemId]
+     * and keeps refilling the queue as it drains (the [AudioRadioController]
+     * refill rule) until [stopRadio]. Same outcome vocabulary as
+     * [startInstantMix]; the radio arms only on a [AudioQueueOutcome.Started].
+     */
+    suspend fun startRadio(
+        seedItemId: String,
+        albumFallback: String? = null,
+        guard: () -> Boolean = { true },
+    ): AudioQueueOutcome
+
+    /**
+     * Deactivates the radio (queue + playback keep playing as they are).
+     * Every fresh-queue play method disarms the radio implicitly too — a
+     * radio never survives into a queue it didn't seed.
+     */
+    fun stopRadio()
+
+    /** UI-visible radio status (active/seed/refilling) for now-playing surfaces. */
+    val radioState: StateFlow<RadioState>
+
+    /**
+     * Plays playlist items as a fresh queue (disarming any live radio, like
+     * [playTracks]). `PlaylistItem` carries no image reference, so the
+     * existing imageless mapper (`imageUrl = null`) applies.
      */
     suspend fun playPlaylist(items: List<PlaylistItem>, startIndex: Int = 0): AudioQueueOutcome
 
@@ -153,12 +184,65 @@ interface AudioQueueFacade {
 /**
  * Stateless adapter over the narrow [AudioQueueManager] queue interface (never
  * the 1642-line concrete manager), plus the mix fetch and image-URL provider.
+ * The mix fetch rides the [MusicCatalogue] family seam (the repository's
+ * getInstantMix read — the only repository member this facade touches), not
+ * the 30-plus-member union.
  */
 class DefaultAudioQueueFacade(
     private val queueManager: AudioQueueManager,
-    private val mediaRepository: MediaRepository,
+    private val musicCatalogue: MusicCatalogue,
     private val imageUrlProvider: ImageUrlProvider,
+    /** Application-lifetime scope backing the radio observer (singleton scope). */
+    private val radioScope: CoroutineScope,
 ) : AudioQueueFacade {
+
+    /**
+     * The radio state machine, created lazily — in practice on the first
+     * [radioState] collection (the queue sheet's radio chip is always
+     * composed), which arms the queue observer; a facade whose radio state is
+     * never collected registers no observer. The scope is the injected
+     * application scope — the observer only reads flows; the enqueue lambda
+     * owns the main-thread hop.
+     */
+    private val radio: AudioRadioController by lazy {
+        AudioRadioController(
+            scope = radioScope,
+            queueFlow = queueManager.queue,
+            currentIndexFlow = queueManager.currentIndex,
+            fetchMix = { seed -> withContext(Dispatchers.IO) { musicCatalogue.getInstantMix(seed, limit = 100) } },
+            enqueue = { tracks -> enqueueTracks(tracks) },
+        )
+    }
+
+    /**
+     * True only while a radio [radio.start] armed is still live, so
+     * [stopRadio] and the fresh-queue play paths can deactivate it without
+     * forcing the lazy [radio] (and its queue observer) into existence for
+     * radio-free sessions. Set wherever the controller is armed; cleared
+     * under every disarm path.
+     */
+    @Volatile
+    private var radioArmed = false
+
+    override val radioState: StateFlow<RadioState>
+        get() = radio.state
+
+    override suspend fun startRadio(
+        seedItemId: String,
+        albumFallback: String?,
+        guard: () -> Boolean,
+    ): AudioQueueOutcome {
+        val outcome = startInstantMix(seedItemId, albumFallback, guard)
+        if (outcome is AudioQueueOutcome.Started) {
+            radioArmed = true
+            radio.start(seedItemId)
+        }
+        return outcome
+    }
+
+    override fun stopRadio() {
+        stopRadioIfArmed()
+    }
 
     override suspend fun playTracks(
         tracks: List<MediaItem>,
@@ -214,7 +298,7 @@ class DefaultAudioQueueFacade(
         albumFallback: String?,
         guard: () -> Boolean,
     ): AudioQueueOutcome {
-        val mix = withContext(Dispatchers.IO) { mediaRepository.getInstantMix(seedItemId) }
+        val mix = withContext(Dispatchers.IO) { musicCatalogue.getInstantMix(seedItemId, limit = 100) }
         return mix.fold(
             onSuccess = { tracks ->
                 when {
@@ -229,6 +313,7 @@ class DefaultAudioQueueFacade(
 
     override suspend fun playPlaylist(items: List<PlaylistItem>, startIndex: Int): AudioQueueOutcome {
         if (items.isEmpty()) return AudioQueueOutcome.Empty
+        stopRadioIfArmed()
         val queueItems = withContext(Dispatchers.Default) { items.map { it.toAudioQueueItem() } }
         return withContext(Dispatchers.Main) {
             queueManager.playQueue(queueItems, startIndex)
@@ -238,6 +323,19 @@ class DefaultAudioQueueFacade(
 
     override suspend fun enqueuePlaylistItem(item: PlaylistItem) {
         withContext(Dispatchers.Main) { queueManager.addToQueue(item.toAudioQueueItem()) }
+    }
+
+    /**
+     * A fresh queue replaces whatever was playing, so a live radio's old seed
+     * must not keep refilling it ([startRadio] re-arms on its own Started).
+     * Runs before the queue mutation so an in-flight refill's pre-append
+     * claim check sees an inactive radio against the new queue.
+     */
+    private fun stopRadioIfArmed() {
+        if (radioArmed) {
+            radioArmed = false
+            radio.stop()
+        }
     }
 
     /**
@@ -251,6 +349,7 @@ class DefaultAudioQueueFacade(
         mapper: (T) -> AudioQueueItem,
     ): AudioQueueOutcome {
         if (source.isEmpty()) return AudioQueueOutcome.Empty
+        stopRadioIfArmed()
         val items = withContext(Dispatchers.Default) { source.map(mapper) }
         return withContext(Dispatchers.Main) {
             queueManager.playQueue(items, startIndex)

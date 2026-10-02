@@ -2,7 +2,7 @@ package com.raulshma.jellyplay.widget
 
 import android.content.Context
 import android.content.Intent
-import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore
 import io.mockk.every
 import io.mockk.mockk
@@ -33,9 +33,9 @@ class ContinueWatchingBroadcasterImplTest {
         // Relaxed fakes: an empty continue-watching snapshot keeps the poster
         // prewarm a no-op, so the test pins only the broadcast contract.
         val widgetDataStore = mockk<WidgetDataStore>(relaxed = true)
-        val playbackRepository = mockk<PlaybackRepository>(relaxed = true)
+        val imageUrlProvider = mockk<ImageUrlProvider>(relaxed = true)
 
-        ContinueWatchingBroadcasterImpl(context, widgetDataStore, playbackRepository)
+        ContinueWatchingBroadcasterImpl(context, widgetDataStore, imageUrlProvider)
             .refreshContinueWatching()
 
         val intent = slot<Intent>()

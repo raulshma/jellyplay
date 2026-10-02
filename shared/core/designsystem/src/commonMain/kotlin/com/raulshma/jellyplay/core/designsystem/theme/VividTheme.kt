@@ -34,20 +34,9 @@ fun getVividColorScheme(accent: String, isDark: Boolean): ColorScheme {
 
 /** Vivid typography — geometric Outfit with tight, punchy display tracking. */
 val VividTypography: Typography
-    @Composable get() = Typography(
-    displayLarge = JellyPlayTypography.displayLarge.copy(fontFamily = vividFontFamily, letterSpacing = (-0.5).sp),
-    displayMedium = JellyPlayTypography.displayMedium.copy(fontFamily = vividFontFamily, letterSpacing = (-0.5).sp),
-    displaySmall = JellyPlayTypography.displaySmall.copy(fontFamily = vividFontFamily),
-    headlineLarge = JellyPlayTypography.headlineLarge.copy(fontFamily = vividFontFamily),
-    headlineMedium = JellyPlayTypography.headlineMedium.copy(fontFamily = vividFontFamily),
-    headlineSmall = JellyPlayTypography.headlineSmall.copy(fontFamily = vividFontFamily),
-    titleLarge = JellyPlayTypography.titleLarge.copy(fontFamily = vividFontFamily),
-    titleMedium = JellyPlayTypography.titleMedium.copy(fontFamily = vividFontFamily),
-    titleSmall = JellyPlayTypography.titleSmall.copy(fontFamily = vividFontFamily),
-    bodyLarge = JellyPlayTypography.bodyLarge.copy(fontFamily = vividFontFamily),
-    bodyMedium = JellyPlayTypography.bodyMedium.copy(fontFamily = vividFontFamily),
-    bodySmall = JellyPlayTypography.bodySmall.copy(fontFamily = vividFontFamily),
-    labelLarge = JellyPlayTypography.labelLarge.copy(fontFamily = vividFontFamily),
-    labelMedium = JellyPlayTypography.labelMedium.copy(fontFamily = vividFontFamily),
-    labelSmall = JellyPlayTypography.labelSmall.copy(fontFamily = vividFontFamily),
-)
+    @Composable get() = variantTypography(JellyPlayTypography, vividFontFamily) {
+        copy(
+            displayLarge = displayLarge.copy(letterSpacing = (-0.5).sp),
+            displayMedium = displayMedium.copy(letterSpacing = (-0.5).sp),
+        )
+    }

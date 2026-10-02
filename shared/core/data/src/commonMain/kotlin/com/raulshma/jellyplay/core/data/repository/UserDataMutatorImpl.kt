@@ -19,15 +19,17 @@ import kotlinx.coroutines.sync.withLock
 // zero body changes. Its Koin single stays in dataJvmModule.
 
 /**
- * Production adapter over [MediaRepository] (the write — including
+ * Production adapter over [UserDataWriteOperations] (the write — including
  * PlayedStateSync fan-out and repository self-invalidation) and
- * [MediaDetailProvider] (the active-session rewrite). Both are
- * `Lazy` for the same reason [PlayedStateSyncImpl] takes them: the
- * provider and repository reference each other's graphs, and deferring
- * construction keeps this module out of any DI cycle.
+ * [MediaDetailProvider] (the active-session rewrite). The repository dep is
+ * the user-data-write family seam, not the [MediaRepository] union, since
+ * this module is the clean sole consumer of that family (the family-seam
+ * flip). Both are `Lazy` for the same reason [PlayedStateSyncImpl] takes
+ * them: the provider and repository reference each other's graphs, and
+ * deferring construction keeps this module out of any DI cycle.
  */
 class UserDataMutatorImpl(
-    private val mediaRepository: Lazy<MediaRepository>,
+    private val userDataWrites: Lazy<UserDataWriteOperations>,
     private val mediaDetailProvider: Lazy<MediaDetailProvider>,
 ) : UserDataMutator {
 
@@ -57,7 +59,7 @@ class UserDataMutatorImpl(
         containers: List<UserDataContainer>,
         seriesId: String?,
     ): Result<AppliedMutation> = userDataMutationMutex.withLock {
-        mediaRepository.value.toggleFavorite(itemId)
+        userDataWrites.value.toggleFavorite(itemId)
             .map { target -> AppliedMutation(itemId = itemId, favorite = target) }
             .onSuccess { applied -> applyPostSuccessRefresh(itemId, applied, mode, containers, seriesId) }
     }
@@ -84,13 +86,13 @@ class UserDataMutatorImpl(
 
     /** Repository call for the played direction, shared by [setPlayed] and [setSeasonPlayed]. */
     private suspend fun writePlayed(itemId: String, played: Boolean): Result<Unit> =
-        if (played) mediaRepository.value.markPlayed(itemId)
-        else mediaRepository.value.markUnplayed(itemId)
+        if (played) userDataWrites.value.markPlayed(itemId)
+        else userDataWrites.value.markUnplayed(itemId)
 
     /** Season variant of [writePlayed] — the server recurses into the season's children. */
     private suspend fun writeSeasonPlayed(seriesId: String, seasonId: String, played: Boolean): Result<Unit> =
-        if (played) mediaRepository.value.markSeasonPlayed(seasonId, seriesId)
-        else mediaRepository.value.markSeasonUnplayed(seasonId, seriesId)
+        if (played) userDataWrites.value.markSeasonPlayed(seasonId, seriesId)
+        else userDataWrites.value.markSeasonUnplayed(seasonId, seriesId)
 
     /**
      * Post-success refresh pass, in the order callers used to hand-assemble:

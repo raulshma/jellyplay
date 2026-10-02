@@ -40,8 +40,14 @@ class SyncPlayPlaybackCore constructor(
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
+    /**
+     * The last APPLIED group command (set by [applyCommand], cleared by
+     * [scheduleStop]/[reset]). Read externally only through the manager's
+     * narrow intents ([SyncPlayManager.lastGroupCommandWasUnpause],
+     * [SyncPlayManager.queuedItemStartPositionTicks]).
+     */
     @Volatile
-    var lastCommand: SyncPlayPlaybackCommand? = null
+    internal var lastCommand: SyncPlayPlaybackCommand? = null
         private set
 
     @Volatile
@@ -86,7 +92,7 @@ class SyncPlayPlaybackCore constructor(
     private var lastKnownEnginePlaying = false
 
     private val _ignoreWait = MutableStateFlow(false)
-    val ignoreWait: StateFlow<Boolean> = _ignoreWait.asStateFlow()
+    internal val ignoreWait: StateFlow<Boolean> = _ignoreWait.asStateFlow()
 
     @Volatile
     private var callbacks: PlaybackCoreCallbacks? = null
@@ -94,15 +100,34 @@ class SyncPlayPlaybackCore constructor(
     @Volatile
     private var lastScheduledCommand: SyncPlayPlaybackCommand? = null
 
-    fun setCallbacks(cb: PlaybackCoreCallbacks) {
+    /**
+     * Registers [cb] as THE live session callbacks, replacing any previous
+     * registration. This replaces the former global `setCallbacks` /
+     * `clearCallbacks` pair: attachment is replace-by-construction, so a
+     * caller cannot leave a stale reference behind the new one (the bridge's
+     * former defensive clear-before-set was defusing exactly that hazard).
+     * Reachable from outside the core only through
+     * [SyncPlayManager.attachSession].
+     */
+    internal fun attachCallbacks(cb: PlaybackCoreCallbacks) {
         callbacks = cb
     }
 
-    fun clearCallbacks() {
+    /**
+     * Drops the callbacks registered by [attachCallbacks] so the process-wide
+     * core stops retaining the departed player session. Reached externally
+     * only through [SyncPlayManager.detachSession].
+     */
+    internal fun detachCallbacks() {
         callbacks = null
     }
 
-    fun setCurrentPlaylistItemId(id: String?) {
+    /**
+     * Syncs the core's notion of which playlist item local Ready/Buffering
+     * reports refer to (the id stamped into every report). Reached externally
+     * only through [SyncPlayManager.onQueueItemChanged].
+     */
+    internal fun setCurrentPlaylistItemId(id: String?) {
         currentPlaylistItemId = id
     }
 
@@ -117,16 +142,24 @@ class SyncPlayPlaybackCore constructor(
      * `setPendingItemLoad(Boolean)` flag setter; making it arm-only means no
      * external caller can fight the READY-clear.
      */
-    fun beginPendingItemLoad() {
+    internal fun beginPendingItemLoad() {
         pendingItemLoad = true
     }
 
-    fun setIgnoreWait(ignore: Boolean) {
+    /**
+     * Flips the local ignore-wait mirror AND fires the server command
+     * (fire-and-forget on the core's own scope). Reached externally only
+     * through [SyncPlayManager.setIgnoreWait] — the player path. The syncplay
+     * feature's awaited transport variant ([SyncPlayManager.setGroupIgnoreWait])
+     * sends the command WITHOUT touching this local mirror; that divergence
+     * is declared behavior, not an oversight.
+     */
+    internal fun setIgnoreWait(ignore: Boolean) {
         _ignoreWait.value = ignore
         scope.launch { controller.setIgnoreWait(ignore) }
     }
 
-    fun applyCommand(cmd: SyncPlayPlaybackCommand) {
+    internal fun applyCommand(cmd: SyncPlayPlaybackCommand) {
         scope.launch {
             if (isDuplicate(cmd)) {
                 Log.d(TAG, "Duplicate command detected: ${cmd.command}")
@@ -200,7 +233,7 @@ class SyncPlayPlaybackCore constructor(
      * Reaches the engine through [PlaybackCoreCallbacks] — a vanished engine
      * degrades to no-ops instead of the former bridge-side null checks.
      */
-    fun reconcileToServerPosition(serverTicks: Long, whenMs: Long, lane: ReconcileLane, groupIsPlaying: Boolean) {
+    internal fun reconcileToServerPosition(serverTicks: Long, whenMs: Long, lane: ReconcileLane, groupIsPlaying: Boolean) {
         scope.launch {
             val cb = callbacks ?: return@launch
             val estimatedMs = safePositionMs(estimateCurrentTicks(serverTicks, whenMs), cb.durationMs())
@@ -357,7 +390,7 @@ class SyncPlayPlaybackCore constructor(
      * avoidable Ready report is another Unpause echo the local player must
      * absorb (and re-seek for) — the second half of the historic echo loop.
      */
-    fun onPlaybackStateChanged(state: Int) {
+    internal fun onPlaybackStateChanged(state: Int) {
         scope.launch {
             val cb = callbacks ?: return@launch
             val enginePlaying = try {
@@ -442,7 +475,7 @@ class SyncPlayPlaybackCore constructor(
         }
     }
 
-    fun performSyncCorrection() {
+    internal fun performSyncCorrection() {
         if (!syncEnabled) return
         if (!isSyncCorrectionWarranted()) return
 
@@ -543,7 +576,7 @@ class SyncPlayPlaybackCore constructor(
         }
     }
 
-    fun reset() {
+    internal fun reset() {
         scheduledCommandJob?.cancel()
         enableSyncJob?.cancel()
         speedToSyncJob?.cancel()
@@ -555,7 +588,7 @@ class SyncPlayPlaybackCore constructor(
         pendingItemLoad = false
     }
 
-    fun onGroupLeft() {
+    internal fun onGroupLeft() {
         reset()
     }
 

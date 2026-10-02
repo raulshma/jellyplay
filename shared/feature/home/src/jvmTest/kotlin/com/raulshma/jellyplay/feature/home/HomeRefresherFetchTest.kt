@@ -25,7 +25,6 @@ import com.raulshma.jellyplay.core.model.descriptor
 import com.raulshma.jellyplay.core.model.seerr.DiscoverSectionType
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
-import com.raulshma.jellyplay.core.model.seerr.SeerrSearchResponse
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -133,30 +132,41 @@ class HomeRefresherFetchTest {
     ): HomeRefresher {
         val scope = CoroutineScope(SupervisorJob() + StandardTestDispatcher(testScheduler))
         refresherScope = scope
+        // One state store shared by the refresher and its side-fetch
+        // collaborator (the factory seam, mirrored here).
+        val state = MutableStateFlow(HomeRefreshState())
         return HomeRefresher(
             scope = scope,
             clock = fakeTimeSource,
             mediaRepository = mediaRepository,
-            seerrRepository = seerrRepository,
-            arrRepository = arrRepository,
             orderHomeSections = OrderHomeSectionsUseCase(),
             widgetDataStore = widgetDataStore,
             continueWatchingBroadcaster = continueWatchingBroadcaster,
             tvWatchNextScheduler = tvWatchNextScheduler,
             librarySyncHook = librarySyncHook,
             offlineModeManager = offlineModeManager,
+            stateStore = state,
+            discoverSources = HomeDiscoverSources(
+                clock = fakeTimeSource,
+                seerrRepository = seerrRepository,
+                arrRepository = arrRepository,
+                offlineModeManager = offlineModeManager,
+                state = state,
+            ),
             awaitOutboxDrained = { true },
-            sectionPrefsProvider = {
-                HomeSectionPrefs(
-                    query = HomeSectionQuery(discoverRows = discoverRows),
-                    homeSectionOrder = HomeSectionType.CONFIGURABLE,
-                    mergeContinueWatchingAndNextUp = false,
-                )
-            },
-            seerrPreferencesProvider = { seerrPreferences },
-            discoverEnabledProvider = { false },
-            directArrEnabledProvider = { false },
-            androidTvWatchNextEnabledProvider = { true },
+            fetchInputs = HomeFetchInputs(
+                sectionPrefs = {
+                    HomeSectionPrefs(
+                        query = HomeSectionQuery(discoverRows = discoverRows),
+                        homeSectionOrder = HomeSectionType.CONFIGURABLE,
+                        mergeContinueWatchingAndNextUp = false,
+                    )
+                },
+                seerrPreferences = { seerrPreferences },
+                discoverEnabled = { false },
+                directArrEnabled = { false },
+                androidTvWatchNextEnabled = { true },
+            ),
         ).also { refresher = it }
     }
 
@@ -311,7 +321,7 @@ class HomeRefresherFetchTest {
         )
         val trending = listOf(seerrItem(1, "Trending Movie"))
         coEvery { seerrRepository.getTrending(any()) } returns
-            Result.success(SeerrSearchResponse(results = trending))
+            Result.success(trending)
         val refresher = buildRefresher(seerrPreferences = prefs)
 
         refresher.request(RefreshTrigger.DiscoverEnabled)

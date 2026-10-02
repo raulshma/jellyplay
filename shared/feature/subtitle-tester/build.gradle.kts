@@ -1,5 +1,3 @@
-import org.gradle.api.plugins.ExtensionAware
-
 plugins {
     id("jellyplay.kmp.library.compose")
 }
@@ -40,23 +38,11 @@ kotlin {
             // SubtitleTesterUiState.engineCapabilities (moved here from
             // feature:player:video with this conveyor feature).
             implementation(project(":shared:core:player-contract"))
-            // JetBrains CMP distribution (see catalog note): Android targets
-            // redirect to the androidx artifacts.
-            implementation(libs.jb.compose.runtime)
-            implementation(libs.jb.compose.ui)
-            implementation(libs.jb.compose.foundation)
-            implementation(libs.jb.compose.material3)
-            // Compose-resources runtime (stringResource/StringResource API).
-            implementation(compose.components.resources)
-            // Nav3 ships KMP variants from google maven directly — no mirror.
             // (The legacy build's lifecycle-viewmodel-navigation3 and
             // hilt-navigation-compose edges were dropped: no file imports
             // them — navigation entries use entry<Route> from the nav3
             // runtime/ui artifacts only, and the screen's ViewModel is
             // Koin-owned via koinViewModel.)
-            implementation(libs.navigation3.runtime)
-            implementation(libs.navigation3.ui)
-            implementation(libs.lifecycle.runtime.compose)
         }
         // This feature is androidMain-heavy by design (admin WebView-quartet
         // precedent): the preview engines, surface hosts, SAF font picker and
@@ -74,22 +60,13 @@ kotlin {
             // The jvm target NEVER sees this edge.
             implementation(project(":shared:feature:player-video"))
             // PlayerEngineFactory's Context/media3 ctor args and the ViewModel
-            // base class.
-            implementation(libs.lifecycle.viewmodel)
-            // Koin owns the tester ViewModel (V3 feature conveyor: one
-            // framework per type — the Hilt annotations were stripped at the
-            // move).
-            implementation(libs.koin.core)
-            implementation(libs.koin.compose)
-            implementation(libs.koin.compose.viewmodel)
+            // base class — lifecycle-viewmodel + the koin trio now ride the
+            // convention plugin's universal commonMain bundle.
         }
     }
 }
 
-// `compose.resources` is a nested extension with no generated Kotlin-DSL
-// accessor; configure it explicitly. Same package as the legacy
-// feature:subtitle-tester so migrated files keep their
-// `com.raulshma.jellyplay.feature.subtitle.tester` imports; generated
-// accessors land in `...feature.subtitle.tester.generated.resources`.
-val composeResources = (compose as ExtensionAware).extensions.getByName("resources") as org.jetbrains.compose.resources.ResourcesExtension
-composeResources.packageOfResClass = "com.raulshma.jellyplay.feature.subtitle.tester.generated.resources"
+// The compose-resources `packageOfResClass`
+// (`...feature.subtitle.tester.generated.resources`, same as the legacy value)
+// is a path-derived default from the convention plugin now — see
+// KmpLibraryComposePlugin.

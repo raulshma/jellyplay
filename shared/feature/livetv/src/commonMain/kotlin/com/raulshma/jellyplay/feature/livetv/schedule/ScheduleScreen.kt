@@ -20,7 +20,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import com.raulshma.jellyplay.core.ui.components.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -45,14 +44,12 @@ import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
 import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
 import com.raulshma.jellyplay.core.ui.components.ConfirmTone
-import com.raulshma.jellyplay.core.ui.components.ErrorScreen
-import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.SectionHeader
-import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import com.raulshma.jellyplay.feature.livetv.components.LiveTvTabScaffold
 import com.raulshma.jellyplay.feature.livetv.formatLiveTvTime
 import com.raulshma.jellyplay.feature.livetv.generated.resources.Res
 import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_action_close
@@ -83,62 +80,57 @@ fun ScheduleScreen(
         tag = "schedule_init",
     )
 
-    when {
-        uiState.isLoading && uiState.activeRecordings.isEmpty() && uiState.upcomingGroups.isEmpty() -> {
-            ScreenLoadingState(modifier = Modifier.fillMaxSize())
-        }
-        uiState.error != null && uiState.activeRecordings.isEmpty() && uiState.upcomingGroups.isEmpty() -> {
-            ErrorScreen(message = uiState.error!!, onRetry = { viewModel.load() })
-        }
-        uiState.activeRecordings.isEmpty() && uiState.upcomingGroups.isEmpty() -> {
-            ScreenEmptyState(
-                icon = Tabler.Outline.CalendarClock,
-                title = stringResource(Res.string.livetv_no_scheduled_recordings),
-            )
-        }
-        else -> {
-            PullToRefreshBox(isRefreshing = uiState.isLoading, onRefresh = { viewModel.load() }) {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .focusGroup()
-                        .tvFocusRestorer()
-                        .focusRequester(focusRequester),
-                    contentPadding = PaddingValues(top = 8.dp, bottom = bottomPad),
-                ) {
-                    if (uiState.activeRecordings.isNotEmpty()) {
-                        item {
-                            SectionHeader(stringResource(Res.string.livetv_section_active_recordings), contentPad)
-                        }
-                        items(items = uiState.activeRecordings, key = { "active-${it.id}" }, contentType = { "recording" }) { rec ->
-                            TimerRow(
-                                title = rec.name,
-                                subtitle = rec.channelName,
-                                meta = stringResource(Res.string.livetv_recording_now),
-                                contentPad = contentPad,
-                                onClick = { },
-                            )
-                        }
-                        item { Spacer(Modifier.height(16.dp)) }
+    // The shared tab ladder; this tab's real guard variant is the two-list
+    // shape — "empty" means BOTH sections are empty (passed as the compound
+    // [LiveTvTabScaffold.isEmpty] fact).
+    LiveTvTabScaffold(
+        isLoading = uiState.isLoading,
+        error = uiState.error,
+        isEmpty = uiState.activeRecordings.isEmpty() && uiState.upcomingGroups.isEmpty(),
+        emptyIcon = Tabler.Outline.CalendarClock,
+        emptyTitleRes = Res.string.livetv_no_scheduled_recordings,
+        isRefreshing = uiState.isLoading,
+        onRefresh = { viewModel.load() },
+    ) {
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .focusGroup()
+                .tvFocusRestorer()
+                .focusRequester(focusRequester),
+            contentPadding = PaddingValues(top = 8.dp, bottom = bottomPad),
+        ) {
+            if (uiState.activeRecordings.isNotEmpty()) {
+                item {
+                    SectionHeader(stringResource(Res.string.livetv_section_active_recordings), contentPad)
+                }
+                items(items = uiState.activeRecordings, key = { "active-${it.id}" }, contentType = { "recording" }) { rec ->
+                    TimerRow(
+                        title = rec.name,
+                        subtitle = rec.channelName,
+                        meta = stringResource(Res.string.livetv_recording_now),
+                        contentPad = contentPad,
+                        onClick = { },
+                    )
+                }
+                item { Spacer(Modifier.height(16.dp)) }
+            }
+            if (uiState.upcomingGroups.isNotEmpty()) {
+                item {
+                    SectionHeader(stringResource(Res.string.livetv_section_upcoming_recordings), contentPad)
+                }
+                uiState.upcomingGroups.forEach { group ->
+                    item(key = "header-${group.dateLabel}") {
+                        DateLabel(group.dateLabel, contentPad)
                     }
-                    if (uiState.upcomingGroups.isNotEmpty()) {
-                        item {
-                            SectionHeader(stringResource(Res.string.livetv_section_upcoming_recordings), contentPad)
-                        }
-                        uiState.upcomingGroups.forEach { group ->
-                            item(key = "header-${group.dateLabel}") {
-                                DateLabel(group.dateLabel, contentPad)
-                            }
-                            items(items = group.timers, key = { "timer-${it.id}" }, contentType = { "timer" }) { timer ->
-                                TimerRow(
-                                    title = timer.programName,
-                                    subtitle = timer.channelName,
-                                    meta = formatLiveTvTime(timer.startDate).orEmpty(),
-                                    contentPad = contentPad,
-                                    onClick = { viewModel.showTimerDetail(timer) },
-                                )
-                            }
-                        }
+                    items(items = group.timers, key = { "timer-${it.id}" }, contentType = { "timer" }) { timer ->
+                        TimerRow(
+                            title = timer.programName,
+                            subtitle = timer.channelName,
+                            meta = formatLiveTvTime(timer.startDate).orEmpty(),
+                            contentPad = contentPad,
+                            onClick = { viewModel.showTimerDetail(timer) },
+                        )
                     }
                 }
             }

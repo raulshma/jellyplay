@@ -46,6 +46,12 @@ class JellyPlayPlaybackService : MediaLibraryService(), PlaybackSessionManager.L
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? {
+        // Android Auto / Automotive cold-connect: the head unit binds and asks
+        // for a session before any phone-side play has built one (the player
+        // is created lazily on first play). Ensure it exists — an idle player
+        // with no media items, no autoplay — so the car gets a browsable
+        // library instead of a null session ("app unavailable" on the screen).
+        audioPlaybackManager.ensureAudioSession()
         return sessionManager.currentSession as? MediaLibrarySession
     }
 

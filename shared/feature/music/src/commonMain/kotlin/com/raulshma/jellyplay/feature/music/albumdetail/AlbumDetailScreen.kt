@@ -51,7 +51,7 @@ import com.raulshma.jellyplay.feature.music.generated.resources.Res
 import com.raulshma.jellyplay.core.ui.generated.resources.Res as CoreUiRes
 import com.raulshma.jellyplay.core.ui.generated.resources.core_cancel
 import com.raulshma.jellyplay.core.ui.generated.resources.core_delete
-import com.raulshma.jellyplay.feature.music.asText
+import com.raulshma.jellyplay.core.ui.message.asText
 import com.raulshma.jellyplay.feature.music.generated.resources.music_add_to_queue
 import com.raulshma.jellyplay.feature.music.generated.resources.music_delete_album_downloads_confirm_message
 import com.raulshma.jellyplay.feature.music.generated.resources.music_delete_album_downloads_confirm_title

@@ -1,5 +1,3 @@
-import org.gradle.api.plugins.ExtensionAware
-
 plugins {
     id("jellyplay.kmp.library.compose")
 }
@@ -33,34 +31,10 @@ kotlin {
             // SeerrDetailUtils' purified date formatting: the java.time
             // "yyyy-MM-dd" parse moved onto kotlinx-datetime's LocalDate.parse.
             implementation(libs.kotlinx.datetime)
-            // JetBrains CMP distribution (see catalog note): Android targets
-            // redirect to the androidx artifacts.
-            implementation(libs.jb.compose.runtime)
-            implementation(libs.jb.compose.ui)
-            implementation(libs.jb.compose.foundation)
-            implementation(libs.jb.compose.animation)
-            implementation(libs.jb.compose.material3)
-            // Compose-resources runtime (stringResource/StringResource API +
-            // the suspend getString resolver the DetailStrings seam uses).
-            implementation(compose.components.resources)
-            implementation(libs.tabler.icons.outline)
-            implementation(libs.tabler.icons.filled)
-            // Nav3 ships KMP variants from google maven directly — no mirror.
             // The navigation entry uses entry<Route> from the nav3 runtime/ui
             // artifacts only (syncplay/arrqueue precedent: the legacy
             // lifecycle-viewmodel-navigation3 edge is gone).
-            implementation(libs.navigation3.runtime)
-            implementation(libs.navigation3.ui)
-            implementation(libs.lifecycle.viewmodel)
-            // collectAsStateWithLifecycle in the screens.
-            implementation(libs.lifecycle.runtime.compose)
             implementation(libs.coil.compose)
-            // Koin owns every details ViewModel (V3/ feature conveyor:
-            // one framework per type — the Hilt annotations were stripped at
-            // the move).
-            implementation(libs.koin.core)
-            implementation(libs.koin.compose)
-            implementation(libs.koin.compose.viewmodel)
         }
         // (kotlin("test") comes from the convention plugin.)
         getByName("jvmTest").dependencies {
@@ -82,10 +56,7 @@ kotlin {
     }
 }
 
-// `compose.resources` is a nested extension with no generated Kotlin-DSL
-// accessor; configure it explicitly. Same package as the legacy
-// feature:details so migrated files keep their
-// `com.raulshma.jellyplay.feature.details` imports; generated accessors land
-// in `...feature.details.generated.resources`.
-val composeResources = (compose as ExtensionAware).extensions.getByName("resources") as org.jetbrains.compose.resources.ResourcesExtension
-composeResources.packageOfResClass = "com.raulshma.jellyplay.feature.details.generated.resources"
+// The compose-resources `packageOfResClass`
+// (`...feature.details.generated.resources`, same as the legacy value) is a
+// path-derived default from the convention plugin now — see
+// KmpLibraryComposePlugin.

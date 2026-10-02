@@ -103,9 +103,11 @@ fun createPreferenceSliceGraph(
     val playbackStore = PlaybackStore(dataStore, scope)
     val appearanceStore = AppearanceStore(dataStore, scope)
     val videoPlayerStore = VideoPlayerStore(dataStore, scope)
-    val downloadsStore = DownloadsStore(dataStore, scope)
-    val engineStore = PlayerEngineStore(dataStore, scope)
     val identityStore = ServerIdentityStore(dataStore, scope)
+    // The downloads store resolves the per-user allow-list namespace through the
+    // identity store, so it is constructed after it (HomeDiscoveryStore order).
+    val downloadsStore = DownloadsStore(dataStore, scope, identityStore)
+    val engineStore = PlayerEngineStore(dataStore, scope)
     val homeDiscoveryStore = HomeDiscoveryStore(dataStore, scope, identityStore)
     val audioStore = AudioStore(dataStore, scope)
     val audioEffectsStore = AudioEffectsStore(dataStore, scope)

@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.arrqueue.di
 
 import com.raulshma.jellyplay.feature.arrqueue.ArrQueueViewModel
+import com.raulshma.jellyplay.feature.arrqueue.ReleaseSearchViewModel
 import org.koin.compose.viewmodel.dsl.viewModel
 import org.koin.core.module.Module
 import org.koin.dsl.module
@@ -13,8 +14,10 @@ import org.koin.dsl.module
  * before this feature moved (no Hilt interop at all, calendar/requests class):
  *  - ArrRepository resolves from dataJvmModule (the legacy ArrModule @Provides
  *    is the reverse bridge, Hilt→Koin);
- *  - ExperimentalStore resolves from the C4 shared-datastore graph
- *    (datastoreCommonModule; SharedStoreModule bridges legacy injectors).
+ *  - ExperimentalFeatureGate resolves from the C4 shared-datastore graph
+ *    (datastoreCommonModule; SharedStoreModule bridges legacy injectors) — the
+ *    shared eagerly-shared Direct-*arr gate, replacing this VM's hand-rolled
+ *    `stateIn(Eagerly)` copy.
  * The Context + UserMessageBus ctor params were dropped at the move — their
  * only use was resolving ack/fallback strings, now carried unresolved through
  * the ArrQueueMessage screen-forward seam. The whole dep graph resolves on
@@ -26,7 +29,14 @@ val arrqueueModule: Module = module {
     viewModel {
         ArrQueueViewModel(
             arrRepository = get(),
-            experimentalStore = get(),
+            experimentalGate = get(),
+        )
+    }
+    // The release sheet's driver over the ArrReleaseOperations seam (the
+    // dataSeerrArrModule binding over ArrRepositoryImpl).
+    viewModel {
+        ReleaseSearchViewModel(
+            arrReleaseOperations = get(),
         )
     }
 }

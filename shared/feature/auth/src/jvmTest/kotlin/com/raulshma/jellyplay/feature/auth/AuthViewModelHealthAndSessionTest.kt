@@ -31,6 +31,7 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import com.raulshma.jellyplay.core.ui.message.UiMessage
 
 /**
  * Gaps in [AuthViewModel] coverage NOT pinned by [AuthViewModelTest] (which
@@ -272,7 +273,7 @@ class AuthViewModelHealthAndSessionTest {
 
         val state = viewModel.quickConnectState.value
         assertEquals(
-            AuthMessage.Resource(Res.string.auth_qc_error_initiate),
+            UiMessage.Resource(Res.string.auth_qc_error_initiate),
             (state as QuickConnectUiState.Error).message,
         )
     }
@@ -290,7 +291,7 @@ class AuthViewModelHealthAndSessionTest {
 
         val state = viewModel.quickConnectState.value
         assertEquals(
-            AuthMessage.Resource(Res.string.auth_qc_error_polling),
+            UiMessage.Resource(Res.string.auth_qc_error_polling),
             (state as QuickConnectUiState.Error).message,
         )
     }
@@ -312,7 +313,7 @@ class AuthViewModelHealthAndSessionTest {
 
         val state = viewModel.quickConnectState.value
         assertEquals(
-            AuthMessage.Resource(Res.string.auth_qc_error_auth),
+            UiMessage.Resource(Res.string.auth_qc_error_auth),
             (state as QuickConnectUiState.Error).message,
         )
         coVerify(exactly = 1) { authRepository.loginWithQuickConnect("http://server", "sec-1") }

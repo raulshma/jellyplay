@@ -17,8 +17,8 @@ import com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.feature.music.collection.MusicCollectionKind
 import com.raulshma.jellyplay.feature.music.components.GenreChip
-import com.raulshma.jellyplay.feature.music.components.SimpleCollectionGrid
-import com.raulshma.jellyplay.feature.music.components.rememberSimpleCollectionStatus
+import com.raulshma.jellyplay.core.ui.components.SimpleCollectionGrid
+import com.raulshma.jellyplay.core.ui.components.rememberSimpleCollectionStatus
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding

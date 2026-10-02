@@ -4,8 +4,9 @@ import android.content.Context
 import androidx.work.ListenableWorker.Result as WorkResult
 import androidx.work.WorkerParameters
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
+import com.raulshma.jellyplay.core.data.repository.MediaCollectionReads
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
-import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore
 import com.raulshma.jellyplay.core.model.LibraryRecommendationsSource
 import com.raulshma.jellyplay.core.model.LibraryWidgetItem
@@ -39,7 +40,7 @@ import org.robolectric.annotation.Config
  *  - an empty fetch keeps the existing snapshot too.
  *  - the FAVORITES source maps favorites (capped at MAX_ITEMS) into
  *    [LibraryWidgetItem]s, preferring the series id for poster lookup and
- *    blanking out poster urls that the repository could not build.
+ *    blanking out poster urls that the provider could not build.
  *  - the SIMILAR_TO_RECENT source seeds from the first continue-watching
  *    item and only falls back when the similar fetch yields nothing usable.
  *  - a thrown error is retried, except permanent (401/403/404) failures.
@@ -52,7 +53,8 @@ class LibraryRecommendationsWidgetWorkerTest {
     private val workerParameters: WorkerParameters = mockk(relaxed = true)
     private val widgetDataStore: WidgetDataStore = mockk(relaxed = true)
     private val mediaRepository: MediaRepository = mockk(relaxed = true)
-    private val playbackRepository: PlaybackRepository = mockk(relaxed = true)
+    private val mediaCollectionReads: MediaCollectionReads = mockk(relaxed = true)
+    private val imageUrlProvider: ImageUrlProvider = mockk(relaxed = true)
     private val authRepository: AuthRepository = mockk(relaxed = true)
 
     private val currentServer = MutableStateFlow<ServerInfo?>(null)
@@ -74,7 +76,8 @@ class LibraryRecommendationsWidgetWorkerTest {
         params = workerParameters,
         widgetDataStore = widgetDataStore,
         mediaRepository = mediaRepository,
-        playbackRepository = playbackRepository,
+        mediaCollectionReads = mediaCollectionReads,
+        imageUrlProvider = imageUrlProvider,
         authRepository = authRepository,
     )
 
@@ -117,7 +120,7 @@ class LibraryRecommendationsWidgetWorkerTest {
         widgetConfig.value = WidgetConfig(librarySource = LibraryRecommendationsSource.FAVORITES)
         val favorites = (1..11).map { mediaItem("fav-$it", isFavorite = true) }
         coEvery {
-            mediaRepository.getFavorites(any(), any(), any())
+            mediaCollectionReads.getFavorites(any(), any(), any())
         } returns Result.success(
             SearchResult(items = favorites, totalRecordCount = favorites.size, startIndex = 0),
         )
@@ -137,7 +140,7 @@ class LibraryRecommendationsWidgetWorkerTest {
         currentServer.value = server()
         widgetConfig.value = WidgetConfig(librarySource = LibraryRecommendationsSource.FAVORITES)
         coEvery {
-            mediaRepository.getFavorites(any(), any(), any())
+            mediaCollectionReads.getFavorites(any(), any(), any())
         } returns Result.success(
             SearchResult(
                 items = listOf(
@@ -148,7 +151,7 @@ class LibraryRecommendationsWidgetWorkerTest {
                 startIndex = 0,
             ),
         )
-        every { playbackRepository.getImageUrl(eq("series-9"), any(), any()) } returns "https://img/series-9"
+        every { imageUrlProvider.getImageUrl(eq("series-9"), any()) } returns "https://img/series-9"
         // Blank default for "movie-1" (relaxed mock) — must yield a null poster.
 
         createWorker().doWork()
@@ -156,8 +159,8 @@ class LibraryRecommendationsWidgetWorkerTest {
         val persisted = verifyPersistedOnce()
         assertEquals("https://img/series-9", persisted[0].posterUrl)
         assertNull(persisted[1].posterUrl)
-        coVerify(exactly = 1) { playbackRepository.getImageUrl(eq("series-9"), any(), any()) }
-        coVerify(exactly = 1) { playbackRepository.getImageUrl(eq("movie-1"), any(), any()) }
+        coVerify(exactly = 1) { imageUrlProvider.getImageUrl(eq("series-9"), any()) }
+        coVerify(exactly = 1) { imageUrlProvider.getImageUrl(eq("movie-1"), any()) }
     }
 
     @Test
@@ -165,7 +168,7 @@ class LibraryRecommendationsWidgetWorkerTest {
         currentServer.value = server()
         widgetConfig.value = WidgetConfig(librarySource = LibraryRecommendationsSource.FAVORITES)
         coEvery {
-            mediaRepository.getFavorites(any(), any(), any())
+            mediaCollectionReads.getFavorites(any(), any(), any())
         } returns Result.success(SearchResult(items = emptyList(), totalRecordCount = 0, startIndex = 0))
 
         val result = createWorker().doWork()
@@ -195,7 +198,7 @@ class LibraryRecommendationsWidgetWorkerTest {
         currentServer.value = server()
         widgetConfig.value = WidgetConfig(librarySource = LibraryRecommendationsSource.FAVORITES)
         coEvery {
-            mediaRepository.getFavorites(any(), any(), any())
+            mediaCollectionReads.getFavorites(any(), any(), any())
         } throws RuntimeException("connection reset")
 
         val result = createWorker().doWork()
@@ -208,7 +211,7 @@ class LibraryRecommendationsWidgetWorkerTest {
         currentServer.value = server()
         widgetConfig.value = WidgetConfig(librarySource = LibraryRecommendationsSource.FAVORITES)
         coEvery {
-            mediaRepository.getFavorites(any(), any(), any())
+            mediaCollectionReads.getFavorites(any(), any(), any())
         } throws RuntimeException("HTTP 401 Unauthorized")
 
         val result = createWorker().doWork()
@@ -222,7 +225,7 @@ class LibraryRecommendationsWidgetWorkerTest {
         widgetConfig.value = WidgetConfig(librarySource = LibraryRecommendationsSource.FAVORITES)
         coEvery { authRepository.restoreSession() } returns Result.failure(RuntimeException("db locked"))
         coEvery {
-            mediaRepository.getFavorites(any(), any(), any())
+            mediaCollectionReads.getFavorites(any(), any(), any())
         } returns Result.failure(RuntimeException("db locked"))
 
         val result = createWorker().doWork()

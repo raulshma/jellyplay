@@ -41,11 +41,17 @@ internal object SmartPlayResolver {
      *   2. First unplayed episode — "Next up" if something before it was
      *      watched/started, else plain "Play".
      *   3. All played → replay the first episode from 0.
+     *
+     * Virtual (missing/unaired) episodes are never candidates — they have no
+     * file behind them, so "play all" must not land on one (findroid's
+     * PlaylistManager.getInitialItem filters `!it.missing` for the same
+     * reason). The list itself keeps them; only this scan skips them.
      */
     fun resolveSeries(sortedEpisodes: List<MediaItem>): SmartPlayResult? {
-        if (sortedEpisodes.isEmpty()) return null
+        val playable = sortedEpisodes.filterNot { it.isVirtual }
+        if (playable.isEmpty()) return null
 
-        val resumeEpisode = sortedEpisodes.firstOrNull { it.hasResumeProgress() }
+        val resumeEpisode = playable.firstOrNull { it.hasResumeProgress() }
         if (resumeEpisode != null) {
             return SmartPlayResult(
                 episode = resumeEpisode,
@@ -54,9 +60,9 @@ internal object SmartPlayResolver {
             )
         }
 
-        val nextEpisode = sortedEpisodes.firstOrNull { !it.isPlayed }
+        val nextEpisode = playable.firstOrNull { !it.isPlayed }
         if (nextEpisode != null) {
-            val hasWatchedBefore = sortedEpisodes
+            val hasWatchedBefore = playable
                 .takeWhile { it.id != nextEpisode.id }
                 .any { it.isPlayed || (it.playbackPositionTicks ?: 0L) > 0L }
             return SmartPlayResult(
@@ -67,7 +73,7 @@ internal object SmartPlayResolver {
         }
 
         // All episodes played — replay the first.
-        val first = sortedEpisodes.first()
+        val first = playable.first()
         return SmartPlayResult(
             episode = first,
             label = LabelKind.REPLAY_EPISODE,
@@ -85,6 +91,18 @@ internal object SmartPlayResolver {
             label = if (currentEpisode.hasResumeProgress()) LabelKind.RESUME_EPISODE else LabelKind.PLAY_EPISODE,
             startPositionTicks = currentEpisode.playbackPositionTicks ?: 0L,
         )
+
+    /**
+     * Season-level decision (#168): a Play press on a SEASON detail entry
+     * resumes/continues WITHIN that season only — the same resolution order as
+     * [resolveSeries] applied to just the entry season's episodes. [seasonId]
+     * is the detail entry's own id; episodes carry their season in
+     * [MediaItem.seasonId]. Returns null when the season has no (non-virtual)
+     * episodes in the current snapshot — the caller clears the smart target
+     * and the Play button falls back to its non-smart path.
+     */
+    fun resolveSeason(seasonId: String, sortedEpisodes: List<MediaItem>): SmartPlayResult? =
+        resolveSeries(sortedEpisodes.filter { it.seasonId == seasonId })
 }
 
 /**

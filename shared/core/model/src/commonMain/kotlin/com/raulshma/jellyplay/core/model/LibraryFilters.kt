@@ -50,6 +50,15 @@ data class LibraryFilters(
     // offline can apply (media type, year, rating, genres, played status,
     // sort); [tags] has no offline column and is ignored.
     val isDownloaded: Boolean? = null,
+    // Presence filters: when true, restrict the query to items that have
+    // subtitles / a trailer. Standalone /Items query params on the server
+    // (hasSubtitles / hasTrailer), NOT ItemFilter values. Tri-state like
+    // [isResumable] for the same backward-compatibility with the persisted
+    // filter blob (null = "off"; a stored false is an explicit "off" that
+    // queries identically). Neither has an offline column — both are ignored
+    // while the downloaded pin is active, like [tags].
+    val hasSubtitles: Boolean? = null,
+    val hasTrailer: Boolean? = null,
 ) {
 
     /**
@@ -110,6 +119,18 @@ data class LibraryFilters(
     fun withDownloadedToggled(): LibraryFilters =
         copy(isDownloaded = !(isDownloaded == true))
 
+    /**
+     * Copy with the has-subtitles presence toggle flipped. Mirrors the
+     * resumable/downloaded flip (`!(x == true)`), so a stored `false` flips
+     * back to `true` — same algebra as the sheet chip it backs.
+     */
+    fun withHasSubtitlesToggled(): LibraryFilters =
+        copy(hasSubtitles = !(hasSubtitles == true))
+
+    /** Copy with the has-trailer presence toggle flipped (same algebra). */
+    fun withHasTrailerToggled(): LibraryFilters =
+        copy(hasTrailer = !(hasTrailer == true))
+
     /** Copy with every dimension back at its default — the clear-all write. */
     fun cleared(): LibraryFilters = LibraryFilters()
 
@@ -131,5 +152,110 @@ data class LibraryFilters(
             playedStatus != PlayedStatus.ALL ||
             sortBy != SortOption.YEAR_DESC ||
             isResumable == true ||
-            isDownloaded == true
+            isDownloaded == true ||
+            hasSubtitles == true ||
+            hasTrailer == true
+
+    /**
+     * The read-side counterpart of [hasActiveFilters]: enumerates the active
+     * dimensions as dismissible [ActiveFilterTag] entries — the fold behind
+     * the shared active-filter tag bar in core:ui (library + search; both used
+     * to hand-enumerate with per-dimension copy lambdas that had already
+     * drifted). Multi-value dimensions emit one tag per value in list order;
+     * the per-tag [ActiveFilterTag.clear] is the exact `copy(... minus x)`
+     * write the hand-rolled dismiss lambdas performed, so dismiss semantics
+     * are unchanged.
+     *
+     * [dimensions] selects AND orders what a caller renders — a screen passes
+     * its own dimension list, so per-screen subsets/orderings stay explicit
+     * rather than silently imposed (library renders media types, status,
+     * downloaded, genres in that order; search renders media types, genres,
+     * years, tags, min rating, status). Defaults to the canonical order here.
+     * [SortOption][sortBy] is deliberately absent: neither screen surfaces the
+     * active sort as a dismissible tag (the sort chips own that dimension)
+     * even though [hasActiveFilters] counts it.
+     */
+    fun activeTags(
+        dimensions: List<LibraryFilterDimension> = LibraryFilterDimension.entries,
+    ): List<ActiveFilterTag> = buildList {
+        for (dimension in dimensions) {
+            when (dimension) {
+                LibraryFilterDimension.MEDIA_TYPES -> mediaTypes.forEach { mediaType ->
+                    add(ActiveFilterTag(dimension, mediaType.name) { copy(mediaTypes = mediaTypes - mediaType) })
+                }
+
+                LibraryFilterDimension.GENRES -> genres.forEach { genre ->
+                    add(ActiveFilterTag(dimension, genre) { copy(genres = genres - genre) })
+                }
+
+                LibraryFilterDimension.YEARS -> years.forEach { year ->
+                    add(ActiveFilterTag(dimension, year.toString()) { copy(years = years - year) })
+                }
+
+                LibraryFilterDimension.TAGS -> tags.forEach { tag ->
+                    add(ActiveFilterTag(dimension, tag) { copy(tags = tags - tag) })
+                }
+
+                LibraryFilterDimension.MIN_RATING -> if (minRating > 0f) {
+                    add(ActiveFilterTag(dimension, minRating.toString()) { copy(minRating = 0f) })
+                }
+
+                LibraryFilterDimension.PLAYED_STATUS -> if (playedStatus != PlayedStatus.ALL) {
+                    add(ActiveFilterTag(dimension, playedStatus.name) { copy(playedStatus = PlayedStatus.ALL) })
+                }
+
+                LibraryFilterDimension.IS_RESUMABLE -> if (isResumable == true) {
+                    add(ActiveFilterTag(dimension, "true") { copy(isResumable = null) })
+                }
+
+                LibraryFilterDimension.IS_DOWNLOADED -> if (isDownloaded == true) {
+                    add(ActiveFilterTag(dimension, "true") { copy(isDownloaded = null) })
+                }
+
+                LibraryFilterDimension.HAS_SUBTITLES -> if (hasSubtitles == true) {
+                    add(ActiveFilterTag(dimension, "true") { copy(hasSubtitles = null) })
+                }
+
+                LibraryFilterDimension.HAS_TRAILER -> if (hasTrailer == true) {
+                    add(ActiveFilterTag(dimension, "true") { copy(hasTrailer = null) })
+                }
+            }
+        }
+    }
 }
+
+/**
+ * The filter dimensions [LibraryFilters.activeTags] can enumerate. The order
+ * here is the canonical read order (mirrors the [LibraryFilters.hasActiveFilters]
+ * fold); callers pass their own ordered subset to control what and in which
+ * order the tag bar renders.
+ */
+enum class LibraryFilterDimension {
+    MEDIA_TYPES,
+    GENRES,
+    YEARS,
+    TAGS,
+    MIN_RATING,
+    PLAYED_STATUS,
+    IS_RESUMABLE,
+    IS_DOWNLOADED,
+    HAS_SUBTITLES,
+    HAS_TRAILER,
+}
+
+/**
+ * One dismissible entry of the active-filter bar: a dimension that currently
+ * departs from its default, the value being dismissed, and the clear write.
+ *
+ * The model layer cannot resolve string resources, so [value] is the raw
+ * identity (enum [name][LibraryFilterDimension] member name, genre/tag text,
+ * year, rating floor) — the core:ui label resolver turns it into the localized
+ * label. [clear] returns a copy of the originating filters with exactly this
+ * value removed.
+ */
+@Immutable
+data class ActiveFilterTag(
+    val dimension: LibraryFilterDimension,
+    val value: String,
+    val clear: () -> LibraryFilters,
+)

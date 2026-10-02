@@ -107,10 +107,6 @@
     <string name="core_ui_color_style_title">色彩样式</string>
     <string name="core_ui_color_style_subtitle">定义生成调色板的视觉氛围</string>
     <string name="core_ui_dynamic_colors">动态壁纸颜色</string>
-    <string name="core_ui_synthwave_accent_title">Synthwave 强调色</string>
-    <string name="core_ui_synthwave_accent_subtitle">选择自定义霓虹强调色板</string>
-    <string name="core_ui_soothing_accent_title">柔和强调色</string>
-    <string name="core_ui_soothing_accent_subtitle">选择舒缓的强调色</string>
     <string name="core_ui_variant_accent_title">%1$s强调色</string>
     <string name="core_ui_variant_accent_subtitle">选择此主题样式的强调色</string>
 
@@ -125,7 +121,6 @@
     <string name="core_ui_play">播放</string>
     <string name="core_ui_remove">移除</string>
     <string name="core_ui_request">请求</string>
-    <string name="core_ui_watched">已观看</string>
 
     <!-- Accessibility / media -->
     <string name="core_ui_image_placeholder">图片占位符</string>
@@ -183,8 +178,6 @@
     <string name="player_speed_slider_label">调整播放速度</string>
 
     <!-- 无障碍：视频/音乐模式切换 (P5 §3.2) -->
-    <string name="a11y_mode_video">视频模式</string>
-    <string name="a11y_mode_music">音乐模式</string>
 
     <!-- DeleteDownloadedEpisodesSheet (shared by media detail + offline home). -->
     <string name="detail_delete_downloads_title">删除下载</string>
@@ -256,16 +249,35 @@
     <string name="core_ui_auth_use_screen_lock">使用屏幕锁</string>
     <string name="core_ui_auth_unlock_screen_lock">通过屏幕锁解锁</string>
     <string name="core_ui_auth_device_credential_prompt">使用设备屏幕锁解锁</string>
+    <string name="core_ui_auth_no_unlock_method">Unlock is unavailable: no biometrics or screen lock are usable on this device. Clear app data to reset the lock.</string>
     <string name="core_ui_read">阅读</string>
     <string name="core_show_password">显示密码</string>
     <string name="core_hide_password">隐藏密码</string>
     <!-- What's New chrome -->
-    <string name="core_ui_whatsnew_sheet_title">新功能</string>
-    <string name="core_ui_whatsnew_release_title">v%1$s 的新功能</string>
-    <string name="core_ui_whatsnew_category_new">新增</string>
-    <string name="core_ui_whatsnew_category_improvement">改进</string>
-    <string name="core_ui_whatsnew_category_fix">修复</string>
-    <string name="core_ui_whatsnew_take_me_there">带我去</string>
-    <string name="core_ui_whatsnew_got_it">知道了</string>
     <string name="core_ui_whatsnew_archive_empty">暂无版本亮点。</string>
+    <string name="core_refresh_metadata_title">刷新元数据</string>
+    <string name="core_refresh_metadata_message">选择服务器如何刷新“%s”的元数据和图像。</string>
+    <string name="core_refresh_metadata_mode_default">扫描新增和更新的文件</string>
+    <string name="core_refresh_metadata_mode_default_desc">仅下载缺失的元数据和图像。</string>
+    <string name="core_refresh_metadata_mode_full_validation">搜索缺失的元数据</string>
+    <string name="core_refresh_metadata_mode_full_validation_desc">重新检查每个字段，以当前值作为基准。</string>
+    <string name="core_refresh_metadata_mode_replace_all">替换全部元数据</string>
+    <string name="core_refresh_metadata_mode_replace_all_desc">用提供商数据覆盖当前元数据。刷新剧集时其分集也会刷新。</string>
+    <string name="core_refresh_metadata_mode_replace_images">替换全部图像</string>
+    <string name="core_refresh_metadata_mode_replace_images_desc">重新下载全部图像，元数据保持不变。</string>
+    <!-- Played/progress filter chips + clear-all (kept beside
+         core_filter_has_* below, mirroring the default file grouping). -->
+    <string name="core_filter_played_all">全部</string>
+    <string name="core_filter_played_played">已播放</string>
+    <string name="core_filter_played_unplayed">未播放</string>
+    <string name="core_filter_rating_plus">%1$s+</string>
+    <string name="core_filter_in_progress">进行中</string>
+    <string name="core_clear_all">全部清除</string>
+    <string name="core_filter_has_subtitles">含字幕</string>
+    <string name="core_filter_has_trailer">含预告片</string>
+
+    <!-- Media-card footer meta (the shared MediaCardFooterMetaRow renderer
+         for PosterCard/WideMediaCard). -->
+    <string name="core_ui_card_percent_complete">已完成 %1$d%</string>
+    <string name="core_ui_card_time_left">剩余 %1$s</string>
 </resources>

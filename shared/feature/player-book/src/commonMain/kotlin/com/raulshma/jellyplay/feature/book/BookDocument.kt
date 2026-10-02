@@ -84,9 +84,10 @@ interface BookDocument {
      * The page's native size in the back-end's raster units (PDF points /
      * raster pixels), or null when unknowable before decoding (comic
      * archives). Feeds [computeRenderWidth] so the caller picks the raster
-     * width BEFORE rendering (the page cache keys on it).
+     * width BEFORE rendering (the page cache keys on it). Back-ends hop to
+     * Dispatchers.IO themselves (same contract as [renderPage]).
      */
-    fun pageSize(pageIndex: Int): Size? = null
+    suspend fun pageSize(pageIndex: Int): Size? = null
 
     /**
      * Render [pageIndex] sized to fit [widthPx] (aspect preserved). Returns

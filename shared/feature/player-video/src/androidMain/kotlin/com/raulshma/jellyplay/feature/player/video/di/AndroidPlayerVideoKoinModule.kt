@@ -91,7 +91,17 @@ fun androidPlayerVideoModule(context: Context): Module = module {
     // (androidCoreDataModule since then). All lazy: deferral keeps the
     // media3 graph off the startKoin path
     // until first resolution.
-    single<VideoPlayerPlatform> { AndroidVideoPlayerPlatform(context, get()) }
+    single<VideoPlayerPlatform> {
+        AndroidVideoPlayerPlatform(
+            context = context,
+            castManager = get(),
+            // The video focus slice (ADR-0004): the module-owned exclusivity
+            // authority + the VIDEO-family commandable surface singleton the
+            // wiring binds its engine into.
+            playbackFocus = get(),
+            videoFocusSurface = getOrNull(),
+        )
+    }
     single<VideoMediaSessionFactory> {
         // The background-cast detach path resolves the cast receiver's player
         // straight off the legacy media3-typed CastManager (Player?); the
@@ -114,6 +124,7 @@ fun androidPlayerVideoModule(context: Context): Module = module {
         VideoPlayerViewModel(
             platform = get(),
             mediaRepository = get(),
+            mediaExtrasReads = get(),
             lyricsRepository = get(),
             playbackRepository = get(),
             playbackIdentity = get(),
@@ -151,7 +162,7 @@ fun androidPlayerVideoModule(context: Context): Module = module {
             playerLifecycleManager = get(),
             pipController = get(),
             videoMiniPlayerState = get(),
-            sleepTimerManager = get(),
+            sleepCountdown = get(),
             offlineModeManager = get(),
             userMessageBus = get(),
             playerEngineFactory = get(),
@@ -159,6 +170,7 @@ fun androidPlayerVideoModule(context: Context): Module = module {
             savedStateHandle = params.get(),
             subtitlePreviewRepository = get(),
             userDataMutator = get(),
+            nowPlayingReporter = get(),
         )
     }
 }

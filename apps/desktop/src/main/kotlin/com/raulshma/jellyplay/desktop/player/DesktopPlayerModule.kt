@@ -11,6 +11,7 @@ import com.raulshma.jellyplay.core.data.playback.DesktopAudioQueueManager
 import com.raulshma.jellyplay.core.data.playback.focus.DefaultPlaybackFocus
 import com.raulshma.jellyplay.core.data.playback.focus.FocusArbiter
 import com.raulshma.jellyplay.core.data.playback.focus.PlaybackFocus
+import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
 import com.raulshma.jellyplay.core.datastore.engine.PlayerEngineStore
 import com.raulshma.jellyplay.desktop.DesktopPaths
@@ -143,11 +144,12 @@ val desktopPlayerModule: Module = module {
             imageUrlProvider = get(),
             queuePersistenceHelper = get(),
             lyricsManager = get(),
-            sleepTimerManager = get(),
+            sleepCountdown = get(),
             scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
             effectsManager = get(),
             playbackFocus = get(),
             engineFactory = { MpvDesktopEngine(extraOptions = mapOf("vo" to "null")) },
+            nowPlayingReporter = get(),
         )
     }
     single<AudioQueueManager> { get<DesktopAudioQueueManager>() }
@@ -160,8 +162,9 @@ val desktopPlayerModule: Module = module {
     single<AudioQueueFacade> {
         DefaultAudioQueueFacade(
             queueManager = get(),
-            mediaRepository = get(),
+            musicCatalogue = get(),
             imageUrlProvider = get(),
+            radioScope = get(DatastoreQualifiers.applicationScope),
         )
     }
 }

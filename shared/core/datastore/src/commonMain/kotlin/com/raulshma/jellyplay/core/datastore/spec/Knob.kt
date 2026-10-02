@@ -13,9 +13,11 @@ import kotlinx.coroutines.flow.map
  * the write IS (or routes through) the store's setter, so a knob can never
  * become a second write path around existing storage semantics.
  *
- * Knobs are additive access for spec consumers (Stage A pilot); the store's
- * slice projection and setters remain the machinery the knobs are built
- * from, unchanged.
+ * Knobs are additive typed access for spec consumers; the store's slice
+ * projection and setters remain the machinery the knobs are built from,
+ * unchanged. (Stores that declare their keys as Stage B encoded rows — see
+ * [PreferenceEncoding] — additionally DERIVE that machinery from the same
+ * specs; the knob binding shape is identical either way.)
  */
 class Knob<T> internal constructor(
     /** The declaration this knob is bound to. */

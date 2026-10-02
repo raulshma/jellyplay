@@ -7,8 +7,11 @@ import com.raulshma.jellyplay.core.model.arr.ArrCommandName
 import com.raulshma.jellyplay.core.model.arr.ArrHistoryItem
 import com.raulshma.jellyplay.core.model.arr.ArrQueueDeleteOptions
 import com.raulshma.jellyplay.core.model.arr.ArrQueueItem
+import com.raulshma.jellyplay.core.model.arr.ArrRelease
 import com.raulshma.jellyplay.core.model.arr.ArrSeriesEpisode
+import com.raulshma.jellyplay.core.model.arr.ArrServerConfig
 import com.raulshma.jellyplay.core.model.arr.ArrWantedItem
+import com.raulshma.jellyplay.core.network.api.ApiException
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.decodeFromJsonElement
@@ -50,79 +53,71 @@ class SonarrApiClientImpl(
     /** The one v3 endpoint engine, carrying Sonarr's divergent bits. */
     private val engine = ArrV3Client(okHttpClient, ArrV3Service.SONARR)
 
-    override suspend fun getQueue(baseUrl: String, apiKey: String): Result<List<ArrQueueItem>> =
-        engine.getQueue(baseUrl, apiKey, SonarrQueueResource.serializer(), SonarrQueueResource::toArrQueueItem)
+    override suspend fun getQueue(server: ArrServerConfig): Result<List<ArrQueueItem>> =
+        engine.getQueue(server, SonarrQueueResource.serializer(), SonarrQueueResource::toArrQueueItem)
 
     override suspend fun deleteQueueItem(
-        baseUrl: String,
-        apiKey: String,
+        server: ArrServerConfig,
         id: Int,
         options: ArrQueueDeleteOptions,
-    ): Result<Unit> = engine.deleteQueueItem(baseUrl, apiKey, id, options)
+    ): Result<Unit> = engine.deleteQueueItem(server, id, options)
 
     override suspend fun deleteQueueItems(
-        baseUrl: String,
-        apiKey: String,
+        server: ArrServerConfig,
         ids: List<Int>,
         options: ArrQueueDeleteOptions,
-    ): Result<Unit> = engine.deleteQueueItems(baseUrl, apiKey, ids, options)
+    ): Result<Unit> = engine.deleteQueueItems(server, ids, options)
 
-    override suspend fun grabQueueItem(baseUrl: String, apiKey: String, id: Int): Result<Unit> =
-        engine.grabQueueItem(baseUrl, apiKey, id)
+    override suspend fun grabQueueItem(server: ArrServerConfig, id: Int): Result<Unit> =
+        engine.grabQueueItem(server, id)
 
-    override suspend fun importQueueItem(baseUrl: String, apiKey: String, downloadId: String): Result<Unit> =
-        engine.importQueueItem(baseUrl, apiKey, downloadId)
+    override suspend fun importQueueItem(server: ArrServerConfig, downloadId: String): Result<Unit> =
+        engine.importQueueItem(server, downloadId)
 
     override suspend fun getCalendar(
-        baseUrl: String,
-        apiKey: String,
+        server: ArrServerConfig,
         start: String,
         end: String,
     ): Result<List<ArrCalendarItem>> =
-        engine.getCalendar(baseUrl, apiKey, start, end, SonarrEpisodeResource.serializer(), SonarrEpisodeResource::toCalendarItem)
+        engine.getCalendar(server, start, end, SonarrEpisodeResource.serializer(), SonarrEpisodeResource::toCalendarItem)
 
     override suspend fun getHistory(
-        baseUrl: String,
-        apiKey: String,
+        server: ArrServerConfig,
         eventType: Int?,
     ): Result<List<ArrHistoryItem>> =
-        engine.getHistory(baseUrl, apiKey, eventType, SonarrHistoryRecord.serializer(), SonarrHistoryRecord::toArrHistoryItem)
+        engine.getHistory(server, eventType, SonarrHistoryRecord.serializer(), SonarrHistoryRecord::toArrHistoryItem)
 
     override suspend fun getBlocklist(
-        baseUrl: String,
-        apiKey: String,
+        server: ArrServerConfig,
         page: Int,
         pageSize: Int,
     ): Result<List<ArrBlocklistItem>> =
         engine.getBlocklist(
-            baseUrl, apiKey, page, pageSize,
+            server, page, pageSize,
             SonarrBlocklistRecord.serializer(), SonarrBlocklistRecord::toArrBlocklistItem,
         )
 
-    override suspend fun deleteBlocklistItem(baseUrl: String, apiKey: String, id: Int): Result<Unit> =
-        engine.deleteBlocklistItem(baseUrl, apiKey, id)
+    override suspend fun deleteBlocklistItem(server: ArrServerConfig, id: Int): Result<Unit> =
+        engine.deleteBlocklistItem(server, id)
 
-    override suspend fun deleteBlocklistItems(baseUrl: String, apiKey: String, ids: List<Int>): Result<Unit> =
-        engine.deleteBlocklistItems(baseUrl, apiKey, ids)
+    override suspend fun deleteBlocklistItems(server: ArrServerConfig, ids: List<Int>): Result<Unit> =
+        engine.deleteBlocklistItems(server, ids)
 
     override suspend fun getWanted(
-        baseUrl: String,
-        apiKey: String,
+        server: ArrServerConfig,
         page: Int,
         pageSize: Int,
     ): Result<List<ArrWantedItem>> =
-        engine.getWanted(baseUrl, apiKey, page, pageSize, SonarrEpisodeResource.serializer(), SonarrEpisodeResource::toArrWantedItem)
+        engine.getWanted(server, page, pageSize, SonarrEpisodeResource.serializer(), SonarrEpisodeResource::toArrWantedItem)
 
     override suspend fun postCommand(
-        baseUrl: String,
-        apiKey: String,
+        server: ArrServerConfig,
         commandName: ArrCommandName,
         seriesId: Int?,
         episodeIds: List<Int>?,
         seasonNumber: Int?,
     ): Result<ArrCommand> = engine.postCommand(
-        baseUrl,
-        apiKey,
+        server,
         engine.json.encodeToString(
             SonarrCommandRequest(
                 name = commandName.serialName,
@@ -133,11 +128,50 @@ class SonarrApiClientImpl(
         ),
     )
 
-    override suspend fun findSeriesByTvdb(baseUrl: String, apiKey: String, tvdbId: Int): Result<Int?> {
-        val url = engine.buildUrl(baseUrl, "/series").newBuilder()
+    override suspend fun searchReleases(
+        server: ArrServerConfig,
+        episodeId: Int?,
+        seriesId: Int?,
+        seasonNumber: Int?,
+    ): Result<List<ArrRelease>> {
+        // Exactly one query form: a single episode's releases, or a whole
+        // season's (seriesId + seasonNumber). Anything else is a caller bug —
+        // fail before the request rather than sending Sonarr a partial query.
+        val params = when {
+            episodeId != null -> listOf("episodeId" to episodeId.toString())
+            seriesId != null && seasonNumber != null -> listOf(
+                "seriesId" to seriesId.toString(),
+                "seasonNumber" to seasonNumber.toString(),
+            )
+            else -> return Result.failure(
+                ApiException.fromHttp(
+                    400,
+                    "Release search requires an episodeId, or a seriesId + seasonNumber pair.",
+                ),
+            )
+        }
+        return engine.getReleases(server, params)
+    }
+
+    override suspend fun grabRelease(
+        server: ArrServerConfig,
+        release: ArrRelease,
+        seriesId: Int?,
+        episodeIds: List<Int>,
+        shouldOverride: Boolean,
+    ): Result<Unit> = engine.postJson(
+        server,
+        "/release",
+        engine.json.encodeToString(
+            releaseGrabBody(release, shouldOverride, seriesId = seriesId, episodeIds = episodeIds),
+        ),
+    )
+
+    override suspend fun findSeriesByTvdb(server: ArrServerConfig, tvdbId: Int): Result<Int?> {
+        val url = engine.buildUrl(server.baseUrl, "/series").newBuilder()
             .addQueryParameter("tvdbId", tvdbId.toString())
             .build()
-        val request = Request.Builder().url(url).withApiKey(apiKey).get().build()
+        val request = Request.Builder().url(url).withApiKey(server.apiKey).get().build()
         // /series?tvdbId= SHOULD return only the matching series, but some
         // Sonarr versions/configs ignore the param and return ALL series. Do
         // NOT trust `firstOrNull()` here — it would pick the wrong series and
@@ -153,18 +187,17 @@ class SonarrApiClientImpl(
     }
 
     override suspend fun getEpisodeInfo(
-        baseUrl: String,
-        apiKey: String,
+        server: ArrServerConfig,
         seriesId: Int,
         seasonNumber: Int,
         episodeNumber: Int,
     ): Result<SonarrEpisodeInfo?> {
         // Fast path: query the single season + filter client-side.
-        val seasonUrl = engine.buildUrl(baseUrl, "/episode").newBuilder()
+        val seasonUrl = engine.buildUrl(server.baseUrl, "/episode").newBuilder()
             .addQueryParameter("seriesId", seriesId.toString())
             .addQueryParameter("seasonNumber", seasonNumber.toString())
             .build()
-        val seasonReq = Request.Builder().url(seasonUrl).withApiKey(apiKey).get().build()
+        val seasonReq = Request.Builder().url(seasonUrl).withApiKey(server.apiKey).get().build()
         val fastPath = engine.executeText(seasonReq).mapCatching { body ->
             parseEpisodeList(body)
                 .firstOrNull { it.seasonNumber == seasonNumber && it.episodeNumber == episodeNumber }
@@ -181,17 +214,16 @@ class SonarrApiClientImpl(
         // Miss (episode not in this season under Jellyfin's numbering). Fall
         // back to ALL episodes and match on episodeNumber across seasons —
         // handles split seasons, anime absolute numbering, specials placement.
-        return getAllEpisodes(baseUrl, apiKey, seriesId).map { all ->
+        return getAllEpisodes(server, seriesId).map { all ->
             all.firstOrNull { it.episodeNumber == episodeNumber }?.toSonarrEpisodeInfo()
         }
     }
 
     override suspend fun getSeasonSummaries(
-        baseUrl: String,
-        apiKey: String,
+        server: ArrServerConfig,
         seriesId: Int,
     ): Result<List<SonarrSeasonSummary>> =
-        getAllEpisodes(baseUrl, apiKey, seriesId).map { all ->
+        getAllEpisodes(server, seriesId).map { all ->
             all.groupBy { it.seasonNumber }
                 .toSortedMap()
                 .map { (season, eps) ->
@@ -205,14 +237,13 @@ class SonarrApiClientImpl(
      * [getSeasonSummaries].
      */
     private suspend fun getAllEpisodes(
-        baseUrl: String,
-        apiKey: String,
+        server: ArrServerConfig,
         seriesId: Int,
     ): Result<List<SonarrEpisodeLookupResource>> {
-        val url = engine.buildUrl(baseUrl, "/episode").newBuilder()
+        val url = engine.buildUrl(server.baseUrl, "/episode").newBuilder()
             .addQueryParameter("seriesId", seriesId.toString())
             .build()
-        val request = Request.Builder().url(url).withApiKey(apiKey).get().build()
+        val request = Request.Builder().url(url).withApiKey(server.apiKey).get().build()
         return engine.executeText(request).map { body -> parseEpisodeList(body) }
     }
 
@@ -221,19 +252,17 @@ class SonarrApiClientImpl(
         return arr.map { engine.json.decodeFromJsonElement(SonarrEpisodeLookupResource.serializer(), it) }
     }
 
-    override suspend fun deleteEpisodeFile(baseUrl: String, apiKey: String, episodeFileId: Int): Result<Unit> =
-        engine.deletePath(baseUrl, apiKey, "/episodeFile/$episodeFileId")
+    override suspend fun deleteEpisodeFile(server: ArrServerConfig, episodeFileId: Int): Result<Unit> =
+        engine.deletePath(server, "/episodeFile/$episodeFileId")
 
     override suspend fun monitorEpisodes(
-        baseUrl: String,
-        apiKey: String,
+        server: ArrServerConfig,
         episodeIds: List<Int>,
         monitored: Boolean,
     ): Result<Unit> {
         if (episodeIds.isEmpty()) return Result.success(Unit)
         return engine.putJson(
-            baseUrl,
-            apiKey,
+            server,
             "/episode/monitor",
             engine.json.encodeToString(
                 SonarrEpisodeMonitorRequest(episodeIds = episodeIds, monitored = monitored),
@@ -241,11 +270,11 @@ class SonarrApiClientImpl(
         )
     }
 
-    override suspend fun getSeriesInfo(baseUrl: String, apiKey: String, tvdbId: Int): Result<SonarrSeriesInfo?> {
-        val url = engine.buildUrl(baseUrl, "/series").newBuilder()
+    override suspend fun getSeriesInfo(server: ArrServerConfig, tvdbId: Int): Result<SonarrSeriesInfo?> {
+        val url = engine.buildUrl(server.baseUrl, "/series").newBuilder()
             .addQueryParameter("tvdbId", tvdbId.toString())
             .build()
-        val request = Request.Builder().url(url).withApiKey(apiKey).get().build()
+        val request = Request.Builder().url(url).withApiKey(server.apiKey).get().build()
         // Same defensive client-side filter as findSeriesByTvdb: some Sonarr
         // versions ignore the ?tvdbId= param and return ALL series.
         return engine.executeText(request).mapCatching { body ->
@@ -258,18 +287,17 @@ class SonarrApiClientImpl(
     }
 
     override suspend fun getEpisodesForSeries(
-        baseUrl: String,
-        apiKey: String,
+        server: ArrServerConfig,
         seriesId: Int,
     ): Result<List<ArrSeriesEpisode>> {
         // Same /episode?seriesId= path as getAllEpisodes but decoding the rich
         // projection (title, airDate, overview, file size/quality) the
         // management UI needs. getAllEpisodes itself decodes the leaner
         // SonarrEpisodeLookupResource, so we issue the request directly here.
-        val url = engine.buildUrl(baseUrl, "/episode").newBuilder()
+        val url = engine.buildUrl(server.baseUrl, "/episode").newBuilder()
             .addQueryParameter("seriesId", seriesId.toString())
             .build()
-        val request = Request.Builder().url(url).withApiKey(apiKey).get().build()
+        val request = Request.Builder().url(url).withApiKey(server.apiKey).get().build()
         return engine.executeText(request).mapCatching { body ->
             val arr = engine.json.decodeFromString<JsonArray>(body)
             arr.map { engine.json.decodeFromJsonElement(SonarrManagedEpisodeResource.serializer(), it) }
@@ -277,6 +305,6 @@ class SonarrApiClientImpl(
         }
     }
 
-    override suspend fun testConnection(baseUrl: String, apiKey: String): Result<Unit> =
-        engine.testConnection(baseUrl, apiKey)
+    override suspend fun testConnection(server: ArrServerConfig): Result<Unit> =
+        engine.testConnection(server)
 }

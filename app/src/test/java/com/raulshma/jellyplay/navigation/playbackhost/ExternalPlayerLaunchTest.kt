@@ -1,7 +1,10 @@
 package com.raulshma.jellyplay.navigation.playbackhost
 
 import android.content.Intent
+import android.net.Uri
+import com.raulshma.jellyplay.core.model.ExternalPlayerApp
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -13,10 +16,12 @@ import org.robolectric.annotation.Config
  * Pins [externalPlayerLaunch] — the OUTBOUND extras vocabulary of the
  * external-player hand-off, moved verbatim out of MainViewModel so the
  * launch-spec construction lives beside [ExternalPlayerHost] (the RESULT
- * side — the "position"/"positionMs" alias — is already pinned by
+ * side — the per-contract outcome parse — is pinned by
  * `ExternalPlayerPositionTicksTest`): ACTION_VIEW with the video MIME type,
  * the `title`/`return_result` extras, the ms `position` extra with its zero
- * gate, and a fresh playSessionId per launch.
+ * gate, a fresh playSessionId per launch, and the subtitle hand-off extras
+ * (`subs`/`subs.name`/`subs.filename`/`subs.enable`, plus VLC's
+ * `subtitles_location`).
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = android.app.Application::class)
@@ -72,5 +77,91 @@ class ExternalPlayerLaunchTest {
 
         assertTrue(first.playSessionId.isNotBlank())
         assertNotEquals(first.playSessionId, second.playSessionId)
+    }
+
+    // ── subtitle hand-off extras ───────────────────────────────────────────
+
+    @Test
+    fun `subtitle payload populates the subs uri array with the name and filename faces`() {
+        val launch = externalPlayerLaunch(
+            itemId = "item-1",
+            resolvedUrl = "https://server/v",
+            title = "Movie",
+            startPositionTicks = 0L,
+            subtitles = listOf(
+                ExternalSubtitle("https://server/v/1.srt", "English (SRT)", "eng"),
+                ExternalSubtitle("https://server/v/2.ass", "Deutsch", "ger"),
+            ),
+        )
+
+        val subs = launch.intent.getParcelableArrayListExtra<Uri>("subs")!!
+        assertEquals(listOf("https://server/v/1.srt", "https://server/v/2.ass"), subs.map { it.toString() })
+        assertTrue(launch.intent.hasExtra("subs.name"))
+        assertEquals(listOf("English (SRT)", "Deutsch"), launch.intent.getStringArrayExtra("subs.name")!!.toList())
+        assertTrue(launch.intent.hasExtra("subs.filename"))
+        assertEquals(listOf("eng", "ger"), launch.intent.getStringArrayExtra("subs.filename")!!.toList())
+        assertEquals(2, launch.subtitles.size)
+    }
+
+    @Test
+    fun `the selected track rides subs_enable and vlc also gets subtitles_location`() {
+        val launch = externalPlayerLaunch(
+            itemId = "item-1",
+            resolvedUrl = "https://server/v",
+            title = "Movie",
+            startPositionTicks = 0L,
+            subtitles = listOf(
+                ExternalSubtitle("https://server/v/1.srt", "English", "eng"),
+                ExternalSubtitle("https://server/v/2.ass", "Deutsch", "ger", isSelected = true),
+            ),
+            preferredApp = ExternalPlayerApp.VLC,
+        )
+
+        assertEquals(
+            "https://server/v/2.ass",
+            launch.intent.getParcelableExtra<Uri>("subs.enable")!!.toString(),
+        )
+        assertEquals("https://server/v/2.ass", launch.intent.getStringExtra("subtitles_location"))
+    }
+
+    @Test
+    fun `subtitles_location is a vlc-only extra`() {
+        val subtitles = listOf(ExternalSubtitle("https://server/v/1.srt", "English", "eng", isSelected = true))
+
+        val mpvLaunch = externalPlayerLaunch(
+            "item-1", "https://server/v", "Movie", 0L,
+            subtitles = subtitles, preferredApp = ExternalPlayerApp.MPV,
+        )
+        val chooserLaunch = externalPlayerLaunch(
+            "item-1", "https://server/v", "Movie", 0L,
+            subtitles = subtitles,
+        )
+
+        assertFalse(mpvLaunch.intent.hasExtra("subtitles_location"))
+        assertFalse(chooserLaunch.intent.hasExtra("subtitles_location"))
+    }
+
+    @Test
+    fun `no selection means the enable and location extras are omitted`() {
+        val launch = externalPlayerLaunch(
+            "item-1", "https://server/v", "Movie", 0L,
+            subtitles = listOf(ExternalSubtitle("https://server/v/1.srt", "English", "eng")),
+            preferredApp = ExternalPlayerApp.VLC,
+        )
+
+        assertFalse(launch.intent.hasExtra("subs.enable"))
+        assertFalse(launch.intent.hasExtra("subtitles_location"))
+    }
+
+    @Test
+    fun `a launch without subtitles carries none of the subtitle extras`() {
+        val launch = externalPlayerLaunch("item-1", "https://server/v", "Movie", 0L)
+
+        assertFalse(launch.intent.hasExtra("subs"))
+        assertFalse(launch.intent.hasExtra("subs.name"))
+        assertFalse(launch.intent.hasExtra("subs.filename"))
+        assertFalse(launch.intent.hasExtra("subs.enable"))
+        assertFalse(launch.intent.hasExtra("subtitles_location"))
+        assertTrue(launch.subtitles.isEmpty())
     }
 }

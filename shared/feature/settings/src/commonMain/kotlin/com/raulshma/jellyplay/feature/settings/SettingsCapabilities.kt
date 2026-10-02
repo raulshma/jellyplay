@@ -40,6 +40,16 @@ internal data class SettingsCapabilities(
     /** Touch gestures exist (double-tap seek, gesture indicator). */
     val supportsTouchGestures: Boolean,
     /**
+     * The app-lock enforcement stack exists — Android-backed: the lock
+     * gate (`AppLockState` / `PinGateController` / `AuthChallengeScreen`)
+     * is Android-only, and desktop merely persists PIN state through the
+     * shared `SecurityStore` without ever challenging, so its PIN rows
+     * would promise enforcement that does not exist. Hides the PIN rows
+     * (PIN_LOCK, PIN_FOR_PLAYER_LOCK, AUTO_LOCK_TIMER) on desktop; pinned
+     * in `DesktopPlatformActualsTest`.
+     */
+    val supportsAppLock: Boolean,
+    /**
      * Desktop: `rememberBiometricGate() != null` (always false there —
      * pinned in `DesktopPlatformActualsTest`). Android: the platform has
      * biometric APIs; a device without hardware hides the row at runtime
@@ -88,6 +98,29 @@ internal data class SettingsCapabilities(
      * `DesktopPlatformActualsTest`.
      */
     val supportsIdleAmbientScreen: Boolean,
+    /**
+     * The Discord Rich Presence integration exists (feature 4.2) —
+     * desktop-backed: the hand-rolled Discord IPC client + presence service
+     * live in the desktop shell only (the named-pipe / Unix-socket transport
+     * has no Android counterpart). Hides the presence toggle row on
+     * Android; pinned in `DesktopPlatformActualsTest`.
+     */
+    val supportsDiscordPresence: Boolean,
+    /**
+     * The playback-event shell hooks exist (feature 4.3) — desktop-backed:
+     * `DesktopHookRunner` executes the configured commands via
+     * `ProcessBuilder`, which has no Android counterpart. Hides the hook
+     * rows on Android; pinned in `DesktopPlatformActualsTest`.
+     */
+    val supportsShellHooks: Boolean,
+    /**
+     * System picture-in-picture exists — Android-backed: the dedicated
+     * `PlayerActivity` owns auto-enter on Home/recents plus manual PiP entry
+     * (issue #167's toggle rides on it). Desktop binds `NoOpPipController`
+     * (windowing covers it), so the auto-PiP row is structurally absent
+     * there. Pinned in `DesktopPlatformActualsTest`.
+     */
+    val supportsPip: Boolean,
 )
 
 /**

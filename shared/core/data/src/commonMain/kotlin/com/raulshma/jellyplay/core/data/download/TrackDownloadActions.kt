@@ -22,12 +22,13 @@ import kotlinx.coroutines.sync.Semaphore
  * download engine), which is exactly why this interface exists. It replaced
  * the feature-local seams that used to bridge that wall (player-audio's
  * AudioTrackDownloads, music's MusicTrackDownloads — both deleted with the
- * download-actions seam consolidation): since the promoted-interface pass,
- * the JVM actual is the repository itself — jvmShared
+ * download-actions seam consolidation): since the promoted-interface pass, the
+ * JVM actual is the repository itself — jvmShared
  * `DownloadRepositoryImpl` implements this interface directly (its
- * `downloadsFor` IS the repository's one
- * `getDownloadsByMediaItemIdsFlow` IN-query read) and dataJvmModule binds it
- * over the repository single — the hosts inject this one window directly.
+ * [getDownloadsByMediaItemIdsFlow] IS the repository's one IN-query read, not
+ * the N per-id-flow fan-out the deleted adapter re-expressed) and
+ * dataJvmModule binds it over the repository single — the hosts inject this
+ * one window directly.
  *
  * IDIOM RULE (declared with the download-actions seam consolidation,
  * tightened by the promoted-interface pass): a download read a feature needs
@@ -36,7 +37,11 @@ import kotlinx.coroutines.sync.Semaphore
  * single/engine where the surface crosses verbatim, per the DownloadIntake
  * precedent. Features never grow their own wall-crossing template — the
  * deleted AudioTrackDownloads / MusicTrackDownloads twins this interface
- * absorbed were exactly that mistake.
+ * absorbed were exactly that mistake. The members carry the repository's
+ * primary vocabulary verbatim (`getDownloadsByMediaItemIdsFlow`,
+ * `deleteDownload` — the window-local `downloadsFor`/`remove` names were
+ * renamed onto it), so the engine's repository overrides ARE the
+ * implementation, with no one-line forwarding aliases.
  */
 interface TrackDownloadStatusWindow {
 
@@ -48,10 +53,15 @@ interface TrackDownloadStatusWindow {
      * (the album screen reads only its ~10-20 tracks, the player exactly the
      * playing one).
      */
-    fun downloadsFor(ids: List<String>): Flow<List<DownloadItem>>
+    fun getDownloadsByMediaItemIdsFlow(mediaItemIds: List<String>): Flow<List<DownloadItem>>
 
-    /** Removes [downloadId]'s local download (artifacts + offline rows). */
-    suspend fun remove(downloadId: String)
+    /**
+     * Deletes [id]'s local download (artifacts + offline rows). Returns the
+     * delete [Result], which every host deliberately ignores — the same
+     * fire-and-forget contract the former `remove` member carried (the hosts'
+     * remove paths have no error surface on a failed delete).
+     */
+    suspend fun deleteDownload(id: String): Result<Unit>
 }
 
 /**
@@ -107,7 +117,7 @@ class TrackDownloadActions(
      */
     fun bulk(items: List<MediaItem>, concurrency: Int = 3): Job = scope.launch {
         if (items.isEmpty()) return@launch
-        val currentRows = statusWindow.downloadsFor(items.map { it.id }).first()
+        val currentRows = statusWindow.getDownloadsByMediaItemIdsFlow(items.map { it.id }).first()
             .associateBy { it.mediaItemId }
         val permits = Semaphore(concurrency)
         items.forEach { item ->

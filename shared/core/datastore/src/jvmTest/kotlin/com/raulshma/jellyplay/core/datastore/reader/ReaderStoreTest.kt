@@ -351,6 +351,7 @@ class ReaderStoreTest {
         assertEquals(
             listOf(
                 "reader_reading_directions",
+                "reader_reading_layouts",
                 "reader_theme",
                 "reader_font_size_px",
                 "reader_font_family",

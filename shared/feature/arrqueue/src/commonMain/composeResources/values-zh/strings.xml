@@ -54,4 +54,24 @@
     <string name="arrqueue_remove_only">仅移除</string>
     <string name="arrqueue_remove_search">移除并再次搜索</string>
     <string name="arrqueue_blocklist_search">黑名单并搜索</string>
+    <string name="releaseSearch_title">搜索发布</string>
+    <string name="releaseSearch_loading">正在搜索索引站——最多可能需要一分钟。</string>
+    <string name="releaseSearch_empty">未找到发布</string>
+    <string name="releaseSearch_cache_miss_body">服务器的缓存搜索结果已过期。请重新运行搜索。</string>
+    <string name="releaseSearch_search_again">重新搜索</string>
+    <string name="releaseSearch_retry">重试</string>
+    <string name="releaseSearch_sort_score">评分</string>
+    <string name="releaseSearch_sort_seeders">做种数</string>
+    <string name="releaseSearch_sort_age">时间</string>
+    <string name="releaseSearch_approved">已批准</string>
+    <string name="releaseSearch_rejected">已拒绝</string>
+    <string name="releaseSearch_grab_anyway">仍要抓取</string>
+    <string name="releaseSearch_grab_title">抓取发布？</string>
+    <string name="releaseSearch_grab_message">将“%1$s”发送到下载客户端？</string>
+    <string name="releaseSearch_grab_rejected_message">“%1$s”被拒绝：%2$s。仍要抓取吗？</string>
+    <string name="releaseSearch_grab_sent">已发送抓取“%1$s”</string>
+    <string name="releaseSearch_history_grabbed">之前已抓取</string>
+    <string name="releaseSearch_history_failed">之前已失败</string>
+    <string name="releaseSearch_full_season">整季</string>
+    <string name="releaseSearch_seeders_leechers">%1$d 做种 · %2$d 下载</string>
 </resources>

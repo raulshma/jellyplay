@@ -38,8 +38,10 @@ import kotlinx.coroutines.flow.asStateFlow
  * across modules), so this is the deliberately-duplicated app-side copy —
  * same fakes, same bodies, kept in sync by review.
  *
- * Internal top-level so both suites share them (FakeMediaEngine lives in
- * its own file beside this one).
+ * Internal top-level so both suites share them (the MediaEngine double is
+ * the shared com.raulshma.jellyplay.core.testfixtures.FakeMediaEngine since
+ * the fake-twin merge — the app-side copy was deleted; its pollUntil helper
+ * moved beside it into the fixtures module).
  */
 
 /** Scriptable per-item resolution; mirrors what [DesktopAudioSourceResolver] returns. */
@@ -64,6 +66,7 @@ internal class FakeImages : ImageUrlProvider {
         "img://$itemId"
     override fun getChapterImageUrl(itemId: String, imageIndex: Int, tag: String?): String = ""
     override fun getBackdropUrl(itemId: String, maxWidth: Int): String = ""
+    override fun getLogoUrl(itemId: String): String = ""
 }
 
 internal data class StartRecord(
@@ -93,16 +96,12 @@ internal class FakePlaybackRepository : PlaybackRepository {
         return Result.success(Unit)
     }
 
-    override suspend fun replayOutboxEntry(entry: PlaybackOutboxEntry): Boolean = true
     override suspend fun reportBookProgress(
         itemId: String,
         positionTicks: Long,
         final: Boolean,
     ): Result<Unit> = Result.success(Unit)
     override fun getBookDownloadUrl(itemId: String): String = ""
-    override fun getImageUrl(itemId: String, imageType: String, maxWidth: Int?) = "img://$itemId"
-    override fun getChapterImageUrl(itemId: String, imageIndex: Int, tag: String?, maxWidth: Int?) = ""
-    override fun getBackdropUrl(itemId: String, maxWidth: Int) = ""
     override suspend fun getItemImageBytes(itemId: String, imageType: String, maxWidth: Int): ByteArray? = null
 
     override fun getStreamUrl(itemId: String, mediaSourceId: String, startTimeTicks: Long, liveStreamId: String?) =

@@ -9,7 +9,7 @@ import com.raulshma.jellyplay.core.data.repository.DailyWatchActivity
 import com.raulshma.jellyplay.core.data.repository.HeatmapFilter
 import com.raulshma.jellyplay.core.data.repository.StreakInfo
 import com.raulshma.jellyplay.core.data.repository.WatchHistoryRepository
-import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.PlaybackReportingDetail
@@ -62,7 +62,8 @@ sealed interface HeatmapEvent {
 class WatchProgressHeatmapViewModel(
     private val watchHistoryRepository: WatchHistoryRepository,
     private val mediaRepository: MediaRepository,
-    private val playbackRepository: PlaybackRepository,
+    /** Day-detail poster URLs (the ImageUrlProvider seam). */
+    private val imageUrlProvider: ImageUrlProvider,
 ) : JellyPlayViewModel() {
 
     private companion object {
@@ -209,7 +210,7 @@ class WatchProgressHeatmapViewModel(
                 itemId to ResolvedMediaItem(
                     name = detail.item.name,
                     mediaType = detail.item.mediaType,
-                    imageUrl = playbackRepository.getImageUrl(itemId, "Primary", 200),
+                    imageUrl = imageUrlProvider.getImageUrl(itemId, 200),
                 )
             }
         }.filterNotNull()

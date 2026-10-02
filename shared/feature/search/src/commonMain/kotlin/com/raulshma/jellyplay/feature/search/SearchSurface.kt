@@ -1,5 +1,7 @@
 package com.raulshma.jellyplay.feature.search
 
+import com.raulshma.jellyplay.core.ui.components.PagedRefreshPhase
+
 /**
  * WHICH surface the search screen's library-content slot renders, folded ONCE
  * by [computeSearchSurface] — the pure successor of the compound branch
@@ -16,7 +18,7 @@ package com.raulshma.jellyplay.feature.search
  *
  * Precedence is fixed: NoResults → Initial → Content. Note the load-bearing
  * corner the fold preserves: a settled-at-zero refresh ERROR with query text
- * is [NoResults], not [SearchSurface.RefreshPhase.ERROR] — the empty state
+ * is [NoResults], not [SearchSurface.Content.refresh] ERROR — the empty state
  * wins over the error overlay exactly as the pre-fold first-branch-wins
  * ordering did.
  */
@@ -40,42 +42,33 @@ internal sealed interface SearchSurface {
      * The results grid — also the deliberate fall-through while a query's
      * refresh is in flight or while a Seerr/offline pane owns the matches
      * (the grid itself is empty then; the panes render above). Carries the
-     * pager's refresh phase for the overlay ladder.
+     * pager's refresh phase for the overlay ladder — the core:ui chassis's
+     * [PagedRefreshPhase], the same vocabulary every paged collection screen
+     * renders through (this fold's former private LOADING/ERROR/IDLE enum).
      */
-    data class Content(val refresh: RefreshPhase) : SearchSurface
-
-    /**
-     * The pager's refresh phase, stacked OVER the grid by the screen:
-     * [LOADING] a centered progress bar, [ERROR] the full error screen with
-     * retry, [IDLE] nothing extra.
-     */
-    enum class RefreshPhase { LOADING, ERROR, IDLE }
+    data class Content(val refresh: PagedRefreshPhase) : SearchSurface
 }
 
 /**
- * THE fold — pure over the slot's inputs, no Compose types. `itemCount`/
- * `isRefreshing`/`refreshFailed` come from the collected `LazyPagingItems`;
- * the pane flags are the screen's derived visibilities.
+ * THE fold — pure over the slot's inputs, no Compose types. `itemCount` and
+ * `refreshPhase` derive from the collected `LazyPagingItems` (the phase via
+ * the chassis's `LoadState.toPagedRefreshPhase()` — the sealed mapping the
+ * former inline loading/error booleans encoded); the pane flags are the
+ * screen's derived visibilities.
  */
 internal fun computeSearchSurface(
     itemCount: Int,
     queryHasText: Boolean,
-    isRefreshing: Boolean,
-    refreshFailed: Boolean,
+    refreshPhase: PagedRefreshPhase,
     showSeerr: Boolean,
     showSeerrError: Boolean,
     showOffline: Boolean,
 ): SearchSurface = when {
-    itemCount == 0 && queryHasText && !isRefreshing && !showSeerr && !showSeerrError && !showOffline ->
+    itemCount == 0 && queryHasText && refreshPhase != PagedRefreshPhase.LOADING &&
+        !showSeerr && !showSeerrError && !showOffline ->
         SearchSurface.NoResults
 
     !queryHasText && !showSeerr -> SearchSurface.Initial
 
-    else -> SearchSurface.Content(
-        when {
-            isRefreshing -> SearchSurface.RefreshPhase.LOADING
-            refreshFailed -> SearchSurface.RefreshPhase.ERROR
-            else -> SearchSurface.RefreshPhase.IDLE
-        }
-    )
+    else -> SearchSurface.Content(refreshPhase)
 }

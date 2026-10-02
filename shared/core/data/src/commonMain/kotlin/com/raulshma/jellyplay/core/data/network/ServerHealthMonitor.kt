@@ -5,7 +5,7 @@ import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.util.EpochMillisSource
 import com.raulshma.jellyplay.core.data.util.ioDispatcher
 import com.raulshma.jellyplay.core.model.ServerHealth
-import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import com.raulshma.jellyplay.core.network.api.AuthApiClient
 import kotlin.concurrent.Volatile
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -30,13 +30,13 @@ import kotlinx.coroutines.launch
  * it through the supertype), the loop dispatcher moved to the module's
  * [ioDispatcher] expect/actual (`Dispatchers.IO` on android/desktop — the
  * identical production dispatcher), and `@Volatile` became the common
- * kotlin.concurrent annotation. [JellyfinApiClient] is a commonMain
+ * kotlin.concurrent annotation. [AuthApiClient] is a commonMain
  * interface, so the class crosses; its Koin single stays in dataJvmModule.
  */
 private const val MONITOR_LOOP = "ServerHealthMonitor.loop"
 
 class ServerHealthMonitor(
-    private val apiClient: JellyfinApiClient,
+    private val apiClient: AuthApiClient,
     /** Clock seam for the per-check latency measurement (start/delta pair). */
     private val timeSource: EpochMillisSource,
 ) {

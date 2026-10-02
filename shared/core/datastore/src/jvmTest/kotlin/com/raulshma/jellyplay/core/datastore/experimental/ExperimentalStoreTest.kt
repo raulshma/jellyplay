@@ -12,6 +12,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withTimeout
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
@@ -37,15 +38,28 @@ class ExperimentalStoreTest {
             dataStore = TestDataStoreProvider.get()
             dataStore.edit { it.clear() }
             store = ExperimentalStore(dataStore, scope)
-            // Drain the Eagerly-cached slice so the cleared state is observed
-            // before each test writes + reads.
-            store.experimental.first()
+            // Wait until the eagerly-cached slice has observed the cleared
+            // state before each test writes + reads.
+            awaitSlice { it == ExperimentalSlice() }
         }
     }
 
+    /**
+     * Race-free read for write→assert tests: `dataStore.edit` returns when the
+     * value is persisted, but the slice StateFlow is updated asynchronously by
+     * the Unconfined collector (data → read → stateIn chain) — a plain
+     * `experimental.first()` can observe the pre-write snapshot and flake on a
+     * loaded runner (seen on the macOS CI lane). Awaiting the asserted
+     * condition ties the read to the write instead of to scheduler luck.
+     */
+    private suspend fun awaitSlice(
+        timeoutMs: Long = 5_000,
+        predicate: (ExperimentalSlice) -> Boolean,
+    ): ExperimentalSlice = withTimeout(timeoutMs) { store.experimental.first { predicate(it) } }
+
     @Test
     fun `defaults when empty`() = runTest {
-        val slice = store.experimental.first()
+        val slice = awaitSlice { it == ExperimentalSlice() }
         assertTrue(slice.enabledExperimentalFeatures.isEmpty())
         assertTrue(slice.selfUpdateCheckEnabled)
         assertFalse(slice.selfUpdateDownloadEnabled)
@@ -61,7 +75,7 @@ class ExperimentalStoreTest {
     fun `setEnabledExperimentalFeatures round-trips`() = runTest {
         val features = setOf(ExperimentalFeature.HOME_CARD_CLIPPING, ExperimentalFeature.MEDIA_CARD_PEEK)
         store.setEnabledExperimentalFeatures(features)
-        assertEquals(features, store.experimental.first().enabledExperimentalFeatures)
+        assertEquals(features, awaitSlice { it.enabledExperimentalFeatures == features }.enabledExperimentalFeatures)
     }
 
     @Test
@@ -72,53 +86,53 @@ class ExperimentalStoreTest {
             it[androidx.datastore.preferences.core.stringPreferencesKey("enabled_experimental_features")] =
                 """["DIRECT_ARR_INTEGRATION","BOGUS_FEATURE"]"""
         }
-        val slice = store.experimental.first()
+        val slice = awaitSlice { it.enabledExperimentalFeatures == setOf(ExperimentalFeature.DIRECT_ARR_INTEGRATION) }
         assertEquals(setOf(ExperimentalFeature.DIRECT_ARR_INTEGRATION), slice.enabledExperimentalFeatures)
     }
 
     @Test
     fun `setSelfUpdateCheckEnabled round-trips`() = runTest {
         store.setSelfUpdateCheckEnabled(false)
-        assertFalse(store.experimental.first().selfUpdateCheckEnabled)
+        assertFalse(awaitSlice { !it.selfUpdateCheckEnabled }.selfUpdateCheckEnabled)
     }
 
     @Test
     fun `setSelfUpdateDownloadEnabled round-trips`() = runTest {
         store.setSelfUpdateDownloadEnabled(true)
-        assertTrue(store.experimental.first().selfUpdateDownloadEnabled)
+        assertTrue(awaitSlice { it.selfUpdateDownloadEnabled }.selfUpdateDownloadEnabled)
     }
 
     @Test
     fun `setAppLanguage round-trips and clears`() = runTest {
         store.setAppLanguage("fr")
-        assertEquals(store.experimental.first().appLanguage, "fr")
+        assertEquals("fr", awaitSlice { it.appLanguage == "fr" }.appLanguage)
         store.setAppLanguage(null)
-        assertNull(store.experimental.first().appLanguage)
+        assertNull(awaitSlice { it.appLanguage == null }.appLanguage)
     }
 
     @Test
     fun `setShowShareMediaOption round-trips`() = runTest {
         store.setShowShareMediaOption(false)
-        assertFalse(store.experimental.first().showShareMediaOption)
+        assertFalse(awaitSlice { !it.showShareMediaOption }.showShareMediaOption)
     }
 
     @Test
     fun `setHideSearchHistory round-trips`() = runTest {
         store.setHideSearchHistory(true)
-        assertTrue(store.experimental.first().hideSearchHistory)
+        assertTrue(awaitSlice { it.hideSearchHistory }.hideSearchHistory)
     }
 
     @Test
     fun `setPreferAudioDescription round-trips`() = runTest {
         store.setPreferAudioDescription(true)
-        assertTrue(store.experimental.first().preferAudioDescription)
+        assertTrue(awaitSlice { it.preferAudioDescription }.preferAudioDescription)
     }
 
     @Test
     fun `setDismissedUpdate writes version and timestamp`() = runTest {
         store.setDismissedUpdate("1.2.3", 1_700_000_000_000L)
-        val slice = store.experimental.first()
-        assertEquals(slice.dismissedUpdateVersion, "1.2.3")
+        val slice = awaitSlice { it.dismissedUpdateVersion == "1.2.3" }
+        assertEquals("1.2.3", slice.dismissedUpdateVersion)
         assertEquals(1_700_000_000_000L, slice.dismissedUpdateAtMs)
     }
 
@@ -126,22 +140,22 @@ class ExperimentalStoreTest {
     fun `setDismissedUpdate null clears both keys`() = runTest {
         store.setDismissedUpdate("1.2.3", 1_700_000_000_000L)
         store.setDismissedUpdate(null)
-        val slice = store.experimental.first()
+        val slice = awaitSlice { it.dismissedUpdateVersion == null }
         assertNull(slice.dismissedUpdateVersion)
         assertEquals(0L, slice.dismissedUpdateAtMs)
     }
 
     @Test
     fun `updateDismissPeriod defaults to 24h`() = runTest {
-        assertEquals(UpdateDismissPeriod.HOURS_24, store.experimental.first().updateDismissPeriod)
+        assertEquals(UpdateDismissPeriod.HOURS_24, awaitSlice { true }.updateDismissPeriod)
     }
 
     @Test
     fun `setUpdateDismissPeriod round-trips`() = runTest {
         store.setUpdateDismissPeriod(UpdateDismissPeriod.NEVER)
-        assertEquals(UpdateDismissPeriod.NEVER, store.experimental.first().updateDismissPeriod)
+        assertEquals(UpdateDismissPeriod.NEVER, awaitSlice { it.updateDismissPeriod == UpdateDismissPeriod.NEVER }.updateDismissPeriod)
         store.setUpdateDismissPeriod(UpdateDismissPeriod.WEEK_1)
-        assertEquals(UpdateDismissPeriod.WEEK_1, store.experimental.first().updateDismissPeriod)
+        assertEquals(UpdateDismissPeriod.WEEK_1, awaitSlice { it.updateDismissPeriod == UpdateDismissPeriod.WEEK_1 }.updateDismissPeriod)
     }
 
     @Test
@@ -150,6 +164,9 @@ class ExperimentalStoreTest {
         dataStore.edit {
             it[androidx.datastore.preferences.core.stringPreferencesKey("update_dismiss_period")] = "BOGUS"
         }
-        assertEquals(UpdateDismissPeriod.HOURS_24, store.experimental.first().updateDismissPeriod)
+        assertEquals(
+            UpdateDismissPeriod.HOURS_24,
+            awaitSlice { it.updateDismissPeriod == UpdateDismissPeriod.HOURS_24 }.updateDismissPeriod,
+        )
     }
 }

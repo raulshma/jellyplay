@@ -144,6 +144,12 @@ jb-compose-ui-desktop = { group = "org.jetbrains.compose.ui", name = "ui-desktop
 jb-compose-foundation = { group = "org.jetbrains.compose.foundation", name = "foundation", version.ref = "composeMultiplatform" }
 jb-compose-animation = { group = "org.jetbrains.compose.animation", name = "animation", version.ref = "composeMultiplatform" }
 jb-compose-material3 = { group = "org.jetbrains.compose.material3", name = "material3", version.ref = "composeMultiplatformMaterial3" }
+# Compose-resources runtime — what the per-module `compose.components.resources`
+# DSL notation resolves to (org.jetbrains.compose.components:components-resources
+# on the composeMultiplatform train). Declared here so the convention plugin's
+# universal bundle (jellyplay.kmp.library.compose) can add it without the
+# type-safe `compose` accessor, which does not generate inside plugin code.
+jb-compose-components-resources = { group = "org.jetbrains.compose.components", name = "components-resources", version.ref = "composeMultiplatform" }
 jb-compose-saveable = { group = "org.jetbrains.compose.runtime", name = "runtime-saveable", version.ref = "composeMultiplatform" }
 compose-runtime = { group = "androidx.compose.runtime", name = "runtime" }
 compose-ui = { group = "androidx.compose.ui", name = "ui" }
@@ -268,6 +274,7 @@ slf4j-api = { group = "org.slf4j", name = "slf4j-api", version.ref = "slf4j" }
 libmpv = { group = "io.github.abdallahmehiz", name = "mpv-android-lib", version.ref = "libmpv" }
 # Desktop libmpv access (mpv-2.dll / libmpv.so / libmpv.dylib) for MpvDesktopEngine
 jna = { group = "net.java.dev.jna", name = "jna", version.ref = "jna" }
+jna-platform = { group = "net.java.dev.jna", name = "jna-platform", version.ref = "jna" }
 libvlc-all = { group = "org.videolan.android", name = "libvlc-all", version.ref = "libvlc" }
 # libass wired into Media3's renderer pipeline — full ASS/SSA rendering
 # (positioning, fonts, animations, karaoke, vector drawing) on the

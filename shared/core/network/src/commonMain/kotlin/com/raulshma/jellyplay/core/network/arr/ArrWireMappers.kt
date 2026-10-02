@@ -8,6 +8,7 @@ import com.raulshma.jellyplay.core.model.arr.ArrHistoryItem
 import com.raulshma.jellyplay.core.model.arr.ArrMediaType
 import com.raulshma.jellyplay.core.model.arr.ArrQueueItem
 import com.raulshma.jellyplay.core.model.arr.ArrQueueMessage
+import com.raulshma.jellyplay.core.model.arr.ArrRelease
 import com.raulshma.jellyplay.core.model.arr.ArrSeriesEpisode
 import com.raulshma.jellyplay.core.model.arr.ArrWantedItem
 
@@ -51,6 +52,7 @@ internal fun RadarrQueueResource.toArrQueueItem(): ArrQueueItem {
         messages = statusMessages.flatMap { sm ->
             sm.messages.map { msg -> ArrQueueMessage(title = sm.title, message = msg) }
         },
+        arrMovieId = movie?.id,
     )
 }
 
@@ -118,6 +120,44 @@ internal fun RadarrHistoryRecord.toArrHistoryItem(): ArrHistoryItem = ArrHistory
     data = data,
 )
 
+/**
+ * The `/release` row mapper — SHARED by both services: the wire row shape is
+ * field-identical across Radarr and Sonarr (one declaration decodes both, the
+ * per-service extras ride along as defaults), so the wire→model step is one
+ * twin like the decode. Same fallbacks as the queue mappers' list walks
+ * (`mapNotNull { it.name }`, blank-filtered).
+ */
+internal fun ArrReleaseResource.toArrRelease(): ArrRelease = ArrRelease(
+    guid = guid,
+    indexerId = indexerId,
+    indexer = indexer,
+    title = title,
+    quality = quality?.name,
+    qualityId = quality?.quality?.id,
+    languages = languages.mapNotNull { it.name }.filter { it.isNotBlank() },
+    size = size?.toLong(),
+    ageHours = ageHours,
+    seeders = seeders,
+    leechers = leechers,
+    protocol = protocol,
+    releaseGroup = releaseGroup,
+    customFormats = customFormats.mapNotNull { it.name }.filter { it.isNotBlank() },
+    customFormatScore = customFormatScore,
+    approved = approved,
+    temporarilyRejected = temporarilyRejected,
+    rejections = rejections,
+    publishDate = publishDate,
+    downloadUrl = downloadUrl,
+    magnetUrl = magnetUrl,
+    infoUrl = infoUrl,
+    edition = edition,
+    fullSeason = fullSeason,
+    seasonNumber = seasonNumber,
+    episodeNumbers = episodeNumbers,
+    mappedEpisodeInfo = mappedEpisodeInfo,
+    movieTitles = movieTitles,
+)
+
 // ── Sonarr ──────────────────────────────────────────────────────────────────
 
 /** `SonarrApiClientImpl.SonarrQueueResource.toModel`. */
@@ -156,6 +196,8 @@ internal fun SonarrQueueResource.toArrQueueItem(): ArrQueueItem {
         messages = statusMessages.flatMap { sm ->
             sm.messages.map { msg -> ArrQueueMessage(title = sm.title, message = msg) }
         },
+        arrSeriesId = series?.id,
+        arrEpisodeId = episode?.id,
     )
 }
 
@@ -253,3 +295,31 @@ internal fun SonarrManagedEpisodeResource.toArrSeriesEpisode(): ArrSeriesEpisode
  */
 internal fun filterSeriesByTvdb(rows: List<SonarrSeriesResource>, tvdbId: Int): SonarrSeriesResource? =
     rows.firstOrNull { it.tvdbId == tvdbId }
+
+/**
+ * The shared `/release` grab body both Radarr's and Sonarr's
+ * `grabRelease` post: the release's guid/indexer, the override arm's
+ * prefilled quality (the services key the override off the numeric quality
+ * id), and the shouldOverride flag. The per-service identity fields
+ * ([ArrReleaseGrabBody.movieId] / [ArrReleaseGrabBody.seriesId] +
+ * [ArrReleaseGrabBody.episodeIds]) are the caller's arguments.
+ */
+internal fun releaseGrabBody(
+    release: ArrRelease,
+    shouldOverride: Boolean,
+    movieId: Int? = null,
+    seriesId: Int? = null,
+    episodeIds: List<Int> = emptyList(),
+): ArrReleaseGrabBody = ArrReleaseGrabBody(
+    guid = release.guid,
+    indexerId = release.indexerId,
+    quality = if (shouldOverride) {
+        release.qualityId?.let { id -> ArrQuality(quality = ArrQualityName(release.quality, id)) }
+    } else {
+        null
+    },
+    movieId = movieId,
+    seriesId = seriesId,
+    episodeIds = episodeIds.takeIf { it.isNotEmpty() },
+    shouldOverride = shouldOverride.takeIf { it },
+)

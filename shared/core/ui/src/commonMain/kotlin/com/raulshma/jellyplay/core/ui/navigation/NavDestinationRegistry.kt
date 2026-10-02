@@ -20,33 +20,37 @@ import com.composables.icons.tabler.outline.Users
 
 /**
  * Top-level destination facts — the [NAV_DESTINATIONS] registry (key / icon /
- * rail label / group), the lookup and icon extensions built on it, the
- * recorded label overrides, and the per-mode membership tables whose labels
- * resolve through the registry. Split out of NavKey.kt, whose class KDoc
- * documents the restore contract governing every [Route] declared there; the
- * package (and therefore every persisted binary name and the R8 keep rule) is
- * unchanged.
+ * rail label / group / per-surface membership), the lookup and icon
+ * extensions built on it, the recorded label overrides, and the per-mode
+ * membership tables derived from the registry rows. Split out of NavKey.kt,
+ * whose class KDoc documents the restore contract governing every [Route]
+ * declared there; the package (and therefore every persisted binary name and
+ * the R8 keep rule) is unchanged.
  */
 /**
  * One top-level destination's render facts: the persisted customization
- * [key], the [icon] every shell renders for it, and the desktop-rail label +
- * [railGroup]. This registry is the single home for destination facts — the
- * former per-shell parallel tables (the Android `routeToIcon` when-with its
- * silent Home fallback, and the desktop `DESKTOP_RAIL_ITEMS` label/icon/group
- * list) both derive from it, so a new top-level route registers its facts
- * exactly once.
+ * [key], the [icon] every shell renders for it, the desktop-rail label +
+ * [railGroup], and the per-surface [topLevelGroups] membership. This registry
+ * is the single home for destination facts — the former per-shell parallel
+ * tables (the Android `routeToIcon` when-with its silent Home fallback, the
+ * desktop `DESKTOP_RAIL_ITEMS` label/icon/group list, and the hand-listed
+ * video/music top-level tables) all derive from it, so a new top-level route
+ * registers its facts exactly once.
  *
  * Icon note: the two shells previously disagreed on two routes (Library:
  * `Stack2` on phone vs `Library` on desktop; Shortcuts: `Apps` vs `Bolt`).
  * The registry unifies on the desktop set — a visual-only change on the
  * phone bar/drawer.
  *
- * Per-mode bar MEMBERSHIP and order (the video vs music bottom-bar maps below)
- * stay separate — that is per-shell policy — but their labels are no longer a
- * second vocabulary: both maps resolve through [NAV_DESTINATION_BY_ROUTE], and
- * the one deliberate wording divergence ("Browse" on the music bar, "Music" on
- * the rail) is recorded in [TOP_LEVEL_LABEL_OVERRIDES] instead of being
- * hand-copied per table.
+ * Per-shell DISPLAY policy (which hidden/customization-filtered subset a
+ * shell actually renders, and the desktop rail / TV drawer / overflow
+ * memberships — deliberately per-shell decisions) stays out of the registry;
+ * what moved IN is the per-surface membership + order every shell agreed on,
+ * recorded as [NavDestination.topLevelGroups] and derived into the
+ * video/music tables below. Their labels resolve through
+ * [NAV_DESTINATION_BY_ROUTE], and the one deliberate wording divergence
+ * ("Browse" on the music bar, "Music" on the rail) is recorded in
+ * [TOP_LEVEL_LABEL_OVERRIDES] instead of being hand-copied per table.
  */
 data class NavDestination(
     val route: Route,
@@ -54,10 +58,28 @@ data class NavDestination(
     val icon: ImageVector,
     val railLabel: String,
     val railGroup: NavDestinationGroup,
+    /**
+     * The top-level surfaces this destination renders on, keyed by surface
+     * with that surface's 0-based bar/drawer position as the value — the
+     * sort key the video/music tables below derive their order from (the
+     * registry row order is the customization-UI display order, which is NOT
+     * the same policy: MusicBrowse sits after Search there but before it on
+     * the music bar). Empty for destinations that are never top-level tabs
+     * (their rows exist for the rail/customization facts).
+     */
+    val topLevelGroups: Map<TopLevelGroup, Int> = emptyMap(),
 )
 
 /** The rail's visual clusters — a spacer renders between consecutive groups. */
 enum class NavDestinationGroup { Browsing, Tools, System }
+
+/**
+ * The per-mode top-level surfaces a destination can render as a tab on:
+ * the video-mode bar/drawer and the music-mode bar/drawer. Membership +
+ * order live on the [NavDestination] rows ([NavDestination.topLevelGroups]);
+ * the published tables below are derived from them.
+ */
+enum class TopLevelGroup { Video, Music }
 
 /**
  * Every top-level nav destination, in customization-UI display order (the
@@ -65,11 +87,26 @@ enum class NavDestinationGroup { Browsing, Tools, System }
  * derived from this registry, so the two cannot drift).
  */
 val NAV_DESTINATIONS: List<NavDestination> = listOf(
-    NavDestination(Route.Home, "Home", Tabler.Outline.Home, "Home", NavDestinationGroup.Browsing),
-    NavDestination(Route.Library, "Library", Tabler.Outline.Library, "Library", NavDestinationGroup.Browsing),
-    NavDestination(Route.Search, "Search", Tabler.Outline.Search, "Search", NavDestinationGroup.Browsing),
-    NavDestination(Route.LiveTv, "LiveTv", Tabler.Outline.DeviceTv, "Live TV", NavDestinationGroup.Browsing),
-    NavDestination(Route.MusicBrowse, "MusicBrowse", Tabler.Outline.Disc, "Music", NavDestinationGroup.Browsing),
+    NavDestination(
+        Route.Home, "Home", Tabler.Outline.Home, "Home", NavDestinationGroup.Browsing,
+        topLevelGroups = mapOf(TopLevelGroup.Video to 0, TopLevelGroup.Music to 0),
+    ),
+    NavDestination(
+        Route.Library, "Library", Tabler.Outline.Library, "Library", NavDestinationGroup.Browsing,
+        topLevelGroups = mapOf(TopLevelGroup.Video to 1),
+    ),
+    NavDestination(
+        Route.Search, "Search", Tabler.Outline.Search, "Search", NavDestinationGroup.Browsing,
+        topLevelGroups = mapOf(TopLevelGroup.Video to 2, TopLevelGroup.Music to 2),
+    ),
+    NavDestination(
+        Route.LiveTv, "LiveTv", Tabler.Outline.DeviceTv, "Live TV", NavDestinationGroup.Browsing,
+        topLevelGroups = mapOf(TopLevelGroup.Video to 3),
+    ),
+    NavDestination(
+        Route.MusicBrowse, "MusicBrowse", Tabler.Outline.Disc, "Music", NavDestinationGroup.Browsing,
+        topLevelGroups = mapOf(TopLevelGroup.Music to 1),
+    ),
     NavDestination(Route.Shortcuts, "Shortcuts", Tabler.Outline.Bolt, "Shortcuts", NavDestinationGroup.Tools),
     NavDestination(Route.Downloads, "Downloads", Tabler.Outline.Download, "Downloads", NavDestinationGroup.Browsing),
     NavDestination(Route.Newsletter, "Newsletter", Tabler.Outline.Mail, "Newsletter", NavDestinationGroup.Browsing),
@@ -125,41 +162,40 @@ fun topLevelLabel(route: Route): String {
 }
 
 /**
- * Turns a shell's top-level membership/order policy into the route→label map
- * every browse shell renders. Labels are never hand-written per shell — they
+ * Turns one surface's registry membership ([NavDestination.topLevelGroups])
+ * into the route→label map the browse shell renders for it: rows carrying
+ * the [group] flag, ordered by their recorded per-surface position, labels
+ * resolved through [topLevelLabel]. Labels are never hand-written — they
  * resolve through [topLevelLabel] (registry row first, then the recorded
  * overrides), so the only label literals in these tables are the ones in
  * [TOP_LEVEL_LABEL_OVERRIDES].
  */
-private fun deriveTopLevelRoutes(vararg membership: Route): LinkedHashMap<Route, String> {
+private fun deriveTopLevelRoutes(group: TopLevelGroup): LinkedHashMap<Route, String> {
+    val orderedRoutes = NAV_DESTINATIONS
+        .mapNotNull { row -> row.topLevelGroups[group]?.let { position -> row.route to position } }
+        .sortedBy { (_, position) -> position }
+        .map { (route, _) -> route }
     val routes = LinkedHashMap<Route, String>()
-    for (route in membership) {
+    for (route in orderedRoutes) {
         routes[route] = topLevelLabel(route)
     }
     return routes
 }
 
 /**
- * Video-mode top-level destinations, in bar/drawer order. Membership and order
- * are this table's whole policy — labels derive from the registry.
+ * Video-mode top-level destinations, in bar/drawer order. Derived from the
+ * [NAV_DESTINATIONS] rows' [TopLevelGroup.Video] membership + position — a
+ * row is added to (or ordered on) this table by editing its
+ * [NavDestination.topLevelGroups] flag, never by editing a second list.
  */
-val VIDEO_TOP_LEVEL_ROUTES: Map<Route, String> = deriveTopLevelRoutes(
-    Route.Home,
-    Route.Library,
-    Route.Search,
-    Route.LiveTv,
-)
+val VIDEO_TOP_LEVEL_ROUTES: Map<Route, String> = deriveTopLevelRoutes(TopLevelGroup.Video)
 
 /**
- * Music-mode top-level destinations, in bar/drawer order. Same contract as
- * [VIDEO_TOP_LEVEL_ROUTES]; the music tab's "Browse" wording is the one
- * recorded [TOP_LEVEL_LABEL_OVERRIDES] entry.
+ * Music-mode top-level destinations, in bar/drawer order. Same derivation as
+ * [VIDEO_TOP_LEVEL_ROUTES] over [TopLevelGroup.Music]; the music tab's
+ * "Browse" wording is the one recorded [TOP_LEVEL_LABEL_OVERRIDES] entry.
  */
-val MUSIC_TOP_LEVEL_ROUTES: Map<Route, String> = deriveTopLevelRoutes(
-    Route.Home,
-    Route.MusicBrowse,
-    Route.Search,
-)
+val MUSIC_TOP_LEVEL_ROUTES: Map<Route, String> = deriveTopLevelRoutes(TopLevelGroup.Music)
 
 val TOP_LEVEL_ROUTES = VIDEO_TOP_LEVEL_ROUTES
 

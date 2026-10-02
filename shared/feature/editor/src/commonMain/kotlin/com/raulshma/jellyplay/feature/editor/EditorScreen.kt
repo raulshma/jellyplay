@@ -13,6 +13,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Tab
@@ -36,6 +37,7 @@ import com.raulshma.jellyplay.core.ui.components.ConfirmTone
 import com.raulshma.jellyplay.core.ui.components.ErrorBanner
 import com.raulshma.jellyplay.core.ui.components.JellyPlayBackHandler
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
+import com.raulshma.jellyplay.core.ui.components.downloads.RefreshMetadataSheet
 import com.raulshma.jellyplay.core.ui.harness.harnessClickTarget
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
@@ -56,6 +58,7 @@ import com.raulshma.jellyplay.feature.editor.generated.resources.editor_discard_
 import com.raulshma.jellyplay.feature.editor.generated.resources.editor_discard_title
 import com.raulshma.jellyplay.feature.editor.generated.resources.editor_dismiss
 import com.raulshma.jellyplay.feature.editor.generated.resources.editor_keep_editing
+import com.raulshma.jellyplay.feature.editor.generated.resources.editor_refresh_metadata
 import com.raulshma.jellyplay.feature.editor.generated.resources.editor_save
 import com.raulshma.jellyplay.feature.editor.generated.resources.editor_saving
 import com.raulshma.jellyplay.feature.editor.generated.resources.editor_tab_images
@@ -81,8 +84,20 @@ internal fun EditorScreen(
     // `rememberSaveable` survives config changes; reset whenever a different
     // item is loaded.
     var showDiscardDialog by rememberSaveable(itemId) { mutableStateOf(false) }
+    /** Server-side "Refresh metadata" mode sheet (toolbar action). */
+    var showRefreshSheet by rememberSaveable(itemId) { mutableStateOf(false) }
     JellyPlayBackHandler(enabled = uiState.isDirty && !showDiscardDialog) {
         showDiscardDialog = true
+    }
+    if (showRefreshSheet && uiState.mediaDetail != null) {
+        RefreshMetadataSheet(
+            itemName = uiState.mediaDetail?.item?.name.orEmpty(),
+            onConfirm = { option ->
+                showRefreshSheet = false
+                viewModel.onEvent(EditorUiEvent.RefreshMetadata(option))
+            },
+            onDismiss = { showRefreshSheet = false },
+        )
     }
     if (showDiscardDialog) {
         ConfirmDialog(
@@ -125,6 +140,22 @@ internal fun EditorScreen(
             if (uiState.isDirty) showDiscardDialog = true else onBack()
         },
         actions = {
+            // Server-side metadata refresh (the shared core/ui mode sheet).
+            // Admin-gated like Save — the server 403s non-admins anyway.
+            if (uiState.isAdmin && uiState.mediaDetail != null) {
+                val refreshFocusState = rememberTvFocusState()
+                IconButton(
+                    onClick = { showRefreshSheet = true },
+                    modifier = Modifier
+                        .then(refreshFocusState.focusModifier)
+                        .tvFocusIndicator(refreshFocusState, ShapeCache.smooth12),
+                ) {
+                    Icon(
+                        Tabler.Outline.Refresh,
+                        contentDescription = stringResource(Res.string.editor_refresh_metadata),
+                    )
+                }
+            }
             val saveFocusState = rememberTvFocusState()
             FilledTonalButton(
                 onClick = { viewModel.onEvent(EditorUiEvent.SaveMetadata) },

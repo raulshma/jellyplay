@@ -12,5 +12,5 @@ package com.raulshma.jellyplay.feature.player.video.engine
  * Engine-specific invalid sentinels (Media3's C.TIME_UNSET) are negative, so
  * the caller can pass them through and the >0 check rejects them.
  */
-internal fun resolveDurationMs(engineDurationMs: Long, serverDurationMs: Long): Long =
+fun resolveDurationMs(engineDurationMs: Long, serverDurationMs: Long): Long =
     if (engineDurationMs > 0L) engineDurationMs else serverDurationMs

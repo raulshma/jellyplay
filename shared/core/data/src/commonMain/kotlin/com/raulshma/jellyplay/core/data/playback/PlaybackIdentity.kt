@@ -1,7 +1,8 @@
 package com.raulshma.jellyplay.core.data.playback
 
 import com.raulshma.jellyplay.core.network.api.AuthApiClient
-import com.raulshma.jellyplay.feature.player.video.engine.PlaybackTls
+import com.raulshma.jellyplay.core.network.auth.JellyfinAuthorizationHeader
+import com.raulshma.jellyplay.core.model.PlaybackTls
 
 /**
  * The playback session-identity reads: the token + base-URL pair a playback
@@ -35,6 +36,16 @@ interface PlaybackIdentity {
      * `ClientCertificateManager.playbackTlsPaths()` read through.
      */
     fun clientTls(): PlaybackTls? = null
+
+    /**
+     * The canonical token-only `Authorization` header for [token], as the
+     * name→value pair remote-play request builders fold into their header
+     * maps. The data-seam exposure of the wire builder (the SDK-encoding
+     * twins live behind this member — consumers never import the network
+     * auth surface); the value is byte-identical to what every header-auth
+     * surface sends.
+     */
+    fun authorizationHeader(token: String): Pair<String, String>
 }
 
 /** Production impl: the network engine's session as surfaced by [AuthApiClient]. */
@@ -48,4 +59,7 @@ class DefaultPlaybackIdentity(
     override fun accessToken(): String? = apiClient.getAccessToken()
 
     override fun clientTls(): PlaybackTls? = clientTlsReader()
+
+    override fun authorizationHeader(token: String): Pair<String, String> =
+        JellyfinAuthorizationHeader.tokenOnlyHeader(token)
 }

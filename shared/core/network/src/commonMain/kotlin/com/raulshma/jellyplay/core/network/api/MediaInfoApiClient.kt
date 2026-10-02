@@ -11,7 +11,14 @@ import com.raulshma.jellyplay.core.model.PlaybackReportingStatus
 import com.raulshma.jellyplay.core.model.StaleMediaItem
 import com.raulshma.jellyplay.core.model.WatchedMediaItem
 
-interface MediaInfoApiClient {
+/**
+ * The newsletter family seam of [MediaInfoApiClient]: the three `/newsletter`
+ * routes. Split out so core/data's [com.raulshma.jellyplay.core.data.repository.NewsletterRepository]
+ * can extend THIS interface instead of the wide media-info client (the
+ * pass-through mirror retired: the repository is the same [MediaInfoApiClient]
+ * single re-bound under the data-facing name — see the data DI module).
+ */
+interface NewsletterApiClient {
     suspend fun getNewsletterData(sinceDate: String, limit: Int = 20): Result<NewsletterData>
 
     // NOTE: JellyPlay backend route required — `POST /newsletter/send` is not yet
@@ -23,6 +30,9 @@ interface MediaInfoApiClient {
     // implemented server-side. This wires up the client so the feature lights up
     // once the route lands; until then the call 404s and Result.failure surfaces it.
     suspend fun sendTestNewsletter(): Result<Unit>
+}
+
+interface MediaInfoApiClient : NewsletterApiClient {
     suspend fun getUsers(): Result<List<JellyfinUser>>
 
     /** Per-user lookup via `GET /Users/{id}` — avoids the full getUsers() scan for one user. */

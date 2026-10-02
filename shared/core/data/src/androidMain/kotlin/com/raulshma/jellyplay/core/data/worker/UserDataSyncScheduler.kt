@@ -1,13 +1,6 @@
 package com.raulshma.jellyplay.core.data.worker
 
 import android.content.Context
-import androidx.work.Constraints
-import androidx.work.ExistingPeriodicWorkPolicy
-import androidx.work.ExistingWorkPolicy
-import androidx.work.NetworkType
-import androidx.work.OneTimeWorkRequestBuilder
-import androidx.work.PeriodicWorkRequestBuilder
-import androidx.work.WorkManager
 import java.time.Duration
 
 /**
@@ -33,37 +26,21 @@ class UserDataSyncSchedulerImpl(
     private val context: Context,
 ) : UserDataSyncScheduler {
     override fun enqueuePeriodic() {
-        val constraints = Constraints.Builder()
-            .setRequiredNetworkType(NetworkType.CONNECTED)
-            .setRequiresBatteryNotLow(true)
-            .build()
-
-        val request = PeriodicWorkRequestBuilder<UserDataSyncWorker>(SYNC_INTERVAL, SYNC_FLEX)
-            .setConstraints(constraints)
-            .addTag(UserDataSyncWorker.WORK_TAG)
-            .build()
-
-        WorkManager.getInstance(context).enqueueUniquePeriodicWork(
-            UserDataSyncWorker.UNIQUE_PERIODIC_NAME,
-            ExistingPeriodicWorkPolicy.KEEP,
-            request,
+        UniqueWorkSchedules.uniquePeriodic<UserDataSyncWorker>(
+            context = context,
+            uniqueName = UserDataSyncWorker.UNIQUE_PERIODIC_NAME,
+            tag = UserDataSyncWorker.WORK_TAG,
+            interval = SYNC_INTERVAL,
+            flexInterval = SYNC_FLEX,
+            batteryNotLow = true,
         )
     }
 
     override fun enqueueNow() {
-        val constraints = Constraints.Builder()
-            .setRequiredNetworkType(NetworkType.CONNECTED)
-            .build()
-
-        val request = OneTimeWorkRequestBuilder<UserDataSyncWorker>()
-            .setConstraints(constraints)
-            .addTag(UserDataSyncWorker.WORK_TAG)
-            .build()
-
-        WorkManager.getInstance(context).enqueueUniqueWork(
-            UserDataSyncWorker.UNIQUE_NOW_NAME,
-            ExistingWorkPolicy.KEEP,
-            request,
+        UniqueWorkSchedules.uniqueOnce<UserDataSyncWorker>(
+            context = context,
+            uniqueName = UserDataSyncWorker.UNIQUE_NOW_NAME,
+            tag = UserDataSyncWorker.WORK_TAG,
         )
     }
 

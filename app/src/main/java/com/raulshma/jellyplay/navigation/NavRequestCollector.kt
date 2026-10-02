@@ -7,12 +7,10 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.navigation3.runtime.NavKey
 import com.raulshma.jellyplay.core.data.remote.PlayEventPayload
 import com.raulshma.jellyplay.core.model.remote.NavigationTarget
-import com.raulshma.jellyplay.core.ui.feedback.UserMessage
-import com.raulshma.jellyplay.core.ui.message.UserMessage as SharedUserMessage
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.feature.shell.UserMessageDuration
-import com.raulshma.jellyplay.feature.shell.navigation.popPlayerRoutes
-import com.raulshma.jellyplay.feature.shell.navigation.routeForNavigationTarget
+import com.raulshma.jellyplay.feature.shell.navigation.RemoteNavigationDispatcher
+import com.raulshma.jellyplay.feature.shell.navigation.RemoteRouteDispatch
 import com.raulshma.jellyplay.shell.SyncPlayOpenRequest
 import kotlinx.coroutines.flow.Flow
 
@@ -21,37 +19,40 @@ import kotlinx.coroutines.flow.Flow
  * collect-then-dispatch loops JellyPlayApp's `MainContent` used to hand-copy
  * composable-inline: the pending-route (deep link / shortcut) dispatch, the
  * remote-navigation collector, the remote-control now-playing snackbar, and
- * the SyncPlay auto-open guard. Beside them live the message-bus adaptation
- * seams ([shellUserMessagePresent] / [legacySeverityOf] below) — the former
- * sixth loop, the hand-copied message collectors, now reduced to feeding the
- * shared `rememberShellUserMessages` seam. Every loop is the same shape — collect an
+ * the SyncPlay auto-open guard. Beside them lives the message-surface
+ * adapter ([shellUserMessagePresent] below) — the former sixth loop, the
+ * hand-copied message collectors, now reduced to feeding the shared
+ * `rememberShellUserMessages` seam over the ONE commonMain bus. Every loop
+ * is the same shape — collect an
  * external request, apply one small policy fork, drive the navigator or the
- * snackbar host — and the forks are pure companion folds
- * ([pendingRouteDispatch], [syncPlayAutoOpenRoute],
- * [nowPlayingSnackbarMessage]) in the shared pure-fold style (the
- * `feature.shell.navigation.RemoteNavigationRouting` precedent), so
- * both halves are JVM-pinned through fake lambdas
+ * snackbar host — and the forks are the shared
+ * `feature.shell.navigation.RemoteNavigationDispatcher` folds themselves (the
+ * one remote-navigation LADDER both shells run — ladder dispatch, tab-vs-push
+ * policy, SyncPlay guard and now-playing format included; this class adds NO
+ * local dispatch vocabulary), so the fold tables are JVM-pinned once in
+ * `RemoteNavigationDispatcherTest` while the collect-then-dispatch
+ * choreography is pinned here through fake lambdas
  * (`NavRequestCollectorTest`; the PinGateController shape).
  *
  * Capture semantics the shell relies on, preserved from the inline loops:
- * this controller is STATELESS, so `MainContent` constructs it inline (no
- * `remember`) and each `LaunchedEffect` captures the instance current when
- * it (re)launches — exactly as the former inline collectors captured
- * `navigator`, whose `navigateFilter` carries the playback-host decision
- * (external player / dedicated activity / in-nav). The value-keyed
- * pending-route effect therefore re-captures on every new route, while the
- * flow-keyed collectors hold their launch-time instance.
+ * this controller is STATELESS — the remembered `NavRequestController`
+ * (MainContent's request-dispatch holder) constructs it once per holder
+ * instance over the holder's stable seams — and each `LaunchedEffect`
+ * captures the instance current when it (re)launches, exactly as the former
+ * inline collectors captured `navigator`, whose `navigateFilter` carries the
+ * playback-host decision (external player / dedicated activity / in-nav). The
+ * value-keyed pending-route effect therefore re-captures on every new route,
+ * while the flow-keyed collectors hold their launch-time instance.
  *
  * NOT here: message-presentation POLICY (serial merge→resolve→present,
  * severity → duration) — that is
  * [com.raulshma.jellyplay.feature.shell.UserMessageHost]'s
  * (shared/feature/shell), whose composition wiring is the shared
- * `rememberShellUserMessages` seam; the adapters at the bottom of this file
- * only fork the surface ([shellUserMessagePresent]) and project the legacy
- * bus's payload ([legacySeverityOf]). The external-player launch protocol
- * lives in `ExternalPlayerHost` (navigation/playbackhost, beside
- * `PlaybackHostRouter`) — it is STATEFUL (the pending-launch stash), so it
- * is remembered rather than constructed inline like this collector.
+ * `rememberShellUserMessages` seam; the adapter at the bottom of this file
+ * only forks the surface ([shellUserMessagePresent]). The external-player
+ * launch protocol lives in `ExternalPlayerHost` (navigation/playbackhost,
+ * beside `PlaybackHostRouter`) — it is STATEFUL (the pending-launch stash),
+ * so it is remembered rather than constructed inline like this collector.
  *
  * @param topLevelKeys the shell's registered top-level tab routes
  *   (`ALL_TOP_LEVEL_ROUTE_KEYS`) — the tab-vs-nested fork's vocabulary.
@@ -83,20 +84,31 @@ internal class NavRequestCollector(
 ) {
 
     /**
-     * The tab-vs-nested fork for one shell-pending route — the decision the
-     * inline `pendingRoute` collector made with its `if
-     * (ALL_TOP_LEVEL_ROUTE_KEYS.contains(route))`. A top-level route SWITCHES
-     * the tab directly (deliberately NOT via the Navigator: it must not
-     * pop-to-root when the tab is already selected, and it must not run the
-     * navigate filter — tab switches are never playback routes); anything
-     * else is a normal push through the filter. `null` (no pending route) is
-     * a no-op that must not consume.
+     * The shared ladder (feature.shell.navigation
+     * [RemoteNavigationDispatcher]) over this collector's seams — the
+     * exhaustive when(NavigationTarget) and the tab-vs-push fork are ITS now,
+     * not a hand-copy. The Android-specific arms are lambdas over
+     * [dispatchKey], keeping the keycode vocabulary in the :app
+     * `RemoteNavigationRouting.kt`: D-pad directions and the select arm
+     * synthesize their keycodes unconditionally, while the context-menu arm
+     * reports consumption so an unconsumed menu key falls back to the
+     * standard message. Pushes ride the filter-carrying [navigate] seam; tab
+     * switches ride [selectTopLevelTab] (bypassing the Navigator — no
+     * pop-to-root on the selected tab); the context-menu fallback presents
+     * through [presentSnackbar], exactly as this class's former inline
+     * ladder did.
      */
-    sealed interface PendingRouteDispatch {
-        data class SwitchTab(val route: Route) : PendingRouteDispatch
-        data class Push(val route: Route) : PendingRouteDispatch
-        data object None : PendingRouteDispatch
-    }
+    private val remoteNavigation = RemoteNavigationDispatcher(
+        topLevelKeys = topLevelKeys,
+        navigate = navigate,
+        selectTab = selectTopLevelTab,
+        goBack = goBack,
+        backStacks = backStacks,
+        presentMessage = presentSnackbar,
+        moveFocus = { direction -> dispatchKey?.invoke(keyCodeForFocusDirection(direction)) },
+        invokeSelect = { dispatchKey?.invoke(REMOTE_SELECT_KEYCODE) },
+        contextMenuKey = { dispatchKey?.invoke(REMOTE_CONTEXT_MENU_KEYCODE) == true },
+    )
 
     /**
      * Dispatches one shell-pending route (deep links, launcher shortcuts,
@@ -105,13 +117,13 @@ internal class NavRequestCollector(
      * lifecycle-aware state, and the consume-once ack must land in the same
      * call as the navigation (dispatch FIRST, then consume — a consume
      * before the dispatch would race the StateFlow back to null and drop
-     * the route).
+     * the route). A `null` route is a no-op that must not consume.
      */
     fun dispatchPendingRoute(route: Route?) {
         when (val action = pendingRouteDispatch(route, topLevelKeys)) {
-            is PendingRouteDispatch.SwitchTab -> selectTopLevelTab(action.route)
-            is PendingRouteDispatch.Push -> navigate(action.route)
-            PendingRouteDispatch.None -> return
+            is RemoteRouteDispatch.SwitchTab -> selectTopLevelTab(action.route)
+            is RemoteRouteDispatch.Push -> navigate(action.route)
+            null -> return
         }
         consumePendingRoute()
     }
@@ -119,116 +131,73 @@ internal class NavRequestCollector(
     /**
      * Consume remote "Play" / "Playstate" / "GeneralCommand" navigation
      * requests emitted by the WebSocket receiver
-     * (`RemoteNavigationBridge.targets`). The target→route mapping and the
-     * Jellyfin-web "Stop" pop (`ClosePlayer` → player entries off the top of
-     * EVERY back stack) are shared/feature/shell's pure folds
-     * (`feature.shell.navigation.RemoteNavigationRouting`); pushed
-     * routes go through the filter-carrying [navigate] seam.
-     *
-     * Navigation ladder: [NavigationTarget.GoBack] pops via [goBack];
-     * [NavigationTarget.MoveFocus] / [NavigationTarget.InvokeSelect] /
-     * [NavigationTarget.OpenContextMenu] synthesize D-pad/center/menu key
-     * events through [dispatchKey] (Compose's own key handling interprets
-     * them); a context-menu key nothing consumed falls back to the standard
-     * user message; [NavigationTarget.GoToTopLevel] reuses the pure
-     * [pendingRouteDispatch] tab-vs-push fork.
+     * (`RemoteNavigationBridge.targets`). The whole ladder — the
+     * target→route mapping, the Jellyfin-web "Stop" pop
+     * (`ClosePlayer` → player entries off the top of EVERY back stack), the
+     * navigation-ladder arms and the tab-vs-push fork — is
+     * shared/feature/shell's [RemoteNavigationDispatcher], constructed over
+     * this class's seams as [remoteNavigation]; this member is the Android
+     * wiring only (keycode vocabulary, filter-carrying push, direct
+     * tab-switch seam).
      */
     suspend fun collectRemoteNavigation(
         targets: Flow<NavigationTarget>,
         contextMenuUnavailableMessage: String,
     ) {
-        targets.collect { target ->
-            when (target) {
-                NavigationTarget.ClosePlayer -> popPlayerRoutes(backStacks())
-                NavigationTarget.GoBack -> goBack()
-                is NavigationTarget.MoveFocus -> dispatchKey?.invoke(keyCodeForFocusDirection(target.direction))
-                NavigationTarget.InvokeSelect -> dispatchKey?.invoke(REMOTE_SELECT_KEYCODE)
-                NavigationTarget.OpenContextMenu -> {
-                    val handled = dispatchKey?.invoke(REMOTE_CONTEXT_MENU_KEYCODE) == true
-                    if (!handled) presentSnackbar(contextMenuUnavailableMessage)
-                }
-                is NavigationTarget.GoToTopLevel,
-                is NavigationTarget.OpenVideoPlayer,
-                is NavigationTarget.OpenAudioPlayer,
-                is NavigationTarget.OpenMediaDetail -> {
-                    routeForNavigationTarget(target)?.let { route ->
-                        when (pendingRouteDispatch(route, topLevelKeys)) {
-                            is PendingRouteDispatch.SwitchTab -> selectTopLevelTab(route)
-                            is PendingRouteDispatch.Push -> navigate(route)
-                            PendingRouteDispatch.None -> Unit
-                        }
-                    }
-                }
-            }
-        }
+        remoteNavigation.collect(targets, contextMenuUnavailableMessage)
     }
 
     /**
      * Consume SyncPlay auto-open requests
      * (`SyncPlayOpenCoordinator.openRequests`): a joined group started
      * playing (or switched items) → open the video player. The player-open
-     * guard is the pure [syncPlayAutoOpenRoute] fold.
+     * guard is the shared
+     * [RemoteNavigationDispatcher.syncPlayAutoOpenRoute] fold (the request is
+     * spread to fields because the request type is app-owned); its result —
+     * null when a player already tops a back stack and drives the item load
+     * in place — rides the filter-carrying [navigate] seam.
      */
     suspend fun collectSyncPlayOpens(requests: Flow<SyncPlayOpenRequest>) {
         requests.collect { request ->
-            syncPlayAutoOpenRoute(request, backStacks())?.let(navigate)
+            RemoteNavigationDispatcher.syncPlayAutoOpenRoute(
+                itemId = request.itemId,
+                startPositionTicks = request.startPositionTicks,
+                backStacks = backStacks(),
+            )?.let(navigate)
         }
     }
 
     /**
      * Consume remote-control play events (`RemoteControlReceiver.playEvents`)
      * into the now-playing snackbar. The title fallback (blank title → item
-     * id) and the template format are the pure [nowPlayingSnackbarMessage]
-     * fold; the surface itself is the injected [presentSnackbar] seam.
+     * id) and the template format are the shared
+     * [RemoteNavigationDispatcher.nowPlayingMessage] fold; the surface itself
+     * is the injected [presentSnackbar] seam.
      */
     suspend fun collectNowPlayingSnackbars(
         events: Flow<PlayEventPayload>,
         messageTemplate: String,
     ) {
         events.collect { event ->
-            presentSnackbar(nowPlayingSnackbarMessage(event, messageTemplate))
+            presentSnackbar(RemoteNavigationDispatcher.nowPlayingMessage(event, messageTemplate))
         }
     }
 
     companion object {
 
-        /** The pure half of [dispatchPendingRoute] — see that member's KDoc. */
-        fun pendingRouteDispatch(route: Route?, topLevelKeys: Set<Route>): PendingRouteDispatch =
-            when {
-                route == null -> PendingRouteDispatch.None
-                topLevelKeys.contains(route) -> PendingRouteDispatch.SwitchTab(route)
-                else -> PendingRouteDispatch.Push(route)
-            }
-
         /**
-         * The SyncPlay auto-open guard: return the player route to push, or
-         * null when a [Route.VideoPlayer] already sits ON TOP of any back
-         * stack — that player's SyncPlayBridge drives the item load in
-         * place, and pushing another VideoPlayer here would stack duplicate
-         * player screens. Top-only by design: a player buried below a
-         * non-player top does NOT veto (its screen is not visible), and an
-         * AudioPlayer top does not either (it is not the SyncPlay surface).
+         * The pure half of [dispatchPendingRoute] — see that member's KDoc.
+         * The decision table is the shared
+         * [RemoteNavigationDispatcher.routeDispatch], returned in its own
+         * [RemoteRouteDispatch] vocabulary with no local rename; this
+         * wrapper only adds the null arm the nullable pending route needs
+         * (`null` route → `null` dispatch — "no decision", which
+         * [dispatchPendingRoute] must not consume).
          */
-        fun syncPlayAutoOpenRoute(
-            request: SyncPlayOpenRequest,
-            backStacks: Collection<List<NavKey>>,
-        ): Route.VideoPlayer? =
-            if (backStacks.any { it.lastOrNull() is Route.VideoPlayer }) {
-                null
-            } else {
-                Route.VideoPlayer(
-                    itemId = request.itemId,
-                    startPositionTicks = request.startPositionTicks,
-                )
+        fun pendingRouteDispatch(route: Route?, topLevelKeys: Set<Route>): RemoteRouteDispatch? =
+            route?.let { pendingRoute ->
+                RemoteNavigationDispatcher.routeDispatch(pendingRoute, topLevelKeys)
             }
-
-        /**
-         * The now-playing snackbar fold: the item's display title, falling
-         * back to the raw item id when the server sent a blank title, into
-         * the localized template (`snackbar_now_playing`, one %s).
-         */
-        fun nowPlayingSnackbarMessage(event: PlayEventPayload, messageTemplate: String): String =
-            messageTemplate.format(event.title.ifBlank { event.itemId })
     }
 }
 
@@ -255,18 +224,6 @@ internal fun shellUserMessagePresent(
             duration = snackbarDurationFor(duration),
         )
     }
-}
-
-/**
- * The legacy (`core:ui` feedback) bus's severity projected onto the shared
- * bus's vocabulary — the adaptation
- * `com.raulshma.jellyplay.feature.shell.UserMessageHost.hostAdapted` needs
- * for a shell-owned payload type the shared module cannot name. Exhaustive:
- * a new legacy arm is a compile-time decision.
- */
-internal fun legacySeverityOf(message: UserMessage): SharedUserMessage.Severity = when (message) {
-    is UserMessage.Error -> SharedUserMessage.Severity.Error
-    is UserMessage.Info -> SharedUserMessage.Severity.Info
 }
 
 /** TV surface: the shared duration policy onto Toast constants. */

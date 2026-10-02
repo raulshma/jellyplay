@@ -26,6 +26,8 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import com.raulshma.jellyplay.core.network.api.UserDataWrite
+import com.raulshma.jellyplay.core.network.api.UserDataWriteOutcome
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -105,8 +107,7 @@ class OfflineWatchSyncContractTest {
         coEvery { mediaRepository.markPlayed(any()) } returns Result.success(Unit)
         coEvery { mediaRepository.getMediaDetail(any(), any()) } returns
             Result.failure(java.io.IOException("no detail"))
-        coEvery { apiClient.markPlayed(any()) } returns Result.success(Unit)
-        coEvery { apiClient.markUnplayed(any()) } returns Result.success(Unit)
+        coEvery { apiClient.writeUserData(any()) } returns Result.success(UserDataWriteOutcome.Done)
         coEvery { apiClient.reportPlaybackStart(any(), any(), any()) } returns Result.success(Unit)
         coEvery { apiClient.reportPlaybackProgress(any(), any(), any(), any(), any()) } returns Result.success(Unit)
         coEvery { apiClient.reportPlaybackStopped(any(), any(), any()) } returns Result.success(Unit)
@@ -145,7 +146,7 @@ class OfflineWatchSyncContractTest {
                     createDrainer = { notifier ->
                         PlaybackOutboxDrainerImpl(
                             outbox = outbox,
-                            playbackRepository = playbackRepository,
+                            outboxReplay = playbackRepository,
                             offlineModeManager = offlineModeManager,
                             playedStateSync = playedStateSync,
                             offlineRepository = offlineRepository,
@@ -202,13 +203,13 @@ class OfflineWatchSyncContractTest {
             entry("e4", ITEM_ID, PlaybackOutboxEventType.PLAYED),
         )
         coEvery { outbox.hasUnsyncedPlayedIntent(ITEM_ID) } returns true
-        coEvery { apiClient.markPlayed(ITEM_ID) } returns Result.success(Unit)
+        coEvery { apiClient.writeUserData(UserDataWrite.MarkPlayed(ITEM_ID)) } returns Result.success(UserDataWriteOutcome.Done)
 
         val result = buildWorker().doWork()
 
         assertTrue(result is androidx.work.ListenableWorker.Result.Success)
         // The flip lands through the REAL replay mapping...
-        coVerify(exactly = 1) { apiClient.markPlayed(ITEM_ID) }
+        coVerify(exactly = 1) { apiClient.writeUserData(UserDataWrite.MarkPlayed(ITEM_ID)) }
         // ...and NOT ONE position report reaches the server — a trailing STOP
         // replayed after markPlayedItem is what left the server with a
         // near-end position and a resumable watched episode (#153).
@@ -228,7 +229,7 @@ class OfflineWatchSyncContractTest {
         coEvery { offlineRepository.getOfflineItem(ITEM_ID) } returns offlineRow()
         coEvery { mediaRepository.getMediaDetail(ITEM_ID, any()) } returns
             Result.success(serverRow(isPlayed = true, positionTicks = 5_000_000L))
-        coEvery { apiClient.markPlayed(ITEM_ID) } returns Result.success(Unit)
+        coEvery { apiClient.writeUserData(UserDataWrite.MarkPlayed(ITEM_ID)) } returns Result.success(UserDataWriteOutcome.Done)
         // The heal pushes through the intent row + delivery probe.
         coEvery { outbox.isPlayedStateIntentDelivered(ITEM_ID, played = true) } returns true
 
@@ -237,7 +238,7 @@ class OfflineWatchSyncContractTest {
         assertTrue(result is androidx.work.ListenableWorker.Result.Success)
         // The heal: the server's resume point is zeroed so /Items/Resume
         // stops listing the watched episode.
-        coVerify(exactly = 1) { apiClient.markPlayed(ITEM_ID) }
+        coVerify(exactly = 1) { apiClient.writeUserData(UserDataWrite.MarkPlayed(ITEM_ID)) }
         coVerify(exactly = 1) { offlineRepository.updatePlaybackProgress(ITEM_ID, 0L, 100.0, true) }
         // The drain changed server state → home/detail caches must drop now,
         // not on the next TTL tick.
@@ -259,7 +260,8 @@ class OfflineWatchSyncContractTest {
         coEvery { offlineRepository.getOfflineItem(ITEM_ID) } returns offlineRow()
         coEvery { mediaRepository.getMediaDetail(ITEM_ID, any()) } returns
             Result.success(serverRow(isPlayed = true, positionTicks = 5_000_000L))
-        coEvery { apiClient.markPlayed(ITEM_ID) } returns Result.failure(java.io.IOException("5xx"))
+        coEvery { apiClient.writeUserData(UserDataWrite.MarkPlayed(ITEM_ID)) } returns
+            Result.failure(java.io.IOException("5xx"))
 
         val result = buildWorker().doWork()
 
@@ -287,9 +289,11 @@ class OfflineWatchSyncContractTest {
         val result = buildWorker().doWork()
 
         assertTrue(result is androidx.work.ListenableWorker.Result.Success)
-        coVerify(exactly = 1) { apiClient.markUnplayed(ITEM_ID) }
+        coVerify(exactly = 1) { apiClient.writeUserData(UserDataWrite.MarkUnplayed(ITEM_ID)) }
         coVerify(exactly = 0) { mediaRepository.markPlayed(any()) }
-        coVerify(exactly = 0) { apiClient.markPlayed(any()) }
+        // No derived PLAYED write may reach the server — the unwatch must not
+        // be undone (the MarkUnplayed write verified above is the intent).
+        coVerify(exactly = 0) { apiClient.writeUserData(match { it is UserDataWrite.MarkPlayed }) }
     }
 
     // ── 5. Lost intent row: the sticky mirror recovers the flip ───────
@@ -324,13 +328,13 @@ class OfflineWatchSyncContractTest {
         coEvery { offlineRepository.getOfflineItem(ITEM_ID) } returns offlineRow(isPlayed = true, playedPercentage = 100.0)
         coEvery { mediaRepository.getMediaDetail(ITEM_ID, any()) } returns
             Result.success(serverRow(isPlayed = true, positionTicks = 45_000_000L))
-        coEvery { apiClient.markPlayed(ITEM_ID) } returns Result.success(Unit)
+        coEvery { apiClient.writeUserData(UserDataWrite.MarkPlayed(ITEM_ID)) } returns Result.success(UserDataWriteOutcome.Done)
         coEvery { outbox.isPlayedStateIntentDelivered(ITEM_ID, played = true) } returns true
 
         val result = buildWorker().doWork()
 
         assertTrue(result is androidx.work.ListenableWorker.Result.Success)
-        coVerify(exactly = 1) { apiClient.markPlayed(ITEM_ID) }
+        coVerify(exactly = 1) { apiClient.writeUserData(UserDataWrite.MarkPlayed(ITEM_ID)) }
         coVerify(exactly = 1) { offlineRepository.updatePlaybackProgress(ITEM_ID, 0L, 100.0, true) }
         coVerify(exactly = 1) { cacheInvalidator.invalidateCaches() }
     }

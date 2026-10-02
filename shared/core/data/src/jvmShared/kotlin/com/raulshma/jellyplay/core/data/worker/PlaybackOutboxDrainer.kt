@@ -19,7 +19,7 @@ import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxEntry
  * the offline→online network transition.
  *
  * The drain replays outbox entries through
- * `PlaybackRepository.replayOutboxEntry`, a pure dispatch (no enqueue) so a
+ * `PlaybackOutboxReplay.replayOutboxEntry`, a pure dispatch (no enqueue) so a
  * retry does not recurse back into the outbox; the drainer owns the drain
  * loop (delete on success, retry/dead-letter on failure, reconcile), the
  * repository owns the entry-type → API-call mapping.

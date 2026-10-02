@@ -85,7 +85,8 @@ internal object SettingsScreenGroups {
      * precedent: a prefix split, no second declaration list).
      */
     val systemCore = SystemSearchItems.filter {
-        !it.id.startsWith(SCREENSAVER_ID_PREFIX) && !it.id.startsWith(IDLE_AMBIENT_ID_PREFIX)
+        !it.id.startsWith(SCREENSAVER_ID_PREFIX) && !it.id.startsWith(IDLE_AMBIENT_ID_PREFIX) &&
+            !it.id.startsWith(DISCORD_PRESENCE_ID_PREFIX) && !it.id.startsWith(HOOKS_ID_PREFIX)
     }.asSearchGroup("system.core")
     val systemScreensaver = SystemSearchItems.filter { it.id.startsWith(SCREENSAVER_ID_PREFIX) }
         .asSearchGroup("system.screensaver")
@@ -98,25 +99,41 @@ internal object SettingsScreenGroups {
     val systemIdleAmbient = SystemSearchItems.filter { it.id.startsWith(IDLE_AMBIENT_ID_PREFIX) }
         .asSearchGroup("system.idleAmbient")
 
+    /**
+     * the desktop Discord Rich Presence toggle (feature 4.2) — its own
+     * capability-gated group beside the idle-ambient one, same shape.
+     */
+    val systemDiscordPresence = SystemSearchItems.filter { it.id.startsWith(DISCORD_PRESENCE_ID_PREFIX) }
+        .asSearchGroup("system.discordPresence")
+
+    /**
+     * the desktop playback-event shell-hook rows (feature 4.3) — the master
+     * toggle plus the five mpv-shim-named commands, one group.
+     */
+    val systemHooks = SystemSearchItems.filter { it.id.startsWith(HOOKS_ID_PREFIX) }
+        .asSearchGroup("system.hooks")
+
     // ── HomeSettingsScreen ─────────────────────────────────────────────
     /**
-     * The home config hub's three screen groups — the rows moved off
+     * The home config hub's four screen groups — the rows moved off
      * Appearance (the former advanced-gated home display rows, the Next Up
-     * behavior rows, and the former `appearance.homeLayout` drill-in group).
-     * Ids carried over verbatim, so persisted deep-links/recents keep
-     * resolving — only the owning screen changed.
+     * behavior rows, the former `appearance.homeLayout` drill-in group, and
+     * the "Library & Cards" card-display quartet, PS-4). Ids carried over
+     * verbatim, so persisted deep-links/recents keep resolving — only the
+     * owning screen changed.
      */
     val homeDisplay = HomeDisplaySearchItems.asSearchGroup("home.display", HomeDisplayRowAdmissions)
     val homeNextUp = HomeNextUpSearchItems.asSearchGroup("home.nextUp")
     val homeLayout = HomeLayoutSearchItems.asSearchGroup("home.layout")
+    val homeCards = HomeCardsSearchItems.asSearchGroup("home.cards", HomeCardsRowAdmissions)
 
     // ── AppearanceSettingsScreen ────────────────────────────────────────
-    val appearanceTheme = AppearanceThemeSearchItems.asSearchGroup("appearance.theme")
+    val appearanceTheme = AppearanceThemeSearchItems.asSearchGroup("appearance.theme", AppearanceThemeRowAdmissions)
     val appearanceNavigation = AppearanceNavigationSearchItems.asSearchGroup("appearance.navigation")
-    val appearanceLibrary = AppearanceLibrarySearchItems.asSearchGroup("appearance.library")
-    val appearancePerformance = AppearancePerformanceSearchItems.asSearchGroup("appearance.performance")
-    val appearanceEyeCare = AppearanceEyeCareSearchItems.asSearchGroup("appearance.eyeCare")
-    val appearanceNewsletter = AppearanceNewsletterSearchItems.asSearchGroup("appearance.newsletter")
+    val appearanceLibrary = AppearanceLibrarySearchItems.asSearchGroup("appearance.library", AppearanceLibraryRowAdmissions)
+    val appearancePerformance = AppearancePerformanceSearchItems.asSearchGroup("appearance.performance", AppearancePerformanceRowAdmissions)
+    val appearanceEyeCare = AppearanceEyeCareSearchItems.asSearchGroup("appearance.eyeCare", AppearanceEyeCareRowAdmissions)
+    val appearanceNewsletter = AppearanceNewsletterSearchItems.asSearchGroup("appearance.newsletter", AppearanceNewsletterRowAdmissions)
 
     // ── PlaybackSettingsScreen ──────────────────────────────────────────
     val playbackPlayer = PlaybackSettingsSearchItems.asSearchGroup("playback.player", PlaybackPlayerRowAdmissions)
@@ -126,14 +143,14 @@ internal object SettingsScreenGroups {
     )
 
     /**
-     * One screen group fed by three adjacent engine declaration lists —
+     * One screen group fed by four adjacent engine declaration lists —
      * the screen renders a single "Engine Config" group whose rows depend
      * on the preferred player. The desktop-gated mpv audio-device rows
      * declare their [RowAdmission.Platform] gate here — the same
      * declaration `playbackEngineScreenRowTotal` and the screen's emission
      * `if`s read.
      */
-    val playbackEngine = (MpvEngineSearchItems + VlcEngineSearchItems + ExoPlayerEngineSearchItems)
+    val playbackEngine = (MpvEngineSearchItems + VlcEngineSearchItems + ExoPlayerEngineSearchItems + ExternalEngineSearchItems)
         .asSearchGroup("playback.engine", PlaybackEngineRowAdmissions)
 
     val playbackSyncPlay = SyncPlaySearchItems.asSearchGroup("playback.syncPlay")
@@ -213,9 +230,12 @@ internal object SettingsScreenGroups {
         systemCore,
         systemScreensaver,
         systemIdleAmbient,
+        systemDiscordPresence,
+        systemHooks,
         homeDisplay,
         homeNextUp,
         homeLayout,
+        homeCards,
         appearanceTheme,
         appearanceNavigation,
         appearanceLibrary,
@@ -256,6 +276,12 @@ internal object SettingsScreenGroups {
 
     /** Prefix shared by every idle-ambient id in [SystemSearchItems]. */
     internal const val IDLE_AMBIENT_ID_PREFIX = "idle_ambient_"
+
+    /** Prefix shared by every Discord-presence id in [SystemSearchItems]. */
+    internal const val DISCORD_PRESENCE_ID_PREFIX = "discord_"
+
+    /** Prefix shared by every shell-hook id in [SystemSearchItems]. */
+    internal const val HOOKS_ID_PREFIX = "hooks_"
 
     /**
      * The leading trio of [LanguageSettingsSearchItems] (app / audio /

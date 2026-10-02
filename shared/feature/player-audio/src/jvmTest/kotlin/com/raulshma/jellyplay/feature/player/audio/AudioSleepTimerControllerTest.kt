@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.feature.player.audio
 
 import com.raulshma.jellyplay.core.data.playback.AudioPlayerEngine
-import com.raulshma.jellyplay.core.data.playback.AudioSleepTimerManager
+import com.raulshma.jellyplay.core.data.playback.SleepCountdown
 import com.raulshma.jellyplay.core.datastore.audio.AudioStore
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -28,7 +28,7 @@ class AudioSleepTimerControllerTest {
 
     private val testScope = TestScope(UnconfinedTestDispatcher())
 
-    private lateinit var sleepTimerManager: AudioSleepTimerManager
+    private lateinit var sleepCountdown: SleepCountdown
     private lateinit var audioStore: AudioStore
     private lateinit var engine: AudioPlayerEngine
 
@@ -38,13 +38,13 @@ class AudioSleepTimerControllerTest {
 
     @BeforeTest
     fun setUp() {
-        sleepTimerManager = mockk<AudioSleepTimerManager>(relaxed = true)
+        sleepCountdown = mockk<SleepCountdown>(relaxed = true)
         audioStore = mockk(relaxed = true)
         engine = mockk(relaxed = true)
         slice = SleepTimerState()
         controller = AudioSleepTimerController(
             scope = testScope,
-            sleepTimerManager = sleepTimerManager,
+            sleepCountdown = sleepCountdown,
             audioStore = audioStore,
             engine = engine,
             updateState = { transform -> slice = transform(slice) },
@@ -57,7 +57,7 @@ class AudioSleepTimerControllerTest {
 
         coVerify { audioStore.setSleepTimerDurationMs(15 * 60 * 1000L) }
         coVerify { audioStore.setSleepTimerEndOfEpisode(false) }
-        verify { sleepTimerManager.startSleepTimer(15 * 60 * 1000L) }
+        verify { sleepCountdown.startSleepTimer(15 * 60 * 1000L) }
         assertEquals(
             SleepTimerState(active = true, endOfEpisode = false, lastUsedDurationMs = 15 * 60 * 1000L),
             slice,
@@ -69,7 +69,7 @@ class AudioSleepTimerControllerTest {
         controller.startSleepTimerEndOfEpisode()
 
         coVerify { audioStore.setSleepTimerEndOfEpisode(true) }
-        verify { sleepTimerManager.startEndOfEpisodeTimer() }
+        verify { sleepCountdown.startEndOfEpisodeTimer() }
         assertEquals(SleepTimerState(active = true, endOfEpisode = true), slice)
     }
 
@@ -83,7 +83,7 @@ class AudioSleepTimerControllerTest {
         val expiries = mutableListOf<() -> Unit>()
         controller.startSleepTimer(60_000L)
         controller.startSleepTimerEndOfEpisode()
-        verify(exactly = 2) { sleepTimerManager.setOnTimerExpired(capture(expiries)) }
+        verify(exactly = 2) { sleepCountdown.setOnTimerExpired(capture(expiries)) }
 
         for (expiry in expiries) {
             expiry.invoke()
@@ -100,7 +100,7 @@ class AudioSleepTimerControllerTest {
 
         controller.cancelSleepTimer()
 
-        verify { sleepTimerManager.cancelSleepTimer() }
+        verify { sleepCountdown.cancelSleepTimer() }
         // Cancel clears active/endOfEpisode but PRESERVES the last-used
         // duration (the picker keeps offering it) — the pre-extraction
         // behaviour, now pinned.

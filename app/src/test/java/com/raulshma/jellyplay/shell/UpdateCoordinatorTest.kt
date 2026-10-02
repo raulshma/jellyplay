@@ -204,6 +204,43 @@ class UpdateCoordinatorTest {
         assertEquals(UpdateState.Idle, coordinator.updateState.value)
     }
 
+    // ── auto-download preference: single-owner projection of the store ─────
+
+    @Test
+    fun `selfUpdateDownloadEnabled projects the experimental store, starting at the slice default`() = runTest(dispatcher) {
+        // Same first value the former mirror held: false until the store's
+        // current value arrives.
+        assertEquals(false, coordinator.selfUpdateDownloadEnabled.value)
+
+        // Eager sharing syncs the store's current value once started.
+        advanceUntilIdle()
+        assertEquals(false, coordinator.selfUpdateDownloadEnabled.value)
+
+        experimental.value = ExperimentalSlice(selfUpdateDownloadEnabled = true)
+        advanceUntilIdle()
+        assertEquals(true, coordinator.selfUpdateDownloadEnabled.value)
+    }
+
+    @Test
+    fun `setSelfUpdateDownloadEnabled writes only the store - no optimistic local write`() = runTest(dispatcher) {
+        coordinator.selfUpdateDownloadEnabled.value // materialize + warm the projection
+        advanceUntilIdle()
+
+        coordinator.setSelfUpdateDownloadEnabled(true)
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { experimentalStore.setSelfUpdateDownloadEnabled(true) }
+        // The mock store flow never re-emits on its own, so the projection
+        // still holds the store's last value: the toggle round-trips through
+        // the store instead of the former second (mirror) writer.
+        assertEquals(false, coordinator.selfUpdateDownloadEnabled.value)
+
+        // The store's re-emission — and only that — flips the projection.
+        experimental.value = ExperimentalSlice(selfUpdateDownloadEnabled = true)
+        advanceUntilIdle()
+        assertEquals(true, coordinator.selfUpdateDownloadEnabled.value)
+    }
+
     private fun updateInfo(latestVersion: String, isAvailable: Boolean = true) = AppUpdateInfo(
         latestVersion = latestVersion,
         htmlUrl = "https://github.com/raulshma/JellyPlay/releases/tag/v$latestVersion",

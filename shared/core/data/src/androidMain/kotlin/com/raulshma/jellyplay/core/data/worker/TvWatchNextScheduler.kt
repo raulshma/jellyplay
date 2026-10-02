@@ -2,11 +2,7 @@ package com.raulshma.jellyplay.core.data.worker
 
 import android.content.Context
 import android.util.Log
-import androidx.work.Constraints
 import androidx.work.ExistingWorkPolicy
-import androidx.work.NetworkType
-import androidx.work.OneTimeWorkRequestBuilder
-import androidx.work.WorkManager
 
 /**
  * The [TvWatchNextScheduler] interface itself moved to `:shared:core:data`
@@ -19,18 +15,13 @@ class TvWatchNextSchedulerImpl(
 ) : TvWatchNextScheduler {
     override fun scheduleRefresh() {
         try {
-            val request = OneTimeWorkRequestBuilder<TvWatchNextWorker>()
-                .setConstraints(
-                    Constraints.Builder()
-                        .setRequiredNetworkType(NetworkType.CONNECTED)
-                        .build(),
-                )
-                .addTag(TvWatchNextWorker.WORK_TAG)
-                .build()
-            WorkManager.getInstance(context).enqueueUniqueWork(
-                TvWatchNextWorker.UNIQUE_WORK_NAME,
-                ExistingWorkPolicy.REPLACE,
-                request,
+            UniqueWorkSchedules.uniqueOnce<TvWatchNextWorker>(
+                context = context,
+                uniqueName = TvWatchNextWorker.UNIQUE_WORK_NAME,
+                tag = TvWatchNextWorker.WORK_TAG,
+                // REPLACE, not the drains' KEEP: a re-requested refresh
+                // supersedes the queued one instead of being dropped.
+                existingPolicy = ExistingWorkPolicy.REPLACE,
             )
         } catch (e: Exception) {
             // WorkManager not initialised / unavailable — keep the no-throw

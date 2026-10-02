@@ -81,4 +81,7 @@
     <string name="library_year_to">%1$d年以前</string>
     <string name="data_download_started">ダウンロードを開始しました</string>
     <string name="data_download_start_failed">ダウンロードを開始できませんでした</string>
+    <string name="library_filter_has_subtitles">字幕あり</string>
+    <string name="library_filter_has_trailer">予告編あり</string>
+    <string name="library_filter_subtitles">字幕</string>
 </resources>

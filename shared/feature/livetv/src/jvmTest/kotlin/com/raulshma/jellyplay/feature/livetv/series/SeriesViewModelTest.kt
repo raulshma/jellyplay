@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.livetv.series
 
 import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
 import com.raulshma.jellyplay.core.model.DvrSeriesTimer
+import com.raulshma.jellyplay.core.ui.message.UiMessage
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -73,7 +74,7 @@ class SeriesViewModelTest {
         viewModel.load()
         advanceUntilIdle()
 
-        assertTrue(viewModel.uiState.value.error?.contains("boom") == true)
+        assertEquals("boom", (viewModel.uiState.value.error as UiMessage.Raw).text)
     }
 
     // ── Detail sheet round trip ──────────────────────────────────────────────
@@ -100,7 +101,7 @@ class SeriesViewModelTest {
         viewModel.cancelSeries("st-1")
         advanceUntilIdle()
 
-        assertEquals("denied", viewModel.uiState.value.error)
+        assertEquals("denied", (viewModel.uiState.value.error as UiMessage.Raw).text)
         assertEquals(timer, viewModel.uiState.value.selectedTimer)
     }
 

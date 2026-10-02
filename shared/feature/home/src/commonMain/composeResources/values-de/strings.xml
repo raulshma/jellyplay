@@ -100,4 +100,15 @@
     <string name="home_download_start_failed">Download konnte nicht gestartet werden</string>
     <string name="home_series_download_queued">Folgen für den Download vorgemerkt</string>
     <string name="home_see_all">Alle ansehen</string>
+    <string name="next_up_hidden_title">Aus „Als Nächstes“ ausgeblendet</string>
+    <string name="next_up_hidden_empty">Nichts ausgeblendet</string>
+    <string name="next_up_hidden_empty_subtitle">Serien, die du aus der „Als Nächstes“-Reihe entfernst, erscheinen hier zum Wiederherstellen.</string>
+    <string name="next_up_hidden_restore_all">Alle wiederherstellen</string>
+    <string name="next_up_hidden_restore_all_cd">Alle ausgeblendeten Serien in „Als Nächstes“ wiederherstellen</string>
+    <string name="next_up_hidden_restore_all_title">Alle in „Als Nächstes“ wiederherstellen?</string>
+    <string name="next_up_hidden_restore_all_message">Alle %1$d ausgeblendeten Serien erscheinen wieder in der „Als Nächstes“-Reihe.</string>
+    <string name="next_up_hidden_restore_cd">%1$s in „Als Nächstes“ wiederherstellen</string>
+    <string name="next_up_hidden_unknown">Unbekannte Serie</string>
+    <string name="a11y_mode_video">Videomodus</string>
+    <string name="a11y_mode_music">Musikmodus</string>
 </resources>

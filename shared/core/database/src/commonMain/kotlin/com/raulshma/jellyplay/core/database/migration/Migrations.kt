@@ -4,7 +4,7 @@ import androidx.room3.migration.Migration
 import com.raulshma.jellyplay.core.database.crypto.TokenCipher
 
 /**
- * The complete, correctly-ordered v1→v57 migration chain, with the
+ * The complete, correctly-ordered v1→v59 migration chain, with the
  * token-encrypting [Migration24To25] (which needs a [TokenCipher]) and the
  * container-backfilling [Migration53To54] (which needs a [ContainerProbe])
  * as constructor-injected steps at their true positions. Room matches
@@ -73,4 +73,6 @@ fun allMigrations(
         MIGRATION_54_55,
         MIGRATION_55_56,
         MIGRATION_56_57,
+        MIGRATION_57_58,
+        MIGRATION_58_59,
     )

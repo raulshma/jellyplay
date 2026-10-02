@@ -3,9 +3,6 @@ package com.raulshma.jellyplay.navigation
 import androidx.navigation3.runtime.NavKey
 import com.raulshma.jellyplay.core.model.remote.NavigationTarget
 import com.raulshma.jellyplay.core.data.remote.PlayEventPayload
-import com.raulshma.jellyplay.core.ui.feedback.UiText
-import com.raulshma.jellyplay.core.ui.feedback.UserMessage
-import com.raulshma.jellyplay.core.ui.message.UserMessage as SharedUserMessage
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.feature.shell.UserMessageDuration
 import com.raulshma.jellyplay.shell.SyncPlayOpenRequest
@@ -23,9 +20,14 @@ import org.junit.Test
 /**
  * Pins the nav-request collector choreography [NavRequestCollector] owns for
  * JellyPlayApp's MainContent — the five collect-then-dispatch loops that used
- * to live composable-inline — plus the pure policy folds on its companion
- * (the RemoteNavigationRouting precedent) and the message-host adaptation
- * seams ([legacySeverityOf] / the duration maps).
+ * to live composable-inline — plus the one pure fold left on its companion
+ * (the nullable wrapper [NavRequestCollector.pendingRouteDispatch] adds over
+ * the shared route-dispatch table) and the message-host adaptation seams
+ * (the duration maps). The fold tables themselves — the
+ * tab-vs-push decision, the SyncPlay auto-open guard, the now-playing message
+ * format — are the shared RemoteNavigationDispatcher's and are pinned ONCE in
+ * RemoteNavigationDispatcherTest; the collector drives them here only through
+ * its loops (the RemoteNavigationRouting precedent).
  *
  * Every test drives the controller through fake constructor lambdas (one
  * shared event log so dispatch→consume ORDER is asserted, not just counts)
@@ -63,30 +65,12 @@ class NavRequestCollectorTest {
     private fun TestScope.launchCollector(block: suspend () -> Unit) =
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { block() }
 
-    // ── pendingRouteDispatch: the tab-vs-nested fork ─────────────────────
+    // ── pendingRouteDispatch: the null wrapper over the shared table ────
+    // (the tab-vs-push rows themselves are RemoteNavigationDispatcherTest's)
 
     @Test
-    fun `pendingRouteDispatch folds no pending route to None`() {
-        assertEquals(
-            NavRequestCollector.PendingRouteDispatch.None,
-            NavRequestCollector.pendingRouteDispatch(null, topLevelKeys),
-        )
-    }
-
-    @Test
-    fun `pendingRouteDispatch folds a registered top-level key to SwitchTab`() {
-        assertEquals(
-            NavRequestCollector.PendingRouteDispatch.SwitchTab(Route.Search),
-            NavRequestCollector.pendingRouteDispatch(Route.Search, topLevelKeys),
-        )
-    }
-
-    @Test
-    fun `pendingRouteDispatch folds anything else to Push`() {
-        assertEquals(
-            NavRequestCollector.PendingRouteDispatch.Push(Route.MediaDetail("item-1")),
-            NavRequestCollector.pendingRouteDispatch(Route.MediaDetail("item-1"), topLevelKeys),
-        )
+    fun `pendingRouteDispatch folds no pending route to null`() {
+        assertNull(NavRequestCollector.pendingRouteDispatch(null, topLevelKeys))
     }
 
     // ── dispatchPendingRoute: dispatch, then consume-once ────────────────
@@ -122,103 +106,6 @@ class NavRequestCollectorTest {
         shell.collector.dispatchPendingRoute(null)
 
         assertEquals(emptyList<String>(), shell.events)
-    }
-
-    // ── syncPlayAutoOpenRoute: the player-open guard ─────────────────────
-
-    @Test
-    fun `syncPlayAutoOpenRoute builds the player route when no player is open`() {
-        assertEquals(
-            Route.VideoPlayer(itemId = "ep-1", startPositionTicks = 42_000L),
-            NavRequestCollector.syncPlayAutoOpenRoute(
-                SyncPlayOpenRequest(itemId = "ep-1", startPositionTicks = 42_000L),
-                backStacks = listOf(
-                    mutableListOf(Route.Home, Route.MediaDetail("item-1")),
-                ),
-            ),
-        )
-    }
-
-    @Test
-    fun `a VideoPlayer on top of any stack vetoes the open`() {
-        assertNull(
-            NavRequestCollector.syncPlayAutoOpenRoute(
-                SyncPlayOpenRequest("ep-1", 0L),
-                backStacks = listOf(
-                    mutableListOf(Route.Home),
-                    mutableListOf(Route.LiveTv, Route.VideoPlayer("already-open")),
-                ),
-            ),
-        )
-    }
-
-    @Test
-    fun `an AudioPlayer top does not veto — the guard is VideoPlayer-specific`() {
-        // The audio player is not the SyncPlay surface; the group's video
-        // item still needs a video player pushed.
-        assertEquals(
-            Route.VideoPlayer("ep-1"),
-            NavRequestCollector.syncPlayAutoOpenRoute(
-                SyncPlayOpenRequest("ep-1", 0L),
-                backStacks = listOf(mutableListOf(Route.Home, Route.AudioPlayer("a-1"))),
-            ),
-        )
-    }
-
-    @Test
-    fun `a VideoPlayer buried below a non-player top does not veto`() {
-        // Top-only guard: a player the user navigated away from is not
-        // visible, so the group playback opens a fresh one.
-        assertEquals(
-            Route.VideoPlayer("ep-1"),
-            NavRequestCollector.syncPlayAutoOpenRoute(
-                SyncPlayOpenRequest("ep-1", 0L),
-                backStacks = listOf(
-                    mutableListOf(Route.Home, Route.VideoPlayer("buried"), Route.MediaDetail("item-1")),
-                ),
-            ),
-        )
-    }
-
-    @Test
-    fun `empty stacks and an empty stack collection do not veto`() {
-        val request = SyncPlayOpenRequest("ep-1", 0L)
-
-        assertEquals(
-            Route.VideoPlayer("ep-1"),
-            NavRequestCollector.syncPlayAutoOpenRoute(request, backStacks = emptyList()),
-        )
-        assertEquals(
-            Route.VideoPlayer("ep-1"),
-            NavRequestCollector.syncPlayAutoOpenRoute(
-                request,
-                backStacks = listOf(mutableListOf<NavKey>()),
-            ),
-        )
-    }
-
-    // ── nowPlayingSnackbarMessage: the title fallback + template ────────
-
-    @Test
-    fun `a titled play event formats into the now-playing template`() {
-        assertEquals(
-            "Now playing: Episode One",
-            NavRequestCollector.nowPlayingSnackbarMessage(
-                PlayEventPayload(itemId = "ep-1", title = "Episode One", startPositionTicks = 0L),
-                messageTemplate = "Now playing: %s",
-            ),
-        )
-    }
-
-    @Test
-    fun `a blank title falls back to the raw item id`() {
-        assertEquals(
-            "Now playing: ep-1",
-            NavRequestCollector.nowPlayingSnackbarMessage(
-                PlayEventPayload(itemId = "ep-1", title = " ", startPositionTicks = 0L),
-                messageTemplate = "Now playing: %s",
-            ),
-        )
     }
 
     // ── collectRemoteNavigation: target → navigate / ClosePlayer → pop ──
@@ -336,7 +223,7 @@ class NavRequestCollectorTest {
     }
 
     @Test
-    fun `goHome switches the tab through the pendingRouteDispatch fork`() = runTest {
+    fun `goHome switches the tab through the shared route-dispatch fork`() = runTest {
         val shell = Shell(topLevelKeys)
         val targets = MutableSharedFlow<NavigationTarget>(extraBufferCapacity = 4)
         launchCollector { shell.collector.collectRemoteNavigation(targets, contextMenuUnavailableMessage = "no context menu here") }
@@ -364,6 +251,8 @@ class NavRequestCollectorTest {
     }
 
     // ── collectSyncPlayOpens: the guard drives the push ─────────────────
+    // (the guard's own fold table — veto / build / top-only — is
+    // RemoteNavigationDispatcherTest's; these rows pin the loop wiring)
 
     @Test
     fun `a group open request pushes the video player when none is open`() = runTest {
@@ -411,18 +300,6 @@ class NavRequestCollectorTest {
     }
 
     // ── message-host adaptation seams ────────────────────────────────────
-
-    @Test
-    fun `legacySeverityOf projects both legacy arms onto the shared severity`() {
-        assertEquals(
-            SharedUserMessage.Severity.Error,
-            legacySeverityOf(UserMessage.Error(UiText.Raw("boom"))),
-        )
-        assertEquals(
-            SharedUserMessage.Severity.Info,
-            legacySeverityOf(UserMessage.Info(UiText.Raw("done"))),
-        )
-    }
 
     @Test
     fun `duration maps keep the shared severity policy on both surfaces`() {

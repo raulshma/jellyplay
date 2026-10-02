@@ -11,6 +11,7 @@ import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastStore
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerStore
 import com.raulshma.jellyplay.core.model.CastingStrategy
 import com.raulshma.jellyplay.core.model.ExoPlayerEngineConfig
+import com.raulshma.jellyplay.core.model.GestureMode
 import com.raulshma.jellyplay.core.model.LibVlcEngineConfig
 import com.raulshma.jellyplay.core.model.MediaSegmentType
 import com.raulshma.jellyplay.core.model.MpvEngineConfig
@@ -128,14 +129,14 @@ class PlaybackSettingsViewModelTest {
     }
 
     @Test
-    fun `gesture toggle persists through the videoPlayer store`() = runTest {
+    fun `gesture mode picker persists through the videoPlayer store`() = runTest {
         val viewModel = viewModel()
 
-        viewModel.edit { it.videoPlayer.setVideoGesturesEnabled(false) }
+        viewModel.edit { it.videoPlayer.setVideoGestureMode(GestureMode.TAP_ONLY) }
         advanceUntilIdle()
         replayAllEdits()
 
-        coVerify(exactly = 1) { videoPlayerStore.setVideoGesturesEnabled(false) }
+        coVerify(exactly = 1) { videoPlayerStore.setVideoGestureMode(GestureMode.TAP_ONLY) }
     }
 
     @Test

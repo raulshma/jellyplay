@@ -13,19 +13,25 @@ import org.koin.dsl.module
 /**
  * Desktop auto-update, client half (docs/adr/desktop-auto-update.md — the
  * accepted v1 design: **manual check + open the release page**, never silent
- * download-and-install). This file REPLACES the old `999999.0.0` sentinel
- * mechanics from `desktopDataModule` with a real update check:
+ * download-and-install). This file owns the desktop shell's ONE real
+ * `AppUpdateRepository` definition ([desktopAppUpdateModule] — core:data's
+ * desktop data module ships no update family; the installed version is a
+ * desktop-shell input it cannot see):
  *
  *  - The installed version comes from the generated `desktop-build.properties`
- *    classpath resource ([DesktopInstalledVersion.read]) — the same resource
+ *    classpath resource ([DesktopInstalledVersion.read], bound as a Koin
+ *    single beside [com.raulshma.jellyplay.desktop.DesktopPaths] in
+ *    DesktopKoinModules) — the same resource
  *    the About screen's `DesktopAppMetaProvider` reads. Builds produced with
  *    an explicit `-PjellyplayVersion` (the CI release lanes; see
  *    `jellyplayReleaseChannel` in apps/desktop/build.gradle.kts) are
  *    [DesktopInstalledVersion.Release]; every dev/IDE build is
  *    [DesktopInstalledVersion.DevBuild] and stays "up to date" BY CONSTRUCTION
- *    — a dev build has no release to update to, and the old sentinel existed
- *    precisely because `compareVersions` folds a non-numeric version ("dev")
- *    to 0.0.0 and would false-positive against every tag.
+ *    — a dev build has no release to update to, and its non-numeric version
+ *    cannot feed the comparison (`compareVersions` folds a non-numeric
+ *    version ("dev") to 0.0.0, which would false-positive against every
+ *    tag), so the suppression is pinned at the decorator instead of faked
+ *    through an unbeatable version number.
  *  - The feed is the GitHub Releases API the shared seam already targets —
  *    `GitHubReleasesApiImpl.LATEST_RELEASE_URL`
  *    (`https://api.github.com/repos/raulshma/jellyplay/releases/latest`).
@@ -171,11 +177,11 @@ object DesktopUpdateBrowser {
 
 /**
  * The desktop `AppUpdateRepository` actual: the shared
- * [AppUpdateRepositoryImpl] wired with the REAL installed version (this is
- * the ADR's "one-line change to the version supplier", done app-side) plus
- * the [DesktopInstalledVersion.DevBuild] suppression — a dev build's
+ * [AppUpdateRepositoryImpl] wired with the real installed version (the ADR's
+ * "one-line change to the version supplier", done app-side) plus the
+ * [DesktopInstalledVersion.DevBuild] suppression — a dev build's
  * `currentVersionName` cannot be made version-comparable, so the decorator
- * pins `isUpdateAvailable` to false instead of resurrecting any sentinel
+ * pins `isUpdateAvailable` to false rather than faking an unbeatable version
  * number. Download/pending/cleanup delegate untouched: on desktop the UI
  * gates on `isUpdateAvailable`, so the appdata `updates` dir stays empty
  * (ADR: downloadUpdate/getPendingUpdate remain Android-only-reachable).
@@ -212,23 +218,25 @@ private const val UPDATES_DIR = "updates"
  * the underlying comparator has SOMETHING stable. Never drives a visible
  * decision: [DesktopAppUpdateRepository] suppresses every dev-build result.
  * (Folding to `0.0.0` — i.e. "every release is newer" — is fine here BECAUSE
- * the suppression makes it unobservable; the old sentinel's sin was feeding
- * an unsuppressed comparator.)
+ * the suppression makes it unobservable; fed to an unsuppressed comparator
+ * it would false-positive against every tag.)
  */
 private const val DEV_VERSION_NAME = "dev"
 
 /**
- * The Koin override that swaps `desktopDataModule`'s sentinel-bound
- * `AppUpdateRepository` single for the real-version one above. MUST be
- * loaded AFTER `desktopDataModule` (later definition wins) and Main.kt must
- * run its startKoin with `allowOverride(true)` — Koin 4 dropped the
- * per-definition override flag, and the global switch is left on
- * deliberately for this one replacement (the registration guard test ratchets
- * the rest of the module list).
+ * The desktop shell's `AppUpdateRepository` definition — the ONE real
+ * binding, no override. core:data's desktop data module ships no update
+ * family, so this is the only definition in the desktop graph and Main.kt's
+ * startKoin runs under Koin's default no-override policy. The installed
+ * version is the shell's [DesktopInstalledVersion] single (bound beside
+ * DesktopPaths in DesktopKoinModules, read from the generated
+ * desktop-build.properties): release-lane builds compare against the GitHub
+ * feed for real, dev builds are suppressed by the decorator — the ADR's
+ * manual check + open the release page, never a silent install.
  */
 fun desktopAppUpdateModule(dataDir: Path): Module = module {
     single<AppUpdateRepository> {
-        val installed = DesktopInstalledVersion.read()
+        val installed = get<DesktopInstalledVersion>()
         DesktopAppUpdateRepository(
             delegate = AppUpdateRepositoryImpl(
                 gitHubReleasesApi = get(),

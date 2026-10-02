@@ -46,6 +46,8 @@ class LibraryItemsQuerySpecTest {
         assertEquals(listOf("Season", "Episode"), spec.excludeKinds)
         // No played-status/resumable/rating/term dimension active.
         assertNull(spec.itemFilters)
+        assertNull(spec.hasSubtitles)
+        assertNull(spec.hasTrailer)
         assertNull(spec.minCommunityRating)
         assertNull(spec.searchTerm)
         assertNull(spec.genres)
@@ -91,6 +93,37 @@ class LibraryItemsQuerySpecTest {
             buildMediaItemsQuerySpec("p", filters(PlayedStatus.ALL, resumable = false), null, 0, 10, null, ItemKindFilter())
                 .itemFilters,
         )
+    }
+
+    @Test
+    fun `presence filters map onto the hasSubtitles and hasTrailer params only when true`() {
+        // Standalone /Items params (not ItemFilter tokens): true = only items
+        // with subtitles / a trailer. Either dimension stands alone.
+        val both = buildMediaItemsQuerySpec(
+            "p",
+            LibraryFilters(hasSubtitles = true, hasTrailer = true),
+            null, 0, 10, null, ItemKindFilter(),
+        )
+        assertEquals(true, both.hasSubtitles)
+        assertEquals(true, both.hasTrailer)
+
+        val onlySubtitles = buildMediaItemsQuerySpec(
+            "p",
+            LibraryFilters(hasSubtitles = true),
+            null, 0, 10, null, ItemKindFilter(),
+        )
+        assertEquals(true, onlySubtitles.hasSubtitles)
+        assertNull(onlySubtitles.hasTrailer)
+
+        // A stored `false` is the tri-state "off" — omitted, exactly like null.
+        val off = buildMediaItemsQuerySpec(
+            "p",
+            LibraryFilters(hasSubtitles = false, hasTrailer = false),
+            null, 0, 10, null, ItemKindFilter(),
+        )
+        assertNull(off.hasSubtitles)
+        assertNull(off.hasTrailer)
+        assertNull(buildMediaItemsQuerySpec("p", LibraryFilters(), null, 0, 10, null, ItemKindFilter()).hasSubtitles)
     }
 
     @Test
@@ -286,17 +319,31 @@ class LibraryItemsQuerySpecTest {
 
     @Test
     fun `the resume spec narrows to books only when asked`() {
-        val video = buildResumeQuerySpec(limit = 16, isBooks = false)
+        val video = buildResumeQuerySpec(limit = 16, kinds = null)
         assertEquals(16, video.limit)
         assertNull(video.includeKinds, "the video resume row sends no kind constraint")
         assertEquals(listOf("Overview", "PrimaryImageAspectRatio"), video.fields)
         assertNull(video.parentId)
         assertNull(video.sortBy)
 
-        val books = buildResumeQuerySpec(limit = 8, isBooks = true)
+        val books = buildResumeQuerySpec(limit = 8, kinds = listOf("Book"))
         assertEquals(8, books.limit)
         assertEquals(listOf("Book"), books.includeKinds, "books narrow server-side via includeItemTypes")
         assertEquals(listOf("Overview", "PrimaryImageAspectRatio"), books.fields)
+    }
+
+    @Test
+    fun `the resume spec carries no classic-rows wire narrowing`() {
+        // True 1:1 (#168): the video resume row sends the exact pre-12 wire
+        // shape in BOTH modes — the spec has no classic-rows knob; classic
+        // rows drop the 12.x Series/Season rollups in the client-side fold
+        // (toFilteredResumeRows), never on the wire. Books keep their
+        // server-side narrowing.
+        val video = buildResumeQuerySpec(limit = 20, kinds = null)
+
+        assertNull(video.includeKinds)
+        assertEquals(20, video.limit)
+        assertEquals(listOf("Overview", "PrimaryImageAspectRatio"), video.fields)
     }
 
     @Test

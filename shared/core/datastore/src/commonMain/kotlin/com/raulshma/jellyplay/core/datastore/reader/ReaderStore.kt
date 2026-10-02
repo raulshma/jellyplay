@@ -26,6 +26,17 @@ enum class ReadingDirection {
 }
 
 /**
+ * Paged-book layout: one page per screen turn, or a two-page spread (manga /
+ * double-page mode). Lives beside [ReadingDirection] for the same reason —
+ * a pure reader preference with no server-side counterpart.
+ */
+@Serializable
+enum class ReadingLayout {
+    SINGLE,
+    DOUBLE,
+}
+
+/**
  * Global reflowable-book appearance theme. Lives in the datastore module (not
  * core/model) for the same reason as [ReadingDirection]: a pure reader
  * preference with no server-side counterpart.
@@ -93,8 +104,40 @@ class ReaderStore constructor(
 ) {
     private val scope = externalScope
 
+    /**
+     * The four JSON-carrier map preferences (directions / layouts /
+     * per-book appearance / last CFIs), each declared once as a
+     * [EncodedMapPreference] — the decode→edit→encode transaction shape
+     * lives in that class, not pasted per setter.
+     */
+    private val directionsPref = EncodedMapPreference(
+        dataStore = dataStore,
+        key = Keys.READING_DIRECTIONS,
+        decode = ::decodeDirections,
+        encode = { PreferenceCodec.json.encodeToString(EncodedDirections.serializer(), EncodedDirections(it)) },
+    )
+    private val layoutsPref = EncodedMapPreference(
+        dataStore = dataStore,
+        key = Keys.READER_READING_LAYOUTS,
+        decode = ::decodeLayouts,
+        encode = { PreferenceCodec.json.encodeToString(EncodedLayouts.serializer(), EncodedLayouts(it)) },
+    )
+    private val perBookAppearancePref = EncodedMapPreference(
+        dataStore = dataStore,
+        key = Keys.READER_PER_BOOK_APPEARANCE,
+        decode = ::decodePerBookAppearance,
+        encode = { PreferenceCodec.json.encodeToString(EncodedPerBookAppearance.serializer(), EncodedPerBookAppearance(it)) },
+    )
+    private val lastCfisPref = EncodedMapPreference(
+        dataStore = dataStore,
+        key = Keys.READER_LAST_CFIS,
+        decode = ::decodeLastCfis,
+        encode = { PreferenceCodec.json.encodeToString(EncodedLastCfis.serializer(), EncodedLastCfis(it)) },
+    )
+
     internal object Keys {
         val READING_DIRECTIONS = stringPreferencesKey("reader_reading_directions")
+        val READER_READING_LAYOUTS = stringPreferencesKey("reader_reading_layouts")
         val READER_THEME = stringPreferencesKey("reader_theme")
         val READER_FONT_SIZE_PX = intPreferencesKey("reader_font_size_px")
         val READER_FONT_FAMILY = stringPreferencesKey("reader_font_family")
@@ -155,6 +198,7 @@ class ReaderStore constructor(
      */
     internal fun read(prefs: Preferences): ReaderSlice = ReaderSlice(
         readingDirections = decodeDirections(prefs[Keys.READING_DIRECTIONS]),
+        readingLayouts = decodeLayouts(prefs[Keys.READER_READING_LAYOUTS]),
         readerTheme = decodeTheme(prefs[Keys.READER_THEME]),
         readerFontSizePx = decodeFontSize(prefs[Keys.READER_FONT_SIZE_PX]),
         fontFamily = decodeFontFamily(prefs[Keys.READER_FONT_FAMILY]),
@@ -182,13 +226,15 @@ class ReaderStore constructor(
         reader.value.readingDirections[itemId] ?: ReadingDirection.LTR
 
     suspend fun setReadingDirection(itemId: String, direction: ReadingDirection) {
-        dataStore.edit { prefs ->
-            val updated = decodeDirections(prefs[Keys.READING_DIRECTIONS]) + (itemId to direction)
-            prefs[Keys.READING_DIRECTIONS] = PreferenceCodec.json.encodeToString(
-                EncodedDirections.serializer(),
-                EncodedDirections(updated),
-            )
-        }
+        directionsPref.edit { it + (itemId to direction) }
+    }
+
+    /** The paged layout for [itemId], defaulting to [ReadingLayout.SINGLE]. */
+    fun readingLayout(itemId: String): ReadingLayout =
+        reader.value.readingLayouts[itemId] ?: ReadingLayout.SINGLE
+
+    suspend fun setReadingLayout(itemId: String, layout: ReadingLayout) {
+        layoutsPref.edit { it + (itemId to layout) }
     }
 
     suspend fun setReaderTheme(theme: ReaderTheme) {
@@ -305,19 +351,14 @@ class ReaderStore constructor(
      * is clamped into the global font band like the global setter.
      */
     suspend fun setPerBookAppearance(itemId: String, appearance: PerBookAppearance?) {
-        dataStore.edit { prefs ->
-            val current = decodePerBookAppearance(prefs[Keys.READER_PER_BOOK_APPEARANCE])
-            val updated = if (appearance == null) {
+        perBookAppearancePref.edit { current ->
+            if (appearance == null) {
                 current - itemId
             } else {
                 current + (itemId to appearance.copy(
                     fontSizePx = appearance.fontSizePx?.coerceIn(MIN_FONT_SIZE_PX, MAX_FONT_SIZE_PX),
                 ))
             }
-            prefs[Keys.READER_PER_BOOK_APPEARANCE] = PreferenceCodec.json.encodeToString(
-                EncodedPerBookAppearance.serializer(),
-                EncodedPerBookAppearance(updated),
-            )
         }
     }
 
@@ -331,24 +372,12 @@ class ReaderStore constructor(
      * same install, while the server keeps receiving the ticks protocol).
      */
     suspend fun setLastCfi(itemId: String, cfi: String) {
-        dataStore.edit { prefs ->
-            val updated = decodeLastCfis(prefs[Keys.READER_LAST_CFIS]) + (itemId to cfi)
-            prefs[Keys.READER_LAST_CFIS] = PreferenceCodec.json.encodeToString(
-                EncodedLastCfis.serializer(),
-                EncodedLastCfis(updated),
-            )
-        }
+        lastCfisPref.edit { it + (itemId to cfi) }
     }
 
     /** Drops [itemId]'s resume CFI (book removed / marks cleared); other books are untouched. */
     suspend fun clearLastCfi(itemId: String) {
-        dataStore.edit { prefs ->
-            val updated = decodeLastCfis(prefs[Keys.READER_LAST_CFIS]) - itemId
-            prefs[Keys.READER_LAST_CFIS] = PreferenceCodec.json.encodeToString(
-                EncodedLastCfis.serializer(),
-                EncodedLastCfis(updated),
-            )
-        }
+        lastCfisPref.edit { it - itemId }
     }
 
     /**
@@ -379,6 +408,7 @@ class ReaderStore constructor(
      */
     internal val resetKeys: List<Preferences.Key<*>> = listOf(
         Keys.READING_DIRECTIONS,
+        Keys.READER_READING_LAYOUTS,
         Keys.READER_THEME,
         Keys.READER_FONT_SIZE_PX,
         Keys.READER_FONT_FAMILY,
@@ -404,6 +434,7 @@ class ReaderStore constructor(
 @Serializable
 data class ReaderSlice(
     val readingDirections: Map<String, ReadingDirection> = emptyMap(),
+    val readingLayouts: Map<String, ReadingLayout> = emptyMap(),
     val readerTheme: ReaderTheme = ReaderTheme.DARK,
     val readerFontSizePx: Int = ReaderStore.DEFAULT_FONT_SIZE_PX,
     val fontFamily: ReaderFontFamily = ReaderFontFamily.SYSTEM,
@@ -423,9 +454,32 @@ data class ReaderSlice(
     val lastCfis: Map<String, String> = emptyMap(),
 )
 
+/**
+ * One JSON-encoded map preference under a single [key]: the decode → edit →
+ * encode transaction every reader map shares, written once. The per-map
+ * [Encoded*][EncodedDirections] carrier classes stay separate so the stored
+ * JSON field names (`directions`, `layouts`, …) never change.
+ */
+private class EncodedMapPreference<T>(
+    private val dataStore: DataStore<Preferences>,
+    private val key: Preferences.Key<String>,
+    private val decode: (String?) -> Map<String, T>,
+    private val encode: (Map<String, T>) -> String,
+) {
+    suspend fun edit(edit: (Map<String, T>) -> Map<String, T>) {
+        dataStore.edit { prefs ->
+            prefs[key] = encode(edit(decode(prefs[key])))
+        }
+    }
+}
+
 /** JSON carrier so the direction map round-trips through the shared lenient codec. */
 @Serializable
 private data class EncodedDirections(val directions: Map<String, ReadingDirection>)
+
+/** JSON carrier so the per-book layout map round-trips through the shared lenient codec. */
+@Serializable
+private data class EncodedLayouts(val layouts: Map<String, ReadingLayout>)
 
 /** JSON carrier so the per-book appearance map round-trips through the shared lenient codec. */
 @Serializable
@@ -435,32 +489,22 @@ private data class EncodedPerBookAppearance(val appearances: Map<String, PerBook
 @Serializable
 private data class EncodedLastCfis(val cfis: Map<String, String>)
 
-private fun decodeDirections(raw: String?): Map<String, ReadingDirection> {
-    if (raw.isNullOrBlank()) return emptyMap()
-    return runCatching {
-        PreferenceCodec.json
-            .decodeFromString<EncodedDirections>(raw)
-            .directions
-    }.getOrDefault(emptyMap())
-}
+/** Lenient carrier decode shared by all map prefs: a blank or undecodable blob is an empty map. */
+private inline fun <T> decodeMap(raw: String?, extract: (String) -> Map<String, T>): Map<String, T> =
+    if (raw.isNullOrBlank()) emptyMap()
+    else runCatching { extract(raw) }.getOrDefault(emptyMap())
 
-private fun decodePerBookAppearance(raw: String?): Map<String, PerBookAppearance> {
-    if (raw.isNullOrBlank()) return emptyMap()
-    return runCatching {
-        PreferenceCodec.json
-            .decodeFromString<EncodedPerBookAppearance>(raw)
-            .appearances
-    }.getOrDefault(emptyMap())
-}
+private fun decodeDirections(raw: String?): Map<String, ReadingDirection> =
+    decodeMap(raw) { PreferenceCodec.json.decodeFromString<EncodedDirections>(it).directions }
 
-private fun decodeLastCfis(raw: String?): Map<String, String> {
-    if (raw.isNullOrBlank()) return emptyMap()
-    return runCatching {
-        PreferenceCodec.json
-            .decodeFromString<EncodedLastCfis>(raw)
-            .cfis
-    }.getOrDefault(emptyMap())
-}
+private fun decodeLayouts(raw: String?): Map<String, ReadingLayout> =
+    decodeMap(raw) { PreferenceCodec.json.decodeFromString<EncodedLayouts>(it).layouts }
+
+private fun decodePerBookAppearance(raw: String?): Map<String, PerBookAppearance> =
+    decodeMap(raw) { PreferenceCodec.json.decodeFromString<EncodedPerBookAppearance>(it).appearances }
+
+private fun decodeLastCfis(raw: String?): Map<String, String> =
+    decodeMap(raw) { PreferenceCodec.json.decodeFromString<EncodedLastCfis>(it).cfis }
 
 private fun decodeTheme(raw: String?): ReaderTheme =
     ReaderTheme.entries.firstOrNull { it.name == raw } ?: ReaderTheme.DARK

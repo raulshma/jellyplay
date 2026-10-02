@@ -19,7 +19,6 @@ import com.raulshma.jellyplay.core.model.SeerrRowMedia
 import com.raulshma.jellyplay.core.model.descriptor
 import com.raulshma.jellyplay.core.model.seerr.SeerrDiscoverParams
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
-import com.raulshma.jellyplay.core.model.seerr.SeerrSearchResponse
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -60,7 +59,7 @@ class HomeSectionsFetcherTest {
 
     private class FakeHomeSectionSources : HomeSectionSources {
 
-        /** Leaf calls in issue order, e.g. "latest:f1:16". */
+        /** Leaf calls in issue order, e.g. "latest:f1:16:null". */
         val calls = mutableListOf<String>()
 
         /** Created by a test BEFORE the call happens; the call suspends until completed. */
@@ -92,8 +91,8 @@ class HomeSectionsFetcherTest {
             return scripted
         }
 
-        override suspend fun getContinueWatching(limit: Int): Result<List<MediaItem>> =
-            resolve(continueWatchingResults, "cw:$limit") { emptyList() }
+        override suspend fun getContinueWatching(limit: Int, classicRows: Boolean): Result<List<MediaItem>> =
+            resolve(continueWatchingResults, "cw:$limit:$classicRows") { emptyList() }
 
         override suspend fun getContinueReading(limit: Int): Result<List<MediaItem>> =
             resolve(continueReadingResults, "cr:$limit") { emptyList() }
@@ -104,8 +103,8 @@ class HomeSectionsFetcherTest {
         override suspend fun getLibraryFolders(): Result<List<LibraryFolder>> =
             resolve(foldersResults, "folders") { emptyList() }
 
-        override suspend fun getLatestMedia(parentId: String, limit: Int): Result<List<MediaItem>> =
-            resolve(latestResults, "latest:$parentId:$limit") { emptyList() }
+        override suspend fun getLatestMedia(parentId: String, limit: Int, classicEpisodePool: Int?): Result<List<MediaItem>> =
+            resolve(latestResults, "latest:$parentId:$limit:$classicEpisodePool") { emptyList() }
 
         override suspend fun getSimilarItems(itemId: String, limit: Int): Result<List<MediaItem>> =
             resolve(similarResults, "similar:$itemId:$limit") { emptyList() }
@@ -148,24 +147,24 @@ class HomeSectionsFetcherTest {
 
         var available: Boolean = true
         val calls = mutableListOf<String>()
-        val movieResults = ArrayDeque<Result<SeerrSearchResponse>>()
-        val tvResults = ArrayDeque<Result<SeerrSearchResponse>>()
+        val movieResults = ArrayDeque<Result<List<SeerrSearchItem>>>()
+        val tvResults = ArrayDeque<Result<List<SeerrSearchItem>>>()
         val movieParams = mutableListOf<SeerrDiscoverParams?>()
         val tvParams = mutableListOf<SeerrDiscoverParams?>()
 
         override val seerrAvailable: Boolean
             get() = available
 
-        override suspend fun getDiscoverMovies(params: SeerrDiscoverParams?): Result<SeerrSearchResponse> {
+        override suspend fun getDiscoverMovies(params: SeerrDiscoverParams?): Result<List<SeerrSearchItem>> {
             calls += "seerr-movies"
             movieParams += params
-            return movieResults.removeFirstOrNull() ?: Result.success(SeerrSearchResponse())
+            return movieResults.removeFirstOrNull() ?: Result.success(emptyList())
         }
 
-        override suspend fun getDiscoverTv(params: SeerrDiscoverParams?): Result<SeerrSearchResponse> {
+        override suspend fun getDiscoverTv(params: SeerrDiscoverParams?): Result<List<SeerrSearchItem>> {
             calls += "seerr-tv"
             tvParams += params
-            return tvResults.removeFirstOrNull() ?: Result.success(SeerrSearchResponse())
+            return tvResults.removeFirstOrNull() ?: Result.success(emptyList())
         }
     }
 
@@ -240,7 +239,7 @@ class HomeSectionsFetcherTest {
         fake.similarResults += Result.success(listOf(item("recB")))
         // Close the Continue Watching gate (keyed like the recorded call):
         // the whole seed chain stalls behind it.
-        val cwGate = fake.gate("cw:20")
+        val cwGate = fake.gate("cw:20:false")
 
         var fetched: HomeSectionsResult? = null
         val job = launch {
@@ -258,7 +257,7 @@ class HomeSectionsFetcherTest {
 
         // CW + Next Up were issued, but the recommendations chain has NOT run
         // yet (deliberate serialization — do not "improve" it).
-        assertTrue("cw:20" in fake.calls)
+        assertTrue("cw:20:false" in fake.calls)
         assertTrue("nu:20:false:0" in fake.calls)
         assertTrue(fake.calls.none { it.startsWith("similar:") }, "similar fan-out must wait for the seeds")
 
@@ -302,7 +301,7 @@ class HomeSectionsFetcherTest {
             HomeSectionQuery(enabledSections = setOf(HomeSectionType.RECOMMENDATIONS)),
         )
 
-        assertTrue("cw:5" in fake.calls, "wart verbatim: own getContinueWatching(limit = 5)")
+        assertTrue("cw:5:false" in fake.calls, "wart verbatim: own getContinueWatching(limit = 5)")
         assertTrue("nu:5:false:0" in fake.calls, "wart verbatim: own getNextUp(5, rewatching false, maxDays 0)")
         // 2 seeds → per-seed limit = 20/2 + 2 = 12.
         assertEquals(
@@ -325,8 +324,8 @@ class HomeSectionsFetcherTest {
         )
         fake.latestResults += Result.success(listOf(item("a1")))              // f1
         fake.latestResults += Result.success(listOf(item("c1"), item("c2")))  // f3
-        val f1Gate = fake.gate("latest:f1:16")
-        val f3Gate = fake.gate("latest:f3:16")
+        val f1Gate = fake.gate("latest:f1:16:null")
+        val f3Gate = fake.gate("latest:f3:16:null")
 
         var fetched: HomeSectionsResult? = null
         val job = launch {
@@ -339,7 +338,7 @@ class HomeSectionsFetcherTest {
         runCurrent()
 
         // One call per NON-music folder, both issued concurrently.
-        assertEquals(setOf("folders", "latest:f1:16", "latest:f3:16"), fake.calls.toSet())
+        assertEquals(setOf("folders", "latest:f1:16:null", "latest:f3:16:null"), fake.calls.toSet())
 
         // Complete in reverse folder order…
         f3Gate.complete(Unit)
@@ -554,6 +553,92 @@ class HomeSectionsFetcherTest {
         assertEquals(listOf("post-write-row"), latestRows(after).single().items.map { it.id })
     }
 
+    // ── classic rows (#168): the pre-Jellyfin-12 row semantics toggle ────────
+
+    @Test
+    fun `classic rows fold the resume row and fetch the episode pool for TV latest only`() = runTest {
+        val fake = FakeHomeSectionSources()
+        fake.foldersResults += Result.success(
+            listOf(
+                folder("tv1", collectionType = "tvshows"),
+                folder("mov1", collectionType = "movies"),
+                folder("mixed1", collectionType = "mixed"),
+            ),
+        )
+        repeat(3) { fake.latestResults += Result.success(listOf(item("a$it"))) }
+
+        fetcher(fake).fetch(
+            HomeSectionQuery(
+                enabledSections = setOf(HomeSectionType.CONTINUE_WATCHING, HomeSectionType.LATEST_MEDIA),
+                classicRows = true,
+            ),
+        )
+
+        // The resume row carries the classic flag for the client-side rollup
+        // fold (the wire itself stays the pre-12 shape); the per-folder latest
+        // calls fetch the raw-Episode grouping pool for TV (16 × the pre-12
+        // server's own 5× overfetch) and stay unconstrained for movies and
+        // mixed folders — both server generations resolve those identically.
+        assertTrue("cw:20:true" in fake.calls)
+        assertTrue("latest:tv1:16:80" in fake.calls)
+        assertTrue("latest:mov1:16:null" in fake.calls)
+        assertTrue("latest:mixed1:16:null" in fake.calls)
+    }
+
+    @Test
+    fun `modern rows leave the resume and latest calls unconstrained`() = runTest {
+        val fake = FakeHomeSectionSources()
+        fake.foldersResults += Result.success(listOf(folder("tv1", collectionType = "tvshows")))
+        fake.latestResults += Result.success(listOf(item("a1")))
+
+        fetcher(fake).fetch(
+            HomeSectionQuery(
+                enabledSections = setOf(HomeSectionType.CONTINUE_WATCHING, HomeSectionType.LATEST_MEDIA),
+            ),
+        )
+
+        // Default (modern): the server decides what the rows contain — the
+        // 12.x Series/Season resume rollups and mixed latest rows flow through.
+        assertTrue("cw:20:false" in fake.calls)
+        assertTrue("latest:tv1:16:null" in fake.calls)
+    }
+
+    @Test
+    fun `classic rows reach the recommendations self-seed resume call`() = runTest {
+        val fake = FakeHomeSectionSources()
+        // RECOMMENDATIONS without CW/NEXT_UP enabled → the seeds fall back to
+        // the recommendations chain's own getContinueWatching(5) call.
+        fake.continueWatchingResults += Result.success(emptyList())
+        fake.nextUpResults += Result.success(emptyList())
+        fake.suggestionsResults += Result.success(SearchResult(emptyList(), 0, 0))
+
+        fetcher(fake).fetch(
+            HomeSectionQuery(
+                enabledSections = setOf(HomeSectionType.RECOMMENDATIONS),
+                classicRows = true,
+            ),
+        )
+
+        assertTrue("cw:5:true" in fake.calls)
+    }
+
+    @Test
+    fun `a classic-rows flip re-fetches the latest rows despite the sub-call cache`() = runTest {
+        val fake = FakeHomeSectionSources()
+        repeat(2) { fake.foldersResults += Result.success(listOf(folder("tv1", collectionType = "tvshows"))) }
+        fake.latestResults += Result.success(listOf(item("modern-row")))
+        fake.latestResults += Result.success(listOf(item("classic-row")))
+
+        val f = fetcher(fake)
+        f.fetch(HomeSectionQuery(enabledSections = setOf(HomeSectionType.LATEST_MEDIA), classicRows = false))
+        val classic = f.fetch(HomeSectionQuery(enabledSections = setOf(HomeSectionType.LATEST_MEDIA), classicRows = true))
+
+        // The classic episode pool rides the sub-cache key: the flip inside
+        // the TTL window must not serve the other mode's rows.
+        assertEquals(2, fake.calls.count { it.startsWith("latest:") })
+        assertEquals(listOf("classic-row"), latestRows(classic).single().items.map { it.id })
+    }
+
     // ── discover-row dice roll (seed / epoch-stall-guard) ────────────────────
 
     private fun discoverRow(id: String) =
@@ -660,7 +745,7 @@ class HomeSectionsFetcherTest {
     )
 
     private fun seerrResponse(vararg ids: Int, mediaType: String = "movie") = Result.success(
-        SeerrSearchResponse(results = ids.map { SeerrSearchItem(id = it, mediaType = mediaType, title = "s$it") }),
+        ids.map { SeerrSearchItem(id = it, mediaType = mediaType, title = "s$it") },
     )
 
     private fun seerrSections(result: HomeSectionsResult) =
@@ -720,7 +805,7 @@ class HomeSectionsFetcherTest {
     fun `an empty seerr response drops the row`() = runTest {
         val fake = FakeHomeSectionSources()
         val seerr = FakeSeerrHomeSectionSources()
-        seerr.movieResults += Result.success(SeerrSearchResponse()) // empty results
+        seerr.movieResults += Result.success(emptyList()) // empty results
         val f = fetcher(fake, seerr = seerr)
 
         val fetched = f.fetch(

@@ -74,6 +74,10 @@
     <string name="detail_season_format">Season %1$d</string>
     <string name="detail_spoiler">Spoiler</string>
     <string name="detail_watched_badge">Watched</string>
+    <!-- Badge on a virtual episode row whose file is missing from the library. -->
+    <string name="detail_missing_badge">Missing</string>
+    <!-- Badge on a virtual episode row that hasn't aired yet: %1$s = formatted air date. -->
+    <string name="detail_airs_date_format">Airs %1$s</string>
     <string name="detail_cd_switch_to_list">Switch to vertical episode list</string>
     <string name="detail_cd_switch_to_cards">Switch to horizontal episode cards</string>
     <string name="detail_time_left_format">%1$s left</string>
@@ -472,5 +476,45 @@
     <plurals name="detail_book_highlights">
         <item quantity="one">%1$d highlight</item>
         <item quantity="other">%1$d highlights</item>
+    </plurals>
+    <string name="detail_option_refresh_metadata">Refresh metadata</string>
+    <string name="detail_msg_refresh_started">Metadata refresh queued on the server</string>
+    <string name="detail_msg_refresh_failed">Couldn't refresh metadata</string>
+    <string name="detail_option_identify">Identify</string>
+    <string name="detail_identify_title">Identify</string>
+    <string name="detail_identify_name">Name</string>
+    <string name="detail_identify_year">Year</string>
+    <string name="detail_identify_provider_id">Provider ID</string>
+    <string name="detail_identify_search">Search</string>
+    <string name="detail_identify_results_empty">No matches found. Adjust the name, year, or provider ID and search again.</string>
+    <string name="detail_identify_replace_images">Replace all images</string>
+    <string name="detail_identify_apply">Apply</string>
+    <string name="detail_msg_identify_applied">Metadata replaced from provider. Reloading…</string>
+    <string name="detail_msg_identify_failed">Couldn't identify the item</string>
+    <string name="detail_option_start_radio">Start radio</string>
+    <string name="detail_radio_empty">No tracks to seed a radio from this item</string>
+    <string name="detail_radio_failed">Couldn't start the radio</string>
+
+    <!-- ── Multi-version selection + group/split (admin) ─────────────────── -->
+    <string name="detail_option_version">Version</string>
+    <string name="detail_version_select">Select version</string>
+    <string name="detail_version_grouping_badge">Grouping</string>
+    <string name="detail_version_placeholder_badge">Placeholder</string>
+    <string name="detail_option_merge_versions">Merge versions…</string>
+    <string name="detail_option_split_versions">Split versions</string>
+    <string name="detail_merge_versions_title">Merge versions</string>
+    <string name="detail_merge_versions_subtitle">Select the duplicate items to merge into this one. Each becomes a playable version.</string>
+    <string name="detail_merge_confirm">Merge</string>
+    <string name="detail_merge_searching">Searching the library…</string>
+    <string name="detail_merge_no_candidates">No other same-named movies found in the library</string>
+    <string name="detail_split_confirm_title">Split versions?</string>
+    <string name="detail_split_confirm_message">Each version becomes its own library item. This cannot be undone.</string>
+    <string name="detail_msg_merge_started">Merging versions…</string>
+    <string name="detail_msg_merge_failed">Couldn't merge versions</string>
+    <string name="detail_msg_split_started">Splitting versions…</string>
+    <string name="detail_msg_split_failed">Couldn't split versions</string>
+    <plurals name="detail_merge_count_selected">
+        <item quantity="one">%1$d item selected</item>
+        <item quantity="other">%1$d items selected</item>
     </plurals>
 </resources>

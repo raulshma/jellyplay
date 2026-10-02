@@ -1,54 +1,38 @@
 package com.raulshma.jellyplay.desktop
 
 import androidx.compose.ui.focus.FocusDirection
-import androidx.navigation3.runtime.NavKey
-import com.raulshma.jellyplay.core.model.remote.NavigationTarget
 import com.raulshma.jellyplay.core.model.remote.RemoteFocusDirection
-import com.raulshma.jellyplay.feature.shell.navigation.popPlayerRoutes
-import com.raulshma.jellyplay.feature.shell.navigation.routeForNavigationTarget
-import kotlinx.coroutines.flow.Flow
 
 /**
- * The desktop bridge collector: consumes `RemoteNavigationBridge.targets`
- * against the scaffold's guarded navigator and focus/key seams. Desktop
- * ignored the bridge entirely before the receiver port — remote Play →
- * desktop, SyncPlay auto-open and ClosePlayer all dead-ended. The pure folds
- * it dispatches through ([routeForNavigationTarget] / [popPlayerRoutes])
- * live in shared/feature/shell (the former desktop hand-mirror is gone);
- * this class is the per-shell LADDER DISPATCH only — focus moves through
- * Compose's FocusManager, select through the synthesized Enter key, and the
- * context menu (which the desktop shell has no affordance for) falls back to
- * a message — so it is JVM-pinnable through fake lambdas (the
- * NavRequestCollector shape).
+ * The desktop remote-navigation seams — everything this shell adds around
+ * shared/feature/shell's [com.raulshma.jellyplay.feature.shell.navigation.RemoteNavigationDispatcher]
+ * ladder. The former `DesktopRemoteNavCollector` wrapper (eight forwarded
+ * constructor params around the dispatcher plus this constant and a
+ * collect() one-liner) is gone: the dispatcher is now constructed directly
+ * by [DesktopShellServices], which owns the shell-service wiring; only the
+ * two genuinely desktop-owned declarations below remain here.
+ *
+ * Desktop ignored the bridge entirely before the receiver port — remote
+ * Play → desktop, SyncPlay auto-open and ClosePlayer all dead-ended. The
+ * ladder's target→sink table (including the GoToTopLevel select-not-pop
+ * fork) is shared and pinned by `RemoteNavigationDispatcherTest`; the
+ * desktop seams it is constructed over: pushes through the guarded
+ * navigator (dead-end routes surface the guard's snackbar), tab switches
+ * write `topLevelRoute` directly, focus moves through Compose's
+ * FocusManager ([composeFocusDirection]), select through the synthesized
+ * AWT Enter key, and the context menu (which the desktop shell has no
+ * affordance for) keeps the default never-consumed key arm and falls back
+ * to [DESKTOP_CONTEXT_MENU_UNAVAILABLE].
  */
-internal class DesktopRemoteNavCollector(
-    private val navigate: (NavKey) -> Unit,
-    private val goBack: () -> Unit,
-    private val backStacks: () -> Collection<MutableList<NavKey>>,
-    private val moveFocus: (RemoteFocusDirection) -> Unit,
-    private val invokeSelect: () -> Unit,
-    private val presentMessage: suspend (message: String) -> Unit,
-) {
-    suspend fun collect(targets: Flow<NavigationTarget>) {
-        targets.collect { target ->
-            when (target) {
-                NavigationTarget.ClosePlayer -> popPlayerRoutes(backStacks())
-                NavigationTarget.GoBack -> goBack()
-                is NavigationTarget.MoveFocus -> moveFocus(target.direction)
-                NavigationTarget.InvokeSelect -> invokeSelect()
-                NavigationTarget.OpenContextMenu -> presentMessage(CONTEXT_MENU_UNAVAILABLE)
-                is NavigationTarget.OpenVideoPlayer,
-                is NavigationTarget.OpenAudioPlayer,
-                is NavigationTarget.OpenMediaDetail,
-                is NavigationTarget.GoToTopLevel -> routeForNavigationTarget(target)?.let(navigate)
-            }
-        }
-    }
 
-    private companion object {
-        const val CONTEXT_MENU_UNAVAILABLE = "Context menu not available here"
-    }
-}
+/**
+ * The context-menu fallback message: the desktop shell has no context-menu
+ * affordance, so the dispatcher's default never-consumed context-menu key
+ * arm sends every `OpenContextMenu` here. Top-level internal so the
+ * collection seam ([DesktopShellServices]) and
+ * DesktopRemoteNavigationTest pin the exact user-facing string.
+ */
+internal const val DESKTOP_CONTEXT_MENU_UNAVAILABLE = "Context menu not available here"
 
 /**
  * The four-branch remote→Compose focus mapping the scaffold's `moveFocus`

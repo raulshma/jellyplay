@@ -4,21 +4,26 @@ import com.raulshma.jellyplay.feature.player.live.LiveTvPlayerViewModel
 
 /**
  * Platform seam for the audio concerns the live player ViewModel needs
- * (player-live conveyor): the Android audio-focus / becoming-noisy lifecycle
- * (legacy `PlayerAudioLifecycle` in :core:data) and the raw Media3 player
- * volume access behind the mute toggle. The commonMain ViewModel drives the
- * seam; the androidMain actual (`Media3LivePlayerAudio`) wraps the legacy
- * PlayerAudioLifecycle with the exact PlaybackControl adapter the VM used to
- * build inline. Desktop has no live engine, so no actual is registered there
- * — the module wiring passes `audio = get()` explicitly, so a desktop VM
- * resolution fails fast with NoDefinitionFound (Route.LiveTvChannelPlayer is
+ * (player-live conveyor): the Android becoming-noisy receiver (headphone
+ * unplug auto-pause) and the raw Media3 player volume access behind the mute
+ * toggle. The audio-FOCUS half of this seam died with the video focus slice
+ * — the legacy `PlayerAudioLifecycle` duck/restore request collapsed onto
+ * the core:data PlaybackFocus module's one seat (the commonMain ViewModel
+ * claims [com.raulshma.jellyplay.core.data.playback.focus.PlaybackSurfaceId.VIDEO]
+ * on the play edge itself; the androidMain actual binds the current player as
+ * that module's commandable VIDEO surface target, so OS losses come back as
+ * pause/duck commands).
+ *
+ * Desktop has no live engine, so no actual is registered there — the module
+ * wiring passes `audio = get()` explicitly, so a desktop VM resolution fails
+ * fast with NoDefinitionFound (Route.LiveTvChannelPlayer is
  * dead-end-guarded, nothing reaches it); the null ctor default exists for
  * jvmTest only.
  *
  * [bind] is invoked from the ViewModel's `init` (the platform impl reads the
- * engine + mute state lazily through the owner, so audio callbacks always
- * observe the *current* engine — the same re-read-on-every-callback contract
- * the legacy inline adapter had).
+ * engine + mute state lazily through the owner, so callbacks always observe
+ * the *current* engine — the same re-read-on-every-callback contract the
+ * legacy inline adapter had).
  */
 interface LivePlayerAudio {
 
@@ -36,15 +41,16 @@ interface LivePlayerAudio {
     fun setPlayerVolume(volume: Float)
 
     /**
-     * Register audio-focus + becoming-noisy listeners; called once when the
-     * (reused) engine instance is created, before the first load.
+     * Register the becoming-noisy receiver and bind the focus surface
+     * target; called once when the (reused) engine instance is created,
+     * before the first load.
      */
     fun onEngineCreated()
 
     /**
-     * Release audio-focus + becoming-noisy listeners; called from
-     * [LiveTvPlayerViewModel.stop] before the engine is released so the
-     * listeners never dereference a torn-down player.
+     * Unregister the receiver and unbind the focus surface target; called
+     * from [LiveTvPlayerViewModel.stop] before the engine is released so
+     * nothing ever dereferences a torn-down player.
      */
     fun onReleased()
 }

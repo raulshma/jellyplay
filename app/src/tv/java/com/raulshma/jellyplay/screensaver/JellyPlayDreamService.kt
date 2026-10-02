@@ -16,6 +16,7 @@ import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
+import com.raulshma.jellyplay.core.data.repository.MediaCollectionReads
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.screensaver.ScreensaverSlice
@@ -52,10 +53,11 @@ class JellyPlayDreamService : DreamService() {
     private val koin by lazy { org.koin.mp.KoinPlatform.getKoin()!! }
     private val authRepository: AuthRepository by lazy { koin.get() }
     private val mediaRepository: MediaRepository by lazy { koin.get() }
+    private val mediaCollectionReads: MediaCollectionReads by lazy { koin.get() }
     private val imageUrlProvider: ImageUrlProvider by lazy { koin.get() }
     private val preferencesStore: ScreensaverStore by lazy { koin.get() }
     private val imageProvider by lazy {
-        DreamImageProvider(mediaRepository, imageUrlProvider, applicationContext)
+        DreamImageProvider(mediaRepository, mediaCollectionReads, imageUrlProvider, applicationContext)
     }
 
     private val dreamLifecycle = DreamLifecycleOwner()
@@ -89,6 +91,8 @@ class JellyPlayDreamService : DreamService() {
                     kenBurnsEnabled = prefs.dreamKenBurnsEnabled,
                     transitionStyle = prefs.dreamTransitionStyle,
                     showTitle = prefs.dreamShowTitle,
+                    dimAfterMs = prefs.dreamDimAfterMs,
+                    dimPercent = prefs.dreamDimPercent,
                 )
             }
         }
@@ -124,10 +128,11 @@ class JellyPlayDreamService : DreamService() {
                 val fetched = imageProvider.fetchImages(
                     categories = prefs.dreamImageCategories,
                     count = 25,
+                    maxParentalRating = prefs.dreamMaxParentalRating,
                 )
                 images = fetched
                 if (fetched.size > 3) {
-                    imageProvider.prefetchImages(fetched.take(3).map { it.backdropUrl })
+                    imageProvider.prefetchImages(fetched.take(3).map { it.imageUrl })
                 }
             } catch (_: Exception) {
                 images = emptyList()

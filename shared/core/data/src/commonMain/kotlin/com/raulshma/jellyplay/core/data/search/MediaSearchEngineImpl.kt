@@ -121,7 +121,7 @@ class MediaSearchEngineImpl(
         if (!isSeerrSearchAvailable()) return emptyList<SeerrSearchItem>() to false
         return try {
             seerrRepository.search(query).fold(
-                onSuccess = { it.results.take(seerrLimit) to false },
+                onSuccess = { it.take(seerrLimit) to false },
                 onFailure = { emptyList<SeerrSearchItem>() to true },
             )
         } catch (e: CancellationException) {
@@ -173,7 +173,7 @@ class MediaSearchEngineImpl(
                     if (!isSeerrSearchAvailable()) {
                         emptyList()
                     } else {
-                        swallowErrors { seerrRepository.search(query).getOrNull()?.results?.take(seerrLimit) }
+                        swallowErrors { seerrRepository.search(query).getOrNull()?.take(seerrLimit) }
                             ?: emptyList()
                     }
                 }

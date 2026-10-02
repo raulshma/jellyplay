@@ -58,7 +58,7 @@ import kotlinx.coroutines.launch
  * manager and mirrors back through the accessors — the prefs slice never
  * touches the state slice directly.
  *
- * Deliberately NOT migrated: the [SleepTimerManager] workflow (audio has its
+ * Deliberately NOT migrated: the [SleepCountdown] sleep-timer workflow (audio has its
  * own [AudioSleepTimerController]) and the queue/engine transport setters.
  *
  * Not a Koin type: the ViewModel constructs it directly over its own [scope]

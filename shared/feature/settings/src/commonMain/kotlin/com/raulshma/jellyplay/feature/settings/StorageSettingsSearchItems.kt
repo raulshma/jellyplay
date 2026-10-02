@@ -10,7 +10,12 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.downloads_aut
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_adaptive_bitrate
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_delete_cache
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_download_clean_up_now
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_download_keep_days
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_download_lookahead
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_download_max_per_pass
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_download_new
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_download_servers
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_offline
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_background_sync
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_cellular_download_size_warning
@@ -41,8 +46,13 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_auto_delet
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_auto_delete_after_watch_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_auto_delete_cache_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_auto_delete_cache_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_auto_download_clean_up_now_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_auto_download_keep_days_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_auto_download_lookahead_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_auto_download_max_per_pass_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_auto_download_new_episodes_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_auto_download_new_episodes_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_auto_download_servers_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_auto_offline_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_auto_offline_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_bandwidth_cap_subtitle
@@ -122,6 +132,11 @@ internal object StorageSettingsIds {
     const val DOWNLOAD_QUALITY = "download_quality"
     const val SMART_DOWNLOADS = "smart_downloads"
     const val AUTO_DOWNLOAD_NEW_EPISODES = "auto_download_new_episodes"
+    const val AUTO_DOWNLOAD_LOOKAHEAD = "auto_download_lookahead"
+    const val AUTO_DOWNLOAD_MAX_PER_PASS = "auto_download_max_per_pass"
+    const val AUTO_DOWNLOAD_KEEP_DAYS = "auto_download_keep_days"
+    const val AUTO_DOWNLOAD_SERVERS = "auto_download_servers"
+    const val AUTO_DOWNLOAD_CLEAN_UP_NOW = "auto_download_clean_up_now"
     const val DOWNLOAD_SCHEDULE = "download_schedule"
     const val DOWNLOAD_SCHEDULE_START = "download_schedule_start"
     const val DOWNLOAD_SCHEDULE_END = "download_schedule_end"
@@ -378,6 +393,61 @@ internal val StorageDownloadsRowRecords = listOf(
     )
 ,
     SettingsRowRecord(
+        id = StorageSettingsIds.AUTO_DOWNLOAD_LOOKAHEAD,
+        titleRes = Res.string.settings_auto_download_lookahead,
+        searchSubtitleRes = Res.string.ss_auto_download_lookahead_subtitle,
+        keywords = listOf("auto download", "lookahead", "ahead", "episodes", "next up"),
+        route = Route.StorageSettings(),
+        icon = Tabler.Outline.PlayerTrackNext
+    )
+,
+    SettingsRowRecord(
+        id = StorageSettingsIds.AUTO_DOWNLOAD_MAX_PER_PASS,
+        titleRes = Res.string.settings_auto_download_max_per_pass,
+        searchSubtitleRes = Res.string.ss_auto_download_max_per_pass_subtitle,
+        keywords = listOf("auto download", "max per pass", "budget", "limit", "check"),
+        route = Route.StorageSettings(),
+        icon = Tabler.Outline.ArrowBarToDown
+    )
+,
+    SettingsRowRecord(
+        id = StorageSettingsIds.AUTO_DOWNLOAD_KEEP_DAYS,
+        titleRes = Res.string.settings_auto_download_keep_days,
+        searchSubtitleRes = Res.string.ss_auto_download_keep_days_subtitle,
+        keywords = listOf("keep downloads", "retention", "days", "delete old", "cleanup", "space"),
+        route = Route.StorageSettings(),
+        icon = Tabler.Outline.Clock
+    )
+,
+    SettingsRowRecord(
+        id = StorageSettingsIds.AUTO_DOWNLOAD_SERVERS,
+        titleRes = Res.string.settings_auto_download_servers,
+        searchSubtitleRes = Res.string.ss_auto_download_servers_subtitle,
+        keywords = listOf("auto download", "servers", "allow list", "restrict", "which server"),
+        route = Route.StorageSettings(),
+        icon = Tabler.Outline.Server
+    )
+,
+    SettingsRowRecord(
+        id = StorageSettingsIds.AUTO_DOWNLOAD_CLEAN_UP_NOW,
+        titleRes = Res.string.settings_auto_download_clean_up_now,
+        searchSubtitleRes = Res.string.ss_auto_download_clean_up_now_subtitle,
+        keywords = listOf("clean up", "sweep", "retention", "delete old downloads", "free space"),
+        route = Route.StorageSettings(),
+        icon = Tabler.Outline.Trash
+    )
+,
+    SettingsRowRecord(
+        id = StorageSettingsIds.AUTO_DELETE_AFTER_WATCH,
+        titleRes = Res.string.downloads_auto_delete_after_watch,
+        searchTitleRes = Res.string.ss_auto_delete_after_watch_title,
+        searchSubtitleRes = Res.string.ss_auto_delete_after_watch_subtitle,
+        keywords = listOf("auto delete", "after watching", "watched", "delete downloads", "cleanup", "space"),
+        route = Route.StorageSettings(),
+        icon = Tabler.Outline.Trash
+    )
+,
+    SettingsRowRecord(
         id = StorageSettingsIds.DOWNLOAD_SCHEDULE,
         titleRes = Res.string.settings_download_schedule,
         searchTitleRes = Res.string.ss_download_schedule_title,
@@ -435,15 +505,6 @@ internal val StorageDownloadsRowRecords = listOf(
         keywords = listOf("download", "storage", "location", "folder", "sd card", "internal"),
         route = Route.StorageSettings(),
         icon = Tabler.Outline.Folder
-    ),
-    SettingsRowRecord(
-        id = StorageSettingsIds.AUTO_DELETE_AFTER_WATCH,
-        titleRes = Res.string.downloads_auto_delete_after_watch,
-        searchTitleRes = Res.string.ss_auto_delete_after_watch_title,
-        searchSubtitleRes = Res.string.ss_auto_delete_after_watch_subtitle,
-        keywords = listOf("auto delete", "after watching", "watched", "delete downloads", "cleanup", "space"),
-        route = Route.StorageSettings(),
-        icon = Tabler.Outline.Trash
     ))
 
 /** The catalog projection of `StorageDownloadsRowRecords`: the search faces + the shared category. */
@@ -465,12 +526,18 @@ internal val StorageCacheRowAdmissions: Map<String, RowAdmission> =
  * `rowTotalFor` and StorageSettingsScreen's emission `if`s read one gate per
  * id. The base gate is each record's own `isAdvanced` flag (every download
  * record renders unconditionally); the overrides are the three
- * `download_schedule_*` window rows, which only render while their parent
- * toggle is on.
+ * `download_schedule_*` window rows (only while their parent toggle is on),
+ * the four auto-download retention-policy rows (only while auto-download is
+ * on), and the "Clean up now" action (only while a keep-days window is set).
  */
 internal val StorageDownloadsRowAdmissions: Map<String, RowAdmission> =
     StorageDownloadsRowRecords.admissionsByAdvancedFlag() + mapOf(
         StorageSettingsIds.DOWNLOAD_SCHEDULE_START to RowAdmission.WhenOn(StorageSettingsIds.DOWNLOAD_SCHEDULE),
         StorageSettingsIds.DOWNLOAD_SCHEDULE_END to RowAdmission.WhenOn(StorageSettingsIds.DOWNLOAD_SCHEDULE),
         StorageSettingsIds.DOWNLOAD_SCHEDULE_WIFI_ONLY to RowAdmission.WhenOn(StorageSettingsIds.DOWNLOAD_SCHEDULE),
+        StorageSettingsIds.AUTO_DOWNLOAD_LOOKAHEAD to RowAdmission.WhenOn(StorageSettingsIds.AUTO_DOWNLOAD_NEW_EPISODES),
+        StorageSettingsIds.AUTO_DOWNLOAD_MAX_PER_PASS to RowAdmission.WhenOn(StorageSettingsIds.AUTO_DOWNLOAD_NEW_EPISODES),
+        StorageSettingsIds.AUTO_DOWNLOAD_KEEP_DAYS to RowAdmission.WhenOn(StorageSettingsIds.AUTO_DOWNLOAD_NEW_EPISODES),
+        StorageSettingsIds.AUTO_DOWNLOAD_SERVERS to RowAdmission.WhenOn(StorageSettingsIds.AUTO_DOWNLOAD_NEW_EPISODES),
+        StorageSettingsIds.AUTO_DOWNLOAD_CLEAN_UP_NOW to RowAdmission.WhenOn(StorageSettingsIds.AUTO_DOWNLOAD_KEEP_DAYS),
     )

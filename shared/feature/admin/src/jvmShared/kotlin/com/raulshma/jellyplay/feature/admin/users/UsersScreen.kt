@@ -4,11 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -28,7 +24,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import org.jetbrains.compose.resources.stringResource
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import org.koin.compose.viewmodel.koinViewModel
 import com.composables.icons.tabler.Tabler
@@ -43,7 +38,6 @@ import com.raulshma.jellyplay.feature.admin.generated.resources.admin_delete_use
 import com.raulshma.jellyplay.feature.admin.generated.resources.admin_no_users
 import com.raulshma.jellyplay.feature.admin.generated.resources.admin_refresh
 import com.raulshma.jellyplay.feature.admin.generated.resources.admin_users_title
-import com.raulshma.jellyplay.core.designsystem.theme.Dimensions
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
@@ -52,9 +46,9 @@ import com.raulshma.jellyplay.core.ui.components.ConfirmTone
 import com.raulshma.jellyplay.core.ui.components.AddListRow
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
-import com.raulshma.jellyplay.core.ui.components.LocalFloatingNavOffset
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
+import com.raulshma.jellyplay.core.ui.components.clearFloatingNav
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
@@ -75,7 +69,6 @@ fun UsersScreen(
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
     val backgroundColorState = rememberScreenBackgroundColorState()
-    val navOffsetPx = LocalFloatingNavOffset.current
 
     // TV focus-on-launch: focus the first user once the list arrives so D-pad input lands on
     // content, not the navigation drawer.
@@ -108,8 +101,8 @@ fun UsersScreen(
         )
     }
 
-    if (state.showDeleteDialog) {
-        val target = state.selectedUser
+    if (viewModel.deleteConfirmation.isPending) {
+        val target = viewModel.deleteConfirmation.item
         ConfirmDialog(
             title = stringResource(Res.string.admin_delete_user_title),
             message = stringResource(Res.string.admin_delete_user_body, target?.name ?: ""),
@@ -199,8 +192,10 @@ fun UsersScreen(
                     }
                 }
             }
-            // FAB sits above the floating nav bar (clears it + the gesture-nav inset) and
-            // slides up with the nav bar's hide/show animation via LocalFloatingNavOffset.
+            // FAB clears the floating nav bar + the gesture-nav inset and rides
+            // its hide/show animation via clearFloatingNav. Presence-aware: the
+            // desktop shell paints no floating nav, so only margin + inset
+            // remain there.
             if (!isTv) {
                 val addUserFocusState = rememberTvFocusState(focusedScale = 1.05f)
                 FloatingActionButton(
@@ -210,15 +205,8 @@ fun UsersScreen(
                         .align(Alignment.BottomEnd)
                         .then(addUserFocusState.focusModifier)
                         .tvFocusIndicator(addUserFocusState, ShapeCache.smooth16)
-                        .padding(
-                            end = 16.dp,
-                            bottom = 16.dp + Dimensions.floatingNavHeight + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(),
-                        )
-                        .offset {
-                            val maxOffset = Dimensions.floatingNavHeight.toPx()
-                            val yOffset = (-navOffsetPx()).coerceAtMost(maxOffset)
-                            IntOffset(x = 0, y = yOffset.toInt())
-                        },
+                        .padding(end = 16.dp)
+                        .clearFloatingNav(),
                 ) {
                     Icon(Tabler.Outline.UserPlus, contentDescription = stringResource(Res.string.admin_add_user_cd))
                 }

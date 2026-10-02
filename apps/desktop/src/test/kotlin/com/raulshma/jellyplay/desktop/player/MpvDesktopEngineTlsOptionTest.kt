@@ -2,7 +2,8 @@ package com.raulshma.jellyplay.desktop.player
 
 import com.raulshma.jellyplay.desktop.player.mpv.MpvLib
 import com.raulshma.jellyplay.feature.player.video.engine.PlaybackRequest
-import com.raulshma.jellyplay.feature.player.video.engine.PlaybackTls
+import com.raulshma.jellyplay.core.model.PlaybackRequestSpecific
+import com.raulshma.jellyplay.core.model.PlaybackTls
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import org.junit.jupiter.api.Assumptions.assumeTrue
@@ -37,10 +38,12 @@ class MpvDesktopEngineTlsOptionTest {
                 PlaybackRequest(
                     uri = "file:///nonexistent-jellyplay-tls-test.bin",
                     title = "tls",
-                    tls = PlaybackTls(
-                        clientCertificatePath = "C:/certs/client.crt",
-                        clientKeyPath = "C:/certs/client.key",
-                        caPath = "C:/certs/server-ca.pem",
+                    engineSpecific = PlaybackRequestSpecific(
+                        tls = PlaybackTls(
+                            clientCertificatePath = "C:/certs/client.crt",
+                            clientKeyPath = "C:/certs/client.key",
+                            caPath = "C:/certs/server-ca.pem",
+                        ),
                     ),
                 ),
             )
@@ -62,7 +65,9 @@ class MpvDesktopEngineTlsOptionTest {
                 PlaybackRequest(
                     uri = "file:///nonexistent-jellyplay-tls-test.bin",
                     title = "tls",
-                    tls = PlaybackTls(clientCertificatePath = "cert.crt", clientKeyPath = "cert.key"),
+                    engineSpecific = PlaybackRequestSpecific(
+                        tls = PlaybackTls(clientCertificatePath = "cert.crt", clientKeyPath = "cert.key"),
+                    ),
                 ),
             )
             // Second load WITHOUT tls: the reset trio must land even though

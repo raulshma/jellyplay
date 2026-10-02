@@ -52,6 +52,13 @@ class ChannelMixAudioProcessor : AudioProcessor {
 
     private var pendingMode: ChannelMixMode = ChannelMixMode.AUTO
     private var enabled: Boolean = false
+    /**
+     * The speaker-layout cap (null = uncapped): a configured output wider
+     * than the cap is downmixed to the nearest allowed standard layout.
+     * Independent of [enabled] — the cap applies even when the channel-mix
+     * effect itself is off.
+     */
+    private var pendingChannelCap: Int? = null
 
     private var inputAudioFormat: AudioProcessor.AudioFormat = AudioProcessor.AudioFormat.NOT_SET
     private var outputAudioFormat: AudioProcessor.AudioFormat = AudioProcessor.AudioFormat.NOT_SET
@@ -87,6 +94,21 @@ class ChannelMixAudioProcessor : AudioProcessor {
         this.enabled = enabled
     }
 
+    /**
+     * Caps the output channel count (null = uncapped): an output wider than
+     * [maxChannels] is downmixed to the nearest allowed standard layout
+     * where a mixing matrix exists (8 → 6, anything → 2/1) — exotic
+     * layouts with no supported narrowing (e.g. 6.1) pass through
+     * untouched. Independent of [enabled] — the cap applies even when the
+     * channel-mix effect itself is off. Takes effect at the next
+     * [configure] — the engine reconfigures the audio pipeline when the cap
+     * changes, mirroring the mode/enabled setters.
+     */
+    @Synchronized
+    fun setChannelCap(maxChannels: Int?) {
+        pendingChannelCap = maxChannels
+    }
+
     override fun configure(inputAudioFormat: AudioProcessor.AudioFormat): AudioProcessor.AudioFormat {
         if (inputAudioFormat.encoding != C.ENCODING_PCM_16BIT &&
             inputAudioFormat.encoding != C.ENCODING_PCM_FLOAT
@@ -100,7 +122,7 @@ class ChannelMixAudioProcessor : AudioProcessor {
         val inCh = inputAudioFormat.channelCount
         inputChannelCount = inCh
 
-        val (outCh, active) = computeOutputChannels(inCh, pendingMode, enabled)
+        val (outCh, active) = computeOutputChannels(inCh, pendingMode, enabled, pendingChannelCap)
         outputChannelCount = outCh
         isActive = active
 
@@ -122,45 +144,97 @@ class ChannelMixAudioProcessor : AudioProcessor {
 
     /**
      * Pure: returns `(outputChannelCount, isActive)` for a given input
-     * channel count, mode and enabled flag. Exposed for testing.
+     * channel count, mode, enabled flag and channel cap. Exposed for
+     * testing. The narrowest of the mode's target and the cap wins; the cap
+     * is evaluated against the candidate OUTPUT (the mode's target when the
+     * mode has one, else the input) — never the raw input, so a widening
+     * mode cannot slip past the cap. A target that is not a strict
+     * narrowing of the input is a no-op (the pre-cap semantics: downmix
+     * modes never upmix, the surround upmix never applies to ≥6-channel
+     * input).
      */
     internal fun computeOutputChannels(
         inCh: Int,
         mode: ChannelMixMode,
         enabled: Boolean,
+        maxChannels: Int? = null,
     ): Pair<Int, Boolean> {
-        if (!enabled) return inCh to false
-        return when (mode) {
-            ChannelMixMode.MONO -> if (inCh <= 1) (inCh to false) else (1 to true)
-            ChannelMixMode.STEREO_DOWNMIX -> if (inCh <= 2) (inCh to false) else (2 to true)
-            ChannelMixMode.SURROUND_UPMIX -> if (inCh >= 6) (inCh to false) else (6 to true)
-            ChannelMixMode.AUTO -> inCh to false
+        val modeTarget: Int? = when {
+            !enabled -> null
+            mode == ChannelMixMode.MONO -> 1.takeIf { it < inCh }
+            mode == ChannelMixMode.STEREO_DOWNMIX -> 2.takeIf { it < inCh }
+            mode == ChannelMixMode.SURROUND_UPMIX -> 6.takeIf { inCh < it }
+            else -> null // AUTO — the mode has no opinion
         }
+        val capTarget: Int? = maxChannels?.let { channelCapTarget(it, modeTarget ?: inCh) }
+        val target = listOfNotNull(modeTarget, capTarget).minOrNull()
+        return (target ?: inCh) to (target != null && target != inCh)
+    }
+
+    /**
+     * The cap's target layout for the candidate output channel count
+     * [candidateCh], or `null` when the cap does not narrow it (or no
+     * matrix exists for the shape — the cap never narrows below a layout it
+     * cannot mix). Only 8 → 6 is a supported surround narrowing (the
+     * back-pair fold); `maxChannels >= 8` never narrows any standard
+     * layout.
+     */
+    private fun channelCapTarget(maxChannels: Int, candidateCh: Int): Int? = when {
+        maxChannels >= 8 -> null
+        maxChannels >= 6 -> 6.takeIf { candidateCh == 8 }
+        maxChannels >= 2 -> 2.takeIf { it < candidateCh }
+        else -> 1.takeIf { it < candidateCh }
     }
 
     /**
      * Pure: builds the `[outCh][inCh]` mixing-coefficient matrix. Exposed
      * for testing. Assumes [computeOutputChannels] already decided the
-     * shapes are valid for the mode.
+     * shapes are valid for the mode. Downmix targets are keyed on the
+     * OUTPUT count (1 → average, 2 → ITU stereo), so a cap-driven downmix
+     * builds the same matrices its mode-driven twins do.
      */
     internal fun buildMatrix(inCh: Int, outCh: Int, mode: ChannelMixMode): Array<FloatArray> {
-        return when (mode) {
-            ChannelMixMode.MONO -> {
-                // Average all non-LFE channels. LFE sits at index 3 in 5.1/7.1.
-                val m = Array(outCh) { FloatArray(inCh) }
-                val indices = (0 until inCh).filter { !isLfeChannel(it, inCh) }
-                val g = 1f / indices.size
-                indices.forEach { m[0][it] = g }
-                m
-            }
-            ChannelMixMode.STEREO_DOWNMIX -> downmixToStereoMatrix(inCh)
-            ChannelMixMode.SURROUND_UPMIX -> upmixToSurroundMatrix(inCh, outCh)
-            ChannelMixMode.AUTO -> EMPTY_MATRIX
+        return when {
+            outCh == 1 -> monoMatrix(inCh)
+            outCh == 2 -> downmixToStereoMatrix(inCh)
+            mode == ChannelMixMode.SURROUND_UPMIX && outCh == 6 && inCh < 6 -> upmixToSurroundMatrix(inCh, outCh)
+            inCh == 8 && outCh == 6 -> downmix7to5Matrix(inCh)
+            else -> EMPTY_MATRIX
         }
+    }
+
+    private fun monoMatrix(inCh: Int): Array<FloatArray> {
+        // Average all non-LFE channels. LFE sits at index 3 in 5.1/7.1.
+        val m = Array(1) { FloatArray(inCh) }
+        val indices = (0 until inCh).filter { !isLfeChannel(it, inCh) }
+        val g = 1f / indices.size
+        indices.forEach { m[0][it] = g }
+        return m
+    }
+
+    /**
+     * 7.1 → 5.1 (the `maxAudioChannels = 5.1` cap on 8-channel input): the
+     * front triple and LFE pass through; the back and side surround pairs
+     * fold together at 0.5 each — the same surround-folding rule
+     * [downmixToStereoMatrix] applies for 7.1 input.
+     */
+    private fun downmix7to5Matrix(inCh: Int): Array<FloatArray> {
+        val m = Array(6) { FloatArray(inCh) }
+        for (i in 0 until 4) m[i][i] = 1f   // L, R, C, LFE pass through
+        m[4][4] = 0.5f; m[4][6] = 0.5f      // Ls = 0.5·Bl + 0.5·Sl
+        m[5][5] = 0.5f; m[5][7] = 0.5f      // Rs = 0.5·Br + 0.5·Sr
+        return m
     }
 
     private fun downmixToStereoMatrix(inCh: Int): Array<FloatArray> {
         val m = Array(2) { FloatArray(inCh) }
+        if (inCh == 1) {
+            // Mono → dual-mono stereo: reachable as the surround upmix's 6
+            // target clamped to 2 by the channel cap (no [L,R] to split).
+            m[0][0] = 1f
+            m[1][0] = 1f
+            return m
+        }
         // Indices for standard layouts.
         val l = 0; val r = 1; val c = 2; val lfe = 3
         val ls = if (inCh >= 6) 4 else -1

@@ -4,16 +4,22 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.ArrowsJoin
+import com.composables.icons.tabler.outline.ArrowsSplit
 import com.composables.icons.tabler.outline.Download
 import com.composables.icons.tabler.outline.Eye
+
 import com.composables.icons.tabler.outline.EyeOff
 import com.composables.icons.tabler.outline.InfoCircle
 import com.composables.icons.tabler.outline.ListDetails
 import com.composables.icons.tabler.outline.Pencil
 import com.composables.icons.tabler.outline.Playlist
+import com.composables.icons.tabler.outline.Refresh
+import com.composables.icons.tabler.outline.Search
 import com.composables.icons.tabler.outline.Share
 import com.composables.icons.tabler.outline.Stack2
 import com.composables.icons.tabler.outline.Trash
+import com.composables.icons.tabler.outline.Radio
 import com.composables.icons.tabler.outline.Users
 import com.composables.icons.tabler.outline.WaveSine
 import com.raulshma.jellyplay.core.model.DetailPreferences
@@ -36,15 +42,21 @@ import com.raulshma.jellyplay.feature.details.generated.resources.detail_option_
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_option_downloading_series
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_option_edit
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_option_hide_detail_up_next
+import com.raulshma.jellyplay.feature.details.generated.resources.detail_option_identify
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_option_hide_from_continue_watching
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_option_hide_from_next_up
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_option_instant_mix
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_option_manage_series
+import com.raulshma.jellyplay.feature.details.generated.resources.detail_option_merge_versions
+import com.raulshma.jellyplay.feature.details.generated.resources.detail_option_refresh_metadata
+import com.raulshma.jellyplay.feature.details.generated.resources.detail_option_split_versions
+import com.raulshma.jellyplay.feature.details.generated.resources.detail_option_start_radio
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_option_share
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_option_show_detail_up_next
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_option_show_in_continue_watching
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_option_show_in_next_up
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_option_technical_info
+import com.raulshma.jellyplay.feature.details.generated.resources.detail_option_version
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_option_watch_party
 import org.jetbrains.compose.resources.stringResource
 
@@ -83,9 +95,12 @@ internal fun rememberMediaOptions(
     canManageSeries: Boolean,
     canDeleteDownloadedSeries: Boolean,
     canEditMetadata: Boolean,
+    canRefreshMetadata: Boolean,
+    canIdentify: Boolean,
     canAddToPlaylist: Boolean,
     canAddToCollection: Boolean,
     canInstantMix: Boolean,
+    canStartRadio: Boolean,
     isOffline: Boolean,
     onClose: () -> Unit,
     onEditClick: () -> Unit,
@@ -101,12 +116,24 @@ internal fun rememberMediaOptions(
     onHideDetailUpNext: () -> Unit = {},
     onShowDetailUpNext: () -> Unit = {},
     onManageSeries: () -> Unit,
+    onRefreshMetadata: () -> Unit = {},
+    onIdentify: () -> Unit = {},
     onTechnicalInfo: () -> Unit,
     onAddToPlaylist: () -> Unit,
     onAddToCollection: () -> Unit = {},
     onStartInstantMix: () -> Unit = {},
+    onStartRadio: () -> Unit = {},
     onStartWatchParty: () -> Unit = {},
     canStartWatchParty: Boolean = false,
+    /** The item carries more than one version — offers the version picker. */
+    canPickVersion: Boolean = false,
+    onVersionPicker: () -> Unit = {},
+    /** Admin gate for the version group/split entries (RequiresElevation server-side). */
+    canMergeVersions: Boolean = false,
+    onMergeVersions: () -> Unit = {},
+    /** The item is version-merged (more than one media source) — offers Split. */
+    canSplitVersions: Boolean = false,
+    onSplitVersions: () -> Unit = {},
 ): List<MediaOption> {
     // Download status / progress, resolved once for both the label and the
     // enabled flag so the two menus stay in lock-step.
@@ -140,17 +167,25 @@ internal fun rememberMediaOptions(
     val labelShowDetailUpNext = stringResource(Res.string.detail_option_show_detail_up_next)
     val labelTechnicalInfo = stringResource(Res.string.detail_option_technical_info)
     val labelManageSeries = stringResource(Res.string.detail_option_manage_series)
+    val labelRefreshMetadata = stringResource(Res.string.detail_option_refresh_metadata)
+    val labelIdentify = stringResource(Res.string.detail_option_identify)
     val labelAddToPlaylist = stringResource(Res.string.detail_option_add_to_playlist)
     val labelAddToCollection = stringResource(Res.string.detail_option_add_to_collection)
     val labelDeleteDownloads = stringResource(Res.string.detail_option_delete_downloads)
     val labelInstantMix = stringResource(Res.string.detail_option_instant_mix)
+    val labelStartRadio = stringResource(Res.string.detail_option_start_radio)
     val labelWatchParty = stringResource(Res.string.detail_option_watch_party)
+    val labelVersion = stringResource(Res.string.detail_option_version)
+    val labelMergeVersions = stringResource(Res.string.detail_option_merge_versions)
+    val labelSplitVersions = stringResource(Res.string.detail_option_split_versions)
 
     return remember(item, detail, itemId, isAudio, isSeries, seasons, preferences.showShareMediaOption,
         preferences.nextUpExcludedSeriesIds, preferences.hiddenCwItemIds, preferences.showDetailUpNext,
         activeDownload, isDownloading, isDownloadingSeries, isDownloadActive, isDownloadCompleted,
         downloadStatus, downloadProgress, canManageSeries, canDeleteDownloadedSeries, canEditMetadata,
-        canAddToPlaylist, canAddToCollection, canInstantMix, canStartWatchParty, isOffline, labelManageSeries,
+        canRefreshMetadata, canIdentify, canAddToPlaylist, canAddToCollection, canInstantMix, canStartRadio, canStartWatchParty, isOffline,
+        canPickVersion, canMergeVersions, canSplitVersions, labelManageSeries,
+        labelRefreshMetadata, labelIdentify, labelStartRadio, labelVersion, labelMergeVersions, labelSplitVersions,
         labelAddToPlaylist, labelDeleteDownloads, labelInstantMix, labelAddToCollection,
         labelHideDetailUpNext, labelShowDetailUpNext, labelWatchParty) {
         buildList {
@@ -160,6 +195,44 @@ internal fun rememberMediaOptions(
             if (canEditMetadata) {
                 add(MediaOption(labelEdit, Tabler.Outline.Pencil) {
                     onClose(); onEditClick()
+                })
+            }
+            // Server-side metadata refresh (the jellyfin-web "Refresh metadata"
+            // dialog): admin-only (the server 403s non-admins) and remote-only,
+            // same origin rule as the editor. Sits directly under Edit so the
+            // two metadata-maintenance entries stay grouped.
+            if (canRefreshMetadata) {
+                add(MediaOption(labelRefreshMetadata, Tabler.Outline.Refresh) {
+                    onClose(); onRefreshMetadata()
+                })
+            }
+            // Identify (jellyfin-web parity): search providers by name/year/id
+            // and apply the real match. Same admin + remote gates as refresh.
+            if (canIdentify) {
+                add(MediaOption(labelIdentify, Tabler.Outline.Search) {
+                    onClose(); onIdentify()
+                })
+            }
+            // Version group/split (jellyfin-web "Merge versions" / "Split
+            // versions"): admin-gated server-side (RequiresElevation — the
+            // caller resolves the gate off the same isAdmin seam the refresh/
+            // identify entries use), remote-only. The pair stays grouped with
+            // the other metadata-maintenance entries.
+            if (canMergeVersions) {
+                add(MediaOption(labelMergeVersions, Tabler.Outline.ArrowsJoin) {
+                    onClose(); onMergeVersions()
+                })
+            }
+            if (canSplitVersions) {
+                add(MediaOption(labelSplitVersions, Tabler.Outline.ArrowsSplit) {
+                    onClose(); onSplitVersions()
+                })
+            }
+            // Version picker: multi-version items only (the size gate lives
+            // with the caller, which also knows the origin/capability mix).
+            if (canPickVersion) {
+                add(MediaOption(labelVersion, Tabler.Outline.Stack2) {
+                    onClose(); onVersionPicker()
                 })
             }
             if (preferences.showShareMediaOption) {
@@ -243,6 +316,14 @@ internal fun rememberMediaOptions(
             if (canInstantMix) {
                 add(MediaOption(labelInstantMix, Tabler.Outline.WaveSine) {
                     onClose(); onStartInstantMix()
+                })
+            }
+            // Start Radio: audio-only, next to Instant Mix — an instant-mix
+            // seed that keeps refilling itself as the queue drains until the
+            // user stops it from the player's queue sheet.
+            if (canStartRadio) {
+                add(MediaOption(labelStartRadio, Tabler.Outline.Radio) {
+                    onClose(); onStartRadio()
                 })
             }
             // Watch Party: bootstraps a SyncPlay group for the current item and

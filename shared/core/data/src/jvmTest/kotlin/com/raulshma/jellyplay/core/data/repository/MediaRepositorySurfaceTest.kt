@@ -43,9 +43,33 @@ class MediaRepositorySurfaceTest {
      * composed (invalidateDiscoverRowCache, seedDiscoverRowCache) retired to
      * impl-private machinery — a seam that only worked when callers
      * hand-sequenced its members in one order was the caller-side convention
-     * the deep operation exists to kill.
+     * the deep operation exists to kill. 40 after the family-seam split:
+     * the music-catalogue family (MusicCatalogue) and the user-data-write
+     * family (UserDataWriteOperations) got their own seams over the same
+     * impl; getMusicVideos (zero callers repo-wide) plus the four writes
+     * whose sole union caller (UserDataMutator) now injects the seam
+     * (toggleFavorite, markUnplayed, markSeasonPlayed, markSeasonUnplayed)
+     * retired off the union. 31 after the uncached browse-read split: the nine
+     * members the impl never cached moved to their own seams over the
+     * [MediaUncachedReadsImpl] single — MediaExtrasReads (getIntros,
+     * getSpecialFeatures), MediaBrowseReads (getPeople, getItemsByPerson,
+     * getTags) and MediaCollectionReads (getMediaItems, getFavorites,
+     * getSearchSuggestions) — and getItemsByStudio retired outright (zero
+     * repo-typed callers; the network layer's own HomeSectionsFetcher keeps
+     * its private studio drill-down). The repository's paged projections
+     * (getMediaItemsPaged / getFavoritesPaged) stayed on the union. 28 after
+     * the music-catalogue consumer migration completed: every clean music
+     * consumer (the audio playback stack — AudioLibraryBrowser /
+     * AudioQueueFacade / ThemeMusicPlayer — and feature:music's artist/album/
+     * home ViewModels) injects the [MusicCatalogue] seam for the catalogue
+     * reads, so getArtistAlbums / getInstantMix / getThemeSongs retired from
+     * the union into the seam (zero remaining union-typed callers). The one
+     * music member left on the union is getAlbumTracks: the detail provider's
+     * session resolves detail + album tracks together and is a mixed consumer,
+     * so its read rides the union. getMusicVideos (already seam-only, zero
+     * callers) retired from the seam outright in the same wave.
      */
-    private val maxInterfaceMembers = 45
+    private val maxInterfaceMembers = 28
 
     /** Walks up from the working dir to the module root that owns src/commonMain/kotlin. */
     private fun moduleRoot(): File {

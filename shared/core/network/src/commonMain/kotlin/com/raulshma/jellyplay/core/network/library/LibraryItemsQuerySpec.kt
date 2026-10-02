@@ -65,6 +65,14 @@ internal data class LibraryItemsQuerySpec(
     val searchTerm: String? = null,
     /** ItemFilter serial names ("IsPlayed", "IsUnplayed", "IsResumable", "IsFavorite"). */
     val itemFilters: List<String>? = null,
+    /**
+     * Standalone /Items presence params (NOT ItemFilter values — the resolver
+     * fails fast on unknown tokens): true = only items with subtitles / a
+     * trailer. Tri-state like [LibraryFilters.isResumable]: null and a stored
+     * false are both "off" and omit the parameter.
+     */
+    val hasSubtitles: Boolean? = null,
+    val hasTrailer: Boolean? = null,
     /** Minimum community rating; null = no floor. */
     val minCommunityRating: Double? = null,
     /** ItemFields serial names; null = server default projection. */
@@ -137,6 +145,10 @@ internal fun buildMediaItemsQuerySpec(
         limit = limit,
         searchTerm = searchTerm?.takeIf { it.isNotBlank() },
         itemFilters = itemFilters.takeIf { it.isNotEmpty() },
+        // Presence filters pass only an explicit true: a stored false is the
+        // tri-state "off" (same rule as the IsResumable item filter above).
+        hasSubtitles = filters.hasSubtitles.takeIf { it == true },
+        hasTrailer = filters.hasTrailer.takeIf { it == true },
         minCommunityRating = filters.minRating.takeIf { it > 0f }?.toDouble(),
         fields = LIST_PROJECTION_FIELDS + "Genres",
     )
@@ -239,8 +251,12 @@ internal fun buildItemsByStudioQuerySpec(
  * The resume-row query (getContinueWatching / getContinueReading — and the
  * NextUp row, which rides the same limit + list-projection shape with no kind
  * narrowing): the `/UserItems/Resume` request the twins used to hand-mirror.
- * Books narrow server-side via `includeItemTypes` ("Book" — the SDK
- * getResumeItems named arg); the video row sends no kind constraint.
+ * [kinds] carries the `includeItemTypes` serial names: `["Book"]` for the
+ * Continue Reading row, null for the video row — the video row sends the
+ * exact pre-12 wire shape (unconstrained) in BOTH modes; classic rows drop
+ * the 12.x Series/Season rollups in the client-side fold instead
+ * ([toFilteredResumeRows]'s `dropContainerRollups`), so the wire stays
+ * byte-identical across server generations.
  *
  * Deliberately NOT here: the `nextUpDateCutoff` CLOCK (`java.time`, JVM-side)
  * and the SDK's non-null enable* defaults
@@ -249,12 +265,42 @@ internal fun buildItemsByStudioQuerySpec(
  */
 internal fun buildResumeQuerySpec(
     limit: Int,
-    isBooks: Boolean,
+    kinds: List<String>?,
 ): LibraryItemsQuerySpec = LibraryItemsQuerySpec(
-    includeKinds = if (isBooks) listOf("Book") else null,
+    includeKinds = kinds,
     limit = limit,
     fields = LIST_PROJECTION_FIELDS,
 )
+
+/**
+ * The classic-rows TV-latest leaf kind (#168): the kind the pre-12
+ * `/Items/Latest` pipeline fed its Series grouping — the raw-episode pool the
+ * client-side twin ([toClassicLatestCards]) re-groups. A [MediaType] so the
+ * wire pin ([MediaType.toWireItemKind] serial) and the fold's kind filter
+ * ([toFilteredLatestRows] allowed-kinds) resolve through one name.
+ */
+internal val CLASSIC_TV_LATEST_MEDIA_TYPE: MediaType = MediaType.EPISODE
+
+/**
+ * The pre-12 latest-pool overfetch multiplier: Jellyfin 10.x's
+ * `GetItemsForLatestItems` fetched `limit * 5` episodes before grouping into
+ * `limit` containers. The classic path mirrors the same pool size so the
+ * client-side grouping sees exactly the candidate set the 10.x server's
+ * grouping saw (UserViewManager.GetLatestItems over a `limit * 5` query).
+ */
+internal const val CLASSIC_LATEST_POOL_MULTIPLIER: Int = 5
+
+/**
+ * The classic-rows episode-pool size for one library folder's `/Items/Latest`
+ * call (#168): TV folders fetch a raw-Episode pool of `limit * 5` for the
+ * client-side pre-12 grouping ([toClassicLatestCards]); every other collection
+ * type stays unconstrained — movies behaved identically before and after 12.x
+ * (both generations resolve a movies folder to plain Movie rows), and the
+ * mixed-library routing computes movies and shows server-side, so pinning
+ * either single kind would silently drop half the folder's additions.
+ */
+internal fun classicLatestEpisodePool(collectionType: String?, limit: Int): Int? =
+    if (collectionType == "tvshows") limit * CLASSIC_LATEST_POOL_MULTIPLIER else null
 
 /**
  * [MediaType]s → includeItemTypes serial names, shared by every spec'd

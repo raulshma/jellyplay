@@ -1,5 +1,3 @@
-import org.gradle.api.plugins.ExtensionAware
-
 plugins {
     id("jellyplay.kmp.library.compose")
 }
@@ -45,31 +43,13 @@ kotlin {
             // replaces the legacy :feature:player:core api edge, which this
             // module absorbed.
             implementation(project(":shared:core:player-contract"))
-            // JetBrains CMP distribution (see catalog note): Android targets
-            // redirect to the androidx artifacts.
-            implementation(libs.jb.compose.runtime)
-            implementation(libs.jb.compose.ui)
-            implementation(libs.jb.compose.foundation)
-            implementation(libs.jb.compose.animation)
-            implementation(libs.jb.compose.material3)
-            // Compose-resources runtime (stringResource/StringResource API +
-            // the suspend getString resolver the VideoStrings seam uses).
-            implementation(compose.components.resources)
-            implementation(libs.tabler.icons.outline)
-            implementation(libs.tabler.icons.filled)
-            // Nav3 ships KMP variants from google maven directly — no mirror.
             // (The legacy build's lifecycle-viewmodel-navigation3 and
             // hilt-navigation-compose edges were dropped with the move: the
             // screen hosts no nav entry — PlayerActivity is the sole entry
             // point — and the ViewModel is Koin-owned via koinViewModel.)
-            implementation(libs.navigation3.runtime)
-            implementation(libs.navigation3.ui)
             // SavedStateHandle in PlaybackSession/VideoPlayerViewModel (KMP
             // since lifecycle 2.9 — StudioDetailViewModel precedent).
-            implementation(libs.lifecycle.viewmodel)
             implementation(libs.lifecycle.viewmodel.savedstate)
-            // collectAsStateWithLifecycle in the screens/sheets.
-            implementation(libs.lifecycle.runtime.compose)
             // Coil for the next-episode / companion-dashboard artwork.
             implementation(libs.coil.compose)
             implementation(libs.kotlinx.coroutines.core)
@@ -120,8 +100,9 @@ kotlin {
         // surface host is the co-module actual of an internal expect — moving
         // it app-side would force the seam public or add an indirection layer.
         getByName("jvmMain").dependencies {
-            implementation(libs.koin.core)
-            implementation(libs.koin.compose.viewmodel)
+            // (koin-core/koin-compose-viewmodel ride the convention plugin's
+            // universal commonMain bundle — the desktop DI module registers
+            // the commonMain VideoPlayerViewModel without local edges.)
             implementation(libs.jna)
             // SwingPanel host for the EngineVideoSurface desktop actual — the common
             // window package reaches jvmMain through jb-compose-ui, but SwingPanel is
@@ -172,24 +153,18 @@ kotlin {
             // subtitle font picker.
             implementation(libs.truetype.parser)
             implementation(libs.libvlc.all)
-            // Koin owns the ViewModel + engine stack (V3 feature conveyor:
-            // one framework per type — the Hilt annotations were stripped at
-            // the move; the app-side interop singles flipped direction, see
-            // HiltInteropModule).
-            implementation(libs.koin.core)
-            implementation(libs.koin.compose)
-            implementation(libs.koin.compose.viewmodel)
+            // (koin-core/koin-compose/koin-compose-viewmodel ride the
+            // convention plugin's universal commonMain bundle — the Koin
+            // factory adapting the platform playback singletons needs no
+            // androidMain-local edges.)
         }
     }
 }
 
-// `compose.resources` is a nested extension with no generated Kotlin-DSL
-// accessor; configure it explicitly. Same package as the legacy
-// feature:player:video so migrated files keep their
-// `com.raulshma.jellyplay.feature.player.video` imports; generated accessors
-// land in `...feature.player.video.generated.resources`.
-val composeResources = (compose as ExtensionAware).extensions.getByName("resources") as org.jetbrains.compose.resources.ResourcesExtension
-composeResources.packageOfResClass = "com.raulshma.jellyplay.feature.player.video.generated.resources"
+// The compose-resources `packageOfResClass`
+// (`...feature.player.video.generated.resources`, same as the legacy value) is
+// a path-derived default from the convention plugin now — see
+// KmpLibraryComposePlugin.
 
 // Robolectric lane for the 11 rehomed :app androidTest Compose suites.
 // AGP 9.4's withHostTest names the lane's source set androidHostTest

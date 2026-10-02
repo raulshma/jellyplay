@@ -8,20 +8,24 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.raulshma.jellyplay.core.datastore.PreferenceCodec
+import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.datastore.sliceStateFlow
 import com.raulshma.jellyplay.core.datastore.toEnumOrNull
+import com.raulshma.jellyplay.core.datastore.UserNamespacedKeys
 import com.raulshma.jellyplay.core.model.DownloadQuality
 import com.raulshma.jellyplay.core.model.DownloadScheduleWindow
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 
 /**
  * Deep module owning the **downloads** preference domain: wifi-only + per-stream
  * connection counts (with the 1..6 max-concurrent invariant), download quality,
- * smart/auto downloads, storage cap + location, the cellular size warning, and
- * the schedule window.
+ * smart/auto downloads (+ its retention policy: lookahead, max-per-pass,
+ * keep-days), storage cap + location, the cellular size warning, and the
+ * schedule window.
  *
  * Extracted from the `UserPreferencesStore` god object so this concern owns its
  * keys, its setters (including the `MAX_CONCURRENT_DOWNLOADS` coerce invariant),
@@ -30,12 +34,23 @@ import kotlinx.serialization.Serializable
  *
  * **Storage:** reuses the shared `"user_prefs"` DataStore file; key strings match
  * the legacy `UserPreferencesStore.Keys` names — no migration file.
+ *
+ * The auto-download **server allow-list** (`auto_download_servers`) is the one
+ * per-user key here: it is stored under the `u_<userId>::<canonical>` namespace
+ * (the `HomeDiscoveryStore` precedent) so two accounts on one install keep
+ * independent allow-lists. The canonical key string is shared with the backup
+ * format; every read/write resolves the namespace from the very
+ * `Preferences` snapshot being read or edited ([ServerIdentityStore.activeUserIdIn]),
+ * pre-login reads serve the default (empty = all servers).
  */
 class DownloadsStore constructor(
     private val dataStore: DataStore<Preferences>,
     private val externalScope: CoroutineScope,
+    private val identityStore: ServerIdentityStore,
 ) {
     private val scope = externalScope
+
+    private val json = Json { ignoreUnknownKeys = true }
 
     internal object Keys {
         val WIFI_ONLY_DOWNLOADS = booleanPreferencesKey("wifi_only_downloads")
@@ -58,6 +73,28 @@ class DownloadsStore constructor(
         val DOWNLOAD_SCHEDULE_START = intPreferencesKey("download_schedule_start")
         val DOWNLOAD_SCHEDULE_END = intPreferencesKey("download_schedule_end")
         val DOWNLOAD_SCHEDULE_WIFI_ONLY = booleanPreferencesKey("download_schedule_wifi_only")
+        /**
+         * Auto-download lookahead: how many not-yet-downloaded episodes after the
+         * highest downloaded (or watched) episode of each season one check pass
+         * enqueues. `0` restores the legacy all-missing-episodes behavior.
+         */
+        val AUTO_DOWNLOAD_LOOKAHEAD = intPreferencesKey("auto_download_lookahead")
+        /**
+         * Global per-pass enqueue budget across every series (`0` = unlimited) —
+         * remaining series are picked up by the next pass.
+         */
+        val AUTO_DOWNLOAD_MAX_PER_PASS = intPreferencesKey("auto_download_max_per_pass")
+        /**
+         * Keep-days retention: completed downloads older than this many days are
+         * swept (unwatched ones are protected). `0` = off.
+         */
+        val AUTO_DOWNLOAD_KEEP_DAYS = intPreferencesKey("auto_download_keep_days")
+        /**
+         * Per-user server allow-list for auto-download — canonical name of the
+         * `u_<userId>::`-namespaced JSON string-set key. Empty = all servers.
+         * Never read/written as a flat key: see the class KDoc.
+         */
+        val AUTO_DOWNLOAD_SERVERS = stringPreferencesKey("auto_download_servers")
     }
 
     val downloads: StateFlow<DownloadsSlice> =
@@ -71,6 +108,13 @@ class DownloadsStore constructor(
         downloadQuality = readDownloadQuality(prefs),
         smartDownloadsEnabled = PreferenceCodec.readBool(prefs, Keys.SMART_DOWNLOADS_ENABLED, "smart_downloads_enabled", false),
         autoDownloadNewEpisodes = PreferenceCodec.readBool(prefs, Keys.AUTO_DOWNLOAD_NEW_EPISODES, "auto_download_new_episodes", false),
+        autoDownloadLookahead = PreferenceCodec.readInt(prefs, Keys.AUTO_DOWNLOAD_LOOKAHEAD, "auto_download_lookahead", DEFAULT_LOOKAHEAD)
+            .coerceIn(0, MAX_LOOKAHEAD),
+        autoDownloadMaxPerPass = PreferenceCodec.readInt(prefs, Keys.AUTO_DOWNLOAD_MAX_PER_PASS, "auto_download_max_per_pass", 0)
+            .coerceIn(0, MAX_PER_PASS_LIMIT),
+        autoDownloadKeepDays = PreferenceCodec.readInt(prefs, Keys.AUTO_DOWNLOAD_KEEP_DAYS, "auto_download_keep_days", 0)
+            .coerceAtLeast(0),
+        autoDownloadServers = readAutoDownloadServers(prefs),
         maxDownloadStorageGb = PreferenceCodec.readInt(prefs, Keys.MAX_DOWNLOAD_STORAGE_GB, "max_download_storage_gb", 0),
         downloadStorageLocation = prefs[Keys.DOWNLOAD_STORAGE_LOCATION] ?: "INTERNAL",
         autoDeleteAfterWatch = prefs[Keys.AUTO_DELETE_AFTER_WATCH] ?: false,
@@ -82,6 +126,19 @@ class DownloadsStore constructor(
             wifiOnly = prefs[Keys.DOWNLOAD_SCHEDULE_WIFI_ONLY] ?: true,
         ),
     )
+
+    /**
+     * The active user's auto-download server allow-list, read straight from a
+     * [Preferences] snapshot — the `HomeDiscoveryStore.read` shape: the
+     * namespace is resolved from the snapshot itself, and pre-login (no active
+     * user) serves the default (empty = all servers). A corrupted JSON blob
+     * degrades to the default rather than throwing into the slice collector.
+     */
+    private fun readAutoDownloadServers(prefs: Preferences): Set<String> {
+        val userId = identityStore.activeUserIdIn(prefs) ?: return emptySet()
+        val raw = prefs[UserNamespacedKeys.stringKey(userId, Keys.AUTO_DOWNLOAD_SERVERS)] ?: return emptySet()
+        return runCatching { json.decodeFromString<Set<String>>(raw) }.getOrDefault(emptySet())
+    }
 
     private fun readDownloadQuality(prefs: Preferences): DownloadQuality =
         prefs[Keys.DOWNLOAD_QUALITY].toEnumOrNull() ?: DownloadQuality.ORIGINAL
@@ -112,6 +169,35 @@ class DownloadsStore constructor(
 
     suspend fun setAutoDownloadNewEpisodes(enabled: Boolean) {
         dataStore.edit { it[Keys.AUTO_DOWNLOAD_NEW_EPISODES] = enabled }
+    }
+
+    /** Lookahead window in episodes (0 = legacy all-missing behavior). */
+    suspend fun setAutoDownloadLookahead(episodes: Int) {
+        dataStore.edit { it[Keys.AUTO_DOWNLOAD_LOOKAHEAD] = episodes.coerceIn(0, MAX_LOOKAHEAD) }
+    }
+
+    /** Per-pass enqueue budget across series (0 = unlimited). */
+    suspend fun setAutoDownloadMaxPerPass(count: Int) {
+        dataStore.edit { it[Keys.AUTO_DOWNLOAD_MAX_PER_PASS] = count.coerceIn(0, MAX_PER_PASS_LIMIT) }
+    }
+
+    /** Keep-days retention window (0 = off). */
+    suspend fun setAutoDownloadKeepDays(days: Int) {
+        dataStore.edit { it[Keys.AUTO_DOWNLOAD_KEEP_DAYS] = days.coerceAtLeast(0) }
+    }
+
+    /**
+     * Writes the active user's server allow-list into their `u_<userId>::`
+     * namespace. The user is resolved from the very snapshot being edited (the
+     * `HomeDiscoveryStore.editForUser` pattern) so the write is atomic with
+     * respect to concurrent user switches; pre-login there is no namespace, so
+     * the write is skipped.
+     */
+    suspend fun setAutoDownloadServers(serverIds: Set<String>) {
+        dataStore.edit { prefs ->
+            val userId = identityStore.activeUserIdIn(prefs) ?: return@edit
+            prefs[UserNamespacedKeys.stringKey(userId, Keys.AUTO_DOWNLOAD_SERVERS)] = json.encodeToString(serverIds)
+        }
     }
 
     suspend fun setMaxDownloadStorageGb(gb: Int) {
@@ -167,6 +253,9 @@ class DownloadsStore constructor(
             Keys.DOWNLOAD_QUALITY,
             Keys.SMART_DOWNLOADS_ENABLED,
             Keys.AUTO_DOWNLOAD_NEW_EPISODES,
+            Keys.AUTO_DOWNLOAD_LOOKAHEAD,
+            Keys.AUTO_DOWNLOAD_MAX_PER_PASS,
+            Keys.AUTO_DOWNLOAD_KEEP_DAYS,
             Keys.MAX_DOWNLOAD_STORAGE_GB,
             Keys.DOWNLOAD_STORAGE_LOCATION,
             Keys.AUTO_DELETE_AFTER_WATCH,
@@ -175,8 +264,31 @@ class DownloadsStore constructor(
             Keys.DOWNLOAD_SCHEDULE_START,
             Keys.DOWNLOAD_SCHEDULE_END,
             Keys.DOWNLOAD_SCHEDULE_WIFI_ONLY,
+            // Canonical form of the per-user namespaced allow-list key: the
+            // flat slot never holds data (every read/write resolves the
+            // u_<userId>:: namespace), but the coverage guard enumerates the
+            // declared key objects, and the HomeDiscoveryStore precedent keeps
+            // its canonical keys in the static list the same way. The namespaced
+            // instances are stripped by [removeDynamicResetKeys].
+            Keys.AUTO_DOWNLOAD_SERVERS,
         )
         else -> emptyList()
+    }
+
+    /**
+     * Factory-reset participation for the **dynamic** allow-list key: the static
+     * [resetKeysFor] list cannot express `u_<userId>::auto_download_servers`
+     * entries (one set per user that has ever signed in), so the reset machinery
+     * calls this inside its edit (the `HomeDiscoveryStore.removeDynamicResetKeys`
+     * pattern). Canonical-suffix matching
+     * ([UserNamespacedKeys.isNamespaced]) keeps it precise: an unrelated key
+     * that merely starts with `u_` is never touched.
+     */
+    internal fun removeDynamicResetKeys(category: PreferenceResetCategory, prefs: androidx.datastore.preferences.core.MutablePreferences) {
+        if (category != PreferenceResetCategory.DOWNLOADS_NETWORK) return
+        prefs.asMap().keys
+            .filter { UserNamespacedKeys.isNamespaced(it.name, setOf(Keys.AUTO_DOWNLOAD_SERVERS.name)) }
+            .forEach { prefs.remove(it) }
     }
 
     /**
@@ -194,6 +306,9 @@ class DownloadsStore constructor(
             it[Keys.DOWNLOAD_QUALITY] = slice.downloadQuality.name
             it[Keys.SMART_DOWNLOADS_ENABLED] = slice.smartDownloadsEnabled
             it[Keys.AUTO_DOWNLOAD_NEW_EPISODES] = slice.autoDownloadNewEpisodes
+            it[Keys.AUTO_DOWNLOAD_LOOKAHEAD] = slice.autoDownloadLookahead
+            it[Keys.AUTO_DOWNLOAD_MAX_PER_PASS] = slice.autoDownloadMaxPerPass
+            it[Keys.AUTO_DOWNLOAD_KEEP_DAYS] = slice.autoDownloadKeepDays
             it[Keys.MAX_DOWNLOAD_STORAGE_GB] = slice.maxDownloadStorageGb
             it[Keys.DOWNLOAD_STORAGE_LOCATION] = slice.downloadStorageLocation
             it[Keys.AUTO_DELETE_AFTER_WATCH] = slice.autoDeleteAfterWatch
@@ -202,7 +317,22 @@ class DownloadsStore constructor(
             it[Keys.DOWNLOAD_SCHEDULE_START] = slice.downloadScheduleWindow.startHour
             it[Keys.DOWNLOAD_SCHEDULE_END] = slice.downloadScheduleWindow.endHour
             it[Keys.DOWNLOAD_SCHEDULE_WIFI_ONLY] = slice.downloadScheduleWindow.wifiOnly
+            // The allow-list is namespaced: write into the active user's
+            // namespace (skipped pre-login — no namespace to write into).
+            val userId = identityStore.activeUserIdIn(it) ?: return@edit
+            it[UserNamespacedKeys.stringKey(userId, Keys.AUTO_DOWNLOAD_SERVERS)] = json.encodeToString(slice.autoDownloadServers)
         }
+    }
+
+    companion object {
+        /** Default lookahead window (episodes past the highest downloaded/watched). */
+        internal const val DEFAULT_LOOKAHEAD = 3
+
+        /** Upper bound of the lookahead picker. */
+        internal const val MAX_LOOKAHEAD = 10
+
+        /** Upper bound of the max-per-pass picker (0 = unlimited). */
+        internal const val MAX_PER_PASS_LIMIT = 50
     }
 }
 
@@ -219,6 +349,14 @@ data class DownloadsSlice(
     val downloadQuality: DownloadQuality = DownloadQuality.ORIGINAL,
     val smartDownloadsEnabled: Boolean = false,
     val autoDownloadNewEpisodes: Boolean = false,
+    /** Episodes past the highest downloaded/watched per season (0 = all missing). */
+    val autoDownloadLookahead: Int = DownloadsStore.DEFAULT_LOOKAHEAD,
+    /** Global per-pass enqueue budget across series (0 = unlimited). */
+    val autoDownloadMaxPerPass: Int = 0,
+    /** Keep-days retention window for completed downloads (0 = off). */
+    val autoDownloadKeepDays: Int = 0,
+    /** Active user's auto-download server allow-list (empty = all servers). */
+    val autoDownloadServers: Set<String> = emptySet(),
     val maxDownloadStorageGb: Int = 0,
     val downloadStorageLocation: String = "INTERNAL",
     val autoDeleteAfterWatch: Boolean = false,

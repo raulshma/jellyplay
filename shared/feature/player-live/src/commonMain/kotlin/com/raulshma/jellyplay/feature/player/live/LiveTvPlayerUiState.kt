@@ -6,6 +6,7 @@ import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.LiveTvProgram
 import com.raulshma.jellyplay.feature.player.live.engine.LiveEngineState
 import com.raulshma.jellyplay.feature.player.live.engine.LivePlayMethod
+import com.raulshma.jellyplay.core.ui.message.UiMessage
 
 @Immutable
 data class LiveTvPlayerUiState(
@@ -21,9 +22,9 @@ data class LiveTvPlayerUiState(
     val engineState: LiveEngineState = LiveEngineState.IDLE,
     /**
      * Player-facing error, still unresolved (the commonMain VM has no
-     * Context): a localized [LivePlayerMessage.Resource] or an already-final
-     * [LivePlayerMessage.Raw] engine string. The screen collapses it with
-     * [LivePlayerMessage.asText] where [components.LiveErrorBanner] renders.
+     * Context): a localized [UiMessage.Resource] or an already-final
+     * [UiMessage.Raw] engine string. The screen collapses it with
+     * `asText` where [components.LiveErrorBanner] renders.
      */
     val errorMessage: LivePlayerMessage? = null,
     /** Full technical detail for the last error (stacktrace-grade), shown in

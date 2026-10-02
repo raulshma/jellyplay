@@ -60,14 +60,14 @@ class DownloadsViewModelTest {
         syncManager = mockk<OfflineResync>(relaxed = true)
         downloadsFlow = MutableStateFlow(emptyList())
         progressFlow = MutableStateFlow(emptyMap())
-        every { downloadRepository.allDownloads() } returns downloadsFlow
+        every { downloadRepository.getAllDownloads() } returns downloadsFlow
         // The JVM queue seam is supported in production; the VM only emits
         // success messages when the seam says deletions are real.
         every { downloadRepository.isSupported } returns true
-        every { downloadRepository.activeDownloadProgress() } returns progressFlow
+        every { downloadRepository.getActiveDownloadProgress() } returns progressFlow
         // forceResyncCandidates() reads the suspend snapshot; answer with the
         // flow's current value so pushItems drives both paths.
-        coEvery { downloadRepository.allDownloadsSnapshot() } answers { downloadsFlow.value }
+        coEvery { downloadRepository.getAllDownloadsSnapshot() } answers { downloadsFlow.value }
         // batchProgress is a non-suspend val → stub with `every`, not `coEvery`.
         every { syncManager.batchProgress } returns MutableStateFlow(ResyncBatchProgress())
         // Flow-returning repo reads are non-suspend → `every` as well.
@@ -157,7 +157,7 @@ class DownloadsViewModelTest {
 
     @Test
     fun init_load_failure_sets_error_with_fallback_literal() = runTest(mainDispatcher) {
-        every { downloadRepository.allDownloads() } returns kotlinx.coroutines.flow.flow {
+        every { downloadRepository.getAllDownloads() } returns kotlinx.coroutines.flow.flow {
             throw RuntimeException(null as String?)
         }
         val failingViewModel = DownloadsViewModel(downloadRepository, offlineRepository, syncManager)
@@ -179,7 +179,7 @@ class DownloadsViewModelTest {
         viewModel.applyBulkAction(DownloadBulkAction.CANCEL, DownloadActionScope.Item("d9"))
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { downloadRepository.cancel("d9") }
+        coVerify(exactly = 1) { downloadRepository.cancelDownload("d9") }
     }
 
     @Test
@@ -190,8 +190,8 @@ class DownloadsViewModelTest {
         viewModel.applyBulkAction(DownloadBulkAction.PAUSE, DownloadActionScope.Item("d9"))
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { downloadRepository.pause("d9") }
-        coVerify(exactly = 0) { downloadRepository.enqueue(any()) }
+        coVerify(exactly = 1) { downloadRepository.pauseDownload("d9") }
+        coVerify(exactly = 0) { downloadRepository.enqueueDownload(any()) }
     }
 
     @Test
@@ -202,9 +202,9 @@ class DownloadsViewModelTest {
         viewModel.applyBulkAction(DownloadBulkAction.RESUME, DownloadActionScope.Item("d9"))
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { downloadRepository.resume("d9") }
+        coVerify(exactly = 1) { downloadRepository.resumeDownload("d9") }
         // enqueueDownload is a non-suspend fun on the writer port.
-        verify(exactly = 1) { downloadRepository.enqueue("d9") }
+        verify(exactly = 1) { downloadRepository.enqueueDownload("d9") }
     }
 
     @Test
@@ -215,8 +215,8 @@ class DownloadsViewModelTest {
         viewModel.applyBulkAction(DownloadBulkAction.RETRY_FAILED, DownloadActionScope.Item("d9"))
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { downloadRepository.retry("d9") }
-        verify(exactly = 1) { downloadRepository.enqueue("d9") }
+        coVerify(exactly = 1) { downloadRepository.retryDownload("d9") }
+        verify(exactly = 1) { downloadRepository.enqueueDownload("d9") }
     }
 
     // ── Bus→flow seam (V3 conveyor) ───────────────────────────────────────
@@ -229,8 +229,63 @@ class DownloadsViewModelTest {
         viewModel.deleteDownload(item("d9", status = DownloadStatus.COMPLETED))
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { downloadRepository.delete("d9") }
+        coVerify(exactly = 1) { downloadRepository.deleteDownload("d9") }
         assertEquals(DownloadsUserMessage.Deleted, viewModel.messages.first())
+    }
+
+    // ── Confirmation hosts (the screen's former remember{} machines) ─────
+    // DownloadsScreen drives its two delete dialogs off these hosts; the
+    // synchronous settle arm is the pinned fix for the documented
+    // "confirm write never cleared" bug.
+
+    @Test
+    fun pendingDelete_host_show_holds_the_item_for_the_dialog() = runTest(mainDispatcher) {
+        val target = item("d1", status = DownloadStatus.COMPLETED)
+
+        viewModel.pendingDelete.show(target)
+
+        assertEquals(target, viewModel.pendingDelete.item)
+        assertTrue(viewModel.pendingDelete.isPending)
+        // A second show replaces the pending target rather than stacking.
+        val other = item("d2", status = DownloadStatus.COMPLETED)
+        viewModel.pendingDelete.show(other)
+        assertEquals(other, viewModel.pendingDelete.item)
+    }
+
+    @Test
+    fun pendingDelete_host_confirm_returns_the_target_and_clears_synchronously() = runTest(mainDispatcher) {
+        val target = item("d1", status = DownloadStatus.COMPLETED)
+        viewModel.pendingDelete.show(target)
+
+        val confirmed = viewModel.pendingDelete.confirm()
+
+        assertEquals(target, confirmed)
+        // The settle arm is INSIDE confirm: nothing stays armed for the next
+        // open (the old screen-held machine's documented failure mode).
+        assertFalse(viewModel.pendingDelete.isPending)
+        assertNull(viewModel.pendingDelete.item)
+        assertNull(viewModel.pendingDelete.confirm())
+    }
+
+    @Test
+    fun pendingDelete_host_dismiss_clears_without_returning_a_target() = runTest(mainDispatcher) {
+        viewModel.pendingDelete.show(item("d1", status = DownloadStatus.COMPLETED))
+
+        viewModel.pendingDelete.dismiss(inFlight = false)
+
+        assertFalse(viewModel.pendingDelete.isPending)
+        assertNull(viewModel.pendingDelete.item)
+    }
+
+    @Test
+    fun pendingBulkDelete_host_round_trips_the_unit_payload_with_the_same_settle() = runTest(mainDispatcher) {
+        assertFalse(viewModel.pendingBulkDelete.isPending)
+
+        viewModel.pendingBulkDelete.show(Unit)
+
+        assertTrue(viewModel.pendingBulkDelete.isPending)
+        assertEquals(Unit, viewModel.pendingBulkDelete.confirm())
+        assertFalse(viewModel.pendingBulkDelete.isPending)
     }
 
     // ── Selection ─────────────────────────────────────────────────────────
@@ -285,8 +340,8 @@ class DownloadsViewModelTest {
         viewModel.applyBulkAction(DownloadBulkAction.DELETE, DownloadActionScope.Selected)
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { downloadRepository.delete("a") }
-        coVerify(exactly = 1) { downloadRepository.delete("b") }
+        coVerify(exactly = 1) { downloadRepository.deleteDownload("a") }
+        coVerify(exactly = 1) { downloadRepository.deleteDownload("b") }
         assertEquals(emptySet(), viewModel.uiState.value.selectedIds)
         assertEquals(DownloadsUserMessage.Deleted, viewModel.messages.first())
     }
@@ -296,7 +351,7 @@ class DownloadsViewModelTest {
         viewModel.applyBulkAction(DownloadBulkAction.DELETE, DownloadActionScope.Selected)
         advanceUntilIdle()
 
-        coVerify(exactly = 0) { downloadRepository.delete(any()) }
+        coVerify(exactly = 0) { downloadRepository.deleteDownload(any()) }
         val message = kotlinx.coroutines.withTimeoutOrNull(50) { viewModel.messages.first() }
         assertNull(message)
     }
@@ -316,9 +371,9 @@ class DownloadsViewModelTest {
         viewModel.applyBulkAction(DownloadBulkAction.PAUSE, DownloadActionScope.Selected)
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { downloadRepository.pause("dl") }
-        coVerify(exactly = 0) { downloadRepository.pause("pa") }
-        coVerify(exactly = 0) { downloadRepository.pause("ok") }
+        coVerify(exactly = 1) { downloadRepository.pauseDownload("dl") }
+        coVerify(exactly = 0) { downloadRepository.pauseDownload("pa") }
+        coVerify(exactly = 0) { downloadRepository.pauseDownload("ok") }
     }
 
     @Test
@@ -335,10 +390,10 @@ class DownloadsViewModelTest {
         viewModel.applyBulkAction(DownloadBulkAction.RESUME, DownloadActionScope.Selected)
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { downloadRepository.resume("pa") }
-        verify(exactly = 1) { downloadRepository.enqueue("pa") }
-        coVerify(exactly = 0) { downloadRepository.resume("dl") }
-        verify(exactly = 0) { downloadRepository.enqueue("dl") }
+        coVerify(exactly = 1) { downloadRepository.resumeDownload("pa") }
+        verify(exactly = 1) { downloadRepository.enqueueDownload("pa") }
+        coVerify(exactly = 0) { downloadRepository.resumeDownload("dl") }
+        verify(exactly = 0) { downloadRepository.enqueueDownload("dl") }
     }
 
     @Test
@@ -359,12 +414,12 @@ class DownloadsViewModelTest {
         viewModel.applyBulkAction(DownloadBulkAction.CANCEL, DownloadActionScope.Selected)
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { downloadRepository.cancel("pen") }
-        coVerify(exactly = 1) { downloadRepository.cancel("que") }
-        coVerify(exactly = 1) { downloadRepository.cancel("dl") }
-        coVerify(exactly = 1) { downloadRepository.cancel("pa") }
-        coVerify(exactly = 0) { downloadRepository.cancel("done") }
-        coVerify(exactly = 0) { downloadRepository.cancel("cxl") }
+        coVerify(exactly = 1) { downloadRepository.cancelDownload("pen") }
+        coVerify(exactly = 1) { downloadRepository.cancelDownload("que") }
+        coVerify(exactly = 1) { downloadRepository.cancelDownload("dl") }
+        coVerify(exactly = 1) { downloadRepository.cancelDownload("pa") }
+        coVerify(exactly = 0) { downloadRepository.cancelDownload("done") }
+        coVerify(exactly = 0) { downloadRepository.cancelDownload("cxl") }
     }
 
     // ── Global actions (applyBulkAction at All scope) ─────────────────────
@@ -383,9 +438,9 @@ class DownloadsViewModelTest {
         viewModel.applyBulkAction(DownloadBulkAction.PAUSE, DownloadActionScope.All)
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { downloadRepository.pause("dl1") }
-        coVerify(exactly = 1) { downloadRepository.pause("dl2") }
-        coVerify(exactly = 0) { downloadRepository.pause("pa") }
+        coVerify(exactly = 1) { downloadRepository.pauseDownload("dl1") }
+        coVerify(exactly = 1) { downloadRepository.pauseDownload("dl2") }
+        coVerify(exactly = 0) { downloadRepository.pauseDownload("pa") }
     }
 
     @Test
@@ -402,11 +457,11 @@ class DownloadsViewModelTest {
         viewModel.applyBulkAction(DownloadBulkAction.RETRY_FAILED, DownloadActionScope.All)
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { downloadRepository.retry("f1") }
-        coVerify(exactly = 1) { downloadRepository.retry("f2") }
-        verify(exactly = 1) { downloadRepository.enqueue("f1") }
-        verify(exactly = 1) { downloadRepository.enqueue("f2") }
-        coVerify(exactly = 0) { downloadRepository.retry("ok") }
+        coVerify(exactly = 1) { downloadRepository.retryDownload("f1") }
+        coVerify(exactly = 1) { downloadRepository.retryDownload("f2") }
+        verify(exactly = 1) { downloadRepository.enqueueDownload("f1") }
+        verify(exactly = 1) { downloadRepository.enqueueDownload("f2") }
+        coVerify(exactly = 0) { downloadRepository.retryDownload("ok") }
     }
 
     @Test
@@ -422,11 +477,11 @@ class DownloadsViewModelTest {
 
         viewModel.moveToFront(item("a", priority = 3))
         advanceUntilIdle()
-        coVerify(exactly = 1) { downloadRepository.setPriority("a", 8) }
+        coVerify(exactly = 1) { downloadRepository.setDownloadPriority("a", 8) }
 
         viewModel.lowerPriority(item("c", priority = 5))
         advanceUntilIdle()
-        coVerify(exactly = 1) { downloadRepository.setPriority("c", 2) }
+        coVerify(exactly = 1) { downloadRepository.setDownloadPriority("c", 2) }
     }
 
     // ── Freshness check / resync ──────────────────────────────────────────

@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.music.artistdetail
 
 import com.raulshma.jellyplay.core.data.playback.AudioQueueItem
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.MusicCatalogue
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
@@ -31,6 +32,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertSame
+import com.raulshma.jellyplay.core.ui.message.UiMessage
 
 /**
  * Pins the artist detail contract on the [com.raulshma.jellyplay.core.ui.viewmodel.DeferredFetchCoordinator]
@@ -49,6 +51,7 @@ class ArtistDetailViewModelTest {
     private val mainDispatcher = StandardTestDispatcher()
 
     private val mediaRepository: MediaRepository = mockk()
+    private val musicCatalogue: MusicCatalogue = mockk()
     private val imageUrlProvider: ImageUrlProvider = mockk(relaxed = true)
     private val audioQueueFacade: MusicQueuePlayer = mockk()
 
@@ -69,6 +72,7 @@ class ArtistDetailViewModelTest {
         every { mediaRepository.userDataChanges } returns userDataEvents
         viewModel = ArtistDetailViewModel(
             mediaRepository = mediaRepository,
+            musicCatalogue = musicCatalogue,
             imageUrlProvider = imageUrlProvider,
             audioQueueFacade = audioQueueFacade,
         )
@@ -84,7 +88,7 @@ class ArtistDetailViewModelTest {
         coEvery { mediaRepository.getMediaDetail("ar1", any()) } returns Result.success(
             MediaDetail(item = MediaItem(id = "ar1", name = artistName, mediaType = MediaType.ARTIST)),
         )
-        coEvery { mediaRepository.getArtistAlbums("ar1", any()) } returns Result.success(albums)
+        coEvery { musicCatalogue.getArtistAlbums("ar1", any()) } returns Result.success(albums)
         viewModel.loadArtist("ar1")
     }
 
@@ -104,7 +108,7 @@ class ArtistDetailViewModelTest {
     fun loadArtist_detailFailure_setsRawErrorOverNoContent() = runTest(mainDispatcher) {
         coEvery { mediaRepository.getMediaDetail("ar1", any()) } returns
             Result.failure(RuntimeException("no artist"))
-        coEvery { mediaRepository.getArtistAlbums("ar1", any()) } returns Result.success(albums)
+        coEvery { musicCatalogue.getArtistAlbums("ar1", any()) } returns Result.success(albums)
 
         viewModel.loadArtist("ar1")
         advanceUntilIdle()
@@ -112,7 +116,7 @@ class ArtistDetailViewModelTest {
         // All-or-nothing on the loud path too: the failed detail half fails
         // the whole fetch, so the error owns the screen (the screen renders
         // ErrorScreen whenever error != null) and no half-pair is published.
-        assertEquals("no artist", (viewModel.error as MixErrorMessage.Raw).message)
+        assertEquals("no artist", (viewModel.error as UiMessage.Raw).text)
         assertEquals("", viewModel.artistName)
         assertEquals(emptyList(), viewModel.albums)
         assertFalse(viewModel.isLoading)
@@ -126,13 +130,13 @@ class ArtistDetailViewModelTest {
         coEvery { mediaRepository.getMediaDetail("ar1", any()) } returns Result.success(
             MediaDetail(item = MediaItem(id = "ar1", name = "Artist", mediaType = MediaType.ARTIST)),
         )
-        coEvery { mediaRepository.getArtistAlbums("ar1", any()) } returns
+        coEvery { musicCatalogue.getArtistAlbums("ar1", any()) } returns
             Result.failure(RuntimeException("albums gone"))
 
         viewModel.loadArtist("ar1")
         advanceUntilIdle()
 
-        assertEquals("albums gone", (viewModel.error as MixErrorMessage.Raw).message)
+        assertEquals("albums gone", (viewModel.error as UiMessage.Raw).text)
         assertEquals("", viewModel.artistName)
         assertEquals(emptyList(), viewModel.albums)
         assertFalse(viewModel.isLoading)
@@ -170,7 +174,7 @@ class ArtistDetailViewModelTest {
         viewModel.startInstantMix("ar1")
         advanceUntilIdle()
 
-        assertSame(Res.string.music_mix_unavailable, (viewModel.error as MixErrorMessage.Resource).res)
+        assertSame(Res.string.music_mix_unavailable, (viewModel.error as UiMessage.Resource).res)
         assertNull(viewModel.mixFirstTrackId)
         assertFalse(viewModel.isStartingMix)
     }
@@ -185,7 +189,7 @@ class ArtistDetailViewModelTest {
         viewModel.startInstantMix("ar1")
         advanceUntilIdle()
 
-        assertEquals("boom", (viewModel.error as MixErrorMessage.Raw).message)
+        assertEquals("boom", (viewModel.error as UiMessage.Raw).text)
         assertNull(viewModel.mixFirstTrackId)
         assertFalse(viewModel.isStartingMix)
     }
@@ -237,7 +241,7 @@ class ArtistDetailViewModelTest {
         advanceUntilIdle()
 
         coVerify(exactly = 1) { mediaRepository.getMediaDetail("ar1") }
-        coVerify(exactly = 1) { mediaRepository.getArtistAlbums("ar1") }
+        coVerify(exactly = 1) { musicCatalogue.getArtistAlbums("ar1", 50) }
         assertFalse(viewModel.isLoading)
     }
 
@@ -252,29 +256,29 @@ class ArtistDetailViewModelTest {
             MusicQueueOutcome.Failed(RuntimeException("mix boom"))
         viewModel.startInstantMix("ar1")
         advanceUntilIdle()
-        assertEquals("mix boom", (viewModel.error as MixErrorMessage.Raw).message)
+        assertEquals("mix boom", (viewModel.error as UiMessage.Raw).text)
 
         viewModel.loadArtist("ar1")
         advanceUntilIdle()
 
         coVerify(exactly = 1) { mediaRepository.getMediaDetail("ar1") }
-        coVerify(exactly = 1) { mediaRepository.getArtistAlbums("ar1") }
+        coVerify(exactly = 1) { musicCatalogue.getArtistAlbums("ar1", 50) }
         assertFalse(viewModel.isLoading)
         // The mix error survives the skipped re-entry.
-        assertEquals("mix boom", (viewModel.error as MixErrorMessage.Raw).message)
+        assertEquals("mix boom", (viewModel.error as UiMessage.Raw).text)
     }
 
     @Test
     fun loadArtist_thrownRepoFailure_clearsSpinnerSetsErrorAndReloadsOnReEntry() = runTest(mainDispatcher) {
         coEvery { mediaRepository.getMediaDetail("ar1", any()) } throws IllegalStateException("engine blew up")
-        coEvery { mediaRepository.getArtistAlbums("ar1", any()) } returns Result.success(albums)
+        coEvery { musicCatalogue.getArtistAlbums("ar1", any()) } returns Result.success(albums)
 
         viewModel.loadArtist("ar1")
         advanceUntilIdle()
 
         // The coordinator swallows the throw (re-arm + no uncaught handler);
         // without the error hook the spinner would stay up with no error UI.
-        assertEquals("engine blew up", (viewModel.error as MixErrorMessage.Raw).message)
+        assertEquals("engine blew up", (viewModel.error as UiMessage.Raw).text)
         assertFalse(viewModel.isLoading)
 
         // The throw must count as a failed loud load: re-entry reloads
@@ -299,19 +303,19 @@ class ArtistDetailViewModelTest {
         coEvery { mediaRepository.getMediaDetail("ar1", any()) } returns Result.success(
             MediaDetail(item = MediaItem(id = "ar1", name = "Artist", mediaType = MediaType.ARTIST)),
         )
-        coEvery { mediaRepository.getArtistAlbums("ar1", any()) } returns
+        coEvery { musicCatalogue.getArtistAlbums("ar1", any()) } returns
             Result.failure(RuntimeException("albums gone"))
         viewModel.loadArtist("ar1")
         advanceUntilIdle()
-        assertEquals("albums gone", (viewModel.error as MixErrorMessage.Raw).message)
+        assertEquals("albums gone", (viewModel.error as UiMessage.Raw).text)
 
         // Re-entry retries the loud load and heals the failed half.
-        coEvery { mediaRepository.getArtistAlbums("ar1", any()) } returns Result.success(albums)
+        coEvery { musicCatalogue.getArtistAlbums("ar1", any()) } returns Result.success(albums)
         viewModel.loadArtist("ar1")
         advanceUntilIdle()
 
         coVerify(exactly = 2) { mediaRepository.getMediaDetail("ar1") }
-        coVerify(exactly = 2) { mediaRepository.getArtistAlbums("ar1") }
+        coVerify(exactly = 2) { musicCatalogue.getArtistAlbums("ar1", 50) }
         assertNull(viewModel.error)
         assertEquals(albums, viewModel.albums)
     }
@@ -323,18 +327,18 @@ class ArtistDetailViewModelTest {
         coEvery { mediaRepository.getMediaDetail("ar1", any()) } returns Result.success(
             MediaDetail(item = MediaItem(id = "ar1", name = "Artist", mediaType = MediaType.ARTIST)),
         )
-        coEvery { mediaRepository.getArtistAlbums("ar1", any()) } returns
+        coEvery { musicCatalogue.getArtistAlbums("ar1", any()) } returns
             Result.failure(RuntimeException("albums gone"))
         viewModel.loadArtist("ar1")
         advanceUntilIdle()
-        assertEquals("albums gone", (viewModel.error as MixErrorMessage.Raw).message)
+        assertEquals("albums gone", (viewModel.error as UiMessage.Raw).text)
 
         // The deferred silent regeneration succeeds and heals the screen.
         viewModel.deferredRefresher.onScreenActiveChanged(false)
         coEvery { mediaRepository.getMediaDetail("ar1", true) } returns Result.success(
             MediaDetail(item = MediaItem(id = "ar1", name = "Artist", mediaType = MediaType.ARTIST)),
         )
-        coEvery { mediaRepository.getArtistAlbums("ar1", any()) } returns Result.success(albums)
+        coEvery { musicCatalogue.getArtistAlbums("ar1", any()) } returns Result.success(albums)
         userDataEvents.emit(UserDataChange("user-1", listOf("al1")))
         advanceUntilIdle()
         viewModel.deferredRefresher.onScreenActiveChanged(true)
@@ -366,7 +370,7 @@ class ArtistDetailViewModelTest {
         coEvery { mediaRepository.getMediaDetail("ar1", true) } returns Result.success(
             MediaDetail(item = MediaItem(id = "ar1", name = "Artist 2", mediaType = MediaType.ARTIST)),
         )
-        coEvery { mediaRepository.getArtistAlbums("ar1", any()) } returns Result.success(albums)
+        coEvery { musicCatalogue.getArtistAlbums("ar1", any()) } returns Result.success(albums)
         userDataEvents.emit(UserDataChange("user-1", listOf("al1")))
         advanceUntilIdle()
 
@@ -388,7 +392,7 @@ class ArtistDetailViewModelTest {
 
         viewModel.deferredRefresher.onScreenActiveChanged(false)
         coEvery { mediaRepository.getMediaDetail("ar1", true) } returns Result.failure(RuntimeException("offline blip"))
-        coEvery { mediaRepository.getArtistAlbums("ar1", any()) } returns Result.success(albums)
+        coEvery { musicCatalogue.getArtistAlbums("ar1", any()) } returns Result.success(albums)
         userDataEvents.emit(UserDataChange("user-1", listOf("al1")))
         advanceUntilIdle()
         viewModel.deferredRefresher.onScreenActiveChanged(true)
@@ -425,7 +429,7 @@ class ArtistDetailViewModelTest {
         coEvery { mediaRepository.getMediaDetail("ar1", true) } returns Result.success(
             MediaDetail(item = MediaItem(id = "ar1", name = "Artist 2", mediaType = MediaType.ARTIST)),
         )
-        coEvery { mediaRepository.getArtistAlbums("ar1", any()) } returns
+        coEvery { musicCatalogue.getArtistAlbums("ar1", any()) } returns
             Result.failure(RuntimeException("albums blip"))
         userDataEvents.emit(UserDataChange("user-1", listOf("al1")))
         advanceUntilIdle()
@@ -449,7 +453,7 @@ class ArtistDetailViewModelTest {
         coEvery { mediaRepository.getMediaDetail("ar1", true) } returns Result.success(
             MediaDetail(item = MediaItem(id = "ar1", name = "Artist", mediaType = MediaType.ARTIST)),
         )
-        coEvery { mediaRepository.getArtistAlbums("ar1", any()) } returns Result.success(albums)
+        coEvery { musicCatalogue.getArtistAlbums("ar1", any()) } returns Result.success(albums)
 
         viewModel.refreshArtist("ar1")
         advanceUntilIdle()

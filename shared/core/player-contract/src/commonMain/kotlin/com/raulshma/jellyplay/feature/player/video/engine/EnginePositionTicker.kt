@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.player.video.engine
 
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.StateFlow
@@ -82,6 +83,38 @@ class EnginePositionTicker(
     private val isReady: (() -> Boolean)? = null,
     private val notReadyInitialWaitMs: Long = POSITION_NOT_READY_MIN_WAIT_MS,
     private val notReadyMaxWaitMs: Long = POSITION_NOT_READY_MAX_WAIT_MS,
+    /**
+     * Prime ONE synchronous [onActive] read before the polling loop starts —
+     * the audio managers' `startPositionTracking` contract: the first
+     * position/duration publish must land BEFORE [launch] returns, not one
+     * polling interval later. The former hand-rolled loops published on
+     * their FIRST iteration — before any delay — and the regression this
+     * prime closes surfaced when the desktop audio manager adopted the
+     * ticker: without it, the first position publish waits up to the full
+     * interval, and a skip in that window reports the previous item's stop
+     * position against `duration == 0` (the transition stop-report fallback
+     * `_duration.value * 10_000` read 0 and advance stop reports were
+     * suppressed).
+     *
+     * Synchronous ON PURPOSE, via [CoroutineStart.UNDISPATCHED]: a
+     * dispatched (loop-first) tick could race the very stop-report fallback
+     * it feeds — the prime body is a plain read + flow write and never
+     * suspends, so UNDISPATCHED runs it to completion on the CALLER's
+     * thread inside `launch()`, and the loop's first `delay` then parks as
+     * usual on the scope's dispatcher. Like the manual tick the audio
+     * managers used to make, the prime is gated only by [isReady] — the
+     * body's own playing gate decides whether anything is published, and
+     * [onActive]'s play/edge suppression deliberately does NOT apply (a
+     * paused body is the body's own no-op).
+     *
+     * OFF by default because the video adapters' `positionFlow` shells
+     * already prime via their surrounding `callbackFlow`'s initial
+     * `trySend(currentPositionMs)` — an unconditional prime body here would
+     * double-publish the same first value down a conflated (non-deduping)
+     * channel. Audio managers pass `true`; their tick bodies publish
+     * through dedup-guarded state flows, so the prime is idempotent.
+     */
+    private val primeFirstTick: Boolean = false,
 ) {
     /**
      * The ticker's last observed play-state, seeded from the current state.
@@ -90,8 +123,26 @@ class EnginePositionTicker(
      */
     private var lastPlayingState: Boolean = isCurrentlyPlaying()
 
-    /** Launches the ticker loop. Returns the [Job] for cancellation. */
-    fun launch(): Job = scopeProvider().launch {
+    /**
+     * Launches the ticker loop. Returns the [Job] for cancellation.
+     *
+     * With [primeFirstTick] enabled the launch is [CoroutineStart.UNDISPATCHED]
+     * so the prime read runs synchronously on the caller's thread (see the
+     * [primeFirstTick] KDoc); without it the launch is DEFAULT-started and
+     * the first body read happens one polling interval after launch — the
+     * engine-shaped behaviour the video `positionFlow` shells rely on.
+     */
+    fun launch(): Job = scopeProvider().launch(
+        start = if (primeFirstTick) CoroutineStart.UNDISPATCHED else CoroutineStart.DEFAULT,
+    ) {
+        if (primeFirstTick && isReady?.invoke() != false) {
+            // Prime read (moved here from the audio managers' manual
+            // synchronous tick calls) — see [primeFirstTick]. Does NOT
+            // update [lastPlayingState]: the constructor seeded it from the
+            // same synchronous read moments earlier on this same thread, so
+            // the loop's edge detection starts from the same value either way.
+            onActive()
+        }
         var notReadyWaitMs = notReadyInitialWaitMs
         while (isActive) {
             if (isReady?.invoke() == false) {

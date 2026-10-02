@@ -12,6 +12,7 @@ import kotlin.test.assertTrue
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.resetMain
@@ -21,13 +22,16 @@ import kotlinx.coroutines.test.setMain
 
 /**
  * Direct pins for [VideoMiniPlayerState]'s engine-retention choreography on
- * virtual time (the SleepTimerManagerTest setMain idiom): the 5-minute
+ * virtual time (the former SleepTimerManagerTest setMain idiom): the 5-minute
  * auto-release timeout that frees the native video engine after the user
  * dismisses the mini player, the reclaim identity guard (a different item
- * must never receive someone else's engine), the release reset ladder, and
- * the timeout's cancellation on release/reclaim (no double-release of native
- * resources). The holder previously had no direct test — its semantics were
- * only incidentally exercised through the livetv feature.
+ * must never receive someone else's engine), the typed-reclaim capability
+ * (the deposit-time [VideoMiniPlayerState.enterMiniMode] registration that
+ * backs [VideoMiniPlayerState.tryReclaimMediaEngine] — no reclaim-site
+ * downcast), the release reset ladder, and the timeout's cancellation on
+ * release/reclaim (no double-release of native resources). The holder
+ * previously had no direct test — its semantics were only incidentally
+ * exercised through the livetv feature.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class VideoMiniPlayerStateTest {
@@ -37,7 +41,7 @@ class VideoMiniPlayerStateTest {
      * about WHO holds and WHO releases the engine, not about playback) and
      * exposes a writable isPlaying flow the holder's collector mirrors.
      */
-    private class FakeEngine(
+    private open class FakeEngine(
         var playing: Boolean = false,
         var releaseCount: Int = 0,
         var pauseCount: Int = 0,
@@ -57,6 +61,46 @@ class VideoMiniPlayerStateTest {
         override fun decreaseVolume(delta: Float) = Unit
         override fun setMuted(muted: Boolean) = Unit
         override fun release() { releaseCount++ }
+    }
+
+    /**
+     * The typed view the video feature's deposit registers: the depositor
+     * holds its engine AS a [MediaEngine] and vouches for that fact by
+     * returning the same instance — the capability, not a cast. The members
+     * beyond [FakeEngine]'s remote-control surface are inert stubs; the
+     * assertions are about WHO holds and WHO releases the engine.
+     */
+    private class TypedEngine : FakeEngine(), com.raulshma.jellyplay.feature.player.video.engine.MediaEngine {
+        override val displayName: String get() = "typed"
+        override fun load(request: com.raulshma.jellyplay.feature.player.video.engine.PlaybackRequest) = Unit
+        override val playbackSpeed: Float get() = 1f
+        override fun setPlaybackSpeed(speed: Float) = Unit
+        override val playbackState: StateFlow<com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState> =
+            MutableStateFlow(com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState.IDLE)
+        override val durationMs: Long get() = 0L
+        override val positionFlow: kotlinx.coroutines.flow.Flow<Long> = kotlinx.coroutines.flow.emptyFlow()
+        override val errorFlow: kotlinx.coroutines.flow.Flow<com.raulshma.jellyplay.feature.player.video.engine.EngineError> =
+            kotlinx.coroutines.flow.emptyFlow()
+        override val subtitleEvents: kotlinx.coroutines.flow.Flow<com.raulshma.jellyplay.feature.player.video.engine.SubtitleEvent> =
+            kotlinx.coroutines.flow.emptyFlow()
+        override val bufferedPositionMs: StateFlow<Long> = MutableStateFlow(0L)
+        override val videoStats: StateFlow<com.raulshma.jellyplay.feature.player.video.engine.EngineVideoStats> =
+            MutableStateFlow(com.raulshma.jellyplay.feature.player.video.engine.EngineVideoStats())
+        override val currentCues: StateFlow<List<com.raulshma.jellyplay.feature.player.video.engine.TimedCue>> =
+            MutableStateFlow(emptyList())
+        override val liveSubtitleCue: StateFlow<CharSequence?> = MutableStateFlow(null)
+        override val pollingIntervalMs: StateFlow<Long> = MutableStateFlow(1_000L)
+        override val videoStatsEnabled: StateFlow<Boolean> = MutableStateFlow(false)
+        override fun setPollingIntervalMs(ms: Long) = Unit
+        override fun setVideoStatsEnabled(enabled: Boolean) = Unit
+        override val audioSessionId: Int get() = 0
+        override val capabilities: com.raulshma.jellyplay.feature.player.video.engine.EngineCapabilities
+            get() = com.raulshma.jellyplay.feature.player.video.engine.EngineCapabilities()
+        override fun updateConfig(config: com.raulshma.jellyplay.feature.player.video.engine.EngineConfig) = Unit
+        override val availableTracks: StateFlow<List<com.raulshma.jellyplay.feature.player.video.engine.MediaTrack>> =
+            MutableStateFlow(emptyList())
+        override fun applySubtitleStyle(style: com.raulshma.jellyplay.core.model.SubtitleStyle) = Unit
+        override fun setAspectRatio(ratio: com.raulshma.jellyplay.feature.player.video.engine.AspectRatio) = Unit
     }
 
     private val testDispatcher = StandardTestDispatcher()
@@ -81,6 +125,21 @@ class VideoMiniPlayerStateTest {
             mediaSourceId = "src-1",
             title = "Title",
             subtitle = "Subtitle",
+        )
+    }
+
+    /**
+     * Deposit WITH the typed-reclaim capability — the video feature's shape:
+     * the depositor passes the typed view of the same instance it deposits.
+     */
+    private fun enterTyped(engine: TypedEngine, itemId: String = "item-1") {
+        state.enterMiniMode(
+            engine = engine,
+            itemId = itemId,
+            mediaSourceId = "src-1",
+            title = "Title",
+            subtitle = "Subtitle",
+            asMediaEngine = { engine },
         )
     }
 
@@ -141,6 +200,55 @@ class VideoMiniPlayerStateTest {
 
         // Not in mini mode anymore: nothing to reclaim at all.
         assertNull(state.tryReclaimEngine("item-1"))
+    }
+
+    @Test
+    fun `typed reclaim hands back the registered MediaEngine and pops the session`() = runTest(testDispatcher.scheduler) {
+        val engine = TypedEngine()
+        enterTyped(engine)
+
+        // A different item never reclaims — typed or broad, same guard.
+        assertNull(state.tryReclaimMediaEngine("item-other"), "a different item id must not reclaim (typed)")
+        assertTrue(state.isMiniMode.value, "the mismatched typed reclaim must not consume the deposit")
+
+        val reclaimed = state.tryReclaimMediaEngine("item-1")
+        assertSame(engine, reclaimed, "the typed reclaim returns the registered instance — no downcast")
+        assertEquals(0, engine.releaseCount, "reclaim hands the engine over — it must NOT be released")
+        assertFalse(state.isMiniMode.value)
+        assertNull(state.engine)
+
+        // Not in mini mode anymore: nothing to reclaim at all.
+        assertNull(state.tryReclaimMediaEngine("item-1"))
+    }
+
+    @Test
+    fun `typed reclaim without the capability returns null and leaves the deposit intact`() = runTest(testDispatcher.scheduler) {
+        // A broad deposit (no registered capability — a foreign depositor's
+        // shape): the typed reclaim must NOT pop the session, because the
+        // popped engine would be dropped without ever being released.
+        val engine = FakeEngine()
+        enter(engine)
+
+        assertNull(state.tryReclaimMediaEngine("item-1"), "no registered capability means no typed reclaim")
+        assertTrue(state.isMiniMode.value, "the deposit must survive the capability miss")
+        assertSame(engine, state.engine)
+
+        // The broad seam still reclaims it afterwards.
+        assertSame(engine, state.tryReclaimEngine("item-1"))
+    }
+
+    @Test
+    fun `re-entering broad overwrites the capability - typed reclaim no longer fires`() = runTest(testDispatcher.scheduler) {
+        val typed = TypedEngine()
+        enterTyped(typed)
+
+        val broad = FakeEngine()
+        enter(broad) // a new broad deposit replaces the typed one mid-window
+
+        assertNull(state.tryReclaimMediaEngine("item-1"), "the overwrite cleared the typed capability")
+        assertTrue(state.isMiniMode.value, "and again must not consume the deposit")
+        assertSame(broad, state.tryReclaimEngine("item-1"))
+        assertEquals(0, typed.releaseCount, "the replaced engine is dropped unreleased — the existing re-enter semantics")
     }
 
     @Test

@@ -11,6 +11,7 @@ import com.raulshma.jellyplay.core.datastore.security.SecuritySlice
 import com.raulshma.jellyplay.core.datastore.subtitle.SubtitleSlice
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerSlice
 import com.raulshma.jellyplay.core.datastore.appearance.AppearanceSlice
+import com.raulshma.jellyplay.core.model.GestureMode
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import com.raulshma.jellyplay.core.model.ThemeMode
@@ -266,22 +267,22 @@ class UserPreferencesStoreRestoreCategoriesTest {
 
     @Test
     fun `exclusive video-player slice is untouched when no selected category owns it`() = runTest {
-        val incoming = VideoPlayerSlice(videoGesturesEnabled = false)
+        val incoming = VideoPlayerSlice(videoGestureMode = GestureMode.NONE)
 
         store.restoreV2Categories(backup(videoPlayer = incoming), categories = setOf(PreferenceResetCategory.APPEARANCE))
         drain()
 
-        assertEquals(true, videoAfter().videoGesturesEnabled, "default survives — APPEARANCE does not own videoPlayer")
+        assertEquals(GestureMode.ALL, videoAfter().videoGestureMode, "default survives — APPEARANCE does not own videoPlayer")
     }
 
     @Test
     fun `exclusive video-player slice restores wholesale when PLAYBACK is selected`() = runTest {
-        val incoming = VideoPlayerSlice(videoGesturesEnabled = false)
+        val incoming = VideoPlayerSlice(videoGestureMode = GestureMode.NONE)
 
         store.restoreV2Categories(backup(videoPlayer = incoming), categories = setOf(PreferenceResetCategory.PLAYBACK))
         drain()
 
-        assertEquals(false, videoAfter().videoGesturesEnabled)
+        assertEquals(GestureMode.NONE, videoAfter().videoGestureMode)
     }
 
     @Test

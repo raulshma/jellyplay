@@ -64,9 +64,9 @@ class DownloadsViewModelGlobalActionBoundaryTest {
         offlineRepository = mockk(relaxed = true)
         syncManager = mockk<OfflineResync>(relaxed = true)
         downloadsFlow = MutableStateFlow(emptyList())
-        every { downloadRepository.allDownloads() } returns downloadsFlow
-        every { downloadRepository.activeDownloadProgress() } returns MutableStateFlow(emptyMap())
-        coEvery { downloadRepository.allDownloadsSnapshot() } answers { downloadsFlow.value }
+        every { downloadRepository.getAllDownloads() } returns downloadsFlow
+        every { downloadRepository.getActiveDownloadProgress() } returns MutableStateFlow(emptyMap())
+        coEvery { downloadRepository.getAllDownloadsSnapshot() } answers { downloadsFlow.value }
         every { syncManager.batchProgress } returns MutableStateFlow(ResyncBatchProgress())
         every { offlineRepository.getUpdatesCount() } returns MutableStateFlow(0)
         every { offlineRepository.getItemsWithUpdates() } returns MutableStateFlow(emptyList())
@@ -106,7 +106,7 @@ class DownloadsViewModelGlobalActionBoundaryTest {
         viewModel.applyBulkAction(DownloadBulkAction.PAUSE, DownloadActionScope.All)
         advanceUntilIdle()
 
-        coVerify(exactly = 0) { downloadRepository.pause(any()) }
+        coVerify(exactly = 0) { downloadRepository.pauseDownload(any()) }
     }
 
     @Test
@@ -117,8 +117,8 @@ class DownloadsViewModelGlobalActionBoundaryTest {
         viewModel.applyBulkAction(DownloadBulkAction.RETRY_FAILED, DownloadActionScope.All)
         advanceUntilIdle()
 
-        coVerify(exactly = 0) { downloadRepository.retry(any()) }
-        verify(exactly = 0) { downloadRepository.enqueue(any()) }
+        coVerify(exactly = 0) { downloadRepository.retryDownload(any()) }
+        verify(exactly = 0) { downloadRepository.enqueueDownload(any()) }
     }
 
     @Test
@@ -129,7 +129,7 @@ class DownloadsViewModelGlobalActionBoundaryTest {
         viewModel.moveToFront(item("solo"))
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { downloadRepository.setPriority("solo", 1) }
+        coVerify(exactly = 1) { downloadRepository.setDownloadPriority("solo", 1) }
     }
 
     @Test
@@ -140,7 +140,7 @@ class DownloadsViewModelGlobalActionBoundaryTest {
         viewModel.lowerPriority(item("solo"))
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { downloadRepository.setPriority("solo", -1) }
+        coVerify(exactly = 1) { downloadRepository.setDownloadPriority("solo", -1) }
     }
 
     @Test
@@ -166,7 +166,7 @@ class DownloadsViewModelGlobalActionBoundaryTest {
         viewModel.applyBulkAction(DownloadBulkAction.DELETE, DownloadActionScope.Selected)
         advanceUntilIdle()
 
-        coVerify(exactly = 0) { downloadRepository.delete(any()) }
+        coVerify(exactly = 0) { downloadRepository.deleteDownload(any()) }
         // The stale selection is kept (only a successful bulk delete clears it).
         assertEquals(setOf("vanished"), viewModel.uiState.value.selectedIds)
     }

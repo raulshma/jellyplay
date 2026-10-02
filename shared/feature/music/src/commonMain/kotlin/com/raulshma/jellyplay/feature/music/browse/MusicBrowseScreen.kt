@@ -30,6 +30,7 @@ import com.raulshma.jellyplay.feature.music.generated.resources.music_artists
 import com.raulshma.jellyplay.feature.music.generated.resources.music_browse_music
 import com.raulshma.jellyplay.feature.music.generated.resources.music_genres
 import com.raulshma.jellyplay.feature.music.generated.resources.music_items_count
+import com.raulshma.jellyplay.feature.music.generated.resources.music_failed_load_more
 import com.raulshma.jellyplay.feature.music.generated.resources.music_playlists
 import com.raulshma.jellyplay.feature.music.generated.resources.music_tracks
 import com.raulshma.jellyplay.feature.music.collection.MusicCollectionKind
@@ -50,18 +51,18 @@ import com.raulshma.jellyplay.feature.music.components.ArtistCard
 import com.raulshma.jellyplay.feature.music.components.GenreChip
 import com.raulshma.jellyplay.feature.music.components.MusicSortMenuButton
 import com.raulshma.jellyplay.feature.music.components.MusicCollectionPagedGrid
-import com.raulshma.jellyplay.feature.music.components.PagedList
-import com.raulshma.jellyplay.feature.music.components.SimpleCollectionGrid
+import com.raulshma.jellyplay.core.ui.components.PagedCollectionList
+import com.raulshma.jellyplay.core.ui.components.SimpleCollectionGrid
 import com.raulshma.jellyplay.feature.music.components.TrackRow
-import com.raulshma.jellyplay.feature.music.components.rememberPagedCollectionStatus
-import com.raulshma.jellyplay.feature.music.components.rememberSimpleCollectionStatus
+import com.raulshma.jellyplay.core.ui.components.rememberPagedCollectionStatus
+import com.raulshma.jellyplay.core.ui.components.rememberSimpleCollectionStatus
 import kotlinx.coroutines.launch
 
 /**
  * The MusicBrowse tab. Every page is a thin configuration of the one
  * collection chassis: its [MusicCollectionKind] supplies the declared sort
  * set and empty/error presentation, the shared ladder
- * ([MusicCollectionPagedGrid]/[PagedList]/[SimpleCollectionGrid]) supplies
+ * ([MusicCollectionPagedGrid]/[PagedCollectionList]/[SimpleCollectionGrid]) supplies
  * refresh/empty/error/pull-to-refresh/append-footer, and the page keeps only
  * its card factory and click navigation.
  *
@@ -259,7 +260,7 @@ private fun AlbumsPage(
 
 /**
  * List-variant page — previously hand-rolled its own refresh ladder; now the
- * chassis [PagedList] (gaining pull-to-refresh, append footer, TV
+ * chassis [PagedCollectionList] (gaining pull-to-refresh, append footer, TV
  * focus-on-launch and the status indicator).
  */
 @Composable
@@ -277,13 +278,14 @@ private fun TracksPage(
             sortMenu = CollectionSortMenu(sort, kind.sortOptions, viewModel::setTrackSort),
             contentPad = contentPad,
         )
-        PagedList(
+        PagedCollectionList(
             items = tracks,
             itemKey = { it.id },
             contentPadding = PaddingValues(horizontal = contentPad, vertical = 8.dp),
             emptyIcon = kind.emptyIcon,
             emptyTitle = stringResource(kind.emptyTitleRes),
             errorFallbackMessage = stringResource(kind.errorFallbackRes),
+            appendErrorFallbackMessage = stringResource(Res.string.music_failed_load_more),
             tvInitialFocusTag = "browse_tracks_init",
         ) { track ->
             val imageUrl = remember(track.id) { viewModel.getImageUrl(track.id) }

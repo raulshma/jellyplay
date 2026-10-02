@@ -4,11 +4,9 @@ import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.error.UserErrorMessages
-import com.raulshma.jellyplay.core.data.repository.ArrRepository
 import com.raulshma.jellyplay.core.data.repository.BookTocCacheRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.NoopBookTocCacheRepository
-import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.usecase.OrderHomeSectionsUseCase
 import com.raulshma.jellyplay.core.data.widget.ContinueWatchingBroadcaster
 import com.raulshma.jellyplay.core.data.widget.LibrarySyncHook
@@ -20,14 +18,10 @@ import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionPrefs
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.MediaItem
-import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.OfflineMode
 import com.raulshma.jellyplay.core.model.seerr.DiscoverSectionType
-import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
-import com.raulshma.jellyplay.core.model.seerr.SeerrSearchResponse
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -38,14 +32,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.debounce
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withTimeoutOrNull
-import kotlinx.datetime.DateTimeUnit
-import kotlinx.datetime.plus
 
 /**
  * Deep module: the Home screen's entire refresh policy behind one small
@@ -79,14 +70,19 @@ import kotlinx.datetime.plus
  *    raises it). The dice-roll MACHINERY is delegated to
  *    [DiscoverRowsCoordinator] (constructed inside — same state store, same
  *    scope, the generation invariant owned beside the roll jobs it orders);
- *    the refresher keeps only the drain CALL SITE inside its fetch.
+ *    the refresher keeps only the drain CALL SITE inside its fetch. The
+ *    discover/arr side-fetch BODIES are delegated to [HomeDiscoverSources]
+ *    (a factory-owned collaborator — a new side-effect dependency widens
+ *    that class and the factory, not this constructor); the refresher keeps
+ *    the fetch-group schedule and await points that call them.
  *  * [HomeViewModel] is a flows + `onEvent` facade: it folds [state] into
  *    its single UiState object, resets the scroll anchor on identity
  *    changes and manual refresh (pure VM state the refresher cannot see),
  *    and forwards every user intent as an event — nothing else.
  *  * Per-call inputs (the section plan, Seerr prefs, feature flags) stay
- *    mirrored in the VM and cross the seam as read-only providers, so a
- *    preference change can never half-apply mid-fetch.
+ *    mirrored in the VM and cross the seam as the read-only providers
+ *    bundled in [HomeFetchInputs], so a preference change can never
+ *    half-apply mid-fetch.
  *
  * Manual-refresh preamble policy — spinner raises, content/error clears,
  * discover-cache invalidation (strictly happens-before the forced fetch) —
@@ -100,8 +96,6 @@ internal class HomeRefresher(
     private val scope: CoroutineScope,
     private val clock: HomeClock,
     private val mediaRepository: MediaRepository,
-    private val seerrRepository: SeerrRepository,
-    private val arrRepository: ArrRepository,
     private val orderHomeSections: OrderHomeSectionsUseCase,
     private val widgetDataStore: WidgetDataStore,
     private val continueWatchingBroadcaster: ContinueWatchingBroadcaster,
@@ -120,6 +114,23 @@ internal class HomeRefresher(
     /** Offline gate consulted inside the fetch (plus the loop's skip check), and the source of the offline-mode mirror below. */
     private val offlineModeManager: OfflineModeManager,
     /**
+     * The single refresh-state store, created by the construction surface
+     * (factory / test harness) and handed to BOTH this class and
+     * [discoverSources] so every writer lands in ONE fold — the same
+     * hand-in the roll coordinator gets, one construction seam up. Aliased
+     * to [_state] below; all writes go through it.
+     */
+    private val stateStore: MutableStateFlow<HomeRefreshState>,
+    /**
+     * The discover/arr side-fetch bodies (the legacy Seerr discover-grid
+     * fan-out and the direct *arr "Recently Grabbed" calendar fetch) — WHAT
+     * to fetch, moved out of this class; the fetch-group schedule and await
+     * points that call them stay here (WHEN). Factory-owned, so a new
+     * side-effect repository widens [HomeDiscoverSources], not this
+     * constructor.
+     */
+    private val discoverSources: HomeDiscoverSources,
+    /**
      * Lets the playback outbox drain before the going-online fetch so
      * Continue Watching / Next Up reflect the server's post-sync state (the
      * VM hands in its [com.raulshma.jellyplay.core.data.sync.SyncStatusStateHolder]
@@ -129,12 +140,9 @@ internal class HomeRefresher(
      */
     private val awaitOutboxDrained: suspend () -> Boolean,
     // Per-call inputs — the VM's mutable preference mirrors stay in the VM
-    // and are re-read through these providers on every fetch:
-    private val sectionPrefsProvider: () -> HomeSectionPrefs,
-    private val seerrPreferencesProvider: () -> SeerrPreferences,
-    private val discoverEnabledProvider: () -> Boolean,
-    private val directArrEnabledProvider: () -> Boolean,
-    private val androidTvWatchNextEnabledProvider: () -> Boolean,
+    // and are re-read through these providers (bundled in one
+    // [HomeFetchInputs] seam) on every fetch:
+    private val fetchInputs: HomeFetchInputs,
 ) {
 
     // All cadence/TTL constants live in core:model's HomeFreshness — the one
@@ -159,7 +167,7 @@ internal class HomeRefresher(
         private const val GOING_ONLINE_TIMEOUT_MS = 30_000L
     }
 
-    private val _state = MutableStateFlow(HomeRefreshState())
+    private val _state = stateStore
     val state: StateFlow<HomeRefreshState> = _state.asStateFlow()
 
     /**
@@ -202,12 +210,11 @@ internal class HomeRefresher(
      * flag stays armed and the next [start] flushes it.
      */
     private var userDataRefreshJob: Job? = null
-    // Discover-sections TTL gate (see HomeFreshness.DISCOVER_TTL_MS / fetchDiscoverSections).
-    // The CUSTOM Seerr discover rows need no gate here anymore: they ride
-    // the home-sections fetch itself (network-layer TTL + last-known-good —
-    // see HomeSectionsFetcher.fetchSeerrDiscoverRows); the refresher's
-    // WHAT/WHEN voice for them is the query it hands to getHomeSections.
-    private val discoverCache = TtlCacheGate(HomeFreshness.DISCOVER_TTL_MS)
+    // Discover-sections TTL gate: lives on [discoverSources] now — this
+    // class's WHAT/WHEN voice for the custom Seerr rows is the query it
+    // hands to getHomeSections (they ride the home-sections fetch itself;
+    // network-layer TTL + last-known-good — see
+    // HomeSectionsFetcher.fetchSeerrDiscoverRows).
     private var lastContinueWatchingIds: Set<String> = emptySet()
     /**
      * Set when a fetch painted sections while the outbox drain was still
@@ -280,7 +287,7 @@ internal class HomeRefresher(
             }
 
             lastRefreshTime = clock.nowEpochMillis()
-            val sectionPrefs = sectionPrefsProvider()
+            val sectionPrefs = fetchInputs.sectionPrefs()
 
             // Stale-while-revalidate: on a cold open (sections still empty),
             // paint the persisted snapshot from Room instantly so the home
@@ -316,15 +323,15 @@ internal class HomeRefresher(
                     // ordering; nothing is spliced here anymore.
                     mediaRepository.getHomeSections(sectionPrefs.query, force = force)
                 }
-                val discoverDeferred = if (discoverEnabledProvider()) {
-                    async { runCatchingRethrowingCancellation { fetchDiscoverSections(seerrPreferencesProvider()) } }
+                val discoverDeferred = if (fetchInputs.discoverEnabled()) {
+                    async { runCatchingRethrowingCancellation { discoverSources.fetchDiscoverSections(fetchInputs.seerrPreferences()) } }
                 } else null
                 // Direct *arr "Recently Grabbed" calendar — gated by the
                 // DIRECT_ARR_INTEGRATION flag and the same TTL gate as
                 // discover sections so it never adds extra round-trips on
                 // every refresh.
-                val arrDeferred = if (directArrEnabledProvider()) {
-                    async { runCatchingRethrowingCancellation { fetchRecentlyGrabbed() } }
+                val arrDeferred = if (fetchInputs.directArrEnabled()) {
+                    async { runCatchingRethrowingCancellation { discoverSources.fetchRecentlyGrabbed() } }
                 } else null
 
                 mainDeferred.await()
@@ -399,7 +406,7 @@ internal class HomeRefresher(
                                 // so the system home stays in sync with the
                                 // user's progress. Worker is a no-op on
                                 // phones and respects its preference.
-                                if (androidTvWatchNextEnabledProvider()) {
+                                if (fetchInputs.androidTvWatchNextEnabled()) {
                                     tvWatchNextScheduler.scheduleRefresh()
                                 }
                             }
@@ -589,7 +596,7 @@ internal class HomeRefresher(
         // discoverSections with the previous user's rows.
         discoverJob?.cancel()
         discoverRows.cancelForIdentityChange()
-        val sectionPrefs = sectionPrefsProvider()
+        val sectionPrefs = fetchInputs.sectionPrefs()
         val cachedSections = orderedCachedSections(sectionPrefs)
         // Same single-emission pairing as the fetch write: the SWR paint and
         // its fractions land together, so the painted CR row never flashes
@@ -716,14 +723,15 @@ internal class HomeRefresher(
     }
 
     /**
-     * Resets the discover-sections TTL so the next [fetchDiscoverSections]
-     * actually hits the network. Called on user-initiated refresh — the
-     * custom Seerr rows ride the forced home-sections fetch instead (the
-     * network layer's force acts as their invalidation), and the legacy
-     * fixed grid is what this gate still covers.
+     * Resets the discover-sections TTL so the next fetch actually hits the
+     * network. Called on user-initiated refresh — the custom Seerr rows ride
+     * the forced home-sections fetch instead (the network layer's force acts
+     * as their invalidation), and the legacy fixed grid is what the gate
+     * still covers. WHEN is here (the manual-refresh preamble); the gate
+     * itself lives on [HomeDiscoverSources].
      */
     private fun invalidateDiscoverCache() {
-        discoverCache.invalidate()
+        discoverSources.invalidate()
     }
 
     /**
@@ -736,7 +744,7 @@ internal class HomeRefresher(
      */
     private fun fetchDiscover() {
         discoverJob?.cancel()
-        discoverJob = scope.launch { fetchDiscoverSections(seerrPreferencesProvider()) }
+        discoverJob = scope.launch { discoverSources.fetchDiscoverSections(fetchInputs.seerrPreferences()) }
     }
 
     /**
@@ -1047,74 +1055,6 @@ internal class HomeRefresher(
         val continueReading = sections.find { it.type == HomeSectionType.CONTINUE_READING }
             ?: return emptyMap()
         return bookTocCacheRepository.decodeBookProgressFractions(continueReading.items)
-    }
-
-    /**
-     * Refreshes the *arr calendar window and pushes the merged list into
-     * [HomeRefreshState.recentlyGrabbed] as [SeerrSearchItem]s (reusing the
-     * TMDB card model so no new card UI is needed). Window is now → +30
-     * days so "coming soon" + freshly-grabbed items both surface. Failures
-     * degrade to empty; the *arr repository already swallows per-server
-     * errors.
-     */
-    private suspend fun fetchRecentlyGrabbed() {
-        val now = clock.today()
-        val end = now.plus(30, DateTimeUnit.DAY)
-        // ArrRepository takes kotlinx.datetime.LocalDate — the refresher's
-        // HomeClock seam now speaks kotlinx LocalDate natively.
-        arrRepository.refreshCalendar(now, end)
-        val items = arrRepository.calendar(now, end).first()
-        _state.update { it.copy(recentlyGrabbed = items.map { it.toSeerrSearchItem() }) }
-    }
-
-    private suspend fun fetchDiscoverSections(prefs: SeerrPreferences) {
-        if (!prefs.enabled || !prefs.discoverEnabled) return
-        if (offlineModeManager.networkStatus.value == NetworkStatus.Local) return
-        // Trending/popular change slowly; cache discover results for
-        // HomeFreshness.DISCOVER_TTL_MS so "just sitting on Home" doesn't fan
-        // out up to 5 Seerr round-trips per minute (periodic refresh + per
-        // pref change). A user-initiated refresh (swipe-to-refresh) bypasses
-        // this gate via [invalidateDiscoverCache].
-        val now = clock.nowEpochMillis()
-        if (!discoverCache.shouldFetch(now)) return
-
-        val today = clock.today().toString()
-
-        // coroutineScope, not the outer VM scope: the Seerr fan-out must be a
-        // child of the calling refresh job (or the tracked fetchDiscover job),
-        // so [stop] / the VM's going-online timeout cancels in-flight requests
-        // — launching on the VM scope let them escape cancellation and run to
-        // completion abandoned.
-        val newSections = coroutineScope {
-            val deferredResults = mutableListOf<Pair<DiscoverSectionType, Deferred<Result<SeerrSearchResponse>>>>()
-
-            if (prefs.discoverTrending) {
-                deferredResults.add(DiscoverSectionType.TRENDING to async { seerrRepository.getTrending() })
-            }
-            if (prefs.discoverPopularMovies) {
-                deferredResults.add(DiscoverSectionType.POPULAR_MOVIES to async { seerrRepository.getDiscoverMovies() })
-            }
-            if (prefs.discoverPopularTv) {
-                deferredResults.add(DiscoverSectionType.POPULAR_TV to async { seerrRepository.getDiscoverTv() })
-            }
-            if (prefs.discoverUpcomingMovies) {
-                deferredResults.add(DiscoverSectionType.UPCOMING_MOVIES to async { seerrRepository.getDiscoverMovies(primaryReleaseDateGte = today) })
-            }
-            if (prefs.discoverUpcomingTv) {
-                deferredResults.add(DiscoverSectionType.UPCOMING_TV to async { seerrRepository.getDiscoverTv(firstAirDateGte = today) })
-            }
-
-            val sections = mutableMapOf<DiscoverSectionType, List<SeerrSearchItem>>()
-            for ((type, deferred) in deferredResults) {
-                deferred.await().onSuccess { response ->
-                    sections[type] = response.results
-                }
-            }
-            sections
-        }
-
-        discoverCache.markFetched(clock.nowEpochMillis())
-        _state.update { it.copy(discoverSections = newSections) }
     }
 }
 

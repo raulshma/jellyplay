@@ -79,7 +79,7 @@ internal fun DetailContent(
     val scrollState = rememberDetailScrollState(listState, contentVisible)
 
     val targetBackdropId = item
-        ?.takeIf { it.mediaType == MediaType.EPISODE }?.seriesId
+        ?.takeIf { showsParentSeriesContext(it.mediaType) }?.seriesId
         ?: state.itemId
 
     val contentFocusRequester = remember { FocusRequester() }
@@ -127,9 +127,25 @@ internal fun DetailContent(
             isSeries &&
             (state.detailContext?.seriesAggregate?.downloadedEpisodeCount ?: 0) > 0,
         canEditMetadata = state.capabilities.remoteDiscovery,
+        canRefreshMetadata = state.canManageMetadata && state.capabilities.remoteDiscovery,
+        canIdentify = state.canManageMetadata && state.capabilities.remoteDiscovery &&
+            (item?.mediaType == MediaType.SERIES || item?.mediaType == MediaType.MOVIE),
+        canPickVersion = !isAudio && !isSeries && (state.detail?.mediaSources?.size ?: 0) > 1,
+        onVersionPicker = callbacks.playback.onOpenVersionPicker,
+        // The Merge/Split endpoints are Movies-only server-side
+        // (/Videos/MergeVersions, /Videos/{id}/AlternateSources) and
+        // admin-gated (RequiresElevation) — the same gate the refresh/identify
+        // entries resolve. Split only applies to an already-merged item.
+        canMergeVersions = state.canManageMetadata && state.capabilities.remoteDiscovery &&
+            item?.mediaType == MediaType.MOVIE,
+        onMergeVersions = callbacks.metadata.onOpenMergeVersions,
+        canSplitVersions = state.canManageMetadata && state.capabilities.remoteDiscovery &&
+            item?.mediaType == MediaType.MOVIE && (state.detail?.mediaSources?.size ?: 0) > 1,
+        onSplitVersions = callbacks.metadata.onSplitVersions,
         canAddToPlaylist = state.capabilities.remoteDiscovery,
         canAddToCollection = state.capabilities.remoteDiscovery,
         canInstantMix = isAudio && state.capabilities.remoteDiscovery,
+        canStartRadio = isAudio && state.capabilities.remoteDiscovery,
         canStartWatchParty = state.capabilities.remoteWorkAllowed,
         isOffline = state.origin?.isLocal == true,
         onClose = { /* menus close themselves */ },
@@ -146,10 +162,13 @@ internal fun DetailContent(
         onHideDetailUpNext = callbacks.userData.onHideDetailUpNext,
         onShowDetailUpNext = callbacks.userData.onShowDetailUpNext,
         onManageSeries = callbacks.navigation.onManageSeries,
+        onRefreshMetadata = callbacks.metadata.onRefreshMetadata,
+        onIdentify = callbacks.metadata.onIdentify,
         onTechnicalInfo = { callbacks.navigation.onNavigate(Route.MediaInfo(state.itemId)) },
         onAddToPlaylist = callbacks.addTo.onAddToPlaylist,
         onAddToCollection = callbacks.addTo.onAddToCollection,
         onStartInstantMix = callbacks.playback.onStartInstantMix,
+        onStartRadio = callbacks.playback.onStartRadio,
         onStartWatchParty = callbacks.playback.onStartWatchParty,
     )
 

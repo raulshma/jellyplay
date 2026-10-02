@@ -1,5 +1,7 @@
 package com.raulshma.jellyplay.core.network.arr
 
+import com.raulshma.jellyplay.core.model.arr.ArrServerConfig
+import com.raulshma.jellyplay.core.model.arr.ArrServiceKind
 import kotlinx.coroutines.test.runTest
 import okhttp3.OkHttpClient
 import okhttp3.mockwebserver.MockResponse
@@ -25,11 +27,21 @@ class SonarrApiClientImplTest {
     private lateinit var server: MockWebServer
     private lateinit var client: SonarrApiClientImpl
 
+    /** The one connection fixture; rebuilt in setup so baseUrl carries the live port. */
+    private lateinit var conn: ArrServerConfig
+
     @BeforeTest
     fun setup() {
         server = MockWebServer()
         server.start()
         client = SonarrApiClientImpl(OkHttpClient())
+        conn = ArrServerConfig(
+            id = "sonarr-test",
+            baseUrl = server.url("/").toString(),
+            apiKey = "key",
+            name = "Sonarr Test",
+            kind = ArrServiceKind.SONARR,
+        )
     }
 
     @AfterTest
@@ -42,7 +54,7 @@ class SonarrApiClientImplTest {
         server.enqueue(MockResponse().setResponseCode(503).setBody("down"))
         server.enqueue(MockResponse().setResponseCode(200).setBody("""{"some":"status"}"""))
 
-        val result = client.testConnection(server.url("/").toString(), "key")
+        val result = client.testConnection(conn)
 
         assertTrue(result.isSuccess)
         assertEquals(2, server.requestCount)
@@ -54,7 +66,7 @@ class SonarrApiClientImplTest {
         server.enqueue(MockResponse().setResponseCode(503).setBody("down"))
         server.enqueue(MockResponse().setResponseCode(200).setBody("""{"records":[]}"""))
 
-        val result = client.getQueue(server.url("/").toString(), "key")
+        val result = client.getQueue(conn)
 
         assertTrue(result.isSuccess)
         assertEquals(2, server.requestCount)
@@ -66,7 +78,7 @@ class SonarrApiClientImplTest {
             server.enqueue(MockResponse().setResponseCode(500).setBody("still down"))
         }
 
-        val result = client.getWanted(server.url("/").toString(), "key", page = 1, pageSize = 50)
+        val result = client.getWanted(conn, page = 1, pageSize = 50)
 
         assertTrue(result.isFailure)
         assertEquals(com.raulshma.jellyplay.core.network.api.HttpExecutor.MAX_RETRIES + 1, server.requestCount)
@@ -76,7 +88,7 @@ class SonarrApiClientImplTest {
     fun `does not retry a non-retryable 401`() = runTest {
         server.enqueue(MockResponse().setResponseCode(401).setBody("bad key"))
 
-        val result = client.getQueue(server.url("/").toString(), "badkey")
+        val result = client.getQueue(conn.copy(apiKey = "badkey"))
 
         assertTrue(result.isFailure)
         assertEquals(1, server.requestCount, "401 must fail fast")

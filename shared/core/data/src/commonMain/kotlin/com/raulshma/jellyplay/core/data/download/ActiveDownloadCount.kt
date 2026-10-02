@@ -8,7 +8,7 @@ import kotlinx.coroutines.flow.Flow
  * feature-local MusicTrackDownloads seam that did not fold onto
  * [TrackDownloadStatusWindow]: a badge is process-scoped (it counts the WHOLE
  * pipeline), not an id-scoped row window, so it is neither a
- * `downloadsFor(ids)` shape nor a remove command.
+ * `getDownloadsByMediaItemIdsFlow(ids)` shape nor a delete command.
  *
  * The natural source — core:data's jvmShared `DownloadRepository`
  * ([`getActiveDownloadCount`][com.raulshma.jellyplay.core.data.repository.DownloadRepository.getActiveDownloadCount])
@@ -23,5 +23,5 @@ import kotlinx.coroutines.flow.Flow
 interface ActiveDownloadCount {
 
     /** Live count of in-flight downloads (the music-home badge). */
-    fun activeDownloadCount(): Flow<Int>
+    fun getActiveDownloadCount(): Flow<Int>
 }

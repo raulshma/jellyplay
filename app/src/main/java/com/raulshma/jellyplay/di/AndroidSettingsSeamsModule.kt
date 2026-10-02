@@ -1,10 +1,13 @@
 package com.raulshma.jellyplay.di
 
 import com.raulshma.jellyplay.core.data.playback.AudioStreamCache
+import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.worker.AutoDownloadScheduler
 import com.raulshma.jellyplay.core.data.worker.TvWatchNextScheduler
 import com.raulshma.jellyplay.core.notification.scheduler.NotificationScheduler
 import com.raulshma.jellyplay.feature.settings.AudioCacheClearer
+import com.raulshma.jellyplay.feature.settings.AutoDownloadCleanup
+import com.raulshma.jellyplay.feature.settings.AutoDownloadCleanupSummary
 import com.raulshma.jellyplay.feature.settings.AutoDownloadSync
 import com.raulshma.jellyplay.feature.settings.NotificationSync
 import com.raulshma.jellyplay.feature.settings.WatchNextRefresher
@@ -13,8 +16,8 @@ import org.koin.dsl.module
 
 /**
  * App-authored Koin definitions for the Android actuals of the settings
- * feature's four seams (Hilt removal:
- * the four legacy impls are Koin-owned now, so each seam resolves its
+ * feature's seams (Hilt removal:
+ * the legacy impls are Koin-owned now, so each seam resolves its
  * dependency straight from the container instead of through the former
  * SettingsSeamsEntryPoint).
  *
@@ -23,6 +26,8 @@ import org.koin.dsl.module
  * cost and resolution failure surfaces only on that screen.
  *  - [AutoDownloadSync] delegates to the legacy
  *    [AutoDownloadScheduler.sync] WorkManager enqueue/cancel;
+ *  - [AutoDownloadCleanup] delegates to the download repository's
+ *    keep-days retention sweep (the "Clean up now" action);
  *  - [NotificationSync] delegates to the legacy [NotificationScheduler]'s
  *    suspend scheduleOrUpdate (signature-matched);
  *  - [WatchNextRefresher] delegates to the [TvWatchNextScheduler] binding;
@@ -31,6 +36,12 @@ import org.koin.dsl.module
 fun androidSettingsSeamsModule(): Module = module {
     single<AutoDownloadSync> {
         AutoDownloadSync { get<AutoDownloadScheduler>().sync() }
+    }
+    single<AutoDownloadCleanup> {
+        AutoDownloadCleanup {
+            val result = get<DownloadRepository>().sweepExpiredAutoDownloads()
+            AutoDownloadCleanupSummary(result.deletedCount, result.bytesReclaimed)
+        }
     }
     single<NotificationSync> {
         NotificationSync { get<NotificationScheduler>().scheduleOrUpdate() }

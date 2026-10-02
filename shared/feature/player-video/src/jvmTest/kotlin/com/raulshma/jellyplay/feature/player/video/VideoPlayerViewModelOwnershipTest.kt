@@ -18,12 +18,25 @@ import kotlin.test.assertTrue
  * `useDownloadedSubtitle`), the `release` dispose hook, and the internal
  * controller slices the screen drives directly
  * (cast/syncPlay/subtitles/sleepTimer/abRepeat/effects/render/sessionRender/
- * globalMpvConfig + the session's `resolveOfflineResumeTicks` hook). New
+ * globalMpvConfig — the session's `resolveOfflineResumeTicks` hook lives on
+ * SessionLoadPipeline since the VideoSessionHost deletion). The whole
+ * collaborator graph is built by the PlayerWiring composition builder (the
+ * two-phase construction that broke the six mutual-recursion cycles); the
+ * VM's reads of it go through private aliases, so this ceiling held through
+ * that move too. New
  * behaviour belongs in an extracted module built from constructor lambdas —
  * the SettingsProjector / PlayerPrefsFanout / MediaContentProjector seam
  * shape — with the VM left a thin caller that owns the uiState writes.
  *
- * Baseline: 35 members (104 before the VideoPlayerUiEvent intent fold: the
+ * Baseline: 36 members — 35 after the VideoPlayerUiEvent intent fold, +1 for
+ * `stillWatchingPrompt` (the "Still watching?" overlay's state surface, the
+ * one state flow feature 1.3 adds; the prompt's logic itself lives in
+ * StillWatchingGate / StillWatchingPromptState / the session event), then 35
+ * again after the VideoSessionHost extraction deleted the
+ * `resolveOfflineResumeTicks` member, and 35 STILL after the PlayerWiring
+ * move (the exposed slices became read-only aliases of the builder's
+ * instances — same members, one line each). 104
+ * before the VideoPlayerUiEvent intent fold: the
  * same flows/getters/slices plus ~60 per-action command funs the funnel
  * replaced and 13 dead ones deleted outright — `loadActiveSubtitleCues` /
  * `setPreviewSheetVisible` / `clearActiveSubtitleCues` / `subtitlePreviewState`

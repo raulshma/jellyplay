@@ -1,7 +1,19 @@
 package com.raulshma.jellyplay.core.network.arr
 
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.nullable
+import kotlinx.serialization.builtins.serializer
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonDecoder
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 
 /**
  * Wire DTOs for the Radarr/Sonarr v3 clients — the consolidated *arr v3 wire
@@ -35,13 +47,20 @@ internal data class ArrQuality(
     val name: String? get() = quality?.name
 }
 
-/** The inner `quality` object of [ArrQuality]. */
+/**
+ * The inner `quality` object of [ArrQuality]. [id] rides along so a
+ * `/release` row's quality can be echoed back into a grab body (the *arr
+ * services key quality overrides off the numeric id, not the name).
+ */
 @Serializable
-internal data class ArrQualityName(val name: String? = null)
+internal data class ArrQualityName(val name: String? = null, val id: Int? = null)
 
-/** A queue row's language entry. */
+/**
+ * A queue row's language entry. [id] rides along for the same round-trip
+ * reason as [ArrQualityName.id].
+ */
 @Serializable
-internal data class ArrLanguage(val name: String? = null)
+internal data class ArrLanguage(val name: String? = null, val id: Int? = null)
 
 /** A queue row's custom-format entry. */
 @Serializable
@@ -313,4 +332,119 @@ internal data class SonarrEpisodeFileResource(
     val id: Int = 0,
     val size: Double? = null,
     val quality: ArrQuality? = null,
+)
+
+// ── Interactive release search (`GET/POST /release`) ────────────────────────
+
+/**
+ * A `/release` row — one candidate release from the interactive search. The
+ * endpoint's row shape is the shared core below on BOTH services (plus
+ * per-service extras the other never sends), so ONE declaration decodes both:
+ * Radarr rows populate [movieTitles] (+ [edition]), Sonarr rows populate the
+ * season/episode quartet — whichever side a row came from, the other group
+ * stays at its default. `ignoreUnknownKeys` (the shared lenient JSON) drops
+ * the remaining ReleaseResource fields the UI never reads.
+ */
+/**
+ * Sonarr's `mappedEpisodeInfo` release field: the name reads like a display
+ * string, but real Sonarr v3/v4 servers answer with an ARRAY of per-episode
+ * mapping objects (`{ seasonNumber, episodeNumber, mappedSeasonNumber,
+ * mappedEpisodeNumber, mappedTitle, … }`), and a strict `String?` decode
+ * fails the ENTIRE release page on them. The serializer accepts both shapes —
+ * array entries render to a compact `S2E05 · Title` summary — and folds any
+ * other shape to null so one drifted field can never blank the results.
+ */
+internal object MappedEpisodeInfoSerializer : KSerializer<String?> {
+    private val delegate = String.serializer().nullable
+    override val descriptor: SerialDescriptor = delegate.descriptor
+
+    override fun serialize(encoder: Encoder, value: String?) = delegate.serialize(encoder, value)
+
+    override fun deserialize(decoder: Decoder): String? {
+        val element = (decoder as? JsonDecoder)?.decodeJsonElement() ?: return null
+        return when (element) {
+            is JsonPrimitive -> element.contentOrNull
+            is JsonArray -> element.mapNotNull { entry ->
+                (entry as? JsonObject)?.let(::renderMappedEpisode)
+            }.takeIf(List<*>::isNotEmpty)?.joinToString(", ")
+            else -> null
+        }
+    }
+
+    /** `S<mappedSeason>E<mappedEpisode> · <mappedTitle>`, skipping missing halves. */
+    private fun renderMappedEpisode(entry: JsonObject): String? {
+        fun numbers(vararg keys: String): Int? = keys.firstNotNullOfOrNull { key ->
+            (entry[key] as? JsonPrimitive)?.takeIf { it !is JsonNull }?.contentOrNull?.toIntOrNull()
+        }
+        fun texts(vararg keys: String): String? = keys.firstNotNullOfOrNull { key ->
+            (entry[key] as? JsonPrimitive)?.takeIf { it !is JsonNull }?.contentOrNull?.takeIf(String::isNotBlank)
+        }
+        val season = numbers("mappedSeasonNumber", "seasonNumber")
+        val episode = numbers("mappedEpisodeNumber", "episodeNumber")
+        val title = texts("mappedTitle", "title")
+        val tag = if (season != null && season >= 0 && episode != null && episode >= 0) {
+            "S${season}E${episode}"
+        } else null
+        return listOfNotNull(tag, title).takeIf(List<*>::isNotEmpty)?.joinToString(" · ")
+    }
+}
+
+@Serializable
+internal data class ArrReleaseResource(
+    /** The release's indexer guid — the grab body's required identity + the history-badge match key. */
+    val guid: String = "",
+    val indexerId: Int = 0,
+    val indexer: String? = null,
+    val title: String = "",
+    val quality: ArrQuality? = null,
+    val languages: List<ArrLanguage> = emptyList(),
+    val size: Double? = null,
+    val ageHours: Double? = null,
+    val seeders: Int? = null,
+    val leechers: Int? = null,
+    val protocol: String? = null,
+    val releaseGroup: String? = null,
+    val customFormats: List<ArrCustomFormat> = emptyList(),
+    val customFormatScore: Int = 0,
+    val approved: Boolean = false,
+    val temporarilyRejected: Boolean = false,
+    val rejections: List<String> = emptyList(),
+    val publishDate: String? = null,
+    val downloadUrl: String? = null,
+    val magnetUrl: String? = null,
+    val infoUrl: String? = null,
+    val edition: String? = null,
+    // Sonarr-only extras.
+    val fullSeason: Boolean = false,
+    val seasonNumber: Int? = null,
+    val episodeNumbers: List<Int> = emptyList(),
+    @Serializable(with = MappedEpisodeInfoSerializer::class)
+    val mappedEpisodeInfo: String? = null,
+    // Radarr-only extras.
+    val movieTitles: List<String> = emptyList(),
+)
+
+/**
+ * The `POST /release` grab body — `guid` + `indexerId` are the required
+ * identity; every other field is an optional refinement the adapters set
+ * only when the caller supplied it (with `encodeDefaults = false` the absent
+ * refinements stay off the wire byte-identically to a hand-built map).
+ * `shouldOverride` + the identity fields (`movieId` on Radarr,
+ * `seriesId` + `episodeIds` on Sonarr) + the release's own [quality] prefill
+ * form the "grab anyway" arm for a rejected release.
+ */
+@Serializable
+internal data class ArrReleaseGrabBody(
+    val guid: String,
+    val indexerId: Int,
+    val quality: ArrQuality? = null,
+    val languages: List<ArrLanguage> = emptyList(),
+    /** Radarr's movie identity (required on the override arm). */
+    val movieId: Int? = null,
+    /** Sonarr's series identity (required on the override arm). */
+    val seriesId: Int? = null,
+    /** Sonarr's episode identity (episode releases on the override arm). */
+    val episodeIds: List<Int>? = null,
+    val downloadClientId: Int? = null,
+    val shouldOverride: Boolean? = null,
 )

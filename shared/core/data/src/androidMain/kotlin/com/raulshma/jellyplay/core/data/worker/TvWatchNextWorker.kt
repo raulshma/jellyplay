@@ -4,7 +4,7 @@ import android.content.Context
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
-import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.data.tv.TvWatchNextPublisher
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
 import com.raulshma.jellyplay.core.model.TimeSource
@@ -29,14 +29,14 @@ class TvWatchNextWorker(
     context: Context,
     params: WorkerParameters,
     private val mediaRepository: MediaRepository,
-    private val playbackRepository: PlaybackRepository,
+    private val imageUrlProvider: ImageUrlProvider,
     private val playbackStore: PlaybackStore,
     private val timeSource: TimeSource,
 ) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
         val prefs = playbackStore.playback.firstOrNull() ?: return Result.success()
-        val publisher = TvWatchNextPublisher(applicationContext, mediaRepository, playbackRepository, timeSource)
+        val publisher = TvWatchNextPublisher(applicationContext, mediaRepository, imageUrlProvider, timeSource)
 
         if (!prefs.androidTvWatchNextEnabled) {
             return publisher.clear().fold(

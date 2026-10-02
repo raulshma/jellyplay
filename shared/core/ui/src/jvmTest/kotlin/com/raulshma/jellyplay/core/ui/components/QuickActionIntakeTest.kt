@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.core.ui.components
 import androidx.compose.runtime.mutableStateOf
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.ui.components.downloads.RemoveDownloadState
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull

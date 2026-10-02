@@ -17,17 +17,13 @@ import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.MediaSession
 import androidx.compose.runtime.Immutable
-import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
-import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
-import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
-import com.raulshma.jellyplay.core.concurrency.mapConcurrent
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
-import com.raulshma.jellyplay.core.data.playback.focus.FocusOutcome
 import com.raulshma.jellyplay.core.data.playback.focus.NoopPlaybackFocus
 import com.raulshma.jellyplay.core.data.playback.focus.PlaybackFocus
 import com.raulshma.jellyplay.core.data.playback.focus.PlaybackSurfaceId
+import com.raulshma.jellyplay.core.data.playback.focus.claimOnPlayEdge
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.ChannelMixMode
 import com.raulshma.jellyplay.core.model.EffectStrength
@@ -49,7 +45,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Semaphore
 import com.raulshma.jellyplay.feature.player.video.engine.EnginePositionTicker
 import kotlin.math.pow
 
@@ -60,11 +55,19 @@ import kotlin.math.pow
 class AudioPlaybackManager(
     private val context: Context,
     private val mediaRepository: MediaRepository,
-    private val playlistRepository: PlaylistRepository,
+    /**
+     * The library/browse ladder (detail+local resolve, playable-[MediaItem]
+     * building, the [androidx.media3.session.MediaLibrarySession] builder) —
+     * DI-constructed since the constructor diet: the browser's five family
+     * deps (music catalogue / collection reads / playlists / downloads /
+     * adaptive bitrate) ride its own single and never reached this manager's
+     * own call sites. The manager keeps the pass-through READS its public
+     * surface needs ([buildMediaItemForQueueItem], [createPlayer]'s and the
+     * crossfade path's `buildMediaSession`).
+     */
+    private val libraryBrowser: AudioLibraryBrowser,
     private val playbackRepository: PlaybackRepository,
     private val imageUrlProvider: ImageUrlProvider,
-    private val downloadRepository: DownloadRepository,
-    private val offlineRepository: OfflineRepository,
     private val playbackSourceResolver: PlaybackSourceResolver,
     private val sessionManager: PlaybackSessionManager,
     private val audioStore: com.raulshma.jellyplay.core.datastore.audio.AudioStore,
@@ -72,11 +75,10 @@ class AudioPlaybackManager(
     private val playbackStore: com.raulshma.jellyplay.core.datastore.playback.PlaybackStore,
     private val queuePersistenceHelper: QueuePersistenceHelper,
     private val bandwidthMonitor: com.raulshma.jellyplay.core.data.streaming.BandwidthMonitor,
-    private val adaptiveBitrateSelector: com.raulshma.jellyplay.core.data.streaming.AdaptiveBitrateSelector,
     private val bandwidthInterceptor: com.raulshma.jellyplay.core.network.interceptor.BandwidthInterceptor,
     private val lyricsManager: AudioLyricsManager,
     private val effectsProcessor: AudioEffectsProcessor,
-    private val sleepTimerManager: SleepTimerManager,
+    private val sleepCountdown: SleepCountdown,
     private val jellyfinRemotePlayCastStrategy: com.raulshma.jellyplay.core.data.cast.remote.JellyfinRemotePlayCastStrategy,
     private val audioStreamCache: AudioStreamCache,
     private val audioPrefetchEngine: AudioPrefetchEngine,
@@ -104,8 +106,6 @@ class AudioPlaybackManager(
     private val scope = playbackScope ?: CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val testPlayerFactory = playerFactory
 
-    private val queuePreWarmPermits = Semaphore(8)
-
     companion object {
         // Position-poll interval while playback is actively progressing. Matches
         // the video side's default ticker cadence (≈4 Hz). The paused re-check
@@ -120,15 +120,22 @@ class AudioPlaybackManager(
     private var currentEffects = com.raulshma.jellyplay.core.datastore.audioeffects.AudioEffectsSlice()
     private var currentPlayback = com.raulshma.jellyplay.core.datastore.playback.PlaybackSlice()
 
-    private val libraryBrowser = AudioLibraryBrowser(
+    /**
+     * The windowed queue→playlist mirror ([QueuePlaylistMirror]) — the ONE
+     * owner of the prefix invariant, the window math, the build cache +
+     * permits, the loading/window job guards, the remove-of-current-row
+     * coordination and every non-echo player-playlist write (the play-path
+     * pre-warm, the transition window slide, the crossfade re-mirror, the
+     * shuffle/undo rebuild). This manager keeps only the pass-through call
+     * sites.
+     */
+    private val queueMirror = QueuePlaylistMirror(
         scope = scope,
-        mediaRepository = mediaRepository,
-        playlistRepository = playlistRepository,
-        downloadRepository = downloadRepository,
-        playbackRepository = playbackRepository,
-        playbackSourceResolver = playbackSourceResolver,
-        streamingQualityProvider = { currentPlayback.streamingQuality },
-        adaptiveBitrateSelector = adaptiveBitrateSelector,
+        playerProvider = { exoPlayer },
+        queueProvider = { state.queue.value },
+        cursorProvider = { state.currentIndex.value },
+        writeCursor = { state._currentIndex.value = it },
+        buildItem = { queueItem -> buildMediaItemForQueueItem(queueItem) },
     )
 
     // Promoted reporter (commonMain): the former `exoPlayerProvider`
@@ -146,14 +153,6 @@ class AudioPlaybackManager(
     )
 
     /**
-     * Set around a remove-of-the-current-row [removeFromQueue]: the chassis
-     * transition's player write is that caller's own `removeMediaItem` (the
-     * shifted-in row then plays and its transition echo reconciles), so
-     * [engineDispatch.prepare] must not also seek/rebuild on top of it.
-     */
-    private var removingCurrentRow = false
-
-    /**
      * The engine-command port — [state]'s ONLY engine touch (the desktop
      * adapter's dispatch twin, shaped over ExoPlayer). The media3 player
      * OWNS the playlist, so [prepare] is a window seek to the chassis cursor
@@ -167,12 +166,12 @@ class AudioPlaybackManager(
 
         override fun prepare(item: AudioQueueItem, startPositionMs: Long) {
             val player = exoPlayer ?: return
-            if (removingCurrentRow) return
+            if (queueMirror.removingCurrentRow) return
             val index = state.currentIndex.value
-            if (playlistMirrorsQueue(player)) {
+            if (queueMirror.mirrorsQueue(player) && index < player.mediaItemCount) {
                 player.seekTo(index, startPositionMs)
             } else {
-                rebuildPlaylist(
+                queueMirror.rebuild(
                     items = state.queue.value,
                     targetIndex = index,
                     positionMs = { startPositionMs },
@@ -205,23 +204,13 @@ class AudioPlaybackManager(
         }
     }
 
-    /** True while the player's playlist window ids equal the chassis queue. */
-    private fun playlistMirrorsQueue(player: ExoPlayer): Boolean {
-        val queue = state.queue.value
-        if (player.mediaItemCount != queue.size) return false
-        for (i in queue.indices) {
-            if (player.getMediaItemAt(i).mediaId != queue[i].id) return false
-        }
-        return true
-    }
-
     /**
      * The queue-state chassis (commonMain [AudioQueueStateCore]) — the ONE
      * owner of the playback state flows (re-exposed below by reference), the
      * undo stack + events, the advance/retreat/wrap/shuffle/repeat/restart
      * selection and the cursor/remap semantics this manager previously
      * inlined. What stays here: the media3 playlist mirror (per-mutation
-     * writes above + the [rebuildPlaylist] shuffle/undo restore), the
+     * writes above + the [QueuePlaylistMirror.rebuild] shuffle/undo restore), the
      * transition choreography listener (the engine's `onMediaItemTransition`
      * IS the choreographer — the chassis runs with its built-in report block
      * suppressed), the play()/pre-warm path, crossfade, A-B loop, effects,
@@ -237,7 +226,7 @@ class AudioPlaybackManager(
         // Android has no next-item resolve-cache to invalidate (the pre-warm
         // reads the flows live) — the desktop's prefetch clear stays desktop's.
         onQueueShapeInvalidated = {},
-        onQueueExhausted = { sleepTimerManager.triggerEndOfEpisode() },
+        onQueueExhausted = { sleepCountdown.triggerEndOfEpisode() },
         // ReplayGain context passes isShuffled fresh at every apply site here,
         // so the shuffle-flag hook stays default.
         onShuffleModeChanged = {},
@@ -278,14 +267,15 @@ class AudioPlaybackManager(
     private var mediaSession: MediaSession? = null
     private var _isLoadingItemFlag = false
     private var positionJob: Job? = null
-    private var queueLoadingJob: Job? = null
-    private val mediaItemCache = android.util.LruCache<String, MediaItem>(25)
 
     private val _gaplessEnabled = MutableStateFlow(true)
     val gaplessEnabled: StateFlow<Boolean> = _gaplessEnabled.asStateFlow()
 
-    private val _crossfadeDurationMs = MutableStateFlow(0L)
-    override val crossfadeDurationMs: StateFlow<Long> = _crossfadeDurationMs.asStateFlow()
+    // Crossfade duration lives in the chassis core (one of its eleven cells,
+    // written through AudioQueueStateCore.setCrossfadeDurationMs — the former
+    // manager-local duplicate cell folded so the chassis is the one owner on
+    // both adapters; same 0L initial value, so the fold is unobservable).
+    override val crossfadeDurationMs: StateFlow<Long> get() = state.crossfadeDurationMs
 
     private val _isCrossfading = MutableStateFlow(false)
     val isCrossfading: StateFlow<Boolean> = _isCrossfading.asStateFlow()
@@ -320,10 +310,10 @@ class AudioPlaybackManager(
         context = context,
         effectsProcessor = effectsProcessor,
         mediaRepository = mediaRepository,
-        playbackRepository = playbackRepository,
+        imageUrlProvider = imageUrlProvider,
         playbackSourceResolver = playbackSourceResolver,
         repeatModeProvider = { state.repeatMode.value },
-        crossfadeDurationMsProvider = { _crossfadeDurationMs.value },
+        crossfadeDurationMsProvider = { crossfadeDurationMs.value },
         isCrossfadingProvider = { _isCrossfading.value },
         isCrossfadingSetter = { _isCrossfading.value = it },
         exoPlayerProvider = { exoPlayer },
@@ -414,23 +404,11 @@ class AudioPlaybackManager(
             // no per-entry-point claim sites can drift. Newest user action
             // wins: this publishes Held(MUSIC), and the reader (whose loop is
             // not a commandable surface) pauses its speech on the state.
-            if (isPlaying) {
-                val outcome = playbackFocus.acquire(PlaybackSurfaceId.MUSIC)
-                if (outcome is FocusOutcome.Denied) {
-                    // Honor the interface contract ("the caller MUST NOT
-                    // produce audio"): a Denied claim here means another
-                    // holder is Suspended under an OS loss (e.g. read-aloud
-                    // during a phone call) — the newest user action does not
-                    // outrank an OS suspension. Pause mirrors the user's own
-                    // pause: playWhenReady drops, so neither the OS focus
-                    // stack nor a later release can auto-resume this denial.
-                    // The resulting isPlaying=false edge releases the claim
-                    // attempt below on the next listener pass.
-                    pause()
-                }
-            } else {
-                playbackFocus.release(PlaybackSurfaceId.MUSIC)
-            }
+            playbackFocus.claimOnPlayEdge(
+                surfaceId = PlaybackSurfaceId.MUSIC,
+                isPlaying = isPlaying,
+                onDenied = { pause() },
+            )
         }
 
         override fun onPlayerError(error: PlaybackException) {
@@ -476,7 +454,7 @@ class AudioPlaybackManager(
                 else -> 0
             }
             if (state.repeatMode.value != appMode) {
-                state._repeatMode.value = appMode
+                state.onEngineRepeatModeChanged(appMode)
             }
         }
     }
@@ -541,13 +519,13 @@ class AudioPlaybackManager(
     override fun setGaplessEnabled(enabled: Boolean) {
         _gaplessEnabled.value = enabled
         if (enabled) {
-            _crossfadeDurationMs.value = 0L
+            state.setCrossfadeDurationMs(0L)
             crossfader.cancel()
         }
     }
 
     override fun setCrossfadeDurationMs(ms: Long) {
-        _crossfadeDurationMs.value = ms
+        state.setCrossfadeDurationMs(ms)
         if (ms > 0) {
             _gaplessEnabled.value = false
         } else {
@@ -557,7 +535,30 @@ class AudioPlaybackManager(
     }
 
     private fun getOrCreatePlayer(): ExoPlayer {
-        return exoPlayer ?: testPlayerFactory?.invoke() ?: createPlayer()
+        // The factory path ASSIGNS the field (createPlayer() does the same
+        // at its tail): the returned player must be the manager's live
+        // engine — EngineDispatch.isLive and every `exoPlayer ?: return`
+        // guard read the field, so an unassigned factory result would leave
+        // the chassis's engine gate dead (the queue-semantics suite's former
+        // reflection write existed precisely for this).
+        return exoPlayer ?: testPlayerFactory?.invoke()?.also { player -> exoPlayer = player }
+            ?: createPlayer()
+    }
+
+    /**
+     * Guarantees the audio MediaLibrarySession exists without starting
+     * playback — the Android Auto / Automotive cold-connect path. A car
+     * client binds [JellyPlayPlaybackService] and asks for its session before
+     * any phone-side play has run; the player + session are otherwise built
+     * lazily on the first play, so the service would hand the head unit a
+     * null session and the app would appear unavailable on the car screen.
+     * Idempotent: [getOrCreatePlayer] short-circuits on the live engine, so
+     * this is a no-op once playback has built the session (and a full
+     * recreate after [stopAndRelease], matching the play path). Main thread
+     * only — [createPlayer] builds the ExoPlayer on the calling looper.
+     */
+    fun ensureAudioSession() {
+        getOrCreatePlayer()
     }
 
     private fun createPlayer(): ExoPlayer {
@@ -581,21 +582,21 @@ class AudioPlaybackManager(
                 enableAudioTrackPlaybackParams: Boolean,
             ): androidx.media3.exoplayer.audio.AudioSink {
                 return DefaultAudioSink.Builder(context)
+                    // ONE in-sink chain order, shared with the video engine's
+                    // ExoPlayer sink (core:data `inSinkAudioChain`): channel
+                    // mix first — it may change the channel count, so every
+                    // downstream processor must see the remixed layout — then
+                    // dynamics/ReplayGain, the dialogue-boost high-pass, and
+                    // the L/R balance processor (music's in-sink balance is
+                    // the declared divergence from video, which has no
+                    // balance surface).
                     .setAudioProcessors(
-                        arrayOf(
-                            // Channel mix first: it may change the channel count,
-                            // so every downstream processor must see the remixed
-                            // layout.
-                            effectsProcessor.channelMixProcessor,
-                            // Dynamics compression (DYNAMIC normalization) and
-                            // ReplayGain (TRACK/ALBUM) are mutually exclusive at
-                            // runtime but both live in the chain.
-                            effectsProcessor.dynamicsProcessor,
-                            effectsProcessor.replayGainProcessor,
-                            // High-pass rumble cut for dialogue boost; a no-op
-                            // when boost is off.
-                            effectsProcessor.highPassProcessor,
-                            effectsProcessor.balanceProcessor,
+                        inSinkAudioChain(
+                            channelMixProcessor = effectsProcessor.channelMixProcessor,
+                            dynamicsProcessor = effectsProcessor.dynamicsProcessor,
+                            replayGainProcessor = effectsProcessor.replayGainProcessor,
+                            highPassProcessor = effectsProcessor.highPassProcessor,
+                            balanceProcessor = effectsProcessor.balanceProcessor,
                         ),
                     )
                     .setEnableFloatOutput(enableFloatOutput)
@@ -652,18 +653,12 @@ class AudioPlaybackManager(
 
     private fun restorePersistedQueue() {
         scope.launch {
-            val items = queuePersistenceHelper.loadQueue()
-            if (items.isNotEmpty()) {
-                state._queue.value = items
-            }
-            val savedState = queuePersistenceHelper.loadState()
-            savedState?.let { saved ->
-                state._currentIndex.value = saved.currentIndex
-                state._currentPosition.value = saved.currentPositionMs
-                state._repeatMode.value = saved.repeatMode.coerceIn(0, 2)
-                state._shuffleMode.value = saved.shuffleEnabled
-                state._speed.value = saved.playbackSpeed
-            }
+            // Chassis command: the bulk cold-start restore (empty queue
+            // writes nothing; null state leaves the five cells untouched).
+            state.restorePersisted(
+                queue = queuePersistenceHelper.loadQueue(),
+                savedState = queuePersistenceHelper.loadState(),
+            )
         }
     }
 
@@ -680,24 +675,60 @@ class AudioPlaybackManager(
         )
     }
 
+    /**
+     * The item-builder path — one queue row → its playable [MediaItem]
+     * through the browser ladder (an unresolvable row builds null). The
+     * segment fan-out (permits + cache) lives on [QueuePlaylistMirror]; the
+     * direct single-row appends ([addToQueue] / [addToQueueAll]) and the
+     * play-path load call this directly, as before.
+     */
     private suspend fun buildMediaItemForQueueItem(queueItem: AudioQueueItem, startPositionMs: Long = 0L): MediaItem? {
         return libraryBrowser.buildPlayableMediaItem(queueItem.id, startPositionMs)
     }
 
     /**
-     * Builds [MediaItem]s for a queue segment concurrently (bounded by
-     * [queuePreWarmPermits], via [Semaphore.mapConcurrent]) while preserving
-     * input order, so result order — and therefore the [mediaItemCache]
-     * insertion order — matches the sequential `mapNotNull { ... }` loops
-     * this replaces. Already-cached items short-circuit inside the transform
-     * (the old ladder skipped their permit acquire via a completed deferred);
-     * per-item failures cancel the siblings and propagate, exactly as the
-     * old `coroutineScope { ... }` did.
+     * The shared (commonMain) play-path skeleton — everything from the stop
+     * report through the launched resolve/publish/append/load/report/lyrics/
+     * ticker choreography. This manager supplies the Android seams: the
+     * detail+local resolve ladder, the media3 loads, the windowed queue
+     * pre-warm and the post-lyrics ReplayGain apply (its declared hook
+     * positions — see [AudioPlayPath]'s divergence list). [AudioPlayPath]'s
+     * failure publish is a no-op here (null): [resolvePlayTrack] already
+     * published the specific detail-failure text before its local probe —
+     * the historical order — so no captured-copy mutable is needed.
      */
-    private suspend fun buildMediaItemsForQueueItems(queueItems: List<AudioQueueItem>): List<MediaItem> =
-        queuePreWarmPermits.mapConcurrent(queueItems) { qi ->
-            mediaItemCache.get(qi.id) ?: buildMediaItemForQueueItem(qi)
-        }.mapNotNull { it?.also { mediaItemCache.put(it.mediaId, it) } }
+    private val playPath = AudioPlayPath(
+        scope = scope,
+        playbackRepository = playbackRepository,
+        progressReporter = progressReporter,
+        state = state,
+        resolve = { itemId -> resolvePlayTrack(itemId) },
+        loadFailureText = { null },
+        clearTrackScopedState = { clearAbLoop() },
+        onLoadingItemChanged = { loading -> _isLoadingItemFlag = loading },
+        acquireEngine = { getOrCreatePlayer() },
+        publishDetail = { track -> publishResolvedTrack(track) },
+        appendQueueItem = { track -> buildPlayedQueueRow(track) },
+        // ReplayGain rides afterReporting here (post-lyrics, the historical
+        // Android position); the desktop twin applies it beforeLoad.
+        beforeLoad = { _, _ -> },
+        loadIntoEngine = { track, clickedItem, startPositionMs ->
+            loadResolvedTrack(track, clickedItem, startPositionMs)
+        },
+        afterLoad = { _, _ -> preWarmPlaylistAroundCursor() },
+        fetchLyrics = { track, _ ->
+            fetchLyrics(
+                itemId = track.itemId,
+                artistName = track.lyricArtistName,
+                trackName = track.lyricTrackName,
+                durationSec = track.lyricDurationSec,
+            )
+        },
+        afterReporting = { track, _ ->
+            effectsProcessor.applyReplayGain(track.normalizationGain, state.shuffleMode.value)
+        },
+        startPositionTracking = { startPositionTracking() },
+    )
 
     override fun play(itemId: String) {
         assertMainThread("play")
@@ -705,7 +736,7 @@ class AudioPlaybackManager(
         // "Play On" routing (mirrors jellyfin-web's playbackManager.play(): when a
         // remote Jellyfin session is the active player, every play delegates to it
         // and the local engine never loads). Pause local audio so only the remote
-        // session plays.
+        // session plays. Platform prefix — the shared skeleton has no cast routing.
         if (jellyfinRemotePlayCastStrategy.isConnected.value) {
             jellyfinRemotePlayCastStrategy.loadMedia(
                 itemId = itemId,
@@ -723,189 +754,163 @@ class AudioPlaybackManager(
             }
         }
 
+        // Crossfade teardown precedes the skeleton's stop report — the
+        // hand-written order.
         crossfader.cancel()
-        progressReporter.reportStopped()
-        // A→B loop is track-specific; clear it when loading a new item so a
-        // marker pair never applies to a different song.
-        clearAbLoop()
-        currentItemId = itemId
-        _isLoadingItemFlag = true
-        state._isLoadingItem.value = true
+        playPath.start(itemId)
+    }
 
-        val player = getOrCreatePlayer()
+    /**
+     * [AudioPlayPath.resolve] seam: the detail round-trip plus the queue-only
+     * local-file fallback ladder (the former ~50-line intra-file duplicate of
+     * the append/build/load choreography now folds into this one resolve).
+     *
+     * Dead-code note: the historical restored-current-item resume override is
+     * gone — `play()` claims `currentItemId = itemId` synchronously before
+     * this async resolve runs, so its cold-start clause could never hold (the
+     * recorded desktop parity note; resume is server-ticks only).
+     */
+    private suspend fun resolvePlayTrack(itemId: String): AudioPlayTrack? {
+        val detailResult = mediaRepository.getMediaDetail(itemId)
+        val detail = detailResult.getOrNull()
 
-        scope.launch {
-            val detailResult = mediaRepository.getMediaDetail(itemId)
-            val detail = detailResult.getOrNull()
-
-            if (detail != null) {
-                state._playbackError.value = null
-                // Capture whether this is the cold-start restored current item
-                // BEFORE overwriting currentPlayingItemId below. On a fresh
-                // launch restorePersistedQueue() loads the queue + position but
-                // leaves currentPlayingItemId null and currentItemId null, so
-                // the only signal is that the tapped item is the restored
-                // queue's current index AND nothing is loaded yet.
-                val coldStart = currentItemId == null && currentPlayingItemId.value == null
-                val restoredCurrentId = state.queue.value.getOrNull(state.currentIndex.value)?.id
-                val isRestoredCurrentItem = coldStart && restoredCurrentId == itemId
-                val restoredPosMs = state.currentPosition.value
-                nowPlayingTracker.publishDetail(
-                    itemId = itemId,
-                    title = detail.item.name,
-                    artist = detail.item.albumArtist
-                        ?: detail.item.artistItems.firstOrNull()?.name
-                        ?: "",
-                    artistId = detail.item.artistItems.firstOrNull()?.id,
-                    album = detail.item.album ?: "",
-                    albumArtUrl = playbackRepository.getImageUrl(itemId, maxWidth = 600),
-                )
-
-                val source = detail.mediaSources.firstOrNull()
-                val resumeTicks = detail.item.playbackPositionTicks ?: 0L
-                // Prefer the locally-persisted resume position over the
-                // server-reported ticks when resuming the restored current
-                // item: it is always at least as recent as the (10 s-throttled)
-                // server progress, and survives process death the server ticks
-                // may not.
-                val startPositionMs = when {
-                    isRestoredCurrentItem && restoredPosMs > 0 -> restoredPosMs
-                    resumeTicks > 0 -> resumeTicks / 10_000
-                    else -> 0L
-                }
-
-                val q = state.queue.value
-                val currentIdx = state.currentIndex.value
-                val isInQueue = currentIdx >= 0 && q.getOrNull(currentIdx)?.id == itemId
-
-                if (!isInQueue) {
-                    state.appendPlayedItem(
-                        AudioQueueItem(
-                            id = itemId,
-                            name = title.value,
-                            artist = artist.value,
-                            album = album.value,
-                            imageUrl = albumArtUrl.value,
-                            mediaSourceId = source?.id,
-                            durationMs = detail.item.runTimeTicks?.let { it / 10_000 } ?: 0L,
-                            normalizationGain = detail.item.normalizationGain,
-                        )
-                    )
-                }
-
-                val queueItems = state.queue.value
-                val playIndex = state.currentIndex.value
-
-                val clickedItem = queueItems.getOrNull(playIndex)
-                if (clickedItem != null) {
-                    val clickedMediaItem = buildMediaItemForQueueItem(clickedItem, startPositionMs)
-                    if (clickedMediaItem != null) {
-                        player.setMediaItem(clickedMediaItem, startPositionMs)
-                        player.prepare()
-                        player.playWhenReady = true
-                    }
-
-                    queueLoadingJob?.cancel()
-                    // The pre-warm below builds MediaItems for the ENTIRE
-                    // queue; the default 25-entry cache would evict the head
-                    // before the tail is built (75+ repeated repo lookups for
-                    // a 100-track playlist). Size the LRU to the queue.
-                    mediaItemCache.resize(queueItems.size.coerceAtLeast(25))
-                    queueLoadingJob = scope.launch(Dispatchers.IO) {
-                        coroutineScope {
-                            val afterJob = async { buildMediaItemsForQueueItems(queueItems.subList(playIndex + 1, queueItems.size)) }
-                            val beforeJob = async { buildMediaItemsForQueueItems(queueItems.subList(0, playIndex)) }
-                            val mediaItemsAfter = afterJob.await()
-                            val mediaItemsBefore = beforeJob.await()
-
-                            launch(Dispatchers.Main) {
-                                if (exoPlayer == player) {
-                                    if (mediaItemsAfter.isNotEmpty()) {
-                                        player.addMediaItems(mediaItemsAfter)
-                                    }
-                                    if (mediaItemsBefore.isNotEmpty()) {
-                                        player.addMediaItems(0, mediaItemsBefore)
-                                        state._currentIndex.value = playIndex
-                                    }
-                                }
-                                queueLoadingJob = null
-                            }
-                        }
-                    }
-                }
-
-                playbackRepository.reportPlaybackStart(
-                    PlaybackStartInfo(
-                        itemId = itemId,
-                        sessionId = playSessionId,
-                        mediaSourceId = source?.id,
-                        startPositionTicks = if (startPositionMs > 0) startPositionMs * 10_000 else null,
-                    )
-                )
-
-                fetchLyrics(
-                    itemId = itemId,
-                    artistName = detail.item.albumArtist
-                        ?: detail.item.artistItems.firstOrNull()?.name,
-                    trackName = detail.item.name,
-                    durationSec = detail.item.runTimeTicks?.let { it / 10_000_000.0 },
-                )
-                effectsProcessor.applyReplayGain(detail.item.normalizationGain, state.shuffleMode.value)
-                startPositionTracking()
-                progressReporter.start()
-            } else {
-                state._playbackError.value = detailResult.exceptionOrNull()?.message ?: "Failed to load track"
-                // Queue-only local fallback: when the server detail fetch failed
-                // but a completed download exists on disk, play the local file.
-                // resolveLocalSource performs no getMediaDetail round-trip, so the
-                // COMPLETED classification survives even though the server call
-                // failed — preserving the historical queue-only fallback.
-                val local = playbackSourceResolver.resolveLocalSource(itemId)
-                if (local != null) {
-                    nowPlayingTracker.publishLocalFile(
-                        itemId = itemId,
-                        title = local.title,
-                        artist = local.offlineItem?.seriesName ?: "",
-                        album = "",
-                    )
-
-                    val q = state.queue.value
-                    val currentIdx = state.currentIndex.value
-                    val isInQueue = currentIdx >= 0 && q.getOrNull(currentIdx)?.id == itemId
-
-                    if (!isInQueue) {
-                        state.appendPlayedItem(
-                            AudioQueueItem(
-                                id = itemId,
-                                name = title.value,
-                                artist = artist.value,
-                                album = "",
-                                imageUrl = null,
-                                mediaSourceId = local.download.mediaSourceId,
-                            )
-                        )
-                    }
-
-                    val mediaItem = MediaItem.Builder()
-                        .setMediaId(itemId)
-                        .setUri(local.uri)
-                        .setMediaMetadata(
-                            MediaMetadata.Builder()
-                                .setTitle(title.value)
-                                .setArtist(artist.value)
-                                .build()
-                        )
-                        .build()
-
-                    player.setMediaItem(mediaItem)
-                    player.prepare()
-                    player.playWhenReady = true
-                    startPositionTracking()
-                }
-            }
-            _isLoadingItemFlag = false
-            state._isLoadingItem.value = false
+        if (detail != null) {
+            val resumeTicks = detail.item.playbackPositionTicks ?: 0L
+            return AudioPlayTrack(
+                itemId = itemId,
+                startPositionMs = if (resumeTicks > 0) resumeTicks / 10_000 else 0L,
+                mediaSourceId = detail.mediaSources.firstOrNull()?.id,
+                title = detail.item.name,
+                artist = detail.item.albumArtist
+                    ?: detail.item.artistItems.firstOrNull()?.name
+                    ?: "",
+                artistId = detail.item.artistItems.firstOrNull()?.id,
+                album = detail.item.album,
+                lyricArtistName = detail.item.albumArtist
+                    ?: detail.item.artistItems.firstOrNull()?.name,
+                lyricTrackName = detail.item.name,
+                lyricDurationSec = detail.item.runTimeTicks?.let { it / 10_000_000.0 },
+                normalizationGain = detail.item.normalizationGain,
+                durationMs = detail.item.runTimeTicks?.let { it / 10_000 } ?: 0L,
+            )
         }
+
+        // Queue-only local fallback: when the server detail fetch failed but a
+        // completed download exists on disk, play the local file.
+        // resolveLocalSource performs no getMediaDetail round-trip, so the
+        // COMPLETED classification survives even though the server call
+        // failed — preserving the historical queue-only fallback. The load
+        // error publishes BEFORE the local probe (the historical arm's
+        // order) and stays published on fallback (the arm never cleared it —
+        // the preserved quirk [AudioPlayTrack.reportsToServer] documents);
+        // the skeleton's failure arm re-publishes the same text, which
+        // StateFlow conflation drops).
+        val failureText = detailResult.exceptionOrNull()?.message ?: "Failed to load track"
+        state.setLoadError(failureText)
+        val local = playbackSourceResolver.resolveLocalSource(itemId)
+        return if (local != null) {
+            AudioPlayTrack(
+                itemId = itemId,
+                startPositionMs = 0L,
+                mediaSourceId = local.download.mediaSourceId,
+                title = local.title,
+                artist = local.offlineItem?.seriesName ?: "",
+                artistId = null,
+                album = "",
+                lyricArtistName = null,
+                lyricTrackName = local.title,
+                lyricDurationSec = null,
+                normalizationGain = null,
+                reportsToServer = false,
+                uri = local.uri,
+            )
+        } else {
+            // The specific failure text is already on the chassis error flow
+            // (published above, before the probe) — the skeleton's failure
+            // arm is a null no-op for this manager.
+            null
+        }
+    }
+
+    /**
+     * [AudioPlayPath.publishDetail] seam: the detail arm's all-six-fields
+     * publish, or the local fallback's five-field local-file shape.
+     */
+    private fun publishResolvedTrack(track: AudioPlayTrack) {
+        if (track.reportsToServer) {
+            nowPlayingTracker.publishDetail(
+                itemId = track.itemId,
+                title = track.title,
+                artist = track.artist,
+                artistId = track.artistId,
+                album = track.album ?: "",
+                albumArtUrl = imageUrlProvider.getImageUrl(track.itemId, maxWidth = 600),
+            )
+        } else {
+            nowPlayingTracker.publishLocalFile(
+                itemId = track.itemId,
+                title = track.title,
+                artist = track.artist,
+                album = "",
+            )
+        }
+    }
+
+    /** [AudioPlayPath.appendQueueItem] seam — reads the just-published tracker values. */
+    private fun buildPlayedQueueRow(track: AudioPlayTrack): AudioQueueItem = AudioQueueItem(
+        id = track.itemId,
+        name = title.value,
+        artist = artist.value,
+        album = if (track.reportsToServer) album.value else "",
+        imageUrl = if (track.reportsToServer) albumArtUrl.value else null,
+        mediaSourceId = track.mediaSourceId,
+        durationMs = if (track.reportsToServer) track.durationMs else 0L,
+        normalizationGain = track.normalizationGain,
+    )
+
+    /**
+     * [AudioPlayPath.loadIntoEngine] seam: the detail arm resolves a media3
+     * MediaItem through the browser ladder (an unresolvable item loads
+     * nothing — the rest of the arm still runs, its historical shape); the
+     * local fallback loads the file uri directly.
+     */
+    private suspend fun loadResolvedTrack(track: AudioPlayTrack, clickedItem: AudioQueueItem, startPositionMs: Long) {
+        val player = getOrCreatePlayer()
+        if (track.reportsToServer) {
+            val clickedMediaItem = buildMediaItemForQueueItem(clickedItem, startPositionMs)
+            if (clickedMediaItem != null) {
+                player.setMediaItem(clickedMediaItem, startPositionMs)
+                player.prepare()
+                player.playWhenReady = true
+            }
+        } else {
+            val mediaItem = MediaItem.Builder()
+                .setMediaId(track.itemId)
+                .setUri(track.uri)
+                .setMediaMetadata(
+                    MediaMetadata.Builder()
+                        .setTitle(title.value)
+                        .setArtist(artist.value)
+                        .build()
+                )
+                .build()
+
+            player.setMediaItem(mediaItem)
+            player.prepare()
+            player.playWhenReady = true
+        }
+    }
+
+    /**
+     * [AudioPlayPath.afterLoad] seam (Android's windowed queue pre-warm — the
+     * declared divergence from the desktop's next-item-only prefetch): the
+     * whole choreography (window math, cache, job guards, invariant, the
+     * prepend's cursor reconciliation) lives on [QueuePlaylistMirror]; this
+     * only supplies the play path's engine acquisition — the player must be
+     * created NOW and captured for the mirror's Main-write identity guard.
+     */
+    private fun preWarmPlaylistAroundCursor() {
+        queueMirror.prewarm(getOrCreatePlayer())
     }
 
     /**
@@ -937,6 +942,11 @@ class AudioPlaybackManager(
         assertMainThread("addToQueue")
         state.addToQueue(item)
         val player = exoPlayer ?: return
+        // Windowed mirror: appending onto a player that trails the queue
+        // would land the row ahead of the not-yet-mirrored middle rows —
+        // only a full mirror takes the direct append; the pre-warm window
+        // covers the new row once the cursor reaches it.
+        if (player.mediaItemCount + 1 != state.queue.value.size) return
         scope.launch {
             buildMediaItemForQueueItem(item)?.let { mediaItem ->
                 player.addMediaItem(mediaItem)
@@ -952,6 +962,8 @@ class AudioPlaybackManager(
         // chassis's bulk append skips empties.
         state.addToQueueAll(items)
         val player = exoPlayer ?: return
+        // The addToQueue full-mirror guard, bulk-shaped.
+        if (player.mediaItemCount + items.size != state.queue.value.size) return
         scope.launch {
             val mediaItems = items.mapNotNull { buildMediaItemForQueueItem(it) }
             if (mediaItems.isNotEmpty()) {
@@ -962,14 +974,14 @@ class AudioPlaybackManager(
 
     override fun removeFromQueue(index: Int) {
         assertMainThread("removeFromQueue")
-        if (queueLoadingJob != null) return
+        if (queueMirror.isLoading) return
         if (index < 0 || index >= state.queue.value.size) return
         // Remove-of-the-current-row: the chassis transition must not write
         // the player — the removeMediaItem below IS the write (media3 plays
         // the shifted-in row and its transition echo reconciles).
-        removingCurrentRow = index == state.currentIndex.value
+        queueMirror.removingCurrentRow = index == state.currentIndex.value
         state.removeFromQueue(index)
-        removingCurrentRow = false
+        queueMirror.removingCurrentRow = false
         val player = exoPlayer ?: return
         if (index < player.mediaItemCount) {
             player.removeMediaItem(index)
@@ -993,12 +1005,21 @@ class AudioPlaybackManager(
         val queueBefore = state.queue.value
         state.moveQueueItem(fromIndex, toIndex)
         if (state.queue.value === queueBefore) return
-        exoPlayer?.moveMediaItem(fromIndex, toIndex)
+        val player = exoPlayer ?: return
+        if (fromIndex < player.mediaItemCount && toIndex < player.mediaItemCount) {
+            player.moveMediaItem(fromIndex, toIndex)
+        } else if (fromIndex < player.mediaItemCount || toIndex < player.mediaItemCount) {
+            // The move straddles the mirrored frontier in either direction:
+            // mirrored rows shifted under an unmirrored tail — rebuild the
+            // windowed mirror instead of writing a stale move.
+            queueMirror.rebuild(state.queue.value, state.currentIndex.value) { player.currentPosition }
+        }
+        // Fully beyond the frontier: the mirrored prefix is untouched.
     }
 
     override fun skipToNext() {
         assertMainThread("skipToNext")
-        if (queueLoadingJob != null) return
+        if (queueMirror.isLoading) return
         crossfader.cancel()
         // Chassis: the shared advance/wrap rule (+1 mid-queue, wrap to 0
         // under repeat ≥ ALL, blocked at the RepeatNone tail — no undo
@@ -1009,7 +1030,7 @@ class AudioPlaybackManager(
 
     override fun skipToPrevious() {
         assertMainThread("skipToPrevious")
-        if (queueLoadingJob != null) return
+        if (queueMirror.isLoading) return
         val player = exoPlayer ?: return
         crossfader.cancel()
         // Chassis: restart-in-place above the threshold (strictly > — seek
@@ -1091,50 +1112,16 @@ class AudioPlaybackManager(
      */
     override fun undoLastQueueOperation(): Boolean {
         assertMainThread("undoLastQueueOperation")
-        if (queueLoadingJob != null) return false
+        if (queueMirror.isLoading) return false
         return state.undoLastQueueOperation()
     }
 
     /**
      * The ONE queue-rebuild write (the shuffle reorder/restore mirror in
-     * [toggleShuffle] and the undo restore via [EngineDispatch.prepare]):
-     * builds MediaItems for [items] off-main, then replaces the player's
-     * playlist with `setMediaItems(items, targetIndex, positionMs)` + prepare
-     * on Main.
-     *
-     * ONE canonical player-identity-check placement, chosen here: AFTER the
-     * async build, on the Main thread, immediately before the write — the
-     * check closest to the write is the only one that can actually close the
-     * swap window (a check before the build would still race the swap that
-     * happens while the build runs). Bail = no write, as in all pre-fold
-     * copies (they only disagreed on where the check sat).
-     *
-     * [positionMs] is a provider evaluated at WRITE time on Main: the
-     * shuffle arms read `player.currentPosition` there so playback that
-     * continues during the build is not rewound, while the undo restore pins
-     * the captured snapshot value. [targetIndex] is coerced into the BUILT
-     * list's bounds — a partial build must not crash the write.
+     * [toggleShuffle], the undo restore and the out-of-window fallback via
+     * [EngineDispatch.prepare]) is [QueuePlaylistMirror.rebuild] — the
+     * mirror's own KDoc carries the write's contract.
      */
-    private fun rebuildPlaylist(
-        items: List<AudioQueueItem>,
-        targetIndex: Int,
-        positionMs: () -> Long,
-    ) {
-        val player = exoPlayer ?: return
-        if (items.isEmpty()) return
-        scope.launch(Dispatchers.IO) {
-            val mediaItems = buildMediaItemsForQueueItems(items)
-            launch(Dispatchers.Main) {
-                if (mediaItems.isEmpty() || exoPlayer != player) return@launch
-                player.setMediaItems(
-                    mediaItems,
-                    targetIndex.coerceIn(0, mediaItems.lastIndex),
-                    positionMs(),
-                )
-                player.prepare()
-            }
-        }
-    }
 
     fun seekByDelta(deltaMs: Long) {
         assertMainThread("seekByDelta")
@@ -1170,7 +1157,7 @@ class AudioPlaybackManager(
         state.toggleShuffle()
         val player = exoPlayer ?: return
         if (state.queue.value !== queueBefore) {
-            rebuildPlaylist(
+            queueMirror.rebuild(
                 items = state.queue.value,
                 targetIndex = state.currentIndex.value,
                 positionMs = { player.currentPosition },
@@ -1300,7 +1287,7 @@ class AudioPlaybackManager(
 
     override fun playFromQueue(index: Int) {
         assertMainThread("playFromQueue")
-        if (queueLoadingJob != null) return
+        if (queueMirror.isLoading) return
         if (index < 0 || index >= state.queue.value.size) return
         crossfader.cancel()
         // Chassis: same-index clicks seek the CURRENT item to zero (no
@@ -1417,6 +1404,7 @@ class AudioPlaybackManager(
                 nextItem = nextItem,
                 reapplyReplayGain = true,
             )
+            queueMirror.extend()
 
             scope.launch {
                 progressReporter.reportStopped(
@@ -1503,28 +1491,9 @@ class AudioPlaybackManager(
 
         _isCrossfading.value = false
 
-        val queueItems = state.queue.value
-        if (queueItems.size > 1) {
-            scope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                coroutineScope {
-                    val afterJob = async { buildMediaItemsForQueueItems(queueItems.subList(nextIndex + 1, queueItems.size)) }
-                    val beforeJob = async { buildMediaItemsForQueueItems(queueItems.subList(0, nextIndex)) }
-                    val itemsAfter = afterJob.await()
-                    val itemsBefore = beforeJob.await()
-
-                    launch(kotlinx.coroutines.Dispatchers.Main) {
-                        if (exoPlayer == secondary) {
-                            if (itemsAfter.isNotEmpty()) {
-                                secondary.addMediaItems(itemsAfter)
-                            }
-                            if (itemsBefore.isNotEmpty()) {
-                                secondary.addMediaItems(0, itemsBefore)
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        // Same windowed mirror as the play-path pre-warm: full prefix
+        // below the crossfaded row, bounded lookahead ahead of it.
+        queueMirror.prewarmAround(secondary, nextIndex)
 
         playbackRepository.reportPlaybackStart(startReportFor(nextItem))
     }
@@ -1575,19 +1544,32 @@ class AudioPlaybackManager(
         positionJob?.cancel()
         var lastPosition = 0L
         var lastDuration = 0L
-        var bandwidthSampleTick = 0
-        var lastBufferedPosition = 0L
+        // Per-tracking-start instance (the historical locals' reset shape):
+        // the sample counter + buffered-position baseline start from zero
+        // with every tracking run.
+        val bandwidthSampler = AudioBandwidthSampler(
+            bandwidthMonitor = bandwidthMonitor,
+            assumedKbpsProvider = { currentAudioBitrateTier.value.targetKbps },
+        )
         // The shared polling loop (player-contract) owns the cadence, the
         // bounded reactive paused-wait and the player-less exponential
         // backoff; this is only the tick body. Paused ticks still reach
         // [onActive] on a play→pause edge — the body's own gate keeps them
-        // no-ops, exactly as before the unification.
+        // no-ops, exactly as before the unification. The ticker's
+        // synchronous first-tick prime (primeFirstTick) is the fix this
+        // manager was missing: the first position/duration publish now
+        // lands BEFORE startPositionTracking() returns instead of up to one
+        // 250 ms interval later — so a skip in that window no longer
+        // reports the stop position against duration == 0 (the desktop twin
+        // has primed since it adopted the ticker; the regression story is
+        // on EnginePositionTicker's primeFirstTick KDoc).
         positionJob = EnginePositionTicker(
             scopeProvider = { scope },
             pollingIntervalMs = MutableStateFlow(POSITION_POLL_INTERVAL_MS),
             isPlayingFlow = state._isPlaying,
             isCurrentlyPlaying = { exoPlayer?.isPlaying == true },
             isReady = { exoPlayer != null },
+            primeFirstTick = true,
             onActive = tickBody@{
                 val player = exoPlayer ?: return@tickBody
                 if (!player.isPlaying) return@tickBody
@@ -1605,38 +1587,22 @@ class AudioPlaybackManager(
                     abLoopEndMs = _abLoopEndMs.value,
                 )
                 plan.seekToMs?.let { player.seekTo(it) }
-                plan.publishPositionMs?.let {
-                    state._currentPosition.value = it
-                    lastPosition = it
-                }
-                plan.publishDurationMs?.let {
-                    state._duration.value = it
-                    lastDuration = it
-                }
+                state.publishTick(plan)
+                plan.publishPositionMs?.let { lastPosition = it }
+                plan.publishDurationMs?.let { lastDuration = it }
                 if (plan.updateLyricIndex) {
                     lyricsManager.updateCurrentLyricIndex(state.currentPosition.value)
                 }
 
                 // Android-only tick duties (declared divergences — the
                 // desktop ticker stops at the shared plan above).
-                if (_crossfadeDurationMs.value > 0 && state.repeatMode.value != 2) {
+                if (crossfadeDurationMs.value > 0 && state.repeatMode.value != 2) {
                     crossfader.maybeStart()
                 }
 
-                bandwidthSampleTick++
-                if (bandwidthSampleTick >= 20) {
-                    bandwidthSampleTick = 0
-                    val buffered = player.bufferedPosition
-                    val deltaMs = (buffered - lastBufferedPosition).coerceAtLeast(0L)
-                    lastBufferedPosition = buffered
-                    if (deltaMs > 0) {
-                        val assumedKbps = currentAudioBitrateTier.value.targetKbps
-                        val estimatedBytes = (assumedKbps.toLong() * deltaMs) / 8L / 1000L
-                        if (estimatedBytes > 0) {
-                            bandwidthMonitor.addSample(estimatedBytes, deltaMs)
-                        }
-                    }
-                }
+                // Bandwidth estimation (the collaborator owns the ~5 s
+                // sampling cadence + the bitrate-tier-assumed byte math).
+                bandwidthSampler.onTick(player.bufferedPosition)
             },
         ).launch()
     }

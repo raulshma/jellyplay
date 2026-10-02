@@ -81,4 +81,7 @@
     <string name="library_year_to">%1$d년까지</string>
     <string name="data_download_started">다운로드 시작됨</string>
     <string name="data_download_start_failed">다운로드를 시작할 수 없음</string>
+    <string name="library_filter_has_subtitles">자막 있음</string>
+    <string name="library_filter_has_trailer">예고편 있음</string>
+    <string name="library_filter_subtitles">자막</string>
 </resources>

@@ -26,7 +26,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.raulshma.jellyplay.core.model.SubtitleEdgeType
 import com.raulshma.jellyplay.core.model.SubtitleStyle
-import com.raulshma.jellyplay.feature.player.video.engine.MpvStyleMapping
+import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvStyleMapping
 import com.raulshma.jellyplay.feature.player.video.subtitle.AndroidFontProvider
 import com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleDefaults
 

@@ -100,3 +100,12 @@ button, so the stray tap would have failed a run that was already playing.
    wave-19C residual (expand + dismiss + session release).
 2. The Settings-screen ANR recorded in `docs/e2e/device-locale-pass.md`
    (any locale) — same device round, orthogonal to PiP.
+3. The auto-PiP preference (issue #167: Settings → Playback → advanced →
+   "Auto Picture-in-Picture", Android-only row, default ON) needs a
+   device pass for its OFF half: toggle off → play → HOME must background
+   the app like a recents-switch (playback pauses, or keeps playing when
+   background-audio is on) with NO pinned task, and the manual PiP button
+   in the controls must still enter PiP. The toggle folds into all three
+   auto-entry paths (`onUserLeaveHint`, the top-resumed fallback, the
+   pre-arm `setAutoEnterEnabled`) via `PlayerActivity.shouldAutoEnterPipNow()`;
+   mid-session flips re-apply the pre-arm through the params collector.

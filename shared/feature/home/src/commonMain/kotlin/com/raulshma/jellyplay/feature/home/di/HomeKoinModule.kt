@@ -2,7 +2,9 @@ package com.raulshma.jellyplay.feature.home.di
 
 import com.raulshma.jellyplay.feature.home.HomeStores
 import com.raulshma.jellyplay.feature.home.HomeRefresherFactory
+import com.raulshma.jellyplay.feature.home.HomeSheetsFactory
 import com.raulshma.jellyplay.feature.home.HomeViewModel
+import com.raulshma.jellyplay.feature.home.NextUpExcludedViewModel
 import org.koin.compose.viewmodel.dsl.viewModel
 import org.koin.core.module.Module
 import org.koin.dsl.module
@@ -48,6 +50,15 @@ val homeModule: Module = module {
             bookTocCacheRepository = get(),
         )
     }
+    single {
+        HomeSheetsFactory(
+            episodeCatalogue = get(),
+            seriesDownloads = get(),
+            downloadIntake = get(),
+            userMessageBus = get(),
+            offlineRepository = get(),
+        )
+    }
     viewModel {
         HomeViewModel(
             episodeCatalogue = get(),
@@ -56,7 +67,6 @@ val homeModule: Module = module {
             mediaRepository = get(),
             imageUrlProvider = get(),
             photoFolderPrefetcher = get(),
-            seriesDownloads = get(),
             downloadIntake = get(),
             quickDownloadActions = get(),
             offlineRepository = get(),
@@ -68,16 +78,25 @@ val homeModule: Module = module {
                 appearance = get(),
                 experimental = get(),
                 playback = get(),
+                seerrPreferences = get(),
             ),
             preferencesEditor = get(),
             seerrRequestDelegate = get(),
-            seerrPreferencesStore = get(),
             authRepository = get(),
             homeSession = get(),
             userMessageBus = get(),
             settingsSearchProvider = get(),
             homeRefresherFactory = get(),
             syncStatusStateHolderFactory = get(),
+            homeSheetsFactory = get(),
+        )
+    }
+    viewModel {
+        NextUpExcludedViewModel(
+            homeDiscoveryStore = get(),
+            editor = get(),
+            mediaRepository = get(),
+            imageUrlProvider = get(),
         )
     }
 }

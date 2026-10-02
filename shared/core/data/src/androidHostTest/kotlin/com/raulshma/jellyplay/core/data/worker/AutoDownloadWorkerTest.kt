@@ -12,8 +12,10 @@ import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueSnapshot
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
+import com.raulshma.jellyplay.core.data.repository.AutoDownloadSweepResult
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsSlice
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
+import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import io.mockk.coEvery
@@ -51,6 +53,7 @@ class AutoDownloadWorkerTest {
     private val downloadRepository: DownloadRepository = mockk()
     private val downloadIntake: DownloadIntake = mockk()
     private val downloadsStore: DownloadsStore = mockk()
+    private val serverIdentityStore: ServerIdentityStore = mockk()
 
     @Before
     fun setup() {
@@ -59,7 +62,10 @@ class AutoDownloadWorkerTest {
             context,
             Configuration.Builder().setMinimumLoggingLevel(android.util.Log.DEBUG).build(),
         )
-        every { downloadsStore.downloads } returns MutableStateFlow(DownloadsSlice(autoDownloadNewEpisodes = true))
+        every { downloadsStore.downloads } returns MutableStateFlow(
+            DownloadsSlice(autoDownloadNewEpisodes = true, autoDownloadLookahead = 0),
+        )
+        coEvery { downloadRepository.sweepExpiredAutoDownloads() } returns AutoDownloadSweepResult.EMPTY
         coEvery { downloadRepository.getDownloadedSeriesIds() } returns listOf("s1")
         coEvery { downloadRepository.getDownloadedEpisodeIdsBySeries() } returns mapOf("s1" to setOf("ep-old"))
         coEvery { episodeCatalogue.loadSeriesEpisodes(any(), any()) } returns Result.success(snapshot())
@@ -105,6 +111,7 @@ class AutoDownloadWorkerTest {
                     downloadRepository,
                     downloadIntake,
                     downloadsStore,
+                    serverIdentityStore,
                 )
             })
             .setRunAttemptCount(runAttemptCount)

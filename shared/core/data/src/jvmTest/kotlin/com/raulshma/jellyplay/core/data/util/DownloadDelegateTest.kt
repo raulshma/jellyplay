@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.core.data.util
 import com.raulshma.jellyplay.core.data.repository.DownloadStartRequest
 import com.raulshma.jellyplay.core.data.repository.OfflineDownloadWriter
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.model.MediaDetail
@@ -132,6 +133,7 @@ class DownloadDelegateTest {
     }
 
     private val playbackRepository: PlaybackRepository = mockk()
+    private val imageUrlProvider: ImageUrlProvider = mockk()
     private val writer = RecordingWriter().apply { startResult = Result.success(pendingItem()) }
 
     // V3 downloads conveyor: the moved DownloadDelegate ctor has no Context
@@ -139,12 +141,13 @@ class DownloadDelegateTest {
     private val delegate = DownloadDelegate(
         writer = writer,
         playbackRepository = playbackRepository,
+        imageUrlProvider = imageUrlProvider,
     )
 
     @Test
     fun `executeDownload runs the full bundle recipe when start yields PENDING`() = runTest {
         val request = buildRequest(detailWithStreams = true, withTrickplay = true)
-        coEvery { playbackRepository.getBackdropUrl(any(), any()) } returns "https://backdrop"
+        coEvery { imageUrlProvider.getBackdropUrl(any(), any()) } returns "https://backdrop"
 
         val result = delegate.executeDownload(request)
 
@@ -195,7 +198,7 @@ class DownloadDelegateTest {
             container = "mkv",
             selectedSubtitleIndices = setOf(2),
         )
-        coEvery { playbackRepository.getBackdropUrl(any(), any()) } returns "https://backdrop"
+        coEvery { imageUrlProvider.getBackdropUrl(any(), any()) } returns "https://backdrop"
 
         delegate.executeDownload(request)
 
@@ -210,7 +213,7 @@ class DownloadDelegateTest {
         // the item plays offline with no subtitles forever (see executeDownload).
         writer.subtitleBundleResult = false
         val request = buildRequest(detailWithStreams = true, withTrickplay = false)
-        coEvery { playbackRepository.getBackdropUrl(any(), any()) } returns "https://backdrop"
+        coEvery { imageUrlProvider.getBackdropUrl(any(), any()) } returns "https://backdrop"
 
         delegate.executeDownload(request)
 
@@ -263,7 +266,7 @@ class DownloadDelegateTest {
         // image as an artifact. Most servers have no episode backdrop — that
         // null case (persist null, no remote-URL fallback) is pinned by the
         // test below.
-        coEvery { playbackRepository.getBackdropUrl(any(), any()) } returns "https://backdrop"
+        coEvery { imageUrlProvider.getBackdropUrl(any(), any()) } returns "https://backdrop"
         val request = buildRequest(
             detailWithStreams = false,
             withTrickplay = false,
@@ -285,7 +288,7 @@ class DownloadDelegateTest {
         // URL (episodes only): the offline home's CW card then falls back to
         // the episode's own primary via the wide card's fallback chain, while
         // the offline detail hero resolves the series backdrop at load time.
-        coEvery { playbackRepository.getBackdropUrl(any(), any()) } returns "https://backdrop"
+        coEvery { imageUrlProvider.getBackdropUrl(any(), any()) } returns "https://backdrop"
         writer.imageResults["Backdrop"] = null
         val request = buildRequest(
             detailWithStreams = false,
@@ -328,7 +331,7 @@ class DownloadDelegateTest {
             imageUrl = "https://img",
             imageBlurHash = null,
         )
-        coEvery { playbackRepository.getBackdropUrl(any(), any()) } returns "https://backdrop"
+        coEvery { imageUrlProvider.getBackdropUrl(any(), any()) } returns "https://backdrop"
 
         val result = delegate.executeDownload(request)
 
@@ -359,7 +362,7 @@ class DownloadDelegateTest {
         // from getBookDownloadUrl (the direct-download endpoint), never
         // getStreamUrl.
         coEvery { playbackRepository.getBookDownloadUrl("item-1") } returns "https://server/Items/item-1/Download?api_key=tok"
-        coEvery { playbackRepository.getImageUrl("item-1", "Primary", 300) } returns "https://img"
+        coEvery { imageUrlProvider.getImageUrl("item-1", 300) } returns "https://img"
         // Real server payload: books carry NO MediaSources — the format only
         // rides detail.path. The fork must precede the source guard.
         val detail = MediaDetail(
@@ -385,7 +388,7 @@ class DownloadDelegateTest {
         // The downloads row must link to its parent series/season — without
         // the link, deleteOfflineSeries (WHERE seriesId = :seriesId) finds no
         // rows and orphans episode files behind a deleted series.
-        coEvery { playbackRepository.getBackdropUrl(any(), any()) } returns "https://backdrop"
+        coEvery { imageUrlProvider.getBackdropUrl(any(), any()) } returns "https://backdrop"
         val request = episodeRequest()
 
         delegate.executeDownload(request)
@@ -405,7 +408,7 @@ class DownloadDelegateTest {
         // The single episode-context guard: a detail item that happens to
         // carry series fields must NOT leak them into a non-episode's
         // download row.
-        coEvery { playbackRepository.getBackdropUrl(any(), any()) } returns "https://backdrop"
+        coEvery { imageUrlProvider.getBackdropUrl(any(), any()) } returns "https://backdrop"
         val request = episodeRequest().copy(
             mediaType = MediaType.MOVIE.name,
             detail = requestDetail(MediaType.MOVIE),

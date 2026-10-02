@@ -18,7 +18,9 @@ import com.raulshma.jellyplay.core.model.PlaybackReportingStatus
 import com.raulshma.jellyplay.core.model.ScanProgress
 import com.raulshma.jellyplay.core.model.UserDetailPage
 import com.raulshma.jellyplay.core.model.UserStatistics
-import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import com.raulshma.jellyplay.core.network.api.AdminApiClient
+import com.raulshma.jellyplay.core.network.api.AuthApiClient
+import com.raulshma.jellyplay.core.network.api.MediaInfoApiClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
@@ -30,7 +32,12 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 
 class AdminStatisticsRepositoryImpl constructor(
-    private val apiClient: JellyfinApiClient,
+    /** The per-user statistics fan-out (users, played counts, plugin charts). */
+    private val mediaInfoApiClient: MediaInfoApiClient,
+    /** The active-session read behind the list page's "currently playing" flag. */
+    private val adminApiClient: AdminApiClient,
+    /** Forwarded to [scanCore] only — the audit entry's admin identity stamp. */
+    private val authApiClient: AuthApiClient,
     private val auditLogDao: AuditLogDao,
     private val scanStateDao: ScanStateDao,
     private val json: Json,
@@ -81,7 +88,8 @@ class AdminStatisticsRepositoryImpl constructor(
      * shared-input decisions.
      */
     private val scanCore = MediaCleanupScanCore(
-        apiClient = apiClient,
+        authApiClient = authApiClient,
+        mediaInfoApiClient = mediaInfoApiClient,
         auditLogDao = auditLogDao,
         scanStateDao = scanStateDao,
         json = json,
@@ -138,9 +146,9 @@ class AdminStatisticsRepositoryImpl constructor(
         // One capture for the whole page — see [whenPlugin]'s KDoc.
         val pluginAvailable = pluginStatus.value == PlaybackReportingStatus.AVAILABLE
         coroutineScope {
-            val usersDeferred = async { apiClient.getUsers().getOrThrow() }
-            val sessionsDeferred = async { apiClient.getSessions().getOrDefault(emptyList()) }
-            val pluginDeferred = async { whenPlugin(pluginAvailable) { apiClient.getPlaybackReportingUserActivity(days = 30) } }
+            val usersDeferred = async { mediaInfoApiClient.getUsers().getOrThrow() }
+            val sessionsDeferred = async { adminApiClient.getSessions().getOrDefault(emptyList()) }
+            val pluginDeferred = async { whenPlugin(pluginAvailable) { mediaInfoApiClient.getPlaybackReportingUserActivity(days = 30) } }
 
             val users = usersDeferred.await()
             val activeUserIds = sessionsDeferred.await().map { it.userId }.toSet()
@@ -165,10 +173,10 @@ class AdminStatisticsRepositoryImpl constructor(
     )
 
     private suspend fun fetchUserPlayCounts(userId: String): UserPlayCounts = coroutineScope {
-        val movieDeferred = async { apiClient.getUserPlayedItemCount(userId, listOf("Movie")).getOrDefault(0) }
-        val episodeDeferred = async { apiClient.getUserPlayedItemCount(userId, listOf("Episode")).getOrDefault(0) }
-        val songDeferred = async { apiClient.getUserPlayedItemCount(userId, listOf("Audio")).getOrDefault(0) }
-        val movieUnplayedDeferred = async { apiClient.getUserUnplayedItemCount(userId, listOf("Movie")).getOrDefault(0) }
+        val movieDeferred = async { mediaInfoApiClient.getUserPlayedItemCount(userId, listOf("Movie")).getOrDefault(0) }
+        val episodeDeferred = async { mediaInfoApiClient.getUserPlayedItemCount(userId, listOf("Episode")).getOrDefault(0) }
+        val songDeferred = async { mediaInfoApiClient.getUserPlayedItemCount(userId, listOf("Audio")).getOrDefault(0) }
+        val movieUnplayedDeferred = async { mediaInfoApiClient.getUserUnplayedItemCount(userId, listOf("Movie")).getOrDefault(0) }
         UserPlayCounts(
             moviePlayed = movieDeferred.await(),
             episodePlayed = episodeDeferred.await(),
@@ -241,10 +249,10 @@ class AdminStatisticsRepositoryImpl constructor(
         val pluginChart: List<com.raulshma.jellyplay.core.model.PlaybackActivityPoint>
         coroutineScope {
             val userDeferred = async {
-                apiClient.getUserById(userId).getOrNull() ?: JellyfinUser(id = userId)
+                mediaInfoApiClient.getUserById(userId).getOrNull() ?: JellyfinUser(id = userId)
             }
             val playedDeferred = async {
-                apiClient.getItemsWithUserData(
+                mediaInfoApiClient.getItemsWithUserData(
                     userId = userId,
                     isPlayed = true,
                     sortBy = "PlayCount",
@@ -254,7 +262,7 @@ class AdminStatisticsRepositoryImpl constructor(
                 ).getOrDefault(Pair(0, emptyList()))
             }
             val pluginChartDeferred = async {
-                whenPlugin(pluginAvailable) { apiClient.getPlaybackReportingPlayActivity(days = 30, dataType = "count", filter = userId) }
+                whenPlugin(pluginAvailable) { mediaInfoApiClient.getPlaybackReportingPlayActivity(days = 30, dataType = "count", filter = userId) }
             }
             user = userDeferred.await()
             playedResult = playedDeferred.await()
@@ -281,7 +289,7 @@ class AdminStatisticsRepositoryImpl constructor(
         coroutineScope {
             val fallbackDeferred = async {
                 if (pluginChart.isEmpty() || pluginChart.all { it.value == 0L }) {
-                    apiClient.getItemsWithUserData(
+                    mediaInfoApiClient.getItemsWithUserData(
                         userId = userId,
                         isPlayed = true,
                         sortBy = "DatePlayed",
@@ -327,30 +335,30 @@ class AdminStatisticsRepositoryImpl constructor(
         val breakdowns: BreakdownResults
         val enhancedDeferreds: EnhancedDeferreds?
         coroutineScope {
-            val genreDeferred = async { whenPlugin(pluginAvailable) { apiClient.getPlaybackReportingBreakdown("Genre", days = 30, filter = userId) } }
-            val methodDeferred = async { whenPlugin(pluginAvailable) { apiClient.getPlaybackReportingBreakdown("PlaybackMethod", days = 30, filter = userId) } }
-            val deviceDeferred = async { whenPlugin(pluginAvailable) { apiClient.getPlaybackReportingBreakdown("ClientName", days = 30, filter = userId) } }
-            val activityDeferred = async { whenPlugin(pluginAvailable) { apiClient.getPlaybackReportingUserActivity(days = 30) } }
+            val genreDeferred = async { whenPlugin(pluginAvailable) { mediaInfoApiClient.getPlaybackReportingBreakdown("Genre", days = 30, filter = userId) } }
+            val methodDeferred = async { whenPlugin(pluginAvailable) { mediaInfoApiClient.getPlaybackReportingBreakdown("PlaybackMethod", days = 30, filter = userId) } }
+            val deviceDeferred = async { whenPlugin(pluginAvailable) { mediaInfoApiClient.getPlaybackReportingBreakdown("ClientName", days = 30, filter = userId) } }
+            val activityDeferred = async { whenPlugin(pluginAvailable) { mediaInfoApiClient.getPlaybackReportingUserActivity(days = 30) } }
             val watchDeferred = async { computeWatchTimeBreakdown(userId) }
             enhancedDeferreds = if (pluginAvailable) {
                 EnhancedDeferreds(
                     weeklyActivity = async {
-                        apiClient.getPlaybackReportingUserActivity(days = 7).getOrDefault(emptyList())
+                        mediaInfoApiClient.getPlaybackReportingUserActivity(days = 7).getOrDefault(emptyList())
                     },
                     sixMonthCount = async {
-                        apiClient.getPlaybackReportingPlayActivity(days = 180, dataType = "count", filter = userId)
+                        mediaInfoApiClient.getPlaybackReportingPlayActivity(days = 180, dataType = "count", filter = userId)
                             .getOrDefault(emptyList())
                     },
                     musicGenreBreakdown = async {
-                        apiClient.getPlaybackReportingBreakdown("Genre", days = 30, filter = "$userId,Audio")
+                        mediaInfoApiClient.getPlaybackReportingBreakdown("Genre", days = 30, filter = "$userId,Audio")
                             .getOrDefault(emptyList())
                     },
                     musicArtistBreakdown = async {
-                        apiClient.getPlaybackReportingArtistBreakdown(days = 30, filter = "$userId,Audio")
+                        mediaInfoApiClient.getPlaybackReportingArtistBreakdown(days = 30, filter = "$userId,Audio")
                             .getOrDefault(emptyList())
                     },
                     musicTopItems = async {
-                        apiClient.getItemsWithUserData(
+                        mediaInfoApiClient.getItemsWithUserData(
                             userId = userId,
                             includeItemTypes = listOf("Audio"),
                             isPlayed = true,
@@ -361,7 +369,7 @@ class AdminStatisticsRepositoryImpl constructor(
                         ).getOrDefault(Pair(0, emptyList()))
                     },
                     audioPlayCount = async {
-                        apiClient.getUserPlayedItemCount(userId, listOf("Audio")).getOrDefault(0)
+                        mediaInfoApiClient.getUserPlayedItemCount(userId, listOf("Audio")).getOrDefault(0)
                     },
                 )
             } else null
@@ -478,7 +486,7 @@ class AdminStatisticsRepositoryImpl constructor(
      */
     private suspend fun computeWatchTimeBreakdown(userId: String): StatisticsMath.WatchTimeBreakdown {
         return try {
-            val items = apiClient.getItemsWithUserData(
+            val items = mediaInfoApiClient.getItemsWithUserData(
                 userId = userId,
                 isPlayed = true,
                 sortBy = "DatePlayed",

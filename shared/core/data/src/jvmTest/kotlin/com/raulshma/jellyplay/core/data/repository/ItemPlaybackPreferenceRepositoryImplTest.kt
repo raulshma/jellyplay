@@ -453,4 +453,59 @@ class ItemPlaybackPreferenceRepositoryImplTest {
         assertEquals("ger", pref.audioLanguage)
         assertNull(pref.dialogueBoostStrength)
     }
+
+    // ── Preferred media source (version memory) ─────────────────────────
+
+    @Test
+    fun `setPreferredMediaSource round-trips the source id`() = runTest {
+        repository.setPreferredMediaSource(PlaybackPrefScope.ITEM, "item-1", "source-4k")
+
+        assertEquals("source-4k", repository.get(PlaybackPrefScope.ITEM, "item-1")!!.preferredMediaSourceId)
+    }
+
+    @Test
+    fun `scopes are isolated for the preferred media source`() = runTest {
+        repository.setPreferredMediaSource(PlaybackPrefScope.ITEM, "k", "source-item")
+        repository.setPreferredMediaSource(PlaybackPrefScope.SERIES, "k", "source-series")
+
+        assertEquals("source-item", repository.get(PlaybackPrefScope.ITEM, "k")!!.preferredMediaSourceId)
+        assertEquals("source-series", repository.get(PlaybackPrefScope.SERIES, "k")!!.preferredMediaSourceId)
+    }
+
+    @Test
+    fun `setPreferredMediaSource null clears the memory and keeps the other fields`() = runTest {
+        repository.save(PlaybackPrefScope.ITEM, "item-1", audioLanguage = "ger")
+        repository.setPreferredMediaSource(PlaybackPrefScope.ITEM, "item-1", "source-4k")
+        assertNotNull(repository.get(PlaybackPrefScope.ITEM, "item-1")!!.preferredMediaSourceId)
+
+        // "Forget this version": the memory clears, the language rule survives.
+        repository.setPreferredMediaSource(PlaybackPrefScope.ITEM, "item-1", null)
+        val pref = repository.get(PlaybackPrefScope.ITEM, "item-1")!!
+        assertNull(pref.preferredMediaSourceId)
+        assertEquals("ger", pref.audioLanguage)
+    }
+
+    @Test
+    fun `clearing the preferred media source on a row with nothing else drops the row`() = runTest {
+        repository.setPreferredMediaSource(PlaybackPrefScope.ITEM, "item-1", "source-4k")
+        repository.setPreferredMediaSource(PlaybackPrefScope.ITEM, "item-1", null)
+        assertNull(repository.get(PlaybackPrefScope.ITEM, "item-1"))
+    }
+
+    @Test
+    fun `setPreferredMediaSource null on an unknown key is a no-op`() = runTest {
+        repository.setPreferredMediaSource(PlaybackPrefScope.SERIES, "missing", null)
+        assertNull(repository.get(PlaybackPrefScope.SERIES, "missing"))
+    }
+
+    @Test
+    fun `a language save keeps the preferred media source`() = runTest {
+        repository.setPreferredMediaSource(PlaybackPrefScope.ITEM, "item-1", "source-4k")
+
+        repository.save(PlaybackPrefScope.ITEM, "item-1", audioLanguage = "ger")
+
+        val pref = repository.get(PlaybackPrefScope.ITEM, "item-1")!!
+        assertEquals("ger", pref.audioLanguage)
+        assertEquals("source-4k", pref.preferredMediaSourceId)
+    }
 }

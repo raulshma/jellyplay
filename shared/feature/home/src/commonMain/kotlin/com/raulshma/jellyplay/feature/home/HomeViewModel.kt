@@ -16,7 +16,6 @@ import com.raulshma.jellyplay.core.data.repository.SearchHistoryItem
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
 import com.raulshma.jellyplay.core.data.download.DownloadRequestResult
 import com.raulshma.jellyplay.core.data.download.QuickDownloadActions
-import com.raulshma.jellyplay.core.data.download.SeriesEpisodeDownloads
 import com.raulshma.jellyplay.core.ui.message.UiText
 import com.raulshma.jellyplay.feature.home.generated.resources.Res
 import com.raulshma.jellyplay.feature.home.generated.resources.home_discover_reroll_failed
@@ -32,7 +31,6 @@ import com.raulshma.jellyplay.core.data.session.SessionIdentityProvider
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.data.util.PhotoFolderChildUrlsStore
 import com.raulshma.jellyplay.core.data.util.PhotoFolderPrefetcher
-import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
 import com.raulshma.jellyplay.core.datastore.appearance.AppearanceSlice
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalSlice
@@ -72,7 +70,6 @@ internal class HomeViewModel(
     private val mediaRepository: MediaRepository,
     private val imageUrlProvider: ImageUrlProvider,
     private val photoFolderPrefetcher: PhotoFolderPrefetcher,
-    private val seriesDownloads: SeriesEpisodeDownloads,
     private val downloadIntake: DownloadIntake,
     private val quickDownloadActions: QuickDownloadActions,
     private val offlineRepository: OfflineRepository,
@@ -84,11 +81,10 @@ internal class HomeViewModel(
     private val bookTocCacheRepository: BookTocCacheRepository = NoopBookTocCacheRepository(),
     private val offlineModeManager: OfflineModeManager,
     private val newsletterTriggerManager: HomeNewsletterGate,
-    /** The four datastore stores bundled at construction — see [HomeStores]. */
+    /** The five datastore stores bundled at construction — see [HomeStores]. */
     private val prefs: HomeStores,
     private val preferencesEditor: PreferencesEditor,
     private val seerrRequestDelegate: SeerrRequestDelegate,
-    private val seerrPreferencesStore: SeerrPreferencesStore,
     private val authRepository: AuthRepository,
     /**
      * The single owner of identity transitions (replaces this VM's own
@@ -113,6 +109,15 @@ internal class HomeViewModel(
      */
     private val homeRefresherFactory: HomeRefresherFactory,
     private val syncStatusStateHolderFactory: HomeSyncStatusFactory,
+    /**
+     * The two series sheets' construction seam (see [HomeSheetsFactory]): the
+     * holders' pure-DI collaborators land there instead of widening this
+     * constructor — [SeriesEpisodeDownloads] was the first param this move
+     * retired; the shared beans ([episodeCatalogue], [downloadIntake],
+     * [userMessageBus], [offlineRepository]) stay because this VM's body
+     * consumes them too.
+     */
+    private val homeSheetsFactory: HomeSheetsFactory,
 ) : JellyPlayViewModel() {
 
     private val _uiState = stateFlow(HomeUiState())
@@ -163,7 +168,7 @@ internal class HomeViewModel(
      * The section-preference mirrors, bundled in one [HomeSectionPrefs] value
      * so the prefs collector below diffs and adopts each emission with a
      * single comparison/assignment; the refresher consumes the snapshot
-     * directly via its sectionPrefsProvider.
+     * directly via [HomeFetchInputs.sectionPrefs].
      */
     private var sectionPrefs = HomeSectionPrefs()
     private var androidTvWatchNextEnabled = true
@@ -195,18 +200,21 @@ internal class HomeViewModel(
      *
      * Constructed through [homeRefresherFactory] (the construction seam that
      * owns its pure-DI collaborators); the per-call inputs are the preference
-     * mirrors above, exposed as read-only providers so the mirrors stay
-     * owned by the prefs collector in one place.
+     * mirrors above, exposed as the read-only providers bundled in one
+     * [HomeFetchInputs] so the mirrors stay owned by the prefs collector
+     * in one place.
      */
     private val refresher = homeRefresherFactory.create(
         scope = scope,
         offlineModeManager = offlineModeManager,
         awaitOutboxDrained = syncStatus::awaitOutboxDrained,
-        sectionPrefsProvider = { sectionPrefs },
-        seerrPreferencesProvider = { seerrPreferences },
-        discoverEnabledProvider = { discoverEnabled },
-        directArrEnabledProvider = { directArrEnabled },
-        androidTvWatchNextEnabledProvider = { androidTvWatchNextEnabled },
+        fetchInputs = HomeFetchInputs(
+            sectionPrefs = { sectionPrefs },
+            seerrPreferences = { seerrPreferences },
+            discoverEnabled = { discoverEnabled },
+            directArrEnabled = { directArrEnabled },
+            androidTvWatchNextEnabled = { androidTvWatchNextEnabled },
+        ),
     )
 
     /**
@@ -236,10 +244,10 @@ internal class HomeViewModel(
     /**
      * The home search bar's entire state surface — live query, results slice,
      * active flag, recent history and the undo channel — behind one holder
-     * (see [HomeSearchStateHolder]). The query/history/undo flows are
-     * re-exposed directly (SearchViewModel style); [HomeSearchStateHolder.searchState]
-     * and [HomeSearchStateHolder.isSearchActive] are folded into
-     * [HomeUiState] by the two collectors in [init].
+     * (see [HomeSearchStateHolder]). The query/results/history/undo flows are
+     * re-exposed directly (SearchViewModel style); only
+     * [HomeSearchStateHolder.isSearchActive] is folded into [HomeUiState] by
+     * the one collector in [init].
      */
     private val searchStateHolder = HomeSearchStateHolder(scope, mediaSearchEngine)
 
@@ -248,6 +256,12 @@ internal class HomeViewModel(
      * [HomeSearchStateHolder.searchQuery] for why it is NOT part of uiState.
      */
     val searchQuery: StateFlow<String> get() = searchStateHolder.searchQuery
+
+    /**
+     * The results slice the search overlay renders — see
+     * [HomeSearchStateHolder.searchState] for why it is NOT part of uiState.
+     */
+    val searchState: StateFlow<HomeSearchState> get() = searchStateHolder.searchState
 
     /** Recent searches for the active user — see [HomeSearchStateHolder.searchHistory]. */
     val searchHistory: StateFlow<List<SearchHistoryItem>> get() = searchStateHolder.searchHistory
@@ -305,8 +319,12 @@ internal class HomeViewModel(
      * documented and pinned there). [state][SeriesDeleteStateHolder.state] is
      * folded into [HomeUiState.seriesDelete] by the init collector; [onEvent]
      * routes the sheet's events straight to the holder's methods.
+     *
+     * Both series-sheet holders are constructed through [homeSheetsFactory]
+     * (the [HomeRefresherFactory] pattern — see its KDoc).
      */
-    private val seriesDeleteStateHolder = SeriesDeleteStateHolder(scope, offlineRepository)
+    private val sheets = homeSheetsFactory.create(scope)
+    private val seriesDeleteStateHolder get() = sheets.seriesDelete
 
     /**
      * The series download sheet opened from a series card's quick-action
@@ -316,13 +334,7 @@ internal class HomeViewModel(
      * [HomeUiState.seriesDownload] by the init collector; [onEvent] routes
      * the sheet's callbacks straight to the holder's methods.
      */
-    private val seriesDownloadStateHolder = SeriesDownloadStateHolder(
-        scope = scope,
-        episodeCatalogue = episodeCatalogue,
-        seriesDownloads = seriesDownloads,
-        downloadIntake = downloadIntake,
-        userMessageBus = userMessageBus,
-    )
+    private val seriesDownloadStateHolder get() = sheets.seriesDownload
 
     /**
      * Encapsulates all Seerr request UI state (result, servers, loading, seasons).
@@ -485,10 +497,10 @@ internal class HomeViewModel(
         }
 
         launch {
-            seerrPreferencesStore.preferences.collect { prefs ->
+            prefs.seerrPreferences.preferences.collect { seerrPrefs ->
                 val wasEnabled = discoverEnabled
-                seerrPreferences = prefs
-                val nowEnabled = prefs.enabled && prefs.discoverEnabled
+                seerrPreferences = seerrPrefs
+                val nowEnabled = seerrPrefs.enabled && seerrPrefs.discoverEnabled
                 discoverEnabled = nowEnabled
                 _uiState.update { it.copy(discoverEnabled = nowEnabled) }
                 if (nowEnabled && !wasEnabled) {
@@ -522,19 +534,15 @@ internal class HomeViewModel(
             }
         }
 
-        // Fold the search holder's two UI-shaped slices into HomeUiState (same
+        // Fold the search holder's one UI-shaped slice into HomeUiState (same
         // fold pattern as the Seerr/refresher collectors below) so the UI
-        // observes a single state object. The per-keystroke query stays on the
-        // holder's own flow (re-exposed as `searchQuery`), NOT in uiState —
-        // see HomeSearchStateHolder's KDoc for the recomposition contract.
-        // The search kernel itself (debounce, cancel-and-replace, parallel
+        // observes a single state object. The per-keystroke query AND the
+        // results slice stay on the holder's own flows (re-exposed as
+        // `searchQuery`/`searchState`), NOT in uiState — see
+        // HomeSearchStateHolder's KDoc for the recomposition contract. The
+        // search kernel itself (debounce, cancel-and-replace, parallel
         // Jellyfin + gated Seerr fetch, history policy) lives in the holder /
-        // MediaSearchEngine; these collectors only fold emissions.
-        launch {
-            searchStateHolder.searchState.collect { search ->
-                _uiState.update { it.copy(searchState = search) }
-            }
-        }
+        // MediaSearchEngine; this collector only folds emissions.
         launch {
             searchStateHolder.isSearchActive.collect { active ->
                 _uiState.update { it.copy(isSearchActive = active) }

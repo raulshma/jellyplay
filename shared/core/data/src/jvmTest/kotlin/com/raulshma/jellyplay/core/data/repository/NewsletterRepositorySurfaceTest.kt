@@ -10,25 +10,25 @@ import kotlin.test.assertTrue
  * MediaRepository union shrink left behind, and every member on it is
  * coupling its consumer (the newsletter feature's view model) pays. This
  * test parses the interface's source, counts its members (fun/val
- * declarations, overloads counted separately — matching the impl's override
- * count), and pins that count so it can only move DOWN.
+ * declarations, overloads counted separately), and pins that count so it can
+ * only move DOWN.
  *
- * Baseline 3 is the count at the MediaRepository facade split: the three
- * members moved verbatim from MediaRepositoryImpl to
- * [NewsletterRepositoryImpl] (one-line forwards over the MediaInfoApiClient
- * family seam — the family owns no cache state). Two of the three wait on
- * unimplemented backend routes (see the NOTEs kept on both the interface
- * and the impl); when those routes land or die, retire or keep the members
- * accordingly and lower the baseline if the surface shrinks.
+ * Baseline 0 since the pass-through mirror retired: the interface EXTENDS
+ * core/network's [NewsletterApiClient] verbatim (its three members live
+ * there — the family owns no cache state) and re-declares nothing; the data
+ * DI module re-binds the MediaInfoApiClient single under this name, so the
+ * former forward impl class is gone. The vacuity guard pins the supertype
+ * link instead of member declarations — the inherited members must stay
+ * reachable through this seam.
  *
- * Lower [maxInterfaceMembers] when a member retires; never raise it. A new
- * newsletter capability should land as a narrow collaborator over the
- * MediaInfoApiClient family seam rather than growing this surface.
+ * Lower [maxInterfaceMembers] if a member ever moves BACK down here (never
+ * raise it); a new newsletter capability should land on the client family
+ * seam rather than growing this surface.
  */
 class NewsletterRepositorySurfaceTest {
 
     /** The maximum allowed member count of [NewsletterRepository] (see class KDoc). */
-    private val maxInterfaceMembers = 3
+    private val maxInterfaceMembers = 0
 
     /** Walks up from the working dir to the module root that owns src/commonMain/kotlin. */
     private fun moduleRoot(): File {
@@ -80,13 +80,16 @@ class NewsletterRepositorySurfaceTest {
         return out.toString()
     }
 
-    /** The comment-stripped body of `interface NewsletterRepository { … }`. */
+    /** The comment-stripped body of `interface NewsletterRepository …` (empty for a brace-less marker). */
     private fun interfaceBody(): String {
         val src = interfaceSource().readText(Charsets.UTF_8).stripCommentsAndStrings()
         val header = src.indexOf("interface NewsletterRepository")
         assertTrue(header >= 0, "interface NewsletterRepository declaration not found")
         val open = src.indexOf('{', header)
-        assertTrue(open >= 0, "interface body opening brace not found")
+        // A brace-less declaration (marker interface extending the client
+        // family) has no body to scan — the member ratchet above then sees
+        // zero declarations, which is exactly the pinned shape.
+        if (open < 0) return ""
         var depth = 0
         var i = open
         while (i < src.length) {
@@ -121,15 +124,14 @@ class NewsletterRepositorySurfaceTest {
 
     @Test
     fun `interface body parse actually sees members`() {
-        val body = interfaceBody()
-        // Sanity: the parse actually sees declarations, so an empty/false
-        // body can never satisfy the ratchet above. No members have been
-        // retired from this surface yet, so there is no absence list to pin
-        // (the PlaybackRepository precedent's second half) — this guard is
-        // the whole vacuity defense until one retires.
+        // Vacuity defense for the zero-declared-member shape: the interface
+        // must still EXTEND the client family seam (the three inherited
+        // members stay reachable through it) and must not have grown its own
+        // declarations.
+        val stripped = interfaceSource().readText(Charsets.UTF_8).stripCommentsAndStrings()
         assertTrue(
-            countMembers(body) > 0 && body.contains("getNewsletterData") && body.contains("sendTestNewsletter"),
-            "interface body parse found no members — the ratchet is vacuous",
+            stripped.contains("NewsletterApiClient"),
+            "NewsletterRepository no longer extends NewsletterApiClient — the inherited members are unreachable",
         )
     }
 }

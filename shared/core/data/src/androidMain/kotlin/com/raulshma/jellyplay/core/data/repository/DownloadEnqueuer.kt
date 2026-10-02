@@ -17,9 +17,10 @@ import java.util.concurrent.TimeUnit
 // implements the shared DownloadEnqueueCoordinator seam (same package, moved
 // to :shared:core:data jvmShared with the portable DownloadRepositoryImpl).
 // The @Inject/@Singleton annotations were stripped — Koin owns construction
-// (the app composition root's androidDownloadSeamsModule), and the legacy
-// DownloadRecoveryInitializer is a Koin single in the app module (androidAppModule)
-// via koin().get(). The WorkManager bodies are verbatim; the cancelWork
+// (the app composition root's androidDownloadSeamsModule), and the cold-start
+// recovery single (core:data's DownloadRecoveryPort, which the app module's
+// DownloadRecoveryInitializer invokes) reaches this actual through the seam.
+// The WorkManager bodies are verbatim; the cancelWork
 // override carries the body the repository's private cancelWorkForDownload
 // previously owned.
 
@@ -55,6 +56,19 @@ class DownloadEnqueuer(
      */
     override fun enqueue(downloadId: String) {
         enqueue(downloadId, honorScheduleAndNetwork = true)
+    }
+
+    /**
+     * The cold-start recovery kick ([DownloadEnqueueCoordinator]'s recovery
+     * flavour, consumed by core:data's DownloadRecoveryCore): the same
+     * enqueue with the schedule/network gate bypassed — the row was already
+     * in flight under the gate before the restart, so re-applying it could
+     * strand the download until the next window opening. Previously this
+     * call shape lived only in the app module's recovery initializer, which
+     * reached for the concrete class to get it; the seam now carries it.
+     */
+    override fun enqueueForRecovery(downloadId: String) {
+        enqueue(downloadId, honorScheduleAndNetwork = false)
     }
 
     /**

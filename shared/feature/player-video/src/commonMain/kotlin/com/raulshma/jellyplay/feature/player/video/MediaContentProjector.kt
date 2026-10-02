@@ -101,9 +101,15 @@ internal class MediaContentProjector(
         updateMedia { it.copy(
             currentMediaSource = session.currentMediaSource,
             mediaStreams = session.mediaStreams,
+            // Every version of the item — the Version sheet's rows (empty for
+            // an offline session, whose detail carries no sources).
+            mediaSources = session.mediaDetail?.mediaSources ?: emptyList(),
             playMethod = session.playMethodString,
             transcodeReasons = session.transcodeReasons,
             isDirectPlayForced = session.isDirectPlayForced,
+            // Mirror the offline-source flag — the "Downloaded" badge's
+            // derivation input (stats overlay + playback-info sheet).
+            isOfflineSource = session.isOffline,
             // Mirror the session's series id so the per-series
             // "remember subtitle/audio" toggle row renders for episode
             // playback (footer is gated on seriesId != null). The detail

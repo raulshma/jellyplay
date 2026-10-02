@@ -58,4 +58,26 @@
     <!-- Brand names (non-translatable) -->
     <string name="arrqueue_brand_radarr" translatable="false">Radarr</string>
     <string name="arrqueue_brand_sonarr" translatable="false">Sonarr</string>
+
+    <!-- Release search sheet -->
+    <string name="releaseSearch_title">Search releases</string>
+    <string name="releaseSearch_loading">Searching indexers — this can take up to a minute.</string>
+    <string name="releaseSearch_empty">No releases found</string>
+    <string name="releaseSearch_cache_miss_body">The server\'s cached search results have expired. Run the search again.</string>
+    <string name="releaseSearch_search_again">Search again</string>
+    <string name="releaseSearch_retry">Retry</string>
+    <string name="releaseSearch_sort_score">Score</string>
+    <string name="releaseSearch_sort_seeders">Seeders</string>
+    <string name="releaseSearch_sort_age">Age</string>
+    <string name="releaseSearch_approved">Approved</string>
+    <string name="releaseSearch_rejected">Rejected</string>
+    <string name="releaseSearch_grab_anyway">Grab anyway</string>
+    <string name="releaseSearch_grab_title">Grab release?</string>
+    <string name="releaseSearch_grab_message">Send "%1$s" to the download client?</string>
+    <string name="releaseSearch_grab_rejected_message">"%1$s" was rejected: %2$s. Grab anyway?</string>
+    <string name="releaseSearch_grab_sent">Grab sent for "%1$s"</string>
+    <string name="releaseSearch_history_grabbed">Previously grabbed</string>
+    <string name="releaseSearch_history_failed">Previously failed</string>
+    <string name="releaseSearch_full_season">Full season</string>
+    <string name="releaseSearch_seeders_leechers">%1$d seeders · %2$d leechers</string>
 </resources>

@@ -5,6 +5,7 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
+import com.raulshma.jellyplay.core.model.LayoutMode
 
 enum class WindowSizeClass {
     Compact,
@@ -39,4 +40,20 @@ fun rememberAdaptiveInfo(): AdaptiveInfo {
         windowSizeClass = windowSizeClass,
         isLandscape = widthDp.value > heightDp.value,
     )
+}
+
+/**
+ * Applies the manual layout override (issue #166) to the measured adaptive
+ * info. AUTO passes the measurement through untouched; PHONE clamps the size
+ * class to Compact so a tablet renders the single-pane phone shell; TABLET
+ * lifts it to Expanded so a phone renders the two-pane shell. The measured
+ * `isLandscape` is preserved either way — the override deliberately reshapes
+ * only the width-class axis (the landscape two-pane forks still key off the
+ * real orientation), so a portrait phone forcing TABLET gets the expanded
+ * density without the side-by-side detail body.
+ */
+fun LayoutMode.applyOverride(info: AdaptiveInfo): AdaptiveInfo = when (this) {
+    LayoutMode.AUTO -> info
+    LayoutMode.PHONE -> info.copy(windowSizeClass = WindowSizeClass.Compact)
+    LayoutMode.TABLET -> info.copy(windowSizeClass = WindowSizeClass.Expanded)
 }

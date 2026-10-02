@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.core.data.repository
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.playback.PlaybackIdentity
 import com.raulshma.jellyplay.core.data.sync.OfflineSyncComparator
+import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.data.util.TimeSource
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
 import com.raulshma.jellyplay.core.database.JellyPlayDatabase
@@ -75,6 +76,8 @@ public class OfflineDownloadWriterCore(
     private val downloadEnqueuer: DownloadEnqueueCoordinator,
     private val imagePreloader: OfflineImagePreloader,
     private val playbackRepository: PlaybackRepository,
+    /** Poster/backdrop/cast artwork URLs for the offline metadata rows. */
+    private val imageUrlProvider: ImageUrlProvider,
     private val playbackIdentity: PlaybackIdentity,
     private val httpClient: OkHttpClient,
     private val json: Json,
@@ -345,7 +348,7 @@ public class OfflineDownloadWriterCore(
             .filter { it.hasCastImage() }
             .take(10)
             .forEach { person ->
-                preloadImageToCache(playbackRepository.getImageUrl(person.id, maxWidth = 200))
+                preloadImageToCache(imageUrlProvider.getImageUrl(person.id, maxWidth = 200))
             }
     }
 
@@ -377,9 +380,9 @@ public class OfflineDownloadWriterCore(
             if (seriesDetail != null) {
                 val seriesArtwork = downloadSeriesArtwork(seriesId, artworkDir)
                 val seriesImageUrl = seriesArtwork.posterPath
-                    ?: playbackRepository.getImageUrl(seriesId, maxWidth = 300)
+                    ?: imageUrlProvider.getImageUrl(seriesId, maxWidth = 300)
                 val seriesBackdropUrl = seriesArtwork.backdropPath
-                    ?: playbackRepository.getBackdropUrl(seriesId, maxWidth = 1280)
+                    ?: imageUrlProvider.getBackdropUrl(seriesId, maxWidth = 1280)
                 saveOfflineMetadataForItem(seriesDetail.item, seriesImageUrl, seriesBackdropUrl)
             } else {
                 offlineMediaDao.upsert(

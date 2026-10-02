@@ -1,12 +1,6 @@
 package com.raulshma.jellyplay.core.data.worker
 
 import android.content.Context
-import androidx.work.Constraints
-import androidx.work.ExistingPeriodicWorkPolicy
-import androidx.work.ExistingWorkPolicy
-import androidx.work.NetworkType
-import androidx.work.OneTimeWorkRequestBuilder
-import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
 import kotlinx.coroutines.CoroutineScope
@@ -66,39 +60,26 @@ class AutoDownloadScheduler(
             val enabled = downloadsStore.downloads.first().autoDownloadNewEpisodes
             if (!enabled) return@launch
 
-            val constraints = Constraints.Builder()
-                .setRequiredNetworkType(NetworkType.CONNECTED)
-                .setRequiresBatteryNotLow(true)
-                .build()
-
-            val request = OneTimeWorkRequestBuilder<AutoDownloadWorker>()
-                .setConstraints(constraints)
-                .addTag(AutoDownloadWorker.WORK_TAG)
-                .build()
-
-            WorkManager.getInstance(context).enqueueUniqueWork(
-                AutoDownloadWorker.UNIQUE_NOW_NAME,
-                ExistingWorkPolicy.KEEP,
-                request,
+            UniqueWorkSchedules.uniqueOnce<AutoDownloadWorker>(
+                context = context,
+                uniqueName = AutoDownloadWorker.UNIQUE_NOW_NAME,
+                tag = AutoDownloadWorker.WORK_TAG,
+                // The foreground trigger keeps the periodic's battery gate —
+                // mirroring the drain one-shots' bare CONNECTED is a deliberate
+                // future choice (see UniqueWorkSchedules).
+                batteryNotLow = true,
             )
         }
     }
 
     private fun enqueue() {
-        val constraints = Constraints.Builder()
-            .setRequiredNetworkType(NetworkType.CONNECTED)
-            .setRequiresBatteryNotLow(true)
-            .build()
-
-        val request = PeriodicWorkRequestBuilder<AutoDownloadWorker>(CHECK_INTERVAL, CHECK_FLEX)
-            .setConstraints(constraints)
-            .addTag(AutoDownloadWorker.WORK_TAG)
-            .build()
-
-        WorkManager.getInstance(context).enqueueUniquePeriodicWork(
-            AutoDownloadWorker.UNIQUE_PERIODIC_NAME,
-            ExistingPeriodicWorkPolicy.KEEP,
-            request,
+        UniqueWorkSchedules.uniquePeriodic<AutoDownloadWorker>(
+            context = context,
+            uniqueName = AutoDownloadWorker.UNIQUE_PERIODIC_NAME,
+            tag = AutoDownloadWorker.WORK_TAG,
+            interval = CHECK_INTERVAL,
+            flexInterval = CHECK_FLEX,
+            batteryNotLow = true,
         )
     }
 

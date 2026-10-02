@@ -21,12 +21,16 @@ import com.raulshma.jellyplay.core.model.SearchResult
 import com.raulshma.jellyplay.core.model.Studio
 import com.raulshma.jellyplay.core.model.TimeSource
 import com.raulshma.jellyplay.core.concurrency.mapConcurrentCatching
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.network.LyricsApi
 import com.raulshma.jellyplay.core.network.library.ChildItemImageRow
+import com.raulshma.jellyplay.core.network.library.ClassicLatestCard
+import com.raulshma.jellyplay.core.network.library.CLASSIC_TV_LATEST_MEDIA_TYPE
 import com.raulshma.jellyplay.core.network.library.DETAIL_PROJECTION_FIELDS
 import com.raulshma.jellyplay.core.network.library.EmptyLibraryFallback
 import com.raulshma.jellyplay.core.network.library.FavoriteFlagCache
 import com.raulshma.jellyplay.core.network.library.HomeSectionSources
+import com.raulshma.jellyplay.core.network.library.HomeSectionsCachePort
 import com.raulshma.jellyplay.core.network.library.HomeSectionsFetcher
 import com.raulshma.jellyplay.core.network.library.SEARCH_SUGGESTIONS_FIELDS
 import com.raulshma.jellyplay.core.network.library.SEARCH_SUGGESTIONS_ITEM_TYPES
@@ -41,8 +45,12 @@ import com.raulshma.jellyplay.core.network.library.buildMediaItemsQuerySpec
 import com.raulshma.jellyplay.core.network.library.buildResumeQuerySpec
 import com.raulshma.jellyplay.core.network.library.buildSearchHintsQuerySpec
 import com.raulshma.jellyplay.core.network.library.emptyFallbackTotalCount
+import com.raulshma.jellyplay.core.network.library.synthesizedSeries
 import com.raulshma.jellyplay.core.network.library.toChildItemImageUrls
+import com.raulshma.jellyplay.core.network.library.toClassicLatestCards
+import com.raulshma.jellyplay.core.network.library.toFilteredLatestRows
 import com.raulshma.jellyplay.core.network.library.toFilteredResumeRows
+import com.raulshma.jellyplay.core.network.library.toWireItemKind
 import org.jellyfin.sdk.model.api.BaseItemKind
 import org.jellyfin.sdk.model.api.CreatePlaylistDto
 import org.jellyfin.sdk.model.api.ImageType
@@ -52,6 +60,7 @@ import org.jellyfin.sdk.model.api.MediaType as SdkMediaType
 import org.jellyfin.sdk.model.api.SortOrder
 import org.jellyfin.sdk.model.api.UpdatePlaylistDto
 import org.jellyfin.sdk.model.serializer.toUUID
+import org.jellyfin.sdk.api.client.ApiClient
 import org.jellyfin.sdk.api.client.HttpMethod
 import org.jellyfin.sdk.api.client.extensions.*
 import kotlinx.coroutines.sync.Semaphore
@@ -113,7 +122,7 @@ class LibraryApiClientImpl(
      * layer). Default null = this wiring fetches no Seerr rows (unit fakes).
      */
     private val seerrHomeSectionSources: SeerrHomeSectionSources? = null,
-) : LibraryApiClient, HomeSectionSources {
+) : LibraryApiClient, PlaylistApiClient, CollectionApiClient, HomeSectionSources, HomeSectionsCachePort {
 
     /**
      * Parent ids of libraries already known to return nothing from both the
@@ -191,15 +200,19 @@ class LibraryApiClientImpl(
         homeSectionsFetcher.fetch(query, force)
     }
 
-    override fun invalidateHomeSubcallCaches() {
+    // The home cache-maintenance verbs are NOT on [LibraryApiClient] anymore:
+    // the data layer's write/roll paths reach them through
+    // [HomeSectionsCachePort], which this impl satisfies with the same
+    // one-line forwards to the fetcher it has always delegated to.
+    override fun invalidateSubcallCaches() {
         homeSectionsFetcher.invalidateCaches()
     }
 
-    override fun invalidateDiscoverRowCache(rowId: String) {
+    override fun invalidateDiscoverRow(rowId: String) {
         homeSectionsFetcher.invalidateDiscoverRow(rowId)
     }
 
-    override fun seedDiscoverRowCache(row: DiscoverRowConfig, items: List<MediaItem>) {
+    override fun seedDiscoverRow(row: DiscoverRowConfig, items: List<MediaItem>) {
         homeSectionsFetcher.seedDiscoverRow(row, items)
     }
 
@@ -247,15 +260,86 @@ class LibraryApiClientImpl(
         perLibrary.flatten().distinctBy { it.id }.take(row.limit)
     }
 
-    override suspend fun getLatestMedia(parentId: String, limit: Int): Result<List<MediaItem>> =
+    override suspend fun getLatestMedia(
+        parentId: String,
+        limit: Int,
+        classicEpisodePool: Int?,
+    ): Result<List<MediaItem>> =
         engine.withApi { api ->
-            val response = api.userLibraryApi.getLatestMedia(
-                parentId = parentId.toUUID(),
-                limit = limit,
-                fields = LIST_ITEM_FIELDS,
-            ).content ?: emptyList()
-            response.toFilteredMediaItems(engine.currentMaxParentalRating)
+            if (classicEpisodePool == null) {
+                // Modern (default): the server decides — on 12.x the smart
+                // Series/Season/Episode container selection IS the feature.
+                // groupItems=true is the SDK/server default; passed explicitly
+                // so the two branches stay self-describing on the wire.
+                val response = api.userLibraryApi.getLatestMedia(
+                    parentId = parentId.toUUID(),
+                    limit = limit,
+                    groupItems = true,
+                    fields = LIST_ITEM_FIELDS,
+                ).content ?: emptyList()
+                response.map { it.toMediaItem() }
+                    .toFilteredLatestRows(engine.currentMaxParentalRating, allowedKinds = null)
+            } else {
+                fetchClassicLatestRow(api, parentId, limit, classicEpisodePool)
+            }
         }
+
+    /**
+     * The classic-rows TV-latest pipeline (#168), true 1:1 with the pre-12
+     * wire result: fetch the raw-Episode pool the 10.x server fed its
+     * own grouping (IncludeItemTypes=Episode + groupItems=false — the
+     * shape every server generation answers with plain episode rows),
+     * re-run the 10.x grouping client-side (toClassicLatestCards), then
+     * resolve each grouped card against the REAL Series items — one batched
+     * ids query — so grouped cards carry true Series DTO data (year,
+     * unplayed count), matching what the 10.x controller returned. The
+     * Episode-kind fold re-applies the pin for servers that ignore
+     * includeItemTypes.
+     */
+    private suspend fun fetchClassicLatestRow(
+        api: ApiClient,
+        parentId: String,
+        limit: Int,
+        classicEpisodePool: Int,
+    ): List<MediaItem> {
+        val pool = api.userLibraryApi.getLatestMedia(
+            parentId = parentId.toUUID(),
+            limit = classicEpisodePool,
+            includeItemTypes = listOfNotNull(CLASSIC_TV_LATEST_MEDIA_TYPE.toWireItemKind()).toBaseItemKinds(),
+            groupItems = false,
+            fields = LIST_ITEM_FIELDS,
+        ).content ?: emptyList()
+        val cards = pool
+            .map { it.toMediaItem() }
+            .toFilteredLatestRows(engine.currentMaxParentalRating, allowedKinds = setOf(CLASSIC_TV_LATEST_MEDIA_TYPE))
+            .toClassicLatestCards(limit)
+        val groupedSeriesIds = cards.filterIsInstance<ClassicLatestCard.Grouped>().map { it.seriesId }
+        val seriesById: Map<String, MediaItem> =
+            if (groupedSeriesIds.isEmpty()) {
+                emptyMap()
+            } else {
+                // Degrade, not fail: a lost ids query must not blank the
+                // row — grouped cards fall back to synthesis. (Cancellation
+                // rethrown, per the concurrency rule.)
+                runCatchingRethrowingCancellation {
+                    api.itemsApi.getItems(
+                        ids = groupedSeriesIds.map { it.toUUID() },
+                        fields = LIST_ITEM_FIELDS,
+                    ).content?.items.orEmpty()
+                }.getOrDefault(emptyList())
+                    .map { it.toMediaItem() }
+                    .associateBy { it.id }
+            }
+        return cards.map { card ->
+            when (card) {
+                is ClassicLatestCard.Single -> card.mostRecentEpisode
+                is ClassicLatestCard.Grouped ->
+                    seriesById[card.seriesId]
+                        ?.copy(childCount = card.episodes.size)
+                        ?: card.synthesizedSeries()
+            }
+        }
+    }
 
     override suspend fun getNextUp(
         limit: Int,
@@ -265,7 +349,7 @@ class LibraryApiClientImpl(
         // The limit/projection shape is the shared resume spec (NextUp rides
         // it with no kind narrowing); the cutoff CLOCK stays here (JVM-side
         // java.time).
-        val spec = buildResumeQuerySpec(limit, isBooks = false)
+        val spec = buildResumeQuerySpec(limit, kinds = null)
         // Same value LocalDateTime.now() produced, through the epoch seam —
         // [nowLocalDateTime] (toSdkLocalDateTime uses the same derivation
         // for the inbound bounds).
@@ -284,24 +368,36 @@ class LibraryApiClientImpl(
         (response?.items ?: emptyList()).toFilteredMediaItems(engine.currentMaxParentalRating)
     }
 
-    override suspend fun getContinueWatching(limit: Int): Result<List<MediaItem>> = engine.withApi { api ->
-        val spec = buildResumeQuerySpec(limit, isBooks = false)
+    override suspend fun getContinueWatching(
+        limit: Int,
+        classicRows: Boolean,
+    ): Result<List<MediaItem>> = engine.withApi { api ->
+        // The wire request is the exact pre-12 shape in BOTH modes (no
+        // IncludeItemTypes — the 10.x video resume row never narrowed).
+        val spec = buildResumeQuerySpec(limit, kinds = null)
         val response = api.itemsApi.getResumeItems(
             limit = spec.limit,
             fields = spec.fields.toItemFieldsList(),
         ).content
         // #157: the fold drops played rows the resume endpoint still reports —
-        // see resumableOnly() for the full rationale.
+        // see resumableOnly() for the full rationale. Classic rows (#168) add
+        // the rollup fold: a 12.x server also reports Series/Season containers
+        // as resumable themselves, which the pre-12 server never did — dropped
+        // client-side so the wire stays byte-identical across generations.
         (response?.items ?: emptyList())
             .map { it.toMediaItem() }
-            .toFilteredResumeRows(engine.currentMaxParentalRating, isBooks = false)
+            .toFilteredResumeRows(
+                engine.currentMaxParentalRating,
+                isBooks = false,
+                dropContainerRollups = classicRows,
+            )
     }
 
     override suspend fun getContinueReading(limit: Int): Result<List<MediaItem>> = engine.withApi { api ->
         // Server-side narrowing to books (spec.includeKinds); the fold's
         // books half stays as belt-and-braces (old servers may ignore
         // includeItemTypes).
-        val spec = buildResumeQuerySpec(limit, isBooks = true)
+        val spec = buildResumeQuerySpec(limit, kinds = listOf("Book"))
         val response = api.itemsApi.getResumeItems(
             limit = spec.limit,
             fields = spec.fields.toItemFieldsList(),
@@ -369,6 +465,8 @@ class LibraryApiClientImpl(
             recursive = spec.recursive,
             searchTerm = spec.searchTerm,
             filters = spec.itemFilters.toItemFilters(),
+            hasSubtitles = spec.hasSubtitles,
+            hasTrailer = spec.hasTrailer,
             minCommunityRating = spec.minCommunityRating,
             fields = spec.fields.toItemFieldsList(),
         ).content
@@ -666,18 +764,20 @@ class LibraryApiClientImpl(
         ).content.items.toFilteredMediaItems(engine.currentMaxParentalRating)
     }
 
-    override suspend fun getEpisodes(seriesId: String, seasonId: String): Result<List<MediaItem>> =
+    override suspend fun getEpisodes(seriesId: String, seasonId: String, isMissing: Boolean?): Result<List<MediaItem>> =
         engine.withApi { api ->
             api.tvShowsApi.getEpisodes(
                 seriesId = seriesId.toUUID(),
                 seasonId = seasonId.toUUID(),
+                isMissing = isMissing,
             ).content.items.toFilteredMediaItems(engine.currentMaxParentalRating)
         }
 
-    override suspend fun getAllEpisodes(seriesId: String): Result<List<MediaItem>> =
+    override suspend fun getAllEpisodes(seriesId: String, isMissing: Boolean?): Result<List<MediaItem>> =
         engine.withApi { api ->
             api.tvShowsApi.getEpisodes(
                 seriesId = seriesId.toUUID(),
+                isMissing = isMissing,
             ).content.items.toFilteredMediaItems(engine.currentMaxParentalRating)
         }
 
@@ -918,62 +1018,74 @@ class LibraryApiClientImpl(
         Unit
     }
 
-    override suspend fun markPlayed(itemId: String): Result<Unit> = engine.withApi { api ->
-        val userId = engine.requireUserId()
-        api.playStateApi.markPlayedItem(
-            userId = userId.toUUID(),
-            itemId = itemId.toUUID(),
-        )
-    }
-
-    override suspend fun markUnplayed(itemId: String): Result<Unit> = engine.withApi { api ->
-        val userId = engine.requireUserId()
-        api.playStateApi.markUnplayedItem(
-            userId = userId.toUUID(),
-            itemId = itemId.toUUID(),
-        )
-    }
-
-    override suspend fun toggleFavorite(itemId: String, currentIsFavorite: Boolean?): Result<Boolean> = engine.apiResultWithRetry {
-        val userId = engine.requireUserId()
-        val uuid = itemId.toUUID()
-        favoriteFlags.toggle(
-            cacheKey = uuid.toString(),
-            currentIsFavorite = currentIsFavorite,
-            fetchCurrent = {
-                engine.requireApi().userLibraryApi.getItem(itemId = uuid).content.userData?.isFavorite == true
-            },
-            markOnServer = {
-                engine.requireApi().userLibraryApi.markFavoriteItem(
-                    userId = userId.toUUID(),
-                    itemId = uuid,
-                )
-            },
-            unmarkOnServer = {
-                engine.requireApi().userLibraryApi.unmarkFavoriteItem(
-                    userId = userId.toUUID(),
-                    itemId = uuid,
-                )
-            },
-        )
-    }
-
-    override suspend fun setFavorite(itemId: String, isFavorite: Boolean): Result<Unit> = engine.withApi { api ->
-        val userId = engine.requireUserId()
-        val uuid = itemId.toUUID()
-        if (isFavorite) {
-            api.userLibraryApi.markFavoriteItem(
+    /**
+     * The ONE user-data write funnel (the four former per-verb members
+     * folded): each op keeps its exact former transport — mark/unmark ride
+     * [JellyfinApiEngine.withApi], the toggle rides the retry chassis +
+     * [FavoriteFlagCache] read-flip cache. The [UserDataWriteOutcome] carries
+     * the post-toggle favorite state; state writes answer [UserDataWriteOutcome.Done].
+     */
+    override suspend fun writeUserData(write: UserDataWrite): Result<UserDataWriteOutcome> = when (write) {
+        is UserDataWrite.MarkPlayed -> engine.withApi { api ->
+            val userId = engine.requireUserId()
+            api.playStateApi.markPlayedItem(
                 userId = userId.toUUID(),
-                itemId = uuid,
+                itemId = write.itemId.toUUID(),
             )
-        } else {
-            api.userLibraryApi.unmarkFavoriteItem(
-                userId = userId.toUUID(),
-                itemId = uuid,
-            )
+            UserDataWriteOutcome.Done
         }
-        favoriteFlags.put(uuid.toString(), isFavorite)
-        Unit
+
+        is UserDataWrite.MarkUnplayed -> engine.withApi { api ->
+            val userId = engine.requireUserId()
+            api.playStateApi.markUnplayedItem(
+                userId = userId.toUUID(),
+                itemId = write.itemId.toUUID(),
+            )
+            UserDataWriteOutcome.Done
+        }
+
+        is UserDataWrite.ToggleFavorite -> engine.apiResultWithRetry {
+            val userId = engine.requireUserId()
+            val uuid = write.itemId.toUUID()
+            val toggled = favoriteFlags.toggle(
+                cacheKey = uuid.toString(),
+                currentIsFavorite = write.currentIsFavorite,
+                fetchCurrent = {
+                    engine.requireApi().userLibraryApi.getItem(itemId = uuid).content.userData?.isFavorite == true
+                },
+                markOnServer = {
+                    engine.requireApi().userLibraryApi.markFavoriteItem(
+                        userId = userId.toUUID(),
+                        itemId = uuid,
+                    )
+                },
+                unmarkOnServer = {
+                    engine.requireApi().userLibraryApi.unmarkFavoriteItem(
+                        userId = userId.toUUID(),
+                        itemId = uuid,
+                    )
+                },
+            )
+            UserDataWriteOutcome.FavoriteNow(toggled)
+        }
+
+        is UserDataWrite.SetFavorite -> engine.withApi { api ->
+            val userId = engine.requireUserId()
+            val uuid = write.itemId.toUUID()
+            if (write.isFavorite) {
+                api.userLibraryApi.markFavoriteItem(
+                    userId = userId.toUUID(),
+                    itemId = uuid,
+                )
+            } else {
+                api.userLibraryApi.unmarkFavoriteItem(
+                    userId = userId.toUUID(),
+                    itemId = uuid,
+                )
+            }
+            favoriteFlags.put(uuid.toString(), write.isFavorite)
+            UserDataWriteOutcome.Done
+        }
     }
 
     /**

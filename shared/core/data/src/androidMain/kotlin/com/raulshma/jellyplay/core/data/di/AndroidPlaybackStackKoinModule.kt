@@ -5,6 +5,7 @@ import com.raulshma.jellyplay.core.data.cache.CacheManager
 import com.raulshma.jellyplay.core.data.playback.AndroidPipController
 import com.raulshma.jellyplay.core.data.playback.AudioEffectsManager
 import com.raulshma.jellyplay.core.data.playback.AudioEffectsProcessor
+import com.raulshma.jellyplay.core.data.playback.AudioLibraryBrowser
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
 import com.raulshma.jellyplay.core.data.playback.AudioPrefetchEngine
 import com.raulshma.jellyplay.core.data.playback.AudioQueueFacade
@@ -16,7 +17,11 @@ import com.raulshma.jellyplay.core.data.playback.PipController
 import com.raulshma.jellyplay.core.data.playback.PlaybackSessionManager
 import com.raulshma.jellyplay.core.data.playback.ThemeMusicPlayer
 import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
+import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
 import com.raulshma.jellyplay.core.network.di.NetworkQualifiers
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import org.koin.core.module.Module
 import org.koin.dsl.module
 
@@ -27,16 +32,44 @@ import org.koin.dsl.module
  */
 internal fun androidPlaybackStackModule(context: Context): Module = module {
     // ── Playback stack (media3) ─────────────────────────────────────────
+    // The library/browse ladder is DI-OWNED since the manager's constructor
+    // diet: its five family deps (music catalogue / collection reads /
+    // playlists / downloads / adaptive bitrate) resolve as the same singles
+    // the manager used to forward, and the streaming-quality read rides the
+    // store directly (the manager used to hand a lambda over its own
+    // collect-cached playback slice — same value, read at the source).
+    single {
+        AudioLibraryBrowser(
+            // The manager's default playback scope (SupervisorJob +
+            // Main.immediate) — the scope the browser rode when the manager
+            // constructed it internally. Deliberately NOT the application
+            // scope (Dispatchers.Default): the browser resolves media3
+            // session callbacks on it.
+            scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
+            mediaRepository = get(),
+            musicCatalogue = get(),
+            mediaCollectionReads = get(),
+            playlistRepository = get(),
+            downloadRepository = get(),
+            playbackRepository = get(),
+            imageUrlProvider = get(),
+            playbackSourceResolver = get(),
+            streamingQualityProvider = { get<PlaybackStore>().playback.value.streamingQuality },
+            adaptiveBitrateSelector = get(),
+            // Call-time facade access — a direct dep would be circular
+            // (browser ← manager ← facade). Resolved only when a controller
+            // (Android Auto) issues setMediaItems, well after construction.
+            audioQueueFacadeProvider = { get<AudioQueueFacade>() },
+        )
+    }
     single {
         AudioPlaybackManager(
             context = context,
             playbackFocus = get(),
             mediaRepository = get(),
-            playlistRepository = get(),
+            libraryBrowser = get(),
             playbackRepository = get(),
             imageUrlProvider = get(),
-            downloadRepository = get(),
-            offlineRepository = get(),
             playbackSourceResolver = get(),
             sessionManager = get(),
             audioStore = get(),
@@ -44,11 +77,10 @@ internal fun androidPlaybackStackModule(context: Context): Module = module {
             playbackStore = get(),
             queuePersistenceHelper = get(),
             bandwidthMonitor = get(),
-            adaptiveBitrateSelector = get(),
             bandwidthInterceptor = get(),
             lyricsManager = get(),
             effectsProcessor = get(),
-            sleepTimerManager = get(),
+            sleepCountdown = get(),
             jellyfinRemotePlayCastStrategy = get(),
             audioStreamCache = get(),
             audioPrefetchEngine = get(),
@@ -85,7 +117,7 @@ internal fun androidPlaybackStackModule(context: Context): Module = module {
     single {
         ThemeMusicPlayer(
             context = context,
-            mediaRepository = get(),
+            musicCatalogue = get(),
             playbackRepository = get(),
             appearanceStore = get(),
         )
@@ -101,8 +133,9 @@ internal fun androidPlaybackStackModule(context: Context): Module = module {
     single<AudioQueueFacade> {
         DefaultAudioQueueFacade(
             queueManager = get(),
-            mediaRepository = get(),
+            musicCatalogue = get(),
             imageUrlProvider = get(),
+            radioScope = get(DatastoreQualifiers.applicationScope),
         )
     }
 

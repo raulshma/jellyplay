@@ -13,6 +13,7 @@ import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.navigation.navigatePhotoAware
 import com.raulshma.jellyplay.feature.home.HomeCallbacks
 import com.raulshma.jellyplay.feature.home.HomeScreen
+import com.raulshma.jellyplay.feature.home.NextUpExcludedScreen
 
 fun EntryProviderScope<NavKey>.homeSection(
     navigator: Navigator,
@@ -104,5 +105,9 @@ fun EntryProviderScope<NavKey>.homeSection(
             musicContent = musicContent,
             surpriseRequests = surpriseRequests,
         )
+    }
+
+    entry<Route.NextUpExcluded> {
+        NextUpExcludedScreen(onBack = { navigator.goBack() })
     }
 }

@@ -26,15 +26,24 @@ import org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension
  *    — the JVM-semantics middle layer every module shares code through.
  *    Modules that carry no jvmShared sources simply leave the directory
  *    empty; the wiring is inert there.
- *  - adds kotlin("test") to commonTest and jvmTest.
+ *  - adds kotlin("test") to commonTest and jvmTest. Test-lane selection
+ *    follows docs/adr/0006-test-lane-selection.md: pure common logic →
+ *    commonTest, JVM-only seams (threading, java.time, file IO) → jvmTest,
+ *    exercising androidMain actuals → androidHostTest (Robolectric host
+ *    lane), shared doubles → :shared:core:test-fixtures (test-scoped only).
  *
- * NOT centralized here (stays per module): the namespace, the per-module
- * compose-resources `packageOfResClass` (a per-module legacy package string —
- * see the tail comment in the compose modules), `withHostTest`/`withDeviceTest`
- * lanes and the Robolectric dependency wiring, the Room KSP setup, and every
- * module's actual dependency list. Modules needing Compose + compose-resources
- * apply `jellyplay.kmp.library.compose` instead, which applies this plugin
- * first.
+ * NOT centralized here (stays per module): the namespace, `withHostTest`/
+ * `withDeviceTest` lanes and the Robolectric dependency wiring, the Room KSP
+ * setup, and the non-universal remainder of every module's dependency list
+ * (project edges, coil/datetime/serialization/paging/saveable, platform-lane
+ * deps, test lanes). Two things USED to be per-module and moved into
+ * `jellyplay.kmp.library.compose` (XC-2, deliberately reversing the earlier
+ * "every module owns its dependency list" stance for this subset): the
+ * universal Compose dependency bundle every Compose module repeated verbatim,
+ * and the compose-resources `packageOfResClass` (now a path-derived default
+ * on the `jellyplay` extension, overridable per module — `feature:player-book`
+ * legacy package). Modules needing Compose + compose-resources apply
+ * `jellyplay.kmp.library.compose` instead, which applies this plugin first.
  */
 class KmpLibraryBasePlugin : Plugin<Project> {
 

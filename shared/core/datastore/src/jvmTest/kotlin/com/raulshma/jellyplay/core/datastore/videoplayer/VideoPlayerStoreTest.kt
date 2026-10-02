@@ -6,10 +6,12 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import com.raulshma.jellyplay.core.datastore.TestDataStoreProvider
 import com.raulshma.jellyplay.core.model.GestureIndicatorSide
+import com.raulshma.jellyplay.core.model.GestureMode
 import com.raulshma.jellyplay.core.model.MediaSegmentType
 import com.raulshma.jellyplay.core.model.OrientationMode
 import com.raulshma.jellyplay.core.model.PreloadBufferSize
 import com.raulshma.jellyplay.core.model.SegmentBehavior
+import com.raulshma.jellyplay.core.model.StillWatchingMode
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -55,7 +57,7 @@ class VideoPlayerStoreTest {
         assertEquals(0.5f, slice.videoBrightnessLevel)
         assertEquals(1.0f, slice.videoDefaultSpeed)
         assertEquals(SegmentBehavior.DEFAULT_BEHAVIORS, slice.segmentBehaviors)
-        assertTrue(slice.videoGesturesEnabled)
+        assertTrue(slice.videoGestureMode == GestureMode.ALL)
         assertTrue(slice.videoAutoplayNext)
         assertFalse(slice.incognitoModeEnabled)
     }
@@ -96,11 +98,48 @@ class VideoPlayerStoreTest {
     }
 
     @Test
-    fun `setVideoGesturesEnabled toggles`() = runTest {
-        store.setVideoGesturesEnabled(false)
-        assertFalse(store.videoPlayer.first().videoGesturesEnabled)
-        store.setVideoGesturesEnabled(true)
-        assertTrue(store.videoPlayer.first().videoGesturesEnabled)
+    fun `setVideoGestureMode round-trips`() = runTest {
+        store.setVideoGestureMode(GestureMode.TAP_ONLY)
+        assertEquals(GestureMode.TAP_ONLY, store.videoPlayer.first().videoGestureMode)
+        store.setVideoGestureMode(GestureMode.NONE)
+        assertEquals(GestureMode.NONE, store.videoPlayer.first().videoGestureMode)
+        store.setVideoGestureMode(GestureMode.ALL)
+        assertEquals(GestureMode.ALL, store.videoPlayer.first().videoGestureMode)
+    }
+
+    @Test
+    fun `legacy video_gestures_enabled false migrates to NONE`() = runTest {
+        // Pre-mode install with gestures disabled: no `video_gesture_mode` key,
+        // so readGestureMode falls back to the legacy boolean.
+        dataStore.edit {
+            it[androidx.datastore.preferences.core.booleanPreferencesKey("video_gestures_enabled")] = false
+        }
+        assertEquals(GestureMode.NONE, store.videoPlayer.first().videoGestureMode)
+    }
+
+    @Test
+    fun `legacy video_gestures_enabled true migrates to ALL`() = runTest {
+        dataStore.edit {
+            it[androidx.datastore.preferences.core.booleanPreferencesKey("video_gestures_enabled")] = true
+        }
+        assertEquals(GestureMode.ALL, store.videoPlayer.first().videoGestureMode)
+    }
+
+    @Test
+    fun `video_gesture_mode key wins over legacy boolean`() = runTest {
+        dataStore.edit {
+            it[androidx.datastore.preferences.core.booleanPreferencesKey("video_gestures_enabled")] = false
+            it[androidx.datastore.preferences.core.stringPreferencesKey("video_gesture_mode")] = "TAP_ONLY"
+        }
+        assertEquals(GestureMode.TAP_ONLY, store.videoPlayer.first().videoGestureMode)
+    }
+
+    @Test
+    fun `corrupt video_gesture_mode falls back to legacy boolean`() = runTest {
+        dataStore.edit {
+            it[androidx.datastore.preferences.core.stringPreferencesKey("video_gesture_mode")] = "BOGUS"
+        }
+        assertEquals(GestureMode.ALL, store.videoPlayer.first().videoGestureMode)
     }
 
     @Test
@@ -114,13 +153,51 @@ class VideoPlayerStoreTest {
     }
 
     @Test
+    fun `still watching defaults off with zero threshold`() = runTest {
+        val slice = store.videoPlayer.first()
+        assertEquals(StillWatchingMode.OFF, slice.stillWatchingMode)
+        assertEquals(0, slice.stillWatchingEpisodeThreshold)
+    }
+
+    @Test
+    fun `still watching setters round-trip and coerce`() = runTest {
+        store.setStillWatchingMode(StillWatchingMode.BOTH)
+        store.setStillWatchingEpisodeThreshold(3)
+        val slice = store.videoPlayer.first()
+        assertEquals(StillWatchingMode.BOTH, slice.stillWatchingMode)
+        assertEquals(3, slice.stillWatchingEpisodeThreshold)
+
+        // Negative thresholds coerce to 0 (= off), mirroring the pass-out hours.
+        store.setStillWatchingEpisodeThreshold(-4)
+        assertEquals(0, store.videoPlayer.first().stillWatchingEpisodeThreshold)
+
+        // A corrupt/unknown stored enum name falls back to OFF.
+        dataStore.edit {
+            it[androidx.datastore.preferences.core.stringPreferencesKey("still_watching_mode")] = "BOGUS"
+        }
+        assertEquals(StillWatchingMode.OFF, store.videoPlayer.first().stillWatchingMode)
+    }
+
+    @Test
+    fun `still watching fields survive restore`() = runTest {
+        val slice = VideoPlayerSlice(
+            stillWatchingMode = StillWatchingMode.EPISODES,
+            stillWatchingEpisodeThreshold = 5,
+        )
+        store.restore(slice)
+        val restored = store.videoPlayer.first()
+        assertEquals(StillWatchingMode.EPISODES, restored.stillWatchingMode)
+        assertEquals(5, restored.stillWatchingEpisodeThreshold)
+    }
+
+    @Test
     fun `restore(slice) round-trips a fully-populated slice`() = runTest {
         val slice = VideoPlayerSlice(
             videoSeekDurationMs = 15_000L,
             videoControlsTimeoutMs = 10_000L,
             videoDefaultOrientation = OrientationMode.LOCKED_LANDSCAPE,
             videoDefaultAspectRatio = "16:9",
-            videoGesturesEnabled = false,
+            videoGestureMode = GestureMode.TAP_ONLY,
             videoPassOutProtectionHours = 24,
             videoSkipBackOnResumeMs = 10_000L,
             videoHoldSpeedEnabled = false,

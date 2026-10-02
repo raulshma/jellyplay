@@ -166,4 +166,41 @@ internal class JellyfinRawRequester(
             if (response.isSuccessful) response.body?.string() else null
         }
     }
+
+    /**
+     * POST JSON [bodyText] whose success BODY TEXT the caller needs (the
+     * backup create — the response is the new archive's manifest). When
+     * [callTimeoutSeconds] > 0 the call rides a client cloned with that
+     * ceiling on EVERY timeout (call, read, write) — the clone shares the
+     * pool and dispatcher, only the timeouts differ. Raising callTimeout
+     * alone is not enough: the endpoints it serves accept the request and
+     * then work silently for minutes, so the shared 15s read timeout still
+     * fires long before the call ceiling.
+     */
+    fun postForText(
+        path: String,
+        bodyText: String,
+        failureMessage: String,
+        callTimeoutSeconds: Long = 0,
+    ): String {
+        val session = requireSession()
+        val client = if (callTimeoutSeconds > 0) {
+            engine.okHttpClient.newBuilder()
+                .callTimeout(callTimeoutSeconds, java.util.concurrent.TimeUnit.SECONDS)
+                .readTimeout(callTimeoutSeconds, java.util.concurrent.TimeUnit.SECONDS)
+                .writeTimeout(callTimeoutSeconds, java.util.concurrent.TimeUnit.SECONDS)
+                .build()
+        } else {
+            engine.okHttpClient
+        }
+        val request = Request.Builder()
+            .url(session.base + path)
+            .tokenAuthHeader(session.token)
+            .post(bodyText.toRequestBody("application/json".toMediaType()))
+            .build()
+        return client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) throw Exception("$failureMessage: ${response.code}")
+            response.body?.string().orEmpty()
+        }
+    }
 }

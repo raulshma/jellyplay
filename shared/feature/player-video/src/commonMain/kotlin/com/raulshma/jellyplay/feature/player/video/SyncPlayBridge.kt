@@ -74,7 +74,7 @@ internal class SyncPlayBridge(
     val state: StateFlow<SyncPlayUiState> = _state.asStateFlow()
 
     val isInSession: Boolean get() = syncPlayManager.isInSyncPlaySession
-    val ignoreWait: StateFlow<Boolean> get() = syncPlayManager.playbackCore.ignoreWait
+    val ignoreWait: StateFlow<Boolean> get() = syncPlayManager.ignoreWait
 
     fun start() {
         attach()
@@ -96,7 +96,7 @@ internal class SyncPlayBridge(
             syncPlayManager.leaveGroup()
             _state.update { it.cleared() }
             currentPlaylistItemId = null
-            syncPlayManager.playbackCore.reset()
+            syncPlayManager.resetPlaybackSync()
         }
     }
 
@@ -113,29 +113,29 @@ internal class SyncPlayBridge(
     /**
      * Shared registration core of [start]/[reattachSession] (they were
      * byte-identical twins apart from the event-listener restart):
-     * defensive clearCallbacks → setCallbacks → repopulate the group-display
-     * state and the core's playlist id from the live group. Call order inside
-     * is load-bearing and preserved from the former inline twins.
+     * attachSession → repopulate the group-display state and the core's
+     * playlist id from the live group. Call order inside is load-bearing and
+     * preserved from the former inline twins.
      */
     private fun attach() {
-        // Defensive clear before re-registering: the @Singleton
-        // SyncPlayPlaybackCore retains its callbacks until clearCallbacks()
-        // runs. If a previous bridge for this VM was never torn down (e.g. an
-        // early init failure path, or a future registration site that forgets
-        // reset()), the singleton would hold two refs — the stale one keeping
-        // a dead VM alive. Clearing first makes attaching idempotent.
-        syncPlayManager.playbackCore.clearCallbacks()
-        syncPlayManager.playbackCore.setCallbacks(this)
+        // attachSession REPLACES any previous registration on the process-wide
+        // playback core — the former defensive clear-before-set (defusing the
+        // raw global callbacks seam's stale-ref hazard) is folded into the
+        // replace-by-construction seam, so a previous bridge for this VM that
+        // was never torn down (e.g. an early init failure path, or a future
+        // registration site that forgets reset()) can no longer keep a dead
+        // VM alive behind the new registration.
+        syncPlayManager.attachSession(this)
         if (syncPlayManager.isInSyncPlaySession) {
             val group = syncPlayManager.currentGroup
             _state.update { it.from(group) }
             currentPlaylistItemId = group?.playingPlaylistItemId
-            syncPlayManager.playbackCore.setCurrentPlaylistItemId(currentPlaylistItemId)
+            syncPlayManager.onQueueItemChanged(currentPlaylistItemId)
         }
     }
 
     fun setIgnoreWait(ignore: Boolean) {
-        syncPlayManager.playbackCore.setIgnoreWait(ignore)
+        syncPlayManager.setIgnoreWait(ignore)
     }
 
     /**
@@ -155,9 +155,9 @@ internal class SyncPlayBridge(
             try {
                 val matchingEntry = currentGroup?.playlistItemMap?.entries?.find { it.value == itemId }
                 if (matchingEntry != null) {
-                    syncPlayManager.syncPlayController.setPlaylistItem(matchingEntry.key)
+                    syncPlayManager.setQueueItem(matchingEntry.key)
                 } else {
-                    syncPlayManager.syncPlayController.setNewQueue(
+                    syncPlayManager.setNewQueue(
                         itemIds = listOf(itemId),
                         playingItemId = itemId,
                         mediaSourceId = mediaSourceId,
@@ -170,15 +170,15 @@ internal class SyncPlayBridge(
     }
 
     fun sendStop() {
-        scope.launch { syncPlayManager.syncPlayController.stop() }
+        scope.launch { syncPlayManager.stopGroup() }
     }
 
     fun sendNextItem(playlistItemId: String) {
-        scope.launch { syncPlayManager.syncPlayController.nextItem(playlistItemId) }
+        scope.launch { syncPlayManager.nextQueueItem(playlistItemId) }
     }
 
     fun sendPreviousItem(playlistItemId: String) {
-        scope.launch { syncPlayManager.syncPlayController.previousItem(playlistItemId) }
+        scope.launch { syncPlayManager.previousQueueItem(playlistItemId) }
     }
 
     /**
@@ -191,7 +191,7 @@ internal class SyncPlayBridge(
     fun onPlaybackStateChanged(state: EnginePlaybackState) {
         if (!isInSession) return
         getMediaEngine() ?: return
-        syncPlayManager.playbackCore.onPlaybackStateChanged(state.toCoreStateInt())
+        syncPlayManager.onPlaybackStateChanged(state.toCoreStateInt())
     }
 
     /**
@@ -231,20 +231,20 @@ internal class SyncPlayBridge(
         if (group.isPlaying) return
         // Group-driven playback arrives as an Unpause command; our engine
         // starting because of it must not echo another unpause request.
-        if (syncPlayManager.playbackCore.lastCommand?.command == "Unpause") return
+        if (syncPlayManager.lastGroupCommandWasUnpause) return
         val nowMs = System.currentTimeMillis()
         if (nowMs - lastUnpauseRequestAtMs < UNPAUSE_REQUEST_DEDUPE_MS) return
         lastUnpauseRequestAtMs = nowMs
-        scope.launch { syncPlayManager.syncPlayController.unpause() }
+        scope.launch { syncPlayManager.unpauseGroup() }
     }
 
     fun reset() {
-        syncPlayManager.playbackCore.reset()
-        // Clear the callbacks held by the @Singleton playback core so it does
+        syncPlayManager.resetPlaybackSync()
+        // Drop the callbacks held by the @Singleton playback core so it does
         // not retain this bridge (and through it the destroyed ViewModel) after
         // the player screen leaves composition. reset() is the teardown path
         // invoked from VideoPlayerViewModel.onCleared() -> releaseInternals().
-        syncPlayManager.playbackCore.clearCallbacks()
+        syncPlayManager.detachSession()
         currentPlaylistItemId = null
         eventJob?.cancel()
         eventJob = null
@@ -259,10 +259,10 @@ internal class SyncPlayBridge(
             if (getMediaEngine()?.isPlaying?.value == true) {
                 getMediaEngine()?.pause()
                 setIsPlaying(false)
-                syncPlayManager.syncPlayController.pause()
+                syncPlayManager.pauseGroup()
             } else {
                 lastUnpauseRequestAtMs = System.currentTimeMillis()
-                syncPlayManager.syncPlayController.unpause()
+                syncPlayManager.unpauseGroup()
             }
         }
     }
@@ -270,7 +270,7 @@ internal class SyncPlayBridge(
     fun seekTo(positionMs: Long) {
         scope.launch {
             getMediaEngine()?.seekTo(positionMs)
-            syncPlayManager.syncPlayController.seek(TimeSyncManager.msToTicks(positionMs))
+            syncPlayManager.seekGroup(TimeSyncManager.msToTicks(positionMs))
         }
     }
 
@@ -282,26 +282,24 @@ internal class SyncPlayBridge(
                     is SyncPlayEvent.PlayQueueUpdate -> {
                         if (event.data.playingPlaylistItemId.isNotBlank()) {
                             currentPlaylistItemId = event.data.playingPlaylistItemId
-                            syncPlayManager.playbackCore.setCurrentPlaylistItemId(currentPlaylistItemId)
+                            syncPlayManager.onQueueItemChanged(currentPlaylistItemId)
                         }
                         val currentItemId = getCurrentItemId()
                         when {
                             currentItemId == null || currentItemId != event.data.playingItemId -> {
-                                syncPlayManager.playbackCore.beginPendingItemLoad()
+                                syncPlayManager.beginPendingItemLoad()
                                 _state.update { it.copy(isSyncPlaySyncing = true, isSyncPlaySynced = false) }
-                                val posTicks = syncPlayManager.queueCore.getStartPositionTicks(
-                                    syncPlayManager.playbackCore.lastCommand
-                                )
+                                val posTicks = syncPlayManager.queuedItemStartPositionTicks()
                                 onLoadItem(event.data.playingItemId, posTicks)
                             }
                             getMediaEngine() == null -> {
-                                syncPlayManager.playbackCore.beginPendingItemLoad()
+                                syncPlayManager.beginPendingItemLoad()
                                 _state.update { it.copy(isSyncPlaySyncing = true, isSyncPlaySynced = false) }
                             }
                             else -> {
                                 // Core-owned estimate → clamp → tolerance →
                                 // seek/play-pause-mirror (300 ms lane).
-                                syncPlayManager.playbackCore.reconcileToServerPosition(
+                                syncPlayManager.reconcileToServerPosition(
                                     serverTicks = event.data.startPositionTicks,
                                     whenMs = event.data.whenMs,
                                     lane = SyncPlayPlaybackCore.ReconcileLane.QUEUE_UPDATE,

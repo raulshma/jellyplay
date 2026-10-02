@@ -5,6 +5,11 @@ import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestStateHolder
+import com.raulshma.jellyplay.core.data.seerr.TmdbCompanionFetches
+import com.raulshma.jellyplay.core.data.seerr.TmdbCompanionLanding
+import com.raulshma.jellyplay.core.data.seerr.TmdbCompanionLimits
+import com.raulshma.jellyplay.core.data.seerr.TmdbCompanionRequest
+import com.raulshma.jellyplay.core.data.seerr.TmdbCompanionStateHolder
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestSnapshot
 import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
 import com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections
@@ -19,11 +24,10 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.model.seerr.isAvailable
 import com.raulshma.jellyplay.core.model.seerr.SeerrTvDetails
 import com.raulshma.jellyplay.core.model.seerr.withPendingRequest
+import com.raulshma.jellyplay.core.ui.components.seerr.SeerrRequestDialogHolder
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.core.model.seerr.buildPosterUrl
 import com.raulshma.jellyplay.core.model.seerr.buildBackdropUrl
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -54,6 +58,29 @@ class SeerrDetailViewModel constructor(
 
     private val seerrRequestState = SeerrRequestStateHolder(scope, seerrRequestDelegate)
 
+    /**
+     * The TMDB-companion legs (secondary ratings, recommendations, similar) —
+     * the choreography shared with [DetailViewModel]'s screen, formerly
+     * hand-copied into [loadDetails]: the holder owns the gate expressions,
+     * the bounded fan-out, per-leg error tolerance, and take-limits. This
+     * screen shows TMDB rows whole and only ever loads behind a connected
+     * Seerr, so it passes the gate facts as constants and [TmdbCompanionLimits.NONE];
+     * it has no staleness epoch, so the guard stays defaulted.
+     */
+    private val tmdbCompanion = TmdbCompanionStateHolder(
+        scope = scope,
+        fetches = TmdbCompanionFetches.of(seerrRepository),
+    )
+
+    // The dialog half of the request lifecycle: which item the request dialog
+    // is open for (frozen at open) plus the open/dismiss choreography. The
+    // data half (service details, seasons, result) stays in the holder above,
+    // reached through the two constructor seams.
+    private val seerrRequestDialog = SeerrRequestDialogHolder(
+        prepare = seerrRequestState::prepare,
+        clearRequestResult = seerrRequestState::clearRequestResult,
+    )
+
     /** Atomic snapshot of the Seerr-detail screen content state. */
     val uiState: StateFlow<SeerrDetailUiState> = _uiState
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), SeerrDetailUiState())
@@ -62,6 +89,9 @@ class SeerrDetailViewModel constructor(
     // holder's snapshot is the single interface — commands go through the
     // wrappers below.
     val seerrSnapshot: StateFlow<SeerrRequestSnapshot> = seerrRequestState.snapshotIn(scope)
+
+    /** The item the request dialog is open for (null = closed) — the render gate. */
+    val seerrDialogItem: StateFlow<SeerrSearchItem?> = seerrRequestDialog.item
 
     val isSeerrConnected: StateFlow<Boolean> = seerrRepository.isConnected()
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), false)
@@ -116,33 +146,25 @@ class SeerrDetailViewModel constructor(
 
                 val type = if (isMovie) MediaType.MOVIE else MediaType.SERIES
 
-                coroutineScope {
-                    val ratingsDeferred = if (hasRatings) {
-                        async { null }
-                    } else {
-                        async {
-                            seerrRepository.getRatings(tmdbId, mediaType).getOrNull()
-                        }
-                    }
-                    val recommendationsDeferred = async {
-                        seerrRepository.getRecommendations(tmdbId, type).getOrNull()
-                    }
-                    val similarDeferred = async {
-                        seerrRepository.getSimilar(tmdbId, type).getOrNull()
-                    }
-
-                    ratingsDeferred.await()?.let {
-                        updateRatings(it, null)
-                    }
-
-                    recommendationsDeferred.await()?.let { result ->
-                        _uiState.update { it.copy(recommendations = result.results) }
-                    }
-
-                    similarDeferred.await()?.let { result ->
-                        _uiState.update { it.copy(similar = result.results) }
-                    }
-                }
+                // The ratings/recommendations/similar legs ride the shared
+                // holder. Joined, not fire-and-forget: the isLoading flag must
+                // stay up (and the Jellyfin resolution below must wait) until
+                // every leg settles — the former coroutineScope semantics.
+                // hasRatings (from the primary detail above) skips the
+                // redundant secondary-ratings fetch inside the holder.
+                tmdbCompanion.load(
+                    TmdbCompanionRequest(
+                        tmdbId = tmdbId,
+                        mediaType = type,
+                        connected = true,
+                        recommendationsEnabled = true,
+                        hasRatings = hasRatings,
+                        loadRatings = true,
+                        loadRecommendations = true,
+                        limits = TmdbCompanionLimits.NONE,
+                        onLanding = ::foldCompanionLanding,
+                    ),
+                ).join()
 
                 // Once details are loaded, try to resolve the Jellyfin library item
                 // so the "Available" action can open it directly. Best-effort: a
@@ -153,6 +175,19 @@ class SeerrDetailViewModel constructor(
             }
 
             _uiState.update { it.copy(isLoading = false) }
+        }
+    }
+
+    /** Maps one holder landing onto this screen's ui state. */
+    private fun foldCompanionLanding(landing: TmdbCompanionLanding) {
+        when (landing) {
+            is TmdbCompanionLanding.Ratings -> updateRatings(landing.ratings, null)
+            is TmdbCompanionLanding.Recommendations ->
+                _uiState.update { it.copy(recommendations = landing.items) }
+            is TmdbCompanionLanding.Similar ->
+                _uiState.update { it.copy(similar = landing.items) }
+            // This screen never requests the videos/reviews legs.
+            is TmdbCompanionLanding.Videos, is TmdbCompanionLanding.Reviews -> Unit
         }
     }
 
@@ -168,10 +203,10 @@ class SeerrDetailViewModel constructor(
         val movie = state.movieDetails
         val tv = state.tvDetails
         val mediaInfo = movie?.mediaInfo ?: tv?.mediaInfo
-        val status = mediaInfo?.status ?: 0
         // Availability folds through core/model's SeerrStatusDecisions
-        // (partial availability counts as present), not a hand-rolled pair.
-        if (!SeerrMediaStatus.fromValue(status).isAvailable) return
+        // (partial availability counts as present), not a hand-rolled pair;
+        // the status arrives enum-interpreted from the client seam.
+        if (!(mediaInfo?.status ?: SeerrMediaStatus.UNKNOWN).isAvailable) return
 
         // Provider candidates in priority order. tmdb is the primary id Seerr tracks;
         // tvdb/imdb are fallbacks that may be present on the detail's externalIds.
@@ -208,14 +243,15 @@ class SeerrDetailViewModel constructor(
     }
 
     /**
-     * Opens the Seerr request dialog for [item]: the item plus the open
-     * cascade (service details, TV seasons for tv) are owned by the holder —
-     * the screen's dialog renders from the snapshot's `dialogItem`.
+     * Opens the Seerr request dialog for [item]: the item lands on
+     * [seerrDialogItem] frozen at open time, and the open cascade (service
+     * details, TV seasons for tv) fires through the dialog holder's
+     * `prepare` seam.
      */
-    fun openRequestDialog(item: SeerrSearchItem) = seerrRequestState.openRequestDialog(item)
+    fun openRequestDialog(item: SeerrSearchItem) = seerrRequestDialog.open(item)
 
     /** Closes the dialog and clears the last request result (holder-owned ordering). */
-    fun dismissRequestDialog() = seerrRequestState.dismissRequestDialog()
+    fun dismissRequestDialog() = seerrRequestDialog.dismiss()
 
     fun toggleSeason(tvId: Int, seasonNumber: Int) {
         if (_uiState.value.selectedSeasonNumber == seasonNumber) {

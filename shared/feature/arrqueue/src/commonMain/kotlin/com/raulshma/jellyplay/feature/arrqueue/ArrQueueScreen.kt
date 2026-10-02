@@ -15,12 +15,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
@@ -28,13 +28,14 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import com.raulshma.jellyplay.core.ui.components.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -47,16 +48,12 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.ArrowLeft
-import com.composables.icons.tabler.outline.Ban
-import com.composables.icons.tabler.outline.Check
-import com.composables.icons.tabler.outline.Database
+import com.composables.icons.tabler.outline.DotsVertical
 import com.composables.icons.tabler.outline.Download
 import com.composables.icons.tabler.outline.PlayerPlay
 import com.composables.icons.tabler.outline.Refresh
 import com.composables.icons.tabler.outline.Search
-import com.composables.icons.tabler.outline.Settings
 import com.composables.icons.tabler.outline.Trash
-import com.composables.icons.tabler.outline.X
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
@@ -71,8 +68,13 @@ import com.raulshma.jellyplay.core.model.formatBytes
 import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
 import com.raulshma.jellyplay.core.ui.components.ConfirmTone
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
-import com.raulshma.jellyplay.core.ui.components.JellyPlayCircularProgressIndicator
+import com.raulshma.jellyplay.core.ui.components.FeatureDisabledState
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
+import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
+import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
+import com.raulshma.jellyplay.core.ui.components.SelectionActionBar
+import com.raulshma.jellyplay.core.ui.components.StatusPill
+import com.raulshma.jellyplay.core.ui.components.downloads.QueueDeleteConfirmActions
 import com.raulshma.jellyplay.core.ui.message.LocalUserMessageBus
 import com.raulshma.jellyplay.feature.arrqueue.generated.resources.Res
 import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_blocklist_search
@@ -101,6 +103,8 @@ import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_sele
 import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_selected_count
 import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_title
 import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_unknown_error
+import com.raulshma.jellyplay.feature.arrqueue.generated.resources.releaseSearch_title
+import kotlinx.coroutines.flow.merge
 import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
@@ -111,9 +115,11 @@ fun ArrQueueScreen(
     onBack: () -> Unit,
     onOpenArrSettings: () -> Unit = {},
     viewModel: ArrQueueViewModel = koinViewModel(),
+    releaseSearchViewModel: ReleaseSearchViewModel = koinViewModel(),
 ) {
     val state by viewModel.state
     val featureEnabled by viewModel.featureEnabled.collectAsStateWithLifecycle()
+    val releaseSearchState by releaseSearchViewModel.state
     val isTv = LocalTvMode.current
 
     // One-shot action feedback (livetv screen-forward pattern): the VM emits
@@ -123,10 +129,12 @@ fun ArrQueueScreen(
     // strings were — and posts through the app-wide UserMessageBus (the
     // drop-by-default local simply discards the message when no host provides
     // a bus). Collector is screen-scoped, so an ack emitted just before a
-    // quick-back is dropped (livetv-documented accepted delta).
+    // quick-back is dropped (livetv-documented accepted delta). Both VMs'
+    // channels feed this one collector (the release sheet's grab ack rides
+    // the same unresolved seal).
     val bus = LocalUserMessageBus.current
     LaunchedEffect(bus) {
-        viewModel.messages.collect { message ->
+        merge(viewModel.messages, releaseSearchViewModel.messages).collect { message ->
             when (message) {
                 is ArrQueueMessage.Info -> bus.info(getString(message.res, *message.args.toTypedArray()))
                 is ArrQueueMessage.Error -> bus.error(getString(message.res, *message.args.toTypedArray()))
@@ -165,23 +173,25 @@ fun ArrQueueScreen(
         Box(modifier = Modifier.fillMaxSize()) {
             when {
                 !featureEnabled -> FeatureDisabledState(
+                    title = stringResource(Res.string.arrqueue_disabled_title),
+                    body = stringResource(Res.string.arrqueue_disabled_body),
+                    ctaLabel = stringResource(Res.string.arrqueue_open_settings),
                     onOpenSettings = onOpenArrSettings,
                     modifier = Modifier.fillMaxSize(),
                 )
 
-                state.isLoading && state.queue.isEmpty() -> Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    JellyPlayCircularProgressIndicator(modifier = Modifier.size(48.dp))
-                }
+                state.isLoading && state.queue.isEmpty() -> ScreenLoadingState()
 
                 state.error != null && state.queue.isEmpty() -> ErrorScreen(
                     message = state.error ?: stringResource(Res.string.arrqueue_unknown_error),
                     onRetry = { viewModel.refresh() },
                 )
 
-                state.queue.isEmpty() -> EmptyQueueState(modifier = Modifier.fillMaxSize())
+                state.queue.isEmpty() -> ScreenEmptyState(
+                    icon = Tabler.Outline.Download,
+                    title = stringResource(Res.string.arrqueue_empty_title),
+                    description = stringResource(Res.string.arrqueue_empty_body),
+                )
 
                 else -> PullToRefreshBox(
                     isRefreshing = state.isLoading && state.queue.isNotEmpty(),
@@ -215,6 +225,7 @@ fun ArrQueueScreen(
                                 onDelete = { viewModel.showDeleteDialog(item) },
                                 onGrab = { viewModel.showGrabDialog(item) },
                                 onImport = { viewModel.showImportDialog(item) },
+                                onSearchReleases = { releaseSearchViewModel.open(item) },
                             )
                         }
                     }
@@ -224,15 +235,29 @@ fun ArrQueueScreen(
             // Selection-mode bottom action bar.
             if (state.selectionMode) {
                 SelectionActionBar(
+                    countLabel = stringResource(Res.string.arrqueue_selected_count, state.selectedIds.size),
                     selectedCount = state.selectedIds.size,
-                    actionInProgress = state.actionInProgress,
+                    selectAllLabel = stringResource(Res.string.arrqueue_select_all),
+                    clearLabel = stringResource(Res.string.arrqueue_clear_selection),
                     onSelectAll = { viewModel.selectAll() },
                     onClear = { viewModel.clearSelection() },
-                    onBulkDelete = {
+                    actionInProgress = state.actionInProgress,
+                    actions = { actionsEnabled ->
                         // Surface the same 3-option delete dialog the single-row
                         // path uses, so a bulk delete isn't forced into "remove only"
                         // without the blocklist / search-again choices.
-                        viewModel.showBulkDeleteDialog()
+                        FilledTonalButton(
+                            onClick = { viewModel.showBulkDeleteDialog() },
+                            enabled = actionsEnabled,
+                            shape = ShapeCache.smooth12,
+                            colors = ButtonDefaults.filledTonalButtonColors(
+                                contentColor = MaterialTheme.colorScheme.error,
+                            ),
+                        ) {
+                            Icon(Tabler.Outline.Trash, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text(stringResource(Res.string.arrqueue_delete))
+                        }
                     },
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
@@ -286,6 +311,21 @@ fun ArrQueueScreen(
             )
         }
     }
+
+    // The interactive release-search sheet (the queue row's overflow action).
+    releaseSearchState.item?.let { openItem ->
+        ReleaseSearchSheet(
+            item = openItem,
+            sheet = releaseSearchState.sheet,
+            onDismiss = { releaseSearchViewModel.dismiss() },
+            onSearchAgain = { releaseSearchViewModel.searchAgain() },
+            onSortSelected = { releaseSearchViewModel.selectSort(it) },
+            onToggleInfo = { releaseSearchViewModel.toggleInfo(it) },
+            onRequestGrab = { releaseSearchViewModel.requestGrab(it) },
+            onDismissGrabDialog = { releaseSearchViewModel.dismissGrabDialog() },
+            onConfirmGrab = { releaseSearchViewModel.confirmGrab() },
+        )
+    }
 }
 
 // ── Rows ──────────────────────────────────────────────────────────────────
@@ -302,6 +342,7 @@ private fun QueueRow(
     onDelete: () -> Unit,
     onGrab: () -> Unit,
     onImport: () -> Unit,
+    onSearchReleases: () -> Unit,
 ) {
     val focusState = rememberTvFocusState()
     val isTv = LocalTvMode.current
@@ -347,6 +388,15 @@ private fun QueueRow(
                         Spacer(Modifier.width(8.dp))
                         StatusChip(status = item.status)
                     }
+                }
+                // Row overflow — "Search releases" (the interactive release
+                // search lives behind it, not on the three-button action row,
+                // which stays delete/grab/import).
+                if (!selectionMode) {
+                    QueueRowOverflowMenu(
+                        enabled = !actionInProgress,
+                        onSearchReleases = onSearchReleases,
+                    )
                 }
             }
 
@@ -442,16 +492,40 @@ private fun QueueRow(
 @Composable
 private fun ServiceBadge(kind: ArrServiceKind) {
     val (label, color) = ArrQueuePresentation.serviceBadge(kind)
-    Surface(
-        shape = RoundedCornerShape(6.dp),
-        color = color.copy(alpha = 0.15f),
+    StatusPill(
+        text = stringResource(label),
+        color = color,
+        fontWeight = FontWeight.Medium,
+    )
+}
+
+/** The queue row's overflow menu — currently just the release-search entry. */
+@Composable
+private fun QueueRowOverflowMenu(
+    enabled: Boolean,
+    onSearchReleases: () -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    IconButton(onClick = { expanded = true }, enabled = enabled, modifier = Modifier.size(32.dp)) {
+        Icon(
+            Tabler.Outline.DotsVertical,
+            contentDescription = null,
+            modifier = Modifier.size(16.dp),
+        )
+    }
+    DropdownMenu(
+        expanded = expanded,
+        onDismissRequest = { expanded = false },
     ) {
-        Text(
-            text = stringResource(label),
-            style = MaterialTheme.typography.labelSmall,
-            color = color,
-            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-            fontWeight = FontWeight.Medium,
+        DropdownMenuItem(
+            text = { Text(stringResource(Res.string.releaseSearch_title)) },
+            leadingIcon = {
+                Icon(Tabler.Outline.Search, contentDescription = null, modifier = Modifier.size(18.dp))
+            },
+            onClick = {
+                expanded = false
+                onSearchReleases()
+            },
         )
     }
 }
@@ -459,123 +533,7 @@ private fun ServiceBadge(kind: ArrServiceKind) {
 @Composable
 private fun StatusChip(status: ArrDownloadStatus) {
     val (label, color) = ArrQueuePresentation.statusChip(status)
-    Surface(
-        shape = RoundedCornerShape(6.dp),
-        color = color.copy(alpha = 0.15f),
-    ) {
-        Text(
-            text = stringResource(label),
-            style = MaterialTheme.typography.labelSmall,
-            color = color,
-            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-        )
-    }
-}
-
-// ── States ────────────────────────────────────────────────────────────────
-
-@Composable
-private fun FeatureDisabledState(onOpenSettings: () -> Unit, modifier: Modifier = Modifier) {
-    Box(modifier = modifier, contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(
-                Tabler.Outline.Database,
-                contentDescription = null,
-                modifier = Modifier.size(64.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.height(16.dp))
-            Text(
-                stringResource(Res.string.arrqueue_disabled_title),
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.height(4.dp))
-            Text(
-                stringResource(Res.string.arrqueue_disabled_body),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.height(16.dp))
-            Button(onClick = onOpenSettings, shape = ShapeCache.smooth12) {
-                Icon(Tabler.Outline.Settings, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(8.dp))
-                Text(stringResource(Res.string.arrqueue_open_settings))
-            }
-        }
-    }
-}
-
-@Composable
-private fun EmptyQueueState(modifier: Modifier = Modifier) {
-    Box(modifier = modifier, contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(
-                Tabler.Outline.Download,
-                contentDescription = null,
-                modifier = Modifier.size(64.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.height(16.dp))
-            Text(
-                stringResource(Res.string.arrqueue_empty_title),
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.height(4.dp))
-            Text(
-                stringResource(Res.string.arrqueue_empty_body),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
-}
-
-@Composable
-private fun SelectionActionBar(
-    selectedCount: Int,
-    actionInProgress: Boolean,
-    onSelectAll: () -> Unit,
-    onClear: () -> Unit,
-    onBulkDelete: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Surface(
-        modifier = modifier,
-        shape = ShapeCache.smooth12,
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        shadowElevation = 8.dp,
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                stringResource(Res.string.arrqueue_selected_count, selectedCount),
-                style = MaterialTheme.typography.labelLarge,
-                modifier = Modifier.weight(1f),
-            )
-            IconButton(onClick = onSelectAll, enabled = !actionInProgress) {
-                Icon(Tabler.Outline.Check, contentDescription = stringResource(Res.string.arrqueue_select_all))
-            }
-            IconButton(onClick = onClear, enabled = !actionInProgress) {
-                Icon(Tabler.Outline.X, contentDescription = stringResource(Res.string.arrqueue_clear_selection))
-            }
-            FilledTonalButton(
-                onClick = onBulkDelete,
-                enabled = !actionInProgress && selectedCount > 0,
-                shape = ShapeCache.smooth12,
-                colors = ButtonDefaults.filledTonalButtonColors(
-                    contentColor = MaterialTheme.colorScheme.error,
-                ),
-            ) {
-                Icon(Tabler.Outline.Trash, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(6.dp))
-                Text(stringResource(Res.string.arrqueue_delete))
-            }
-        }
-    }
+    StatusPill(text = stringResource(label), color = color)
 }
 
 // ── Dialogs ───────────────────────────────────────────────────────────────
@@ -590,7 +548,9 @@ private fun DeleteActionDialog(
     // Three-way choice (remove-only / remove + search / blocklist + search): this
     // is a selection dialog, not a binary confirm. The real actions live in the
     // `content` slot as full-width buttons; `confirmText` is omitted so no primary
-    // confirm button renders, and Cancel lives in the dismiss slot.
+    // confirm button renders, and Cancel lives in the dismiss slot. The legs
+    // themselves are core:ui's shared QueueDeleteConfirmActions cluster (the
+    // requests detail sheet renders the same cluster inline) — labels only.
     ConfirmDialog(
         title = if (bulk) {
             stringResource(Res.string.arrqueue_remove_selected_title)
@@ -607,36 +567,15 @@ private fun DeleteActionDialog(
         tone = ConfirmTone.DESTRUCTIVE,
         icon = Tabler.Outline.Trash,
         content = {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                OutlinedButton(
-                    onClick = { onConfirm(false, false); onDismiss() },
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(stringResource(Res.string.arrqueue_remove_only))
-                }
-                OutlinedButton(
-                    onClick = { onConfirm(false, true); onDismiss() },
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Icon(Tabler.Outline.Search, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text(stringResource(Res.string.arrqueue_remove_search))
-                }
-                OutlinedButton(
-                    onClick = { onConfirm(true, true); onDismiss() },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = MaterialTheme.colorScheme.error,
-                    ),
-                ) {
-                    Icon(Tabler.Outline.Ban, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text(stringResource(Res.string.arrqueue_blocklist_search))
-                }
-            }
+            QueueDeleteConfirmActions(
+                onChoose = { blocklist, searchAgain ->
+                    onConfirm(blocklist, searchAgain)
+                    onDismiss()
+                },
+                removeOnlyLabel = stringResource(Res.string.arrqueue_remove_only),
+                removeSearchLabel = stringResource(Res.string.arrqueue_remove_search),
+                blocklistSearchLabel = stringResource(Res.string.arrqueue_blocklist_search),
+            )
         },
     )
 }

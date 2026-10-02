@@ -22,7 +22,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import com.raulshma.jellyplay.core.ui.components.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -47,15 +46,13 @@ import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
 import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
 import com.raulshma.jellyplay.core.ui.components.ConfirmTone
-import com.raulshma.jellyplay.core.ui.components.ErrorScreen
-import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.SectionHeader
-import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import com.raulshma.jellyplay.feature.livetv.components.LiveTvTabScaffold
 import com.raulshma.jellyplay.core.ui.generated.resources.Res as CoreUiRes
 import com.raulshma.jellyplay.core.ui.generated.resources.core_cancel
 import com.raulshma.jellyplay.feature.livetv.generated.resources.Res
@@ -89,8 +86,9 @@ fun RecordingsScreen(
         tag = "recordings_init",
     )
 
-    // Delete confirm dialog. Long-press a recording to open it.
-    uiState.pendingDelete?.let { recording ->
+    // Delete confirm dialog. Long-press a recording to open it; the machine
+    // lives on the ViewModel ([RecordingsViewModel.deleteConfirmation]).
+    viewModel.deleteConfirmation.item?.let { recording ->
         ConfirmDialog(
             title = stringResource(Res.string.livetv_delete_recording_title),
             message = stringResource(Res.string.livetv_delete_recording_body, recording.name),
@@ -103,75 +101,66 @@ fun RecordingsScreen(
         )
     }
 
-    when {
-        uiState.isLoading && uiState.recordings.isEmpty() -> {
-            ScreenLoadingState(modifier = Modifier.fillMaxSize())
-        }
-        uiState.error != null && uiState.recordings.isEmpty() -> {
-            ErrorScreen(message = uiState.error!!, onRetry = { viewModel.load() })
-        }
-        uiState.recordings.isEmpty() -> {
-            ScreenEmptyState(
-                icon = Tabler.Outline.RecordMail,
-                title = stringResource(Res.string.livetv_no_recordings_available),
-            )
-        }
-        else -> {
-            val rows = remember(uiState.recordings) { uiState.recordings.chunked(GRID_COLUMNS) }
-            PullToRefreshBox(
-                isRefreshing = uiState.isLoading,
-                onRefresh = { viewModel.load() },
-            ) {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .focusGroup()
-                        .tvFocusRestorer()
-                        .focusRequester(focusRequester),
-                    contentPadding = PaddingValues(vertical = 8.dp, horizontal = 0.dp),
-                ) {
-                    if (uiState.recordings.isNotEmpty()) {
-                        item {
-                            SectionHeader(stringResource(Res.string.livetv_section_latest_recordings), contentPad)
-                        }
-                        // 2-column grid rendered as one lazy row per pair so the
-                        // whole tab keeps a single vertical scroll (no nested
-                        // scrollers to fight for height).
-                        items(
-                            items = rows,
-                            key = { row -> "${row.first().id}:${row.last().id}" },
-                            contentType = { "recording_row" },
-                        ) { row ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = contentPad),
-                                horizontalArrangement = Arrangement.spacedBy(spacing),
-                            ) {
-                                row.forEach { recording ->
-                                    val imageUrl = remember(recording.id, recording.imageTag) {
-                                        viewModel.getImageUrl(recording.id, recording.imageTag)
-                                    }
-                                    RecordingCard(
-                                        recording = recording,
-                                        imageUrl = imageUrl,
-                                        onClick = { onRecordingClick(recording.id) },
-                                        onLongClick = { viewModel.showDeleteDialog(recording) },
-                                        modifier = Modifier.weight(1f),
-                                    )
-                                }
-                                // Trailing single card in an odd-length list spans
-                                // only its own column (no artificial stretch).
-                                if (row.size < GRID_COLUMNS) {
-                                    Spacer(Modifier.weight(1f))
-                                }
-                            }
-                        }
-                        item { Spacer(Modifier.height(16.dp)) }
-                    }
-                    item { Spacer(Modifier.height(bottomPad)) }
+    // The shared tab ladder (loading / error / empty rungs + the
+    // pull-to-refresh content rung).
+    LiveTvTabScaffold(
+        isLoading = uiState.isLoading,
+        error = uiState.error,
+        isEmpty = uiState.recordings.isEmpty(),
+        emptyIcon = Tabler.Outline.RecordMail,
+        emptyTitleRes = Res.string.livetv_no_recordings_available,
+        isRefreshing = uiState.isLoading,
+        onRefresh = { viewModel.load() },
+    ) {
+        val rows = remember(uiState.recordings) { uiState.recordings.chunked(GRID_COLUMNS) }
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .focusGroup()
+                .tvFocusRestorer()
+                .focusRequester(focusRequester),
+            contentPadding = PaddingValues(vertical = 8.dp, horizontal = 0.dp),
+        ) {
+            if (uiState.recordings.isNotEmpty()) {
+                item {
+                    SectionHeader(stringResource(Res.string.livetv_section_latest_recordings), contentPad)
                 }
+                // 2-column grid rendered as one lazy row per pair so the
+                // whole tab keeps a single vertical scroll (no nested
+                // scrollers to fight for height).
+                items(
+                    items = rows,
+                    key = { row -> "${row.first().id}:${row.last().id}" },
+                    contentType = { "recording_row" },
+                ) { row ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = contentPad),
+                        horizontalArrangement = Arrangement.spacedBy(spacing),
+                    ) {
+                        row.forEach { recording ->
+                            val imageUrl = remember(recording.id, recording.imageTag) {
+                                viewModel.getImageUrl(recording.id, recording.imageTag)
+                            }
+                            RecordingCard(
+                                recording = recording,
+                                imageUrl = imageUrl,
+                                onClick = { onRecordingClick(recording.id) },
+                                onLongClick = { viewModel.showDeleteDialog(recording) },
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                        // Trailing single card in an odd-length list spans
+                        // only its own column (no artificial stretch).
+                        if (row.size < GRID_COLUMNS) {
+                            Spacer(Modifier.weight(1f))
+                        }
+                    }
+                }
+                item { Spacer(Modifier.height(16.dp)) }
             }
+            item { Spacer(Modifier.height(bottomPad)) }
         }
     }
 }

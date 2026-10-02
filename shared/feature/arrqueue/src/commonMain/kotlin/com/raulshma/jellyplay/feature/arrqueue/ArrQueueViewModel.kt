@@ -5,8 +5,7 @@ import androidx.compose.runtime.State
 import com.raulshma.jellyplay.core.concurrency.DEFAULT_FANOUT_PARALLELISM
 import com.raulshma.jellyplay.core.concurrency.mapConcurrent
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
-import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore
-import com.raulshma.jellyplay.core.datastore.experimental.directArrEnabled
+import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalFeatureGate
 import com.raulshma.jellyplay.core.model.PendingConfirmation
 import com.raulshma.jellyplay.core.model.SelectionState
 import com.raulshma.jellyplay.core.model.arr.ArrQueueDeleteOptions
@@ -20,11 +19,8 @@ import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_impo
 import com.raulshma.jellyplay.feature.arrqueue.generated.resources.arrqueue_unknown_error
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.sync.Semaphore
 
 /**
@@ -67,7 +63,7 @@ data class ArrQueueUiState(
 
 class ArrQueueViewModel(
     private val arrRepository: ArrRepository,
-    experimentalStore: com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore,
+    experimentalGate: ExperimentalFeatureGate,
 ) : JellyPlayViewModel() {
 
     private val _state = composeState(ArrQueueUiState())
@@ -84,17 +80,11 @@ class ArrQueueViewModel(
     val messages: Flow<ArrQueueMessage> = messageChannel.receiveAsFlow()
 
     /**
-     * Whether the Direct *arr Integration experimental flag is enabled.
-     *
-     * Eagerly shared (not `WhileSubscribed`) so the value is always available
-     * to [loadQueue] / [refresh] reads via `.value`; mirrors the rationale in
-     * `RequestsViewModel.directArrEnabled`.
+     * Whether the Direct *arr Integration experimental flag is enabled —
+     * [ExperimentalFeatureGate.directArrEnabled] verbatim (rationale and
+     * init-timing notes live on the gate).
      */
-    private val directArrEnabled: StateFlow<Boolean> = experimentalStore.directArrEnabled()
-        .stateIn(scope, SharingStarted.Eagerly, false)
-
-    /** Hot stream of the combined queue, mirrored into UI state. */
-    val featureEnabled: StateFlow<Boolean> = directArrEnabled
+    val featureEnabled: StateFlow<Boolean> = experimentalGate.directArrEnabled
 
     init {
         // Mirror the repository's queue flow into UI state. Empty until the
@@ -108,7 +98,7 @@ class ArrQueueViewModel(
     }
 
     fun refresh() {
-        if (!directArrEnabled.value) {
+        if (!featureEnabled.value) {
             _state.value = _state.value.copy(isLoading = false, error = null)
             return
         }
@@ -171,13 +161,16 @@ class ArrQueueViewModel(
      * BEFORE the repository call (clear-before-action — failure surfaces
      * through the message channel and never reopens the dialog), run the
      * single command, and dispatch its [Result] to EXACTLY ONE arm — the
-     * caller's success arm, or the collapsed failure arm (Raw when the
-     * exception carries a message, the unknown-error resource otherwise).
-     * The busy flag settles once after either arm.
+     * caller's (optional) success arm, or the collapsed failure arm (Raw when
+     * the exception carries a message, the unknown-error resource otherwise).
+     * The busy flag settles once after either arm. The success arm defaults
+     * to empty: the single-row delete's follow-up choreography moved into the
+     * repository's deep [ArrRepository.deleteQueueRow], so its ladder call
+     * has nothing left to run on success.
      */
     private fun runQueueAction(
         action: suspend () -> Result<Unit>,
-        onSuccess: suspend () -> Unit,
+        onSuccess: suspend () -> Unit = {},
     ) {
         launch {
             _state.value = _state.value.copy(actionInProgress = true, actionConfirmation = _state.value.actionConfirmation.clear())
@@ -192,26 +185,14 @@ class ArrQueueViewModel(
 
     /**
      * Deletes a single queue row. [blocklist] adds the release to the *arr
-     * blocklist; [searchAgain] triggers a fresh search for a replacement.
+     * blocklist; [searchAgain] triggers a fresh search for a replacement —
+     * the option mapping, replacement search and queue refresh are all the
+     * repository's [ArrRepository.deleteQueueRow] deep member (the former
+     * hand-copied choreography), so the guard ladder has no success arm left.
      */
     fun deleteItem(item: ArrQueueItem, blocklist: Boolean, searchAgain: Boolean) {
         runQueueAction(
-            action = {
-                arrRepository.deleteQueueItem(
-                    item,
-                    ArrQueueDeleteOptions(
-                        removeFromClient = true,
-                        blocklist = blocklist,
-                        skipRedownload = !searchAgain,
-                    ),
-                )
-            },
-            onSuccess = {
-                if (searchAgain) {
-                    val tmdb = item.tmdbId
-                    if (tmdb != null) arrRepository.searchForTmdb(tmdb, item.serverKind)
-                }
-            },
+            action = { arrRepository.deleteQueueRow(item, blocklist, searchAgain) },
         )
     }
 

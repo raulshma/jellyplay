@@ -41,6 +41,7 @@ class CoreDataWorkerFactory : WorkerFactory() {
                 downloadRepository = koin().get(),
                 downloadIntake = koin().get(),
                 downloadsStore = koin().get(),
+                serverIdentityStore = koin().get(),
             )
             UserDataSyncWorker::class.simpleName -> UserDataSyncWorker(
                 context, workerParameters,
@@ -56,13 +57,14 @@ class CoreDataWorkerFactory : WorkerFactory() {
             )
             WatchedMediaScanWorker::class.simpleName -> WatchedMediaScanWorker(
                 context, workerParameters,
-                apiClient = koin().get(),
+                authApiClient = koin().get(),
+                mediaInfoApiClient = koin().get(),
                 scanStateDao = koin().get(),
             )
             TvWatchNextWorker::class.simpleName -> TvWatchNextWorker(
                 context, workerParameters,
                 mediaRepository = koin().get(),
-                playbackRepository = koin().get(),
+                imageUrlProvider = koin().get(),
                 playbackStore = koin().get(),
                 timeSource = koin().get(),
             )
@@ -76,7 +78,7 @@ class CoreDataWorkerFactory : WorkerFactory() {
                 createDrainer = { notifier ->
                     PlaybackOutboxDrainerImpl(
                         outbox = koin().get(),
-                        playbackRepository = koin().get(),
+                        outboxReplay = koin().get<com.raulshma.jellyplay.core.data.worker.PlaybackOutboxReplay>(),
                         offlineModeManager = koin().get(),
                         playedStateSync = koin().get(),
                         offlineRepository = koin().get(),

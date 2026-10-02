@@ -45,6 +45,13 @@ internal data class DetailContentState(
     val persistedSeasonId: String? = null,
     val selectedSubtitleIndex: Int?,
     val selectedAudioIndex: Int?,
+    /**
+     * The version (media-source id) the user picked in the detail screen's
+     * version picker for this item; null = the server's default (first)
+     * source. Pure UI selection — the Play dispatch carries it through
+     * `onPlayClick`'s existing id argument, nothing is persisted here.
+     */
+    val selectedVersionId: String? = null,
     val isDownloading: Boolean,
     val isDownloadingSeries: Boolean,
     val activeDownload: DownloadItem?,
@@ -67,6 +74,12 @@ internal data class DetailContentState(
     val isSeerrRecommendationsEnabled: Boolean,
     val preferences: DetailPreferences,
     val canManageSeries: Boolean,
+    /**
+     * The signed-in user may run server-side metadata actions (admin). Gates
+     * the ⋮ menu's "Refresh metadata" / "Identify" entries together with
+     * [DetailCapabilities.remoteDiscovery] (resolved in `DetailContent`).
+     */
+    val canManageMetadata: Boolean = false,
     // ── Unified-provider fields. Drives source-aware rendering of the
     // download/sync UI, local subtitle selector, asset-aware image resolution,
     // and capability-gated navigation. Empty/default for a plain REMOTE item so
@@ -115,6 +128,8 @@ internal data class ArtworkCallbacks(
     val getBackdropUrl: (String) -> String = { "" },
     /** Resolves a chapter thumbnail URL (imageType = Chapter) by list index + tag. */
     val getChapterImageUrl: (itemId: String, imageIndex: Int, tag: String?) -> String = { _, _, _ -> "" },
+    /** Resolves the clear-logo URL (imageType = Logo) for the "prefer logos" title. */
+    val getLogoUrl: (String) -> String = { "" },
 )
 
 /**
@@ -149,11 +164,15 @@ internal data class PlaybackCallbacks(
     val onSelectLocalSubtitle: (index: Int?) -> Unit = {},
     /** Start an instant mix for the current audio item (fire-and-forget VM action). */
     val onStartInstantMix: () -> Unit = {},
+    /** Start an endless radio for the current audio item (fire-and-forget VM action). */
+    val onStartRadio: () -> Unit = {},
     /**
      * Bootstrap a SyncPlay watch party for the current item and open the player
      * (fire-and-forget VM action; success navigates via DetailMessage).
      */
     val onStartWatchParty: () -> Unit = {},
+    /** Open the version picker sheet (multi-version items only). */
+    val onOpenVersionPicker: () -> Unit = {},
 )
 
 /**
@@ -267,6 +286,26 @@ internal data class AddToCallbacks(
 )
 
 /**
+ * Admin metadata-maintenance actions for the current item (the ⋮ menu's
+ * server-side metadata entries).
+ *
+ * Grouping rule: the metadata-maintenance openers that open sheets at screen
+ * level; the underlying writes run through the `MetadataAdminActions` helper
+ * the screen reaches directly.
+ */
+@Immutable
+internal data class MetadataCallbacks(
+    /** Open the "Refresh metadata" mode sheet for the current item. */
+    val onRefreshMetadata: () -> Unit = {},
+    /** Open the "Identify" provider re-match sheet for the current item. */
+    val onIdentify: () -> Unit = {},
+    /** Open the "Merge versions…" multi-select sheet (admin, movies). */
+    val onOpenMergeVersions: () -> Unit = {},
+    /** Split the current item's merged versions apart (admin, movies). */
+    val onSplitVersions: () -> Unit = {},
+)
+
+/**
  * Navigation off the detail screen.
  *
  * Grouping rule: every lambda whose job is to land the user on another screen
@@ -328,4 +367,5 @@ internal data class DetailContentCallbacks(
     val addTo: AddToCallbacks = AddToCallbacks(),
     val navigation: NavigationCallbacks = NavigationCallbacks(),
     val screen: ScreenCallbacks = ScreenCallbacks(),
+    val metadata: MetadataCallbacks = MetadataCallbacks(),
 )

@@ -4,7 +4,7 @@ import com.raulshma.jellyplay.core.data.offline.OfflineDeleteActions
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.toMediaItem
-import com.raulshma.jellyplay.core.ui.components.downloadedSeasonSlices
+import com.raulshma.jellyplay.core.ui.components.downloads.downloadedSeasonSlices
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job

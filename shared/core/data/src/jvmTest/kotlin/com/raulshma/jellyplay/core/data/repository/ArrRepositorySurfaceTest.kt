@@ -13,10 +13,16 @@ import kotlin.test.assertTrue
  * members (fun/val declarations, overloads counted separately — matching the
  * impl's override count), and pins that count so it can only move DOWN.
  *
- * Baseline 27 is the count at the ratchet's introduction (the companion
- * object's `SERVER_CACHE_TTL_MS` const is not a member and does not count).
+ * Baseline 19 = the 27 at the ratchet's introduction minus the 9-member
+ * Sonarr series-management family, which moved to its own one-consumer seam
+ * [SonarrSeriesOperations] (the Manage Series screen) rather than staying on
+ * this aggregate, plus one deep member (`deleteQueueRow`) that folded the
+ * queue-delete choreography the requests and arrqueue ViewModels had
+ * copy-pasted — a consolidation, not surface growth (the companion object's
+ * `SERVER_CACHE_TTL_MS` const is not a member and does not count).
  *
- * Lower [maxInterfaceMembers] when another member retires; never raise it.
+ * Lower [maxInterfaceMembers] when another member retires; never raise it
+ * without a consolidation rationale like deleteQueueRow's.
  * A genuinely new *arr capability should land as a narrow collaborator or a
  * new [com.raulshma.jellyplay.core.network.api.ArrServiceClient] method
  * behind the existing dispatch rather than growing this surface.
@@ -24,7 +30,7 @@ import kotlin.test.assertTrue
 class ArrRepositorySurfaceTest {
 
     /** The maximum allowed member count of [ArrRepository] (see class KDoc). */
-    private val maxInterfaceMembers = 27
+    private val maxInterfaceMembers = 19
 
     /** Walks up from the working dir to the module root that owns src/commonMain/kotlin. */
     private fun moduleRoot(): File {

@@ -20,7 +20,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import com.raulshma.jellyplay.core.ui.components.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -45,13 +44,11 @@ import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
 import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
 import com.raulshma.jellyplay.core.ui.components.ConfirmTone
-import com.raulshma.jellyplay.core.ui.components.ErrorScreen
-import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
-import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import com.raulshma.jellyplay.feature.livetv.components.LiveTvTabScaffold
 import com.raulshma.jellyplay.feature.livetv.generated.resources.Res
 import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_action_close
 import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_cancel_series
@@ -76,38 +73,32 @@ fun SeriesScreen(
         tag = "series_init",
     )
 
-    when {
-        uiState.isLoading && uiState.seriesTimers.isEmpty() -> {
-            ScreenLoadingState(modifier = Modifier.fillMaxSize())
-        }
-        uiState.error != null && uiState.seriesTimers.isEmpty() -> {
-            ErrorScreen(message = uiState.error!!, onRetry = { viewModel.load() })
-        }
-        uiState.seriesTimers.isEmpty() -> {
-            ScreenEmptyState(
-                icon = Tabler.Outline.CalendarRepeat,
-                title = stringResource(Res.string.livetv_no_series_recordings),
-            )
-        }
-        else -> {
-            PullToRefreshBox(isRefreshing = uiState.isLoading, onRefresh = { viewModel.load() }) {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .focusGroup()
-                        .tvFocusRestorer()
-                        .focusRequester(focusRequester),
-                    contentPadding = PaddingValues(top = 8.dp, bottom = bottomPad),
-                    verticalArrangement = Arrangement.spacedBy(spacing),
-                ) {
-                    items(
-                        items = uiState.seriesTimers,
-                        key = { it.id },
-                        contentType = { "series_timer" },
-                    ) { timer ->
-                        SeriesTimerCard(timer = timer, contentPad = contentPad) { viewModel.showDetail(timer) }
-                    }
-                }
+    // The shared tab ladder (loading / error / empty rungs + the
+    // pull-to-refresh content rung).
+    LiveTvTabScaffold(
+        isLoading = uiState.isLoading,
+        error = uiState.error,
+        isEmpty = uiState.seriesTimers.isEmpty(),
+        emptyIcon = Tabler.Outline.CalendarRepeat,
+        emptyTitleRes = Res.string.livetv_no_series_recordings,
+        isRefreshing = uiState.isLoading,
+        onRefresh = { viewModel.load() },
+    ) {
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .focusGroup()
+                .tvFocusRestorer()
+                .focusRequester(focusRequester),
+            contentPadding = PaddingValues(top = 8.dp, bottom = bottomPad),
+            verticalArrangement = Arrangement.spacedBy(spacing),
+        ) {
+            items(
+                items = uiState.seriesTimers,
+                key = { it.id },
+                contentType = { "series_timer" },
+            ) { timer ->
+                SeriesTimerCard(timer = timer, contentPad = contentPad) { viewModel.showDetail(timer) }
             }
         }
     }

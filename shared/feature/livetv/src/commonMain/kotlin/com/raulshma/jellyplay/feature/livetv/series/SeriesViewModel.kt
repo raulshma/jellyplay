@@ -3,16 +3,21 @@ package com.raulshma.jellyplay.feature.livetv.series
 import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
 import com.raulshma.jellyplay.core.model.DvrSeriesTimer
+import com.raulshma.jellyplay.core.ui.message.UiMessage
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.core.ui.viewmodel.loadInto
 import com.raulshma.jellyplay.feature.livetv.components.RecordActions
 import com.raulshma.jellyplay.feature.livetv.components.RecordOutcome
+import com.raulshma.jellyplay.feature.livetv.generated.resources.Res
+import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_error_cancel_recording
+import com.raulshma.jellyplay.feature.livetv.generated.resources.livetv_error_load_series
 
 @Immutable
 data class SeriesUiState(
     val seriesTimers: List<DvrSeriesTimer> = emptyList(),
     val isLoading: Boolean = false,
-    val error: String? = null,
+    /** The load/cancel failure — resolved to text at render ([UiMessage.asText]). */
+    val error: UiMessage? = null,
     val selectedTimer: DvrSeriesTimer? = null,
 )
 
@@ -39,7 +44,8 @@ class SeriesViewModel(
                 _uiState.update { it.copy(selectedTimer = null) }
                 load()
             }
-            is RecordOutcome.Error -> _uiState.update { it.copy(error = outcome.message) }
+            is RecordOutcome.Error ->
+                _uiState.update { it.copy(error = UiMessage.of(outcome.message, Res.string.livetv_error_cancel_recording)) }
             is RecordOutcome.Requesting, RecordOutcome.Idle -> Unit
         }
     }
@@ -52,7 +58,11 @@ class SeriesViewModel(
                 start = { _uiState.update { it.copy(isLoading = true, error = null) } },
                 fetch = { mediaRepository.getSeriesTimers(sortBy = "SortName") },
                 onSuccess = { timers -> _uiState.update { s -> s.copy(seriesTimers = timers, isLoading = false) } },
-                onFailure = { e -> _uiState.update { s -> s.copy(error = e.message, isLoading = false) } },
+                onFailure = { e ->
+                    _uiState.update {
+                        s -> s.copy(error = UiMessage.of(e, Res.string.livetv_error_load_series), isLoading = false)
+                    }
+                },
             )
         }
     }

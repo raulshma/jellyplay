@@ -7,6 +7,10 @@ package com.raulshma.jellyplay.core.model.seerr
  * individual flows (which each new holder flow used to force every consumer
  * to re-write). It lives here, with the other Seerr models, so core/ui can
  * see it — `SeerrRequestDialog` folds it into dialog fields in one place.
+ *
+ * Deliberately NO dialog field: WHICH item the dialog is open for is
+ * presentation state owned by core/ui's `SeerrRequestDialogHolder`, so
+ * snapshot consumers without a dialog don't carry dialog vocabulary.
  */
 data class SeerrRequestSnapshot(
     val requestResult: SeerrRequestResult? = null,
@@ -15,11 +19,4 @@ data class SeerrRequestSnapshot(
     val isLoadingServices: Boolean = false,
     val tvSeasons: List<SeerrSeason> = emptyList(),
     val tvIsAnime: Boolean = false,
-    /**
-     * The item the request dialog is open for (null = closed). Set by the
-     * holder's `openRequestDialog` — together with the open cascade it fires —
-     * so screens gate the dialog render on this instead of hand-copying the
-     * open/dismiss choreography.
-     */
-    val dialogItem: SeerrSearchItem? = null,
 )

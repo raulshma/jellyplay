@@ -9,7 +9,7 @@ import android.view.View
 import android.widget.RemoteViews
 import android.widget.RemoteViewsService
 import com.raulshma.jellyplay.R
-import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.deeplink.DeepLinkGrammar
@@ -49,18 +49,18 @@ class ContinueWatchingWidgetService : RemoteViewsService() {
 
     override fun onGetViewFactory(intent: Intent): RemoteViewsFactory {
         val store: WidgetDataStore = WidgetKoin.get()
-        val playbackRepo: PlaybackRepository = WidgetKoin.get()
+        val imageUrlProvider: ImageUrlProvider = WidgetKoin.get()
         val appWidgetId = intent.getIntExtra(
             AppWidgetManager.EXTRA_APPWIDGET_ID,
             AppWidgetManager.INVALID_APPWIDGET_ID
         )
-        return ContinueWatchingFactory(applicationContext, store, playbackRepo, appWidgetId)
+        return ContinueWatchingFactory(applicationContext, store, imageUrlProvider, appWidgetId)
     }
 
     private class ContinueWatchingFactory(
         context: Context,
         private val store: WidgetDataStore,
-        private val playbackRepository: PlaybackRepository,
+        private val imageUrlProvider: ImageUrlProvider,
         appWidgetId: Int,
     ) : WidgetGridFactory<MediaItem>(
         context = context,
@@ -94,7 +94,7 @@ class ContinueWatchingWidgetService : RemoteViewsService() {
         // The (imageId → url) rows both poster paths derive — the preload's
         // fetch and the bind's cachedPoster lookup.
         private fun posterEntries(items: List<MediaItem>): List<ContinueWatchingPosterEntry> =
-            items.map { WidgetImageLoader.continueWatchingPosterEntry(it, playbackRepository) }
+            items.map { WidgetImageLoader.continueWatchingPosterEntry(it, imageUrlProvider) }
 
         // The cache is keyed by the continue-watching image id (the series id
         // when the row is an episode — the same key [posterFor] looks up), so

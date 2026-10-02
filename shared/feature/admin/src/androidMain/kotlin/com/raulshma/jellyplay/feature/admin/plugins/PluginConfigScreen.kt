@@ -43,11 +43,11 @@ import com.raulshma.jellyplay.feature.admin.generated.resources.admin_plugin_set
 import com.raulshma.jellyplay.feature.admin.generated.resources.admin_refresh
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState
-import com.raulshma.jellyplay.core.ui.feedback.LocalUserMessageBus
-import com.raulshma.jellyplay.core.ui.feedback.UiText
+import com.raulshma.jellyplay.core.ui.message.LocalUserMessageBus
+import com.raulshma.jellyplay.core.ui.message.UiText
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
-import com.raulshma.jellyplay.feature.admin.users.detail.asText
+import com.raulshma.jellyplay.core.ui.message.asText
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 
 @Composable

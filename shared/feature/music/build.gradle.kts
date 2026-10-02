@@ -1,5 +1,3 @@
-import org.gradle.api.plugins.ExtensionAware
-
 plugins {
     id("jellyplay.kmp.library.compose")
     alias(libs.plugins.kotlin.serialization)
@@ -29,34 +27,11 @@ kotlin {
             // HomeDiscoveryStore (music home discovery prefs).
             implementation(project(":shared:core:datastore"))
             implementation(project(":shared:core:ui"))
-            // JetBrains CMP distribution (see catalog note): Android targets
-            // redirect to the androidx artifacts.
-            implementation(libs.jb.compose.runtime)
-            implementation(libs.jb.compose.ui)
-            implementation(libs.jb.compose.foundation)
-            implementation(libs.jb.compose.animation)
-            implementation(libs.jb.compose.material3)
-            // Compose-resources runtime (stringResource/StringResource API).
-            implementation(compose.components.resources)
-            implementation(libs.tabler.icons.outline)
-            implementation(libs.tabler.icons.filled)
-            // Nav3 ships KMP variants from google maven directly — no mirror.
-            implementation(libs.navigation3.runtime)
-            implementation(libs.navigation3.ui)
-            implementation(libs.lifecycle.viewmodel)
             // GenreDetailViewModel ctor arg (nav-entry SavedStateHandle, KMP
             // since lifecycle 2.9 — synthesized from CreationExtras by Koin's
             // Android parameters holder, same extras the Hilt factory used).
             implementation(libs.lifecycle.viewmodel.savedstate)
-            // collectAsStateWithLifecycle in the screens.
-            implementation(libs.lifecycle.runtime.compose)
             implementation(libs.paging.compose)
-            // Koin owns the music ViewModels (V3 feature conveyor: one
-            // framework per type — the Hilt annotations were stripped at the
-            // move).
-            implementation(libs.koin.core)
-            implementation(libs.koin.compose)
-            implementation(libs.koin.compose.viewmodel)
         }
         // (kotlin("test") comes from the convention plugin.)
         getByName("jvmTest").dependencies {
@@ -71,9 +46,7 @@ kotlin {
     }
 }
 
-// `compose.resources` is a nested extension with no generated Kotlin-DSL
-// accessor; configure it explicitly. Same package as the legacy :feature:music
-// so migrated files keep their `com.raulshma.jellyplay.feature.music` imports;
-// generated accessors land in `...feature.music.generated.resources`.
-val composeResources = (compose as ExtensionAware).extensions.getByName("resources") as org.jetbrains.compose.resources.ResourcesExtension
-composeResources.packageOfResClass = "com.raulshma.jellyplay.feature.music.generated.resources"
+// The compose-resources `packageOfResClass`
+// (`...feature.music.generated.resources`, same as the legacy value) is a
+// path-derived default from the convention plugin now — see
+// KmpLibraryComposePlugin.

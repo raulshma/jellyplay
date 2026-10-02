@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.shell
 
+import com.raulshma.jellyplay.core.concurrency.RestartableJob
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayEvent
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager
 import kotlinx.coroutines.CoroutineScope

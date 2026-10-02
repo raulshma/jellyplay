@@ -3,6 +3,8 @@ package com.raulshma.jellyplay.core.network.arr
 import com.raulshma.jellyplay.core.model.arr.ArrCommandName
 import com.raulshma.jellyplay.core.model.arr.ArrDownloadStatus
 import com.raulshma.jellyplay.core.model.arr.ArrQueueDeleteOptions
+import com.raulshma.jellyplay.core.model.arr.ArrServerConfig
+import com.raulshma.jellyplay.core.model.arr.ArrServiceKind
 import com.raulshma.jellyplay.core.network.api.ApiException
 import kotlinx.coroutines.runBlocking
 import okhttp3.OkHttpClient
@@ -22,11 +24,21 @@ class RadarrApiClientTest {
     private lateinit var mockWebServer: MockWebServer
     private lateinit var apiClient: RadarrApiClientImpl
 
+    /** The one connection fixture; rebuilt in setup so baseUrl carries the live port. */
+    private lateinit var conn: ArrServerConfig
+
     @BeforeTest
     fun setup() {
         mockWebServer = MockWebServer()
         mockWebServer.start()
         apiClient = RadarrApiClientImpl(OkHttpClient())
+        conn = ArrServerConfig(
+            id = "radarr-test",
+            baseUrl = mockWebServer.url("/").toString().trimEnd('/'),
+            apiKey = "k",
+            name = "Radarr Test",
+            kind = ArrServiceKind.RADARR,
+        )
     }
 
     @AfterTest
@@ -64,8 +76,7 @@ class RadarrApiClientTest {
         """.trimIndent()
         mockWebServer.enqueue(MockResponse().setBody(json).setResponseCode(200))
 
-        val baseUrl = mockWebServer.url("/").toString().trimEnd('/')
-        val result = apiClient.getQueue(baseUrl, "secret-key")
+        val result = apiClient.getQueue(conn.copy(apiKey = "secret-key"))
 
         assertTrue(result.isSuccess)
         val queue = result.getOrThrow()
@@ -99,7 +110,7 @@ class RadarrApiClientTest {
         """.trimIndent()
         mockWebServer.enqueue(MockResponse().setBody(json).setResponseCode(200))
 
-        val result = apiClient.getQueue(mockWebServer.url("/").toString().trimEnd('/'), "k")
+        val result = apiClient.getQueue(conn)
         assertTrue(result.isSuccess)
         assertEquals(ArrDownloadStatus.IMPORTED, result.getOrThrow()[0].status)
     }
@@ -107,7 +118,7 @@ class RadarrApiClientTest {
     @Test
     fun `getQueue handles empty records envelope`() = runBlocking {
         mockWebServer.enqueue(MockResponse().setBody("""{ "records": [] }""").setResponseCode(200))
-        val result = apiClient.getQueue(mockWebServer.url("/").toString().trimEnd('/'), "k")
+        val result = apiClient.getQueue(conn)
         assertTrue(result.isSuccess)
         assertTrue(result.getOrThrow().isEmpty())
     }
@@ -117,14 +128,14 @@ class RadarrApiClientTest {
         // Radarr never returns a bare array; if a future change reverts the
         // envelope unwrap, decoding this must fail rather than silently parse.
         mockWebServer.enqueue(MockResponse().setBody("[]").setResponseCode(200))
-        val result = apiClient.getQueue(mockWebServer.url("/").toString().trimEnd('/'), "k")
+        val result = apiClient.getQueue(conn)
         assertTrue(result.isFailure, "bare array must not decode as the envelope")
     }
 
     @Test
     fun `getQueue maps 401 to failure`() = runBlocking {
         mockWebServer.enqueue(MockResponse().setResponseCode(401).setBody("Unauthorized"))
-        val result = apiClient.getQueue(mockWebServer.url("/").toString().trimEnd('/'), "bad-key")
+        val result = apiClient.getQueue(conn.copy(apiKey = "bad-key"))
         assertTrue(result.isFailure)
     }
 
@@ -142,7 +153,7 @@ class RadarrApiClientTest {
         mockWebServer.enqueue(MockResponse().setBody(json).setResponseCode(200))
 
         val result = apiClient.getCalendar(
-            mockWebServer.url("/").toString().trimEnd('/'), "k",
+            conn,
             "2026-07-01", "2026-09-01",
         )
         assertTrue(result.isSuccess)
@@ -161,7 +172,7 @@ class RadarrApiClientTest {
     @Test
     fun `testConnection hits system-status and succeeds on 2xx`() = runBlocking {
         mockWebServer.enqueue(MockResponse().setBody("{}").setResponseCode(200))
-        val result = apiClient.testConnection(mockWebServer.url("/").toString().trimEnd('/'), "k")
+        val result = apiClient.testConnection(conn)
         assertTrue(result.isSuccess)
         val recorded = mockWebServer.takeRequest()
         assertTrue(recorded.path!!.startsWith("/api/v3/system/status"))
@@ -170,7 +181,7 @@ class RadarrApiClientTest {
     @Test
     fun `testConnection fails on 401`() = runBlocking {
         mockWebServer.enqueue(MockResponse().setResponseCode(401))
-        val result = apiClient.testConnection(mockWebServer.url("/").toString().trimEnd('/'), "bad")
+        val result = apiClient.testConnection(conn.copy(apiKey = "bad"))
         assertTrue(result.isFailure)
     }
 
@@ -178,7 +189,7 @@ class RadarrApiClientTest {
     fun `deleteQueueItem sends DELETE with options params`() = runBlocking {
         mockWebServer.enqueue(MockResponse().setResponseCode(200).setBody("{}"))
         val result = apiClient.deleteQueueItem(
-            mockWebServer.url("/").toString().trimEnd('/'), "k", 42,
+            conn, 42,
             ArrQueueDeleteOptions(removeFromClient = true, blocklist = true, skipRedownload = false),
         )
         assertTrue(result.isSuccess)
@@ -194,7 +205,7 @@ class RadarrApiClientTest {
     fun `deleteQueueItems sends bulk DELETE with ids body`() = runBlocking {
         mockWebServer.enqueue(MockResponse().setResponseCode(200).setBody("{}"))
         val result = apiClient.deleteQueueItems(
-            mockWebServer.url("/").toString().trimEnd('/'), "k", listOf(1, 2, 3),
+            conn, listOf(1, 2, 3),
         )
         assertTrue(result.isSuccess)
         val recorded = mockWebServer.takeRequest()
@@ -205,7 +216,7 @@ class RadarrApiClientTest {
     @Test
     fun `deleteQueueItems no-op on empty list`() = runBlocking {
         val result = apiClient.deleteQueueItems(
-            mockWebServer.url("/").toString().trimEnd('/'), "k", emptyList(),
+            conn, emptyList(),
         )
         assertTrue(result.isSuccess)
         // No request should have been recorded.
@@ -215,7 +226,7 @@ class RadarrApiClientTest {
     @Test
     fun `grabQueueItem POSTs to queue grab`() = runBlocking {
         mockWebServer.enqueue(MockResponse().setResponseCode(200).setBody("{}"))
-        val result = apiClient.grabQueueItem(mockWebServer.url("/").toString().trimEnd('/'), "k", 5)
+        val result = apiClient.grabQueueItem(conn, 5)
         assertTrue(result.isSuccess)
         val recorded = mockWebServer.takeRequest()
         assertEquals("POST", recorded.method)
@@ -231,7 +242,7 @@ class RadarrApiClientTest {
             ] }
         """.trimIndent()
         mockWebServer.enqueue(MockResponse().setBody(json).setResponseCode(200))
-        val result = apiClient.getBlocklist(mockWebServer.url("/").toString().trimEnd('/'), "k")
+        val result = apiClient.getBlocklist(conn)
         assertTrue(result.isSuccess)
         val items = result.getOrThrow()
         assertEquals(1, items.size)
@@ -243,7 +254,7 @@ class RadarrApiClientTest {
     @Test
     fun `deleteBlocklistItem sends DELETE`() = runBlocking {
         mockWebServer.enqueue(MockResponse().setResponseCode(200))
-        val result = apiClient.deleteBlocklistItem(mockWebServer.url("/").toString().trimEnd('/'), "k", 7)
+        val result = apiClient.deleteBlocklistItem(conn, 7)
         assertTrue(result.isSuccess)
         val recorded = mockWebServer.takeRequest()
         assertEquals("DELETE", recorded.method)
@@ -257,7 +268,7 @@ class RadarrApiClientTest {
         """.trimIndent()
         mockWebServer.enqueue(MockResponse().setBody(json).setResponseCode(200))
         val result = apiClient.postCommand(
-            mockWebServer.url("/").toString().trimEnd('/'), "k",
+            conn,
             ArrCommandName.SEARCH_MOVIE, movieIds = listOf(123),
         )
         assertTrue(result.isSuccess)
@@ -287,7 +298,7 @@ class RadarrApiClientTest {
                 "movie": { "id": 1, "title": "X", "tmdbId": 1 } } ] }
         """.trimIndent()
         mockWebServer.enqueue(MockResponse().setBody(json).setResponseCode(200))
-        val item = apiClient.getQueue(mockWebServer.url("/").toString().trimEnd('/'), "k").getOrThrow()[0]
+        val item = apiClient.getQueue(conn).getOrThrow()[0]
         assertEquals("qbittorrent", item.downloadClient)
         assertEquals("Bluray-1080p", item.quality)
         assertEquals(listOf("English"), item.languages)
@@ -303,7 +314,7 @@ class RadarrApiClientTest {
         val json = """[ { "id": 4242, "title": "Tracked", "tmdbId": 123 } ]"""
         mockWebServer.enqueue(MockResponse().setBody(json).setResponseCode(200))
 
-        val result = apiClient.findMovieIdByTmdb(mockWebServer.url("/").toString().trimEnd('/'), "k", 123)
+        val result = apiClient.findMovieIdByTmdb(conn, 123)
         assertTrue(result.isSuccess)
         assertEquals(4242, result.getOrThrow())
 
@@ -315,7 +326,7 @@ class RadarrApiClientTest {
     @Test
     fun `findMovieIdByTmdb returns null when movie is not tracked`() = runBlocking {
         mockWebServer.enqueue(MockResponse().setBody("[]").setResponseCode(200))
-        val result = apiClient.findMovieIdByTmdb(mockWebServer.url("/").toString().trimEnd('/'), "k", 999)
+        val result = apiClient.findMovieIdByTmdb(conn, 999)
         assertTrue(result.isSuccess)
         assertNull(result.getOrThrow())
     }
@@ -326,7 +337,7 @@ class RadarrApiClientTest {
 
     @Test
     fun `unknown host surfaces the Radarr service text with retryable classification`() = runBlocking {
-        val result = apiClient.testConnection("http://jellyplay-no-such-host.invalid", "k")
+        val result = apiClient.testConnection(conn.copy(baseUrl = "http://jellyplay-no-such-host.invalid"))
         assertTrue(result.isFailure)
         val error = result.exceptionOrNull()!! as ApiException
         assertEquals("Unable to reach Radarr. Check the URL and your network connection.", error.message)
@@ -335,7 +346,7 @@ class RadarrApiClientTest {
 
     @Test
     fun `connection refusal surfaces the Radarr connect text`() = runBlocking {
-        val result = apiClient.testConnection("http://127.0.0.1:1", "k")
+        val result = apiClient.testConnection(conn.copy(baseUrl = "http://127.0.0.1:1"))
         assertTrue(result.isFailure)
         val error = result.exceptionOrNull()!! as ApiException
         assertEquals("Could not connect to Radarr. Ensure the server is running and accessible.", error.message)
@@ -348,7 +359,7 @@ class RadarrApiClientTest {
             OkHttpClient.Builder().readTimeout(500, TimeUnit.MILLISECONDS).build(),
         )
         mockWebServer.enqueue(MockResponse().setBody("{}").setHeadersDelay(3, TimeUnit.SECONDS))
-        val result = timeoutClient.testConnection(mockWebServer.url("/").toString().trimEnd('/'), "k")
+        val result = timeoutClient.testConnection(conn)
         assertTrue(result.isFailure)
         val error = result.exceptionOrNull()!! as ApiException
         assertEquals("Connection to Radarr timed out. The server took too long to respond.", error.message)
@@ -358,7 +369,7 @@ class RadarrApiClientTest {
     @Test
     fun `HTTP failures carry the fromHttp taxonomy and the arr message shape`() = runBlocking {
         mockWebServer.enqueue(MockResponse().setResponseCode(401).setBody("""{"message":"Invalid API key"}"""))
-        val unauthorized = apiClient.testConnection(mockWebServer.url("/").toString().trimEnd('/'), "bad")
+        val unauthorized = apiClient.testConnection(conn.copy(apiKey = "bad"))
         assertTrue(unauthorized.isFailure)
         val authError = unauthorized.exceptionOrNull()!! as ApiException
         assertEquals(401, authError.httpCode)
@@ -371,7 +382,7 @@ class RadarrApiClientTest {
         repeat(com.raulshma.jellyplay.core.network.api.HttpExecutor.MAX_RETRIES + 1) {
             mockWebServer.enqueue(MockResponse().setResponseCode(500).setBody("boom"))
         }
-        val serverError = apiClient.testConnection(mockWebServer.url("/").toString().trimEnd('/'), "bad")
+        val serverError = apiClient.testConnection(conn.copy(apiKey = "bad"))
         assertTrue(serverError.isFailure)
         val serverApiError = serverError.exceptionOrNull()!! as ApiException
         assertEquals(500, serverApiError.httpCode)

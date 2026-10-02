@@ -4,7 +4,8 @@ import com.raulshma.jellyplay.core.model.ActiveSession
 import com.raulshma.jellyplay.core.model.PlaybackReportingStatus
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
-import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import com.raulshma.jellyplay.core.network.api.AuthApiClient
+import com.raulshma.jellyplay.core.network.api.MediaInfoApiClient
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
@@ -33,13 +34,14 @@ import kotlin.test.assertEquals
  *    which never cleared on identity change).
  *
  * The identity chain is REAL (HomeSession + SessionCacheRegistry over a
- * mocked `JellyfinApiClient.session` — the EpisodeCatalogueImplTest idiom),
+ * mocked `AuthApiClient.session` — the EpisodeCatalogueImplTest idiom),
  * so the invalidation is exercised end-to-end through the registry, not
  * stubbed.
  */
 class PlaybackReportingStatusStoreTest {
 
-    private val apiClient: JellyfinApiClient = mockk()
+    private val authApiClient: AuthApiClient = mockk()
+    private val mediaInfoApiClient: MediaInfoApiClient = mockk()
     private val sessionFlow = MutableStateFlow<ActiveSession?>(null)
 
     private lateinit var homeSession: HomeSession
@@ -47,16 +49,16 @@ class PlaybackReportingStatusStoreTest {
 
     @BeforeTest
     fun setup() {
-        every { apiClient.session } returns sessionFlow
+        every { authApiClient.session } returns sessionFlow
         homeSession = HomeSession(
-            apiClient,
+            authApiClient,
             CoroutineScope(SupervisorJob() + Dispatchers.Default),
         )
         val sessionCacheRegistry = SessionCacheRegistry(
             homeSession,
             CoroutineScope(SupervisorJob() + Dispatchers.Default),
         )
-        store = PlaybackReportingStatusStore(apiClient, sessionCacheRegistry)
+        store = PlaybackReportingStatusStore(mediaInfoApiClient, sessionCacheRegistry)
     }
 
     private fun session(serverId: String, userId: String) = ActiveSession(
@@ -91,7 +93,7 @@ class PlaybackReportingStatusStoreTest {
     /** A refreshed-AVAILABLE store, signed in as server-A/user-1. */
     private suspend fun refreshedAvailableStore() {
         signIn("server-A", "user-1")
-        coEvery { apiClient.checkPlaybackReportingPlugin() } returns Result.success(PlaybackReportingStatus.AVAILABLE)
+        coEvery { mediaInfoApiClient.checkPlaybackReportingPlugin() } returns Result.success(PlaybackReportingStatus.AVAILABLE)
         store.refresh()
         assertEquals(PlaybackReportingStatus.AVAILABLE, store.status.value)
     }
@@ -105,7 +107,7 @@ class PlaybackReportingStatusStoreTest {
 
     @Test
     fun `refresh publishes AVAILABLE when the plugin check succeeds`() = runTest {
-        coEvery { apiClient.checkPlaybackReportingPlugin() } returns Result.success(PlaybackReportingStatus.AVAILABLE)
+        coEvery { mediaInfoApiClient.checkPlaybackReportingPlugin() } returns Result.success(PlaybackReportingStatus.AVAILABLE)
 
         store.refresh()
 
@@ -114,7 +116,7 @@ class PlaybackReportingStatusStoreTest {
 
     @Test
     fun `refresh publishes the check's UNAVAILABLE verdict verbatim`() = runTest {
-        coEvery { apiClient.checkPlaybackReportingPlugin() } returns Result.success(PlaybackReportingStatus.UNAVAILABLE)
+        coEvery { mediaInfoApiClient.checkPlaybackReportingPlugin() } returns Result.success(PlaybackReportingStatus.UNAVAILABLE)
 
         store.refresh()
 
@@ -123,7 +125,7 @@ class PlaybackReportingStatusStoreTest {
 
     @Test
     fun `refresh falls back to UNAVAILABLE when the check fails`() = runTest {
-        coEvery { apiClient.checkPlaybackReportingPlugin() } returns Result.failure(IllegalStateException("down"))
+        coEvery { mediaInfoApiClient.checkPlaybackReportingPlugin() } returns Result.failure(IllegalStateException("down"))
 
         store.refresh()
 
@@ -166,7 +168,7 @@ class PlaybackReportingStatusStoreTest {
         awaitStatus(PlaybackReportingStatus.UNKNOWN)
         signIn("server-A", "user-2")
 
-        coEvery { apiClient.checkPlaybackReportingPlugin() } returns Result.success(PlaybackReportingStatus.UNAVAILABLE)
+        coEvery { mediaInfoApiClient.checkPlaybackReportingPlugin() } returns Result.success(PlaybackReportingStatus.UNAVAILABLE)
         store.refresh()
 
         assertEquals(PlaybackReportingStatus.UNAVAILABLE, store.status.value)

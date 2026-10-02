@@ -11,7 +11,7 @@ import kotlin.test.assertNotEquals
 
 /**
  * Pins [HomeSnapshotFingerprint]'s covered field set — the contract behind
- * `MediaRepositoryImpl.persistHomeSectionsSnapshot`'s cheap-path dedup. A
+ * `HomeSectionsSnapshotStore.persist`'s cheap-path dedup. A
  * change to any fingerprinted field must flip the fingerprint (else a real
  * content change would be skipped for a full dedup window); a change to a
  * non-fingerprinted metadata field must NOT flip it (the documented

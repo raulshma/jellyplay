@@ -11,11 +11,14 @@ import com.raulshma.jellyplay.core.model.arr.ArrDownloadSummary
 import com.raulshma.jellyplay.core.model.arr.ArrQueueDeleteOptions
 import com.raulshma.jellyplay.core.model.arr.ArrQueueItem
 import com.raulshma.jellyplay.core.model.arr.ArrRedownloadResult
+import com.raulshma.jellyplay.core.model.arr.ArrRelease
+import com.raulshma.jellyplay.core.model.arr.ArrReleaseHistoryStatus
 import com.raulshma.jellyplay.core.model.arr.ArrSeriesEpisode
 import com.raulshma.jellyplay.core.model.arr.ArrSeriesResolution
 import com.raulshma.jellyplay.core.model.arr.ArrRedownloadStep
 import com.raulshma.jellyplay.core.model.arr.ArrRedownloadStepResult
 import com.raulshma.jellyplay.core.model.arr.ArrRedownloadStepStatus
+import com.raulshma.jellyplay.core.network.arr.ArrReleaseCacheMiss
 import com.raulshma.jellyplay.core.network.arr.RadarrApiClient
 import com.raulshma.jellyplay.core.network.arr.SonarrApiClient
 import com.raulshma.jellyplay.core.model.arr.ArrServerConfig
@@ -72,14 +75,22 @@ import kotlinx.datetime.LocalDate
  * application scope (never cancelled — this singleton lives for the process
  * lifetime); its `SupervisorJob` context keeps a failure in one fan-out
  * branch from cancelling siblings.
+ *
+ * Also implements [SonarrSeriesOperations] — the Manage-Series-only Sonarr
+ * series-management seam split out of the aggregate interface — and
+ * [ArrReleaseOperations], the release sheet's search & grab seam (the same
+ * over-the-impl pattern: the members and their guard clusters live unchanged
+ * below; dataSeerrArrModule binds both seams over this same single).
  */
 class ArrRepositoryImpl(
     private val radarrApiClient: RadarrApiClient,
     private val sonarrApiClient: SonarrApiClient,
-    private val seerrRepository: SeerrRepository,
+    private val seerrServiceDirectory: SeerrServiceDirectory,
     private val arrPreferencesStore: ArrPreferencesStore,
     private val cacheScope: CoroutineScope,
-) : ArrRepository {
+) : ArrRepository,
+    SonarrSeriesOperations,
+    ArrReleaseOperations {
 
     /** Bounded concurrency for Seerr detail fan-out during server resolution. */
     private val resolveSemaphore = Semaphore(4)
@@ -256,6 +267,34 @@ class ArrRepositoryImpl(
             }
         }
 
+    /**
+     * The deep single-row delete the two queue screens share — see the
+     * interface KDoc for the invariant. The delete leg IS the
+     * [deleteQueueItem] choreography (owning-server routing + hot-feed
+     * refresh via the [withServer] seam); the replacement search rides only
+     * a successful delete and its own result is folded away (both call sites
+     * treated a failed follow-up search as silent, so the folded shape is
+     * behavior-identical to the two hand-copied ViewModel bodies).
+     */
+    override suspend fun deleteQueueRow(item: ArrQueueItem, blocklist: Boolean, searchAgain: Boolean): Result<Unit> =
+        withContext(cacheScope.coroutineContext) {
+            val deleted = withServer(item.serverId, item.serverKind, refresh = { refreshQueue() }) { client ->
+                client.deleteQueueItem(
+                    item.queueId,
+                    ArrQueueDeleteOptions(
+                        removeFromClient = true,
+                        blocklist = blocklist,
+                        skipRedownload = !searchAgain,
+                    ),
+                )
+            }
+            val tmdb = item.tmdbId
+            if (deleted.isSuccess && searchAgain && tmdb != null) {
+                searchForTmdb(tmdb, item.serverKind)
+            }
+            deleted
+        }
+
     override suspend fun grabQueueItem(item: ArrQueueItem): Result<Unit> =
         withContext(cacheScope.coroutineContext) {
             val server = findServer(item.serverId, item.serverKind) ?: return@withContext noServer()
@@ -300,7 +339,7 @@ class ArrRepositoryImpl(
                             // Resolve tmdbId → Radarr movie id first; if the movie isn't tracked
                             // (lookup returns null), fall back to a global MissingMoviesSearch
                             // rather than silently no-op'ing.
-                            val movieId = radarrApiClient.findMovieIdByTmdb(srv.baseUrl, srv.apiKey, tmdbId)
+                            val movieId = radarrApiClient.findMovieIdByTmdb(srv, tmdbId)
                                 .getOrNull()
                             if (movieId != null) {
                                 client.postCommand(command, movieIds = listOf(movieId))
@@ -368,13 +407,161 @@ class ArrRepositoryImpl(
         Result.success(winner)
     }
 
-    // ── Sonarr series management ("Manage Series" screen) ────────────────
+    // ── Release search & grab (the ArrReleaseOperations seam) ─────────────
+    // The release sheet's exclusive family, keyed by the queue row it was
+    // opened from. Every member routes through the same findServer dispatch
+    // as the management actions above, resolves the *arr-internal ids on
+    // demand when the row predates them, and fails with the shared no-server
+    // / actionable-message 404s rather than throwing.
+
+    override suspend fun searchReleases(item: ArrQueueItem): Result<List<ArrRelease>> =
+        withContext(cacheScope.coroutineContext) {
+            val server = findServer(item.serverId, item.serverKind)
+                ?: return@withContext Result.failure(noServerException())
+            val tagged: Result<List<ArrRelease>> = when (item.serverKind) {
+                ArrServiceKind.RADARR -> {
+                    val movieId = resolveRadarrMovieId(server, item)
+                        ?: return@withContext Result.failure(
+                            ApiException.fromHttp(
+                                404,
+                                "Cannot resolve this movie's Radarr id — refresh the queue and try again.",
+                            ),
+                        )
+                    radarrApiClient.searchReleases(server, movieId)
+                }
+                ArrServiceKind.SONARR -> {
+                    // Sonarr's /release keys off the episode id (the season
+                    // pair needs a season number the queue row does not carry).
+                    // A fresh row always has one (includeEpisode=true); a
+                    // stale one without it can only be fixed by a refresh.
+                    val episodeId = item.arrEpisodeId
+                        ?: return@withContext Result.failure(
+                            ApiException.fromHttp(
+                                404,
+                                "This row predates the internal episode ids — refresh the queue and try again.",
+                            ),
+                        )
+                    sonarrApiClient.searchReleases(server, episodeId = episodeId)
+                }
+            }
+            tagged
+                .map { rows -> rows.map { it.tagged(server.id, server.kind) } }
+                // The wire-level cache-miss marker folds into the seam's typed
+                // failure here — the feature branches on
+                // [ArrReleaseCacheUnavailable] and never imports the network type.
+                .recoverCatching { e ->
+                    val miss = e as? ArrReleaseCacheMiss ?: throw e
+                    throw ArrReleaseCacheUnavailable(miss.serviceName, miss)
+                }
+        }
+
+    override suspend fun grabRelease(item: ArrQueueItem, release: ArrRelease, override: Boolean): Result<Unit> =
+        withContext(cacheScope.coroutineContext) {
+            val server = findServer(item.serverId, item.serverKind)
+                ?: return@withContext Result.failure(noServerException())
+            val result = when (item.serverKind) {
+                ArrServiceKind.RADARR -> {
+                    // The override arm requires Radarr's movie id (its identity
+                    // field); resolve it on demand when the row predates the id.
+                    val movieId = if (override) {
+                        resolveRadarrMovieId(server, item)
+                            ?: return@withContext Result.failure(
+                                ApiException.fromHttp(
+                                    404,
+                                    "Cannot resolve this movie's Radarr id for an override grab — refresh the queue and try again.",
+                                ),
+                            )
+                    } else {
+                        item.arrMovieId
+                    }
+                    radarrApiClient.grabRelease(server, release, movieId = movieId, shouldOverride = override)
+                }
+                ArrServiceKind.SONARR -> {
+                    // The override arm requires Sonarr's series id; resolve it
+                    // on demand via the tvdbId (the resolveSonarrSeriesForSeries
+                    // probe the Manage-Series seam uses).
+                    val seriesId = if (override) {
+                        item.arrSeriesId
+                            ?: item.tvdbId?.let { tvdb -> resolveSonarrSeriesForSeries(tvdb)?.seriesId }
+                            ?: return@withContext Result.failure(
+                                ApiException.fromHttp(
+                                    404,
+                                    "Cannot resolve this series' Sonarr id for an override grab — refresh the queue and try again.",
+                                ),
+                            )
+                    } else {
+                        item.arrSeriesId
+                    }
+                    sonarrApiClient.grabRelease(
+                        server, release,
+                        seriesId = seriesId,
+                        episodeIds = listOfNotNull(item.arrEpisodeId),
+                        shouldOverride = override,
+                    )
+                }
+            }
+            // The grab just mutated the download queue — refresh the hot feed
+            // (the same fetch-then-notify ordering withServer applies to the
+            // single-item management deletes) so the new row appears.
+            if (result.isSuccess) refreshQueue()
+            result
+        }
+
+    /**
+     * Radarr's /release keys off the internal movie id. The row's own id
+     * wins; older snapshots fall back to the tmdbId lookup (same
+     * translate-first rule as searchForTmdb's SearchMovie arm). Null when
+     * neither resolves — the callers fail with their own actionable 404
+     * (the grab arm's message adds the override context).
+     */
+    private suspend fun resolveRadarrMovieId(server: ArrServerConfig, item: ArrQueueItem): Int? =
+        item.arrMovieId
+            ?: item.tmdbId?.let { tmdb -> radarrApiClient.findMovieIdByTmdb(server, tmdb).getOrNull() }
+
+    override suspend fun releaseHistoryStatuses(item: ArrQueueItem): Result<Map<String, ArrReleaseHistoryStatus>> =
+        withContext(cacheScope.coroutineContext) {
+            val server = findServer(item.serverId, item.serverKind)
+                ?: return@withContext Result.failure(noServerException())
+            val history = when (item.serverKind) {
+                ArrServiceKind.RADARR -> radarrApiClient.getHistory(server)
+                ArrServiceKind.SONARR -> sonarrApiClient.getHistory(server)
+            }
+            history.map { rows ->
+                // The grabbed (eventType 1) and download-failed (eventType 3)
+                // rows both carry the release guid in their `data` map — the
+                // wire eventType is a numeric enum, decoded to its string form
+                // by the lenient JSON. FAILED outranks GRABBED regardless of
+                // history order (a grabbed-then-failed release reads failed).
+                val merged = mutableMapOf<String, ArrReleaseHistoryStatus>()
+                rows.forEach { row ->
+                    val guid = row.data["guid"] ?: return@forEach
+                    val status = when (row.eventType.trim()) {
+                        HISTORY_EVENT_GRABBED -> ArrReleaseHistoryStatus.GRABBED
+                        HISTORY_EVENT_FAILED -> ArrReleaseHistoryStatus.FAILED
+                        else -> return@forEach
+                    }
+                    merged[guid] = if (status == ArrReleaseHistoryStatus.FAILED ||
+                        merged[guid] == ArrReleaseHistoryStatus.FAILED
+                    ) {
+                        ArrReleaseHistoryStatus.FAILED
+                    } else {
+                        ArrReleaseHistoryStatus.GRABBED
+                    }
+                }
+                merged
+            }
+        }
+
+    // ── Sonarr series management (the SonarrSeriesOperations seam) ───────
+    // The Manage-Series screen's exclusive family — split out of
+    // ArrRepository as its own consumer seam; the overrides below satisfy
+    // SonarrSeriesOperations, which dataSeerrArrModule binds over this single.
 
     override suspend fun resolveSonarrSeries(tvdbId: Int): Result<ArrSeriesResolution> =
         withResolvedSonarrSeries(tvdbId) { target ->
             Result.success(
                 ArrSeriesResolution(
-                    serverId = target.serverId,
+                    serverId = target.server.id,
                     seriesId = target.seriesId,
                     title = target.title,
                     monitored = target.monitored,
@@ -385,7 +572,7 @@ class ArrRepositoryImpl(
 
     override suspend fun getSonarrEpisodes(tvdbId: Int): Result<List<ArrSeriesEpisode>> =
         withResolvedSonarrSeries(tvdbId) { target ->
-            sonarrApiClient.getEpisodesForSeries(target.baseUrl, target.apiKey, target.seriesId)
+            sonarrApiClient.getEpisodesForSeries(target.server, target.seriesId)
         }
 
     override suspend fun monitorSonarrEpisodes(
@@ -394,12 +581,12 @@ class ArrRepositoryImpl(
         monitored: Boolean,
     ): Result<Unit> = withResolvedSonarrSeries(tvdbId) { target ->
         if (episodeIds.isEmpty()) Result.success(Unit)
-        else sonarrApiClient.monitorEpisodes(target.baseUrl, target.apiKey, episodeIds, monitored)
+        else sonarrApiClient.monitorEpisodes(target.server, episodeIds, monitored)
     }
 
     override suspend fun deleteSonarrEpisodeFile(tvdbId: Int, episodeFileId: Int): Result<Unit> =
         withResolvedSonarrSeries(tvdbId) { target ->
-            sonarrApiClient.deleteEpisodeFile(target.baseUrl, target.apiKey, episodeFileId)
+            sonarrApiClient.deleteEpisodeFile(target.server, episodeFileId)
         }
 
     override suspend fun searchSonarrEpisodes(tvdbId: Int, episodeIds: List<Int>): Result<Unit> =
@@ -408,7 +595,7 @@ class ArrRepositoryImpl(
                 Result.success(Unit)
             } else {
                 sonarrApiClient.postCommand(
-                    target.baseUrl, target.apiKey,
+                    target.server,
                     ArrCommandName.SEARCH_EPISODES, episodeIds = episodeIds,
                 ).map { }
             }
@@ -417,7 +604,7 @@ class ArrRepositoryImpl(
     override suspend fun searchMonitoredSonarrSeason(tvdbId: Int, seasonNumber: Int): Result<Unit> =
         withResolvedSonarrSeries(tvdbId) { target ->
             sonarrApiClient.postCommand(
-                target.baseUrl, target.apiKey,
+                target.server,
                 ArrCommandName.SEASON_SEARCH,
                 seriesId = target.seriesId,
                 seasonNumber = seasonNumber,
@@ -427,7 +614,7 @@ class ArrRepositoryImpl(
     override suspend fun refreshSonarrSeries(tvdbId: Int): Result<Unit> =
         withResolvedSonarrSeries(tvdbId) { target ->
             sonarrApiClient.postCommand(
-                target.baseUrl, target.apiKey,
+                target.server,
                 ArrCommandName.REFRESH_SERIES, seriesId = target.seriesId,
             ).map { }
         }
@@ -435,7 +622,7 @@ class ArrRepositoryImpl(
     override suspend fun rescanSonarrSeries(tvdbId: Int): Result<Unit> =
         withResolvedSonarrSeries(tvdbId) { target ->
             sonarrApiClient.postCommand(
-                target.baseUrl, target.apiKey,
+                target.server,
                 ArrCommandName.RESCAN_SERIES, seriesId = target.seriesId,
             ).map { }
         }
@@ -443,7 +630,7 @@ class ArrRepositoryImpl(
     override suspend fun searchSonarrSeries(tvdbId: Int): Result<Unit> =
         withResolvedSonarrSeries(tvdbId) { target ->
             sonarrApiClient.postCommand(
-                target.baseUrl, target.apiKey,
+                target.server,
                 ArrCommandName.SEARCH_SERIES, seriesId = target.seriesId,
             ).map { }
         }
@@ -476,12 +663,10 @@ class ArrRepositoryImpl(
     private suspend fun resolveSonarrSeriesForSeries(tvdbId: Int): ResolvedSonarrSeries? {
         val summary = resolveServers().getOrDefault(ArrServiceSummary())
         for (srv in summary.sonarrServers) {
-            val info = sonarrApiClient.getSeriesInfo(srv.baseUrl, srv.apiKey, tvdbId).getOrNull()
+            val info = sonarrApiClient.getSeriesInfo(srv, tvdbId).getOrNull()
             if (info != null) {
                 return ResolvedSonarrSeries(
-                    serverId = srv.id,
-                    baseUrl = srv.baseUrl,
-                    apiKey = srv.apiKey,
+                    server = srv,
                     seriesId = info.id,
                     title = info.title,
                     monitored = info.monitored,
@@ -492,11 +677,9 @@ class ArrRepositoryImpl(
         return null
     }
 
-    /** Private carrier for a resolved Sonarr series + its owning server credentials. */
+    /** Private carrier for a resolved Sonarr series + its owning server connection. */
     private data class ResolvedSonarrSeries(
-        val serverId: String,
-        val baseUrl: String,
-        val apiKey: String,
+        val server: ArrServerConfig,
         val seriesId: Int,
         val title: String,
         val monitored: Boolean,
@@ -504,93 +687,16 @@ class ArrRepositoryImpl(
     )
 
     /**
-     * The one delete & re-download step-ladder, shared by the Radarr (movie)
-     * and Sonarr (episode) flows: lookup → hard DELETE_FILE gate → re-query
-     * VERIFY → MONITOR if unmonitored → SEARCH. Everything service-specific —
-     * lookup abort reasons, the verify re-query semantics (including Sonarr's
-     * inconclusive-re-query WARNING branches) — lives in the
-     * [ArrServiceClient] adapters; the ladder owns only the step order and
-     * the generic step messages, plus the two flow rules that genuinely
-     * differ between the historical twins: the service display name
-     * interpolated into those messages, and Sonarr's hard gate on a FAILED
-     * verify (Radarr's verify failure is best-effort and the flow continues
-     * to completion).
+     * The redownload step-ladder lives in [ArrRedownloadEngine] (one
+     * engine per server, constructed over the resolved [ArrServiceClient]);
+     * this impl keeps the server resolution, the fan-out arbitration and
+     * the `clientFor` dispatch.
      */
     private suspend fun redownloadLadder(
         client: ArrServiceClient,
         kind: ArrServiceKind,
         ref: ArrRedownloadRef,
-    ): ArrRedownloadResult {
-        val service = client.serviceName
-        val steps = mutableListOf<ArrRedownloadStepResult>()
-
-        // Lookup: resolve the tracked item, or abort at the DELETE_FILE gate
-        // with the service-specific reason (unresolvable ids, lookup error,
-        // not tracked, episode not found).
-        val item = when (val lookup = client.lookup(ref)) {
-            is ArrRedownloadLookup.Found -> lookup.item
-            is ArrRedownloadLookup.Aborted -> {
-                steps += ArrRedownloadStepResult(
-                    ArrRedownloadStep.DELETE_FILE,
-                    ArrRedownloadStepStatus.FAILED,
-                    lookup.message,
-                )
-                return ArrRedownloadResult(steps, isComplete = false)
-            }
-        }
-
-        // Step 1: delete the file. No file → skip (already gone, not an error).
-        if (item.fileId == 0) {
-            steps += ArrRedownloadStepResult(
-                ArrRedownloadStep.DELETE_FILE,
-                ArrRedownloadStepStatus.SKIPPED,
-                "No file to delete.",
-            )
-        } else {
-            val deleteOk = client.deleteFile(item.fileId)
-            steps += ArrRedownloadStepResult(
-                ArrRedownloadStep.DELETE_FILE,
-                if (deleteOk) ArrRedownloadStepStatus.SUCCESS else ArrRedownloadStepStatus.FAILED,
-                if (deleteOk) null else "$service rejected the file delete.",
-            )
-            if (!deleteOk) return ArrRedownloadResult(steps, isComplete = false)
-        }
-
-        // Step 2: verify deleted via the service's own re-query (Sonarr
-        // answers WARNING when the re-query is inconclusive).
-        val verify = client.verifyDeleted(item)
-        steps += verify
-        // A FAILED verify is a hard gate on Sonarr only (file still present →
-        // search would no-op); Radarr continues best-effort.
-        if (kind == ArrServiceKind.SONARR && verify.status == ArrRedownloadStepStatus.FAILED) {
-            return ArrRedownloadResult(steps, isComplete = false)
-        }
-
-        // Step 3: monitor only if not already monitored (idempotent otherwise).
-        if (item.monitored) {
-            steps += ArrRedownloadStepResult(
-                ArrRedownloadStep.MONITOR,
-                ArrRedownloadStepStatus.SKIPPED,
-                "Already monitored.",
-            )
-        } else {
-            val monOk = client.monitor(item.id)
-            steps += ArrRedownloadStepResult(
-                ArrRedownloadStep.MONITOR,
-                if (monOk) ArrRedownloadStepStatus.SUCCESS else ArrRedownloadStepStatus.FAILED,
-                if (monOk) null else "Failed to re-monitor.",
-            )
-        }
-
-        // Step 4: search.
-        val search = client.search(item.id)
-        steps += ArrRedownloadStepResult(
-            ArrRedownloadStep.SEARCH,
-            if (search) ArrRedownloadStepStatus.SUCCESS else ArrRedownloadStepStatus.FAILED,
-            if (search) "$service is searching for a new download." else "Search command failed.",
-        )
-        return ArrRedownloadResult(steps, isComplete = true)
-    }
+    ): ArrRedownloadResult = ArrRedownloadEngine(client, kind, ref).run()
 
     // ── Routing helpers ────────────────────────────────────────────────────
 
@@ -650,6 +756,10 @@ class ArrRepositoryImpl(
     private fun ArrBlocklistItem.tagged(serverId: String, kind: ArrServiceKind): ArrBlocklistItem =
         copy(serverId = serverId, serverKind = kind)
 
+    /** Tags a release row with its source server. */
+    private fun ArrRelease.tagged(serverId: String, kind: ArrServiceKind): ArrRelease =
+        copy(serverId = serverId, serverKind = kind)
+
     // ── Seerr discovery helpers ────────────────────────────────────────────
 
     /**
@@ -692,14 +802,14 @@ class ArrRepositoryImpl(
      * tailored UI hint.
      */
     private suspend fun discoverRadarrServers(): DiscoveryOutcome {
-        return seerrRepository.getRadarrSettings().fold(
+        return seerrServiceDirectory.getRadarrSettings().fold(
             onSuccess = { list -> DiscoveryOutcome(list.mapNotNull { it.toArrServerConfig() }) },
             onFailure = { DiscoveryOutcome(error = it.toDiscoveryError()) },
         )
     }
 
     private suspend fun discoverSonarrServers(): DiscoveryOutcome {
-        return seerrRepository.getSonarrSettings().fold(
+        return seerrServiceDirectory.getSonarrSettings().fold(
             onSuccess = { list -> DiscoveryOutcome(list.mapNotNull { it.toArrServerConfig() }) },
             onFailure = { DiscoveryOutcome(error = it.toDiscoveryError()) },
         )
@@ -768,6 +878,12 @@ class ArrRepositoryImpl(
 
     companion object {
         private const val SERVERS_KEY = "arr_servers"
+
+        /** *arr `/history` eventType for a release grab (both services' numeric enum). */
+        private const val HISTORY_EVENT_GRABBED = "1"
+
+        /** *arr `/history` eventType for a download failure (both services' numeric enum). */
+        private const val HISTORY_EVENT_FAILED = "3"
 
         /** Lowercases + trims trailing slash for stable de-dup comparison. */
         fun canonicalBaseUrl(url: String): String =

@@ -8,7 +8,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.MainViewModel
-import com.raulshma.jellyplay.core.ui.feedback.LocalUserMessageBus
+import com.raulshma.jellyplay.core.ui.message.LocalUserMessageBus
 import com.raulshma.jellyplay.core.ui.tv.isTv
 import com.raulshma.jellyplay.feature.onboarding.OnboardingScreen
 import com.raulshma.jellyplay.feature.shell.onboardingGateRoute
@@ -22,12 +22,16 @@ import com.raulshma.jellyplay.shell.ShellInfra
  * [SignedOutAuthHost], with the update sheet overlaid above every branch.
  *
  * The former 1.6k-line single file is split per concern, same package:
- * [MainContent] (MainContent.kt), the layout branches + [ShellNavParams]
- * (ShellLayouts.kt), [MainNavDisplay] (MainNavDisplay.kt), the shell overlays
- * (ShellOverlays.kt), and the pure folds (FullScreenRoutePolicy.kt,
- * NavRequestCollector.kt, the remote-navigation routing folds and
- * VisibleTopLevelRoutes in their shared homes — shared/feature/shell and
- * core/ui navigation).
+ * [MainContent] (MainContent.kt), the request-dispatch holder
+ * (NavRequestController.kt), the external-player launch pair
+ * (ExternalPlayerLauncherHost.kt), the bottom-nav scroll state
+ * (BottomNavScrollState.kt), the peek-preview state (PeekPreviewState.kt),
+ * the back-exit confirmation host (BackExitHost.kt), the layout branches +
+ * [ShellNavParams] (ShellLayouts.kt), [MainNavDisplay] (MainNavDisplay.kt),
+ * the shell overlays (ShellOverlays.kt), and the pure folds
+ * (FullScreenRoutePolicy.kt, NavRequestCollector.kt, the remote-navigation
+ * routing folds and VisibleTopLevelRoutes in their shared homes —
+ * shared/feature/shell and core/ui navigation).
  */
 @Composable
 fun JellyPlayApp(
@@ -53,19 +57,19 @@ fun JellyPlayApp(
         }
     }
 
-    // The shared (commonMain) UserMessageBus — the single the migrated
-    // ViewModels (home, player session, library) post through. Provided
-    // alongside the legacy bus below so both message stacks render.
-    val sharedUserMessageBus = remember {
-        org.koin.mp.KoinPlatform.getKoin()!!.get<com.raulshma.jellyplay.core.ui.message.UserMessageBus>()
-    }
+    // The app-wide UserMessageBus (commonMain core:ui message) — the ONE
+    // bus every poster (migrated ViewModels, screens, seam adapters) posts
+    // through since the legacy androidMain feedback bus was deleted.
+    // Resolved through the infra bundle (same resolution path as every
+    // other shell service; the former inline KoinPlatform.getKoin()
+    // service-locator here is gone — see ShellInfra's KDoc).
+    val sharedUserMessageBus = remember { infra.userMessageBusLazy.value }
 
     CompositionLocalProvider(
         // Resolved here (first composition) instead of MainActivity's
         // onCreate — the bus is needed by every branch below, so this is as
         // late as its provider can fire without redesigning the local.
-        LocalUserMessageBus provides infra.userMessageBusLazy.value,
-        com.raulshma.jellyplay.core.ui.message.LocalUserMessageBus provides sharedUserMessageBus,
+        LocalUserMessageBus provides sharedUserMessageBus,
     ) {
         when {
             isRestoring -> {}
@@ -101,13 +105,19 @@ fun JellyPlayApp(
                     com.raulshma.jellyplay.core.ui.components.LocalServerHealth provides session.serverHealth,
                     com.raulshma.jellyplay.core.ui.components.LocalSurpriseOnLaunch provides surpriseController,
                 ) {
+                    // ADR 0001: the revoke/plain fork dispatches through
+                    // the shared ShellSessionController, whose sign-out
+                    // action lands in SessionCoordinator (remote-control
+                    // stop + sign-out) — the same fork desktop runs
+                    // against AuthRepository. Remembered on the ViewModel so
+                    // MainContent receives a STABLE lambda: it is a key of
+                    // the shellHost hooks remember (and a ShellNavParams
+                    // field), and a fresh lambda per recomposition here —
+                    // this root recomposes on every preference write — made
+                    // the section-graph memoization behind them always miss.
+                    val onLogout: (Boolean) -> Unit = remember(viewModel) { viewModel::logout }
                     MainContent(
-                        // ADR 0001: the revoke/plain fork dispatches through
-                        // the shared ShellSessionController, whose sign-out
-                        // action lands in SessionCoordinator (remote-control
-                        // stop + sign-out) — the same fork desktop runs
-                        // against AuthRepository.
-                        onLogout = { revoke -> viewModel.logout(revoke) },
+                        onLogout = onLogout,
                         model = viewModel,
                         preferences = preferences,
                         infra = infra,

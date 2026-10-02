@@ -19,6 +19,16 @@ import com.raulshma.jellyplay.core.model.MediaItem
  *  - An explicit "skip credits" press auto-advances when a next episode exists
  *    and autoplay is enabled, regardless of the countdown dismissal (the user
  *    took a deliberate action).
+ *
+ * **"Still watching?" episode counter (feature 1.3):** the controller also
+ * owns the unattended-binge streak — [recordAutoAdvance] increments it on each
+ * autoplay-driven advance, and every user-driven signal (player open, manual
+ * episode navigation, user interaction) resets it via [onUserInteraction].
+ * [needsStillWatchingCheck] reports when the streak reached the configured
+ * threshold (0 = off); the VM's end-of-playback gate consults it before
+ * advancing and raises the confirm overlay instead. The counter deliberately
+ * lives OUTSIDE [resetForNewItem]: an auto-advance load runs the same
+ * new-item reset, and its streak must survive it.
  */
 internal class AutoPlayController {
     @Volatile
@@ -29,9 +39,21 @@ internal class AutoPlayController {
     var cancelled: Boolean = false
         private set
 
+    @Volatile
+    private var consecutiveAutoPlays: Int = 0
+
+    /** Consecutive auto-plays before the confirm prompt; <= 0 disables the counter. */
+    @Volatile
+    private var stillWatchingThreshold: Int = 0
+
     /** Mirrors `UserPreferences.videoAutoplayNext` once it is loaded/synced. */
     fun setEnabled(value: Boolean) {
         enabled = value
+    }
+
+    /** Seeds the still-watching episode threshold (0 = off). Idempotent. */
+    fun setStillWatchingThreshold(threshold: Int) {
+        stillWatchingThreshold = threshold.coerceAtLeast(0)
     }
 
     /** User dismissed the upcoming-episode countdown. */
@@ -43,6 +65,29 @@ internal class AutoPlayController {
     fun resetForNewItem() {
         cancelled = false
     }
+
+    /**
+     * A user-driven signal (player open, manual episode navigation, or the
+     * engine-coordinator's interaction event): the user is present, so the
+     * unattended streak restarts from zero.
+     */
+    fun onUserInteraction() {
+        consecutiveAutoPlays = 0
+    }
+
+    /** An autoplay-driven advance succeeded — the unattended streak grows. */
+    fun recordAutoAdvance() {
+        consecutiveAutoPlays += 1
+    }
+
+    /**
+     * True when the episode arm's threshold is armed (a positive threshold
+     * that the still-watching mode includes) and the unattended streak
+     * reached it — the VM's end-of-playback gate then raises the
+     * "Still watching?" confirm overlay instead of advancing.
+     */
+    fun needsStillWatchingCheck(): Boolean =
+        stillWatchingThreshold > 0 && consecutiveAutoPlays >= stillWatchingThreshold
 
     /**
      * Natural end-of-playback rule: advance only when a next episode exists,

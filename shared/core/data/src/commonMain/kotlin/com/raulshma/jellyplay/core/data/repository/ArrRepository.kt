@@ -8,6 +8,8 @@ import com.raulshma.jellyplay.core.model.arr.ArrDownloadSummary
 import com.raulshma.jellyplay.core.model.arr.ArrQueueDeleteOptions
 import com.raulshma.jellyplay.core.model.arr.ArrRedownloadResult
 import com.raulshma.jellyplay.core.model.arr.ArrQueueItem
+import com.raulshma.jellyplay.core.model.arr.ArrRelease
+import com.raulshma.jellyplay.core.model.arr.ArrReleaseHistoryStatus
 import com.raulshma.jellyplay.core.model.arr.ArrSeriesEpisode
 import com.raulshma.jellyplay.core.model.arr.ArrSeriesResolution
 import com.raulshma.jellyplay.core.model.arr.ArrServerConfig
@@ -50,6 +52,13 @@ import kotlinx.datetime.LocalDate
  * Every read method is safe to call when the flag is disabled: queue/calendar
  * flows simply emit empty lists, and [resolveServers] returns an empty
  * [ArrServiceSummary].
+ *
+ * The Sonarr series-management family this interface used to carry
+ * (resolve/get/monitor/delete/search/refresh/rescan per tvdb id) moved to its
+ * own consumer seam, [SonarrSeriesOperations] — it serves exactly one screen
+ * (feature:details' Manage Series) that otherwise injects nothing else from
+ * here, so keeping it on the aggregate taught every requests/arrqueue/
+ * calendar/settings consumer about a surface it never calls.
  */
 interface ArrRepository {
 
@@ -137,6 +146,22 @@ interface ArrRepository {
      */
     suspend fun deleteQueueItems(items: List<ArrQueueItem>, options: ArrQueueDeleteOptions): Result<Unit>
 
+    /**
+     * The ONE deep queue-row delete both queue surfaces (requests' detail
+     * sheet, arrqueue's row screen) share — the former per-ViewModel
+     * copy-paste choreography, owned once here: maps the two confirm-dialog
+     * booleans onto [ArrQueueDeleteOptions] (`removeFromClient` is always
+     * true — both surfaces remove from the download client), deletes through
+     * the owning server with the same routing + hot-queue-feed refresh as
+     * [deleteQueueItem], then — only when [searchAgain] is set AND the row
+     * carries a tmdb id — queues the replacement [searchForTmdb] follow-up.
+     *
+     * INVARIANT: the follow-up's own failure never fails the returned
+     * [Result] — both surfaces treat a failed replacement search as silent
+     * (the delete itself succeeded); only the delete's result surfaces.
+     */
+    suspend fun deleteQueueRow(item: ArrQueueItem, blocklist: Boolean, searchAgain: Boolean): Result<Unit>
+
     /** Force-sends a queued release to its download client. */
     suspend fun grabQueueItem(item: ArrQueueItem): Result<Unit>
 
@@ -190,12 +215,30 @@ interface ArrRepository {
         episodeNumber: Int? = null,
     ): Result<ArrRedownloadResult>
 
-    // ── Sonarr series management ("Manage Series" screen) ────────────────
-    //
-    // All keyed by the series' tvdb id (the same identity Jellyfin exposes in
-    // MediaDetail.providerIds). Each method resolves the owning Sonarr server
-    // + internal series id internally via [resolveSonarrSeries], so the UI
-    // never needs to know which server tracks the series.
+    companion object {
+        /** TTL for the resolved-servers cache. */
+        const val SERVER_CACHE_TTL_MS = 60_000L
+    }
+}
+
+/**
+ * The Sonarr series-management family the "Manage Series" screen
+ * (feature:details' ManageSeriesViewModel) consumes — split out of
+ * [ArrRepository] because it serves exactly that one screen while every other
+ * ArrRepository consumer (requests / arrqueue / calendar / settings) never
+ * touches it, so the aggregate interface was teaching all of them about a
+ * surface they don't use. The JVM actual is the same
+ * [ArrRepositoryImpl] single (dataJvmModule binds this seam over it, exactly
+ * the `[ArrRepository]`-over-the-impl pattern), so server resolution + the
+ * `withResolvedSonarrSeries` guard cluster stay shared with the aggregate's
+ * queue/calendar/blocklist paths.
+ *
+ * All members are keyed by the series' tvdb id (the same identity Jellyfin
+ * exposes in MediaDetail.providerIds). Each member resolves the owning Sonarr
+ * server + internal series id internally via [resolveSonarrSeries], so the UI
+ * never needs to know which server tracks the series.
+ */
+interface SonarrSeriesOperations {
 
     /**
      * Resolves the Sonarr server + internal series id for [tvdbId]. Returns the
@@ -231,10 +274,73 @@ interface ArrRepository {
 
     /** Queues a `SeriesSearch` — search all monitored missing episodes (`POST /command`). */
     suspend fun searchSonarrSeries(tvdbId: Int): Result<Unit>
+}
 
-    companion object {
-        /** TTL for the resolved-servers cache. */
-        const val SERVER_CACHE_TTL_MS = 60_000L
-    }
+/**
+ * The interactive release search & grab family the arrqueue screen's release
+ * sheet consumes — split from [ArrRepository] for the same one-consumer
+ * reason as [SonarrSeriesOperations] (the aggregate's surface ratchet pins
+ * its member count; this family serves exactly one UI while every other
+ * [ArrRepository] consumer never touches it). The JVM actual is the same
+ * [ArrRepositoryImpl] single (dataSeerrArrModule binds this seam over it —
+ * the over-the-impl pattern), so server routing via `findServer`, the
+ * on-demand id fallbacks, and the queue-refresh-after-mutation stay shared
+ * with the aggregate's management actions.
+ *
+ * All members are keyed by the [ArrQueueItem] the sheet was opened from: its
+ * `serverId`/`serverKind` route to the owning server and its arr-internal
+ * ids ([ArrQueueItem.arrMovieId] / [ArrQueueItem.arrSeriesId] /
+ * [ArrQueueItem.arrEpisodeId]) key the search and the grab identities. Rows
+ * fetched before those ids landed (older in-memory snapshots) fall back to
+ * the tmdb/tvdb lookups on demand; a row where no lookup can produce the
+ * required id fails with an actionable message (refresh the queue).
+ */
+
+/**
+ * The typed failure [ArrReleaseOperations.searchReleases] reports when the
+ * owning server's ~30-minute interactive-search decision cache has no rows
+ * (server restart, TTL expiry, or the search command never ran). The
+ * data-seam fold of the network layer's wire-level cache-miss marker: the
+ * release sheet branches on THIS type and never sees a network-module
+ * exception class.
+ */
+class ArrReleaseCacheUnavailable(
+    /** The service that answered ("Radarr" / "Sonarr"), for UI copy. */
+    val serviceName: String,
+    cause: Throwable? = null,
+) : Exception(
+    "The cached release results on $serviceName expired. Search again to refresh them.",
+    cause,
+)
+
+interface ArrReleaseOperations {
+    /**
+     * Runs the interactive release search for [item] against its owning
+     * server (`GET /release?movieId=` on Radarr, `?episodeId=` on Sonarr —
+     * the queue row always carries the episode id). Fails with
+     * [ArrReleaseCacheUnavailable] when the server's ~30-minute decision
+     * cache has no rows (the search command must run first) — the UI offers
+     * "Search again" on that failure.
+     */
+    suspend fun searchReleases(item: ArrQueueItem): Result<List<ArrRelease>>
+
+    /**
+     * Grabs [release] on [item]'s owning server (`POST /release`). When
+     * [override] is set the grab sends `shouldOverride` + the identity fields
+     * (Radarr movie id, Sonarr series/episode ids — via the same on-demand
+     * fallbacks as [searchReleases]) with the release's own quality prefilled,
+     * so a rejected release can be grabbed anyway. The queue refreshes on
+     * success so the new download row appears in the hot feed.
+     */
+    suspend fun grabRelease(item: ArrQueueItem, release: ArrRelease, override: Boolean): Result<Unit>
+
+    /**
+     * Matches the owning server's recent `/history` rows against release
+     * guids (the grabbed/failed events carry the release guid in their
+     * `data` map) so the sheet can badge rows "previously grabbed / failed"
+     * client-side. Returns guid → status; FAILED outranks GRABBED when both
+     * events exist. Best-effort: callers treat a failure as "no badges".
+     */
+    suspend fun releaseHistoryStatuses(item: ArrQueueItem): Result<Map<String, ArrReleaseHistoryStatus>>
 }
 

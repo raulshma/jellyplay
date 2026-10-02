@@ -2,7 +2,7 @@ package com.raulshma.jellyplay.feature.admin.plugins
 
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
-import com.raulshma.jellyplay.core.network.auth.tokenAuthHeader
+import com.raulshma.jellyplay.core.data.network.jellyfinTokenAuthHeader
 import java.io.ByteArrayInputStream
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -44,7 +44,7 @@ internal fun interceptAuthedRequest(
         .url(urlStr)
         .get()
     if (accessToken.isNotBlank()) {
-        requestBuilder.tokenAuthHeader(accessToken)
+        requestBuilder.jellyfinTokenAuthHeader(accessToken)
     }
     // Carry over request headers (Accept, etc.), skipping ones OkHttp manages
     // and the ones we set explicitly.

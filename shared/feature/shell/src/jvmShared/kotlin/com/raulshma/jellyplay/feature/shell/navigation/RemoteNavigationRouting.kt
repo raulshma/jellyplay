@@ -12,9 +12,12 @@ import com.raulshma.jellyplay.core.ui.navigation.Route
  * `RemoteNavigationRoutingTest`; the PlaybackHostRouter precedent). The
  * former hand-mirrored twins (the Android app's `RemoteNavigationRouting`
  * folds and the desktop mirror in `DesktopRemoteNavigation`) both folded onto
- * this one home; the per-shell LADDER DISPATCH stays per-shell (Android
- * synthesizes D-pad/center/menu keycodes, desktop moves focus through
- * AWT/Compose seams).
+ * this one home; the target→seam LADDER around these folds — including the
+ * tab-vs-push fork for the folded routes — is
+ * [RemoteNavigationDispatcher] (beside this file, the one ladder both shell
+ * collectors run), leaving only the focus/select/context-menu ARMS per-shell
+ * (Android synthesizes D-pad/center/menu keycodes, desktop moves focus
+ * through AWT/Compose seams).
  *
  * [routeForNavigationTarget] maps a server-emitted target to the Route to
  * push; [popPlayerRoutes] is the Jellyfin-web "Stop" semantics for
@@ -23,10 +26,10 @@ import com.raulshma.jellyplay.core.ui.navigation.Route
  * behind a tab switch.
  *
  * The navigation-ladder targets: [NavigationTarget.GoToTopLevel] folds onto
- * its Route (the collector then reuses its tab-vs-push dispatch fork), while
- * [NavigationTarget.GoBack], [NavigationTarget.MoveFocus],
+ * its Route (the [RemoteNavigationDispatcher] then runs its tab-vs-push
+ * fork), while [NavigationTarget.GoBack], [NavigationTarget.MoveFocus],
  * [NavigationTarget.InvokeSelect] and [NavigationTarget.OpenContextMenu] are
- * NOT routes — the collectors branch on them directly (back stack pop /
+ * NOT routes — the dispatcher branches on them directly (back stack pop /
  * focus move / synthesized key events) and this fold returns null.
  */
 fun routeForNavigationTarget(target: NavigationTarget): Route? = when (target) {
@@ -47,7 +50,8 @@ fun routeForNavigationTarget(target: NavigationTarget): Route? = when (target) {
     // Not a navigation — the collector branches to [popPlayerRoutes] instead.
     NavigationTarget.ClosePlayer -> null
     // Not a navigation — the collector branches to the back-stack pop /
-    // focus-or-key-synthesis seams (NavRequestCollector / DesktopRemoteNavCollector).
+    // focus-or-key-synthesis seams (NavRequestCollector on Android, the
+    // desktop shell's RemoteNavigationDispatcher wiring in DesktopShellServices).
     NavigationTarget.GoBack,
     is NavigationTarget.MoveFocus,
     NavigationTarget.InvokeSelect,

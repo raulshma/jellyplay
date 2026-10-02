@@ -263,6 +263,13 @@ object MpvLib {
         return mpv.mpv_set_property(ctx, name, FORMAT_DOUBLE, mem) >= 0
     }
 
+    /** Integer magnitudes (the subtitle-style `sub-pos`/`sub-margin-y`) via MPV_FORMAT_INT64. */
+    fun setPropertyInt(ctx: Pointer, name: String, value: Int): Boolean {
+        val mem = Memory(8)
+        mem.setLong(0, value.toLong())
+        return mpv.mpv_set_property(ctx, name, FORMAT_INT64, mem) >= 0
+    }
+
     fun setPropertyFlag(ctx: Pointer, name: String, value: Boolean): Boolean {
         val mem = Memory(4)
         mem.setInt(0, if (value) 1 else 0)

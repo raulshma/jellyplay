@@ -45,7 +45,6 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_volu
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_audio_autoplay_next_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_audio_autoplay_next_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_audio_cache_clear_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_audio_cache_clear_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_audio_cache_network_policy_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_audio_cache_network_policy_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_audio_cache_size_subtitle
@@ -57,7 +56,6 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_audio_defa
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_audio_description_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_audio_description_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_audio_prefetch_backfill_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_audio_prefetch_backfill_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_audio_prefetch_lookahead_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_audio_prefetch_lookahead_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_audio_preload_buffer_subtitle
@@ -550,7 +548,6 @@ internal val AudioCacheRowRecords = listOf(
     SettingsRowRecord(
         id = AudioSettingsIds.AUDIO_PREFETCH_BACKFILL,
         titleRes = Res.string.settings_audio_prefetch_backfill,
-        searchTitleRes = Res.string.ss_audio_prefetch_backfill_title,
         searchSubtitleRes = Res.string.ss_audio_prefetch_backfill_subtitle,
         keywords = listOf("audio", "prefetch", "backfill", "buffering", "music", "previous"),
         route = Route.AudioSettings(),
@@ -562,7 +559,6 @@ internal val AudioCacheRowRecords = listOf(
     SettingsRowRecord(
         id = AudioSettingsIds.AUDIO_CACHE_CLEAR,
         titleRes = Res.string.settings_audio_cache_clear,
-        searchTitleRes = Res.string.ss_audio_cache_clear_title,
         searchSubtitleRes = Res.string.ss_audio_cache_clear_subtitle,
         keywords = listOf("audio", "cache", "clear", "music", "storage", "wipe"),
         route = Route.AudioSettings(),

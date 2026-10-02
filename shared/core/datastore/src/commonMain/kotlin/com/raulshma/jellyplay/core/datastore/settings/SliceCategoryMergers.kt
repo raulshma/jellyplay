@@ -66,11 +66,15 @@ internal fun PlaybackSlice.mergeWith(
     if (!importPlayback && !importSubtitles && !importSync && !importMisc) return this
     return copy(
         preferredPlayer = if (importPlayback) incoming.preferredPlayer else preferredPlayer,
+        preferredExternalPlayer = if (importPlayback) incoming.preferredExternalPlayer else preferredExternalPlayer,
         streamingQuality = if (importPlayback) incoming.streamingQuality else streamingQuality,
         cellularStreamingQuality = if (importPlayback) incoming.cellularStreamingQuality else cellularStreamingQuality,
         playbackMode = if (importPlayback) incoming.playbackMode else playbackMode,
         decoderMode = if (importPlayback) incoming.decoderMode else decoderMode,
         audioPassthrough = if (importPlayback) incoming.audioPassthrough else audioPassthrough,
+        audioPassthroughCodecs = if (importPlayback) incoming.audioPassthroughCodecs else audioPassthroughCodecs,
+        maxAudioChannels = if (importPlayback) incoming.maxAudioChannels else maxAudioChannels,
+        downmixBoostDb = if (importPlayback) incoming.downmixBoostDb else downmixBoostDb,
         frameRateMatching = if (importPlayback) incoming.frameRateMatching else frameRateMatching,
         refreshRateMode = if (importPlayback) incoming.refreshRateMode else refreshRateMode,
         keepScreenOnDuringVideo = if (importPlayback) incoming.keepScreenOnDuringVideo else keepScreenOnDuringVideo,
@@ -78,6 +82,7 @@ internal fun PlaybackSlice.mergeWith(
         duckOnTransientFocusLoss = if (importPlayback) incoming.duckOnTransientFocusLoss else duckOnTransientFocusLoss,
         autoPlayCountdownSec = if (importPlayback) incoming.autoPlayCountdownSec else autoPlayCountdownSec,
         backgroundVideoAudioEnabled = if (importPlayback) incoming.backgroundVideoAudioEnabled else backgroundVideoAudioEnabled,
+        autoEnterPip = if (importPlayback) incoming.autoEnterPip else autoEnterPip,
         pgsSubtitleDirectPlay = if (importSubtitles) incoming.pgsSubtitleDirectPlay else pgsSubtitleDirectPlay,
         liveStreamOption = if (importSync) incoming.liveStreamOption else liveStreamOption,
         userDataSyncEnabled = if (importMisc) incoming.userDataSyncEnabled else userDataSyncEnabled,

@@ -1,6 +1,8 @@
 package com.raulshma.jellyplay.core.network.config
 
 import com.raulshma.jellyplay.core.datastore.SecureKeyValueStorage
+import com.raulshma.jellyplay.core.model.ClientCertificateImport
+import com.raulshma.jellyplay.core.model.ClientCertificateStatus
 import java.io.ByteArrayInputStream
 import java.io.File
 import java.nio.file.Files

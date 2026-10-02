@@ -1,13 +1,18 @@
 package com.raulshma.jellyplay.feature.player.video
 
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.MediaExtrasReads
+import com.raulshma.jellyplay.core.data.repository.OfflinePlaybackFacade
+import com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager
 import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregate
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregateStore
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.MediaSegment
 import com.raulshma.jellyplay.core.model.MediaSource
+import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.PlayMethod
+import com.raulshma.jellyplay.core.model.PlayerType
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
@@ -39,8 +44,26 @@ sealed interface LoadOutcome {
 }
 
 /**
- * UiState-shaped load outputs. Implemented by the ViewModel — uiState
- * ownership stays there. Each method is called at a
+ * The ui-state → ui-state transform [SessionLoadOutputs.onPrefsProjected]
+ * carries. Internal alias so implementers of the outputs seam (formerly the
+ * deleted [VideoSessionHost]; today [PlayerWiring], the composition builder
+ * that implements it) can take the transform through the command-lambda
+ * split: ControllerOwnershipTest's migrated-controller ratchet forbids the
+ * literal type name in the migrated controllers (KDoc prose is exempt; the
+ * builder — the VM's construction surface — is not ratchet-listed, so its
+ * override spells the alias for continuity). The alias is transparent —
+ * overrides may spell either form. This is the ratchet's ONE declared
+ * state-transformer exception (see that suite's KDoc): the projection is
+ * the pipeline's load-stage vocabulary — the seed the implementer forwards
+ * for the VM to apply — not state the implementer reads or owns.
+ */
+internal typealias PrefsProjection = VideoPlayerUiState.() -> VideoPlayerUiState
+
+/**
+ * UiState-shaped load outputs. Implemented by [PlayerWiring] (the
+ * composition builder that owns the collaborator graph — the ViewModel's
+ * former object-literal, then the deleted VideoSessionHost) — uiState
+ * ownership stays with the ViewModel. Each method is called at a
  * defined point of the [SessionLoadPipeline] spine; the interface exists so
  * the *order* of the stages is testable against a fake.
  */
@@ -69,7 +92,12 @@ interface SessionLoadOutputs {
  * Injected ViewModel operations the pipeline calls at defined points of its
  * spine. The pipeline owns *the order stages run in*; these hooks own the
  * VM-bound bodies (controllers, session bookkeeping, reporting choreography)
- * that must not move into a load-ordering module.
+ * that must not move into a load-ordering module. (Since the
+ * [VideoSessionHost] deletion, the three stage bodies with real logic are
+ * pipeline members below — [fetchMediaSegments], [shouldAttemptCinemaMode]
+ * and [restoreRememberedMuted] — instead of hooks; the server start report
+ * lives on [PlaybackSession] beside its stop-report twin, and its hook is a
+ * one-line delegate.)
  *
  * Every hook is a required constructor parameter — there are no silent no-op
  * defaults; a caller that ignores a stage says so at the construction site.
@@ -81,20 +109,12 @@ class SessionLoadHooks(
         mediaSourceId: String?,
         startPositionTicks: Long,
     ) -> Unit,
-    /** Cinema Mode gate predicate (fresh starts, video items, not SyncPlay…). */
-    val shouldAttemptCinemaMode: (
-        agg: VideoPlayerAggregate,
-        itemId: String,
-        startPositionTicks: Long,
-    ) -> Boolean,
     /** Takes over playback with the first pre-roll intro. */
     val beginCinemaMode: (intros: List<MediaItem>, request: LoadRequest) -> Unit,
     /** Offline-start resolution (completed-download resume ticks). */
     val resolveOfflineResumeTicks: suspend (itemId: String, startPositionTicks: Long) -> Long,
     /** Applies aggregate prefs to session-owned controllers (autoplay…). */
     val onSessionPrefsApplied: (agg: VideoPlayerAggregate) -> Unit,
-    /** Reapplies the remembered-muted preference to uiState + engine. */
-    val restoreRememberedMuted: (agg: VideoPlayerAggregate) -> Unit,
     /** Per-item hydration after loadMedia (video filters, subtitle delay). */
     val onItemHydrated: (itemId: String, hydrated: VideoPlayerAggregate) -> Unit,
     /** Media-session factory. */
@@ -111,7 +131,6 @@ class SessionLoadHooks(
     ) -> Unit,
     val startPositionTracking: () -> Unit,
     val startProgressReporting: () -> Unit,
-    val fetchMediaSegments: (itemId: String) -> Unit,
     val fetchAdjacentEpisodes: (detail: MediaDetail) -> Unit,
     val loadSeriesEpisodes: (detail: MediaDetail) -> Unit,
     /** Terminal outcome observer. */
@@ -147,9 +166,37 @@ class SessionLoadHooks(
  */
 class SessionLoadPipeline(
     private val sessionManager: PlayerSessionManager,
-    private val mediaRepository: MediaRepository,
+    /**
+     * The item-attached extras seam — the pipeline's one repository read is the
+     * Cinema Mode intros lookup, which left the wide union for
+     * [MediaExtrasReads] (uncached forward, no cache state).
+     */
+    private val mediaExtrasReads: MediaExtrasReads,
     private val aggregateStore: VideoPlayerAggregateStore,
     private val networkOfflineStore: NetworkOfflineStore,
+    /**
+     * The offline facade behind [fetchMediaSegments]' offline-first
+     * precedence (the segments bundled with a download win over a server
+     * round-trip so skip controls work without a connection). Moved here from
+     * the deleted [VideoSessionHost]: the pipeline owns WHEN the segments
+     * stage runs, and the mini-player reclaim's hydration
+     * ([PlaybackSession.loadReclaimedEngine] → `hydrateReclaimedItem`) shares
+     * this one fetch through it.
+     */
+    private val offlinePlaybackFacade: OfflinePlaybackFacade,
+    /** The SyncPlay session flag — a [shouldAttemptCinemaMode] veto. */
+    private val syncPlayManager: SyncPlayManager,
+    /**
+     * The VM's media-detail holder — [shouldAttemptCinemaMode]'s item-type
+     * guard reads it (intros are only meaningful for movies/episodes).
+     */
+    private val getMediaDetail: () -> MediaDetail?,
+    /** The server segments read behind [fetchMediaSegments]' fallback arm. */
+    private val playbackRepository: com.raulshma.jellyplay.core.data.repository.PlaybackRepository,
+    /** The remembered-muted uiState mirror write ([restoreRememberedMuted]). */
+    private val setMutedMirror: (Boolean) -> Unit,
+    /** The segments fetch's uiState write (the overlay's segment list). */
+    private val onSegmentsFetched: (List<MediaSegment>) -> Unit,
     private val outputs: SessionLoadOutputs,
     private val hooks: SessionLoadHooks,
 ) {
@@ -161,7 +208,7 @@ class SessionLoadPipeline(
      */
     fun start(scope: CoroutineScope, request: LoadRequest): Job = scope.launch {
         try {
-            runStages(request)
+            runStages(scope, request)
         } finally {
             // Guarantee the loading screen lifts even if the load throws or
             // takes the cinema-intro early return — otherwise the player is
@@ -171,7 +218,7 @@ class SessionLoadPipeline(
         }
     }
 
-    private suspend fun runStages(request: LoadRequest) {
+    private suspend fun runStages(scope: CoroutineScope, request: LoadRequest) {
         hooks.reconcileSyncPlayQueue(request.itemId, request.mediaSourceId, request.startPositionTicks)
 
         val agg = aggregateStore.aggregate.value
@@ -191,12 +238,12 @@ class SessionLoadPipeline(
         // Volume is driven by the device media stream, which Android itself
         // persists across sessions — no app-level restore needed. Mute is
         // still reapplied here when "remember muted" is on.
-        hooks.restoreRememberedMuted(agg)
+        restoreRememberedMuted(agg)
 
         if (request.allowCinemaMode &&
-            hooks.shouldAttemptCinemaMode(agg, request.itemId, request.startPositionTicks)
+            shouldAttemptCinemaMode(agg, request.itemId, request.startPositionTicks)
         ) {
-            val intros = mediaRepository.getIntros(request.itemId).getOrDefault(emptyList())
+            val intros = mediaExtrasReads.getIntros(request.itemId).getOrDefault(emptyList())
             if (intros.isNotEmpty()) {
                 hooks.beginCinemaMode(intros, request)
                 hooks.onOutcome(LoadOutcome.CinemaIntro(intros.first().id))
@@ -262,7 +309,7 @@ class SessionLoadPipeline(
 
         hooks.startPositionTracking()
         hooks.startProgressReporting()
-        hooks.fetchMediaSegments(request.itemId)
+        fetchMediaSegments(scope, request.itemId)
         if (detail != null) {
             coroutineScope {
                 launch { hooks.fetchAdjacentEpisodes(detail) }
@@ -270,5 +317,74 @@ class SessionLoadPipeline(
             }
         }
         hooks.onOutcome(LoadOutcome.Completed)
+    }
+
+    // ── The three stage bodies with real logic ──────────────────────────────
+    //
+    // These lived on the deleted [VideoSessionHost] as load-hook bodies; they
+    // moved here because this spine owns WHEN each of them runs (and the
+    // mini-player reclaim's hydration reuses [fetchMediaSegments] through the
+    // session). Their uiState writes arrive as the [setMutedMirror] /
+    // [onSegmentsFetched] commands; the detail holder read arrives as
+    // [getMediaDetail] — the command-lambda split, unchanged.
+
+    /**
+     * The segments fetch behind the load spine's stage 10 and the reclaim's
+     * hydration: offline-first — prefer segments bundled with the download so
+     * skip controls (intro/outro/recap) work without a server round-trip.
+     * Fire-and-forget on the caller's scope (the VM scope — the fetch must
+     * outlive this load coroutine's siblings only as long as the VM lives,
+     * exactly as the former host's launch did).
+     */
+    internal fun fetchMediaSegments(scope: CoroutineScope, itemId: String) {
+        scope.launch {
+            val local = offlinePlaybackFacade.loadSegments(itemId)
+            if (local != null) {
+                onSegmentsFetched(local)
+                return@launch
+            }
+            val segments = playbackRepository.getMediaSegments(itemId).getOrDefault(emptyList())
+            onSegmentsFetched(segments)
+        }
+    }
+
+    /**
+     * Cinema Mode is only attempted on fresh starts (never on resume /
+     * next-episode auto-advance / SyncPlay / external player / mini-mode
+     * reclaim). Server-side intros are best-effort: any failure returns an
+     * empty list and falls back to normal playback.
+     */
+    private fun shouldAttemptCinemaMode(
+        agg: VideoPlayerAggregate,
+        itemId: String,
+        startPositionTicks: Long,
+    ): Boolean {
+        if (!agg.videoPlayer.cinemaModeEnabled) return false
+        if (startPositionTicks != 0L) return false
+        if (agg.playback.preferredPlayer == PlayerType.EXTERNAL) return false
+        if (syncPlayManager.isInSyncPlaySession) return false
+        // Skip for non-video items — intros are only meaningful for movies/episodes.
+        val existingDetail = getMediaDetail()
+        if (existingDetail != null && existingDetail.item.id == itemId) {
+            val type = existingDetail.item.mediaType
+            if (type != MediaType.MOVIE &&
+                type != MediaType.EPISODE &&
+                type != MediaType.UNKNOWN
+            ) {
+                return false
+            }
+        }
+        return true
+    }
+
+    /**
+     * Reapplies the remembered-muted preference: the uiState mirror first,
+     * then the engine — order preserved from the former inline hook body.
+     */
+    private fun restoreRememberedMuted(agg: VideoPlayerAggregate) {
+        if (agg.videoPlayer.videoRememberMuted && agg.videoPlayer.videoMuted) {
+            setMutedMirror(true)
+            sessionManager.engine?.setMuted(true)
+        }
     }
 }

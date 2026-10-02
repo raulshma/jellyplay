@@ -33,7 +33,15 @@ interface SyncPlayRepository {
 
     suspend fun getSyncPlayGroups(): Result<List<SyncPlayGroup>>
 
-    suspend fun createSyncPlayGroup(groupName: String): Result<Unit>
+    /**
+     * Creates the group AND joins it (the deepened create: the jvmShared
+     * impl delegates to `SyncPlayManager.createGroup`, the one owner of the
+     * "create then join MY group" choreography) and returns the joined
+     * group's identifying info — callers page/queue by [SyncPlayGroupInfo.groupId]
+     * and never re-derive the id by name-matching the group list (the
+     * duplicate-name misjoin the old `Result<Unit>` + refetch flow allowed).
+     */
+    suspend fun createSyncPlayGroup(groupName: String): Result<SyncPlayGroupInfo>
 
     suspend fun getSyncPlayInfo(groupId: String? = null): Result<SyncPlayGroupInfo>
 

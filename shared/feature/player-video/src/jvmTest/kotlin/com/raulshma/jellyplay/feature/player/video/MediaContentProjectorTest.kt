@@ -261,6 +261,27 @@ class MediaContentProjectorTest {
     }
 
     @Test
+    fun onSessionState_mirrorsOfflineSource_downloadedBadgeDerivation() {
+        // An offline session (playing the stored download) pins the
+        // "Downloaded" badge on.
+        projector.onSessionState(
+            session = PlayerSessionState(currentItemId = "item-1", isOffline = true),
+            seriesId = null,
+        )
+        assertEquals(true, media.isOfflineSource)
+        assertEquals(true, media.showDownloadedBadge)
+
+        // A same-item online session (streaming) clears it again — the
+        // mirror is unguarded, so the badge tracks the live session.
+        projector.onSessionState(
+            session = PlayerSessionState(currentItemId = "item-1", isOffline = false),
+            seriesId = null,
+        )
+        assertEquals(false, media.isOfflineSource)
+        assertEquals(false, media.showDownloadedBadge)
+    }
+
+    @Test
     fun onLyrics_writesAndClears() {
         val lines = listOf(LyricsLine(timeMs = 0L, text = "la"))
         projector.onLyrics(lines)

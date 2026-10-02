@@ -32,9 +32,7 @@ import androidx.media3.exoplayer.RenderersFactory
 import androidx.media3.common.text.Cue
 import androidx.media3.common.text.CueGroup
 import androidx.media3.datasource.DataSource
-import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.ResolvingDataSource
-import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.DecoderCounters
@@ -55,6 +53,7 @@ import com.raulshma.jellyplay.core.data.playback.DialogueBoostHelper
 import com.raulshma.jellyplay.core.data.playback.DynamicsCompressorAudioProcessor
 import com.raulshma.jellyplay.core.data.playback.EqualizerHelper
 import com.raulshma.jellyplay.core.data.playback.HighPassFilterAudioProcessor
+import com.raulshma.jellyplay.core.data.playback.inSinkAudioChain
 import com.raulshma.jellyplay.core.data.playback.isSessionKeyedUrl
 import com.raulshma.jellyplay.core.data.playback.LoudnessEnhancerHelper
 import com.raulshma.jellyplay.core.data.playback.NightModeHelper
@@ -393,7 +392,7 @@ class ExoPlayerEngine(
     override fun load(request: PlaybackRequest) {
         ensurePlayerThread("load")
 
-        currentNormalizationGain = request.normalizationGain
+        currentNormalizationGain = request.requestSpecific?.normalizationGain
 
         val exoCfg = (currentConfig.engineSpecific as? ExoPlayerEngineConfig) ?: ExoPlayerEngineConfig()
         val assForRequest = AssSupport.hasAssSubtitles(request)
@@ -407,7 +406,6 @@ class ExoPlayerEngine(
             authToken = request.authToken,
             headers = request.headers,
             assSession = assForRequest,
-            pauseOnAudioFocusLoss = currentConfig.pauseOnAudioFocusLoss,
             drmProvider = currentConfig.drmSessionManagerProvider,
             streamCacheEligible = streamCacheEligible,
         )
@@ -458,12 +456,20 @@ class ExoPlayerEngine(
                 enableAudioTrackPlaybackParams: Boolean,
             ): DefaultAudioSink {
                 return DefaultAudioSink.Builder(context)
+                    // ONE in-sink chain order, shared with the music sink
+                    // (core:data `inSinkAudioChain`): channel mix first — it
+                    // may change the channel count, so every downstream
+                    // processor must see the remixed layout — then
+                    // dynamics/ReplayGain and the dialogue-boost high-pass.
+                    // No balance processor: video has no L/R balance surface
+                    // (the declared divergence from music's in-sink balance,
+                    // recorded on the factory's KDoc).
                     .setAudioProcessors(
-                        arrayOf(
-                            channelMixProcessor,
-                            dynamicsProcessor,
-                            replayGainProcessor,
-                            highPassFilter,
+                        inSinkAudioChain(
+                            channelMixProcessor = channelMixProcessor,
+                            dynamicsProcessor = dynamicsProcessor,
+                            replayGainProcessor = replayGainProcessor,
+                            highPassProcessor = highPassFilter,
                         ),
                     )
                     .setEnableFloatOutput(enableFloatOutput)
@@ -590,12 +596,20 @@ class ExoPlayerEngine(
         val isNetworkStream = request.uri.startsWith("http", ignoreCase = true) ||
             request.uri.startsWith("rtmp", ignoreCase = true)
 
+        // handleAudioFocus is FORCED OFF (the video focus slice): the OS
+        // audio-focus seat belongs to core:data's PlaybackFocus module now —
+        // a second, engine-internal request would fight that seat exactly
+        // like the music migration's crossfade-secondary case. Focus prefs
+        // (pause-on-loss / duck-on-transient) ride the module's
+        // VideoFocusPolicyInput, never this builder.
+        // setHandleAudioBecomingNoisy stays true: the headphone-unplug
+        // auto-pause is focus-independent and media3-native.
         val exo = ExoPlayer.Builder(context)
             .setRenderersFactory(finalRenderersFactory)
             .setMediaSourceFactory(msf)
             .setTrackSelector(selector)
             .setLoadControl(loadControl)
-            .setAudioAttributes(audioAttrs, currentConfig.pauseOnAudioFocusLoss)
+            .setAudioAttributes(audioAttrs, false)
             .setWakeMode(if (isNetworkStream) C.WAKE_MODE_NETWORK else C.WAKE_MODE_LOCAL)
             .setHandleAudioBecomingNoisy(true)
             .setBandwidthMeter(bandwidthMeter)
@@ -800,8 +814,9 @@ class ExoPlayerEngine(
                 // Android client pins APPLICATION_M3U8 the same way. This is
                 // also what makes native HLS seeking (segment + EXTINF
                 // resolution) reliable on a transcode.
+                val callerMime = request.requestSpecific?.mimeType
                 val inferredMime = when {
-                    request.mimeType != null -> request.mimeType
+                    callerMime != null -> callerMime
                     isHlsRequest(request) -> MimeTypes.APPLICATION_M3U8
                     else -> null
                 }
@@ -814,7 +829,17 @@ class ExoPlayerEngine(
 
     /**
      * Builds the media [DataSource.Factory] chain:
-     * `[VideoStreamCache] → auth ResolvingDataSource → OkHttp/Default`.
+     * `[VideoStreamCache] → auth ResolvingDataSource → Default → OkHttp`.
+     *
+     * The OkHttp/UA/auth-header/DefaultDataSource prologue is the shared
+     * [authenticatedDataSourceFactory] seam (player-contract androidMain —
+     * the same factory ExoLiveEngine consumes; this engine's former
+     * hand-typed copy of those lines is gone). The request's headers ride
+     * through [authenticatedDataSourceFactory]'s extraRequestHeaders slot —
+     * the session manager already folds the identical
+     * [JellyfinAuthorizationHeader.tokenOnlyHeader] pair for this token into
+     * them, so the seam's own auth-pair construction merges idempotently and
+     * the default request properties are byte-identical to the former body.
      *
      * Route media streams through the shared app OkHttp stack rather than a
      * standalone HttpURLConnection: the injected client carries the shared
@@ -832,8 +857,9 @@ class ExoPlayerEngine(
      * therefore re-fetch from the network. [enableStreamCache] (see
      * [isStreamCacheEligible]) adds the [VideoStreamCache] CacheDataSource
      * layer around the HTTP base factory for content-stable URLs only, which
-     * serves and fills a byte-range cache with volatile-param-stripped keys.
-     * The layer sits below [DefaultDataSource]'s scheme routing (and the auth
+     * serves and fills a byte-range cache with volatile-param-stripped keys
+     * (the seam's [authenticatedDataSourceFactory] `composeBase` slot). The
+     * layer sits below [DefaultDataSource]'s scheme routing (and the auth
      * resolver above it), so side-loaded local/content subtitle URIs bypass
      * the cache entirely — only media bytes are ever pinned.
      */
@@ -843,21 +869,24 @@ class ExoPlayerEngine(
         headers: Map<String, String>,
         enableStreamCache: Boolean,
     ): DataSource.Factory {
-        val httpDataSourceFactory = OkHttpDataSource.Factory(streamingOkHttpClient)
-            .setUserAgent("JellyPlay")
-            .setDefaultRequestProperties(headers)
-
-        // Cache the HTTP base only: DefaultDataSource routes file/content/asset
-        // URIs through its own non-base sources, keeping them out of the cache.
-        // Passthrough (returns the upstream unchanged) when the cache
-        // directory cannot be opened — playback never breaks.
-        val baseFactory: DataSource.Factory = if (enableStreamCache && videoStreamCache != null) {
-            videoStreamCache.getCacheDataSourceFactory(httpDataSourceFactory)
-        } else {
-            httpDataSourceFactory
-        }
-
-        var factory: DataSource.Factory = DefaultDataSource.Factory(context, baseFactory)
+        var factory: DataSource.Factory = authenticatedDataSourceFactory(
+            context = context,
+            okHttpClient = streamingOkHttpClient,
+            authToken = token,
+            extraRequestHeaders = headers,
+            composeBase = { httpDataSourceFactory ->
+                // Cache the HTTP base only: DefaultDataSource routes
+                // file/content/asset URIs through its own non-base sources,
+                // keeping them out of the cache. Passthrough (returns the
+                // upstream unchanged) when the cache directory cannot be
+                // opened — playback never breaks.
+                if (enableStreamCache && videoStreamCache != null) {
+                    videoStreamCache.getCacheDataSourceFactory(httpDataSourceFactory)
+                } else {
+                    httpDataSourceFactory
+                }
+            },
+        )
 
         val authority = serverUrl?.let { Uri.parse(it).authority }
         if (authority != null && token != null) {
@@ -926,7 +955,7 @@ class ExoPlayerEngine(
      * stream-cache rejection in [isStreamCacheEligible].
      */
     private fun isHlsRequest(request: PlaybackRequest): Boolean =
-        request.mimeType == MimeTypes.APPLICATION_M3U8 ||
+        request.requestSpecific?.mimeType == MimeTypes.APPLICATION_M3U8 ||
             request.uri.contains(".m3u8", ignoreCase = true)
 
     override fun release() {
@@ -1041,14 +1070,6 @@ class ExoPlayerEngine(
             if (oldConfig.subtitleStyle.offsetMs != newConfig.subtitleStyle.offsetMs) {
                 refreshSubtitlesForOffsetChange()
             }
-        }
-
-        if (oldConfig.pauseOnAudioFocusLoss != newConfig.pauseOnAudioFocusLoss) {
-            val audioAttrs = AudioAttributes.Builder()
-                .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
-                .setUsage(C.USAGE_MEDIA)
-                .build()
-            player?.setAudioAttributes(audioAttrs, newConfig.pauseOnAudioFocusLoss)
         }
     }
 

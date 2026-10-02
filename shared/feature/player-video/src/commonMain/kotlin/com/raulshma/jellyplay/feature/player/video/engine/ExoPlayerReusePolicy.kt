@@ -29,7 +29,6 @@ internal data class LoadRebuildInputs(
     val authToken: String?,
     val headers: Map<String, String>,
     val assSession: Boolean,
-    val pauseOnAudioFocusLoss: Boolean,
     // The provider itself (not its product): providers have no equals,
     // so data-class equality degrades to identity — same instance means
     // same DRM hook, different instance forces the rebuild path.

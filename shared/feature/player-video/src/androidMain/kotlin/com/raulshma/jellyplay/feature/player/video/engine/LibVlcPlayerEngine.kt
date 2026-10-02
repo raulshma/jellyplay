@@ -247,9 +247,12 @@ class LibVlcPlayerEngine(
             options.add("--audio-desync=${currentConfig.audioDelayMs.toInt()}")
         }
 
-        if (currentConfig.audioPassthrough) {
-            if (!hasRenderer) {
-                options.add("--codec=ac3,eac3,dts,dtshd,truehd")
+        if (currentConfig.audioPassthrough && !hasRenderer) {
+            // The enabled-codec allowlist replaces the legacy fixed list;
+            // an empty set composes nothing (no bitstreaming) — see
+            // libVlcPassthroughCodecList.
+            libVlcPassthroughCodecList(currentConfig.audioPassthroughCodecs)?.let { codecs ->
+                options.add("--codec=$codecs")
             }
         }
 
@@ -264,6 +267,11 @@ class LibVlcPlayerEngine(
             ChannelMixMode.SURROUND_UPMIX -> options.add("--stereo-mode=surround")
             ChannelMixMode.AUTO -> {}
         }
+
+        // The channel cap AFTER the channel-mix mode: when both want a
+        // --stereo-mode value the stricter cap wins (VLC resolves duplicate
+        // options last-wins).
+        libVlcChannelCapOption(currentConfig.audioEffects.maxAudioChannels)?.let { options.add(it) }
 
         if (currentConfig.audioEffects.audioNormalizationEnabled) {
             when (currentConfig.audioEffects.audioNormalizationMode) {

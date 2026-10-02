@@ -65,4 +65,24 @@
     <string name="livetv_will_be_recorded">「%1$s」を録画します。</string>
     <string name="livetv_channel">チャンネル</string>
     <string name="livetv_live">ライブ</string>
+
+    <!-- Tab error fallbacks (the UiMessage folds' Resource arms) -->
+    <string name="livetv_error_load_channels">チャンネルを読み込めませんでした</string>
+    <string name="livetv_error_load_channel">チャンネルを読み込めませんでした</string>
+    <string name="livetv_error_load_programs">番組を読み込めませんでした</string>
+    <string name="livetv_error_load_guide">番組ガイドを読み込めませんでした</string>
+    <string name="livetv_error_load_recordings">録画を読み込めませんでした</string>
+    <string name="livetv_error_delete_recording">録画を削除できませんでした</string>
+    <string name="livetv_error_load_schedule">予定を読み込めませんでした</string>
+    <string name="livetv_error_load_series">シリーズを読み込めませんでした</string>
+    <string name="livetv_error_record">録画を作成できませんでした</string>
+    <string name="livetv_error_cancel_recording">録画をキャンセルできませんでした</string>
+
+    <!-- Programs tab row titles (jellyfin-web getProgramSections) -->
+    <string name="livetv_programs_on_now">放送中</string>
+    <string name="livetv_programs_shows">シリーズ</string>
+    <string name="livetv_programs_movies">映画</string>
+    <string name="livetv_programs_sports">スポーツ</string>
+    <string name="livetv_programs_kids">キッズ</string>
+    <string name="livetv_programs_news">ニュース</string>
 </resources>

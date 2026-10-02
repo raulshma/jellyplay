@@ -133,6 +133,9 @@ internal fun DesktopAppRoot(
     // and is silently dropped when the current screen has no refresh action.
     menuRefreshRequests: kotlinx.coroutines.flow.Flow<Unit> = kotlinx.coroutines.flow.emptyFlow(),
 ) {
+    // Direct Koin reads — NOT the DesktopShellServices holder: this pre-scaffold window (splash /
+    // sign-in) composes BEFORE that holder can exist — the composition-order contract on
+    // rememberDesktopShellServices.
     val authRepository: AuthRepository = koinInject()
     val isAuthenticated by authRepository.isAuthenticated.collectAsState(initial = false)
 
@@ -173,13 +176,21 @@ internal fun DesktopAppRoot(
     // Desktop receiver port: realtime socket + capabilities + the
     // remote-control receiver, driven off the auth state for the life of the
     // composition (survives the sign-in → scaffold swap because it lives
-    // HERE, like the harness hosts above; torn down with the window).
+    // HERE, like the harness hosts above; torn down with the window). The
+    // receiver's user-visible outputs are collected DOWNSTREAM: the scaffold's
+    // DesktopShellServices adds its displayMessages to the user-message host
+    // (same Koin single — collecting the flow does not re-arm the receiver),
+    // while its playEvents stay deliberately uncollected (the decision is
+    // documented at the collection seam, desktopUserMessageSources).
     // The choreography itself is the SHARED RealtimeSessionController now
     // (shared/feature/shell) — the former DesktopSessionCoordinator held only
     // this wiring and died with the fold; the per-shell share is the client
     // name and this `create` call. The restore above may leave this
     // composition already authenticated, and the controller's auth collector
     // picks that up off the StateFlow's current value on its first pass.
+    // Same pre-scaffold rule as the authRepository read above — direct Koin
+    // reads per the composition-order contract on rememberDesktopShellServices
+    // (this arm must also survive the sign-in → scaffold swap).
     val realtimeConnection: RealtimeConnection = koinInject()
     val serverIdentityStore: ServerIdentityStore = koinInject()
     val remoteControlReceiver: RemoteControlReceiver = koinInject()

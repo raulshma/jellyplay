@@ -79,4 +79,7 @@
     <string name="book_reader_auto_scroll_speed">Vitesse du défilement automatique</string>
     <string name="book_reader_auto_scroll_start">Démarrer le défilement automatique</string>
     <string name="book_reader_auto_scroll_stop">Arrêter le défilement automatique</string>
+    <string name="book_reader_layout">Mise en page</string>
+    <string name="book_reader_layout_single">Page simple</string>
+    <string name="book_reader_layout_double">Double page</string>
 </resources>

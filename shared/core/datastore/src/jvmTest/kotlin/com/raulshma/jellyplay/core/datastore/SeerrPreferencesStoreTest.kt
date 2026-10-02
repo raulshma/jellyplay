@@ -140,7 +140,13 @@ class SeerrPreferencesStoreTest {
         assertEquals("", secureCredentialsStore.getPassword())
         assertEquals("", secureCredentialsStore.getSessionCookie())
         // ...and every preference is back to its default.
-        assertEquals(SeerrPreferences(), store.preferences.first())
+        val afterDisconnect = store.preferences.first()
+        assertEquals(SeerrPreferences(), afterDisconnect)
         assertFalse(store.isConnected.first())
+
+        // Those defaults match a fresh (cleared) read exactly — the read-path
+        // fallbacks and the disconnect reset must stay the same table.
+        dataStore.edit { it.clear() }
+        assertEquals(afterDisconnect, store.preferences.first())
     }
 }

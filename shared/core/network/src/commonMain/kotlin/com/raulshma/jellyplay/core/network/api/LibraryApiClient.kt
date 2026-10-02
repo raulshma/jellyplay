@@ -1,6 +1,5 @@
 package com.raulshma.jellyplay.core.network.api
 
-import com.raulshma.jellyplay.core.model.CollectionSummary
 import com.raulshma.jellyplay.core.model.DiscoverRowConfig
 import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.HomeSection
@@ -13,8 +12,6 @@ import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.PersonRef
-import com.raulshma.jellyplay.core.model.Playlist
-import com.raulshma.jellyplay.core.model.PlaylistItem
 import com.raulshma.jellyplay.core.model.SearchResult
 import com.raulshma.jellyplay.core.model.Studio
 
@@ -31,19 +28,40 @@ interface LibraryApiClient {
         force: Boolean = false,
     ): Result<HomeSectionsResult>
 
-    /**
-     * Drops the home hot-path sub-call caches (per-folder latest media,
-     * per-seed similar items) so the next [getHomeSections] fetch re-hits the
-     * server for those rows. Their entries carry per-item UserData, so a
-     * watched/favorite/progress write calling this purges the pre-write rows
-     * instead of letting them serve stale badges for the sub-call TTL. Best-
-     * effort and synchronous — a no-op before any home fetch has memoised.
-     */
-    fun invalidateHomeSubcallCaches()
+    // The home hot-path cache-maintenance verbs (invalidateHomeSubcallCaches /
+    // invalidateDiscoverRowCache / seedDiscoverRowCache) left this interface:
+    // cache-management vocabulary does not belong on a network API surface, and
+    // their one consumer (the data layer's write/roll paths) reaches them
+    // through the narrow [com.raulshma.jellyplay.core.network.library.HomeSectionsCachePort]
+    // instead.
 
-    suspend fun getLatestMedia(parentId: String, limit: Int = 16): Result<List<MediaItem>>
+    suspend fun getLatestMedia(
+        parentId: String,
+        limit: Int = 16,
+        /**
+         * Classic-rows TV semantics (#168): non-null = fetch a raw-Episode
+         * pool of this size (`IncludeItemTypes=Episode&groupItems=false` —
+         * the wire shape that behaves identically on every server
+         * generation) and re-group it client-side into the pre-12 row
+         * (`limit` cards of Series-or-Episode, Jellyfin 10.x's own grouping
+         * outcome). Null = unconstrained server default, which on Jellyfin
+         * 12.x means the smart Series/Season/Episode container mix. The home
+         * fetcher passes `limit * 5` for TV folders under classic rows;
+         * other callers stay unconstrained.
+         */
+        classicEpisodePool: Int? = null,
+    ): Result<List<MediaItem>>
     suspend fun getNextUp(limit: Int = 20, enableRewatching: Boolean = false, maxDays: Int = 0): Result<List<MediaItem>>
-    suspend fun getContinueWatching(limit: Int = 20): Result<List<MediaItem>>
+    suspend fun getContinueWatching(
+        limit: Int = 20,
+        /**
+         * Classic-rows (#168): the wire request is the exact pre-12 shape
+         * (no `IncludeItemTypes`) in BOTH modes; true adds the client-side
+         * fold that drops the Series/Season resume rollups a 12.x server
+         * reports (a no-op on ≤10.x servers, where no rollups arrive).
+         */
+        classicRows: Boolean = false,
+    ): Result<List<MediaItem>>
 
     /**
      * The books half of the resume query (`/UserItems/Resume` narrowed to
@@ -91,23 +109,6 @@ interface LibraryApiClient {
      * periodic refresh is consulted only by the home-sections path.
      */
     suspend fun getDiscoverRowItems(row: DiscoverRowConfig): Result<List<MediaItem>>
-
-    /**
-     * Drops the home fetcher's memoised items for one discover row (the dice
-     * affordance): the next home fetch re-rolls a RANDOM row instead of
-     * replaying the cached set for the sub-call TTL. Best-effort and
-     * synchronous — a no-op when the row has not been memoised.
-     */
-    fun invalidateDiscoverRowCache(rowId: String)
-
-    /**
-     * Memoises one discover row's freshly fetched items in the home fetcher's
-     * per-row sub-call cache (the dice roll's commit step): the next home
-     * fetch serves the rolled items instead of re-querying the server, so a
-     * roll survives the periodic refresh. No-op on an empty list; the key
-     * derivation matches the fetch path's.
-     */
-    fun seedDiscoverRowCache(row: DiscoverRowConfig, items: List<MediaItem>)
 
     suspend fun getMediaDetail(itemId: String): Result<MediaDetail>
 
@@ -194,43 +195,28 @@ interface LibraryApiClient {
     suspend fun getItemsByPerson(personId: String, limit: Int = 50): Result<List<MediaItem>>
     suspend fun getThemeSongs(itemId: String): Result<List<MediaItem>>
     suspend fun getSeasons(seriesId: String): Result<List<MediaItem>>
-    suspend fun getEpisodes(seriesId: String, seasonId: String): Result<List<MediaItem>>
+
+    /**
+     * Episodes of one season. [isMissing] is Jellyfin's `isMissing` filter,
+     * mapped jellyfin-web style: `false` hides the server's virtual (missing /
+     * unaired) episode placeholders; null omits the filter so they come back
+     * and render as placeholders. Hide is the sensible default.
+     */
+    suspend fun getEpisodes(
+        seriesId: String,
+        seasonId: String,
+        isMissing: Boolean? = false,
+    ): Result<List<MediaItem>>
 
     /**
      * Fetches every episode for a series in a single round-trip. The Jellyfin
      * `/Shows/{seriesId}/Episodes` endpoint returns the full set when
      * `seasonId` is omitted, which collapses an N-season fan-out (one request
      * per season) into a single call. Callers that need per-season grouping
-     * can `groupBy { it.seasonId }` the result locally.
+     * can `groupBy { it.seasonId }` the result locally. [isMissing] behaves
+     * exactly as on [getEpisodes].
      */
-    suspend fun getAllEpisodes(seriesId: String): Result<List<MediaItem>>
-
-    suspend fun getCollectionItems(
-        collectionId: String,
-        startIndex: Int = 0,
-        limit: Int = 50,
-    ): Result<SearchResult>
-
-    /**
-     * Lists the user's collections (Jellyfin BoxSet items) for the detail
-     * screen's "Add to Collection" picker. Remote-only — collections are a
-     * server-side library construct. Returns a lightweight summary per
-     * collection (id, name, item count, primary image tag).
-     */
-    suspend fun getCollections(limit: Int = 100): Result<List<CollectionSummary>>
-
-    /**
-     * Creates a new collection (BoxSet) via Jellyfin's `/Collections` endpoint,
-     * optionally seeded with [itemIds]. Returns the new collection's id.
-     * Remote-only.
-     */
-    suspend fun createCollection(name: String, itemIds: List<String> = emptyList()): Result<String>
-
-    /**
-     * Adds the given item ids to an existing collection via Jellyfin's
-     * `/Collections/{collectionId}/Items` endpoint. Remote-only.
-     */
-    suspend fun addItemsToCollection(collectionId: String, itemIds: List<String>): Result<Unit>
+    suspend fun getAllEpisodes(seriesId: String, isMissing: Boolean? = false): Result<List<MediaItem>>
 
     suspend fun getTags(
         parentId: String? = null,
@@ -245,26 +231,20 @@ interface LibraryApiClient {
     ): Result<SearchResult>
 
     suspend fun getLyrics(itemId: String): Result<LyricsResult>
-    suspend fun getPlaylists(limit: Int = 50): Result<List<Playlist>>
-    suspend fun getPlaylistItems(playlistId: String, startIndex: Int = 0, limit: Int = 50): Result<List<PlaylistItem>>
-    suspend fun createPlaylist(name: String, overview: String? = null, itemIds: List<String> = emptyList(), mediaType: MediaType = MediaType.AUDIO): Result<String>
-    suspend fun updatePlaylist(playlistId: String, name: String? = null, overview: String? = null, isPublic: Boolean? = null): Result<Unit>
-    suspend fun deletePlaylist(playlistId: String): Result<Unit>
-    suspend fun addItemsToPlaylist(playlistId: String, itemIds: List<String>): Result<Unit>
-    suspend fun removeItemsFromPlaylist(playlistId: String, entryIds: List<String>): Result<Unit>
-    suspend fun movePlaylistItem(playlistId: String, entryId: String, newIndex: Int): Result<Unit>
-    suspend fun markPlayed(itemId: String): Result<Unit>
-    suspend fun markUnplayed(itemId: String): Result<Unit>
-    suspend fun toggleFavorite(itemId: String, currentIsFavorite: Boolean? = null): Result<Boolean>
+
+    // The playlist ×8 and collection ×4 members left for the
+    // [PlaylistApiClient] / [CollectionApiClient] family seams (the
+    // one-impl-many-seams idiom: [LibraryApiClientImpl] implements all three;
+    // the JellyfinApiClient union carries them; consumers narrow to the seam
+    // they read).
 
     /**
-     * Sets an absolute favorite state on the server (`markFavoriteItem` when
-     * [isFavorite], `unmarkFavoriteItem` otherwise). Used by the outbox replay
-     * path so a staged flip lands deterministically regardless of the server's
-     * current state — unlike [toggleFavorite], which reads-and-flips and is
-     * unsuitable for replay.
+     * The ONE user-data write member — the parameterized fold of the four
+     * former write verbs over [UserDataWrite]; the outcome carries the
+     * post-toggle favorite state ([UserDataWriteOutcome.FavoriteNow]) so the
+     * single member serves the flip and the replay funnels alike.
      */
-    suspend fun setFavorite(itemId: String, isFavorite: Boolean): Result<Unit>
+    suspend fun writeUserData(write: UserDataWrite): Result<UserDataWriteOutcome>
 
     fun getImageUrl(
         itemId: String,

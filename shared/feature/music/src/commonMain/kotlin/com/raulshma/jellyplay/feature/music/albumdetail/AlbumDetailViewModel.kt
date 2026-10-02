@@ -6,6 +6,7 @@ import com.raulshma.jellyplay.core.data.download.TrackDownloadStatusWindow
 import com.raulshma.jellyplay.core.data.playback.InstantMixState
 import com.raulshma.jellyplay.core.data.playback.InstantMixStateHolder
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.MusicCatalogue
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.DownloadStatus
@@ -27,6 +28,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import com.raulshma.jellyplay.core.ui.message.UiMessage
 
 /** The album screen's all-or-nothing content aggregate (the detail+tracks pair). */
 private data class AlbumContent(
@@ -35,7 +37,13 @@ private data class AlbumContent(
 )
 
 class AlbumDetailViewModel(
+    /**
+     * The detail read + user-data feed only — the album's track list rides
+     * [musicCatalogue], the repository's narrow music family seam (the
+     * getAlbumTracks force lever included).
+     */
     private val mediaRepository: MediaRepository,
+    private val musicCatalogue: MusicCatalogue,
     private val imageUrlProvider: ImageUrlProvider,
     private val audioQueueFacade: MusicQueuePlayer,
     private val downloads: TrackDownloadStatusWindow,
@@ -106,7 +114,7 @@ class AlbumDetailViewModel(
                 _detail.value = st.value?.detail
                 _tracks.set(st.value?.tracks ?: emptyList())
                 _isLoading.value = st.isLoading
-                _loadError.value = st.error?.let { MixErrorMessage.Raw(it.message ?: "Failed to load album") }
+                _loadError.value = st.error?.let { UiMessage.Raw(it.message ?: "Failed to load album") }
             }
         }
         launch {
@@ -139,7 +147,7 @@ class AlbumDetailViewModel(
     private suspend fun fetchAlbumData(albumId: String, force: Boolean): AlbumContent {
         return coroutineScope {
             val detailDeferred = async { mediaRepository.getMediaDetail(albumId, force = force) }
-            val tracksDeferred = async { mediaRepository.getAlbumTracks(albumId, force = force) }
+            val tracksDeferred = async { musicCatalogue.getAlbumTracks(albumId, force = force) }
             val detailResult = detailDeferred.await()
             val tracksResult = tracksDeferred.await()
 
@@ -189,7 +197,7 @@ class AlbumDetailViewModel(
             if (tracks.isEmpty()) {
                 flowOf(emptyMap())
             } else {
-                downloads.downloadsFor(tracks.map { it.id })
+                downloads.getDownloadsByMediaItemIdsFlow(tracks.map { it.id })
                     .map { rows -> rows.associateBy { it.mediaItemId } }
             }
         }
@@ -214,7 +222,7 @@ class AlbumDetailViewModel(
         val existing = trackDownloads.value[track.id]
         if (existing != null && existing.status == DownloadStatus.COMPLETED) {
             launch {
-                downloads.remove(existing.id)
+                downloads.deleteDownload(existing.id)
             }
             return
         }
@@ -236,7 +244,7 @@ class AlbumDetailViewModel(
                 val existing = currentDownloads[track.id]
                 if (existing != null) {
                     launch {
-                        downloads.remove(existing.id)
+                        downloads.deleteDownload(existing.id)
                     }
                 }
             }

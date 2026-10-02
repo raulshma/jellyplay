@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.core.ui.adaptive
 
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.raulshma.jellyplay.core.model.LayoutMode
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -166,6 +167,30 @@ class AdaptiveLayoutTokensTest {
         )
         assertFalse(phone.isTv)
         assertFalse(phone.usesRemoteInput)
+    }
+
+    // ── LayoutMode.applyOverride (issue #166) ────────────────────────────
+
+    @Test
+    fun applyOverride_autoPassesThrough() {
+        val landscape = info(WindowSizeClass.Medium, isLandscape = true)
+        assertEquals(landscape, LayoutMode.AUTO.applyOverride(landscape))
+        val compact = info(WindowSizeClass.Compact)
+        assertEquals(compact, LayoutMode.AUTO.applyOverride(compact))
+    }
+
+    @Test
+    fun applyOverride_phoneClampsToCompact_preservingLandscape() {
+        val overridden = LayoutMode.PHONE.applyOverride(info(WindowSizeClass.Expanded, isLandscape = true))
+        assertEquals(WindowSizeClass.Compact, overridden.windowSizeClass)
+        assertTrue(overridden.isLandscape, "the override reshapes only the width-class axis")
+    }
+
+    @Test
+    fun applyOverride_tabletLiftsToExpanded_preservingLandscape() {
+        val overridden = LayoutMode.TABLET.applyOverride(info(WindowSizeClass.Compact))
+        assertEquals(WindowSizeClass.Expanded, overridden.windowSizeClass)
+        assertFalse(overridden.isLandscape)
     }
 
     @Test

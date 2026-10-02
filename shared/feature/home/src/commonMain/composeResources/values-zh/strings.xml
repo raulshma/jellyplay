@@ -100,4 +100,15 @@
     <string name="home_download_start_failed">无法开始下载</string>
     <string name="home_series_download_queued">剧集已加入下载队列</string>
     <string name="home_see_all">查看全部</string>
+    <string name="next_up_hidden_title">已从“接下来播放”中隐藏</string>
+    <string name="next_up_hidden_empty">没有隐藏内容</string>
+    <string name="next_up_hidden_empty_subtitle">从“接下来播放”栏移除的剧集会显示在这里，可供恢复。</string>
+    <string name="next_up_hidden_restore_all">全部恢复</string>
+    <string name="next_up_hidden_restore_all_cd">将所有隐藏的剧集恢复到“接下来播放”</string>
+    <string name="next_up_hidden_restore_all_title">全部恢复到“接下来播放”？</string>
+    <string name="next_up_hidden_restore_all_message">所有 %1$d 个隐藏的剧集将重新出现在“接下来播放”栏中。</string>
+    <string name="next_up_hidden_restore_cd">将 %1$s 恢复到“接下来播放”</string>
+    <string name="next_up_hidden_unknown">未知剧集</string>
+    <string name="a11y_mode_video">视频模式</string>
+    <string name="a11y_mode_music">音乐模式</string>
 </resources>

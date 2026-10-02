@@ -116,10 +116,17 @@ jobs:
         # packageVersion (numeric) feeds jpackage/msi; the display version
         # (v0.11.0-alpha.N) lands in the About screen via
         # desktop-build.properties (WriteDesktopBuildInfoTask).
+        # macOS override mirrors release.yml's desktop-package leg (same
+        # job, stable-cut lane): 7 GB runners OOM/GC-thrash under the repo
+        # defaults (6g Gradle daemon, 4g Kotlin daemon, 12 workers) — the
+        # proven kmp-build.yml recipe is --max-workers=2 + 3g Gradle + 5g
+        # Kotlin daemon. Linux/windows runners have 16 GB and keep the repo
+        # defaults.
         run: >
           ./gradlew :apps:desktop:packageDistributionForCurrentOS
           -PjellyplayVersion=${{ needs.determine-version.outputs.numeric }}
           -PjellyplayVersionName=${{ needs.determine-version.outputs.display }}
+          ${{ matrix.platform == 'macos' && '--max-workers=2 -Dorg.gradle.jvmargs="-Xmx3g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8" -Pkotlin.daemon.jvmargs="-Xmx5g -XX:+UseParallelGC"' || '' }}
           --stacktrace
 
       - name: Rename installers with alpha version

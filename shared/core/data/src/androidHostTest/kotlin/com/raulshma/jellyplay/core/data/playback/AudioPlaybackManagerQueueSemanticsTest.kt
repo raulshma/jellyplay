@@ -43,13 +43,21 @@ private class StubPlaylist {
 }
 
 /**
+ * The mirror's pre-warm lookahead ([QueuePlaylistMirror]'s
+ * PREWARM_LOOKAHEAD_ITEMS) — pinned here so the window tests assert the
+ * exact mirrored prefix the production constant produces.
+ */
+private const val PREWARM_LOOKAHEAD_ITEMS = 12
+
+/**
  * The stateful stub ExoPlayer: every playlist-mutating Player write is
  * stubbed to keep [StubPlaylist] in sync synchronously (a real ExoPlayer
  * would route writes through its internal playback thread), while
- * `setMediaItem`/`addMediaItem(s)`/`prepare`/`play`/`playWhenReady` stay
- * relaxed no-ops — the engine-write surfaces these pins assert on are the
- * queue-chassis writes (seek / removeMediaItem / moveMediaItem /
- * clearMediaItems / the setMediaItems rebuild), not the play-path loads.
+ * `prepare`/`play`/`playWhenReady` stay relaxed no-ops — the engine-write
+ * surfaces these pins assert on are the queue-chassis writes (seek /
+ * removeMediaItem / moveMediaItem / clearMediaItems / the setMediaItems
+ * rebuild) plus the pre-warm mirror writes (`setMediaItem` single-item load,
+ * `addMediaItem(s)` appends/prepends).
  */
 private fun stubPlayer(playlist: StubPlaylist): ExoPlayer {
     val player = mockk<ExoPlayer>(relaxed = true)
@@ -67,6 +75,20 @@ private fun stubPlayer(playlist: StubPlaylist): ExoPlayer {
     }
     every { player.seekTo(any<Long>()) } answers {
         playlist.lastSeekPositionMs = firstArg()
+    }
+    every { player.setMediaItem(any<MediaItem>(), any<Long>()) } answers {
+        playlist.items.clear()
+        playlist.items += firstArg<MediaItem>()
+        playlist.index = 0
+    }
+    every { player.addMediaItems(any<List<MediaItem>>()) } answers {
+        playlist.items += arg<List<MediaItem>>(0)
+    }
+    every { player.addMediaItems(any<Int>(), any<List<MediaItem>>()) } answers {
+        playlist.items.addAll(firstArg<Int>(), arg<List<MediaItem>>(1))
+    }
+    every { player.addMediaItem(any<MediaItem>()) } answers {
+        playlist.items += firstArg<MediaItem>()
     }
     every { player.removeMediaItem(any()) } answers {
         val index = firstArg<Int>()
@@ -113,42 +135,57 @@ private fun stubPlayer(playlist: StubPlaylist): ExoPlayer {
  * [StandardTestDispatcher] scope, so `play()`'s async resolve/pre-warm body
  * stays PARKED on the scheduler forever — no network machinery, no
  * queueLoadingJob guards, no pre-warm player writes ever run. The stub is
- * made the manager's live engine by writing the private `exoPlayer` field
- * directly (the `playerFactory` test seam only RETURNS a player from
- * `getOrCreatePlayer()` — it never assigns the field, so without this write
- * `EngineDispatch.isLive` and every `exoPlayer ?: return` adapter guard
- * would stay dead). With the field set, the chassis's engine gate is live
- * and every engine write below lands synchronously on the stub. The stub
- * never fires player events, so chassis-driven cursor writes are asserted
- * directly, the way the core suite asserts its recording dispatch; the ONE
- * async write the adapter performs (the shuffle/undo playlist rebuild) is
- * awaited via a main-looper drain loop.
+ * made the manager's live engine by the `playerFactory` seam itself:
+ * `getOrCreatePlayer()` ASSIGNS the factory result to the private
+ * `exoPlayer` field (the same tail `createPlayer()` has always had), so the
+ * first play-path prefix arms `EngineDispatch.isLive` and every
+ * `exoPlayer ?: return` adapter guard synchronously — the former
+ * reflection write into the field is retired. The stub never fires player
+ * events, so chassis-driven cursor writes are asserted directly, the way
+ * the core suite asserts its recording dispatch; the ONE async write the
+ * adapter performs (the shuffle/undo playlist rebuild) is awaited via a
+ * main-looper drain loop.
  */
 @OptIn(UnstableApi::class)
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
 class AudioPlaybackManagerQueueSemanticsTest {
 
-    private class Harness {
+    private class Harness(
+        /**
+         * Non-null: `getMediaDetail` succeeds with this detail for every id,
+         * so play()'s resolve lands on the server-reporting arm and its
+         * afterLoad pre-warm actually runs (the failure default parks the
+         * resolve on the queue-only local fallback, which never pre-warms).
+         */
+        private val detail: com.raulshma.jellyplay.core.model.MediaDetail? = null,
+    ) {
         val playlist = StubPlaylist()
         val scheduler = TestCoroutineScheduler()
         val scope = CoroutineScope(SupervisorJob() + StandardTestDispatcher(scheduler))
         val player: ExoPlayer = stubPlayer(playlist)
 
-        val manager: AudioPlaybackManager = AudioPlaybackManager(
-            context = ApplicationProvider.getApplicationContext(),
-            mediaRepository = mockk(relaxed = true) {
+        // Shared collaborators the manager AND its DI-hoisted
+        // [AudioLibraryBrowser] both read (since the constructor diet the
+        // browser is a ctor param — the harness constructs it over the same
+        // mocks, exactly the production Koin shape).
+        private val mediaRepository: com.raulshma.jellyplay.core.data.repository.MediaRepository =
+            mockk(relaxed = true) {
                 // Real Result values (value classes cannot be proxied): the
                 // resolve ladder fails and buildPlayableMediaItem falls to
-                // the local-source arm stubbed below.
-                coEvery { getMediaDetail(any()) } returns Result.failure(RuntimeException("test"))
-            },
-            playlistRepository = mockk(relaxed = true),
-            playbackRepository = mockk(relaxed = true),
-            imageUrlProvider = mockk(relaxed = true),
-            downloadRepository = mockk(relaxed = true),
-            offlineRepository = mockk(relaxed = true),
-            playbackSourceResolver = mockk(relaxed = true) {
+                // the local-source arm stubbed below (unless the harness was
+                // given a success detail, which reaches the pre-warm arm).
+                val detailResult: Result<com.raulshma.jellyplay.core.model.MediaDetail> =
+                    detail?.let { Result.success(it) }
+                        ?: Result.failure(RuntimeException("test"))
+                coEvery { getMediaDetail(any()) } returns detailResult
+            }
+        private val playbackRepository: com.raulshma.jellyplay.core.data.repository.PlaybackRepository =
+            mockk(relaxed = true)
+        private val imageUrlProvider: com.raulshma.jellyplay.core.data.util.ImageUrlProvider =
+            mockk(relaxed = true)
+        private val playbackSourceResolver: PlaybackSourceResolver =
+            mockk(relaxed = true) {
                 coEvery { resolveLocalSource(any()) } answers {
                     val itemId = firstArg<String>()
                     ResolvedPlaybackSource.Local(
@@ -160,20 +197,42 @@ class AudioPlaybackManagerQueueSemanticsTest {
                         offlineItem = null,
                     )
                 }
-            },
+            }
+
+        private val libraryBrowser = AudioLibraryBrowser(
+            scope = scope,
+            mediaRepository = mediaRepository,
+            musicCatalogue = mockk(relaxed = true),
+            mediaCollectionReads = mockk(relaxed = true),
+            playlistRepository = mockk(relaxed = true),
+            downloadRepository = mockk(relaxed = true),
+            playbackRepository = playbackRepository,
+            imageUrlProvider = imageUrlProvider,
+            playbackSourceResolver = playbackSourceResolver,
+            streamingQualityProvider = { com.raulshma.jellyplay.core.model.StreamingQuality.AUTO },
+            adaptiveBitrateSelector = mockk(relaxed = true),
+            audioQueueFacadeProvider = { mockk<AudioQueueFacade>(relaxed = true) },
+        )
+
+        val manager: AudioPlaybackManager = AudioPlaybackManager(
+            context = ApplicationProvider.getApplicationContext(),
+            libraryBrowser = libraryBrowser,
+            mediaRepository = mediaRepository,
+            playbackRepository = playbackRepository,
+            imageUrlProvider = imageUrlProvider,
+            playbackSourceResolver = playbackSourceResolver,
             sessionManager = mockk(relaxed = true),
             audioStore = mockk(relaxed = true),
             audioEffectsStore = mockk(relaxed = true),
             playbackStore = mockk(relaxed = true),
             queuePersistenceHelper = mockk(relaxed = true),
             bandwidthMonitor = mockk(relaxed = true),
-            adaptiveBitrateSelector = mockk(relaxed = true),
             bandwidthInterceptor = mockk(relaxed = true),
             lyricsManager = mockk(relaxed = true),
             effectsProcessor = mockk(relaxed = true) {
                 every { pitchSemitones } returns MutableStateFlow(0f)
             },
-            sleepTimerManager = mockk(relaxed = true),
+            sleepCountdown = mockk(relaxed = true),
 // Relaxed StateFlow stubs answer .value with a boxed Object and blow up
             // the production Boolean reads (play()'s "Play On" gate) — stub the
             // three flags with real flows, disconnected by default.
@@ -186,26 +245,12 @@ class AudioPlaybackManagerQueueSemanticsTest {
             audioStreamCache = mockk(relaxed = true),
             audioPrefetchEngine = mockk(relaxed = true),
             playbackScope = scope,
-            // Guarantees getOrCreatePlayer NEVER falls through to the real
-            // createPlayer() path while exoPlayer is still null (the factory
-            // result is returned unassigned — see attachEngine).
+            // getOrCreatePlayer() ASSIGNS the factory result to the private
+            // exoPlayer field (the createPlayer() tail shape) — the stub
+            // becomes the live engine on the first play-path prefix, and no
+            // real media3 engine is ever built.
             playerFactory = { player },
         )
-
-        /**
-         * Arms the engine gate: writes the stub into the manager's private
-         * `exoPlayer` field (the only holder [EngineDispatch.isLive] and the
-         * `exoPlayer ?: return` adapter guards read). Reflection is the one
-         * seam that keeps the player fully stub-synchronous — the real
-         * createPlayer() path would build a media3 engine whose playlist
-         * writes ride its internal playback thread.
-         */
-        fun attachEngine() {
-            AudioPlaybackManager::class.java
-                .getDeclaredField("exoPlayer")
-                .apply { isAccessible = true }
-                .set(manager, player)
-        }
 
         fun close() {
             scope.cancel()
@@ -225,7 +270,9 @@ class AudioPlaybackManagerQueueSemanticsTest {
         openHarnesses.clear()
     }
 
-    private fun newHarness(): Harness = Harness().also { openHarnesses += it }
+    private fun newHarness(
+        detail: com.raulshma.jellyplay.core.model.MediaDetail? = null,
+    ): Harness = Harness(detail).also { openHarnesses += it }
 
     private fun item(id: String) = AudioQueueItem(
         id = id,
@@ -241,14 +288,14 @@ class AudioPlaybackManagerQueueSemanticsTest {
     private fun items(vararg ids: String) = ids.map { item(it) }
 
     /**
-     * Brings the engine live (the reflection write above) and seeds the
-     * chassis queue; playQueue's onPlayRequested hook runs play()'s
-     * synchronous prefix and parks its resolve body on the test scheduler,
-     * then the queue is mirrored into the stub playlist — the shape play()'s
-     * whole-queue pre-warm leaves the real player in.
+     * Brings the engine live and seeds the chassis queue; playQueue's
+     * onPlayRequested hook runs play()'s synchronous prefix (whose
+     * engine acquisition assigns the stub through the playerFactory seam)
+     * and parks its resolve body on the test scheduler, then the queue is
+     * mirrored into the stub playlist — the shape the windowed queue
+     * pre-warm leaves the real player in.
      */
     private fun Harness.seedLive(rows: List<AudioQueueItem>, index: Int) {
-        attachEngine()
         manager.playQueue(rows, index)
         mirrorQueueToPlayer()
     }
@@ -456,7 +503,7 @@ class AudioPlaybackManagerQueueSemanticsTest {
     fun shuffleWithoutAnEngineFlipsOnlyTheFlag() {
         val h = newHarness()
         // Seed through the chassis cells directly: this pin needs the
-        // null-engine gate (no attachEngine here, so exoPlayer stays null).
+        // null-engine gate (no play()/playQueue here, so exoPlayer stays null).
         h.manager.state._queue.value = items("a", "b", "c")
         h.manager.state._currentIndex.value = 1
 
@@ -561,5 +608,79 @@ class AudioPlaybackManagerQueueSemanticsTest {
         h.manager.cycleRepeatMode() // 1 → 2 (one)
         h.manager.cycleRepeatMode() // 2 → 0 (none)
         assertEquals("(mode+1) % 3 wraps", 0, h.manager.repeatMode.value)
+    }
+
+    // ── windowed queue pre-warm ─────────────────────────────────────────────
+
+    /** Success detail for the play-path resolve — every id shares one shape. */
+    private fun detailFor(id: String): com.raulshma.jellyplay.core.model.MediaDetail =
+        com.raulshma.jellyplay.core.model.MediaDetail(
+            item = com.raulshma.jellyplay.core.model.MediaItem(
+                id = id,
+                name = "Track $id",
+                mediaType = com.raulshma.jellyplay.core.model.MediaType.AUDIO,
+            ),
+            mediaSources = listOf(
+                com.raulshma.jellyplay.core.model.MediaSource(id = "ms-$id", name = "Source"),
+            ),
+        )
+
+    /**
+     * Plays [index] through the full async resolve/load body and drains the
+     * pre-warm mirror write (the IO build hops to the real IO dispatcher; the
+     * append lands on the Robolectric main looper). `runCurrent` — not
+     * `advanceUntilIdle`: a successful load arms the position ticker, whose
+     * recurring delay loop would spin the virtual-time idle drain forever.
+     */
+    private fun Harness.playAndAwaitPrewarm(rows: List<AudioQueueItem>, index: Int) {
+        manager.playQueue(rows, index)
+        scheduler.runCurrent()
+        awaitMain(
+            { playlist.items.size == minOf(index + 1 + PREWARM_LOOKAHEAD_ITEMS, rows.size) },
+            "the windowed pre-warm mirrors the cursor + lookahead prefix",
+        )
+    }
+
+    @Test
+    fun prewarmMirrorsOnlyTheLookaheadWindowPrefixAroundTheCursor() {
+        val h = newHarness(detailFor("row2"))
+        val rows = (0 until 60).map { item("row$it") }
+
+        h.playAndAwaitPrewarm(rows, index = 2)
+
+        // Prefix [0, cursor + 1 + lookahead): the full prefix below the
+        // cursor (the prepend reconciliation) plus the bounded lookahead
+        // ahead of it — rows past the window are never mirrored.
+        assertEquals(rows.subList(0, 15).map { it.id }, h.playlist.items.map { it.mediaId })
+        assertEquals(2, h.manager.currentIndex.value)
+    }
+
+    @Test
+    fun skipInsideTheMirroredWindowSeeksInsteadOfRebuilding() {
+        val h = newHarness(detailFor("row2"))
+        val rows = (0 until 60).map { item("row$it") }
+        h.playAndAwaitPrewarm(rows, index = 2)
+
+        h.manager.skipToNext()
+
+        assertEquals(3, h.manager.currentIndex.value)
+        assertEquals(3, h.playlist.lastSeekIndex)
+        assertEquals("the windowed mirror takes the seek, not the rebuild", 0, h.playlist.rebuilt)
+    }
+
+    @Test
+    fun playFromQueuePastTheWindowRebuildsTheWindowedPrefix() {
+        val h = newHarness(detailFor("row2"))
+        val rows = (0 until 60).map { item("row$it") }
+        h.playAndAwaitPrewarm(rows, index = 2)
+
+        h.manager.playFromQueue(20)
+        awaitMain({ h.playlist.rebuilt > 0 }, "an out-of-window jump falls through to the rebuild")
+
+        // The rebuild mirrors the same prefix-window shape around the target
+        // (rows past the lookahead ahead of it stay unmirrored).
+        assertEquals(rows.subList(0, 33).map { it.id }, h.playlist.items.map { it.mediaId })
+        assertEquals(20, h.playlist.index)
+        assertEquals(20, h.manager.currentIndex.value)
     }
 }

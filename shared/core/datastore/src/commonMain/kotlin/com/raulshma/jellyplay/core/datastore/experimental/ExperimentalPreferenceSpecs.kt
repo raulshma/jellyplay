@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.datastore.experimental
 
+import com.raulshma.jellyplay.core.datastore.appearance.AppearancePreferenceSpecs
 import com.raulshma.jellyplay.core.datastore.spec.PreferenceSearchSpec
 import com.raulshma.jellyplay.core.datastore.spec.PreferenceSpec
 import com.raulshma.jellyplay.core.model.ExperimentalFeature
@@ -7,10 +8,10 @@ import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import com.raulshma.jellyplay.core.model.UpdateDismissPeriod
 
 /**
- * The Experimental domain's single preference declaration (Stage A pilot of
- * the spec machinery): one [PreferenceSpec] per knob this store owns — the
- * canonical key name, value type, default, reset category, and (where the
- * knob is searchable) its settings-search metadata as plain data.
+ * The Experimental domain's single preference declaration: one [PreferenceSpec]
+ * per knob this store owns — the canonical key name, value type, default,
+ * reset category, and (where the knob is searchable) its settings-search
+ * metadata as plain data.
  *
  * [ExperimentalStore] binds each spec to its existing key / read / setter
  * machinery via `Knob.of`, so the specs add a declaration without changing
@@ -155,12 +156,30 @@ object ExperimentalPreferenceSpecs {
         keyName = "show_share_media_option",
         default = true,
         resetCategory = PreferenceResetCategory.MISC_APP,
+        search = PreferenceSearchSpec(
+            id = "show_share_media",
+            titleKey = "ss_show_share_media_title",
+            subtitleKey = "ss_show_share_media_subtitle",
+            categoryKey = "ss_cat_appearance",
+            keywords = listOf("share", "media", "send", "details"),
+            routeKind = AppearancePreferenceSpecs.ROUTE_APPEARANCE_SETTINGS,
+            isAdvanced = true,
+        ),
     )
 
     val HIDE_SEARCH_HISTORY: PreferenceSpec<Boolean> = PreferenceSpec.boolean(
         keyName = "hide_search_history",
         default = false,
         resetCategory = PreferenceResetCategory.MISC_APP,
+        search = PreferenceSearchSpec(
+            id = "hide_search_history",
+            titleKey = "ss_hide_search_history_title",
+            subtitleKey = "ss_hide_search_history_subtitle",
+            categoryKey = "ss_cat_appearance",
+            keywords = listOf("search", "history", "hide", "privacy", "recent"),
+            routeKind = AppearancePreferenceSpecs.ROUTE_APPEARANCE_SETTINGS,
+            isAdvanced = true,
+        ),
     )
 
     /** Same MISC_APP reset-ownership note as [APP_LANGUAGE]: list entry owned by `SubtitleLanguageStore`. */
@@ -191,6 +210,23 @@ object ExperimentalPreferenceSpecs {
         searchDirectArrIntegration,
         searchArrSettings,
     )
+
+    /**
+     * This domain's settings-search entries that catalog into the settings
+     * feature's APPEARANCE screen groups (the share-media and hide-search-
+     * history toggles render in the appearance "Library & Cards" group):
+     * same declarations as their rows above, listed separately from
+     * [searchEntries] so the experimental screen's own derivation
+     * keeps its exact five-entry binding contract.
+     */
+    val appearanceSearchEntries: List<PreferenceSearchSpec> = listOf(
+        SHOW_SHARE_MEDIA_OPTION.searchEntry(),
+        HIDE_SEARCH_HISTORY.searchEntry(),
+    )
+
+    /** The projection hook for the search-entry lists: a row's declared entry. */
+    private fun PreferenceSpec<*>.searchEntry(): PreferenceSearchSpec =
+        requireNotNull(search) { "row '$keyName' declares no search entry" }
 
     /** Every knob spec declared here, in store-declaration order. */
     val all: List<PreferenceSpec<*>> = listOf(

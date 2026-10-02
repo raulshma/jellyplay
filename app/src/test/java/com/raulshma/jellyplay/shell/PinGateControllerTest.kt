@@ -29,7 +29,11 @@ import org.junit.Test
  *    verifier;
  *  - [PinGateController.lockoutMessage] keeps the former in-activity
  *    formatter's exact bucket boundaries (seconds round up; 60s → minutes,
- *    3600s → hours, 86400s → hours-only).
+ *    3600s → hours, 86400s → hours-only);
+ *  - [PinGateController.lockoutRemainingMs] — the display-side fold the gate
+ *    composable feeds a LIVE clock — goes non-positive exactly when the
+ *    lockout expires, so the keypad revives without waiting for the pref to
+ *    change (the frozen-clock bug this fold was extracted to fix).
  */
 class PinGateControllerTest {
 
@@ -155,6 +159,48 @@ class PinGateControllerTest {
         verify(exactly = 0) { limiter.getPinLockoutState() }
         coVerify(exactly = 0) { limiter.recordFailedPinAttempt() }
         coVerify(exactly = 0) { limiter.resetPinLockout() }
+    }
+
+    // ── lockoutRemainingMs (the gate's live-clock display decision) ───────
+
+    @Test
+    fun `lockoutRemainingMs reports the shrinking window while the lockout holds`() {
+        val state = PinLockoutState(
+            failedAttempts = PinRateLimiter.MAX_PIN_ATTEMPTS,
+            lockoutUntilEpochMs = nowMs + 30_000L,
+        )
+        assertEquals(30_000L, PinGateController.lockoutRemainingMs(state, nowMs))
+        assertEquals(1L, PinGateController.lockoutRemainingMs(state, nowMs + 29_999L))
+        assertTrue(PinGateController.lockoutRemainingMs(state, nowMs) > 0L) // active
+    }
+
+    @Test
+    fun `lockoutRemainingMs treats deadline-now as expired, matching the click-time re-check`() {
+        val state = PinLockoutState(
+            failedAttempts = PinRateLimiter.MAX_PIN_ATTEMPTS,
+            lockoutUntilEpochMs = nowMs,
+        )
+        // The exact edge submit's re-check pins: elapsed == deadline unlocks.
+        assertEquals(0L, PinGateController.lockoutRemainingMs(state, nowMs))
+        assertFalse(PinGateController.lockoutRemainingMs(state, nowMs) > 0L) // keypad revives
+    }
+
+    @Test
+    fun `lockoutRemainingMs goes non-positive once the clock moves past the deadline`() {
+        // The frozen-clock bug's shape: the SAME composition read, evaluated
+        // at a later now — the fold goes inactive without any pref change.
+        val state = PinLockoutState(
+            failedAttempts = PinRateLimiter.MAX_PIN_ATTEMPTS,
+            lockoutUntilEpochMs = nowMs,
+        )
+        assertTrue(PinGateController.lockoutRemainingMs(state, nowMs + 1L) < 0L)
+        assertFalse(PinGateController.lockoutRemainingMs(state, nowMs + 1L) > 0L)
+    }
+
+    @Test
+    fun `lockoutRemainingMs is zero without a recorded lockout`() {
+        assertEquals(0L, PinGateController.lockoutRemainingMs(PinLockoutState.NOT_LOCKED, nowMs))
+        assertFalse(PinGateController.lockoutRemainingMs(PinLockoutState.NOT_LOCKED, nowMs) > 0L)
     }
 
     // ── lockoutMessage boundaries (the former formatter's exact fold) ──────

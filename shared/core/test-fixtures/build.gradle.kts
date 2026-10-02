@@ -14,8 +14,10 @@ kotlin {
         // copy until a touch migrates its 14 consumers),
         // FakeUserDataMutator (details + home) and FakeMediaEngine (the one
         // MediaEngine double for the session + audio-queue jvmTest suites;
-        // apps/desktop's app-side copy is the remaining per-touch
-        // candidate). AGP 9 has no KMP testFixtures support, so this is a
+        // apps/desktop's app-side copy was adopted in the fake-twin merge —
+        // its suites construct AUTO_PLAY instances of this class, and its
+        // wall-clock pollUntil helper lives beside it in PollUntil.kt).
+        // AGP 9 has no KMP testFixtures support, so this is a
         // plain library module declared inside consumers' test source-set
         // blocks ONLY.
         //
@@ -64,13 +66,19 @@ kotlin {
 // TestFixturesScopeGuardTest scans every build.gradle.kts in the repo, so its
 // real inputs sit far outside the test classpath — wire them in explicitly or
 // the tripwire goes stale (up-to-date skip) exactly when someone adds the bad
-// reference it exists to catch.
+// reference it exists to catch. The scripts are enumerated per root instead of
+// one fileTree over the repo root: a tree rooted at the project directory
+// overlaps the desktop fetchBundledLibmpv outputs under tools/mpv, and Gradle
+// 9's task-graph validation fails any single invocation that runs both (e.g.
+// `gradlew jvmTest :apps:desktop:test`). Same file set, no location overlap —
+// tools/ carries no build scripts, and a newly added module enters
+// `subprojects` (recomputing this list) in the same configuration pass its
+// settings include triggers.
 tasks.named<Test>("jvmTest") {
     inputs.files(
-        fileTree(rootDir) {
-            include("**/build.gradle.kts")
-            exclude("**/build/**", "**/.git/**", "**/.gradle/**", "**/.kotlin/**")
-        },
+        rootProject.files("build.gradle.kts"),
+        rootProject.subprojects.map { it.files("build.gradle.kts") },
+        gradle.includedBuilds.map { it.projectDir.resolve("build.gradle.kts") },
     ).withPropertyName("guardScannedBuildScripts")
         .withPathSensitivity(PathSensitivity.NONE)
 }

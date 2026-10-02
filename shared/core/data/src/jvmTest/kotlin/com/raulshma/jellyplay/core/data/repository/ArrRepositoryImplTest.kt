@@ -18,6 +18,7 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.slot
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
@@ -33,7 +34,7 @@ class ArrRepositoryImplTest {
 
     private val radarrApiClient: RadarrApiClient = mockk(relaxed = true)
     private val sonarrApiClient: SonarrApiClient = mockk(relaxed = true)
-    private val seerrRepository: SeerrRepository = mockk(relaxed = true)
+    private val seerrServiceDirectory: SeerrServiceDirectory = mockk(relaxed = true)
     private val arrPreferencesStore: ArrPreferencesStore = mockk(relaxed = true)
 
     // Stand-in for the production @ApplicationScope (never cancelled, same
@@ -47,9 +48,9 @@ class ArrRepositoryImplTest {
     @BeforeTest
     fun setup() {
         every { arrPreferencesStore.preferences } returns MutableStateFlow(ArrPreferences())
-        coEvery { seerrRepository.getRadarrSettings() } returns Result.success(emptyList())
-        coEvery { seerrRepository.getSonarrSettings() } returns Result.success(emptyList())
-        repository = ArrRepositoryImpl(radarrApiClient, sonarrApiClient, seerrRepository, arrPreferencesStore, testScope)
+        coEvery { seerrServiceDirectory.getRadarrSettings() } returns Result.success(emptyList())
+        coEvery { seerrServiceDirectory.getSonarrSettings() } returns Result.success(emptyList())
+        repository = ArrRepositoryImpl(radarrApiClient, sonarrApiClient, seerrServiceDirectory, arrPreferencesStore, testScope)
     }
 
     @Test
@@ -71,7 +72,7 @@ class ArrRepositoryImplTest {
         every { arrPreferencesStore.preferences } returns MutableStateFlow(
             ArrPreferences(useSeerrDiscovery = false, manualServers = listOf(manualRadarr, manualSonarr)),
         )
-        repository = ArrRepositoryImpl(radarrApiClient, sonarrApiClient, seerrRepository, arrPreferencesStore, testScope)
+        repository = ArrRepositoryImpl(radarrApiClient, sonarrApiClient, seerrServiceDirectory, arrPreferencesStore, testScope)
 
         val summary = repository.resolveServers().getOrThrow()
         assertEquals(listOf(manualRadarr), summary.radarrServers)
@@ -89,7 +90,7 @@ class ArrRepositoryImplTest {
         every { arrPreferencesStore.preferences } returns MutableStateFlow(
             ArrPreferences(useSeerrDiscovery = true, manualServers = listOf(manual)),
         )
-        coEvery { seerrRepository.getRadarrSettings() } returns Result.success(
+        coEvery { seerrServiceDirectory.getRadarrSettings() } returns Result.success(
             listOf(radarrSettings(id = 1, hostname = "radarr.local", apiKey = "discovered-key")),
         )
 
@@ -107,7 +108,7 @@ class ArrRepositoryImplTest {
         every { arrPreferencesStore.preferences } returns MutableStateFlow(
             ArrPreferences(useSeerrDiscovery = true),
         )
-        coEvery { seerrRepository.getRadarrSettings() } returns Result.success(
+        coEvery { seerrServiceDirectory.getRadarrSettings() } returns Result.success(
             listOf(radarrSettings(id = 2, hostname = "radarr2.local", apiKey = "")),
         )
 
@@ -123,7 +124,7 @@ class ArrRepositoryImplTest {
             ArrPreferences(useSeerrDiscovery = true),
         )
         // /settings/* is admin-only; a non-admin Seerr account gets 403.
-        coEvery { seerrRepository.getRadarrSettings() } returns Result.failure(
+        coEvery { seerrServiceDirectory.getRadarrSettings() } returns Result.failure(
             ApiException.fromSeerrHttp(httpCode = 403, message = "HTTP 403: Forbidden"),
         )
 
@@ -137,7 +138,7 @@ class ArrRepositoryImplTest {
         every { arrPreferencesStore.preferences } returns MutableStateFlow(
             ArrPreferences(useSeerrDiscovery = true),
         )
-        coEvery { seerrRepository.getRadarrSettings() } returns Result.failure(
+        coEvery { seerrServiceDirectory.getRadarrSettings() } returns Result.failure(
             ApiException.fromSeerrHttp(httpCode = 500, message = "HTTP 500: boom"),
         )
 
@@ -152,7 +153,7 @@ class ArrRepositoryImplTest {
         every { arrPreferencesStore.preferences } returns MutableStateFlow(
             ArrPreferences(useSeerrDiscovery = true),
         )
-        coEvery { seerrRepository.getRadarrSettings() } returns Result.success(
+        coEvery { seerrServiceDirectory.getRadarrSettings() } returns Result.success(
             listOf(radarrSettings(id = 7, hostname = "radarr.local", apiKey = "key-7", baseUrl = "/radarr")),
         )
 
@@ -173,7 +174,7 @@ class ArrRepositoryImplTest {
         every { arrPreferencesStore.preferences } returns MutableStateFlow(
             ArrPreferences(useSeerrDiscovery = true),
         )
-        coEvery { seerrRepository.getRadarrSettings() } returns Result.failure(RuntimeException("boom"))
+        coEvery { seerrServiceDirectory.getRadarrSettings() } returns Result.failure(RuntimeException("boom"))
 
         val result = repository.resolveServers()
         assertTrue(result.isSuccess)
@@ -187,11 +188,11 @@ class ArrRepositoryImplTest {
         every { arrPreferencesStore.preferences } returns MutableStateFlow(
             ArrPreferences(useSeerrDiscovery = false, manualServers = listOf(radarrSrv, sonarrSrv)),
         )
-        repository = ArrRepositoryImpl(radarrApiClient, sonarrApiClient, seerrRepository, arrPreferencesStore, testScope)
+        repository = ArrRepositoryImpl(radarrApiClient, sonarrApiClient, seerrServiceDirectory, arrPreferencesStore, testScope)
         val radarrItem = ArrQueueItem(queueId = 1, title = "R1", status = ArrDownloadStatus.DOWNLOADING, tmdbId = 11)
         val sonarrItem = ArrQueueItem(queueId = 2, title = "S1", status = ArrDownloadStatus.QUEUED, tvdbId = 22)
-        coEvery { radarrApiClient.getQueue("https://r.local", "k") } returns Result.success(listOf(radarrItem))
-        coEvery { sonarrApiClient.getQueue("https://s.local", "k") } returns Result.success(listOf(sonarrItem))
+        coEvery { radarrApiClient.getQueue(radarrSrv) } returns Result.success(listOf(radarrItem))
+        coEvery { sonarrApiClient.getQueue(sonarrSrv) } returns Result.success(listOf(sonarrItem))
 
         repository.refreshQueue()
         val queue = repository.queue().first()
@@ -207,10 +208,10 @@ class ArrRepositoryImplTest {
         every { arrPreferencesStore.preferences } returns MutableStateFlow(
             ArrPreferences(useSeerrDiscovery = false, manualServers = listOf(srv1, srv2)),
         )
-        repository = ArrRepositoryImpl(radarrApiClient, sonarrApiClient, seerrRepository, arrPreferencesStore, testScope)
-        coEvery { radarrApiClient.getQueue("https://r1.local", "k") } returns Result.failure(RuntimeException("down"))
+        repository = ArrRepositoryImpl(radarrApiClient, sonarrApiClient, seerrServiceDirectory, arrPreferencesStore, testScope)
+        coEvery { radarrApiClient.getQueue(srv1) } returns Result.failure(RuntimeException("down"))
         val survivor = ArrQueueItem(queueId = 9, title = "OK", status = ArrDownloadStatus.DOWNLOADING, tmdbId = 99)
-        coEvery { radarrApiClient.getQueue("https://r2.local", "k") } returns Result.success(listOf(survivor))
+        coEvery { radarrApiClient.getQueue(srv2) } returns Result.success(listOf(survivor))
 
         repository.refreshQueue()
         val queue = repository.queue().first()
@@ -224,8 +225,8 @@ class ArrRepositoryImplTest {
         every { arrPreferencesStore.preferences } returns MutableStateFlow(
             ArrPreferences(useSeerrDiscovery = false, manualServers = listOf(srv)),
         )
-        repository = ArrRepositoryImpl(radarrApiClient, sonarrApiClient, seerrRepository, arrPreferencesStore, testScope)
-        coEvery { radarrApiClient.getQueue(any(), any()) } returns Result.success(
+        repository = ArrRepositoryImpl(radarrApiClient, sonarrApiClient, seerrServiceDirectory, arrPreferencesStore, testScope)
+        coEvery { radarrApiClient.getQueue(any()) } returns Result.success(
             listOf(ArrQueueItem(queueId = 1, title = "x", status = ArrDownloadStatus.DOWNLOADING, tmdbId = 777)),
         )
 
@@ -248,9 +249,9 @@ class ArrRepositoryImplTest {
         every { arrPreferencesStore.preferences } returns MutableStateFlow(
             ArrPreferences(useSeerrDiscovery = false, manualServers = listOf(radarrSrv)),
         )
-        repository = ArrRepositoryImpl(radarrApiClient, sonarrApiClient, seerrRepository, arrPreferencesStore, testScope)
-        coEvery { radarrApiClient.deleteQueueItem(any(), any(), any(), any()) } returns Result.success(Unit)
-        coEvery { radarrApiClient.getQueue(any(), any()) } returns Result.success(emptyList())
+        repository = ArrRepositoryImpl(radarrApiClient, sonarrApiClient, seerrServiceDirectory, arrPreferencesStore, testScope)
+        coEvery { radarrApiClient.deleteQueueItem(any(), any(), any()) } returns Result.success(Unit)
+        coEvery { radarrApiClient.getQueue(any()) } returns Result.success(emptyList())
         val item = ArrQueueItem(
             queueId = 5, title = "x", status = ArrDownloadStatus.DOWNLOADING,
             tmdbId = 1, serverId = "r1", serverKind = ArrServiceKind.RADARR,
@@ -258,7 +259,7 @@ class ArrRepositoryImplTest {
 
         val result = repository.deleteQueueItem(item, ArrQueueDeleteOptions())
         assertTrue(result.isSuccess)
-        coVerify { radarrApiClient.deleteQueueItem("https://r1.local", "k", 5, any()) }
+        coVerify { radarrApiClient.deleteQueueItem(radarrSrv, 5, any()) }
     }
 
     @Test
@@ -267,9 +268,9 @@ class ArrRepositoryImplTest {
         every { arrPreferencesStore.preferences } returns MutableStateFlow(
             ArrPreferences(useSeerrDiscovery = false, manualServers = listOf(sonarrSrv)),
         )
-        repository = ArrRepositoryImpl(radarrApiClient, sonarrApiClient, seerrRepository, arrPreferencesStore, testScope)
-        coEvery { sonarrApiClient.deleteQueueItem(any(), any(), any(), any()) } returns Result.success(Unit)
-        coEvery { sonarrApiClient.getQueue(any(), any()) } returns Result.success(emptyList())
+        repository = ArrRepositoryImpl(radarrApiClient, sonarrApiClient, seerrServiceDirectory, arrPreferencesStore, testScope)
+        coEvery { sonarrApiClient.deleteQueueItem(any(), any(), any()) } returns Result.success(Unit)
+        coEvery { sonarrApiClient.getQueue(any()) } returns Result.success(emptyList())
         val item = ArrQueueItem(
             queueId = 9, title = "ep", status = ArrDownloadStatus.DOWNLOADING,
             serverId = "s1", serverKind = ArrServiceKind.SONARR,
@@ -277,7 +278,7 @@ class ArrRepositoryImplTest {
 
         val result = repository.deleteQueueItem(item, ArrQueueDeleteOptions(blocklist = true))
         assertTrue(result.isSuccess)
-        coVerify { sonarrApiClient.deleteQueueItem(any(), any(), 9, any()) }
+        coVerify { sonarrApiClient.deleteQueueItem(any(), 9, any()) }
     }
 
     @Test
@@ -290,20 +291,116 @@ class ArrRepositoryImplTest {
         assertTrue(result.isFailure)
     }
 
+    // ── deleteQueueRow (the deep single-row delete both queue screens share) ──
+    // The dialog-flag → ArrQueueDeleteOptions mapping + the replacement-search
+    // follow-up used to be copy-pasted in RequestsViewModel.removeQueueItem and
+    // ArrQueueViewModel.deleteItem; these rows pin them at their new owner.
+
+    @Test
+    fun `deleteQueueRow maps dialog flags to options, refreshes and follows up with search`() = runTest {
+        val radarrSrv = ArrServerConfig("r1", "https://r1.local", "k", "R1", ArrServiceKind.RADARR)
+        every { arrPreferencesStore.preferences } returns MutableStateFlow(
+            ArrPreferences(useSeerrDiscovery = false, manualServers = listOf(radarrSrv)),
+        )
+        repository = ArrRepositoryImpl(radarrApiClient, sonarrApiClient, seerrServiceDirectory, arrPreferencesStore, testScope)
+        val optionsSlot = slot<ArrQueueDeleteOptions>()
+        coEvery { radarrApiClient.deleteQueueItem(any(), any(), capture(optionsSlot)) } returns Result.success(Unit)
+        coEvery { radarrApiClient.getQueue(any()) } returns Result.success(emptyList())
+        // The replacement-search leg (searchForTmdb → tmdb resolve → command).
+        coEvery { radarrApiClient.findMovieIdByTmdb(radarrSrv, 555) } returns Result.success(42)
+        coEvery {
+            radarrApiClient.postCommand(any(), any(), any(), any())
+        } returns Result.success(com.raulshma.jellyplay.core.model.arr.ArrCommand(id = 1, name = "SearchMovie", status = "queued"))
+        val item = ArrQueueItem(
+            queueId = 5, title = "x", status = ArrDownloadStatus.DOWNLOADING,
+            tmdbId = 555, serverId = "r1", serverKind = ArrServiceKind.RADARR,
+        )
+
+        val result = repository.deleteQueueRow(item, blocklist = true, searchAgain = true)
+
+        assertTrue(result.isSuccess)
+        // The dialog flags map exactly as the two former ViewModel bodies did.
+        assertEquals(
+            ArrQueueDeleteOptions(removeFromClient = true, blocklist = true, skipRedownload = false),
+            optionsSlot.captured,
+        )
+        // Success refreshed the hot queue feed…
+        coVerify(exactly = 1) { radarrApiClient.getQueue(radarrSrv) }
+        // …and the replacement search rode the success (the follow-up's own
+        // result is folded away — the delete's Result still succeeds).
+        coVerify(exactly = 1) {
+            radarrApiClient.postCommand(radarrSrv, ArrCommandName.SEARCH_MOVIE, movieIds = listOf(42), episodeIds = null)
+        }
+    }
+
+    @Test
+    fun `deleteQueueRow without searchAgain or tmdb fires no search`() = runTest {
+        val radarrSrv = ArrServerConfig("r1", "https://r1.local", "k", "R1", ArrServiceKind.RADARR)
+        every { arrPreferencesStore.preferences } returns MutableStateFlow(
+            ArrPreferences(useSeerrDiscovery = false, manualServers = listOf(radarrSrv)),
+        )
+        repository = ArrRepositoryImpl(radarrApiClient, sonarrApiClient, seerrServiceDirectory, arrPreferencesStore, testScope)
+        coEvery { radarrApiClient.deleteQueueItem(any(), any(), any()) } returns Result.success(Unit)
+        coEvery { radarrApiClient.getQueue(any()) } returns Result.success(emptyList())
+
+        // searchAgain=false: no follow-up even with a tmdb id.
+        val withTmdb = ArrQueueItem(
+            queueId = 5, title = "x", status = ArrDownloadStatus.DOWNLOADING,
+            tmdbId = 555, serverId = "r1", serverKind = ArrServiceKind.RADARR,
+        )
+        assertTrue(repository.deleteQueueRow(withTmdb, blocklist = false, searchAgain = false).isSuccess)
+
+        // searchAgain=true but the row carries no tmdb id: the skip the former
+        // ArrQueueViewModel guard performed (tmdbId-null rows search nothing).
+        val noTmdb = ArrQueueItem(
+            queueId = 6, title = "y", status = ArrDownloadStatus.QUEUED,
+            tmdbId = null, serverId = "r1", serverKind = ArrServiceKind.RADARR,
+        )
+        assertTrue(repository.deleteQueueRow(noTmdb, blocklist = false, searchAgain = true).isSuccess)
+
+        coVerify(exactly = 0) { radarrApiClient.findMovieIdByTmdb(any(), any()) }
+        coVerify(exactly = 0) { radarrApiClient.postCommand(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `deleteQueueRow surfaces the delete failure and fires no follow-up`() = runTest {
+        val radarrSrv = ArrServerConfig("r1", "https://r1.local", "k", "R1", ArrServiceKind.RADARR)
+        every { arrPreferencesStore.preferences } returns MutableStateFlow(
+            ArrPreferences(useSeerrDiscovery = false, manualServers = listOf(radarrSrv)),
+        )
+        repository = ArrRepositoryImpl(radarrApiClient, sonarrApiClient, seerrServiceDirectory, arrPreferencesStore, testScope)
+        coEvery { radarrApiClient.deleteQueueItem(any(), any(), any()) } returns Result.failure(RuntimeException("boom"))
+        val item = ArrQueueItem(
+            queueId = 5, title = "x", status = ArrDownloadStatus.DOWNLOADING,
+            tmdbId = 555, serverId = "r1", serverKind = ArrServiceKind.RADARR,
+        )
+
+        val result = repository.deleteQueueRow(item, blocklist = false, searchAgain = true)
+
+        // Only the delete's Result surfaces (both hosts' failure arms), and a
+        // failed delete queues no replacement search (searchForTmdb itself can
+        // never fail — per-server failures are swallowed — so the folded
+        // follow-up risk the interface KDoc guards against is exactly this
+        // ordering: follow-up strictly after a successful delete).
+        assertEquals("boom", result.exceptionOrNull()?.message)
+        coVerify(exactly = 0) { radarrApiClient.findMovieIdByTmdb(any(), any()) }
+        coVerify(exactly = 0) { radarrApiClient.postCommand(any(), any(), any(), any()) }
+    }
+
     @Test
     fun `deleteBlocklistItem refreshes blocklist after success`() = runTest {
         val radarrSrv = ArrServerConfig("r1", "https://r1.local", "k", "R1", ArrServiceKind.RADARR)
         every { arrPreferencesStore.preferences } returns MutableStateFlow(
             ArrPreferences(useSeerrDiscovery = false, manualServers = listOf(radarrSrv)),
         )
-        repository = ArrRepositoryImpl(radarrApiClient, sonarrApiClient, seerrRepository, arrPreferencesStore, testScope)
-        coEvery { radarrApiClient.deleteBlocklistItem(any(), any(), any()) } returns Result.success(Unit)
-        coEvery { radarrApiClient.getBlocklist(any(), any(), any(), any()) } returns Result.success(emptyList())
+        repository = ArrRepositoryImpl(radarrApiClient, sonarrApiClient, seerrServiceDirectory, arrPreferencesStore, testScope)
+        coEvery { radarrApiClient.deleteBlocklistItem(any(), any()) } returns Result.success(Unit)
+        coEvery { radarrApiClient.getBlocklist(any(), any(), any()) } returns Result.success(emptyList())
         val item = ArrBlocklistItem(id = 3, title = "blk", serverId = "r1", serverKind = ArrServiceKind.RADARR)
 
         val result = repository.deleteBlocklistItem(item)
         assertTrue(result.isSuccess)
-        coVerify { radarrApiClient.deleteBlocklistItem("https://r1.local", "k", 3) }
+        coVerify { radarrApiClient.deleteBlocklistItem(radarrSrv, 3) }
     }
 
     @Test
@@ -312,11 +409,11 @@ class ArrRepositoryImplTest {
         every { arrPreferencesStore.preferences } returns MutableStateFlow(
             ArrPreferences(useSeerrDiscovery = false, manualServers = listOf(radarrSrv)),
         )
-        repository = ArrRepositoryImpl(radarrApiClient, sonarrApiClient, seerrRepository, arrPreferencesStore, testScope)
+        repository = ArrRepositoryImpl(radarrApiClient, sonarrApiClient, seerrServiceDirectory, arrPreferencesStore, testScope)
         // tmdbId 555 resolves to Radarr internal movie id 42.
-        coEvery { radarrApiClient.findMovieIdByTmdb("https://r1.local", "k", 555) } returns Result.success(42)
+        coEvery { radarrApiClient.findMovieIdByTmdb(radarrSrv, 555) } returns Result.success(42)
         coEvery {
-            radarrApiClient.postCommand(any(), any(), any(), any(), any())
+            radarrApiClient.postCommand(any(), any(), any(), any())
         } returns Result.success(com.raulshma.jellyplay.core.model.arr.ArrCommand(id = 1, name = "SearchMovie", status = "queued"))
 
         val result = repository.searchForTmdb(555, ArrServiceKind.RADARR)
@@ -324,9 +421,9 @@ class ArrRepositoryImplTest {
         assertEquals(1, result.getOrThrow().size)
         // postCommand must be called with the resolved internal id, not the tmdbId.
         coVerify {
-            radarrApiClient.findMovieIdByTmdb("https://r1.local", "k", 555)
+            radarrApiClient.findMovieIdByTmdb(radarrSrv, 555)
             radarrApiClient.postCommand(
-                "https://r1.local", "k", ArrCommandName.SEARCH_MOVIE, movieIds = listOf(42), episodeIds = null,
+                radarrSrv, ArrCommandName.SEARCH_MOVIE, movieIds = listOf(42), episodeIds = null,
             )
         }
     }
@@ -337,11 +434,11 @@ class ArrRepositoryImplTest {
         every { arrPreferencesStore.preferences } returns MutableStateFlow(
             ArrPreferences(useSeerrDiscovery = false, manualServers = listOf(radarrSrv)),
         )
-        repository = ArrRepositoryImpl(radarrApiClient, sonarrApiClient, seerrRepository, arrPreferencesStore, testScope)
+        repository = ArrRepositoryImpl(radarrApiClient, sonarrApiClient, seerrServiceDirectory, arrPreferencesStore, testScope)
         // tmdbId not tracked → lookup returns null → fall back to global search.
-        coEvery { radarrApiClient.findMovieIdByTmdb(any(), any(), any()) } returns Result.success(null)
+        coEvery { radarrApiClient.findMovieIdByTmdb(any(), any()) } returns Result.success(null)
         coEvery {
-            radarrApiClient.postCommand(any(), any(), any(), any(), any())
+            radarrApiClient.postCommand(any(), any(), any(), any())
         } returns Result.success(com.raulshma.jellyplay.core.model.arr.ArrCommand(id = 1, name = "MissingMoviesSearch", status = "queued"))
 
         val result = repository.searchForTmdb(555, ArrServiceKind.RADARR)
@@ -349,7 +446,7 @@ class ArrRepositoryImplTest {
         assertEquals(1, result.getOrThrow().size)
         coVerify {
             radarrApiClient.postCommand(
-                "https://r1.local", "k", ArrCommandName.MISSING_SEARCH, movieIds = null, episodeIds = null,
+                radarrSrv, ArrCommandName.MISSING_SEARCH, movieIds = null, episodeIds = null,
             )
         }
     }
@@ -363,14 +460,14 @@ class ArrRepositoryImplTest {
         every { arrPreferencesStore.preferences } returns MutableStateFlow(
             ArrPreferences(useSeerrDiscovery = false, manualServers = listOf(radarrSrv)),
         )
-        repository = ArrRepositoryImpl(radarrApiClient, sonarrApiClient, seerrRepository, arrPreferencesStore, testScope)
+        repository = ArrRepositoryImpl(radarrApiClient, sonarrApiClient, seerrServiceDirectory, arrPreferencesStore, testScope)
     }
 
     private fun setupSonarrOnly() {
         every { arrPreferencesStore.preferences } returns MutableStateFlow(
             ArrPreferences(useSeerrDiscovery = false, manualServers = listOf(sonarrSrv)),
         )
-        repository = ArrRepositoryImpl(radarrApiClient, sonarrApiClient, seerrRepository, arrPreferencesStore, testScope)
+        repository = ArrRepositoryImpl(radarrApiClient, sonarrApiClient, seerrServiceDirectory, arrPreferencesStore, testScope)
     }
 
     @Test
@@ -383,13 +480,13 @@ class ArrRepositoryImplTest {
         // calls (the verify re-query) return hasFile=false. Use a counter so
         // MockK returns the right value per call order.
         var callCount = 0
-        coEvery { radarrApiClient.getMovieForTmdb(any(), any(), any()) } answers {
+        coEvery { radarrApiClient.getMovieForTmdb(any(), any()) } answers {
             callCount++
             Result.success(if (callCount == 1) movieInfo else movieInfo.copy(hasFile = false, movieFileId = 0))
         }
-        coEvery { radarrApiClient.deleteMovieFile("https://r1.local", "k", 9001) } returns Result.success(Unit)
-        coEvery { radarrApiClient.monitorMovies("https://r1.local", "k", listOf(42), true) } returns Result.success(Unit)
-        coEvery { radarrApiClient.postCommand(any(), any(), any(), any(), any()) } returns
+        coEvery { radarrApiClient.deleteMovieFile(radarrSrv, 9001) } returns Result.success(Unit)
+        coEvery { radarrApiClient.monitorMovies(radarrSrv, listOf(42), true) } returns Result.success(Unit)
+        coEvery { radarrApiClient.postCommand(any(), any(), any(), any()) } returns
             Result.success(com.raulshma.jellyplay.core.model.arr.ArrCommand(1, "SearchMovie", "queued"))
 
         val result = repository.redownloadMedia(555, ArrServiceKind.RADARR).getOrThrow()
@@ -399,7 +496,7 @@ class ArrRepositoryImplTest {
         assertEquals(com.raulshma.jellyplay.core.model.arr.ArrRedownloadStepStatus.SUCCESS, steps[com.raulshma.jellyplay.core.model.arr.ArrRedownloadStep.MONITOR]?.status)
         assertEquals(com.raulshma.jellyplay.core.model.arr.ArrRedownloadStepStatus.SUCCESS, steps[com.raulshma.jellyplay.core.model.arr.ArrRedownloadStep.SEARCH]?.status)
         assertTrue(result.isComplete)
-        coVerify { radarrApiClient.deleteMovieFile("https://r1.local", "k", 9001) }
+        coVerify { radarrApiClient.deleteMovieFile(radarrSrv, 9001) }
     }
 
     @Test
@@ -408,16 +505,16 @@ class ArrRepositoryImplTest {
         val movieInfo = com.raulshma.jellyplay.core.network.arr.RadarrMovieInfo(
             id = 42, movieFileId = 9001, hasFile = true, monitored = true,
         )
-        coEvery { radarrApiClient.getMovieForTmdb("https://r1.local", "k", 555) } returns Result.success(movieInfo)
-        coEvery { radarrApiClient.deleteMovieFile(any(), any(), any()) } returns Result.success(Unit)
-        coEvery { radarrApiClient.getMovieForTmdb(any(), any(), any()) } returns Result.success(movieInfo.copy(hasFile = false, movieFileId = 0))
-        coEvery { radarrApiClient.postCommand(any(), any(), any(), any(), any()) } returns
+        coEvery { radarrApiClient.getMovieForTmdb(radarrSrv, 555) } returns Result.success(movieInfo)
+        coEvery { radarrApiClient.deleteMovieFile(any(), any()) } returns Result.success(Unit)
+        coEvery { radarrApiClient.getMovieForTmdb(any(), any()) } returns Result.success(movieInfo.copy(hasFile = false, movieFileId = 0))
+        coEvery { radarrApiClient.postCommand(any(), any(), any(), any()) } returns
             Result.success(com.raulshma.jellyplay.core.model.arr.ArrCommand(1, "SearchMovie", "queued"))
 
         val result = repository.redownloadMedia(555, ArrServiceKind.RADARR).getOrThrow()
         val monitor = result.steps.first { it.step == com.raulshma.jellyplay.core.model.arr.ArrRedownloadStep.MONITOR }
         assertEquals(com.raulshma.jellyplay.core.model.arr.ArrRedownloadStepStatus.SKIPPED, monitor.status)
-        coVerify(exactly = 0) { radarrApiClient.monitorMovies(any(), any(), any(), any()) }
+        coVerify(exactly = 0) { radarrApiClient.monitorMovies(any(), any(), any()) }
     }
 
     @Test
@@ -426,8 +523,8 @@ class ArrRepositoryImplTest {
         val movieInfo = com.raulshma.jellyplay.core.network.arr.RadarrMovieInfo(
             id = 42, movieFileId = 9001, hasFile = true, monitored = false,
         )
-        coEvery { radarrApiClient.getMovieForTmdb(any(), any(), any()) } returns Result.success(movieInfo)
-        coEvery { radarrApiClient.deleteMovieFile(any(), any(), any()) } returns
+        coEvery { radarrApiClient.getMovieForTmdb(any(), any()) } returns Result.success(movieInfo)
+        coEvery { radarrApiClient.deleteMovieFile(any(), any()) } returns
             Result.failure(ApiException.fromHttp(409, "Root folder missing"))
 
         val result = repository.redownloadMedia(555, ArrServiceKind.RADARR).getOrThrow()
@@ -444,9 +541,9 @@ class ArrRepositoryImplTest {
         val movieInfo = com.raulshma.jellyplay.core.network.arr.RadarrMovieInfo(
             id = 42, movieFileId = 0, hasFile = false, monitored = false,
         )
-        coEvery { radarrApiClient.getMovieForTmdb(any(), any(), any()) } returns Result.success(movieInfo)
-        coEvery { radarrApiClient.monitorMovies(any(), any(), any(), any()) } returns Result.success(Unit)
-        coEvery { radarrApiClient.postCommand(any(), any(), any(), any(), any()) } returns
+        coEvery { radarrApiClient.getMovieForTmdb(any(), any()) } returns Result.success(movieInfo)
+        coEvery { radarrApiClient.monitorMovies(any(), any(), any()) } returns Result.success(Unit)
+        coEvery { radarrApiClient.postCommand(any(), any(), any(), any()) } returns
             Result.success(com.raulshma.jellyplay.core.model.arr.ArrCommand(1, "SearchMovie", "queued"))
 
         val result = repository.redownloadMedia(555, ArrServiceKind.RADARR).getOrThrow()
@@ -454,7 +551,7 @@ class ArrRepositoryImplTest {
         assertEquals(com.raulshma.jellyplay.core.model.arr.ArrRedownloadStepStatus.SKIPPED, deleteStep.status)
         // Flow continues (file was already gone — not an error).
         assertTrue(result.isComplete)
-        coVerify(exactly = 0) { radarrApiClient.deleteMovieFile(any(), any(), any()) }
+        coVerify(exactly = 0) { radarrApiClient.deleteMovieFile(any(), any()) }
     }
 
     @Test
@@ -463,14 +560,14 @@ class ArrRepositoryImplTest {
         val episodeInfo = com.raulshma.jellyplay.core.network.arr.SonarrEpisodeInfo(
             id = 7, episodeFileId = 500, hasFile = true, monitored = false, seasonNumber = 2,
         )
-        coEvery { sonarrApiClient.findSeriesByTvdb("https://s1.local", "k", 123) } returns Result.success(10)
+        coEvery { sonarrApiClient.findSeriesByTvdb(sonarrSrv, 123) } returns Result.success(10)
         var callCount = 0
-        coEvery { sonarrApiClient.getEpisodeInfo(any(), any(), any(), any(), any()) } answers {
+        coEvery { sonarrApiClient.getEpisodeInfo(any(), any(), any(), any()) } answers {
             callCount++
             Result.success(if (callCount == 1) episodeInfo else episodeInfo.copy(hasFile = false, episodeFileId = 0))
         }
-        coEvery { sonarrApiClient.deleteEpisodeFile("https://s1.local", "k", 500) } returns Result.success(Unit)
-        coEvery { sonarrApiClient.monitorEpisodes("https://s1.local", "k", listOf(7), true) } returns Result.success(Unit)
+        coEvery { sonarrApiClient.deleteEpisodeFile(sonarrSrv, 500) } returns Result.success(Unit)
+        coEvery { sonarrApiClient.monitorEpisodes(sonarrSrv, listOf(7), true) } returns Result.success(Unit)
         coEvery { sonarrApiClient.postCommand(any(), any(), any(), any(), any()) } returns
             Result.success(com.raulshma.jellyplay.core.model.arr.ArrCommand(1, "EpisodeSearch", "queued"))
 
@@ -481,18 +578,18 @@ class ArrRepositoryImplTest {
         assertEquals(com.raulshma.jellyplay.core.model.arr.ArrRedownloadStepStatus.SUCCESS, steps[com.raulshma.jellyplay.core.model.arr.ArrRedownloadStep.SEARCH]?.status)
         assertTrue(result.isComplete)
         coVerify {
-            sonarrApiClient.deleteEpisodeFile("https://s1.local", "k", 500)
-            sonarrApiClient.postCommand("https://s1.local", "k", ArrCommandName.SEARCH_EPISODES, seriesId = null, episodeIds = listOf(7))
+            sonarrApiClient.deleteEpisodeFile(sonarrSrv, 500)
+            sonarrApiClient.postCommand(sonarrSrv, ArrCommandName.SEARCH_EPISODES, seriesId = null, episodeIds = listOf(7))
         }
     }
 
     @Test
     fun `redownloadMedia episode not found shows diagnostic with season summaries`() = runTest {
         setupSonarrOnly()
-        coEvery { sonarrApiClient.findSeriesByTvdb("https://s1.local", "k", 123) } returns Result.success(10)
-        coEvery { sonarrApiClient.getEpisodeInfo(any(), any(), any(), any(), any()) } returns Result.success(null)
+        coEvery { sonarrApiClient.findSeriesByTvdb(sonarrSrv, 123) } returns Result.success(10)
+        coEvery { sonarrApiClient.getEpisodeInfo(any(), any(), any(), any()) } returns Result.success(null)
         coEvery {
-            sonarrApiClient.getSeasonSummaries("https://s1.local", "k", 10)
+            sonarrApiClient.getSeasonSummaries(sonarrSrv, 10)
         } returns Result.success(
             listOf(
                 com.raulshma.jellyplay.core.network.arr.SonarrSeasonSummary(0, listOf(1, 2, 3)),
@@ -516,14 +613,14 @@ class ArrRepositoryImplTest {
         val episodeInfo = com.raulshma.jellyplay.core.network.arr.SonarrEpisodeInfo(
             id = 7, episodeFileId = 500, hasFile = true, monitored = true, seasonNumber = 2,
         )
-        coEvery { sonarrApiClient.findSeriesByTvdb("https://s1.local", "k", 123) } returns Result.success(10)
+        coEvery { sonarrApiClient.findSeriesByTvdb(sonarrSrv, 123) } returns Result.success(10)
         var callCount = 0
         // 1st getEpisodeInfo → episode present; 2nd (verify re-query) → null.
-        coEvery { sonarrApiClient.getEpisodeInfo(any(), any(), any(), any(), any()) } answers {
+        coEvery { sonarrApiClient.getEpisodeInfo(any(), any(), any(), any()) } answers {
             callCount++
             Result.success(if (callCount == 1) episodeInfo else null)
         }
-        coEvery { sonarrApiClient.deleteEpisodeFile("https://s1.local", "k", 500) } returns Result.success(Unit)
+        coEvery { sonarrApiClient.deleteEpisodeFile(sonarrSrv, 500) } returns Result.success(Unit)
         coEvery { sonarrApiClient.postCommand(any(), any(), any(), any(), any()) } returns
             Result.success(com.raulshma.jellyplay.core.model.arr.ArrCommand(1, "EpisodeSearch", "queued"))
 
@@ -540,7 +637,7 @@ class ArrRepositoryImplTest {
     fun `redownloadMedia fails fast when no relevant server configured`() = runTest {
         // No servers configured at all.
         every { arrPreferencesStore.preferences } returns MutableStateFlow(ArrPreferences())
-        repository = ArrRepositoryImpl(radarrApiClient, sonarrApiClient, seerrRepository, arrPreferencesStore, testScope)
+        repository = ArrRepositoryImpl(radarrApiClient, sonarrApiClient, seerrServiceDirectory, arrPreferencesStore, testScope)
 
         val result = repository.redownloadMedia(555, ArrServiceKind.RADARR).getOrThrow()
         val deleteStep = result.steps.first { it.step == com.raulshma.jellyplay.core.model.arr.ArrRedownloadStep.DELETE_FILE }

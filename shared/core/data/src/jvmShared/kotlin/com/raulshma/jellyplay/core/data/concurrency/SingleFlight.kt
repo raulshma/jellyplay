@@ -146,6 +146,13 @@ internal class SingleFlight<K : Any, V : Any>(
                 // still-alive caller is safe — under a re-read key and a
                 // fresh epoch capture.
                 if (job?.isCancelled == true) throw ce
+                // REGRESSION (device-verified 2026-10-02): with AudioPlaybackManager's
+                // prewarm-window cancel/restart churn, a surviving caller can hit this
+                // retry while the outer coroutineScope is completing — the nested
+                // scopes resolve synchronously in a cycle and overflow the stack
+                // (fatal StackOverflowError; log: scratch/crash-singeFlight-soe.log).
+                // Retry OUTSIDE this coroutineScope (bounded loop at the call site or
+                // a flat suspendCancellableCoroutine re-entry), never nested inside it.
                 getOrFetch(key, fastRead, readCached, fetch, store)
             }
         }

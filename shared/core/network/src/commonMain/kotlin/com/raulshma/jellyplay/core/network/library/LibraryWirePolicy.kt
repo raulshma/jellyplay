@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.core.network.library
 
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.parentalRatingAge
 
 /**
  * The wire-level library policy tables that are canonical here in commonMain
@@ -43,22 +44,21 @@ internal fun MediaType.toWireItemKind(): String? = when (this) {
 }
 
 /**
- * The canonical rating→age table (unknown ratings map to null = "no
- * opinion"). The parental-filter tails resolve ratings through it
- * (jvmShared: the SDK-typed `toFilteredMediaItems` mapper tail over
- * [filterByParentalRating]).
+ * The shared tail of the latest-rows kind fold
+ * ([toFilteredLatestRows]): null allowed-kinds = unconstrained, otherwise
+ * keep only the kinds the narrowing asked for.
  */
-internal fun parentalRatingAge(rating: String): Int? = when (rating.uppercase()) {
-    "G", "TV-Y", "TV-G" -> 0
-    "PG", "TV-Y7", "TV-PG" -> 7
-    "PG-13", "TV-14" -> 13
-    "R", "TV-MA" -> 17
-    "NC-17" -> 18
-    else -> null
-}
+internal fun <T : MediaItem> List<T>.filterAllowedKinds(allowedKinds: Set<MediaType>?): List<T> =
+    if (allowedKinds == null) this else filter { it.mediaType in allowedKinds }
 
 /**
- * The client-side parental-rating filter, verbatim semantics: no max rating →
+ * The rating→age table moved to core/model
+ * ([com.raulshma.jellyplay.core.model.parentalRatingAge] — its consumers are
+ * settings UIs that must not see this module); the parental filter below
+ * resolves through the model table so the wire filter and the picker
+ * vocabulary can never drift.
+ */
+/** The client-side parental-rating filter, verbatim semantics: no max rating →
  * unfiltered; an unrated/unknown-rating item passes (`!= false` keeps it).
  */
 internal fun <T : MediaItem> List<T>.filterByParentalRating(maxParentalRating: Int?): List<T> {

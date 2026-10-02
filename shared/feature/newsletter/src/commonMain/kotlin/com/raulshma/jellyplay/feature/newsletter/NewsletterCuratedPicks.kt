@@ -5,12 +5,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -28,11 +25,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.ArrowRight
 import com.raulshma.jellyplay.core.designsystem.theme.RatingColors
@@ -42,7 +37,6 @@ import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.hasMeaningfulRuntime
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.formatDurationFromTicks
-import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.model.mediaTypeDisplayName
 import com.raulshma.jellyplay.core.ui.tv.TvFocusableItemRow
 import com.raulshma.jellyplay.feature.newsletter.generated.resources.Res
@@ -139,131 +133,128 @@ private fun CuratedFeaturedCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Box(
-        modifier = modifier
-            .clip(ShapeCache.smooth20)
-            .focusIndicator(ShapeCache.smooth16)
-            .clickable(onClick = onClick),
-    ) {
-        MediaImage(
-            url = backdropUrl,
-            contentDescription = item.name,
-            blurHash = item.blurHashes.backdrop,
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(16f / 9f),
-            contentScale = ContentScale.Crop,
-        )
-
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            Color.Transparent,
-                            Color.Transparent,
-                            Color.Black.copy(alpha = 0.5f),
-                            Color.Black.copy(alpha = 0.85f),
-                        ),
-                    )
-                ),
-        )
-
-        Column(
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                item.mediaType.takeIf { it != MediaType.UNKNOWN }?.let { type ->
-                    Box(
-                        modifier = Modifier
-                            .background(
-                                Color.White.copy(alpha = 0.2f),
-                                ShapeCache.smooth4,
-                            )
-                            .padding(horizontal = 6.dp, vertical = 2.dp),
-                    ) {
-                        Text(
-                            text = type.mediaTypeDisplayName(),
-                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                            color = Color.White,
+    // No under-poster caption block — the whole card lives in the overlay
+    // (null caption keeps the scaffold from composing a padded empty Column).
+    NewsletterCardScaffold(
+        aspectRatio = 16f / 9f,
+        shape = ShapeCache.smooth20,
+        focusShape = ShapeCache.smooth16,
+        onClick = onClick,
+        imageUrl = backdropUrl,
+        contentDescription = item.name,
+        blurHash = item.blurHashes.backdrop,
+        modifier = modifier,
+        overlay = {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color.Transparent,
+                                Color.Transparent,
+                                Color.Black.copy(alpha = 0.5f),
+                                Color.Black.copy(alpha = 0.85f),
+                            ),
                         )
-                    }
-                }
-                item.year?.let {
-                    Text(
-                        text = it.toString(),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = Color.White.copy(alpha = 0.8f),
-                    )
-                }
-                item.communityRating?.let { rating ->
-                    Text(
-                        text = remember(rating) { "\u2605 ${formatOneDecimal(rating.toDouble())}" },
-                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                        color = RatingColors.star,
-                    )
-                }
-                if (item.hasMeaningfulRuntime) {
-                    Text(
-                        text = remember(item.runTimeTicks) {
-                            formatDurationFromTicks(item.runTimeTicks!!)
-                        },
-                        style = MaterialTheme.typography.labelMedium,
-                        color = Color.White.copy(alpha = 0.8f),
-                    )
-                }
-                item.officialRating?.let { rating ->
-                    Box(
-                        modifier = Modifier
-                            .background(
-                                Color.White.copy(alpha = 0.2f),
-                                ShapeCache.smooth4,
-                            )
-                            .padding(horizontal = 6.dp, vertical = 2.dp),
-                    ) {
-                        Text(
-                            text = rating,
-                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                            color = Color.White,
-                        )
-                    }
-                }
-            }
-            Text(
-                text = item.name,
-                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                color = Color.White,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
+                    ),
             )
-            if (item.genres.isNotEmpty()) {
+
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    item.mediaType.takeIf { it != MediaType.UNKNOWN }?.let { type ->
+                        Box(
+                            modifier = Modifier
+                                .background(
+                                    Color.White.copy(alpha = 0.2f),
+                                    ShapeCache.smooth4,
+                                )
+                                .padding(horizontal = 6.dp, vertical = 2.dp),
+                        ) {
+                            Text(
+                                text = type.mediaTypeDisplayName(),
+                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                                color = Color.White,
+                            )
+                        }
+                    }
+                    item.year?.let {
+                        Text(
+                            text = it.toString(),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = Color.White.copy(alpha = 0.8f),
+                        )
+                    }
+                    item.communityRating?.let { rating ->
+                        Text(
+                            text = remember(rating) { "\u2605 ${formatOneDecimal(rating.toDouble())}" },
+                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                            color = RatingColors.star,
+                        )
+                    }
+                    if (item.hasMeaningfulRuntime) {
+                        Text(
+                            text = remember(item.runTimeTicks) {
+                                formatDurationFromTicks(item.runTimeTicks!!)
+                            },
+                            style = MaterialTheme.typography.labelMedium,
+                            color = Color.White.copy(alpha = 0.8f),
+                        )
+                    }
+                    item.officialRating?.let { rating ->
+                        Box(
+                            modifier = Modifier
+                                .background(
+                                    Color.White.copy(alpha = 0.2f),
+                                    ShapeCache.smooth4,
+                                )
+                                .padding(horizontal = 6.dp, vertical = 2.dp),
+                        ) {
+                            Text(
+                                text = rating,
+                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                                color = Color.White,
+                            )
+                        }
+                    }
+                }
                 Text(
-                    text = item.genres.take(3).joinToString(" \u00B7 "),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color.White.copy(alpha = 0.7f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            item.overview?.let { overview ->
-                Text(
-                    text = overview,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color.White.copy(alpha = 0.7f),
+                    text = item.name,
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                    color = Color.White,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(top = 2.dp),
                 )
+                if (item.genres.isNotEmpty()) {
+                    Text(
+                        text = item.genres.take(3).joinToString(" \u00B7 "),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.White.copy(alpha = 0.7f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                item.overview?.let { overview ->
+                    Text(
+                        text = overview,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.White.copy(alpha = 0.7f),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = 2.dp),
+                    )
+                }
             }
-        }
-    }
+        },
+    )
 }
 
 @Composable
@@ -273,26 +264,18 @@ private fun CuratedPickCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(
+    NewsletterCardScaffold(
+        aspectRatio = 2f / 3f,
+        shape = ShapeCache.smooth12,
+        // Kept deliberately: this row's focus indicator has ALWAYS drawn at
+        // smooth12 while every other newsletter card draws smooth16.
+        focusShape = ShapeCache.smooth12,
+        onClick = onClick,
+        imageUrl = imageUrl,
+        contentDescription = item.name,
+        blurHash = item.blurHashes.primary,
         modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(2f / 3f)
-                .clip(ShapeCache.smooth12)
-                .focusIndicator(ShapeCache.smooth12)
-                .clickable(onClick = onClick),
-        ) {
-            MediaImage(
-                url = imageUrl,
-                contentDescription = item.name,
-                blurHash = item.blurHashes.primary,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop,
-            )
-
+        overlay = {
             if (item.communityRating != null) {
                 Box(
                     modifier = Modifier
@@ -313,12 +296,8 @@ private fun CuratedPickCard(
                     )
                 }
             }
-        }
-
-        Column(
-            modifier = Modifier.padding(horizontal = 4.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
+        },
+        caption = {
             Text(
                 text = item.name,
                 style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
@@ -386,6 +365,6 @@ private fun CuratedPickCard(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-        }
-    }
+        },
+    )
 }

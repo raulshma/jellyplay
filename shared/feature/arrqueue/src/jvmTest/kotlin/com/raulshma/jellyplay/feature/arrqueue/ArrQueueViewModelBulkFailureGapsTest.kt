@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.arrqueue
 
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
+import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalFeatureGate
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalSlice
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore
 import com.raulshma.jellyplay.core.model.ExperimentalFeature
@@ -12,6 +13,7 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -80,7 +82,7 @@ class ArrQueueViewModelBulkFailureGapsTest {
 
     private fun newViewModel(): ArrQueueViewModel = ArrQueueViewModel(
         arrRepository = arrRepository,
-        experimentalStore = experimentalStore,
+        experimentalGate = ExperimentalFeatureGate(experimentalStore, CoroutineScope(mainDispatcher)),
     )
 
     private fun item(queueId: Int, tmdbId: Int? = queueId) = ArrQueueItem(

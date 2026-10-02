@@ -404,4 +404,22 @@
     <string name="admin_plugin_config_unavailable">プラグイン設定はこのプラットフォームでは利用できません。</string>
 
     <string name="admin_no_delete_permission">お使いのアカウントにはコンテンツを削除する権限がありません。サーバー管理者に連絡してください。</string>
+    <string name="admin_backups_title">バックアップ</string>
+    <string name="admin_backups_create">バックアップを作成</string>
+    <string name="admin_backups_create_title">バックアップを作成</string>
+    <string name="admin_backups_empty">バックアップはまだありません</string>
+    <string name="admin_backups_empty_hint">バックアップを実行すると、このサーバーの構成とデータが保存されます。</string>
+    <string name="admin_backups_unsupported_title">バックアップは利用できません</string>
+    <string name="admin_backups_unsupported_body">このJellyfinサーバーはバックアップに対応していません。Jellyfin 10.11以降のサーバーが必要です。</string>
+    <string name="admin_backups_component_metadata">メタデータ</string>
+    <string name="admin_backups_component_trickplay">Trickplay</string>
+    <string name="admin_backups_component_subtitles">字幕</string>
+    <string name="admin_backups_component_database">データベース</string>
+    <string name="admin_backups_restore">復元</string>
+    <string name="admin_backups_restore_confirm_title">バックアップを復元しますか？</string>
+    <string name="admin_backups_restore_confirm_body">サーバーは直ちに再起動し、現在のデータはすべて「%1$s」の内容で置き換えられます。この操作は元に戻せません。</string>
+    <string name="admin_backups_restoring">復元中 — サーバーが再起動しています</string>
+    <string name="admin_backups_reconnecting">サーバーが復帰しました — 再接続中…</string>
+    <string name="admin_backups_restore_complete">復元が完了しました — サーバーに再接続しました。</string>
+    <string name="admin_backups_restore_server_unreachable">復元後にサーバーが戻りませんでした。実行中か確認し、再度サインインしてください。</string>
 </resources>

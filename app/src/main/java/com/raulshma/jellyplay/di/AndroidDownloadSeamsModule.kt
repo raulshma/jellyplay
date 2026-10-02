@@ -28,8 +28,10 @@ import org.koin.dsl.module
  *    adapt the notification-summary and image-cache seams.
  *
  * Hilt no longer constructs any of these — the legacy DataModule bridges its
- * remaining injectors (DownloadRecoveryInitializer, StorageSettingsViewModel,
- * DownloadIntakeImpl) to these singles via koin().get().
+ * remaining injectors (StorageSettingsViewModel, DownloadIntakeImpl) to these
+ * singles via koin().get(), and the cold-start recovery single in core:data
+ * (DownloadRecoveryPort) reaches the [DownloadEnqueuer] actual through the
+ * coordinator seam below.
  */
 fun androidDownloadSeamsModule(context: Context): Module = module {
     single { DownloadEnqueuer(context, get()) }

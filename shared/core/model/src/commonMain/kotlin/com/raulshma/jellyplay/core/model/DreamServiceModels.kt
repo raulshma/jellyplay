@@ -9,6 +9,7 @@ enum class DreamImageCategory {
     MOVIES,
     SERIES,
     MUSIC,
+    PHOTOS,
 }
 
 @Immutable
@@ -22,7 +23,8 @@ enum class DreamTransitionStyle {
 @Immutable
 data class DreamImage(
     val itemId: String,
-    val backdropUrl: String,
+    /** The image to show: the backdrop for video/music, the Primary for photos. */
+    val imageUrl: String,
     val title: String,
     val type: DreamImageCategory,
 )

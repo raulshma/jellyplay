@@ -117,10 +117,10 @@ class HomeRefresherTest {
      */
     private val offlineModeFlow = MutableStateFlow(OfflineMode.ONLINE)
 
-    /** Backs the androidTvWatchNextEnabledProvider handed to the refresher. */
+    /** Backs the androidTvWatchNextEnabled provider handed to the refresher. */
     private var androidTvWatchNextEnabled = true
 
-    /** Backs the directArrEnabledProvider handed to the refresher. */
+    /** Backs the directArrEnabled provider handed to the refresher. */
     private var directArrEnabled = false
 
     /**
@@ -195,18 +195,27 @@ class HomeRefresherTest {
     private fun TestScope.buildRefresher(): HomeRefresher {
         val scope = CoroutineScope(SupervisorJob() + StandardTestDispatcher(testScheduler))
         refresherScope = scope
+        // One state store shared by the refresher and its side-fetch
+        // collaborator (the factory seam, mirrored here).
+        val state = MutableStateFlow(HomeRefreshState())
         return HomeRefresher(
             scope = scope,
             clock = fakeTimeSource,
             mediaRepository = mediaRepository,
-            seerrRepository = seerrRepository,
-            arrRepository = arrRepository,
             orderHomeSections = OrderHomeSectionsUseCase(),
             widgetDataStore = widgetDataStore,
             continueWatchingBroadcaster = continueWatchingBroadcaster,
             tvWatchNextScheduler = tvWatchNextScheduler,
             librarySyncHook = librarySyncHook,
             offlineModeManager = offlineModeManager,
+            stateStore = state,
+            discoverSources = HomeDiscoverSources(
+                clock = fakeTimeSource,
+                seerrRepository = seerrRepository,
+                arrRepository = arrRepository,
+                offlineModeManager = offlineModeManager,
+                state = state,
+            ),
             awaitOutboxDrained = {
                 drainCalls++
                 // Mirror the real SyncStatusStateHolder gate: it gives up
@@ -217,17 +226,19 @@ class HomeRefresherTest {
                 if (gate == null) true
                 else withTimeoutOrNull(SyncStatusStateHolder.OUTBOX_DRAIN_WAIT_MS) { gate.await() } != null
             },
-            sectionPrefsProvider = {
-                HomeSectionPrefs(
-                    query = HomeSectionQuery(),
-                    homeSectionOrder = HomeSectionType.CONFIGURABLE,
-                    mergeContinueWatchingAndNextUp = false,
-                )
-            },
-            seerrPreferencesProvider = { SeerrPreferences() },
-            discoverEnabledProvider = { false },
-            directArrEnabledProvider = { directArrEnabled },
-            androidTvWatchNextEnabledProvider = { androidTvWatchNextEnabled },
+            fetchInputs = HomeFetchInputs(
+                sectionPrefs = {
+                    HomeSectionPrefs(
+                        query = HomeSectionQuery(),
+                        homeSectionOrder = HomeSectionType.CONFIGURABLE,
+                        mergeContinueWatchingAndNextUp = false,
+                    )
+                },
+                seerrPreferences = { SeerrPreferences() },
+                discoverEnabled = { false },
+                directArrEnabled = { directArrEnabled },
+                androidTvWatchNextEnabled = { androidTvWatchNextEnabled },
+            ),
             bookTocCacheRepository = bookTocCacheRepository,
         ).also { refresher = it }
     }

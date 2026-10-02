@@ -5,23 +5,33 @@ import com.raulshma.jellyplay.core.data.remote.RemoteControlReceiver
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
+import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.shortcuts.AppShortcutManager
 import com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore
 import com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeStateStore
 import com.raulshma.jellyplay.core.datastore.security.PinRateLimiter
 import com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections
+import com.raulshma.jellyplay.core.model.ExternalPlayerApp
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.MainPreferences
+import com.raulshma.jellyplay.core.model.MediaSource
 import com.raulshma.jellyplay.core.model.OfflineMode
+import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.ui.navigation.Route
-import com.raulshma.jellyplay.core.ui.feedback.UserMessageBus
+import com.raulshma.jellyplay.core.ui.message.UserMessageBus
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.deeplink.DeepLinkHandler
 import com.raulshma.jellyplay.deeplink.IncomingIntentDisposition
+import com.raulshma.jellyplay.deeplink.SharedTextTarget
+import com.raulshma.jellyplay.deeplink.parseSharedText
 import com.raulshma.jellyplay.feature.shell.ShellSessionController
+import com.raulshma.jellyplay.feature.shell.displayMessageText
+import com.raulshma.jellyplay.navigation.ExternalPlaybackOutcome
 import com.raulshma.jellyplay.navigation.MainShellModel
+import com.raulshma.jellyplay.navigation.playbackhost.ExternalSubtitle
 import com.raulshma.jellyplay.navigation.playbackhost.ExternalPlayerLaunch
+import com.raulshma.jellyplay.navigation.playbackhost.ExternalPlayerRequest
 import com.raulshma.jellyplay.navigation.playbackhost.externalPlayerLaunch
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.playback.PlaybackSourceResolver
@@ -72,6 +82,7 @@ class MainViewModel(
     private val deepLinkHandler: DeepLinkHandler,
     private val playbackRepository: PlaybackRepository,
     private val downloadRepository: DownloadRepository,
+    private val mediaRepository: MediaRepository,
     private val playbackSourceResolver: PlaybackSourceResolver,
     private val offlineModeManager: OfflineModeManager,
     private val userMessageBus: UserMessageBus,
@@ -121,13 +132,13 @@ class MainViewModel(
         updateCoordinator.start(scope)
         syncPlayOpenCoordinator.start(scope)
 
-        // Server-pushed display messages surface as one-shot user messages.
+        // Server-pushed display messages surface as one-shot user messages;
+        // the header+text fold is the shared displayMessageText (the desktop
+        // shell's receiver source runs the same fn — one server push reads
+        // identically on both shells).
         launch {
             remoteControlReceiver.displayMessages.collect { msg ->
-                val text = if (msg.header.isNotBlank()) "${msg.header}\n${msg.text}" else msg.text
-                if (text.isNotBlank()) {
-                    userMessageBus.info(text)
-                }
+                displayMessageText(msg)?.let { userMessageBus.info(it) }
             }
         }
 
@@ -310,6 +321,9 @@ class MainViewModel(
 
     fun handleSharedText(sharedText: String) {
         launch {
+            // The fold is the pure parseSharedText in the deeplink package
+            // (same home as IncomingIntentRequest); this member only applies
+            // the classified outcome.
             when (val target = parseSharedText(sharedText)) {
                 SharedTextTarget.Empty -> {
                     userMessageBus.info("No searchable content found in shared text")
@@ -323,26 +337,6 @@ class MainViewModel(
                 }
             }
         }
-    }
-
-    private fun parseSharedText(text: String): SharedTextTarget {
-        val jellyfinUrlMatch = JELLYFIN_MEDIA_URL_REGEX.find(text)
-        if (jellyfinUrlMatch != null) {
-            return SharedTextTarget.MediaDetail(jellyfinUrlMatch.groupValues[1])
-        }
-        val urlMatch = ANY_URL_REGEX.find(text)
-        if (urlMatch != null) {
-            return SharedTextTarget.Search(urlMatch.value)
-        }
-        return text.takeIf { it.isNotBlank() }
-            ?.let(SharedTextTarget::Search)
-            ?: SharedTextTarget.Empty
-    }
-
-    private sealed class SharedTextTarget {
-        data object Empty : SharedTextTarget()
-        data class Search(val query: String) : SharedTextTarget()
-        data class MediaDetail(val mediaId: String) : SharedTextTarget()
     }
 
     override fun consumePendingRoute() {
@@ -375,17 +369,20 @@ class MainViewModel(
      *
      * The launch advertises `return_result`, so the app-level
      * `ActivityResultLauncher` in [com.raulshma.jellyplay.navigation.JellyPlayApp]
-     * can read the external player's final position and credit watched progress
-     * via [reportExternalPlaybackStopped]. The launch construction itself —
-     * the ACTION_VIEW intent, the extras vocabulary ("title"/"return_result"/
-     * "position") and the per-launch playSessionId — is the pure
-     * [externalPlayerLaunch] fold in navigation/playbackhost (beside
-     * [ExternalPlayerHost]); this member owns only the resolver injection.
+     * can read the external player's result and credit watched progress
+     * via [reportExternalPlaybackStopped]. Beyond the ACTION_VIEW fold, the
+     * launch carries the external-subtitle payload (server delivery URLs,
+     * resolved through the shared
+     * [com.raulshma.jellyplay.core.data.repository.PlaybackRepository.resolveSubtitleStreamUrl]
+     * ladder the in-app side-load path uses) and the user's
+     * preferred external app (the targeting the host applies at launch).
+     * The launch construction itself — the intent, the extras vocabulary and
+     * the per-launch playSessionId — is the pure [externalPlayerLaunch] fold
+     * in navigation/playbackhost (beside [ExternalPlayerHost]); this member
+     * owns the resolver/subtitle injection.
      */
     override suspend fun buildExternalPlayerLaunch(
-        itemId: String,
-        mediaSourceId: String?,
-        startPositionTicks: Long,
+        request: ExternalPlayerRequest,
     ): ExternalPlayerLaunch? {
         // The download-vs-stream fork lives once in PlaybackSourceResolver: a
         // completed download with an existing file resolves to a `file://` URI
@@ -394,21 +391,64 @@ class MainViewModel(
         // The resolver silently falls back to streaming when a COMPLETED row's
         // file vanished — the historical MainViewModel disk-staleness behaviour.
         val resolved = playbackSourceResolver.resolvePlaybackSource(
-            itemId = itemId,
-            mediaSourceId = mediaSourceId,
-            startPositionTicks = startPositionTicks,
+            itemId = request.itemId,
+            mediaSourceId = request.mediaSourceId,
+            startPositionTicks = request.startPositionTicks,
         ) ?: return null
 
+        val preferredApp = preferences.value.preferredExternalPlayer
+        // Subtitles ride server-side streams only: a local download plays its
+        // own sidecars, and the external player demuxes the container's
+        // embedded tracks itself.
+        val subtitles = when (resolved) {
+            is ResolvedPlaybackSource.Stream -> resolved.mediaSource
+                ?.let { source -> buildExternalSubtitles(request.itemId, source, request.subtitleStreamIndex) }
+                .orEmpty()
+            is ResolvedPlaybackSource.Local -> emptyList()
+        }
+
         return externalPlayerLaunch(
-            itemId = itemId,
+            itemId = request.itemId,
             resolvedUrl = when (resolved) {
                 is ResolvedPlaybackSource.Local -> resolved.uri
                 is ResolvedPlaybackSource.Stream -> resolved.url
             },
             title = resolved.title,
-            startPositionTicks = startPositionTicks,
+            startPositionTicks = request.startPositionTicks,
+            subtitles = subtitles,
+            preferredApp = preferredApp,
         )
     }
+
+    /**
+     * Builds the external hand-off's [ExternalSubtitle] payload from one
+     * [MediaSource]'s subtitle streams — resolving every stream through
+     * [PlaybackRepository.resolveSubtitleStreamUrl] with `includeEmbedded =
+     * false`: embedded streams are left to the target player's container
+     * demux (side-loading them would duplicate each one), image codecs come
+     * back null (the subtitle endpoint cannot serve them), and a
+     * server-issued `deliveryUrl` resolves verbatim.
+     */
+    private fun buildExternalSubtitles(
+        itemId: String,
+        source: MediaSource,
+        selectedStreamIndex: Int?,
+    ): List<ExternalSubtitle> = source.mediaStreams
+        .filter { it.type == StreamType.SUBTITLE }
+        .mapNotNull { stream ->
+            val url = playbackRepository.resolveSubtitleStreamUrl(
+                stream = stream,
+                itemId = itemId,
+                mediaSourceId = source.id,
+                includeEmbedded = false,
+            ) ?: return@mapNotNull null
+            ExternalSubtitle(
+                url = url,
+                name = stream.displayName,
+                filename = stream.language,
+                isSelected = stream.index == selectedStreamIndex,
+            )
+        }
 
     override fun reportExternalPlaybackStart(playerLaunch: ExternalPlayerLaunch) {
         launch {
@@ -424,23 +464,29 @@ class MainViewModel(
         }
     }
 
-    override fun reportExternalPlaybackStopped(playerLaunch: ExternalPlayerLaunch, finalPositionTicks: Long) {
-        val positionTicks = if (finalPositionTicks > 0) finalPositionTicks else playerLaunch.startPositionTicks
+    override fun reportExternalPlaybackStopped(playerLaunch: ExternalPlayerLaunch, outcome: ExternalPlaybackOutcome) {
         launch {
             runCatchingRethrowingCancellation {
                 withTimeout(5_000) {
+                    // Completion marks played explicitly — the server's
+                    // %-watched stop rule cannot fire for the contracts that
+                    // report completion without a position (MPV/mpvKt). The
+                    // stop report still ends the playback session.
+                    if (outcome is ExternalPlaybackOutcome.Completed) {
+                        mediaRepository.markPlayed(playerLaunch.itemId)
+                    }
                     playbackRepository.reportPlaybackStopped(
                         itemId = playerLaunch.itemId,
                         sessionId = playerLaunch.playSessionId,
-                        positionTicks = positionTicks,
+                        positionTicks = when (outcome) {
+                            is ExternalPlaybackOutcome.Completed ->
+                                outcome.positionTicks.takeIf { it > 0 } ?: playerLaunch.startPositionTicks
+                            is ExternalPlaybackOutcome.StoppedAt -> outcome.positionTicks
+                            is ExternalPlaybackOutcome.Cancelled -> playerLaunch.startPositionTicks
+                        },
                     )
                 }
             }
         }
-    }
-
-    private companion object {
-        val JELLYFIN_MEDIA_URL_REGEX = Regex("""jellyfin://media/([a-f0-9-]+)""")
-        val ANY_URL_REGEX = Regex("""https?://[^\s]+""")
     }
 }

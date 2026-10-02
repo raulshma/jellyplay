@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.core.network.library
 
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.parentalRatingAge
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull

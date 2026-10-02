@@ -1,19 +1,12 @@
 package com.raulshma.jellyplay.feature.details
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
-import com.raulshma.jellyplay.core.designsystem.theme.RatingColors
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
-import com.raulshma.jellyplay.core.designsystem.theme.isLightColor
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,7 +25,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -41,7 +33,6 @@ import androidx.compose.material3.CardDefaults
 import com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.SuggestionChipDefaults
@@ -82,23 +73,15 @@ import com.raulshma.jellyplay.core.designsystem.theme.backgroundBrush
 import com.raulshma.jellyplay.core.designsystem.theme.detailCardBorder
 import com.raulshma.jellyplay.core.designsystem.theme.rememberIsLightTheme
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSoothingTheme
-import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.SeerrDetailPreferences
-import com.raulshma.jellyplay.core.model.seerr.SeerrAggregateCredits
 import com.raulshma.jellyplay.core.model.seerr.SeerrEpisode
-import com.raulshma.jellyplay.core.model.seerr.SeerrMediaStatus
 import com.raulshma.jellyplay.core.model.seerr.SeerrMovieDetails
 import com.raulshma.jellyplay.core.model.seerr.SeerrRatings
 import com.raulshma.jellyplay.core.model.seerr.SeerrRelatedVideo
-import com.raulshma.jellyplay.core.model.seerr.SeerrReleases
+import com.raulshma.jellyplay.core.model.seerr.SeerrRequestButtonState
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
-import com.raulshma.jellyplay.core.model.seerr.SeerrSeason
 import com.raulshma.jellyplay.core.model.seerr.SeerrTvDetails
-import com.raulshma.jellyplay.core.model.seerr.SeerrWatchProvider
-import com.raulshma.jellyplay.core.model.seerr.TmdbImageUrls
-import com.raulshma.jellyplay.core.model.seerr.isAvailable
-import com.raulshma.jellyplay.core.model.seerr.isPending
-import com.raulshma.jellyplay.core.model.seerr.isProcessing
+import com.raulshma.jellyplay.core.model.seerr.seerrRequestButtonState
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
@@ -106,14 +89,13 @@ import com.raulshma.jellyplay.core.ui.adaptive.detailBodyMaxWidth
 import com.raulshma.jellyplay.core.ui.adaptive.rowCardWidth
 import com.raulshma.jellyplay.core.ui.components.CircleBgBackButton
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
-import com.raulshma.jellyplay.core.ui.components.SeerrMediaCard
-import com.raulshma.jellyplay.core.ui.components.SeerrRequestDialog
+import com.raulshma.jellyplay.core.ui.components.seerr.SeerrMediaCard
+import com.raulshma.jellyplay.core.ui.components.seerr.SeerrRequestDialog
 import com.raulshma.jellyplay.core.ui.components.rememberVideoClickHandler
-import com.raulshma.jellyplay.core.ui.components.seerrCardClickHandler
+import com.raulshma.jellyplay.core.ui.components.seerr.seerrCardClickHandler
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.designsystem.theme.BrandColors
 import com.raulshma.jellyplay.core.designsystem.theme.StatusColors
-import com.raulshma.jellyplay.core.ui.components.StaggeredSection
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.FocusRestoringItemRow
@@ -121,30 +103,13 @@ import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
-import com.raulshma.jellyplay.core.ui.tv.rememberInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.input.onDpadKeyEvent
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.ArrowRight
-import com.composables.icons.tabler.outline.Building
-import com.composables.icons.tabler.outline.Calendar
-import com.composables.icons.tabler.outline.CalendarEvent
-import com.composables.icons.tabler.outline.Cash
 import com.composables.icons.tabler.outline.Check
-import com.composables.icons.tabler.outline.ChevronDown
 import com.composables.icons.tabler.outline.Clock
 import com.composables.icons.tabler.outline.Hourglass
-import com.composables.icons.tabler.outline.InfoCircle
-import com.composables.icons.tabler.outline.Language
-import com.composables.icons.tabler.outline.Movie
-import com.composables.icons.tabler.outline.Pencil
-import com.composables.icons.tabler.outline.PlayerPlay
 import com.composables.icons.tabler.outline.Plus
-import com.composables.icons.tabler.outline.Refresh
-import com.composables.icons.tabler.outline.Search
-import com.composables.icons.tabler.outline.Star
-import com.composables.icons.tabler.outline.Users
-import com.composables.icons.tabler.outline.Wallet
-import com.composables.icons.tabler.outline.World
 import com.raulshma.jellyplay.feature.details.generated.resources.Res
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_available
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_link_imdb
@@ -153,29 +118,12 @@ import com.raulshma.jellyplay.feature.details.generated.resources.detail_link_tv
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_request
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_section_cast
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_section_recommendations
-import com.raulshma.jellyplay.feature.details.generated.resources.detail_section_seasons
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_section_similar
-import com.raulshma.jellyplay.feature.details.generated.resources.detail_section_videos
-import com.raulshma.jellyplay.feature.details.generated.resources.detail_seerr_budget
-import com.raulshma.jellyplay.feature.details.generated.resources.detail_seerr_country
-import com.raulshma.jellyplay.feature.details.generated.resources.detail_seerr_currently_streaming_on
-import com.raulshma.jellyplay.feature.details.generated.resources.detail_seerr_director_format
-import com.raulshma.jellyplay.feature.details.generated.resources.detail_seerr_episodes_count
-import com.raulshma.jellyplay.feature.details.generated.resources.detail_seerr_information
-import com.raulshma.jellyplay.feature.details.generated.resources.detail_seerr_language
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_seerr_overview
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_seerr_pending
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_seerr_processing
-import com.raulshma.jellyplay.feature.details.generated.resources.detail_seerr_release_date
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_seerr_requested
-import com.raulshma.jellyplay.feature.details.generated.resources.detail_seerr_revenue
-import com.raulshma.jellyplay.feature.details.generated.resources.detail_seerr_season_n
-import com.raulshma.jellyplay.feature.details.generated.resources.detail_seerr_show_more
-import com.raulshma.jellyplay.feature.details.generated.resources.detail_seerr_status
-import com.raulshma.jellyplay.feature.details.generated.resources.detail_seerr_studios
-import com.raulshma.jellyplay.feature.details.generated.resources.detail_seerr_unknown
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_seerr_unknown_error
-import com.raulshma.jellyplay.feature.details.generated.resources.detail_seerr_video
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -197,6 +145,7 @@ fun SeerrDetailScreen(
     val seerrRecommendations = uiState.recommendations
     val seerrSimilar = uiState.similar
     val seerrSnapshot by viewModel.seerrSnapshot.collectAsStateWithLifecycle()
+    val seerrDialogItem by viewModel.seerrDialogItem.collectAsStateWithLifecycle()
     val preferences by viewModel.preferences.collectAsStateWithLifecycle()
     val seerrPrefs by viewModel.seerrPreferences.collectAsStateWithLifecycle()
 
@@ -225,7 +174,7 @@ fun SeerrDetailScreen(
     ) {
         // One root-level bundle of the Seerr card-loading state + prefetch
         // callback; descendant rows read them via the composition locals.
-        com.raulshma.jellyplay.core.ui.components.ProvideSeerrCardPrefetching(
+        com.raulshma.jellyplay.core.ui.components.seerr.ProvideSeerrCardPrefetching(
             prefetchDetail = { tmdbId, mediaType, onDone ->
                 viewModel.prefetchRelatedDetails(tmdbId, mediaType, onDone)
             }
@@ -300,14 +249,14 @@ fun SeerrDetailScreen(
                 }
             }
 
-            // Seerr request dialog — rendered from the holder snapshot's
-            // dialogItem; the open/dismiss choreography is the holder's
-            // (same pattern as the search and media-detail request dialogs).
-            seerrSnapshot.dialogItem?.let { item ->
+            // Seerr request dialog — gated on the dialog holder's frozen-at-open
+            // item; the open/dismiss choreography is the holder's (same pattern
+            // as the search and media-detail request dialogs).
+            seerrDialogItem?.let { item ->
                 SeerrRequestDialog(
                     item = item,
                     snapshot = seerrSnapshot,
-                    onConfirm = { serverId, profileId, rootFolder, tags, seasons ->
+                    onConfirm = { (serverId, profileId, rootFolder, tags, seasons) ->
                         viewModel.requestMedia(item, seasons, serverId, profileId, rootFolder, tags)
                     },
                     onDismiss = { viewModel.dismissRequestDialog() }
@@ -665,7 +614,7 @@ private fun SeerrDetailContent(
                                             modifier = Modifier.weight(1f, fill = false)
                                         )
                                     
-                                        val contentRating = tvDetail?.contentRatings?.results?.find { it.iso31661 == "US" }?.rating
+                                        val contentRating = tvDetail?.contentRatings?.find { it.iso31661 == "US" }?.rating
                                         if (contentRating != null) {
                                             Spacer(Modifier.width(8.dp))
                                             Surface(
@@ -776,96 +725,103 @@ private fun SeerrActionButtons(
     contentFocusRequester: FocusRequester? = null,
 ) {
     val mediaInfo = movieDetail?.mediaInfo ?: tvDetail?.mediaInfo
-    val status = mediaInfo?.status ?: 0
-    val mediaStatus = remember(status) { SeerrMediaStatus.fromValue(status) }
-    // Availability predicates folded into core/model's SeerrStatusDecisions
-    // (beside the enum) — same decisions the requests list renders through.
-    val isAvailable = mediaStatus.isAvailable
-    val isPending = mediaStatus.isPending
-    val isProcessing = mediaStatus.isProcessing
-    val hasRequest = mediaInfo?.requests?.isNotEmpty() == true
-    val isRequested = isPending || isProcessing || hasRequest
+    // The gating fold (pending/processing/existing request entry) AND the
+    // button precedence (available > requested > requestable) live in
+    // core/model's SeerrStatusDecisions — the same table the requests list
+    // renders through. This shell only maps the returned state to this
+    // screen's (label, icon, color) chrome below.
+    val buttonState = remember(mediaInfo) { seerrRequestButtonState(mediaInfo) }
     val buttonFocusState = rememberTvFocusState(focusedScale = 1.05f)
 
     Row(
         modifier = modifier,
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        if (isAvailable) {
-            // When the Jellyfin library item has been resolved, the button opens it
-            // directly. Otherwise it stays disabled (still indicates availability).
-            Button(
-                onClick = { jellyfinItemId?.let(onOpenInLibrary) },
-                modifier = Modifier
-                    .weight(1f)
-                    .then(
-                        contentFocusRequester?.let { Modifier.focusRequester(it) } ?: Modifier
-                    )
-                    .then(buttonFocusState.focusModifier)
-                    .then(Modifier.tvFocusIndicator(buttonFocusState, ShapeCache.smooth12)),
-                shape = ShapeCache.smooth12,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f),
-                    contentColor = MaterialTheme.colorScheme.onSurface,
-                    disabledContainerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f),
-                    disabledContentColor = MaterialTheme.colorScheme.onSurface
-                ),
-                contentPadding = PaddingValues(vertical = 12.dp),
-                enabled = jellyfinItemId != null
-            ) {
-                Icon(Tabler.Outline.Check, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text(stringResource(Res.string.detail_available), fontWeight = FontWeight.Bold)
+        when (buttonState) {
+            is SeerrRequestButtonState.Available -> {
+                // When the Jellyfin library item has been resolved, the button opens it
+                // directly. Otherwise it stays disabled (still indicates availability).
+                Button(
+                    onClick = { jellyfinItemId?.let(onOpenInLibrary) },
+                    modifier = Modifier
+                        .weight(1f)
+                        .then(
+                            contentFocusRequester?.let { Modifier.focusRequester(it) } ?: Modifier
+                        )
+                        .then(buttonFocusState.focusModifier)
+                        .then(Modifier.tvFocusIndicator(buttonFocusState, ShapeCache.smooth12)),
+                    shape = ShapeCache.smooth12,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f),
+                        contentColor = MaterialTheme.colorScheme.onSurface,
+                        disabledContainerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f),
+                        disabledContentColor = MaterialTheme.colorScheme.onSurface
+                    ),
+                    contentPadding = PaddingValues(vertical = 12.dp),
+                    enabled = jellyfinItemId != null
+                ) {
+                    Icon(Tabler.Outline.Check, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(Res.string.detail_available), fontWeight = FontWeight.Bold)
+                }
             }
-        } else if (isRequested) {
-            val (labelRes, icon, color) = when {
-                isProcessing -> Triple(Res.string.detail_seerr_processing, Tabler.Outline.Hourglass, StatusColors.info)
-                isPending -> Triple(Res.string.detail_seerr_pending, Tabler.Outline.Clock, StatusColors.pending)
-                else -> Triple(Res.string.detail_seerr_requested, Tabler.Outline.ArrowRight, StatusColors.requested)
+            is SeerrRequestButtonState.Requested -> {
+                // This screen's presentation of the in-flight phases — the
+                // label/icon/color triple the requests chip table cannot own
+                // (its labels are the requests Res class and it carries no
+                // per-phase icons; its request-status-aware arms don't apply
+                // to this button). The DECISION is shared; only this chrome
+                // is feature-scoped.
+                val (labelRes, icon, color) = when (buttonState) {
+                    SeerrRequestButtonState.Requested.Processing -> Triple(Res.string.detail_seerr_processing, Tabler.Outline.Hourglass, StatusColors.info)
+                    SeerrRequestButtonState.Requested.Pending -> Triple(Res.string.detail_seerr_pending, Tabler.Outline.Clock, StatusColors.pending)
+                    SeerrRequestButtonState.Requested.ExistingRequest -> Triple(Res.string.detail_seerr_requested, Tabler.Outline.ArrowRight, StatusColors.requested)
+                }
+                Button(
+                    onClick = {},
+                    modifier = Modifier
+                        .weight(1f)
+                        .then(
+                            contentFocusRequester?.let { Modifier.focusRequester(it) } ?: Modifier
+                        )
+                        .then(buttonFocusState.focusModifier)
+                        .then(Modifier.tvFocusIndicator(buttonFocusState, ShapeCache.smooth12)),
+                    shape = ShapeCache.smooth12,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = color.copy(alpha = 0.15f),
+                        contentColor = color,
+                        disabledContainerColor = color.copy(alpha = 0.15f),
+                        disabledContentColor = color
+                    ),
+                    contentPadding = PaddingValues(vertical = 12.dp),
+                    enabled = false
+                ) {
+                    Icon(icon, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(labelRes), fontWeight = FontWeight.Bold)
+                }
             }
-            Button(
-                onClick = {},
-                modifier = Modifier
-                    .weight(1f)
-                    .then(
-                        contentFocusRequester?.let { Modifier.focusRequester(it) } ?: Modifier
-                    )
-                    .then(buttonFocusState.focusModifier)
-                    .then(Modifier.tvFocusIndicator(buttonFocusState, ShapeCache.smooth12)),
-                shape = ShapeCache.smooth12,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = color.copy(alpha = 0.15f),
-                    contentColor = color,
-                    disabledContainerColor = color.copy(alpha = 0.15f),
-                    disabledContentColor = color
-                ),
-                contentPadding = PaddingValues(vertical = 12.dp),
-                enabled = false
-            ) {
-                Icon(icon, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text(stringResource(labelRes), fontWeight = FontWeight.Bold)
-            }
-        } else {
-            Button(
-                onClick = onRequestClick,
-                modifier = Modifier
-                    .weight(1f)
-                    .then(
-                        contentFocusRequester?.let { Modifier.focusRequester(it) } ?: Modifier
-                    )
-                    .then(buttonFocusState.focusModifier)
-                    .then(Modifier.tvFocusIndicator(buttonFocusState, ShapeCache.smooth12)),
-                shape = ShapeCache.smooth12,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary
-                ),
-                contentPadding = PaddingValues(vertical = 12.dp)
-            ) {
-                Icon(Tabler.Outline.Plus, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text(stringResource(Res.string.detail_request), fontWeight = FontWeight.Bold)
+            is SeerrRequestButtonState.NotRequested -> {
+                Button(
+                    onClick = onRequestClick,
+                    modifier = Modifier
+                        .weight(1f)
+                        .then(
+                            contentFocusRequester?.let { Modifier.focusRequester(it) } ?: Modifier
+                        )
+                        .then(buttonFocusState.focusModifier)
+                        .then(Modifier.tvFocusIndicator(buttonFocusState, ShapeCache.smooth12)),
+                    shape = ShapeCache.smooth12,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary
+                    ),
+                    contentPadding = PaddingValues(vertical = 12.dp)
+                ) {
+                    Icon(Tabler.Outline.Plus, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(Res.string.detail_request), fontWeight = FontWeight.Bold)
+                }
             }
         }
     }
@@ -1061,8 +1017,8 @@ private fun SeerrHorizontalSection(
     items: List<SeerrSearchItem>,
     onNavigate: (com.raulshma.jellyplay.core.ui.navigation.Route) -> Unit,
 ) {
-    val loadingState = com.raulshma.jellyplay.core.ui.components.LocalSeerrCardLoadingState.current
-    val prefetch = com.raulshma.jellyplay.core.ui.components.LocalSeerrPrefetch.current
+    val loadingState = com.raulshma.jellyplay.core.ui.components.seerr.LocalSeerrCardLoadingState.current
+    val prefetch = com.raulshma.jellyplay.core.ui.components.seerr.LocalSeerrPrefetch.current
     val uniqueItems = remember(items) { items.distinctBy { it.id } }
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text(
@@ -1152,6 +1108,15 @@ private fun ExternalLinksRow(
     }
 }
 
+/**
+ * Seerr family's cast row — TMDB profile avatars over [SeerrCastMember].
+ * Deliberately NOT collapsed with the media family's DetailCastSection
+ * (MediaDetailBodySections) despite the same-sounding name: that one renders
+ * [PersonItem] over Jellyfin PersonInfo with person navigation and a
+ * local-origin branch, and a different card geometry — a collapse would
+ * change one family's UI. The genuinely shared section vocabulary lives in
+ * commonMain (DetailSectionVocabulary.kt).
+ */
 @Composable
 private fun CastSection(
     cast: List<SeerrCastMember>,
@@ -1211,898 +1176,6 @@ private fun CastSection(
                         textAlign = TextAlign.Center
                     )
                 }
-        }
-    }
-}
-
-@OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
-@Composable
-private fun SeasonsSection(
-    seasons: List<SeerrSeason>,
-    selectedSeasonNumber: Int? = null,
-    episodesBySeason: Map<Int, List<SeerrEpisode>> = emptyMap(),
-    isLoadingEpisodes: Boolean = false,
-    onSeasonClick: (Int) -> Unit = {},
-    showPosterUrl: String? = null,
-) {
-    val isTv = LocalTvMode.current
-    val sortedSeasons = remember(seasons) {
-        seasons.sortedByDescending { it.seasonNumber }.distinctBy { it.seasonNumber }
-    }
-
-    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Text(
-            text = stringResource(Res.string.detail_section_seasons),
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface
-        )
-        FocusRestoringItemRow(
-            items = sortedSeasons,
-            key = { it.seasonNumber },
-            contentType = { "season" },
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-            contentPadding = PaddingValues(horizontal = 4.dp),
-        ) { season ->
-                val isSelected = selectedSeasonNumber == season.seasonNumber
-                val borderModifier = if (isSelected) {
-                    Modifier.border(
-                        width = 2.dp,
-                        color = MaterialTheme.colorScheme.primary,
-                        shape = ShapeCache.smooth8
-                    )
-                } else Modifier
-
-                // Fall back to the show's main poster when this season has no
-                // dedicated artwork — Overseerr returns a null posterPath for
-                // some seasons (notably specials/season 0, or seasons TMDB has
-                // no poster for). Without the fallback the card showed the
-                // generic placeholder even though the show itself has artwork.
-                val seasonCardUrl = remember(season.posterUrl, showPosterUrl) {
-                    season.posterUrl ?: showPosterUrl
-                }
-                Column(
-                    modifier = Modifier
-                        .width(120.dp)
-                        .then(borderModifier)
-                        .clip(ShapeCache.smooth8)
-                        .clickable { onSeasonClick(season.seasonNumber) }
-                ) {
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .aspectRatio(2f / 3f),
-                        shape = ShapeCache.smooth8,
-                        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-                    ) {
-                        Box {
-                            MediaImage(
-                                url = seasonCardUrl ?: "",
-                                contentDescription = season.name,
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Crop
-                            )
-                            if (isSelected) {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .background(
-                                            MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
-                                        )
-                                )
-                                Icon(
-                                    imageVector = com.composables.icons.tabler.Tabler.Outline.ChevronDown,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onPrimary,
-                                    modifier = Modifier
-                                        .align(Alignment.Center)
-                                        .size(32.dp)
-                                )
-                            }
-                        }
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        text = season.name,
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = stringResource(Res.string.detail_seerr_episodes_count, season.episodeCount),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-        }
-
-        val selectedSeason = selectedSeasonNumber
-        if (selectedSeason != null) {
-            AnimatedVisibility(
-                visible = true,
-                enter = expandVertically(
-                    animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
-                    initialHeight = { 0 }
-                ) + fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()),
-                exit = shrinkVertically(MaterialTheme.motionScheme.fastSpatialSpec()) + fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()),
-            ) {
-                val episodes = episodesBySeason[selectedSeason]
-                if (isLoadingEpisodes && episodes == null) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 24.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        JellyPlayLoadingIndicator()
-                    }
-                } else if (episodes != null) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(ShapeCache.smooth12)
-                            .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.5f))
-                            .padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(2.dp)
-                    ) {
-                        Text(
-                            text = sortedSeasons.find { it.seasonNumber == selectedSeason }?.name ?: stringResource(Res.string.detail_seerr_season_n, selectedSeason),
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.padding(bottom = 12.dp)
-                        )
-                        // Prefer the selected season's own poster as the
-                        // episode-still fallback, then the show poster.
-                        val selectedSeasonPoster = sortedSeasons
-                            .find { it.seasonNumber == selectedSeason }?.posterUrl
-                            ?: showPosterUrl
-                        episodes.forEach { episode ->
-                            EpisodeRow(episode = episode, fallbackImageUrl = selectedSeasonPoster)
-                        }
-                    }
-                }
-        }
-    }
-}
-
-@Composable
-private fun EpisodeRow(
-    episode: SeerrEpisode,
-    fallbackImageUrl: String? = null,
-) {
-    // TMDB episode stills are frequently missing (unaired episodes, or episodes
-    // TMDB has no still for). Fall back to the season/show poster so the row
-    // isn't a bare text entry when stillPath is null.
-    val stillUrl = episode.stillUrl?.takeIf { it.isNotBlank() } ?: fallbackImageUrl
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = ShapeCache.smooth8,
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-    ) {
-        Column(modifier = Modifier.fillMaxWidth()) {
-            if (stillUrl != null) {
-                val surfaceContainerLow = MaterialTheme.colorScheme.surfaceContainerLow
-                val scrimBrush = remember(surfaceContainerLow) {
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            Color.Transparent,
-                            Color.Transparent,
-                            surfaceContainerLow.copy(alpha = 0.9f),
-                            surfaceContainerLow,
-                        ),
-                    )
-                }
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .aspectRatio(16f / 9f)
-                ) {
-                    MediaImage(
-                        url = stillUrl,
-                        contentDescription = episode.name,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
-                    )
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(scrimBrush)
-                    )
-                    Text(
-                        text = "${episode.episodeNumber}",
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.Black,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f),
-                        modifier = Modifier
-                            .align(Alignment.BottomStart)
-                            .padding(start = 12.dp, bottom = 4.dp)
-                    )
-                }
-            }
-
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 10.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                Text(
-                    text = "${episode.episodeNumber}. ${episode.name}",
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-
-                val metaItems = mutableListOf<@Composable () -> Unit>()
-                episode.airDate?.takeIf { it.isNotBlank() }?.let { date ->
-                    metaItems.add {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = com.composables.icons.tabler.Tabler.Outline.Calendar,
-                                contentDescription = null,
-                                modifier = Modifier.size(13.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(Modifier.width(4.dp))
-                            Text(
-                                text = formatDate(date),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                }
-                episode.runtime?.takeIf { it > 0 }?.let { mins ->
-                    metaItems.add {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = com.composables.icons.tabler.Tabler.Outline.Clock,
-                                contentDescription = null,
-                                modifier = Modifier.size(13.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(Modifier.width(4.dp))
-                            Text(
-                                text = formatRuntime(mins),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                }
-                episode.voteAverage?.takeIf { it > 0f }?.let { rating ->
-                    metaItems.add {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = com.composables.icons.tabler.Tabler.Outline.Star,
-                                contentDescription = null,
-                                modifier = Modifier.size(13.dp),
-                                tint = RatingColors.star
-                            )
-                            Spacer(Modifier.width(4.dp))
-                            Text(
-                                text = formatRatingOneDecimal(rating),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            episode.voteCount.takeIf { it > 0 }?.let { count ->
-                                Text(
-                                    text = " ($count)",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-                    }
-                }
-
-                if (metaItems.isNotEmpty()) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(14.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        metaItems.forEach { it() }
-                    }
-                }
-
-                val directors = remember(episode.crew) {
-                    episode.crew.filter { it.job.equals("Director", ignoreCase = true) }
-                }
-                if (directors.isNotEmpty()) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = com.composables.icons.tabler.Tabler.Outline.Movie,
-                            contentDescription = null,
-                            modifier = Modifier.size(13.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(Modifier.width(4.dp))
-                        Text(
-                            text = stringResource(Res.string.detail_seerr_director_format, directors.joinToString(", ") { it.name }),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
-
-                val writers = remember(episode.crew) {
-                    episode.crew.filter {
-                        it.department.equals("Writing", ignoreCase = true)
-                    }
-                }
-                if (writers.isNotEmpty()) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = com.composables.icons.tabler.Tabler.Outline.Pencil,
-                            contentDescription = null,
-                            modifier = Modifier.size(13.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(Modifier.width(4.dp))
-                        Text(
-                            text = writers.joinToString(", ") { it.name },
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                }
-
-                if (episode.guestStars.isNotEmpty()) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = com.composables.icons.tabler.Tabler.Outline.Users,
-                            contentDescription = null,
-                            modifier = Modifier.size(13.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(Modifier.width(4.dp))
-                        Text(
-                            text = episode.guestStars.joinToString(", ") {
-                                it.character?.takeIf { c -> c.isNotBlank() }
-                                    ?.let { c -> "${it.name} ($c)" }
-                                    ?: it.name
-                            },
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                }
-
-                episode.overview?.takeIf { it.isNotBlank() }?.let { overview ->
-                    Spacer(Modifier.height(2.dp))
-                    var expanded by remember { mutableStateOf(false) }
-                    Text(
-                        text = overview,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
-                        lineHeight = 20.sp,
-                        maxLines = if (expanded) Int.MAX_VALUE else 3,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.clickable { expanded = !expanded }
-                    )
-                    if (!expanded && overview.length > 200) {
-                        Text(
-                            text = stringResource(Res.string.detail_seerr_show_more),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.clickable { expanded = true }
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun VideosSection(
-    videos: List<SeerrRelatedVideo>,
-    onVideoClick: (SeerrRelatedVideo) -> Unit,
-) {
-    val uniqueVideos = remember(videos) {
-        videos.distinctBy { it.key }.filter { !it.key.isNullOrBlank() }
-    }
-    // The bottom scrim gradient is identical across every card in the same theme
-    // state, so compute it once per row instead of allocating a Brush per card
-    // as cards scroll in/out of view (the HomeMediaRows pattern).
-    val surfaceColor = MaterialTheme.colorScheme.surface
-    val surfaceScrimBrush = remember(surfaceColor) {
-        Brush.verticalGradient(
-            colors = listOf(Color.Transparent, surfaceColor.copy(alpha = 0.85f)),
-            startY = 100f
-        )
-    }
-    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Text(
-            text = stringResource(Res.string.detail_section_videos),
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface
-        )
-        FocusRestoringItemRow(
-            items = uniqueVideos,
-            key = { it.key!! },
-            contentType = { "video" },
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-            contentPadding = PaddingValues(horizontal = 4.dp),
-        ) { video ->
-                val thumbnailUrl = youTubeThumbnailUrl(video.site, video.key)
-
-                val videoCardFocusState = rememberTvFocusState(focusedScale = 1.05f)
-
-                Card(
-                    modifier = Modifier
-                        .width(240.dp)
-                        .aspectRatio(16f / 9f)
-                        .then(videoCardFocusState.focusModifier)
-                        .then(Modifier.tvFocusIndicator(videoCardFocusState, ShapeCache.smooth8))
-                        .clickable {
-                            onVideoClick(video)
-                        },
-                    shape = ShapeCache.smooth8
-                ) {
-                    Box(modifier = Modifier.fillMaxSize()) {
-                        if (thumbnailUrl != null) {
-                            MediaImage(
-                                url = thumbnailUrl,
-                                contentDescription = video.name,
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Crop
-                            )
-                        } else {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .background(MaterialTheme.colorScheme.surfaceVariant),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(Tabler.Outline.PlayerPlay, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                        }
-                        
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(surfaceScrimBrush)
-                        )
-                        
-                        Text(
-                            text = video.name ?: stringResource(Res.string.detail_seerr_video),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier
-                                .align(Alignment.BottomStart)
-                                .padding(8.dp),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        
-                        Icon(
-                            Tabler.Outline.PlayerPlay,
-                            contentDescription = null,
-                            modifier = Modifier.align(Alignment.Center).size(48.dp),
-                            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
-                        )
-                    }
-                }
-        }
-    }
-}
-
-@Composable
-private fun RatingsRow(ratings: SeerrRatings?) {
-    if (ratings == null) return
-
-    // Build a list of only valid (non-null) rating items
-    val ratingItems = mutableListOf<@Composable () -> Unit>()
-
-    // Rotten Tomatoes Critics
-    ratings.rt?.criticsScore?.let { score ->
-        ratingItems.add {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(text = "🍅", modifier = Modifier.padding(end = 4.dp))
-                Text(
-                    text = "$score%",
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-            }
-        }
-    }
-
-    // Rotten Tomatoes Audience
-    ratings.rt?.audienceScore?.let { score ->
-        ratingItems.add {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(text = "🍿", modifier = Modifier.padding(end = 4.dp))
-                Text(
-                    text = "$score%",
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-            }
-        }
-    }
-
-    // IMDb
-    val imdbRating = ratings.imdb
-    if (imdbRating != null) {
-        val imdbScore = imdbRating.criticsScore ?: imdbRating.rating
-        if (imdbScore != null) {
-            ratingItems.add {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .background(BrandColors.imdb, ShapeCache.smooth4)
-                            .padding(horizontal = 4.dp, vertical = 2.dp)
-                    ) {
-                        Text(
-                            text = "IMDb",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Black,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                    Spacer(Modifier.width(6.dp))
-                    Text(
-                        text = formatRatingOneDecimal(imdbScore),
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                }
-            }
-        }
-    }
-
-    // TMDb
-    ratings.tmdb?.rating?.let { rating ->
-        ratingItems.add {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                // The badge background is a fixed mint-green (#90CEA1), which is light in
-                // every theme variant, so the onSurface token (light in dark theme) would be
-                // low-contrast. Derive the text color from the badge's own luminance instead.
-                val tmdbBadgeColor = BrandColors.tmdbBackground
-                val tmdbBadgeText = remember(tmdbBadgeColor) {
-                    if (isLightColor(tmdbBadgeColor)) Color.Black else Color.White
-                }
-                Box(
-                    modifier = Modifier
-                        .background(tmdbBadgeColor, ShapeCache.smooth4)
-                        .padding(horizontal = 4.dp, vertical = 2.dp)
-                ) {
-                    Text(
-                        text = "TMDB",
-                        style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Black,
-                            color = tmdbBadgeText
-                        )
-                }
-                Spacer(Modifier.width(6.dp))
-                Text(
-                    text = "${(rating * 10).toInt()}%",
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-            }
-        }
-    }
-
-    if (ratingItems.isEmpty()) return
-
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        modifier = Modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState())
-    ) {
-        ratingItems.forEach { it() }
-    }
-}
-
-@Composable
-private fun MediaInfoCondensed(
-    movieDetail: SeerrMovieDetails?,
-    tvDetail: SeerrTvDetails?,
-    ratings: SeerrRatings?,
-    modifier: Modifier = Modifier
-) {
-    Column(
-        modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        RatingsRow(ratings)
-
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            val releaseDate = movieDetail?.releaseDate ?: tvDetail?.firstAirDate
-            releaseDate?.take(4)?.let {
-                Text(
-                    text = it,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontWeight = FontWeight.Medium
-                )
-            }
-
-            val runtime = movieDetail?.runtime ?: tvDetail?.episodeRunTime?.firstOrNull()
-            if (runtime != null && runtime > 0) {
-                Surface(
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f),
-                    shape = ShapeCache.smooth4
-                ) {
-                    Text(
-                        text = "${runtime}m",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                    )
-                }
-            }
-
-            val genres = movieDetail?.genres ?: tvDetail?.genres ?: emptyList()
-            if (genres.isNotEmpty()) {
-                Text(
-                    text = genres.take(2).joinToString(", ") { it.name },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun MediaInformationSection(
-    movie: SeerrMovieDetails?,
-    tv: SeerrTvDetails?,
-    streamingRegion: String = "US",
-    discoverRegion: String = "US",
-    seerrServerUrl: String = "",
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Text(
-            text = stringResource(Res.string.detail_seerr_information),
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface
-        )
-
-        Column(
-            modifier = Modifier
-                .fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            MediaInfoRow(stringResource(Res.string.detail_seerr_status), movie?.status ?: tv?.status ?: stringResource(Res.string.detail_seerr_unknown), Tabler.Outline.InfoCircle)
-
-            val releaseDate = movie?.releaseDate ?: tv?.firstAirDate
-            if (movie != null) {
-                ReleaseDateRow(releaseDate, movie.releases, discoverRegion)
-            } else {
-                MediaInfoRow(stringResource(Res.string.detail_seerr_release_date), releaseDate ?: stringResource(Res.string.detail_seerr_unknown), Tabler.Outline.CalendarEvent)
-            }
-
-            if (movie != null) {
-                movie.revenue?.takeIf { it > 0 }?.let {
-                    MediaInfoRow(stringResource(Res.string.detail_seerr_revenue), formatUsCurrency(it), Tabler.Outline.Cash)
-                }
-                movie.budget?.takeIf { it > 0 }?.let {
-                    MediaInfoRow(stringResource(Res.string.detail_seerr_budget), formatUsCurrency(it), Tabler.Outline.Wallet)
-                }
-            }
-
-            val language = movie?.originalLanguage ?: tv?.originalLanguage
-            if (language != null) {
-                MediaInfoRow(stringResource(Res.string.detail_seerr_language), languageDisplayName(language) ?: language, Tabler.Outline.Language)
-            }
-
-            val productionCountries = movie?.productionCountries ?: emptyList()
-            if (productionCountries.isNotEmpty()) {
-                val countryText = productionCountries.joinToString(", ") { country ->
-                    val flag = getFlagEmoji(country.iso31661)
-                    if (flag != null) "$flag ${country.name}" else country.name
-                }
-                MediaInfoRow(stringResource(Res.string.detail_seerr_country), countryText, Tabler.Outline.World)
-            }
-
-            val studios = remember(movie, tv) {
-                movie?.productionCompanies?.map { it.name } ?: tv?.networks?.map { it.name } ?: emptyList()
-            }
-            if (studios.isNotEmpty()) {
-                MediaInfoRow(stringResource(Res.string.detail_seerr_studios), studios.joinToString(", "), Tabler.Outline.Building)
-            }
-
-            val watchProviders = movie?.watchProviders ?: tv?.watchProviders ?: emptyList()
-            val regionProviders = watchProviders.find { it.iso31661 == streamingRegion }
-            val streamingProviders = regionProviders?.flatrate.orEmpty()
-            if (streamingProviders.isNotEmpty()) {
-                StreamingProvidersRow(streamingProviders, streamingRegion, seerrServerUrl)
-            }
-        }
-    }
-}
-
-@Composable
-private fun ReleaseDateRow(
-    releaseDate: String?,
-    releases: SeerrReleases?,
-    discoverRegion: String,
-) {
-    val filteredReleases = remember(releases, discoverRegion) {
-        releases?.results
-            ?.find { it.iso31661 == discoverRegion }
-            ?.releaseDates
-            .orEmpty()
-            .filter { it.type in 3..5 }
-            .distinctBy { it.type }
-            .sortedBy { it.type }
-    }
-
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.Top,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        Icon(
-            imageVector = Tabler.Outline.CalendarEvent,
-            contentDescription = null,
-            modifier = Modifier.size(18.dp),
-            tint = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Column {
-            Text(
-                text = stringResource(Res.string.detail_seerr_release_date),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontWeight = FontWeight.Medium
-            )
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Text(
-                    text = releaseDate ?: stringResource(Res.string.detail_seerr_unknown),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f),
-                    lineHeight = 20.sp
-                )
-                if (filteredReleases.isNotEmpty()) {
-                    Spacer(Modifier.width(4.dp))
-                    filteredReleases.forEach { release ->
-                        ReleaseTypeIcon(release.type)
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun ReleaseTypeIcon(type: Int) {
-    // Mapping table lives in SeerrDetailUtils (releaseTypePresentation);
-    // only the Icon shell stays in composition.
-    val presentation = releaseTypePresentation(type) ?: return
-    Icon(
-        imageVector = presentation.icon,
-        contentDescription = stringResource(presentation.labelRes),
-        modifier = Modifier.size(16.dp),
-        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-    )
-}
-
-@Composable
-private fun StreamingProvidersRow(
-    providers: List<SeerrWatchProvider>,
-    region: String,
-    seerrServerUrl: String = "",
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.Top,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        Icon(
-            imageVector = Tabler.Outline.PlayerPlay,
-            contentDescription = null,
-            modifier = Modifier.size(18.dp),
-            tint = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Column {
-            Text(
-                text = stringResource(Res.string.detail_seerr_currently_streaming_on),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontWeight = FontWeight.Medium
-            )
-            Spacer(Modifier.height(6.dp))
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.horizontalScroll(rememberScrollState())
-            ) {
-                providers.forEach { provider ->
-                    val logoUrl = provider.logoPath?.let { path ->
-                        val cleanPath = path.trimStart('/')
-                        if (seerrServerUrl.isNotBlank()) {
-                            "${seerrServerUrl.trimEnd('/')}/imageproxy/tmdb/t/p/w45/$cleanPath"
-                        } else {
-                            "${TmdbImageUrls.LOGO_W45}/$cleanPath"
-                        }
-                    }
-                    if (logoUrl != null) {
-                        Box(
-                            modifier = Modifier
-                                .size(32.dp)
-                                .clip(ShapeCache.smooth8)
-                                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
-                        ) {
-                            MediaImage(
-                                url = logoUrl,
-                                contentDescription = provider.name,
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Crop
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun MediaInfoRow(
-    label: String,
-    value: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.Top,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            modifier = Modifier.size(18.dp),
-            tint = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Column {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontWeight = FontWeight.Medium
-            )
-            Text(
-                text = value,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f),
-                lineHeight = 20.sp
-            )
         }
     }
 }

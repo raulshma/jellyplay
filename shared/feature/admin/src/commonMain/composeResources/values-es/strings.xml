@@ -404,4 +404,22 @@
     <string name="admin_plugin_config_unavailable">La configuración del complemento no está disponible en esta plataforma.</string>
 
     <string name="admin_no_delete_permission">Tu cuenta no tiene permiso para eliminar contenido. Contacta con el administrador del servidor.</string>
+    <string name="admin_backups_title">Copias de seguridad</string>
+    <string name="admin_backups_create">Crear copia de seguridad</string>
+    <string name="admin_backups_create_title">Crear copia de seguridad</string>
+    <string name="admin_backups_empty">Aún no hay copias de seguridad</string>
+    <string name="admin_backups_empty_hint">Ejecuta una copia de seguridad para capturar la configuración y los datos de este servidor.</string>
+    <string name="admin_backups_unsupported_title">Copias de seguridad no disponibles</string>
+    <string name="admin_backups_unsupported_body">Este servidor de Jellyfin no admite copias de seguridad. Se requiere un servidor con Jellyfin 10.11 o más reciente.</string>
+    <string name="admin_backups_component_metadata">Metadatos</string>
+    <string name="admin_backups_component_trickplay">Trickplay</string>
+    <string name="admin_backups_component_subtitles">Subtítulos</string>
+    <string name="admin_backups_component_database">Base de datos</string>
+    <string name="admin_backups_restore">Restaurar</string>
+    <string name="admin_backups_restore_confirm_title">¿Restaurar copia de seguridad?</string>
+    <string name="admin_backups_restore_confirm_body">El servidor se reinicia de inmediato y todos los datos actuales se sustituyen por el contenido de "%1$s". Esto no se puede deshacer.</string>
+    <string name="admin_backups_restoring">Restaurando — el servidor se está reiniciando</string>
+    <string name="admin_backups_reconnecting">El servidor volvió — reconectando…</string>
+    <string name="admin_backups_restore_complete">Restauración completada — reconectado al servidor.</string>
+    <string name="admin_backups_restore_server_unreachable">El servidor no volvió tras la restauración. Comprueba que está en ejecución y vuelve a iniciar sesión.</string>
 </resources>

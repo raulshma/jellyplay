@@ -8,15 +8,14 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
-import com.raulshma.jellyplay.core.datastore.PreferenceCodec
 import com.raulshma.jellyplay.core.datastore.sliceStateFlow
-import com.raulshma.jellyplay.core.datastore.toEnumOrNull
 import com.raulshma.jellyplay.core.model.AppFontScale
 import com.raulshma.jellyplay.core.model.ColorBlindMode
 import com.raulshma.jellyplay.core.model.ColorStyle
 import com.raulshma.jellyplay.core.model.ContrastLevel
 import com.raulshma.jellyplay.core.model.DateFormatPreference
 import com.raulshma.jellyplay.core.model.HandMode
+import com.raulshma.jellyplay.core.model.LayoutMode
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import com.raulshma.jellyplay.core.model.ThemeMode
 import kotlinx.coroutines.CoroutineScope
@@ -40,14 +39,37 @@ import kotlinx.serialization.Serializable
  * keys, setters, read projection, and reset list end-to-end. Mirrors the
  * `PlaybackStore` / `ServerIdentityStore` shape.
  *
+ * **Spec derivation**: every key this store owns is declared exactly once as a row in
+ * [AppearancePreferenceSpecs] (wire name, default, reset category, read/write
+ * encoding) and the machinery below is derived from those rows — each [Keys]
+ * member rebuilds its row's typed key from the row's wire name, each [read]
+ * projection row delegates to its row encoding, the single-key setters and
+ * [restore] delegate to the rows' derived writes, and [resetKeysFor] filters
+ * the rows by reset category. The migration semantics (the legacy
+ * synthwave/soothing/monochrome booleans → [AppearanceSlice.themeVariant]
+ * fallback) live in the [AppearancePreferenceSpecs.THEME_VARIANT] row's
+ * encoding now, next to the key it applies to.
+ *
+ * **Cross-key invariants owned here (hand-written by decision):**
+ *  - [setThemeVariant] / `restore` normalize the variant to lowercase before
+ *    writing the raw slot (the setter is the clamp owner).
+ *  - [setVariantAccent] routes a variant name to the right accent row — a
+ *    cross-row dispatch table, not a row encoding.
+ *
  * **Theme style invariant:** a single `theme_variant` key selects the active
  * variant — variants are inherently mutually exclusive. The legacy
  * `synthwave_mode` / `soothing_mode` / `monochrome_mode` booleans are no longer
- * written but still drive [readThemeVariant] derivation so existing installs
+ * written but still drive the `themeVariant` derivation so existing installs
  * (and old backups) keep their theme; they remain in the reset list.
  *
  * **Storage:** reuses the shared `"user_prefs"` DataStore; key strings match the
  * legacy `UserPreferencesStore.Keys` names — no migration file.
+ *
+ * **Residual (accepted):** the slice plumbing stays hand-written by the
+ * no-reflection rule — adding a preference still means one
+ * [AppearancePreferenceSpecs] row + one [AppearanceSlice] property + one
+ * [read] / [restore] row (and its setter) + one write-through test line. See
+ * the spec KDoc.
  */
 class AppearanceStore constructor(
     private val dataStore: DataStore<Preferences>,
@@ -55,36 +77,46 @@ class AppearanceStore constructor(
 ) {
     private val scope = externalScope
 
+    /**
+     * The store's DataStore keys, each derived from its
+     * [AppearancePreferenceSpecs] row — the member rebuilds the row's typed
+     * key from the row's single-declared wire name (`Preferences.Key`
+     * equality is name-based, so these interoperate with any hand-built key
+     * of the same name). Kept as a plain object rather than folded into the
+     * rows because it is the reflection anchor for the JVM reset-coverage
+     * guard.
+     */
     internal object Keys {
-        val THEME_MODE = stringPreferencesKey("theme_mode")
-        val CONTRAST_LEVEL = stringPreferencesKey("contrast_level")
-        val DYNAMIC_THEMING = booleanPreferencesKey("dynamic_theming")
-        val OLED_MODE = booleanPreferencesKey("oled_mode")
-        val ACCENT_COLOR_SWATCH = stringPreferencesKey("accent_color_swatch")
-        val COLOR_STYLE = stringPreferencesKey("color_style")
-        val PERFORMANCE_MODE = booleanPreferencesKey("performance_mode")
-        val REDUCE_MOTION_ENABLED = booleanPreferencesKey("reduce_motion_enabled")
-        val THEME_VARIANT = stringPreferencesKey("theme_variant")
-        val SYNTHWAVE_MODE = booleanPreferencesKey("synthwave_mode")
-        val SYNTHWAVE_ACCENT = stringPreferencesKey("synthwave_accent")
-        val SOOTHING_MODE = booleanPreferencesKey("soothing_mode")
-        val SOOTHING_ACCENT = stringPreferencesKey("soothing_accent")
-        val MONOCHROME_MODE = booleanPreferencesKey("monochrome_mode")
-        val VIVID_ACCENT = stringPreferencesKey("vivid_accent")
-        val AURORA_ACCENT = stringPreferencesKey("aurora_accent")
-        val SAKURA_ACCENT = stringPreferencesKey("sakura_accent")
-        val VECTOR_POP_ACCENT = stringPreferencesKey("vector_pop_accent")
-        val BACKDROP_THEME_MUSIC_ENABLED = booleanPreferencesKey("backdrop_theme_music_enabled")
-        val BLUE_LIGHT_FILTER_ENABLED = booleanPreferencesKey("blue_light_filter_enabled")
-        val BLUE_LIGHT_FILTER_STRENGTH = floatPreferencesKey("blue_light_filter_strength")
-        val DATE_FORMAT_PREFERENCE = stringPreferencesKey("date_format_preference")
-        val APP_FONT_SCALE = stringPreferencesKey("app_font_scale")
-        val SCHEDULED_THEME_START_HOUR = intPreferencesKey("scheduled_theme_start_hour")
-        val SCHEDULED_THEME_END_HOUR = intPreferencesKey("scheduled_theme_end_hour")
-        val COLOR_BLIND_MODE = stringPreferencesKey("color_blind_mode")
-        val HAND_MODE = stringPreferencesKey("hand_mode")
-        val HAPTICS_ENABLED = booleanPreferencesKey("haptics_enabled")
-        val SHOW_ADVANCED_SETTINGS = booleanPreferencesKey("show_advanced_settings")
+        val THEME_MODE = stringPreferencesKey(AppearancePreferenceSpecs.THEME_MODE.keyName)
+        val CONTRAST_LEVEL = stringPreferencesKey(AppearancePreferenceSpecs.CONTRAST_LEVEL.keyName)
+        val DYNAMIC_THEMING = booleanPreferencesKey(AppearancePreferenceSpecs.DYNAMIC_THEMING.keyName)
+        val OLED_MODE = booleanPreferencesKey(AppearancePreferenceSpecs.OLED_MODE.keyName)
+        val ACCENT_COLOR_SWATCH = stringPreferencesKey(AppearancePreferenceSpecs.ACCENT_COLOR_SWATCH.keyName)
+        val COLOR_STYLE = stringPreferencesKey(AppearancePreferenceSpecs.COLOR_STYLE.keyName)
+        val PERFORMANCE_MODE = booleanPreferencesKey(AppearancePreferenceSpecs.PERFORMANCE_MODE.keyName)
+        val REDUCE_MOTION_ENABLED = booleanPreferencesKey(AppearancePreferenceSpecs.REDUCE_MOTION_ENABLED.keyName)
+        val THEME_VARIANT = stringPreferencesKey(AppearancePreferenceSpecs.THEME_VARIANT.keyName)
+        val SYNTHWAVE_MODE = booleanPreferencesKey(AppearancePreferenceSpecs.SYNTHWAVE_MODE.keyName)
+        val SYNTHWAVE_ACCENT = stringPreferencesKey(AppearancePreferenceSpecs.SYNTHWAVE_ACCENT.keyName)
+        val SOOTHING_MODE = booleanPreferencesKey(AppearancePreferenceSpecs.SOOTHING_MODE.keyName)
+        val SOOTHING_ACCENT = stringPreferencesKey(AppearancePreferenceSpecs.SOOTHING_ACCENT.keyName)
+        val MONOCHROME_MODE = booleanPreferencesKey(AppearancePreferenceSpecs.MONOCHROME_MODE.keyName)
+        val VIVID_ACCENT = stringPreferencesKey(AppearancePreferenceSpecs.VIVID_ACCENT.keyName)
+        val AURORA_ACCENT = stringPreferencesKey(AppearancePreferenceSpecs.AURORA_ACCENT.keyName)
+        val SAKURA_ACCENT = stringPreferencesKey(AppearancePreferenceSpecs.SAKURA_ACCENT.keyName)
+        val VECTOR_POP_ACCENT = stringPreferencesKey(AppearancePreferenceSpecs.VECTOR_POP_ACCENT.keyName)
+        val BACKDROP_THEME_MUSIC_ENABLED = booleanPreferencesKey(AppearancePreferenceSpecs.BACKDROP_THEME_MUSIC_ENABLED.keyName)
+        val BLUE_LIGHT_FILTER_ENABLED = booleanPreferencesKey(AppearancePreferenceSpecs.BLUE_LIGHT_FILTER_ENABLED.keyName)
+        val BLUE_LIGHT_FILTER_STRENGTH = floatPreferencesKey(AppearancePreferenceSpecs.BLUE_LIGHT_FILTER_STRENGTH.keyName)
+        val DATE_FORMAT_PREFERENCE = stringPreferencesKey(AppearancePreferenceSpecs.DATE_FORMAT_PREFERENCE.keyName)
+        val APP_FONT_SCALE = stringPreferencesKey(AppearancePreferenceSpecs.APP_FONT_SCALE.keyName)
+        val SCHEDULED_THEME_START_HOUR = intPreferencesKey(AppearancePreferenceSpecs.SCHEDULED_THEME_START_HOUR.keyName)
+        val SCHEDULED_THEME_END_HOUR = intPreferencesKey(AppearancePreferenceSpecs.SCHEDULED_THEME_END_HOUR.keyName)
+        val COLOR_BLIND_MODE = stringPreferencesKey(AppearancePreferenceSpecs.COLOR_BLIND_MODE.keyName)
+        val HAND_MODE = stringPreferencesKey(AppearancePreferenceSpecs.HAND_MODE.keyName)
+        val LAYOUT_MODE = stringPreferencesKey(AppearancePreferenceSpecs.LAYOUT_MODE.keyName)
+        val HAPTICS_ENABLED = booleanPreferencesKey(AppearancePreferenceSpecs.HAPTICS_ENABLED.keyName)
+        val SHOW_ADVANCED_SETTINGS = booleanPreferencesKey(AppearancePreferenceSpecs.SHOW_ADVANCED_SETTINGS.keyName)
     }
 
     val appearance: StateFlow<AppearanceSlice> =
@@ -100,105 +132,90 @@ class AppearanceStore constructor(
         .distinctUntilChanged()
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), false)
 
-    internal fun read(prefs: Preferences): AppearanceSlice = AppearanceSlice(
-        dynamicTheming = PreferenceCodec.readBool(prefs, Keys.DYNAMIC_THEMING, "dynamic_theming", true),
-        themeMode = readThemeMode(prefs),
-        contrastLevel = readContrastLevel(prefs),
-        oledMode = PreferenceCodec.readBool(prefs, Keys.OLED_MODE, "oled_mode", false),
-        performanceMode = PreferenceCodec.readBool(prefs, Keys.PERFORMANCE_MODE, "performance_mode", false),
-        accentColorSwatch = prefs[Keys.ACCENT_COLOR_SWATCH] ?: "dynamic",
-        colorStyle = readColorStyle(prefs),
-        synthwaveAccent = prefs[Keys.SYNTHWAVE_ACCENT] ?: "magenta",
-        soothingAccent = prefs[Keys.SOOTHING_ACCENT] ?: "ocean",
-        themeVariant = readThemeVariant(prefs),
-        vividAccent = prefs[Keys.VIVID_ACCENT] ?: "punch",
-        auroraAccent = prefs[Keys.AURORA_ACCENT] ?: "emerald",
-        sakuraAccent = prefs[Keys.SAKURA_ACCENT] ?: "rose",
-        vectorPopAccent = prefs[Keys.VECTOR_POP_ACCENT] ?: "cobalt",
-        showAdvancedSettings = PreferenceCodec.readBool(prefs, Keys.SHOW_ADVANCED_SETTINGS, "show_advanced_settings", false),
-        reduceMotionEnabled = PreferenceCodec.readBool(prefs, Keys.REDUCE_MOTION_ENABLED, "reduce_motion_enabled", false),
-        blueLightFilterEnabled = PreferenceCodec.readBool(prefs, Keys.BLUE_LIGHT_FILTER_ENABLED, "blue_light_filter_enabled", false),
-        blueLightFilterStrength = PreferenceCodec.readFloat(prefs, Keys.BLUE_LIGHT_FILTER_STRENGTH, "blue_light_filter_strength", 0.3f),
-        backdropThemeMusicEnabled = PreferenceCodec.readBool(prefs, Keys.BACKDROP_THEME_MUSIC_ENABLED, "backdrop_theme_music_enabled", false),
-        hapticsEnabled = PreferenceCodec.readBool(prefs, Keys.HAPTICS_ENABLED, "haptics_enabled", true),
-        dateFormatPreference = readDateFormat(prefs),
-        appFontScale = readFontScale(prefs),
-        scheduledThemeStartHour = PreferenceCodec.readInt(prefs, Keys.SCHEDULED_THEME_START_HOUR, "scheduled_theme_start_hour", 22),
-        scheduledThemeEndHour = PreferenceCodec.readInt(prefs, Keys.SCHEDULED_THEME_END_HOUR, "scheduled_theme_end_hour", 7),
-        colorBlindMode = readColorBlindMode(prefs),
-        handMode = readHandMode(prefs),
-    )
-
-    private fun readThemeMode(prefs: Preferences): ThemeMode =
-        prefs[Keys.THEME_MODE].toEnumOrNull() ?: ThemeMode.SYSTEM
+    /**
+     * The manual layout override (issue #166). Surfaced independently so the
+     * desktop shell can rewire its adaptive locals without collecting (and
+     * recomposing on) the whole appearance aggregate.
+     */
+    val layoutMode: StateFlow<LayoutMode> = appearance
+        .map { it.layoutMode }
+        .distinctUntilChanged()
+        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), LayoutMode.AUTO)
 
     /**
-     * Resolves the active theme style. Falls back to the legacy single-purpose
-     * booleans when `theme_variant` hasn't been written yet, so upgrades (and
-     * restores of old backups) keep the user's theme with no migration write.
+     * Pure read of the appearance fields from a raw [Preferences] snapshot,
+     * each field delegated to its [AppearancePreferenceSpecs] row encoding
+     * (including the theme-variant legacy-boolean fallback — the row's derived
+     * read). Exposed so the facade can fold these into the whole
+     * preference projection without duplicating the read logic.
      */
-    private fun readThemeVariant(prefs: Preferences): String {
-        prefs[Keys.THEME_VARIANT]?.let { return it }
-        return when {
-            PreferenceCodec.readBool(prefs, Keys.SYNTHWAVE_MODE, "synthwave_mode", false) -> "synthwave"
-            PreferenceCodec.readBool(prefs, Keys.SOOTHING_MODE, "soothing_mode", false) -> "soothing"
-            PreferenceCodec.readBool(prefs, Keys.MONOCHROME_MODE, "monochrome_mode", false) -> "monochrome"
-            else -> "standard"
-        }
-    }
-
-    private fun readContrastLevel(prefs: Preferences): ContrastLevel =
-        prefs[Keys.CONTRAST_LEVEL].toEnumOrNull() ?: ContrastLevel.DEFAULT
-
-    private fun readColorStyle(prefs: Preferences): ColorStyle =
-        prefs[Keys.COLOR_STYLE].toEnumOrNull() ?: ColorStyle.TONAL_SPOT
-
-    private fun readDateFormat(prefs: Preferences): DateFormatPreference =
-        prefs[Keys.DATE_FORMAT_PREFERENCE].toEnumOrNull() ?: DateFormatPreference.SYSTEM
-
-    private fun readFontScale(prefs: Preferences): AppFontScale =
-        prefs[Keys.APP_FONT_SCALE].toEnumOrNull() ?: AppFontScale.DEFAULT
-
-    private fun readColorBlindMode(prefs: Preferences): ColorBlindMode =
-        prefs[Keys.COLOR_BLIND_MODE].toEnumOrNull() ?: ColorBlindMode.NONE
-
-    private fun readHandMode(prefs: Preferences): HandMode =
-        prefs[Keys.HAND_MODE].toEnumOrNull() ?: HandMode.RIGHT
+    internal fun read(prefs: Preferences): AppearanceSlice = AppearanceSlice(
+        dynamicTheming = AppearancePreferenceSpecs.DYNAMIC_THEMING.readFrom(prefs),
+        themeMode = AppearancePreferenceSpecs.THEME_MODE.readFrom(prefs),
+        contrastLevel = AppearancePreferenceSpecs.CONTRAST_LEVEL.readFrom(prefs),
+        oledMode = AppearancePreferenceSpecs.OLED_MODE.readFrom(prefs),
+        performanceMode = AppearancePreferenceSpecs.PERFORMANCE_MODE.readFrom(prefs),
+        accentColorSwatch = AppearancePreferenceSpecs.ACCENT_COLOR_SWATCH.readFrom(prefs),
+        colorStyle = AppearancePreferenceSpecs.COLOR_STYLE.readFrom(prefs),
+        synthwaveAccent = AppearancePreferenceSpecs.SYNTHWAVE_ACCENT.readFrom(prefs),
+        soothingAccent = AppearancePreferenceSpecs.SOOTHING_ACCENT.readFrom(prefs),
+        themeVariant = AppearancePreferenceSpecs.THEME_VARIANT.readFrom(prefs),
+        vividAccent = AppearancePreferenceSpecs.VIVID_ACCENT.readFrom(prefs),
+        auroraAccent = AppearancePreferenceSpecs.AURORA_ACCENT.readFrom(prefs),
+        sakuraAccent = AppearancePreferenceSpecs.SAKURA_ACCENT.readFrom(prefs),
+        vectorPopAccent = AppearancePreferenceSpecs.VECTOR_POP_ACCENT.readFrom(prefs),
+        showAdvancedSettings = AppearancePreferenceSpecs.SHOW_ADVANCED_SETTINGS.readFrom(prefs),
+        reduceMotionEnabled = AppearancePreferenceSpecs.REDUCE_MOTION_ENABLED.readFrom(prefs),
+        blueLightFilterEnabled = AppearancePreferenceSpecs.BLUE_LIGHT_FILTER_ENABLED.readFrom(prefs),
+        blueLightFilterStrength = AppearancePreferenceSpecs.BLUE_LIGHT_FILTER_STRENGTH.readFrom(prefs),
+        backdropThemeMusicEnabled = AppearancePreferenceSpecs.BACKDROP_THEME_MUSIC_ENABLED.readFrom(prefs),
+        hapticsEnabled = AppearancePreferenceSpecs.HAPTICS_ENABLED.readFrom(prefs),
+        dateFormatPreference = AppearancePreferenceSpecs.DATE_FORMAT_PREFERENCE.readFrom(prefs),
+        appFontScale = AppearancePreferenceSpecs.APP_FONT_SCALE.readFrom(prefs),
+        scheduledThemeStartHour = AppearancePreferenceSpecs.SCHEDULED_THEME_START_HOUR.readFrom(prefs),
+        scheduledThemeEndHour = AppearancePreferenceSpecs.SCHEDULED_THEME_END_HOUR.readFrom(prefs),
+        colorBlindMode = AppearancePreferenceSpecs.COLOR_BLIND_MODE.readFrom(prefs),
+        handMode = AppearancePreferenceSpecs.HAND_MODE.readFrom(prefs),
+        layoutMode = AppearancePreferenceSpecs.LAYOUT_MODE.readFrom(prefs),
+    )
 
     // ------------------------------------------------------------------
-    // Setters
+    // Setters — single-key setters delegate to their row's derived write
+    // (the encoding is the row's, not re-declared here); the lowercase
+    // normalization and the per-variant accent routing live below,
+    // hand-written.
     // ------------------------------------------------------------------
 
     suspend fun setDynamicTheming(enabled: Boolean) {
-        dataStore.edit { it[Keys.DYNAMIC_THEMING] = enabled }
+        dataStore.edit { AppearancePreferenceSpecs.DYNAMIC_THEMING.writeTo(it, enabled) }
     }
 
     suspend fun setThemeMode(mode: ThemeMode) {
-        dataStore.edit { it[Keys.THEME_MODE] = mode.name }
+        dataStore.edit { AppearancePreferenceSpecs.THEME_MODE.writeTo(it, mode) }
     }
 
     suspend fun setContrastLevel(level: ContrastLevel) {
-        dataStore.edit { it[Keys.CONTRAST_LEVEL] = level.name }
+        dataStore.edit { AppearancePreferenceSpecs.CONTRAST_LEVEL.writeTo(it, level) }
     }
 
     suspend fun setOledMode(enabled: Boolean) {
-        dataStore.edit { it[Keys.OLED_MODE] = enabled }
+        dataStore.edit { AppearancePreferenceSpecs.OLED_MODE.writeTo(it, enabled) }
     }
 
     suspend fun setAccentColorSwatch(swatch: String) {
-        dataStore.edit { it[Keys.ACCENT_COLOR_SWATCH] = swatch }
+        dataStore.edit { AppearancePreferenceSpecs.ACCENT_COLOR_SWATCH.writeTo(it, swatch) }
     }
 
     suspend fun setColorStyle(style: ColorStyle) {
-        dataStore.edit { it[Keys.COLOR_STYLE] = style.name }
+        dataStore.edit { AppearancePreferenceSpecs.COLOR_STYLE.writeTo(it, style) }
     }
 
     suspend fun setPerformanceMode(enabled: Boolean) {
-        dataStore.edit { it[Keys.PERFORMANCE_MODE] = enabled }
+        dataStore.edit { AppearancePreferenceSpecs.PERFORMANCE_MODE.writeTo(it, enabled) }
     }
 
     suspend fun setReduceMotionEnabled(enabled: Boolean) {
-        dataStore.edit { it[Keys.REDUCE_MOTION_ENABLED] = enabled }
+        dataStore.edit { AppearancePreferenceSpecs.REDUCE_MOTION_ENABLED.writeTo(it, enabled) }
     }
 
     /**
@@ -209,73 +226,77 @@ class AppearanceStore constructor(
      * canonical form stays stable for the raw-string comparisons downstream.
      */
     suspend fun setThemeVariant(variant: String) {
-        dataStore.edit { it[Keys.THEME_VARIANT] = variant.lowercase() }
+        dataStore.edit { AppearancePreferenceSpecs.THEME_VARIANT.writeTo(it, variant.lowercase()) }
     }
 
     suspend fun setSynthwaveAccent(accent: String) {
-        dataStore.edit { it[Keys.SYNTHWAVE_ACCENT] = accent }
+        dataStore.edit { AppearancePreferenceSpecs.SYNTHWAVE_ACCENT.writeTo(it, accent) }
     }
 
     suspend fun setSoothingAccent(accent: String) {
-        dataStore.edit { it[Keys.SOOTHING_ACCENT] = accent }
+        dataStore.edit { AppearancePreferenceSpecs.SOOTHING_ACCENT.writeTo(it, accent) }
     }
 
     /** Persists the accent for the given themed variant; unknown variants are ignored. */
     suspend fun setVariantAccent(variant: String, accent: String) {
-        val key = when (variant.lowercase()) {
-            "synthwave" -> Keys.SYNTHWAVE_ACCENT
-            "soothing" -> Keys.SOOTHING_ACCENT
-            "vivid" -> Keys.VIVID_ACCENT
-            "aurora" -> Keys.AURORA_ACCENT
-            "sakura" -> Keys.SAKURA_ACCENT
-            "vector_pop" -> Keys.VECTOR_POP_ACCENT
+        val row = when (variant.lowercase()) {
+            "synthwave" -> AppearancePreferenceSpecs.SYNTHWAVE_ACCENT
+            "soothing" -> AppearancePreferenceSpecs.SOOTHING_ACCENT
+            "vivid" -> AppearancePreferenceSpecs.VIVID_ACCENT
+            "aurora" -> AppearancePreferenceSpecs.AURORA_ACCENT
+            "sakura" -> AppearancePreferenceSpecs.SAKURA_ACCENT
+            "vector_pop" -> AppearancePreferenceSpecs.VECTOR_POP_ACCENT
             else -> return
         }
-        dataStore.edit { it[key] = accent }
+        dataStore.edit { row.writeTo(it, accent) }
     }
 
     suspend fun setShowAdvancedSettings(enabled: Boolean) {
-        dataStore.edit { it[Keys.SHOW_ADVANCED_SETTINGS] = enabled }
+        dataStore.edit { AppearancePreferenceSpecs.SHOW_ADVANCED_SETTINGS.writeTo(it, enabled) }
     }
 
     suspend fun setBlueLightFilterEnabled(enabled: Boolean) {
-        dataStore.edit { it[Keys.BLUE_LIGHT_FILTER_ENABLED] = enabled }
+        dataStore.edit { AppearancePreferenceSpecs.BLUE_LIGHT_FILTER_ENABLED.writeTo(it, enabled) }
     }
 
     suspend fun setBlueLightFilterStrength(strength: Float) {
-        dataStore.edit { it[Keys.BLUE_LIGHT_FILTER_STRENGTH] = strength }
+        dataStore.edit { AppearancePreferenceSpecs.BLUE_LIGHT_FILTER_STRENGTH.writeTo(it, strength) }
     }
 
     suspend fun setBackdropThemeMusicEnabled(enabled: Boolean) {
-        dataStore.edit { it[Keys.BACKDROP_THEME_MUSIC_ENABLED] = enabled }
+        dataStore.edit { AppearancePreferenceSpecs.BACKDROP_THEME_MUSIC_ENABLED.writeTo(it, enabled) }
     }
 
     suspend fun setHapticsEnabled(enabled: Boolean) {
-        dataStore.edit { it[Keys.HAPTICS_ENABLED] = enabled }
+        dataStore.edit { AppearancePreferenceSpecs.HAPTICS_ENABLED.writeTo(it, enabled) }
     }
 
     suspend fun setDateFormatPreference(preference: DateFormatPreference) {
-        dataStore.edit { it[Keys.DATE_FORMAT_PREFERENCE] = preference.name }
+        dataStore.edit { AppearancePreferenceSpecs.DATE_FORMAT_PREFERENCE.writeTo(it, preference) }
     }
 
     suspend fun setAppFontScale(scale: AppFontScale) {
-        dataStore.edit { it[Keys.APP_FONT_SCALE] = scale.name }
+        dataStore.edit { AppearancePreferenceSpecs.APP_FONT_SCALE.writeTo(it, scale) }
     }
 
     suspend fun setScheduledThemeStartHour(hour: Int) {
-        dataStore.edit { it[Keys.SCHEDULED_THEME_START_HOUR] = hour }
+        dataStore.edit { AppearancePreferenceSpecs.SCHEDULED_THEME_START_HOUR.writeTo(it, hour) }
     }
 
     suspend fun setScheduledThemeEndHour(hour: Int) {
-        dataStore.edit { it[Keys.SCHEDULED_THEME_END_HOUR] = hour }
+        dataStore.edit { AppearancePreferenceSpecs.SCHEDULED_THEME_END_HOUR.writeTo(it, hour) }
     }
 
     suspend fun setColorBlindMode(mode: ColorBlindMode) {
-        dataStore.edit { it[Keys.COLOR_BLIND_MODE] = mode.name }
+        dataStore.edit { AppearancePreferenceSpecs.COLOR_BLIND_MODE.writeTo(it, mode) }
     }
 
     suspend fun setHandMode(mode: HandMode) {
-        dataStore.edit { it[Keys.HAND_MODE] = mode.name }
+        dataStore.edit { AppearancePreferenceSpecs.HAND_MODE.writeTo(it, mode) }
+    }
+
+    suspend fun setLayoutMode(mode: LayoutMode) {
+        dataStore.edit { AppearancePreferenceSpecs.LAYOUT_MODE.writeTo(it, mode) }
     }
 
     /**
@@ -285,81 +306,71 @@ class AppearanceStore constructor(
      * keeps this list from drifting (the hand-written predecessor had already
      * lost [Keys.HAPTICS_ENABLED], which resets under `MISC_APP`).
      * [Keys.SHOW_ADVANCED_SETTINGS] is not in this store's category lists — it
-     * resets under `EXPERIMENTAL` via ExperimentalStore's list instead.
+     * resets under `EXPERIMENTAL` via ExperimentalStore's list instead (see the
+     * spec row's KDoc).
      */
     internal val resetKeys: List<Preferences.Key<*>> =
         PreferenceResetCategory.entries.flatMap(::resetKeysFor)
 
     /**
      * Category reset participation: the subset of [resetKeys] that belongs to
-     * [category]. This store's keys all sit in `APPEARANCE`, so every other
-     * category returns an empty list. The facade aggregates these lists instead
-     * of a central `when` switch.
+     * [category] — the [AppearancePreferenceSpecs] rows whose declared reset
+     * category matches, mapped to their derived keys. `APPEARANCE` for every
+     * key but the haptics row (`MISC_APP`), while the advanced-settings row
+     * deliberately contributes to no category here. The facade aggregates
+     * these lists instead of a central `when` switch.
      */
-    internal fun resetKeysFor(category: PreferenceResetCategory): List<Preferences.Key<*>> = when (category) {
-        PreferenceResetCategory.APPEARANCE -> listOf(
-            Keys.THEME_MODE, Keys.CONTRAST_LEVEL, Keys.DYNAMIC_THEMING, Keys.OLED_MODE,
-            Keys.ACCENT_COLOR_SWATCH, Keys.COLOR_STYLE, Keys.PERFORMANCE_MODE,
-            Keys.REDUCE_MOTION_ENABLED, Keys.THEME_VARIANT,
-            Keys.SYNTHWAVE_MODE, Keys.SYNTHWAVE_ACCENT,
-            Keys.SOOTHING_MODE, Keys.SOOTHING_ACCENT, Keys.MONOCHROME_MODE,
-            Keys.VIVID_ACCENT, Keys.AURORA_ACCENT, Keys.SAKURA_ACCENT, Keys.VECTOR_POP_ACCENT,
-            Keys.BACKDROP_THEME_MUSIC_ENABLED, Keys.BLUE_LIGHT_FILTER_ENABLED,
-            Keys.BLUE_LIGHT_FILTER_STRENGTH, Keys.DATE_FORMAT_PREFERENCE, Keys.APP_FONT_SCALE,
-            Keys.SCHEDULED_THEME_START_HOUR, Keys.SCHEDULED_THEME_END_HOUR,
-            Keys.COLOR_BLIND_MODE, Keys.HAND_MODE,
-        )
-        PreferenceResetCategory.MISC_APP -> listOf(
-            Keys.HAPTICS_ENABLED,
-        )
-        else -> emptyList()
-    }
+    internal fun resetKeysFor(category: PreferenceResetCategory): List<Preferences.Key<*>> =
+        AppearancePreferenceSpecs.resetKeysFor(category)
 
     /**
      * Faithful inverse of [read]: writes every field of [slice] back to the
-     * DataStore using the same encoding as [restorePreferences], plus the gap
-     * keys [restorePreferences] omits (the theme-variant + accent keys,
-     * haptics, date format, font scale, scheduled-theme hours, and
-     * color-blind/hand mode).
+     * DataStore via its row's derived write (the same encoding the row reads
+     * with) — including the gap keys the legacy facade-level
+     * `restorePreferences` omitted (the theme-variant + accent keys, haptics,
+     * date format, font scale, scheduled-theme hours, and color-blind/hand
+     * mode).
      */
     suspend fun restore(slice: AppearanceSlice) {
-        dataStore.edit { it ->
-            it[Keys.DYNAMIC_THEMING] = slice.dynamicTheming
-            it[Keys.THEME_MODE] = slice.themeMode.name
-            it[Keys.CONTRAST_LEVEL] = slice.contrastLevel.name
-            it[Keys.OLED_MODE] = slice.oledMode
-            it[Keys.ACCENT_COLOR_SWATCH] = slice.accentColorSwatch
-            it[Keys.COLOR_STYLE] = slice.colorStyle.name
-            it[Keys.PERFORMANCE_MODE] = slice.performanceMode
-            it[Keys.SHOW_ADVANCED_SETTINGS] = slice.showAdvancedSettings
-            it[Keys.REDUCE_MOTION_ENABLED] = slice.reduceMotionEnabled
-            it[Keys.BLUE_LIGHT_FILTER_ENABLED] = slice.blueLightFilterEnabled
-            it[Keys.BLUE_LIGHT_FILTER_STRENGTH] = slice.blueLightFilterStrength
-            it[Keys.BACKDROP_THEME_MUSIC_ENABLED] = slice.backdropThemeMusicEnabled
-            it[Keys.SYNTHWAVE_ACCENT] = slice.synthwaveAccent
-            it[Keys.SOOTHING_ACCENT] = slice.soothingAccent
+        dataStore.edit { prefs ->
+            AppearancePreferenceSpecs.DYNAMIC_THEMING.writeTo(prefs, slice.dynamicTheming)
+            AppearancePreferenceSpecs.THEME_MODE.writeTo(prefs, slice.themeMode)
+            AppearancePreferenceSpecs.CONTRAST_LEVEL.writeTo(prefs, slice.contrastLevel)
+            AppearancePreferenceSpecs.OLED_MODE.writeTo(prefs, slice.oledMode)
+            AppearancePreferenceSpecs.ACCENT_COLOR_SWATCH.writeTo(prefs, slice.accentColorSwatch)
+            AppearancePreferenceSpecs.COLOR_STYLE.writeTo(prefs, slice.colorStyle)
+            AppearancePreferenceSpecs.PERFORMANCE_MODE.writeTo(prefs, slice.performanceMode)
+            AppearancePreferenceSpecs.SHOW_ADVANCED_SETTINGS.writeTo(prefs, slice.showAdvancedSettings)
+            AppearancePreferenceSpecs.REDUCE_MOTION_ENABLED.writeTo(prefs, slice.reduceMotionEnabled)
+            AppearancePreferenceSpecs.BLUE_LIGHT_FILTER_ENABLED.writeTo(prefs, slice.blueLightFilterEnabled)
+            AppearancePreferenceSpecs.BLUE_LIGHT_FILTER_STRENGTH.writeTo(prefs, slice.blueLightFilterStrength)
+            AppearancePreferenceSpecs.BACKDROP_THEME_MUSIC_ENABLED.writeTo(prefs, slice.backdropThemeMusicEnabled)
+            AppearancePreferenceSpecs.SYNTHWAVE_ACCENT.writeTo(prefs, slice.synthwaveAccent)
+            AppearancePreferenceSpecs.SOOTHING_ACCENT.writeTo(prefs, slice.soothingAccent)
             // Same normalization as setThemeVariant: backup JSON can carry any
             // casing, and downstream legacy-boolean derivation compares raw
             // lowercase strings.
-            it[Keys.THEME_VARIANT] = slice.themeVariant.lowercase()
-            it[Keys.VIVID_ACCENT] = slice.vividAccent
-            it[Keys.AURORA_ACCENT] = slice.auroraAccent
-            it[Keys.SAKURA_ACCENT] = slice.sakuraAccent
-            it[Keys.VECTOR_POP_ACCENT] = slice.vectorPopAccent
-            it[Keys.HAPTICS_ENABLED] = slice.hapticsEnabled
-            it[Keys.DATE_FORMAT_PREFERENCE] = slice.dateFormatPreference.name
-            it[Keys.APP_FONT_SCALE] = slice.appFontScale.name
-            it[Keys.SCHEDULED_THEME_START_HOUR] = slice.scheduledThemeStartHour
-            it[Keys.SCHEDULED_THEME_END_HOUR] = slice.scheduledThemeEndHour
-            it[Keys.COLOR_BLIND_MODE] = slice.colorBlindMode.name
-            it[Keys.HAND_MODE] = slice.handMode.name
+            AppearancePreferenceSpecs.THEME_VARIANT.writeTo(prefs, slice.themeVariant.lowercase())
+            AppearancePreferenceSpecs.VIVID_ACCENT.writeTo(prefs, slice.vividAccent)
+            AppearancePreferenceSpecs.AURORA_ACCENT.writeTo(prefs, slice.auroraAccent)
+            AppearancePreferenceSpecs.SAKURA_ACCENT.writeTo(prefs, slice.sakuraAccent)
+            AppearancePreferenceSpecs.VECTOR_POP_ACCENT.writeTo(prefs, slice.vectorPopAccent)
+            AppearancePreferenceSpecs.HAPTICS_ENABLED.writeTo(prefs, slice.hapticsEnabled)
+            AppearancePreferenceSpecs.DATE_FORMAT_PREFERENCE.writeTo(prefs, slice.dateFormatPreference)
+            AppearancePreferenceSpecs.APP_FONT_SCALE.writeTo(prefs, slice.appFontScale)
+            AppearancePreferenceSpecs.SCHEDULED_THEME_START_HOUR.writeTo(prefs, slice.scheduledThemeStartHour)
+            AppearancePreferenceSpecs.SCHEDULED_THEME_END_HOUR.writeTo(prefs, slice.scheduledThemeEndHour)
+            AppearancePreferenceSpecs.COLOR_BLIND_MODE.writeTo(prefs, slice.colorBlindMode)
+            AppearancePreferenceSpecs.HAND_MODE.writeTo(prefs, slice.handMode)
+            AppearancePreferenceSpecs.LAYOUT_MODE.writeTo(prefs, slice.layoutMode)
         }
     }
 }
 
 /**
  * The appearance &amp; accessibility preference slice. Plain data class.
- * Defaults mirror the projection defaults in [AppearanceStore.read].
+ * Defaults mirror the projection defaults in [AppearanceStore.read] (declared
+ * on the [AppearancePreferenceSpecs] rows).
  */
 @Immutable
 @Serializable
@@ -390,4 +401,5 @@ data class AppearanceSlice(
     val scheduledThemeEndHour: Int = 7,
     val colorBlindMode: ColorBlindMode = ColorBlindMode.NONE,
     val handMode: HandMode = HandMode.RIGHT,
+    val layoutMode: LayoutMode = LayoutMode.AUTO,
 )

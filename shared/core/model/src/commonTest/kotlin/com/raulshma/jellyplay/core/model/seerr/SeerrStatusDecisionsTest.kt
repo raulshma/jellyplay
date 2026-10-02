@@ -6,9 +6,10 @@ import kotlin.test.assertTrue
 import kotlin.test.Test
 
 /**
- * Pins the Seerr status decision table ([effectiveMediaStatus] and the
- * availability predicates) — the rules the requests list/sheet and the
- * details action buttons previously re-derived inline (verbatim, twice).
+ * Pins the Seerr status decision table ([effectiveMediaStatus], the
+ * availability predicates, and the [seerrRequestButtonState] action-button
+ * precedence) — the rules the requests list/sheet and the details action
+ * buttons previously re-derived inline (verbatim, twice).
  */
 class SeerrStatusDecisionsTest {
 
@@ -18,7 +19,7 @@ class SeerrStatusDecisionsTest {
     fun `effectiveMediaStatus reads regular status for non-4k request`() {
         val request = SeerrRequestItem(
             is4k = false,
-            media = SeerrRequestMedia(status = SeerrMediaStatus.AVAILABLE.value, status4k = SeerrMediaStatus.PENDING.value),
+            media = SeerrRequestMedia(status = SeerrMediaStatus.AVAILABLE, status4k = SeerrMediaStatus.PENDING),
         )
 
         assertEquals(SeerrMediaStatus.AVAILABLE, request.effectiveMediaStatus())
@@ -28,7 +29,7 @@ class SeerrStatusDecisionsTest {
     fun `effectiveMediaStatus reads status4k for 4k request`() {
         val request = SeerrRequestItem(
             is4k = true,
-            media = SeerrRequestMedia(status = SeerrMediaStatus.AVAILABLE.value, status4k = SeerrMediaStatus.PROCESSING.value),
+            media = SeerrRequestMedia(status = SeerrMediaStatus.AVAILABLE, status4k = SeerrMediaStatus.PROCESSING),
         )
 
         assertEquals(SeerrMediaStatus.PROCESSING, request.effectiveMediaStatus())
@@ -40,7 +41,8 @@ class SeerrStatusDecisionsTest {
         // on non-4k servers, so this is a live edge, not a theoretical one.
         val request = SeerrRequestItem(
             is4k = true,
-            media = SeerrRequestMedia(status = SeerrMediaStatus.AVAILABLE.value, status4k = 0),
+            // The wire's 0 (never-requested 4K column) folds to UNKNOWN at the seam.
+            media = SeerrRequestMedia(status = SeerrMediaStatus.AVAILABLE, status4k = SeerrMediaStatus.UNKNOWN),
         )
 
         assertEquals(SeerrMediaStatus.UNKNOWN, request.effectiveMediaStatus())
@@ -85,5 +87,67 @@ class SeerrStatusDecisionsTest {
                 (if (status.isAvailable) 1 else 0) + (if (status.isPending) 1 else 0) + (if (status.isProcessing) 1 else 0)
             assertTrue(flagged <= 1, "$status matched more than one action-button predicate")
         }
+    }
+
+    // ── seerrRequestButtonState (the action-button precedence) ─────────
+
+    /** A [SeerrMediaInfo] at [status] with [requestCount] request entries. */
+    private fun buttonMedia(status: SeerrMediaStatus, requestCount: Int = 0) =
+        SeerrMediaInfo(
+            status = status,
+            requests = List(requestCount) { SeerrMediaRequest() },
+        )
+
+    @Test
+    fun `button state pins the full status-by-request decision table`() {
+        // Both axes of the fold: the gating fold (when a request entry alone
+        // claims the button) and the precedence (available > processing >
+        // pending > existing request > requestable).
+        val table = listOf(
+            // (status, request entries) -> expected button
+            Triple(SeerrMediaStatus.UNKNOWN, 0, SeerrRequestButtonState.NotRequested),
+            Triple(SeerrMediaStatus.UNKNOWN, 1, SeerrRequestButtonState.Requested.ExistingRequest),
+            Triple(SeerrMediaStatus.DELETED, 0, SeerrRequestButtonState.NotRequested),
+            Triple(SeerrMediaStatus.DELETED, 1, SeerrRequestButtonState.Requested.ExistingRequest),
+            Triple(SeerrMediaStatus.PENDING, 0, SeerrRequestButtonState.Requested.Pending),
+            Triple(SeerrMediaStatus.PENDING, 1, SeerrRequestButtonState.Requested.Pending),
+            Triple(SeerrMediaStatus.PROCESSING, 0, SeerrRequestButtonState.Requested.Processing),
+            Triple(SeerrMediaStatus.PROCESSING, 1, SeerrRequestButtonState.Requested.Processing),
+            Triple(SeerrMediaStatus.PARTIALLY_AVAILABLE, 0, SeerrRequestButtonState.Available),
+            Triple(SeerrMediaStatus.PARTIALLY_AVAILABLE, 1, SeerrRequestButtonState.Available),
+            Triple(SeerrMediaStatus.AVAILABLE, 0, SeerrRequestButtonState.Available),
+            Triple(SeerrMediaStatus.AVAILABLE, 1, SeerrRequestButtonState.Available),
+        )
+        table.forEach { (status, requests, expected) ->
+            assertEquals(expected, seerrRequestButtonState(buttonMedia(status, requests)), "at $status with $requests request(s)")
+        }
+    }
+
+    @Test
+    fun `absent mediaInfo folds to not requested`() {
+        // Overseerr omits mediaInfo entirely for never-requested media; the
+        // status then reads as UNKNOWN and no request entry exists.
+        assertEquals(SeerrRequestButtonState.NotRequested, seerrRequestButtonState(null))
+    }
+
+    @Test
+    fun `availability outranks an in-flight request`() {
+        // A partially-grabbed series with an open request still shows the
+        // "open in library" affordance — the availability arm wins.
+        assertEquals(
+            SeerrRequestButtonState.Available,
+            seerrRequestButtonState(buttonMedia(SeerrMediaStatus.PARTIALLY_AVAILABLE, requestCount = 2)),
+        )
+    }
+
+    @Test
+    fun `processing outranks a pending-shaped request entry`() {
+        // The inner sub-shape order: a PROCESSING status renders processing
+        // even when request entries also exist (the outer gating OR and the
+        // inner when disagreed in shape but never in outcome — pinned here).
+        assertEquals(
+            SeerrRequestButtonState.Requested.Processing,
+            seerrRequestButtonState(buttonMedia(SeerrMediaStatus.PROCESSING, requestCount = 1)),
+        )
     }
 }

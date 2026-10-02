@@ -114,7 +114,7 @@ internal fun GestureOverlay(
     brightnessFlow: StateFlow<Float>,
     volumeFlow: StateFlow<Float>,
     indicatorSide: GestureIndicatorSide = GestureIndicatorSide.OPPOSITE,
-    gesturesEnabled: Boolean,
+    swipeGesturesEnabled: Boolean,
     swipeSeekMaxMs: Long,
     showControls: Boolean,
     onSeekGesture: (Long) -> Unit,
@@ -168,41 +168,52 @@ internal fun GestureOverlay(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            // a11y: the vertical-drag gesture surface previously carried no
-            // semantics, so TalkBack/Switch Access users could not adjust
-            // brightness (left half) or volume (right half). Two adjustable
-            // values share one surface, so setProgress alone is ambiguous —
-            // expose four custom actions (increase/decrease per value) that
-            // drive the same gesture callbacks the drag uses. Each action
-            // applies a fixed ~10% step (A11Y_STEP_DELTA). The pointerInput
-            // gesture handling below is left intact; semantics are additive.
-            .semantics {
-                contentDescription = a11yGestureControlsLabel
-                customActions = listOf(
-                    CustomAccessibilityAction(
-                        label = a11yBrightnessIncreaseLabel,
-                    ) {
-                        currentOnBrightnessGesture(A11Y_STEP_DELTA); true
-                    },
-                    CustomAccessibilityAction(
-                        label = a11yBrightnessDecreaseLabel,
-                    ) {
-                        currentOnBrightnessGesture(-A11Y_STEP_DELTA); true
-                    },
-                    CustomAccessibilityAction(
-                        label = a11yVolumeIncreaseLabel,
-                    ) {
-                        currentOnVolumeGesture(A11Y_STEP_DELTA); true
-                    },
-                    CustomAccessibilityAction(
-                        label = a11yVolumeDecreaseLabel,
-                    ) {
-                        currentOnVolumeGesture(-A11Y_STEP_DELTA); true
-                    },
-                )
-            }
+            // a11y + drag surface share one gate: both are the swipe tier, so
+            // with swipes disabled (GestureMode.TAP_ONLY / NONE) neither
+            // exists — no inert surface announcing gesture controls, no
+            // custom actions driving disabled callbacks.
             .then(
-                if (gesturesEnabled) Modifier.pointerInput(swipeSeekMaxMs, showControls, edgeThresholdPx, deadZonePx) {
+                if (swipeGesturesEnabled) {
+                    Modifier
+                        // a11y: the vertical-drag gesture surface previously
+                        // carried no semantics, so TalkBack/Switch Access
+                        // users could not adjust brightness (left half) or
+                        // volume (right half). Two adjustable values share one
+                        // surface, so setProgress alone is ambiguous — expose
+                        // four custom actions (increase/decrease per value)
+                        // that drive the same gesture callbacks the drag uses.
+                        // Each action applies a fixed ~10% step
+                        // (A11Y_STEP_DELTA). The pointerInput gesture handling
+                        // below is left intact; semantics are additive.
+                        .semantics {
+                            contentDescription = a11yGestureControlsLabel
+                            customActions = listOf(
+                                CustomAccessibilityAction(
+                                    label = a11yBrightnessIncreaseLabel,
+                                ) {
+                                    currentOnBrightnessGesture(A11Y_STEP_DELTA); true
+                                },
+                                CustomAccessibilityAction(
+                                    label = a11yBrightnessDecreaseLabel,
+                                ) {
+                                    currentOnBrightnessGesture(-A11Y_STEP_DELTA); true
+                                },
+                                CustomAccessibilityAction(
+                                    label = a11yVolumeIncreaseLabel,
+                                ) {
+                                    currentOnVolumeGesture(A11Y_STEP_DELTA); true
+                                },
+                                CustomAccessibilityAction(
+                                    label = a11yVolumeDecreaseLabel,
+                                ) {
+                                    currentOnVolumeGesture(-A11Y_STEP_DELTA); true
+                                },
+                            )
+                        }
+                } else Modifier
+            )
+            .then(
+                if (swipeGesturesEnabled) Modifier.pointerInput(swipeSeekMaxMs, showControls, edgeThresholdPx, deadZonePx) {
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)
                         val startX = down.position.x

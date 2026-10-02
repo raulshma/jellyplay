@@ -49,15 +49,28 @@ fun List<MediaItem>.readingResumableOnly(): List<MediaItem> =
  * The resume rows' full post-fetch chain, folded once for the client twins
  * (`LibraryApiClientImpl` — which used to hand-copy
  * this tail per endpoint): parental filter → id-distinct → the #157
- * played-row rule's books-or-video half. [isBooks] selects
- * [readingResumableOnly] over [resumableOnly] exactly as the
- * getContinueReading implementations do behind their server-side Book
- * narrowing.
+ * played-row rule's books-or-video half → the optional classic-rows rollup
+ * fold. [isBooks] selects [readingResumableOnly] over [resumableOnly]
+ * exactly as the getContinueReading implementations do behind their
+ * server-side `Book` narrowing.
+ *
+ * [dropContainerRollups] is the classic-rows (#168) half: Jellyfin 12.x
+ * reports Series/Season containers as resumable themselves (upstream
+ * `folderIsResumableFilter`), which the pre-12 server never did — the fold
+ * drops them so the rendered row is the pre-12 leaf set (Episode, Movie,
+ * MusicVideo, and the edge leaf kinds a pre-12 server also reported: home
+ * videos, resumable audio). A no-op on ≤10.x servers (no rollups arrive) and
+ * on the video row's non-classic mode. Runs post-limit like every other
+ * fold, so heavy rollup pollution can under-fill the row — the same accepted
+ * tradeoff as the parental and played-row folds above.
  */
 internal fun List<MediaItem>.toFilteredResumeRows(
     maxParentalRating: Int?,
     isBooks: Boolean,
+    dropContainerRollups: Boolean = false,
 ): List<MediaItem> {
     val filtered = filterByParentalRating(maxParentalRating).distinctBy { it.id }
-    return if (isBooks) filtered.readingResumableOnly() else filtered.resumableOnly()
+    val folded = if (isBooks) filtered.readingResumableOnly() else filtered.resumableOnly()
+    if (!dropContainerRollups || isBooks) return folded
+    return folded.filter { it.mediaType != MediaType.SERIES && it.mediaType != MediaType.SEASON }
 }

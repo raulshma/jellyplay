@@ -82,4 +82,7 @@
     <string name="library_year_to">Até %1$d</string>
     <string name="data_download_started">Transferência iniciada</string>
     <string name="data_download_start_failed">Não foi possível iniciar a transferência</string>
+    <string name="library_filter_has_subtitles">Com legendas</string>
+    <string name="library_filter_has_trailer">Com trailer</string>
+    <string name="library_filter_subtitles">Legendas</string>
 </resources>

@@ -2,8 +2,6 @@ package com.raulshma.jellyplay.core.data.worker
 
 import android.Manifest
 import android.app.Notification
-import android.app.NotificationChannel
-import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
@@ -14,6 +12,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.work.ForegroundInfo
+import com.raulshma.jellyplay.core.notification.channel.NotificationChannelManager
 import com.raulshma.jellyplay.shared.core.data.R
 
 /**
@@ -23,8 +22,8 @@ import com.raulshma.jellyplay.shared.core.data.R
  * byte-level progress, so the notification is an ongoing low-priority card
  * ("Syncing watch progress…") that is cancelled when the drain completes.
  *
- * Channel dedup is via [NotificationManager.getNotificationChannel] — same
- * idempotent pattern as the download helper.
+ * Channel creation routes through [NotificationChannelManager] (I4 fold) —
+ * same deduped get-or-create pattern as every other channel family.
  */
 internal object PlaybackSyncNotificationHelper {
 
@@ -110,17 +109,9 @@ internal object PlaybackSyncNotificationHelper {
     }
 
     private fun createNotificationChannel(context: Context) {
-        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        if (manager.getNotificationChannel(CHANNEL_ID) == null) {
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                context.getString(R.string.data_sync_channel_name),
-                NotificationManager.IMPORTANCE_LOW,
-            ).apply {
-                description = context.getString(R.string.data_sync_channel_desc)
-                setShowBadge(false)
-            }
-            manager.createNotificationChannel(channel)
-        }
+        // I4 fold: the declaration (id, name, importance, badge) lives in
+        // NotificationChannelManager with the other channel families — only
+        // this helper's notification BUILDERS stayed local.
+        NotificationChannelManager(context).ensurePlaybackSyncChannel()
     }
 }

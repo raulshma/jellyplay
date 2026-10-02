@@ -23,5 +23,5 @@ package com.raulshma.jellyplay.core.data.download
 interface SeriesEpisodeDownloads {
 
     /** The ids of [seriesId]'s episodes with a completed local download. */
-    suspend fun downloadedEpisodeIds(seriesId: String): Set<String>
+    suspend fun getDownloadedEpisodeIdsForSeries(seriesId: String): Set<String>
 }

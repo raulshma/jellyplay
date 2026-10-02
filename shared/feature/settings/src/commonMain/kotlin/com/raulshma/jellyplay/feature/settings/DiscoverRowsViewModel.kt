@@ -1,6 +1,8 @@
 package com.raulshma.jellyplay.feature.settings
 
 import androidx.compose.runtime.Immutable
+import com.raulshma.jellyplay.core.data.repository.MediaBrowseReads
+import com.raulshma.jellyplay.core.data.util.FilterDimensionsHolder
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
 import com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore
@@ -151,6 +153,8 @@ class DiscoverRowsViewModel(
     private val homeDiscoveryStore: HomeDiscoveryStore,
     private val editor: PreferencesEditor,
     private val mediaRepository: MediaRepository,
+    /** The browse-facet seam (People picker + tag facets — off the union). */
+    private val mediaBrowseReads: MediaBrowseReads,
 ) : JellyPlayViewModel() {
 
     /** The user's rows, config order — the manage screen's list. */
@@ -168,11 +172,17 @@ class DiscoverRowsViewModel(
     private val _libraryFolders = MutableStateFlow<List<LibraryFolder>>(emptyList())
     val libraryFolders: StateFlow<List<LibraryFolder>> = _libraryFolders.asStateFlow()
 
-    private val _genres = MutableStateFlow<List<Genre>>(emptyList())
-    val genres: StateFlow<List<Genre>> = _genres.asStateFlow()
-
-    private val _tags = MutableStateFlow<List<String>>(emptyList())
-    val tags: StateFlow<List<String>> = _tags.asStateFlow()
+    // Genre/tag editor catalogs come from the shared core:data holder — the
+    // same one the library/search filter sheets use — so the editor's loads
+    // gain the one-retry resilience they never had (the one deliberate
+    // behavior delta of this fold; see FilterDimensionsHolder).
+    private val filterDimensions = FilterDimensionsHolder(
+        scope = scope,
+        getGenres = { force -> mediaRepository.getGenres(force = force) },
+        getTags = { mediaBrowseReads.getTags() },
+    )
+    val genres: StateFlow<List<Genre>> = filterDimensions.genres
+    val tags: StateFlow<List<String>> = filterDimensions.tags
 
     private val _studios = MutableStateFlow<List<Studio>>(emptyList())
     val studios: StateFlow<List<Studio>> = _studios.asStateFlow()
@@ -192,10 +202,12 @@ class DiscoverRowsViewModel(
     private fun loadEditorCatalogs() {
         launch {
             mediaRepository.getLibraryFolders().onSuccess { _libraryFolders.value = it }
-            mediaRepository.getGenres().onSuccess { _genres.value = it }
             mediaRepository.getStudios().onSuccess { _studios.value = it }
-            mediaRepository.getTags().onSuccess { _tags.value = it }
         }
+        // Genres/tags ride the shared holder (independent coroutines + retry),
+        // instead of the former sequential no-retry reads inside the launch
+        // above — same end state, one retry on transient failures.
+        filterDimensions.load()
     }
 
     /** Opens the editor on a new draft seeded from [template] (or defaults). */
@@ -292,7 +304,7 @@ class DiscoverRowsViewModel(
             return
         }
         peopleSearchJob = debounced(peopleSearchJob) {
-            mediaRepository.getPeople(term, limit = 30).onSuccess { _peopleResults.value = it }
+            mediaBrowseReads.getPeople(term, limit = 30).onSuccess { _peopleResults.value = it }
         }
     }
 

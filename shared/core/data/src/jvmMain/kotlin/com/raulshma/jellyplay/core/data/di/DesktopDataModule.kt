@@ -39,16 +39,16 @@ import org.koin.dsl.module
  *    auto-download work end-to-end.
  *  - [desktopHomeConveyorModule] — the Home conveyor's desktop actuals:
  *    the work-scheduler twins plus the honest no-ops.
- *  - [desktopUpdateModule] — the desktop update-check sentinel.
  *
  * Everything not defined by these families resolves from [dataJvmModule].
  *
- * OVERRIDE COUPLING (the ONE deliberate desktop override): apps/desktop's
- * desktopAppUpdateModule — LAST in desktopKoinModules' startKoin list,
- * which runs with allowOverride(true) — REPLACES [desktopUpdateModule]'s
- * sentinel-bound AppUpdateRepository single with the real-version desktop
- * auto-update actual (docs/adr/desktop-auto-update.md). Pointer comments
- * live on both sides (DesktopUpdateKoinModule.kt / DesktopKoinModules.kt).
+ * NO update family here: the desktop `AppUpdateRepository` definition is
+ * apps/desktop's desktopAppUpdateModule (update/DesktopAppUpdate.kt) — the
+ * installed version it compares against is a desktop-shell input (the
+ * generated desktop-build.properties), which core:data cannot see
+ * (docs/adr/desktop-auto-update.md). Formerly this module bound a
+ * `999999.0.0` sentinel version that apps/desktop's override module then
+ * replaced; that chain is gone — one real binding, app-side.
  */
 fun desktopDataModule(dataDir: Path): Module {
     // Side effect, deliberately before the module definition: common code
@@ -67,12 +67,6 @@ fun desktopDataModule(dataDir: Path): Module {
             desktopAdminModule,
             desktopDownloadsSeamsModule(dataDir),
             desktopHomeConveyorModule,
-            // OVERRIDE COUPLING: apps/desktop's desktopAppUpdateModule
-            // (last in desktopKoinModules' startKoin list,
-            // allowOverride(true)) replaces this family's sentinel-bound
-            // AppUpdateRepository single — see DesktopUpdateKoinModule.kt's
-            // pointer comment.
-            desktopUpdateModule(dataDir),
         )
     }
 }

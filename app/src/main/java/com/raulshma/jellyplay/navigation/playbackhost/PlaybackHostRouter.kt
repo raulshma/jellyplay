@@ -11,19 +11,18 @@ import com.raulshma.jellyplay.core.ui.navigation.Route
  * (see `PlaybackHostRouterTest`, which pins every cell of the current table).
  *
  * [PlaybackHostRouter.decide] has exactly one consumer: the `navigateFilter`
- * adapter in `JellyPlayApp.kt`, which executes the decision (launch external
- * player, start PlayerActivity, or let the Navigator push normally).
+ * adapter in `NavRequestController` (the request-dispatch half of MainContent),
+ * which executes the decision (launch external player, start PlayerActivity,
+ * or let the Navigator push normally).
  */
 sealed interface HostDecision {
     /**
      * Hand off to the user's preferred external player app via the
-     * ActivityResultLauncher seam in JellyPlayApp.
+     * ActivityResultLauncher seam in JellyPlayApp. Carries the
+     * [ExternalPlayerRequest] quadruple (its [ExternalPlayerRequest.subtitleStreamIndex]
+     * is the route's selected subtitle — feeds the launch's `subs.enable`).
      */
-    data class ExternalPlayer(
-        val itemId: String,
-        val mediaSourceId: String?,
-        val startPositionTicks: Long,
-    ) : HostDecision
+    data class ExternalPlayer(val request: ExternalPlayerRequest) : HostDecision
 
     /**
      * Mount in the dedicated fullscreen PlayerActivity (system PiP, task
@@ -46,7 +45,14 @@ object PlaybackHostRouter {
 
     fun decide(route: NavKey, preferredPlayer: PlayerType): HostDecision = when {
         route is Route.VideoPlayer && preferredPlayer == PlayerType.EXTERNAL ->
-            HostDecision.ExternalPlayer(route.itemId, route.mediaSourceId, route.startPositionTicks)
+            HostDecision.ExternalPlayer(
+                ExternalPlayerRequest(
+                    itemId = route.itemId,
+                    mediaSourceId = route.mediaSourceId,
+                    startPositionTicks = route.startPositionTicks,
+                    subtitleStreamIndex = route.subtitleStreamIndex,
+                ),
+            )
 
         // Live TV quirk (deliberate, pinned by test): hands off to an external
         // app when EXTERNAL is preferred; every other engine choice mounts in
@@ -55,7 +61,7 @@ object PlaybackHostRouter {
         // MainActivity can't offer since 55cd569f8 removed its
         // supportsPictureInPicture).
         route is Route.LiveTvChannelPlayer && preferredPlayer == PlayerType.EXTERNAL ->
-            HostDecision.ExternalPlayer(route.channelId, null, 0L)
+            HostDecision.ExternalPlayer(ExternalPlayerRequest(route.channelId))
 
         // PIN/biometric gate: PlayerActivity enforces
         // MainActivity's lock itself now — its onCreate/onNewIntent redirect

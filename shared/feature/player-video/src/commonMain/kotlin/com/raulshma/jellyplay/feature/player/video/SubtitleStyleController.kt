@@ -3,6 +3,8 @@ package com.raulshma.jellyplay.feature.player.video
 import com.raulshma.jellyplay.core.datastore.subtitle.SubtitleSlice
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.SubtitleStyle
+import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
+import com.raulshma.jellyplay.feature.player.video.subtitle.FontProvider
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -21,7 +23,10 @@ internal const val SUBTITLE_DELAY_APPLY_DEBOUNCE_MS = 500L
  * Owns the subtitle-style state choreography extracted from
  * [VideoPlayerViewModel]: the resolved in-memory [SubtitleStyle] (styling AND
  * the per-item subtitle-sync delay), the per-item dialogue-boost strength,
- * and the debounced engine re-sync a delay change triggers.
+ * the debounced engine re-sync a delay change triggers, and — folded back
+ * from SubtitleFontController (whose whole surface was the style edit +
+ * engine re-apply pair this class already owned the choreography for) — the
+ * user-font install and the direct engine re-apply of the current style.
  *
  * Step 1 of the recorded two-step design (the `SubtitlePreviewController`
  * shape): the state stays in the VM's uiState mirrors — every write flows
@@ -65,6 +70,10 @@ internal class SubtitleStyleController(
     private val syncEngineConfig: () -> Unit,
     /** Drag-settling engine-config rebuild ([VideoPlayerViewModel.updateConfigWithUiStateDebounced]). */
     private val syncEngineConfigDebounced: () -> Unit,
+    /** Installs a user-picked font into the fonts dir (the [FontProvider] seam). */
+    private val fontProvider: FontProvider,
+    /** The live engine handle for the direct style re-apply ([applySubtitleStyle]). */
+    private val getEngine: () -> MediaEngine?,
 ) {
 
     // Coalesces a burst of subtitle-delay fine-tune changes into one engine
@@ -167,5 +176,40 @@ internal class SubtitleStyleController(
     fun onEngineBound(slice: SubtitleSlice, itemId: String?, isHdr: Boolean) {
         setStyleMirror(resolveSubtitleStyleWithDelay(slice, itemId, isHdr))
         setDialogueBoostMirror(EffectStrength.NONE, false)
+    }
+
+    /**
+     * Installs a user-picked font (from a SAF `OpenDocument` pick) via
+     * [FontProvider.installUserFont], then applies the resulting family
+     * name/path as a style edit through [setStyle] (mirror write + engine
+     * sync + global persist with the per-item offset preserved). Folded back
+     * from SubtitleFontController — the font-facing arm beside the style-edit
+     * choreography it already routed into.
+     *
+     * No-op if the copy/parse fails (FontProvider returns null), leaving the
+     * bundled fallback font in place. (The uri stringifies at the API
+     * boundary — Android hands a SAF Uri's string form, desktop a file URI.)
+     */
+    fun installUserFont(uri: String) {
+        scope.launch {
+            val installed = fontProvider.installUserFont(uri) ?: return@launch
+            setStyle(
+                getStyle().copy(
+                    fontFamilyPath = installed.file.absolutePath,
+                    fontFamilyName = installed.familyName,
+                )
+            )
+        }
+    }
+
+    /**
+     * Re-applies the CURRENT style mirror to the engine's own native
+     * subtitle surface ([MediaEngine.applySubtitleStyle]) — the
+     * visual-style-only path the zoom-safe strategy drives. No-op when no
+     * engine is bound.
+     */
+    fun applySubtitleStyle() {
+        val engine = getEngine() ?: return
+        engine.applySubtitleStyle(getStyle())
     }
 }

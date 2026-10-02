@@ -29,6 +29,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import com.raulshma.jellyplay.core.ui.message.UiMessage
 
 /**
  * Boundary gaps in [AddServerViewModel] NOT pinned by [AddServerViewModelTest]:
@@ -100,7 +101,7 @@ class AddServerViewModelGapsTest {
         advanceUntilIdle()
 
         assertEquals(
-            AuthMessage.Resource(Res.string.auth_error_server_address_required),
+            UiMessage.Resource(Res.string.auth_error_server_address_required),
             viewModel.uiState.value.connectError,
         )
         assertFalse(resultInvoked)

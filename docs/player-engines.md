@@ -59,7 +59,20 @@ Deprez.
 - ✅ Frame-accurate seeking
 - ✅ Best-in-class **ASS/SSA** subtitle rendering — including user style
   override (`--ass-override=force`)
-- ✅ Supports mpv's `~/.config/mpv/mpv.conf` for advanced configuration
+- ✅ Advanced configuration via the in-app *Advanced MPV Configuration*
+  (Android additionally reads `<app files>/mpv/mpv.conf`)
+  - **Subtitle precedence:** any `sub-*` styling key you set in the
+    *Advanced MPV Configuration* (or, on Android, in `mpv.conf`) wins —
+    the app skips writing that key, at startup and on live subtitle-style
+    changes alike. Example: `sub-color=#FF00FF00` in your conf keeps your
+    green captions even with custom subtitle styling enabled in-app.
+    Functional keys the player drives at runtime (`sub-visibility`,
+    `sub-delay`, `secondary-sub-delay`, `sub-use-margins`,
+    `sub-ass-force-margins`, and the font-provider options) stay app-owned
+    so in-app subtitle toggle/sync keep working.
+  - **Platform note:** the desktop builds run mpv with `config=no`, so
+    `~/.config/mpv/mpv.conf` is not read there — only the in-app
+    *Advanced MPV Configuration* participates in the precedence above.
 - ✅ Shader packs (Anime4K, FSRCNNX, etc.) for upscaling and
   deinterlacing
 - ✅ SVP (Smooth Video Project) integration for frame interpolation

@@ -7,6 +7,7 @@ import com.raulshma.jellyplay.core.model.EqualizerPreset
 import com.raulshma.jellyplay.core.model.EqualizerSettings
 import com.raulshma.jellyplay.core.model.ReverbPreset
 import com.raulshma.jellyplay.feature.player.video.engine.AudioEffectsConfig
+import com.raulshma.jellyplay.feature.player.video.engine.DYNAMIC_COMPRESSOR_FILTER
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -182,7 +183,7 @@ class DesktopAudioEffectChainTest {
         // Exact string the Android MPV path emits (and the parameter set the
         // Android DynamicsCompressorAudioProcessor documents as its defaults).
         assertEquals(
-            "lavfi=[${DesktopAudioEffectChain.DYNAMIC_COMPRESSOR_FILTER}]",
+            "lavfi=[$DYNAMIC_COMPRESSOR_FILTER]",
             DesktopAudioEffectChain.buildAfChain(
                 AudioEffectsConfig(
                     audioNormalizationMode = AudioNormalizationMode.DYNAMIC,

@@ -14,7 +14,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.audio.DefaultAudioSink
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
-import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -26,7 +26,8 @@ class AudioCrossfader(
     private val context: Context,
     private val effectsProcessor: AudioEffectsProcessor,
     private val mediaRepository: MediaRepository,
-    private val playbackRepository: PlaybackRepository,
+    /** Artwork URL for the incoming crossfade row (the ImageUrlProvider seam). */
+    private val imageUrlProvider: ImageUrlProvider,
     private val playbackSourceResolver: PlaybackSourceResolver,
     private val repeatModeProvider: () -> Int,
     private val crossfadeDurationMsProvider: () -> Long,
@@ -119,12 +120,19 @@ class AudioCrossfader(
                 enableAudioTrackPlaybackParams: Boolean,
             ): androidx.media3.exoplayer.audio.AudioSink {
                 return DefaultAudioSink.Builder(context)
+                    // ONE in-sink chain order (core:data `inSinkAudioChain`),
+                    // over the crossfade twin instances: channel mix first —
+                    // it may change the channel count, so every downstream
+                    // processor must see the remixed layout. No balance
+                    // processor: the crossfade secondary mirrors the video
+                    // shape here (the primary music sink is the only balance
+                    // rider; see the factory's divergence note).
                     .setAudioProcessors(
-                        arrayOf(
-                            effectsProcessor.crossfadeChannelMixProcessor,
-                            effectsProcessor.crossfadeDynamicsProcessor,
-                            effectsProcessor.crossfadeReplayGainProcessor,
-                            effectsProcessor.crossfadeHighPassProcessor,
+                        inSinkAudioChain(
+                            channelMixProcessor = effectsProcessor.crossfadeChannelMixProcessor,
+                            dynamicsProcessor = effectsProcessor.crossfadeDynamicsProcessor,
+                            replayGainProcessor = effectsProcessor.crossfadeReplayGainProcessor,
+                            highPassProcessor = effectsProcessor.crossfadeHighPassProcessor,
                         ),
                     )
                     .setEnableFloatOutput(enableFloatOutput)
@@ -207,7 +215,7 @@ class AudioCrossfader(
                 val cfPlayer = createCrossfadePlayer()
                 crossfadePlayer = cfPlayer
 
-                val artUri = Uri.parse(playbackRepository.getImageUrl(nextItem.id, maxWidth = 600))
+                val artUri = Uri.parse(imageUrlProvider.getImageUrl(nextItem.id, maxWidth = 600))
                 val mediaItem = MediaItem.Builder()
                     .setMediaId(nextItem.id)
                     .setUri(url)

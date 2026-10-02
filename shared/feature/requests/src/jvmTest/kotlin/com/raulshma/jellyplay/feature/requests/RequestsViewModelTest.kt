@@ -6,19 +6,18 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStore
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
+import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalFeatureGate
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalSlice
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore
 import com.raulshma.jellyplay.core.model.ExperimentalFeature
 import com.raulshma.jellyplay.core.model.arr.ArrDownloadStatus
-import com.raulshma.jellyplay.core.model.arr.ArrQueueDeleteOptions
 import com.raulshma.jellyplay.core.model.arr.ArrQueueItem
 import com.raulshma.jellyplay.core.model.arr.ArrServiceKind
 import com.raulshma.jellyplay.core.model.seerr.SeerrMovieDetails
-import com.raulshma.jellyplay.core.model.seerr.SeerrPageInfo
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestCount
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestFilter
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestItem
-import com.raulshma.jellyplay.core.model.seerr.SeerrRequestListResponse
+import com.raulshma.jellyplay.core.model.seerr.SeerrRequestPage
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestMedia
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestSort
 import com.raulshma.jellyplay.core.model.seerr.SeerrTvDetails
@@ -29,6 +28,7 @@ import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
 import io.mockk.verify
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -102,7 +102,7 @@ class RequestsViewModelTest {
         coEvery { seerrRepository.getRequestCount() } returns Result.success(SeerrRequestCount(pending = 1))
         coEvery { seerrRepository.getMovieDetails(any()) } returns Result.success(SeerrMovieDetails())
         coEvery { seerrRepository.getTvDetails(any()) } returns Result.success(SeerrTvDetails())
-        stubRequests { Result.success(SeerrRequestListResponse()) }
+        stubRequests { Result.success(SeerrRequestPage()) }
     }
 
     @AfterTest
@@ -111,7 +111,7 @@ class RequestsViewModelTest {
     }
 
     /** Routes every getRequests call into [requestCalls] and answers [response]. */
-    private fun stubRequests(response: () -> Result<SeerrRequestListResponse>) {
+    private fun stubRequests(response: () -> Result<SeerrRequestPage>) {
         coEvery {
             seerrRepository.getRequests(any(), any(), any(), any(), any(), any(), any(), any())
         } answers {
@@ -132,13 +132,14 @@ class RequestsViewModelTest {
     private fun newViewModel(): RequestsViewModel = RequestsViewModel(
         seerrRepository = seerrRepository,
         arrRepository = arrRepository,
-        experimentalStore = experimentalStore,
+        experimentalGate = ExperimentalFeatureGate(experimentalStore, CoroutineScope(mainDispatcher)),
     )
 
     private fun page(items: List<SeerrRequestItem>, pages: Int = 1) =
-        SeerrRequestListResponse(
-            pageInfo = SeerrPageInfo(pages = pages, results = items.size),
-            results = items,
+        SeerrRequestPage(
+            items = items,
+            totalResults = items.size,
+            totalPages = pages,
         )
 
     private fun item(id: Int, tmdbId: Int = id, type: String = "movie") =
@@ -558,8 +559,10 @@ class RequestsViewModelTest {
             serverKind = ArrServiceKind.RADARR,
         )
         coEvery { arrRepository.getQueueForTmdb(42) } returns queueItem
-        coEvery { arrRepository.deleteQueueItem(any(), any()) } returns Result.success(Unit)
-        coEvery { arrRepository.searchForTmdb(any(), any()) } returns Result.success(emptyList())
+        // The option mapping + replacement search + queue refresh live in the
+        // repository's deep deleteQueueRow now; this seam hands over the
+        // cached row + the dialog flags only.
+        coEvery { arrRepository.deleteQueueRow(any(), any(), any()) } returns Result.success(Unit)
 
         val viewModel = newViewModel()
         advanceUntilIdle()
@@ -571,13 +574,9 @@ class RequestsViewModelTest {
         viewModel.removeQueueItem(42, blocklist = true, searchAgain = true)
         advanceUntilIdle()
 
-        coVerify(exactly = 1) {
-            arrRepository.deleteQueueItem(
-                queueItem,
-                ArrQueueDeleteOptions(removeFromClient = true, blocklist = true, skipRedownload = false),
-            )
-        }
-        coVerify(exactly = 1) { arrRepository.searchForTmdb(42, ArrServiceKind.RADARR) }
+        // The search intent rides the flags (the repo fires the follow-up on
+        // its success leg — pinned in ArrRepositoryImplTest).
+        coVerify(exactly = 1) { arrRepository.deleteQueueRow(queueItem, blocklist = true, searchAgain = true) }
         val state = viewModel.state.value
         assertFalse(state.queueItems.containsKey(42))
         assertFalse(state.downloadProgress.containsKey(42))
@@ -592,7 +591,7 @@ class RequestsViewModelTest {
         viewModel.removeQueueItem(42, blocklist = false, searchAgain = false)
         advanceUntilIdle()
 
-        coVerify(exactly = 0) { arrRepository.deleteQueueItem(any(), any()) }
+        coVerify(exactly = 0) { arrRepository.deleteQueueRow(any(), any(), any()) }
     }
 
     @Test
@@ -609,7 +608,7 @@ class RequestsViewModelTest {
             serverKind = ArrServiceKind.RADARR,
         )
         coEvery { arrRepository.getQueueForTmdb(42) } returns queueItem
-        coEvery { arrRepository.deleteQueueItem(any(), any()) } returns Result.failure(RuntimeException("boom"))
+        coEvery { arrRepository.deleteQueueRow(any(), any(), any()) } returns Result.failure(RuntimeException("boom"))
 
         val viewModel = newViewModel()
         advanceUntilIdle()

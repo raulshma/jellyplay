@@ -181,4 +181,5 @@
     <string name="editor_subtitles_label_mt">MT</string>
     <string name="editor_subtitles_download">下载</string>
 
+    <string name="editor_refresh_metadata">刷新元数据</string>
 </resources>

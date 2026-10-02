@@ -10,7 +10,7 @@ import androidx.work.WorkerParameters
 import androidx.work.testing.TestListenableWorkerBuilder
 import androidx.work.testing.WorkManagerTestInitHelper
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
-import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackSlice
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
 import com.raulshma.jellyplay.core.model.HomeSectionQuery
@@ -51,7 +51,7 @@ class TvWatchNextWorkerTest {
 
     private lateinit var context: Context
     private val mediaRepository: MediaRepository = mockk(relaxed = true)
-    private val playbackRepository: PlaybackRepository = mockk(relaxed = true)
+    private val imageUrlProvider: ImageUrlProvider = mockk(relaxed = true)
     private val playbackStore: PlaybackStore = mockk()
 
     @Before
@@ -78,7 +78,7 @@ class TvWatchNextWorkerTest {
                     appContext,
                     workerParameters,
                     mediaRepository,
-                    playbackRepository,
+                    imageUrlProvider,
                     playbackStore,
                     SystemTimeSource(),
                 )

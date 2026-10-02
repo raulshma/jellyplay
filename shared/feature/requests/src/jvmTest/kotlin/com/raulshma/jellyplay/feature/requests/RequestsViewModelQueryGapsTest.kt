@@ -3,14 +3,14 @@ package com.raulshma.jellyplay.feature.requests
 import androidx.compose.runtime.snapshots.Snapshot
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
+import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalFeatureGate
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalSlice
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore
 import com.raulshma.jellyplay.core.model.seerr.SeerrCurrentUser
-import com.raulshma.jellyplay.core.model.seerr.SeerrPageInfo
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestCount
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestFilter
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestItem
-import com.raulshma.jellyplay.core.model.seerr.SeerrRequestListResponse
+import com.raulshma.jellyplay.core.model.seerr.SeerrRequestPage
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestMedia
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestSort
 import io.mockk.Runs
@@ -18,6 +18,7 @@ import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -94,7 +95,7 @@ class RequestsViewModelQueryGapsTest {
         coEvery { seerrRepository.getTvDetails(any()) } returns Result.success(
             com.raulshma.jellyplay.core.model.seerr.SeerrTvDetails(),
         )
-        stubRequests { Result.success(SeerrRequestListResponse()) }
+        stubRequests { Result.success(SeerrRequestPage()) }
     }
 
     @AfterTest
@@ -102,7 +103,7 @@ class RequestsViewModelQueryGapsTest {
         Dispatchers.resetMain()
     }
 
-    private fun stubRequests(response: () -> Result<SeerrRequestListResponse>) {
+    private fun stubRequests(response: () -> Result<SeerrRequestPage>) {
         coEvery {
             seerrRepository.getRequests(any(), any(), any(), any(), any(), any(), any(), any())
         } answers {
@@ -117,13 +118,14 @@ class RequestsViewModelQueryGapsTest {
     private fun newViewModel(): RequestsViewModel = RequestsViewModel(
         seerrRepository = seerrRepository,
         arrRepository = arrRepository,
-        experimentalStore = experimentalStore,
+        experimentalGate = ExperimentalFeatureGate(experimentalStore, CoroutineScope(mainDispatcher)),
     )
 
     private fun page(items: List<SeerrRequestItem>, pages: Int = 1) =
-        SeerrRequestListResponse(
-            pageInfo = SeerrPageInfo(pages = pages, results = items.size),
-            results = items,
+        SeerrRequestPage(
+            items = items,
+            totalResults = items.size,
+            totalPages = pages,
         )
 
     private fun item(id: Int, tmdbId: Int = id, type: String = "movie") =

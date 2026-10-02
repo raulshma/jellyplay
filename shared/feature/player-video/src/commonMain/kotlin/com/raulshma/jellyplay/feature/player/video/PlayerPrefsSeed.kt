@@ -19,9 +19,10 @@ import com.raulshma.jellyplay.feature.player.video.engine.AspectRatio
  *    trickplayEnabled, trickplayOnSeekGesture, showPlaybackMetadata, showClock,
  *    showTimeRemaining, keepScreenOnDuringVideo, streamingQuality,
  *    adaptiveBitrateEnabled, playbackMode
- *  - `gestures`: gesturesEnabled, holdSpeedEnabled, holdSpeedMultiplier,
- *    defaultSpeed, swipeSeekMaxMs, seekDurationMs, rememberBrightness,
- *    brightnessLevel, gestureIndicatorSide, frameRateMatching, refreshRateMode
+ *  - `gestures`: gestureMode (tap/swipe tier flags are derived views),
+ *    holdSpeedEnabled, holdSpeedMultiplier, defaultSpeed, swipeSeekMaxMs,
+ *    seekDurationMs, rememberBrightness, brightnessLevel, gestureIndicatorSide,
+ *    frameRateMatching, refreshRateMode
  *  - `videoFx`: aspectRatio (parsed from `videoDefaultAspectRatio`), tvZoomModePercent
  *  - `segmentState`: segmentBehaviors (with the INTRO/OUTRO auto-skip flags OR-ed in)
  *  - `episodes`: videoEpisodeBrowserEnabled
@@ -82,7 +83,7 @@ internal object PlayerPrefsSeed {
                     playbackMode = agg.playback.playbackMode,
                 ),
                 gestures = gestures.copy(
-                    gesturesEnabled = agg.videoPlayer.videoGesturesEnabled,
+                    gestureMode = agg.videoPlayer.videoGestureMode,
                     holdSpeedEnabled = agg.videoPlayer.videoHoldSpeedEnabled,
                     holdSpeedMultiplier = agg.videoPlayer.videoHoldSpeedMultiplier,
                     defaultSpeed = agg.videoPlayer.videoDefaultSpeed,

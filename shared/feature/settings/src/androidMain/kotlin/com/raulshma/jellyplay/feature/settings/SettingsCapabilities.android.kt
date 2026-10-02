@@ -9,6 +9,7 @@ internal actual val settingsCapabilities: SettingsCapabilities = SettingsCapabil
     supportsAudioCache = true,
     supportsScreenOrientation = true,
     supportsTouchGestures = true,
+    supportsAppLock = true,
     supportsBiometric = true,
     supportsSystemNotificationSettings = true,
     supportsLogSharing = true,
@@ -16,4 +17,7 @@ internal actual val settingsCapabilities: SettingsCapabilities = SettingsCapabil
     supportsMpvRenderProfiles = false,
     supportsVolumeMemory = false,
     supportsIdleAmbientScreen = false,
+    supportsDiscordPresence = false,
+    supportsShellHooks = false,
+    supportsPip = true,
 )

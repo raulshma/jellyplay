@@ -16,7 +16,8 @@ import com.raulshma.jellyplay.core.model.MediaCleanupConfig
 import com.raulshma.jellyplay.core.model.MediaItemStub
 import com.raulshma.jellyplay.core.model.ScanPhase
 import com.raulshma.jellyplay.core.model.WatchedMediaItem
-import com.raulshma.jellyplay.core.network.JellyfinApiClient
+import com.raulshma.jellyplay.core.network.api.AuthApiClient
+import com.raulshma.jellyplay.core.network.api.MediaInfoApiClient
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -53,7 +54,8 @@ import java.io.IOException
 class WatchedMediaScanWorkerTest {
 
     private lateinit var context: Context
-    private val apiClient: JellyfinApiClient = mockk(relaxed = true)
+    private val authApiClient: AuthApiClient = mockk(relaxed = true)
+    private val mediaInfoApiClient: MediaInfoApiClient = mockk(relaxed = true)
     private val scanStateDao: ScanStateDao = mockk(relaxed = true)
 
     private val scanId = "scan-watched-1"
@@ -83,7 +85,7 @@ class WatchedMediaScanWorkerTest {
         )
         coEvery { scanStateDao.update(capture(updates)) } returns Unit
         coEvery { scanStateDao.getById(scanId) } returns entity
-        every { apiClient.currentUser } returns flowOf(userInfo(id = "admin-1"))
+        every { authApiClient.currentUser } returns flowOf(userInfo(id = "admin-1"))
     }
 
     private fun userInfo(id: String) = com.raulshma.jellyplay.core.model.UserInfo(
@@ -100,7 +102,13 @@ class WatchedMediaScanWorkerTest {
                     appContext: Context,
                     workerClassName: String,
                     workerParameters: WorkerParameters,
-                ): WatchedMediaScanWorker = WatchedMediaScanWorker(appContext, workerParameters, apiClient, scanStateDao)
+                ): WatchedMediaScanWorker = WatchedMediaScanWorker(
+                    appContext,
+                    workerParameters,
+                    authApiClient,
+                    mediaInfoApiClient,
+                    scanStateDao,
+                )
             })
             .setInputData(inputData)
             .build()
@@ -120,7 +128,7 @@ class WatchedMediaScanWorkerTest {
 
         assertTrue(result is ListenableWorker.Result.Failure)
         coVerify(exactly = 0) { scanStateDao.getById(any()) }
-        coVerify(exactly = 0) { apiClient.getWatchedItems(any(), any(), any(), any(), any(), any(), any()) }
+        coVerify(exactly = 0) { mediaInfoApiClient.getWatchedItems(any(), any(), any(), any(), any(), any(), any()) }
     }
 
     @Test
@@ -130,17 +138,17 @@ class WatchedMediaScanWorkerTest {
         val result = buildWorker().doWork()
 
         assertTrue(result is ListenableWorker.Result.Failure)
-        coVerify(exactly = 0) { apiClient.getWatchedItems(any(), any(), any(), any(), any(), any(), any()) }
+        coVerify(exactly = 0) { mediaInfoApiClient.getWatchedItems(any(), any(), any(), any(), any(), any(), any()) }
     }
 
     @Test
     fun `missing current user fails before any fetch`() = runTest {
-        every { apiClient.currentUser } returns flowOf(null)
+        every { authApiClient.currentUser } returns flowOf(null)
 
         val result = buildWorker().doWork()
 
         assertTrue(result is ListenableWorker.Result.Failure)
-        coVerify(exactly = 0) { apiClient.getWatchedItems(any(), any(), any(), any(), any(), any(), any()) }
+        coVerify(exactly = 0) { mediaInfoApiClient.getWatchedItems(any(), any(), any(), any(), any(), any(), any()) }
         // Not marked failed either — the run never started.
         coVerify(exactly = 0) { scanStateDao.update(any()) }
     }
@@ -149,14 +157,14 @@ class WatchedMediaScanWorkerTest {
 
     @Test
     fun `happy path forwards admin user and config into fetch args and persists mapped stubs`() = runTest {
-        coEvery { apiClient.getWatchedItems(any(), any(), any(), any(), any(), any(), any()) } returns
+        coEvery { mediaInfoApiClient.getWatchedItems(any(), any(), any(), any(), any(), any(), any()) } returns
             Result.success(2 to listOf(watchedItem(1, 3), watchedItem(2, 1)))
 
         val result = buildWorker().doWork()
 
         assertTrue(result is ListenableWorker.Result.Success)
         coVerify(exactly = 1) {
-            apiClient.getWatchedItems(
+            mediaInfoApiClient.getWatchedItems(
                 userId = "admin-1",
                 includeItemTypes = listOf("Episode", "Movie"),
                 minDaysSincePlayed = 30,
@@ -190,7 +198,7 @@ class WatchedMediaScanWorkerTest {
 
     @Test
     fun `transient IOException marks the row FAILED and returns retry`() = runTest {
-        coEvery { apiClient.getWatchedItems(any(), any(), any(), any(), any(), any(), any()) } throws
+        coEvery { mediaInfoApiClient.getWatchedItems(any(), any(), any(), any(), any(), any(), any()) } throws
             IOException("connection reset")
 
         val result = buildWorker().doWork()
@@ -202,7 +210,7 @@ class WatchedMediaScanWorkerTest {
 
     @Test
     fun `unexpected exception marks the row FAILED and returns failure`() = runTest {
-        coEvery { apiClient.getWatchedItems(any(), any(), any(), any(), any(), any(), any()) } throws
+        coEvery { mediaInfoApiClient.getWatchedItems(any(), any(), any(), any(), any(), any(), any()) } throws
             IllegalStateException("malformed payload")
 
         val result = buildWorker().doWork()

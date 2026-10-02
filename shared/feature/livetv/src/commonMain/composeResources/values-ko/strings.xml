@@ -65,4 +65,24 @@
     <string name="livetv_will_be_recorded">"%1$s"이(가) 녹화됩니다.</string>
     <string name="livetv_channel">채널</string>
     <string name="livetv_live">LIVE</string>
+
+    <!-- Tab error fallbacks (the UiMessage folds' Resource arms) -->
+    <string name="livetv_error_load_channels">채널을 불러오지 못했습니다</string>
+    <string name="livetv_error_load_channel">채널을 불러오지 못했습니다</string>
+    <string name="livetv_error_load_programs">프로그램을 불러오지 못했습니다</string>
+    <string name="livetv_error_load_guide">프로그램 가이드를 불러오지 못했습니다</string>
+    <string name="livetv_error_load_recordings">녹화물을 불러오지 못했습니다</string>
+    <string name="livetv_error_delete_recording">녹화물을 삭제하지 못했습니다</string>
+    <string name="livetv_error_load_schedule">예정을 불러오지 못했습니다</string>
+    <string name="livetv_error_load_series">시리즈를 불러오지 못했습니다</string>
+    <string name="livetv_error_record">녹화를 생성하지 못했습니다</string>
+    <string name="livetv_error_cancel_recording">녹화를 취소하지 못했습니다</string>
+
+    <!-- Programs tab row titles (jellyfin-web getProgramSections) -->
+    <string name="livetv_programs_on_now">지금 방송 중</string>
+    <string name="livetv_programs_shows">시리즈</string>
+    <string name="livetv_programs_movies">영화</string>
+    <string name="livetv_programs_sports">스포츠</string>
+    <string name="livetv_programs_kids">키즈</string>
+    <string name="livetv_programs_news">뉴스</string>
 </resources>

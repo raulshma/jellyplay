@@ -5,6 +5,8 @@ import com.raulshma.jellyplay.core.model.arr.ArrCommand
 import com.raulshma.jellyplay.core.model.arr.ArrQueueDeleteOptions
 import com.raulshma.jellyplay.core.model.arr.ArrQueueItem
 import com.raulshma.jellyplay.core.model.arr.ArrHistoryItem
+import com.raulshma.jellyplay.core.model.arr.ArrRelease
+import com.raulshma.jellyplay.core.model.arr.ArrServerConfig
 import com.raulshma.jellyplay.core.network.api.ApiException
 import com.raulshma.jellyplay.core.network.seerr.SeerrApiClientImpl
 import kotlinx.serialization.KSerializer
@@ -83,6 +85,13 @@ internal class ArrV3Service(
  * (Sonarr's series/episode management, Radarr's movie lookups) stay on the
  * adapters, which ride this engine's URL/text/PUT/DELETE arms so the request
  * preamble still has exactly one copy.
+ *
+ * Every method takes the caller's [ArrServerConfig] connection as its first
+ * parameter — the formerly-unnamed `(baseUrl, apiKey)` pair the folded
+ * signatures carried — and reads only [ArrServerConfig.baseUrl] +
+ * [ArrServerConfig.apiKey], at the request-building leaves ([getRequest], the
+ * [ArrClientSupport] preamble), so the connection destructure stays in one
+ * place per request.
  */
 internal class ArrV3Client(
     okHttpClient: OkHttpClient,
@@ -108,41 +117,38 @@ internal class ArrV3Client(
 
     /** `GET /queue` — unwraps the `records` envelope; rows decoded per service. */
     suspend fun <W> getQueue(
-        baseUrl: String,
-        apiKey: String,
+        server: ArrServerConfig,
         row: KSerializer<W>,
         toModel: (W) -> ArrQueueItem,
     ): Result<List<ArrQueueItem>> =
-        parseEnvelope(getRequest(baseUrl, apiKey, "/queue", service.queueIncludeParams), row)
+        parseEnvelope(getRequest(server, "/queue", service.queueIncludeParams), row)
             .map { page -> page.records.map(toModel) }
 
     /** `DELETE /queue/{id}` with the removeFromClient/blocklist/skipRedownload options. */
     suspend fun deleteQueueItem(
-        baseUrl: String,
-        apiKey: String,
+        server: ArrServerConfig,
         id: Int,
         options: ArrQueueDeleteOptions,
     ): Result<Unit> {
-        val url = support.buildUrl(baseUrl, "/queue/$id").newBuilder().withDeleteOptions(options).build()
-        val request = Request.Builder().url(url).withApiKey(apiKey).delete().build()
+        val url = support.buildUrl(server.baseUrl, "/queue/$id").newBuilder().withDeleteOptions(options).build()
+        val request = Request.Builder().url(url).withApiKey(server.apiKey).delete().build()
         return support.parseUnit(request)
     }
 
     /** `DELETE /queue/bulk` — one call for many ids; empty list short-circuits. */
     suspend fun deleteQueueItems(
-        baseUrl: String,
-        apiKey: String,
+        server: ArrServerConfig,
         ids: List<Int>,
         options: ArrQueueDeleteOptions,
     ): Result<Unit> {
         if (ids.isEmpty()) return Result.success(Unit)
-        val url = support.buildUrl(baseUrl, "/queue/bulk").newBuilder().withDeleteOptions(options).build()
-        return deleteIdsBody(url, apiKey, ids)
+        val url = support.buildUrl(server.baseUrl, "/queue/bulk").newBuilder().withDeleteOptions(options).build()
+        return deleteIdsBody(server, url, ids)
     }
 
     /** `POST /queue/grab/{id}` — force-send a queued release to the download client. */
-    suspend fun grabQueueItem(baseUrl: String, apiKey: String, id: Int): Result<Unit> =
-        support.postEmpty(baseUrl, apiKey, "/queue/grab/$id")
+    suspend fun grabQueueItem(server: ArrServerConfig, id: Int): Result<Unit> =
+        support.postEmpty(server, "/queue/grab/$id")
 
     /**
      * The 2-step manualimport flow (the *arr v3 spec has no queue/import/{id}):
@@ -152,11 +158,11 @@ internal class ArrV3Client(
      * unchanged is both the documented usage and immune to schema drift on
      * the 16-field ManualImportResource.
      */
-    suspend fun importQueueItem(baseUrl: String, apiKey: String, downloadId: String): Result<Unit> {
-        val getUrl = support.buildUrl(baseUrl, "/manualimport").newBuilder()
+    suspend fun importQueueItem(server: ArrServerConfig, downloadId: String): Result<Unit> {
+        val getUrl = support.buildUrl(server.baseUrl, "/manualimport").newBuilder()
             .addQueryParameter("downloadId", downloadId)
             .build()
-        val getRequest = Request.Builder().url(getUrl).withApiKey(apiKey).get().build()
+        val getRequest = Request.Builder().url(getUrl).withApiKey(server.apiKey).get().build()
         val rows = support.executeRequest(getRequest).mapCatching { json.decodeFromString<JsonArray>(it) }
         val rowList = rows.getOrElse { return Result.failure(it) }
         if (rowList.isEmpty()) {
@@ -168,8 +174,8 @@ internal class ArrV3Client(
             )
         }
         val postRequest = Request.Builder()
-            .url(support.buildUrl(baseUrl, "/manualimport"))
-            .withApiKey(apiKey)
+            .url(support.buildUrl(server.baseUrl, "/manualimport"))
+            .withApiKey(server.apiKey)
             .post(rowList.toString().toRequestBody("application/json".toMediaType()))
             .build()
         return support.parseUnit(postRequest)
@@ -179,16 +185,14 @@ internal class ArrV3Client(
 
     /** `GET /calendar?start=...&end=...` (+ the service's identity params); bare array rows. */
     suspend fun <W, M> getCalendar(
-        baseUrl: String,
-        apiKey: String,
+        server: ArrServerConfig,
         start: String,
         end: String,
         row: KSerializer<W>,
         toModel: (W) -> M,
     ): Result<List<M>> =
         getList(
-            baseUrl,
-            apiKey,
+            server,
             "/calendar",
             listOf("start" to start, "end" to end) + service.calendarIncludeParams,
             row,
@@ -198,15 +202,14 @@ internal class ArrV3Client(
 
     /** `GET /history` — identity param first, then the optional `eventType` filter. */
     suspend fun <W> getHistory(
-        baseUrl: String,
-        apiKey: String,
+        server: ArrServerConfig,
         eventType: Int?,
         row: KSerializer<W>,
         toModel: (W) -> ArrHistoryItem,
     ): Result<List<ArrHistoryItem>> {
         val params = service.historyIncludeParams +
             if (eventType != null) listOf("eventType" to eventType.toString()) else emptyList()
-        return parseEnvelope(getRequest(baseUrl, apiKey, "/history", params), row)
+        return parseEnvelope(getRequest(server, "/history", params), row)
             .map { page -> page.records.map(toModel) }
     }
 
@@ -214,8 +217,7 @@ internal class ArrV3Client(
 
     /** `GET /blocklist` — both services sort by `date` descending. */
     suspend fun <W> getBlocklist(
-        baseUrl: String,
-        apiKey: String,
+        server: ArrServerConfig,
         page: Int,
         pageSize: Int,
         row: KSerializer<W>,
@@ -223,8 +225,7 @@ internal class ArrV3Client(
     ): Result<List<ArrBlocklistItem>> =
         parseEnvelope(
             getRequest(
-                baseUrl,
-                apiKey,
+                server,
                 "/blocklist",
                 listOf(
                     "page" to page.toString(),
@@ -237,21 +238,20 @@ internal class ArrV3Client(
         ).map { page -> page.records.map(toModel) }
 
     /** `DELETE /blocklist/{id}` — remove one blocklist entry (re-enables search). */
-    suspend fun deleteBlocklistItem(baseUrl: String, apiKey: String, id: Int): Result<Unit> =
-        support.deleteRequest(baseUrl, apiKey, "/blocklist/$id")
+    suspend fun deleteBlocklistItem(server: ArrServerConfig, id: Int): Result<Unit> =
+        support.deleteRequest(server, "/blocklist/$id")
 
     /** `DELETE /blocklist/bulk` — remove multiple blocklist entries; empty list short-circuits. */
-    suspend fun deleteBlocklistItems(baseUrl: String, apiKey: String, ids: List<Int>): Result<Unit> {
+    suspend fun deleteBlocklistItems(server: ArrServerConfig, ids: List<Int>): Result<Unit> {
         if (ids.isEmpty()) return Result.success(Unit)
-        return deleteIdsBody(support.buildUrl(baseUrl, "/blocklist/bulk"), apiKey, ids)
+        return deleteIdsBody(server, support.buildUrl(server.baseUrl, "/blocklist/bulk"), ids)
     }
 
     // ── wanted ──────────────────────────────────────────────────────────────
 
     /** `GET /wanted/missing` — the sort key is the per-service divergence. */
     suspend fun <W, M> getWanted(
-        baseUrl: String,
-        apiKey: String,
+        server: ArrServerConfig,
         page: Int,
         pageSize: Int,
         row: KSerializer<W>,
@@ -259,8 +259,7 @@ internal class ArrV3Client(
     ): Result<List<M>> =
         parseEnvelope(
             getRequest(
-                baseUrl,
-                apiKey,
+                server,
                 "/wanted/missing",
                 listOf(
                     "page" to page.toString(),
@@ -279,34 +278,34 @@ internal class ArrV3Client(
      * services' request field names differ on the wire); the response
      * resource is the shared shape.
      */
-    suspend fun postCommand(baseUrl: String, apiKey: String, bodyJson: String): Result<ArrCommand> {
+    suspend fun postCommand(server: ArrServerConfig, bodyJson: String): Result<ArrCommand> {
         val request = Request.Builder()
-            .url(support.buildUrl(baseUrl, "/command"))
-            .withApiKey(apiKey)
+            .url(support.buildUrl(server.baseUrl, "/command"))
+            .withApiKey(server.apiKey)
             .post(bodyJson.toRequestBody("application/json".toMediaType()))
             .build()
         return support.parseRequest(request, ArrCommandResource.serializer()).map { it.toArrCommand() }
     }
 
     /** `PUT {path}` with a JSON body — the monitor toggles (`/episode/monitor`, `/movie/monitor`). */
-    suspend fun putJson(baseUrl: String, apiKey: String, path: String, bodyJson: String): Result<Unit> {
+    suspend fun putJson(server: ArrServerConfig, path: String, bodyJson: String): Result<Unit> {
         val request = Request.Builder()
-            .url(support.buildUrl(baseUrl, path))
-            .withApiKey(apiKey)
+            .url(support.buildUrl(server.baseUrl, path))
+            .withApiKey(server.apiKey)
             .put(bodyJson.toRequestBody("application/json".toMediaType()))
             .build()
         return support.parseUnit(request)
     }
 
     /** `DELETE {path}` — the file deletes (`/episodeFile/{id}`, `/movieFile/{id}`). */
-    suspend fun deletePath(baseUrl: String, apiKey: String, path: String): Result<Unit> =
-        support.deleteRequest(baseUrl, apiKey, path)
+    suspend fun deletePath(server: ArrServerConfig, path: String): Result<Unit> =
+        support.deleteRequest(server, path)
 
     /** `GET /system/status` — connection probe. Succeeds iff 2xx. */
-    suspend fun testConnection(baseUrl: String, apiKey: String): Result<Unit> {
+    suspend fun testConnection(server: ArrServerConfig): Result<Unit> {
         val request = Request.Builder()
-            .url(support.buildUrl(baseUrl, "/system/status"))
-            .withApiKey(apiKey)
+            .url(support.buildUrl(server.baseUrl, "/system/status"))
+            .withApiKey(server.apiKey)
             .get()
             .build()
         return support.parseUnit(request)
@@ -326,30 +325,66 @@ internal class ArrV3Client(
      * not tracked).
      */
     suspend fun <T> getList(
-        baseUrl: String,
-        apiKey: String,
+        server: ArrServerConfig,
         path: String,
         params: List<Pair<String, String>>,
         element: KSerializer<T>,
     ): Result<List<T>> =
-        support.parseRequest(getRequest(baseUrl, apiKey, path, params), ListSerializer(element))
+        support.parseRequest(getRequest(server, path, params), ListSerializer(element))
+
+    /**
+     * `GET /release` — the interactive release-search rows: a bare JSON array
+     * (no `{records}` envelope), decoded with the shared [ArrReleaseResource]
+     * row. The adapters pass their identity params (Radarr `movieId`; Sonarr
+     * `episodeId` / `seriesId` + `seasonNumber`). The services cache the
+     * search decisions ~30 min and answer 404 when nothing is cached — that
+     * one status remaps to [ArrReleaseCacheMiss] so the UI can offer
+     * "Search again"; every other failure passes through unchanged.
+     */
+    suspend fun getReleases(
+        server: ArrServerConfig,
+        params: List<Pair<String, String>>,
+    ): Result<List<ArrRelease>> =
+        support.parseRequest(
+            getRequest(server, "/release", params),
+            ListSerializer(ArrReleaseResource.serializer()),
+        )
+            .map { list -> list.map { it.toArrRelease() } }
+            .recoverCatching { e ->
+                if ((e as? ApiException)?.httpCode == 404) {
+                    throw ArrReleaseCacheMiss(service.serviceName, e)
+                }
+                throw e
+            }
+
+    /**
+     * `POST {path}` with a JSON body — the release grab (`/release`), the
+     * POST twin of [putJson] (which serves the monitor toggles).
+     */
+    suspend fun postJson(server: ArrServerConfig, path: String, bodyJson: String): Result<Unit> {
+        val request = Request.Builder()
+            .url(support.buildUrl(server.baseUrl, path))
+            .withApiKey(server.apiKey)
+            .post(bodyJson.toRequestBody("application/json".toMediaType()))
+            .build()
+        return support.parseUnit(request)
+    }
 
     // ── assembly helpers ────────────────────────────────────────────────────
 
     /** GET with the params attached in list order (the folded clients' exact order). */
     private fun getRequest(
-        baseUrl: String,
-        apiKey: String,
+        server: ArrServerConfig,
         path: String,
         params: List<Pair<String, String>>,
     ): Request =
         Request.Builder()
             .url(
-                support.buildUrl(baseUrl, path).newBuilder().apply {
+                support.buildUrl(server.baseUrl, path).newBuilder().apply {
                     params.forEach { (name, value) -> addQueryParameter(name, value) }
                 }.build(),
             )
-            .withApiKey(apiKey)
+            .withApiKey(server.apiKey)
             .get()
             .build()
 
@@ -358,11 +393,11 @@ internal class ArrV3Client(
         support.parseRequest(request, ArrRecords.serializer(row))
 
     /** DELETE with the shared bare-ids body (queue/bulk + blocklist/bulk). */
-    private suspend fun deleteIdsBody(url: HttpUrl, apiKey: String, ids: List<Int>): Result<Unit> {
+    private suspend fun deleteIdsBody(server: ArrServerConfig, url: HttpUrl, ids: List<Int>): Result<Unit> {
         val body = json.encodeToString(ArrIdsBody(ids = ids))
         val request = Request.Builder()
             .url(url)
-            .withApiKey(apiKey)
+            .withApiKey(server.apiKey)
             .delete(body.toRequestBody("application/json".toMediaType()))
             .build()
         return support.parseUnit(request)

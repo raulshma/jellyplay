@@ -23,12 +23,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -42,9 +38,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.TriStateCheckbox
-import com.raulshma.jellyplay.core.designsystem.theme.Dimensions
 import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
 import com.raulshma.jellyplay.core.ui.components.ConfirmTone
+import com.raulshma.jellyplay.core.ui.components.SelectionActionBar
 import com.raulshma.jellyplay.core.ui.components.JellyPlayCircularProgressIndicator
 import com.raulshma.jellyplay.core.ui.components.JellyPlayLinearProgressIndicator
 import com.raulshma.jellyplay.core.ui.components.episodeContextLine
@@ -70,11 +66,10 @@ import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import com.raulshma.jellyplay.core.ui.components.LocalFloatingNavOffset
+import com.raulshma.jellyplay.core.ui.components.clearFloatingNav
+import com.raulshma.jellyplay.core.ui.components.floatingNavClearanceDp
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
-import kotlin.math.roundToInt
 import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
@@ -82,8 +77,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.data.repository.DownloadProgress
 import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.DownloadStatus
-import com.raulshma.jellyplay.core.model.PendingConfirmation
 import com.raulshma.jellyplay.core.model.ResyncCategory
+import com.raulshma.jellyplay.core.model.formatBytes
+import com.raulshma.jellyplay.core.model.formatEta
+import com.raulshma.jellyplay.core.model.formatSpeed
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
@@ -211,39 +208,22 @@ fun DownloadsScreen(
         }
     }
 
-    // Pending delete confirmations. Deleting a completed download removes the
-    // file from disk, so we confirm first — matching the unified
-    // MediaDetailScreen delete confirmations. Two separate machines
-    // ([PendingConfirmation]): single-item and bulk selection.
-    /**
-     * Pending single-item delete. Settle arm: [PendingConfirmation.clear] in
-     * the confirm handler (previously the confirm write never cleared —
-     * declared delta). The deletes are fire-and-forget VM calls, so the
-     * machine settles synchronously and the guard's in-flight arm is
-     * unreachable here (dismiss/confirm pass `inFlight = false`).
-     */
-    var pendingDelete by remember { mutableStateOf(PendingConfirmation<DownloadItem>()) }
-    /**
-     * Pending bulk delete of the current selection. Settle arm:
-     * [PendingConfirmation.clear] in the confirm handler (previously never
-     * cleared — declared delta). Same synchronous settle as [pendingDelete].
-     */
-    var pendingBulkDelete by remember { mutableStateOf(PendingConfirmation<Unit>()) }
+    // Pending delete confirmations live on the ViewModel now — two
+    // [ConfirmationHost] machines ([DownloadsViewModel.pendingDelete], single
+    // item, and [DownloadsViewModel.pendingBulkDelete], bulk selection) whose
+    // synchronous settle arm subsumes this screen's old "confirm write never
+    // cleared" screen-held remember{} machines. The dialogs stay here, driven
+    // by the hosts, at the bottom of this body.
     var showResyncSheet by remember { mutableStateOf(false) }
     var showForceResyncSheet by remember { mutableStateOf(false) }
 
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
     // Bottom-pinned action bar must clear the app's floating navigation bar
-    // (it paints above screen content at BottomCenter). Use the canonical nav
-    // height + system nav-bar inset, and slide up in lockstep with the nav's
-    // hide animation via LocalFloatingNavOffset (returns 0f where the nav is
-    // absent — TV/expanded/full-screen).
-    val navOffsetPx = LocalFloatingNavOffset.current
-    val navBarBottomInset = WindowInsets.navigationBars
-        .asPaddingValues()
-        .calculateBottomPadding()
-    val selectionBarClearance = Dimensions.floatingNavHeight + navBarBottomInset
+    // (it paints above screen content at BottomCenter). floatingNavClearanceDp
+    // is presence-aware — where no bar is painted (TV/expanded/full-screen)
+    // only the system nav-bar inset remains — and the bar's clearFloatingNav
+    // ride-up slides it in lockstep with the nav's hide animation.
 
     val selectionMode = uiState.selectionMode
     val selectedIds = uiState.selectedIds
@@ -371,7 +351,7 @@ fun DownloadsScreen(
         // `totalStorageBytes > 0` visibility rule the inline Text had.
         DownloadsStorageUsedText(
             totalStorageBytes = viewModel.totalStorageBytes,
-            formatBytes = viewModel::formatBytes,
+            formatBytes = Long::formatBytes,
             horizontalPadding = adaptiveInfo.contentPadding(isTv),
         )
 
@@ -382,14 +362,14 @@ fun DownloadsScreen(
                 description = stringResource(Res.string.downloads_empty_description),
             )
         } else {
-            // Hoist the three pure formatter lambdas once above the list. They
-            // only delegate to viewModel and are identical across rows, so
-            // allocating them per-row per-recomposition (the list recomposes on
-            // every progress tick / speed sample) was pure churn (11 fresh
-            // lambdas/row).
-            val formatBytes = remember(viewModel) { { v: Long -> viewModel.formatBytes(v) } }
-            val formatSpeed = remember(viewModel) { { v: Long -> viewModel.formatSpeed(v) } }
-            val formatEta = remember(viewModel) { { d: Long, t: Long, s: Long -> viewModel.formatEta(d, t, s) } }
+            // The rows' three formatters are the shared core-model ByteFormatter
+            // extensions, passed as static references — identical across rows,
+            // no per-row allocation (the list recomposes on every progress
+            // tick / speed sample) and no ViewModel hop (the former
+            // DownloadsViewModel forwards are gone).
+            val formatBytes = Long::formatBytes
+            val formatSpeed = Long::formatSpeed
+            val formatEta = ::formatEta
             // Index flagged-update rows by mediaItemId so each list row can
             // render an "update available" dot without a per-row scan. Computed
             // in composable scope (above the LazyColumn) so `remember` is valid.
@@ -420,7 +400,7 @@ fun DownloadsScreen(
                         top = 8.dp,
                         // Grow bottom padding while selecting so the action bar
                         // clears the floating nav and doesn't cover the last row.
-                        bottom = if (selectionMode) selectionBarClearance + 72.dp else adaptiveInfo.bottomPadding(isTv),
+                        bottom = if (selectionMode) floatingNavClearanceDp + 72.dp else adaptiveInfo.bottomPadding(isTv),
                     ),
                     verticalArrangement = Arrangement.spacedBy(adaptiveInfo.itemSpacing(isTv)),
                 ) {
@@ -477,7 +457,7 @@ fun DownloadsScreen(
                             onCancel = { viewModel.applyBulkAction(DownloadBulkAction.CANCEL, DownloadActionScope.Item(download.id)) },
                             onPause = { viewModel.applyBulkAction(DownloadBulkAction.PAUSE, DownloadActionScope.Item(download.id)) },
                             onResume = { viewModel.applyBulkAction(DownloadBulkAction.RESUME, DownloadActionScope.Item(download.id)) },
-                            onDelete = { pendingDelete = pendingDelete.hold(download) },
+                            onDelete = { viewModel.pendingDelete.show(download) },
                             onRetry = { viewModel.applyBulkAction(DownloadBulkAction.RETRY_FAILED, DownloadActionScope.Item(download.id)) },
                             onMoveToFront = { viewModel.moveToFront(download) },
                             onLowerPriority = { viewModel.lowerPriority(download) },
@@ -486,75 +466,105 @@ fun DownloadsScreen(
                     }
                 }
 
-                // Selection-mode bottom action bar.
+                // Selection-mode bottom action bar. The shared core/ui shell
+                // (smooth12 / surfaceContainerHigh / shadow 8) with the
+                // downloads-specific cluster slotted in: pause / resume /
+                // cancel lead (each gated on its own per-list predicate, the
+                // slot contract explicitly allows ignoring the folded boolean)
+                // and the destructive bulk delete trails.
                 if (selectionMode) {
                     SelectionActionBar(
+                        countLabel = stringResource(Res.string.downloads_selected_count, selectedIds.size),
                         selectedCount = selectedIds.size,
-                        hasPauseable = hasPauseable,
-                        hasResumable = hasResumable,
-                        hasCancellable = hasCancellable,
+                        selectAllLabel = stringResource(Res.string.downloads_action_select_all),
+                        clearLabel = stringResource(Res.string.downloads_action_clear_selection),
                         onSelectAll = { viewModel.selectAll() },
                         onClear = { viewModel.clearSelection() },
-                        onPause = { viewModel.applyBulkAction(DownloadBulkAction.PAUSE, DownloadActionScope.Selected) },
-                        onResume = { viewModel.applyBulkAction(DownloadBulkAction.RESUME, DownloadActionScope.Selected) },
-                        onCancel = { viewModel.applyBulkAction(DownloadBulkAction.CANCEL, DownloadActionScope.Selected) },
-                        onBulkDelete = { pendingBulkDelete = pendingBulkDelete.hold(Unit) },
+                        leadingActions = { _ ->
+                            CompactIconButton(
+                                onClick = { viewModel.applyBulkAction(DownloadBulkAction.PAUSE, DownloadActionScope.Selected) },
+                                enabled = hasPauseable,
+                            ) {
+                                Icon(Tabler.Outline.PlayerPause, contentDescription = stringResource(Res.string.downloads_action_pause), modifier = Modifier.size(20.dp))
+                            }
+                            CompactIconButton(
+                                onClick = { viewModel.applyBulkAction(DownloadBulkAction.RESUME, DownloadActionScope.Selected) },
+                                enabled = hasResumable,
+                            ) {
+                                Icon(Tabler.Outline.PlayerPlay, contentDescription = stringResource(Res.string.downloads_action_resume), modifier = Modifier.size(20.dp))
+                            }
+                            CompactIconButton(
+                                onClick = { viewModel.applyBulkAction(DownloadBulkAction.CANCEL, DownloadActionScope.Selected) },
+                                enabled = hasCancellable,
+                            ) {
+                                Icon(Tabler.Outline.PlayerStop, contentDescription = stringResource(Res.string.downloads_action_cancel), modifier = Modifier.size(20.dp))
+                            }
+                        },
+                        actions = { actionsEnabled ->
+                            FilledTonalButton(
+                                onClick = { viewModel.pendingBulkDelete.show(Unit) },
+                                enabled = actionsEnabled,
+                                shape = ShapeCache.smooth12,
+                                contentPadding = ButtonDefaults.TextButtonWithIconContentPadding,
+                                colors = ButtonDefaults.filledTonalButtonColors(
+                                    contentColor = MaterialTheme.colorScheme.error,
+                                ),
+                            ) {
+                                Icon(Tabler.Outline.Trash, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text(stringResource(Res.string.downloads_delete))
+                            }
+                        },
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp)
-                            // Sit above the floating nav (clearance) and slide up
-                            // in lockstep when the nav hides itself.
-                            .padding(bottom = selectionBarClearance)
-                            .offset {
-                                val maxOffset = Dimensions.floatingNavHeight.toPx()
-                                val yOffset = (-navOffsetPx()).coerceAtMost(maxOffset)
-                                IntOffset(x = 0, y = yOffset.roundToInt())
-                            },
+                            // Sit above the floating nav (presence-aware
+                            // clearance) and slide up in lockstep when the nav
+                            // hides itself.
+                            .clearFloatingNav(extraBottom = 0.dp),
                     )
                 }
             }
         }
     }
 
-    pendingDelete.item?.let { item ->
+    viewModel.pendingDelete.item?.let { item ->
         ConfirmDialog(
             title = stringResource(Res.string.downloads_delete_download_title),
-            message = stringResource(Res.string.downloads_delete_download_message, item.name, viewModel.formatBytes(item.totalSizeBytes)),
+            message = stringResource(Res.string.downloads_delete_download_message, item.name, item.totalSizeBytes.formatBytes()),
             confirmText = stringResource(Res.string.downloads_delete),
             dismissText = stringResource(Res.string.downloads_cancel),
             icon = Tabler.Outline.Trash,
             tone = ConfirmTone.DESTRUCTIVE,
             onConfirm = {
-                val target = pendingDelete.confirm(inFlight = false) ?: return@ConfirmDialog
+                // Settle: confirm clears the machine synchronously (the arm
+                // that makes the old never-cleared bug impossible), then the
+                // delete fires as a fire-and-forget VM call.
+                val target = viewModel.pendingDelete.confirm() ?: return@ConfirmDialog
                 viewModel.deleteDownload(target)
-                // Settle: clear the machine (was never cleared on confirm
-                // before the migration).
-                pendingDelete = pendingDelete.clear()
             },
-            onDismiss = { pendingDelete = pendingDelete.dismiss(inFlight = false) },
+            onDismiss = { viewModel.pendingDelete.dismiss(inFlight = false) },
         )
     }
 
-    if (pendingBulkDelete.isPending) {
+    if (viewModel.pendingBulkDelete.isPending) {
         val count = selectedIds.size
         val freedBytes = selectedItems.sumOf { it.totalSizeBytes }
         ConfirmDialog(
             title = stringResource(Res.string.downloads_delete_downloads_title),
             message = pluralStringResource(Res.plurals.downloads_delete_downloads_message, count, count) +
-                if (freedBytes > 0) stringResource(Res.string.downloads_frees_up_sentence, viewModel.formatBytes(freedBytes)) else "",
+                if (freedBytes > 0) stringResource(Res.string.downloads_frees_up_sentence, freedBytes.formatBytes()) else "",
             confirmText = stringResource(Res.string.downloads_delete),
             dismissText = stringResource(Res.string.downloads_cancel),
             icon = Tabler.Outline.Trash,
             tone = ConfirmTone.DESTRUCTIVE,
             onConfirm = {
-                pendingBulkDelete.confirm(inFlight = false) ?: return@ConfirmDialog
+                // Settle: same synchronous arm as the single-item machine.
+                viewModel.pendingBulkDelete.confirm() ?: return@ConfirmDialog
                 viewModel.applyBulkAction(DownloadBulkAction.DELETE, DownloadActionScope.Selected)
-                // Settle: clear the machine (was never cleared on confirm
-                // before the migration).
-                pendingBulkDelete = pendingBulkDelete.clear()
             },
-            onDismiss = { pendingBulkDelete = pendingBulkDelete.dismiss(inFlight = false) },
+            onDismiss = { viewModel.pendingBulkDelete.dismiss(inFlight = false) },
         )
     }
 
@@ -962,77 +972,6 @@ private fun DownloadsStorageUsedText(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(start = horizontalPadding, end = horizontalPadding, bottom = 8.dp),
         )
-    }
-}
-
-@Composable
-private fun SelectionActionBar(
-    selectedCount: Int,
-    hasPauseable: Boolean,
-    hasResumable: Boolean,
-    hasCancellable: Boolean,
-    onSelectAll: () -> Unit,
-    onClear: () -> Unit,
-    onPause: () -> Unit,
-    onResume: () -> Unit,
-    onCancel: () -> Unit,
-    onBulkDelete: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Surface(
-        modifier = modifier,
-        shape = ShapeCache.smooth12,
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        shadowElevation = 8.dp,
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            // Controls get their intrinsic width first; the count text takes
-            // whatever remains and ellipsizes. Without this the row would
-            // squeeze the text column to ~0 width and render letters stacked
-            // vertically on narrow screens.
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            Text(
-                stringResource(Res.string.downloads_selected_count, selectedCount),
-                style = MaterialTheme.typography.labelLarge,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f, fill = false),
-            )
-            // Compact icon-only actions keep the bar to one line on phones.
-            CompactIconButton(onClick = onPause, enabled = hasPauseable) {
-                Icon(Tabler.Outline.PlayerPause, contentDescription = stringResource(Res.string.downloads_action_pause), modifier = Modifier.size(20.dp))
-            }
-            CompactIconButton(onClick = onResume, enabled = hasResumable) {
-                Icon(Tabler.Outline.PlayerPlay, contentDescription = stringResource(Res.string.downloads_action_resume), modifier = Modifier.size(20.dp))
-            }
-            CompactIconButton(onClick = onCancel, enabled = hasCancellable) {
-                Icon(Tabler.Outline.PlayerStop, contentDescription = stringResource(Res.string.downloads_action_cancel), modifier = Modifier.size(20.dp))
-            }
-            CompactIconButton(onClick = onSelectAll, enabled = true) {
-                Icon(Tabler.Outline.Check, contentDescription = stringResource(Res.string.downloads_action_select_all), modifier = Modifier.size(20.dp))
-            }
-            CompactIconButton(onClick = onClear, enabled = true) {
-                Icon(Tabler.Outline.X, contentDescription = stringResource(Res.string.downloads_action_clear_selection), modifier = Modifier.size(20.dp))
-            }
-            FilledTonalButton(
-                onClick = onBulkDelete,
-                enabled = selectedCount > 0,
-                shape = ShapeCache.smooth12,
-                contentPadding = ButtonDefaults.TextButtonWithIconContentPadding,
-                colors = ButtonDefaults.filledTonalButtonColors(
-                    contentColor = MaterialTheme.colorScheme.error,
-                ),
-            ) {
-                Icon(Tabler.Outline.Trash, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(6.dp))
-                Text(stringResource(Res.string.downloads_delete))
-            }
-        }
     }
 }
 

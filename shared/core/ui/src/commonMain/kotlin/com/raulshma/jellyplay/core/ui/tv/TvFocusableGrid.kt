@@ -11,6 +11,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.layout.LazyLayoutCacheWindow
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.IntState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -20,6 +21,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.FocusState
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.unit.dp
@@ -68,7 +70,8 @@ fun TvFocusableGrid(
     val isTv = LocalTvMode.current
     val fallbackFocusRequester = remember { FocusRequester() }
     val currentOnFocusedIndexChange by rememberUpdatedState(onFocusedIndexChange)
-    var focusedIndex by rememberInt(initialIndex)
+    val focusedIndexState = rememberInt(initialIndex)
+    var focusedIndex by focusedIndexState
     var initialFocusRequested by remember { mutableStateOf(false) }
 
     LaunchedEffect(itemCount) {
@@ -108,8 +111,6 @@ fun TvFocusableGrid(
         }
     }
 
-    val currentFocusedIndex = if (itemCount == 0) 0 else focusedIndex.coerceIn(0, itemCount - 1)
-
     LazyVerticalGrid(
         columns = columns,
         state = state,
@@ -141,22 +142,56 @@ fun TvFocusableGrid(
             // required for placement tracking; the `key` param above is mandatory
             // in TvFocusableGrid's contract.
             val placementSpec = lazyItemPlacementSpec()
-            val itemModifier = (if (isTv) {
-                Modifier
-                    .ifElse(index == currentFocusedIndex, Modifier.focusRequester(fallbackFocusRequester))
-                    .onFocusChanged {
-                        if (it.isFocused || it.hasFocus) {
-                            focusedIndex = index
-                            currentOnFocusedIndexChange(index)
-                        }
-                    }
+            if (isTv) {
+                TvItemFocusFallback(
+                    focusedIndexState = focusedIndexState,
+                    itemCount = itemCount,
+                    index = index,
+                    fallbackFocusRequester = fallbackFocusRequester,
+                    onFocused = {
+                        focusedIndex = index
+                        currentOnFocusedIndexChange(index)
+                    },
+                    animatedModifier = Modifier.animateItem(placementSpec = placementSpec),
+                ) { itemModifier ->
+                    itemContent(index, itemModifier)
+                }
             } else {
-                Modifier
-            }).animateItem(placementSpec = placementSpec)
-            itemContent(index, itemModifier)
+                itemContent(index, Modifier.animateItem(placementSpec = placementSpec))
+            }
         }
         extraContent()
     }
+}
+
+/**
+ * Renders [content] with [fallbackFocusRequester] attached to the item at [index] only while the
+ * tracked focus cursor points at [index]. The [focusedIndexState] read must stay inside this leaf —
+ * reading it in the container body recomposes every composed item on each focus move.
+ */
+@Composable
+private fun TvItemFocusFallback(
+    focusedIndexState: IntState,
+    itemCount: Int,
+    index: Int,
+    fallbackFocusRequester: FocusRequester,
+    onFocused: () -> Unit,
+    animatedModifier: Modifier,
+    content: @Composable (Modifier) -> Unit,
+) {
+    val currentFocusedIndex = focusedIndexState.intValue.coerceIn(0, itemCount - 1)
+    val itemModifier = (if (currentFocusedIndex == index) {
+        Modifier.focusRequester(fallbackFocusRequester)
+    } else {
+        Modifier
+    })
+        .onFocusChanged {
+            if (it.isFocused || it.hasFocus) {
+                onFocused()
+            }
+        }
+        .then(animatedModifier)
+    content(itemModifier)
 }
 
 /**

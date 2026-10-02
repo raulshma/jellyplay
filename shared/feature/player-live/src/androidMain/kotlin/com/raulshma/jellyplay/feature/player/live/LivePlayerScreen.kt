@@ -1,8 +1,7 @@
 package com.raulshma.jellyplay.feature.player.live
 
-import android.content.pm.ActivityInfo
 import com.raulshma.jellyplay.core.ui.components.JellyPlayBackHandler
-import android.view.WindowManager
+import com.raulshma.jellyplay.core.ui.message.asText
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
@@ -26,9 +25,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.core.view.WindowCompat
-import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.WindowInsetsControllerCompat
 import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.Player
@@ -43,7 +39,7 @@ import com.raulshma.jellyplay.core.ui.player.playerTopControlsEnter
 import com.raulshma.jellyplay.core.ui.player.playerTopControlsExit
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.input.onDpadKeyEvent
-import com.raulshma.jellyplay.core.ui.feedback.LocalUserMessageBus
+import com.raulshma.jellyplay.core.ui.message.LocalUserMessageBus
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.feature.player.live.components.ChannelZapToast
 import com.raulshma.jellyplay.feature.player.live.components.LiveChannelListSheet
@@ -53,10 +49,18 @@ import com.raulshma.jellyplay.feature.player.live.components.LivePlayerTopBar
 import com.raulshma.jellyplay.feature.player.live.components.LiveRecordSheet
 import com.raulshma.jellyplay.feature.player.live.components.LiveStreamOptionSheet
 import com.raulshma.jellyplay.feature.player.live.engine.Media3LivePlayerEngine
-import com.raulshma.jellyplay.feature.player.video.engine.controlsAutoHideTimeoutMs
-import com.raulshma.jellyplay.feature.player.video.engine.liveWindowRefreshLoop
+import com.raulshma.jellyplay.feature.player.video.PlayerOrientationLock
+import com.raulshma.jellyplay.feature.player.video.chrome.controlsAutoHideTimeoutMs
+import com.raulshma.jellyplay.feature.player.video.chrome.LIVE_SEEK_STEP_MS
+import com.raulshma.jellyplay.feature.player.video.chrome.liveWindowRefreshLoop
+import com.raulshma.jellyplay.feature.player.video.chrome.seekBackTargetMs
+import com.raulshma.jellyplay.feature.player.video.chrome.seekForwardTargetMs
+import com.raulshma.jellyplay.feature.player.video.chrome.shouldRestoreHostWindowOnDispose
+import com.raulshma.jellyplay.feature.player.video.chrome.shouldScheduleControlsAutoHide
+import com.raulshma.jellyplay.feature.player.video.rememberPlayerWindowOps
 import kotlinx.coroutines.delay
 import org.jetbrains.compose.resources.getString
+import com.raulshma.jellyplay.core.ui.message.UiMessage
 
 private const val ZAP_TOAST_MS = 3_000L
 
@@ -97,9 +101,9 @@ fun LivePlayerScreen(
             when (event) {
                 is LivePlayerEvent.Message ->
                     when (val message = event.message) {
-                        is LivePlayerMessage.Resource ->
+                        is UiMessage.Resource ->
                             messageBus.info(getString(message.res, *message.args.toTypedArray()))
-                        is LivePlayerMessage.Raw -> messageBus.error(message.text)
+                        is UiMessage.Raw -> messageBus.error(message.text)
                     }
                 LivePlayerEvent.ClosePlayer -> onBack()
             }
@@ -111,6 +115,10 @@ fun LivePlayerScreen(
     val isTv = LocalTvMode.current
     val context = LocalContext.current
     val activity = remember(context) { context.findActivity() }
+    // Host-window seam (the VOD screen's PlayerWindowOps): system bars,
+    // keep-screen-on and the orientation lock ride the shared ops instead of
+    // raw WindowCompat/FLAG_ calls.
+    val windowOps = rememberPlayerWindowOps()
 
     // Initialize playback once when the screen enters. A *changed* channelId
     // on a live screen instance (the host PlayerActivity's onNewIntent args
@@ -149,37 +157,45 @@ fun LivePlayerScreen(
         }
     }
 
-    // Immersive fullscreen + orientation lock + keep-screen-on.
+    // Immersive fullscreen + orientation lock + keep-screen-on — through the
+    // shared player-video window seam (AndroidPlayerWindowOps wraps the exact
+    // WindowCompat insets-controller / FLAG_KEEP_SCREEN_ON calls these
+    // effects used to inline; the orientation constants ride the
+    // PlayerOrientationLock vocabulary).
     DisposableEffect(activity) {
-        val window = activity?.window
-        val controller = window?.let { WindowCompat.getInsetsController(it, it.decorView) }
-        if (controller != null) {
-            controller.systemBarsBehavior =
-                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-            controller.hide(WindowInsetsCompat.Type.systemBars())
-        }
-        activity?.requestedOrientation = if (isTv) ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-        else ActivityInfo.SCREEN_ORIENTATION_USER_LANDSCAPE
-        window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        windowOps.hideSystemBars()
+        windowOps.lockOrientation(
+            if (isTv) PlayerOrientationLock.TV_LANDSCAPE
+            else PlayerOrientationLock.USER_LANDSCAPE,
+        )
+        windowOps.setKeepScreenOn(true)
 
         onDispose {
-            controller?.show(WindowInsetsCompat.Type.systemBars())
-            // Restore the browse host's default orientation unconditionally.
-            // The captured "original" could itself be a landscape lock pushed by
-            // an earlier screen, which would chain the leak; MainActivity never
-            // legitimately needs a non-default orientation outside a player.
-            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-            window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            // The PiP-transition teardown gate (the shared player-contract
+            // decision; VOD's PlayerWindowSessionEffects dispose folds the
+            // same gate inline): a screen torn down behind a PiP window —
+            // launching other content from browse — must NOT re-show the
+            // system bars or reset the orientation over PlayerActivity's
+            // DELIBERATE PiP-entry bar-show (the relayout that anchors the
+            // gesture-nav handle at the bottom).
+            if (shouldRestoreHostWindowOnDispose(currentlyInPip = windowOps.isInPipMode)) {
+                // restoreOnPlayerExit bundles the host-window teardown the
+                // screen used to do inline: unlock orientation, clear
+                // FLAG_KEEP_SCREEN_ON, re-show the system bars (plus the
+                // brightness/display-mode restores live never armed — no-ops
+                // here). Restore the browse host's default orientation
+                // unconditionally: the captured "original" could itself be a
+                // landscape lock pushed by an earlier screen, which would
+                // chain the leak; MainActivity never legitimately needs a
+                // non-default orientation outside a player.
+                windowOps.restoreOnPlayerExit(PlayerOrientationLock.UNSPECIFIED)
+            }
         }
     }
 
     // Re-hide system bars when the window regains focus (PiP/multiwindow return).
     DisposableEffect(activity) {
-        val window = activity?.window ?: return@DisposableEffect onDispose {}
-        val controller = WindowCompat.getInsetsController(window, window.decorView)
-        controller.systemBarsBehavior =
-            WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-        controller.hide(WindowInsetsCompat.Type.systemBars())
+        windowOps.hideSystemBars()
         onDispose {}
     }
 
@@ -199,11 +215,25 @@ fun LivePlayerScreen(
     }
 
     // Controls auto-hide: delay sourced from the user's
-    // `videoControlsTimeoutMs` preference (mirrors the VOD player), folded
-    // through the shared player-contract TV-doubling policy. Hidden while a
-    // sheet is open.
+    // `videoControlsTimeoutMs` preference (mirrors the VOD player), gated by
+    // the shared player-contract predicate and folded through its TV-doubling
+    // policy. Live maps onto the gate with NO new parameter: `overlayVisible`
+    // as showControls, the open sheet as isSheetOpen, and constant false for
+    // the concepts the live chrome lacks — seek-gesture suppression, overflow
+    // menu, focused-chrome suppression (a focused live control never
+    // suppresses the hide, TV included; the contract test's liveScreen_shape
+    // case pins exactly this mapping).
     LaunchedEffect(overlayVisible, state.currentIndex, state.controlsTimeoutMs) {
-        if (overlayVisible && activeSheet == null) {
+        if (
+            shouldScheduleControlsAutoHide(
+                showControls = overlayVisible,
+                isSeeking = false,
+                isSheetOpen = activeSheet != null,
+                isOverflowMenuOpen = false,
+                isTv = isTv,
+                controlsHasFocus = false,
+            )
+        ) {
             val timeout = controlsAutoHideTimeoutMs(state.controlsTimeoutMs, isTv)
             delay(timeout)
             overlayVisible = false
@@ -368,10 +398,21 @@ fun LivePlayerScreen(
                     durationMs = durationMs,
                     onPlayPause = { viewModel.onEvent(LiveTvPlayerUiEvent.TogglePlayPause) },
                     onSeekBack = {
-                        viewModel.onEvent(LiveTvPlayerUiEvent.SeekWithinDvr((positionMs - 10_000L).coerceAtLeast(0L)))
+                        // Shared step-seek policy (the VOD screen's math):
+                        // floor at zero, no upper clamp on the back path.
+                        viewModel.onEvent(
+                            LiveTvPlayerUiEvent.SeekWithinDvr(seekBackTargetMs(positionMs, LIVE_SEEK_STEP_MS)),
+                        )
                     },
                     onSeekForward = {
-                        viewModel.onEvent(LiveTvPlayerUiEvent.SeekWithinDvr(positionMs + 10_000L))
+                        // Same policy's forward path: cap at the DVR window's
+                        // duration when it is known (the no-duration arm
+                        // passes through unchanged — pure-live streams).
+                        viewModel.onEvent(
+                            LiveTvPlayerUiEvent.SeekWithinDvr(
+                                seekForwardTargetMs(positionMs, LIVE_SEEK_STEP_MS, durationMs),
+                            ),
+                        )
                     },
                     onPlayFromStart = { viewModel.onEvent(LiveTvPlayerUiEvent.PlayFromStart) },
                     onChannelUp = { viewModel.onEvent(LiveTvPlayerUiEvent.ChannelUp(audioStreamIndex, subtitleStreamIndex)) },

@@ -10,11 +10,13 @@ import com.raulshma.jellyplay.core.data.download.SeriesEpisodeDownloads
 import com.raulshma.jellyplay.core.data.download.TrackDownloadStatusWindow
 import com.raulshma.jellyplay.core.data.log.Log
 import com.raulshma.jellyplay.core.data.util.DownloadDelegate
+import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
 import com.raulshma.jellyplay.core.database.JellyPlayDatabase
 import com.raulshma.jellyplay.core.database.dao.DownloadDao
 import com.raulshma.jellyplay.core.database.dao.OfflineMediaDao
 import com.raulshma.jellyplay.core.database.dao.PlaybackStateDao
+import com.raulshma.jellyplay.core.database.dao.PlayedFlagRow
 import com.raulshma.jellyplay.core.database.dao.SyncBaselineDao
 import com.raulshma.jellyplay.core.database.entity.DownloadEntity
 import com.raulshma.jellyplay.core.model.maxBitrate
@@ -28,6 +30,7 @@ import com.raulshma.jellyplay.core.model.MediaSegment
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.OfflineSubtitleManifest
 import com.raulshma.jellyplay.core.model.TrickplayInfo
+import com.raulshma.jellyplay.core.model.wallNowMillis
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -83,7 +86,8 @@ class DownloadRepositoryImpl(
      * `offline` defaults to `false`.
      */
     private val episodeCatalogue: EpisodeCatalogue,
-    private val playbackRepository: PlaybackRepository,
+    /** Series poster/backdrop URLs persisted with the offline metadata rows. */
+    private val imageUrlProvider: ImageUrlProvider,
     private val downloadsStore: DownloadsStore,
     private val storagePolicy: StoragePolicy,
     private val downloadEnqueuer: DownloadEnqueueCoordinator,
@@ -111,8 +115,11 @@ class DownloadRepositoryImpl(
     // verbatim, so the engine implements them DIRECTLY instead of behind
     // per-read verbatim-forward adapters (the deleted JvmDownloadQueue /
     // JvmTrackDownloadStatusWindow / JvmActiveDownloadCount /
-    // JvmSeriesEpisodeDownloads). The differently-named members forward to
-    // this class's own repository methods one-to-one.
+    // JvmSeriesEpisodeDownloads). Their members carry this class's own
+    // repository vocabulary, so the repository overrides in this file ARE
+    // the seam implementations — the former differently-named one-line
+    // forwarders are gone; only [isSupported], which no repository member
+    // spells, is declared down with the seam section.
     DownloadQueue,
     TrackDownloadStatusWindow,
     ActiveDownloadCount,
@@ -178,50 +185,14 @@ class DownloadRepositoryImpl(
         downloadDao.getActiveDownloadCount()
 
     // ── promoted read seams (see the supertype list above) ────────────────
-    // One-to-one forwards onto the repository methods; dataJvmModule binds
-    // each interface over this single. TrackDownloadStatusWindow.downloadsFor
-    // deliberately IS the single getDownloadsByMediaItemIdsFlow IN-query —
-    // not the N combined per-id flows the deleted JvmTrackDownloadStatusWindow
-    // adapter re-expressed (reverted divergence: same rows, one narrow query).
+    // The seam members are the repository overrides above and below under
+    // their primary names (dataJvmModule binds each interface over this
+    // single). The window read deliberately IS the single
+    // getDownloadsByMediaItemIdsFlow IN-query — not the N combined per-id
+    // flows the deleted JvmTrackDownloadStatusWindow adapter re-expressed
+    // (reverted divergence: same rows, one narrow query).
 
     override val isSupported: Boolean = true
-
-    override fun allDownloads(): Flow<List<DownloadItem>> = getAllDownloads()
-
-    override fun activeDownloadProgress(): Flow<Map<String, DownloadProgress>> =
-        getActiveDownloadProgress()
-
-    override suspend fun allDownloadsSnapshot(): List<DownloadItem> = getAllDownloadsSnapshot()
-
-    override suspend fun pause(id: String): Result<Unit> = pauseDownload(id)
-
-    override suspend fun resume(id: String): Result<Unit> = resumeDownload(id)
-
-    override fun enqueue(id: String) = enqueueDownload(id)
-
-    override suspend fun cancel(id: String): Result<Unit> = cancelDownload(id)
-
-    override suspend fun retry(id: String): Result<Unit> = retryDownload(id)
-
-    override suspend fun delete(id: String): Result<Unit> = deleteDownload(id)
-
-    override suspend fun setPriority(id: String, priority: Int): Result<Unit> =
-        setDownloadPriority(id, priority)
-
-    override fun downloadsFor(ids: List<String>): Flow<List<DownloadItem>> =
-        getDownloadsByMediaItemIdsFlow(ids)
-
-    override suspend fun remove(downloadId: String) {
-        // Result ignored — the same fire-and-forget contract the deleted
-        // JvmTrackDownloadStatusWindow adapter carried (the hosts' remove
-        // paths have no error surface on a failed delete).
-        deleteDownload(downloadId)
-    }
-
-    override fun activeDownloadCount(): Flow<Int> = getActiveDownloadCount()
-
-    override suspend fun downloadedEpisodeIds(seriesId: String): Set<String> =
-        getDownloadedEpisodeIdsForSeries(seriesId)
 
     override fun observeCompletedDownloadedIds(): Flow<Set<String>> =
         downloadDao.getCompletedDownloadedItemIds().map(List<String>::toSet).distinctUntilChanged()
@@ -449,8 +420,8 @@ class DownloadRepositoryImpl(
             val snapshotDeferred = async { episodeCatalogue.loadSeriesEpisodes(seriesId) }
 
             val detail = detailDeferred.await()
-            val imageUrl = playbackRepository.getImageUrl(seriesId, maxWidth = 300)
-            val backdropUrl = playbackRepository.getBackdropUrl(seriesId, maxWidth = 1280)
+            val imageUrl = imageUrlProvider.getImageUrl(seriesId, maxWidth = 300)
+            val backdropUrl = imageUrlProvider.getBackdropUrl(seriesId, maxWidth = 1280)
 
             // Persist full series metadata (cast, studios, ratings, …) from the
             // fetched detail so the offline series screen is as rich as online.
@@ -613,6 +584,68 @@ class DownloadRepositoryImpl(
         downloadDao.updatePriority(id, priority)
     }
 
+    /**
+     * The keep-days retention sweep (see the interface KDoc). `playback_state`
+     * is the played-state surface [PlayedStateSyncImpl] mirrors on every
+     * watched flip (both the offline and the confirmed-online paths route
+     * through `OfflineRepository.applyPlayedState` → this DAO), so
+     * `isPlayed == true` is the "safe to reclaim" signal; an item with no
+     * playback row (never written — a legacy download) is treated as
+     * unwatched and protected.
+     */
+    override suspend fun sweepExpiredAutoDownloads(): AutoDownloadSweepResult {
+        /**
+         * One sweep step: any failure (except cancellation) logs [step]'s
+         * context and abandons the whole sweep as EMPTY — a partial sweep
+         * must never report or half-delete.
+         */
+        suspend fun <T> step(step: String, block: suspend () -> T): T? =
+            runCatchingRethrowingCancellation { block() }
+                .onFailure { Log.w(TAG, "Retention sweep $step failed", it) }
+                .getOrNull()
+
+        val keepDays = step("keep-days preference read") {
+            downloadsStore.downloads.first().autoDownloadKeepDays
+        } ?: return AutoDownloadSweepResult.EMPTY
+        // 0 = off — the sweep is a no-op unless the user opted into a window.
+        if (keepDays <= 0) return AutoDownloadSweepResult.EMPTY
+
+        val cutoffMs = wallNowMillis() - keepDays.toLong() * MILLIS_PER_DAY
+        val candidates = step("age query") {
+            downloadDao.getCompletedOlderThan(cutoffMs)
+        } ?: return AutoDownloadSweepResult.EMPTY
+        if (candidates.isEmpty()) return AutoDownloadSweepResult.EMPTY
+
+        val deletable = step("played-state lookup") {
+            val playedById = playbackStateDao.getPlayedFlagsFor(candidates.map { it.mediaItemId })
+                .associateBy(PlayedFlagRow::id)
+            candidates.filter { playedById[it.mediaItemId]?.isPlayed == true }
+        } ?: return AutoDownloadSweepResult.EMPTY
+        if (deletable.isEmpty()) return AutoDownloadSweepResult.EMPTY
+
+        // Reclaimed bytes are read before the rows are gone (the deletion
+        // cascade removes them inside its transaction). A failed read is
+        // tolerated — the count still reports, bytes just read zero.
+        val bytesReclaimed = runCatchingRethrowingCancellation {
+            downloadDao.getTotalBytesFor(deletable.map { it.id })
+        }.getOrDefault(0L)
+        step("deletion of ${deletable.size} downloads") {
+            deletionCore.delete(
+                downloads = deletable,
+                deleteMetadataRows = {
+                    deletable.forEach { entity ->
+                        offlineMediaDao.deleteById(entity.mediaItemId)
+                        playbackStateDao.deleteById(entity.mediaItemId)
+                        syncBaselineDao.deleteById(entity.mediaItemId)
+                    }
+                },
+            )
+        } ?: return AutoDownloadSweepResult.EMPTY
+        return AutoDownloadSweepResult(deletable.size, bytesReclaimed).also {
+            Log.i(TAG, "Retention sweep deleted ${it.deletedCount} downloads (${it.bytesReclaimed} bytes)")
+        }
+    }
+
     // The entity ⟷ domain mappers this class used to carry as private members
     // (MediaItem/MediaDetail → OfflineMediaEntity, MediaItem → PlaybackStateEntity,
     // DownloadEntity → DownloadItem, DownloadProgressRow → DownloadProgress) live
@@ -651,6 +684,9 @@ class DownloadRepositoryImpl(
 
     companion object {
         private const val TAG = "DownloadRepository"
+
+        /** Keep-days → cutoff conversion (the retention sweep's day unit). */
+        private const val MILLIS_PER_DAY = 24L * 60 * 60 * 1000
 
         // Exponential backoff base delay applied to every DownloadWorker
         // request so a flaky server is not hammered by concurrent retries.

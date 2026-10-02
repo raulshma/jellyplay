@@ -1,10 +1,13 @@
 package com.raulshma.jellyplay.feature.settings.di
 
+import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.worker.DesktopAutoDownloadScheduler
 import com.raulshma.jellyplay.feature.settings.AppLocaleSetter
 import com.raulshma.jellyplay.feature.settings.AppMetaProvider
 import com.raulshma.jellyplay.feature.settings.AboutLibrariesJsonSource
 import com.raulshma.jellyplay.feature.settings.AudioCacheClearer
+import com.raulshma.jellyplay.feature.settings.AutoDownloadCleanup
+import com.raulshma.jellyplay.feature.settings.AutoDownloadCleanupSummary
 import com.raulshma.jellyplay.feature.settings.AutoDownloadSync
 import com.raulshma.jellyplay.feature.settings.DesktopAboutLibrariesJsonSource
 import com.raulshma.jellyplay.feature.settings.DesktopAppLocaleSetter
@@ -87,6 +90,12 @@ fun desktopSettingsPlatformModule(
         single<AboutLibrariesJsonSource> { DesktopAboutLibrariesJsonSource() }
         single<AutoDownloadSync> {
             AutoDownloadSync { get<DesktopAutoDownloadScheduler>().start() }
+        }
+        single<AutoDownloadCleanup> {
+            AutoDownloadCleanup {
+                val result = get<DownloadRepository>().sweepExpiredAutoDownloads()
+                AutoDownloadCleanupSummary(result.deletedCount, result.bytesReclaimed)
+            }
         }
         single<WatchNextRefresher> {
             WatchNextRefresher { /* no Android TV Watch Next row on desktop */ }

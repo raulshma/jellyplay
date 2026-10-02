@@ -4,6 +4,7 @@ import com.raulshma.jellyplay.core.datastore.playback.PlaybackSlice
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregate
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerSlice
 import com.raulshma.jellyplay.core.model.GestureIndicatorSide
+import com.raulshma.jellyplay.core.model.GestureMode
 import com.raulshma.jellyplay.core.model.MediaSegment
 import com.raulshma.jellyplay.core.model.MediaSegmentType
 import com.raulshma.jellyplay.core.model.OrientationMode
@@ -69,7 +70,7 @@ class PlayerPrefsSeedTest {
             playbackMode = PlaybackMode.FORCE_TRANSCODE,
         ),
         gestures = GesturePrefsState(
-            gesturesEnabled = true,
+            gestureMode = GestureMode.ALL,
             holdSpeedEnabled = true,
             holdSpeedMultiplier = 2.0f,
             isHoldSpeedActive = true,
@@ -141,7 +142,7 @@ class PlayerPrefsSeedTest {
             videoShowPlaybackMetadata = false,
             showClockInPlayer = true,
             showTimeRemaining = true,
-            videoGesturesEnabled = false,
+            videoGestureMode = GestureMode.NONE,
             videoHoldSpeedEnabled = false,
             videoHoldSpeedMultiplier = 3.0f,
             videoDefaultSpeed = 1.25f,
@@ -194,9 +195,10 @@ class PlayerPrefsSeedTest {
         assertTrue(seeded.uiPrefs.adaptiveBitrateEnabled)
         assertEquals(PlaybackMode.FORCE_DIRECT_PLAY, seeded.uiPrefs.playbackMode)
 
-        // gestures (11)
+        // gestures (12)
         val g = seeded.gestures
-        assertFalse(g.gesturesEnabled)
+        assertFalse(g.tapGesturesEnabled)
+        assertFalse(g.swipeGesturesEnabled)
         assertFalse(g.holdSpeedEnabled)
         assertEquals(3.0f, g.holdSpeedMultiplier, 0.0001f)
         assertEquals(1.25f, g.defaultSpeed, 0.0001f)
@@ -321,7 +323,7 @@ class PlayerPrefsSeedTest {
                 streamingQuality = StreamingQuality.SD_480P,
             ),
             videoPlayer = VideoPlayerSlice(
-                videoGesturesEnabled = false,
+                videoGestureMode = GestureMode.NONE,
                 videoHoldSpeedEnabled = false,
                 videoAutoplayNext = false,
             ),
@@ -329,7 +331,8 @@ class PlayerPrefsSeedTest {
 
         val seeded = seed(agg)(baseState())
 
-        assertFalse(seeded.gestures.gesturesEnabled)
+        assertFalse(seeded.gestures.tapGesturesEnabled)
+        assertFalse(seeded.gestures.swipeGesturesEnabled)
         assertFalse(seeded.gestures.holdSpeedEnabled)
         assertFalse(seeded.autoplay.videoAutoplayNext)
         assertEquals(PlaybackMode.FORCE_DIRECT_PLAY, seeded.uiPrefs.playbackMode)
@@ -337,16 +340,28 @@ class PlayerPrefsSeedTest {
     }
 
     @Test
+    fun tapOnlyMode_seedsTapOnSwipeOff() {
+        val agg = VideoPlayerAggregate(
+            videoPlayer = VideoPlayerSlice(videoGestureMode = GestureMode.TAP_ONLY),
+        )
+
+        val seeded = seed(agg)(baseState())
+
+        assertTrue(seeded.gestures.tapGesturesEnabled, "TAP_ONLY keeps the tap tier")
+        assertFalse(seeded.gestures.swipeGesturesEnabled, "TAP_ONLY kills the swipe tier")
+    }
+
+    @Test
     fun gesturesOn_autoplayOn_seedOverAnAllOffReceiver() {
         val base = baseState()
         val offReceiver = base.copy(
-            gestures = base.gestures.copy(gesturesEnabled = false, holdSpeedEnabled = false),
+            gestures = base.gestures.copy(gestureMode = GestureMode.NONE, holdSpeedEnabled = false),
             autoplay = base.autoplay.copy(videoAutoplayNext = false),
         )
         val agg = VideoPlayerAggregate(
             playback = PlaybackSlice(playbackMode = PlaybackMode.AUTO),
             videoPlayer = VideoPlayerSlice(
-                videoGesturesEnabled = true,
+                videoGestureMode = GestureMode.ALL,
                 videoHoldSpeedEnabled = true,
                 videoAutoplayNext = true,
             ),
@@ -354,7 +369,8 @@ class PlayerPrefsSeedTest {
 
         val seeded = seed(agg)(offReceiver)
 
-        assertTrue(seeded.gestures.gesturesEnabled)
+        assertTrue(seeded.gestures.tapGesturesEnabled)
+        assertTrue(seeded.gestures.swipeGesturesEnabled)
         assertTrue(seeded.gestures.holdSpeedEnabled)
         assertTrue(seeded.autoplay.videoAutoplayNext)
         assertEquals(PlaybackMode.AUTO, seeded.uiPrefs.playbackMode)

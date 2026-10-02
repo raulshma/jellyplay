@@ -3,12 +3,18 @@ package com.raulshma.jellyplay.feature.player.video
 import com.raulshma.jellyplay.core.datastore.subtitle.SubtitleSlice
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.SubtitleStyle
+import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
+import com.raulshma.jellyplay.feature.player.video.subtitle.FontProvider
+import com.raulshma.jellyplay.feature.player.video.subtitle.InstalledFont
+import io.mockk.every
+import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import java.io.File
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -22,6 +28,10 @@ import kotlin.test.assertTrue
  * the in-memory offsetMs is the per-item resolved delay and never persists
  * to the global store; a global style write preserves that offset; and the
  * delay apply debounce coalesces a burst of nudges into one engine sync.
+ * The user-font install + the direct engine re-apply (folded back from the
+ * deleted SubtitleFontController — the old controller was untested, so these
+ * pin the folded result) route through the SAME setStyle funnel, which the
+ * font tests assert.
  * No ViewModel, no uiState.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -44,6 +54,14 @@ class SubtitleStyleControllerTest {
     private var immediateSyncs = 0
     private var debouncedSyncs = 0
 
+    // The font-install seam's recording fake + the engine re-apply sink.
+    private val fontInstallRequests = mutableListOf<String>()
+    private var installedFont: InstalledFont? = null
+    private val appliedStyles = mutableListOf<SubtitleStyle>()
+    private var liveEngine: MediaEngine? = mockk<MediaEngine>(relaxed = true).also {
+        every { it.applySubtitleStyle(any()) } answers { appliedStyles += firstArg<SubtitleStyle>() }
+    }
+
     private lateinit var controller: SubtitleStyleController
 
     @BeforeTest
@@ -64,6 +82,15 @@ class SubtitleStyleControllerTest {
             saveDialogueBoost = { savedBoosts.add(it) },
             syncEngineConfig = { immediateSyncs++ },
             syncEngineConfigDebounced = { debouncedSyncs++ },
+            fontProvider = object : FontProvider {
+                override suspend fun installUserFont(uri: String): InstalledFont? {
+                    fontInstallRequests += uri
+                    return installedFont
+                }
+
+                override suspend fun prewarm() = Unit
+            },
+            getEngine = { liveEngine },
         )
     }
 
@@ -228,5 +255,69 @@ class SubtitleStyleControllerTest {
         assertEquals(EffectStrength.NONE, boostStrengthMirror)
         assertEquals(false, boostEnabledMirror)
         assertTrue(savedBoosts.isEmpty(), "the seed reset must not clear the persisted rule")
+    }
+
+    // ── installUserFont: the SubtitleFontController fold ───────────────────
+
+    @Test
+    fun installUserFont_appliesTheInstalledFontAsAStyleEdit() = testScope.runTest {
+        styleMirror = SubtitleStyle(fontSize = 24, offsetMs = 300L)
+        val fontFile = File("/fonts/picked.ttf")
+        installedFont = InstalledFont(file = fontFile, familyName = "Picked")
+
+        controller.installUserFont("content://picked")
+
+        // The provider saw the (stringified) pick…
+        assertEquals(listOf("content://picked"), fontInstallRequests)
+        // …and the resulting family arrived as a FULL style edit: the mirror
+        // carries the font fields over the previous style…
+        assertEquals(fontFile.absolutePath, styleMirror.fontFamilyPath)
+        assertEquals("Picked", styleMirror.fontFamilyName)
+        assertEquals(24, styleMirror.fontSize, "the rest of the style rides along (a copy, not a reset)")
+        // …which means the SAME funnel as a sheet edit: immediate engine sync
+        // + the global persist with the stored offset restored.
+        assertEquals(1, immediateSyncs)
+        assertEquals(
+            listOf(styleMirror.copy(offsetMs = 200L)),
+            savedGlobalStyles,
+            "a font install is a global style write — the per-item in-memory offset never leaks",
+        )
+    }
+
+    @Test
+    fun installUserFont_copyOrParseFailure_leavesTheStyleUntouched() = testScope.runTest {
+        styleMirror = SubtitleStyle(fontSize = 24)
+        installedFont = null
+
+        controller.installUserFont("content://broken")
+
+        assertEquals(listOf("content://broken"), fontInstallRequests)
+        assertEquals(SubtitleStyle(fontSize = 24), styleMirror, "the bundled fallback font stays")
+        assertEquals(0, immediateSyncs)
+        assertTrue(savedGlobalStyles.isEmpty())
+    }
+
+    // ── applySubtitleStyle: the direct engine re-apply ─────────────────────
+
+    @Test
+    fun applySubtitleStyle_reappliesTheCurrentMirrorToTheEngine() = testScope.runTest {
+        styleMirror = SubtitleStyle(fontSize = 22, fontFamilyName = "Picked")
+
+        controller.applySubtitleStyle()
+
+        assertEquals(
+            listOf(SubtitleStyle(fontSize = 22, fontFamilyName = "Picked")),
+            appliedStyles,
+            "the engine receives the CURRENT mirror, not a stored copy",
+        )
+    }
+
+    @Test
+    fun applySubtitleStyle_withoutABoundEngine_isANoOp() = testScope.runTest {
+        liveEngine = null
+
+        controller.applySubtitleStyle()
+
+        assertTrue(appliedStyles.isEmpty())
     }
 }

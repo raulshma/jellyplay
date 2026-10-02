@@ -19,7 +19,9 @@ import org.koin.dsl.module
  *    context and the shared `NetworkQualifiers.streamingHttpClient` (the
  *    same named instance the VOD PlayerEngineFactory uses);
  *  - [LivePlayerAudio] — a factory (per-ViewModel) whose `bind(owner)` is
- *    invoked from the VM's init; it wraps the legacy PlayerAudioLifecycle;
+ *    invoked from the VM's init; it owns the becoming-noisy receiver and the
+ *    focus-surface binding (the legacy PlayerAudioLifecycle focus request
+ *    died with the seat move into core:data's PlaybackFocus);
  *  - [TranscodeReasonsRenderer] — delegates to the legacy core:ui
  *    TranscodeReasonsFormatter (Android-coupled, dies at its own conveyor
  *    move).
@@ -42,7 +44,15 @@ fun androidPlayerLiveModule(context: Context): Module = module {
             streamingClient = get<OkHttpClient>(NetworkQualifiers.streamingHttpClient),
         )
     }
-    factory<LivePlayerAudio> { Media3LivePlayerAudio(context) }
+    factory<LivePlayerAudio> {
+        Media3LivePlayerAudio(
+            context,
+            // The VIDEO-family commandable surface singleton (androidCoreData
+            // focus module): the current engine's Media3 player is bound into
+            // it as the focus module's command target (the video focus slice).
+            videoFocusSurface = getOrNull(),
+        )
+    }
     single<TranscodeReasonsRenderer> {
         TranscodeReasonsRenderer { rawReasons ->
             TranscodeReasonsFormatter.format(context, rawReasons)

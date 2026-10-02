@@ -5,11 +5,12 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
 /**
- * Decision-table pins for [PageAppender], the append-page core both paged
+ * Decision-table pins for [PageAppender], the append-page core the paged
  * sites route through (Requests' page navigation, admin Stats Detail's
- * `loadMore`). The interleaving these decisions produce at each site is
- * pinned by the per-site suites: `RequestsViewModelPagingInterleaveTest`
- * and `UserStatisticsDetailViewModelTest`.
+ * `loadMore`, Logs' `loadMoreActivity`). The interleaving these decisions
+ * produce at each site is
+ * pinned by the per-site suites: `RequestsViewModelPagingInterleaveTest`,
+ * `UserStatisticsDetailViewModelTest`, and `LogsViewModelTest`.
  */
 class PageAppenderTest {
 

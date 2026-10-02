@@ -57,7 +57,7 @@ internal val dataCoreLeafModule: Module = module {
     // straight from Koin.
     single { PhotoFolderPrefetcher(get()) }
 
-    // JellyfinApiClient resolves from :shared:core:network's networkJvmModule.
+    // AuthApiClient resolves from :shared:core:network's networkJvmModule.
     single { ServerHealthMonitor(get(), get()) }
 
     single { RemoteNavigationBridge() }
@@ -69,6 +69,13 @@ internal val dataCoreLeafModule: Module = module {
     // player's platform adapters wrap it; the remote-control dispatchers and
     // the receiver's screenshot/idle gates read it).
     single { com.raulshma.jellyplay.core.data.remote.ActivePlayerController() }
+
+    // The app-wide now-playing seam (feature 4.2): the video session manager
+    // publishes loads/ends into it, the desktop audio queue manager mirrors
+    // its tracker flows onto it, and the desktop shell's Discord Rich
+    // Presence + playback-event hooks observe it. One shared single on both
+    // JVM shells; inert wherever no platform publishes.
+    single { com.raulshma.jellyplay.core.data.playback.NowPlayingReporter() }
 
     // NotificationStore resolves from :shared:core:datastore's Koin modules;
     // the TimeSource single from dataSessionPlaybackModule.

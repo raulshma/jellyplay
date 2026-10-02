@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.player.video
 
 import com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager
+import com.raulshma.jellyplay.core.testfixtures.FakePositionStore
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflinePlaybackFacade
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
@@ -8,6 +9,7 @@ import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaStreamSelection
 import com.raulshma.jellyplay.core.model.PlayMethod
+import com.raulshma.jellyplay.core.model.PlaybackStartInfo
 import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.ResolvedPlayback
 import com.raulshma.jellyplay.core.model.StreamingQuality
@@ -122,6 +124,7 @@ class PlaybackSessionReportingTest {
 
         session = PlaybackSession(
             scope = sessionScope,
+            upgradesPassOutToOverlay = { false },
             releaseScope = releaseScope,
             clock = { nowMs },
             playerSessionManager = playerSessionManager,
@@ -476,6 +479,48 @@ class PlaybackSessionReportingTest {
 
     // ── Fakes ───────────────────────────────────────────────────────────────
 
+    // ── reportPlaybackStart: the server start report (moved from the deleted
+    //    VideoSessionHostTest when the fun landed on the session, beside its
+    //    stop-report twin) ────────────────────────────────────────────────────
+
+    @kotlin.test.Test
+    fun reportPlaybackStart_normalPath_reportsWithTheResolvedPlaySessionId() = runTest {
+        coEvery { playbackRepository.reportPlaybackStart(any()) } returns Result.success(Unit)
+
+        session.reportPlaybackStart("item-1", null, PlayMethod.DIRECT_PLAY)
+
+        coVerify(exactly = 1) { playbackRepository.reportPlaybackStart(any()) }
+        val slot = io.mockk.slot<PlaybackStartInfo>()
+        coVerify(exactly = 1) { playbackRepository.reportPlaybackStart(capture(slot)) }
+        assertEquals("item-1", slot.captured.itemId)
+        // The server-issued id wins over the locally-allocated UUID fallback.
+        assertEquals("server-1", slot.captured.sessionId)
+        assertEquals(PlayMethod.DIRECT_PLAY, slot.captured.playMethod)
+    }
+
+    @kotlin.test.Test
+    fun reportPlaybackStart_withoutAServerIssuedId_fallsBackToTheLocalUuid() = runTest {
+        coEvery { playbackRepository.reportPlaybackStart(any()) } returns Result.success(Unit)
+        sessionStateFlow.value = PlayerSessionState(currentItemId = "item-1")
+
+        session.reportPlaybackStart("item-1", null, PlayMethod.TRANSCODE)
+
+        val slot = io.mockk.slot<PlaybackStartInfo>()
+        coVerify(exactly = 1) { playbackRepository.reportPlaybackStart(capture(slot)) }
+        assertEquals(session.playSessionId, slot.captured.sessionId)
+    }
+
+    @kotlin.test.Test
+    fun reportPlaybackStart_incognitoSkipsTheServerStartReport() = runTest {
+        // Rebuild the session with the incognito gate armed.
+        buildSession(incognito = true)
+        coEvery { playbackRepository.reportPlaybackStart(any()) } returns Result.success(Unit)
+
+        session.reportPlaybackStart("item-1", null, PlayMethod.DIRECT_PLAY)
+
+        coVerify(exactly = 0) { playbackRepository.reportPlaybackStart(any()) }
+    }
+
     private fun resolved(playMethod: PlayMethod) = ResolvedPlayback(
         mediaSourceId = "ms-1",
         streamUrl = "https://jellyfin/stream",
@@ -513,27 +558,8 @@ class PlaybackSessionReportingTest {
         override fun wasInSyncPlay(): Boolean = false
     }
 
-    private data class PersistCall(
-        val itemId: String,
-        val positionMs: Long,
-        val playSessionId: String,
-        val nowMs: Long,
-    )
-
-    /** Recording [SessionPositionStore]: captures persists, serves saved values. */
-    private class FakePositionStore : SessionPositionStore {
-        val persists = mutableListOf<PersistCall>()
-
-        override fun persist(itemId: String, positionMs: Long, playSessionId: String, nowMs: Long) {
-            persists += PersistCall(itemId, positionMs, playSessionId, nowMs)
-        }
-
-        override fun savedItemId(): String? = null
-
-        override fun savedPositionMs(): Long? = null
-
-        override fun savedPersistedAtMs(): Long? = null
-
-        override fun savedPlaySessionId(): String? = null
-    }
+    // [FakePositionStore] is the shared recording double
+    // (com.raulshma.jellyplay.core.testfixtures.FakePositionStore) since the
+    // fixtures hoist — this file's former private variant (records persists,
+    // serves nulls) is its DEFAULT shape (the saved*Value fields stay null).
 }

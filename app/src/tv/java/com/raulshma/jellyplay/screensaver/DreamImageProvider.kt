@@ -7,11 +7,13 @@ import coil3.request.ImageRequest
 import coil3.request.allowHardware
 import coil3.size.Size
 import com.raulshma.jellyplay.core.concurrency.mapConcurrentCatching
+import com.raulshma.jellyplay.core.data.repository.MediaCollectionReads
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.DreamImage
 import com.raulshma.jellyplay.core.model.DreamImageCategory
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.parentalRatingAge
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.withContext
@@ -19,19 +21,29 @@ import kotlin.random.Random
 
 class DreamImageProvider(
     private val mediaRepository: MediaRepository,
+    /** The SearchResult-shaped reads (the random-items query — off the union). */
+    private val mediaCollectionReads: MediaCollectionReads,
     private val imageUrlProvider: ImageUrlProvider,
     private val context: Context,
 ) {
     private val imageLoader: ImageLoader by lazy { SingletonImageLoader.get(context) }
 
+    /**
+     * [maxParentalRating] is the dream's LOCAL cap (canonical rating age;
+     * null = no local cap) — a second, stricter client-side pass: the network
+     * tail already filters by the signed-in user's server policy, and the
+     * screensaver must never show above this cap even if the profile allows
+     * more. Unrated items pass (the helper's rule).
+     */
     suspend fun fetchImages(
         categories: Set<DreamImageCategory>,
         count: Int = 50,
+        maxParentalRating: Int? = null,
     ): List<DreamImage> = withContext(Dispatchers.IO) {
         val mediaTypes = categories.flatMap { it.toMediaTypes() }.distinct()
         if (mediaTypes.isEmpty()) return@withContext emptyList()
 
-        val result = mediaRepository.getMediaItems(
+        val result = mediaCollectionReads.getMediaItems(
             filters = com.raulshma.jellyplay.core.model.LibraryFilters(
                 mediaTypes = mediaTypes,
                 sortBy = com.raulshma.jellyplay.core.model.SortOption.RANDOM,
@@ -41,18 +53,35 @@ class DreamImageProvider(
 
         result.getOrNull()?.items.orEmpty()
             .filter { it.id.isNotBlank() }
+            // The dream's local cap (canonical rating age; null = no cap): the
+            // same rule core:network's internal `filterByParentalRating` wire
+            // helper applies — unrated/unknown-rating items pass (`!= false`
+            // keeps them), resolved through the public core:model age table.
+            .filter { item ->
+                maxParentalRating == null ||
+                    item.officialRating?.let { rating ->
+                        parentalRatingAge(rating)?.let { age -> age <= maxParentalRating }
+                    } != false
+            }
             .mapNotNull { item ->
                 val category = when (item.mediaType) {
                     MediaType.MOVIE -> DreamImageCategory.MOVIES
                     MediaType.SERIES -> DreamImageCategory.SERIES
                     MediaType.AUDIO, MediaType.ALBUM, MediaType.ARTIST -> DreamImageCategory.MUSIC
+                    MediaType.PHOTO -> DreamImageCategory.PHOTOS
                     else -> return@mapNotNull null
                 }
-                val backdropUrl = imageUrlProvider.getBackdropUrl(item.id, maxWidth = 1920)
-                if (backdropUrl.isBlank()) return@mapNotNull null
+                // Photos surface their Primary image (the photo-album grid's
+                // URL surface); video/music entries use the backdrop.
+                val imageUrl = if (category == DreamImageCategory.PHOTOS) {
+                    imageUrlProvider.getImageUrl(item.id)
+                } else {
+                    imageUrlProvider.getBackdropUrl(item.id, maxWidth = 1920)
+                }
+                if (imageUrl.isBlank()) return@mapNotNull null
                 DreamImage(
                     itemId = item.id,
-                    backdropUrl = backdropUrl,
+                    imageUrl = imageUrl,
                     title = item.name,
                     type = category,
                 )
@@ -96,5 +125,8 @@ class DreamImageProvider(
         DreamImageCategory.MOVIES -> listOf(MediaType.MOVIE)
         DreamImageCategory.SERIES -> listOf(MediaType.SERIES)
         DreamImageCategory.MUSIC -> listOf(MediaType.AUDIO, MediaType.ALBUM)
+        // The photo-album grid's query surface: the same getMediaItems call,
+        // constrained to Photo items.
+        DreamImageCategory.PHOTOS -> listOf(MediaType.PHOTO)
     }
 }

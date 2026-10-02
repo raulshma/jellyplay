@@ -9,9 +9,9 @@ import com.raulshma.jellyplay.core.model.SeerrDetailPreferences
 import com.raulshma.jellyplay.core.model.seerr.SeerrExternalIds
 import com.raulshma.jellyplay.core.model.seerr.SeerrMediaInfo
 import com.raulshma.jellyplay.core.model.seerr.SeerrMediaStatus
+import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrMovieDetails
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
-import com.raulshma.jellyplay.core.model.seerr.SeerrSearchResponse
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -70,10 +70,10 @@ class SeerrDetailViewModelResolutionTest {
         every { seerrRepository.getPreferences() } returns flowOf(SeerrPreferences())
         coEvery { seerrRepository.getRatings(any(), any()) } returns Result.failure(NullPointerException())
         coEvery { seerrRepository.getRecommendations(any(), any()) } returns Result.success(
-            SeerrSearchResponse(results = emptyList(), page = 1, totalPages = 1, totalResults = 0)
+            emptyList<SeerrSearchItem>()
         )
         coEvery { seerrRepository.getSimilar(any(), any()) } returns Result.success(
-            SeerrSearchResponse(results = emptyList(), page = 1, totalPages = 1, totalResults = 0)
+            emptyList<SeerrSearchItem>()
         )
 
         viewModel = SeerrDetailViewModel(
@@ -167,7 +167,7 @@ class SeerrDetailViewModelResolutionTest {
         advanceUntilIdle()
 
         val status = viewModel.uiState.value.movieDetails?.mediaInfo?.status
-        assertEquals(SeerrMediaStatus.PENDING.value, status)
+        assertEquals(SeerrMediaStatus.PENDING, status)
     }
 
     private fun availableMovie(
@@ -175,12 +175,12 @@ class SeerrDetailViewModelResolutionTest {
         externalIds: SeerrExternalIds? = null,
     ) = SeerrMovieDetails(
         id = tmdbId,
-        mediaInfo = SeerrMediaInfo(tmdbId = tmdbId, status = SeerrMediaStatus.AVAILABLE.value),
+        mediaInfo = SeerrMediaInfo(tmdbId = tmdbId, status = SeerrMediaStatus.AVAILABLE),
         externalIds = externalIds,
     )
 
     private fun pendingMovie(tmdbId: Int) = SeerrMovieDetails(
         id = tmdbId,
-        mediaInfo = SeerrMediaInfo(tmdbId = tmdbId, status = SeerrMediaStatus.PENDING.value),
+        mediaInfo = SeerrMediaInfo(tmdbId = tmdbId, status = SeerrMediaStatus.PENDING),
     )
 }

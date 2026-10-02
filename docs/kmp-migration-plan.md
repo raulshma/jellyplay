@@ -118,3 +118,114 @@ ledger tracks *where the migration stands*.
   | sed 's|/build.gradle.kts||' | tr '/' ':' | sed 's|^|:|; s|$|:jvmTest|') \
   :apps:desktop:test
 ```
+
+
+## Desktop packaging history (from :apps:desktop build script)
+
+Appended verbatim (append-only) when the :apps:desktop build script was
+slimmed from ~800 to ~270 lines (2026-10 architecture pass):
+
+  * The per-feature dependency conveyor notes below moved here from the
+    `dependencies` block (the declarations remain in the build script,
+    complete and unchanged).
+  * `FetchBundledLibmpvTask` + `WriteDesktopBuildInfoTask` + the numeric
+    packageVersion grammar / release-channel derivation / macOS 0.x.y ->
+    1.x.y bundle-version shift moved to the `jellyplay.desktop.packaging`
+    class-based convention plugin in build-logic-convention (same pattern
+    as jellyplay.kmp.library.*). Task NAMES are byte-compatible
+    (`fetchBundledLibmpv`, `writeDesktopBuildInfo` — the CI release lanes
+    and README reference them); the extension is
+    `jellyplayDesktopPackaging` (packageVersion / displayVersion /
+    releaseChannel / macOsBundleVersion), and the wiring (run/test
+    jna.library.path, prepareAppResources + package*/createDistributable
+    dependsOn, main-resources srcDir for desktop-build.properties) moved
+    with them unchanged.
+  * `GeneratePackagingIconsTask` (hand-written ICO/ICNS/PNG binary writers
+    for PLACEHOLDER brand assets) was DELETED: its outputs under
+    apps/desktop/packaging/icons/ are committed real files ordinary builds
+    never regenerate; PackagingIconAssetsTest still validates the bytes.
+
+### Relocated dependency-conveyor comments
+
+```kotlin
+    // V3 feature conveyor: search — LIVE since the desktop nav v1
+    // (DesktopAppRoot's NavDisplay renders searchSection as the start tab).
+    // …library, second conveyor item — LIVE like search; PhotoExport's
+    // desktop actual is the desktop-inert half (isSupported=false gates the
+    // share buttons).
+    // …music, third conveyor item — fully LIVE since the real-audio engine:
+    // browse since, and play/enqueue/instant-mix drive real playback
+    // through the DefaultAudioQueueFacade over DesktopAudioQueueManager.
+    // …livetv, fourth conveyor item — LIVE since the MediaRepository
+    // cluster flip; liveTvSection renders in the rail.
+    // …downloads, fifth conveyor item — fully live since the cluster flip
+    // (series downloads included); downloadsSection renders in the rail.
+    // …syncplay, sixth conveyor item — LIVE since the cluster flip;
+    // syncPlaySection renders in the rail.
+    // …settings, seventh conveyor item — LIVE since the admin repositories'
+    // Koin flip: nav v1+ renders settingsSection in the rail (with
+    // the desktop platform actuals; Desktop's update-check row since).
+    //  dialog pass: the harness names SettingsViewModel directly (the
+    // shell's own screens only render settingsSection, so the ViewModel
+    // supertype was never on the shell classpath before).
+    // …admin, eighth conveyor item — LIVE since the same flip:
+    // AdminRepository + AdminStatisticsRepository are Koin singles in
+    // dataJvmModule on both platforms, and nav v1+ renders adminSection in
+    // the rail (gated by the desktop admin-status state).
+    // …editor, ninth conveyor item — LIVE since the store
+    // promotion: desktopDataModule binds the real StreamingSubtitleStore and
+    // DesktopAppRoot renders editorSection (the details screen's edit push,
+    // admin-gated like Android).
+    // …calendar, conveyor feature — LIVE and wired in nav v1
+    // (calendarSection in the rail; all three VM ctor deps resolve).
+    // …requests, eleventh conveyor item — LIVE and wired in nav v1
+    // (requestsSection in the rail; fully Koin-native ctor graph).
+    // …newsletter, conveyor item after requests — LIVE since the cluster
+    // flip and wired in nav v1 (newsletterSection in the rail).
+    // …insights, conveyor feature — LIVE since the cluster flip and wired
+    // in nav v1 (insightsSection in the rail; the share seam's null actual
+    // keeps the share button hidden).
+    // …onboarding, conveyor feature — fully live: nav v1 registers
+    // onboardingSection (reachable from Shortcuts and the settings "rerun
+    // setup" row), and since the shell gates first run —
+    // DesktopNavScaffold pushes Route.Onboarding once per authenticated
+    // session while the persisted onboarding_completed flag is unset
+    // (Android's JellyPlayApp gate order and pref; completion flows through
+    // the shared OnboardingViewModel, so the gate never re-fires).
+    // …auth, cutover (feature-conveyor transform): LIVE since the
+    // unified sign-in landing — the signed-out gate (DesktopSignedOutAuthHost)
+    // and the signed-in settings drill-ins (DesktopAppRoot's authSection
+    // entries) both instantiate these ViewModels; the whole ctor graph is
+    // Koin-native here.
+    // …home, cutover feature (the desktop landing screen) — LIVE
+    // since the desktop wiring: the four WorkManager/widget-backed
+    // HomeViewModel ctor deps resolve to the no-op desktop defs in
+    // desktopDataModule, and DesktopAppRoot wires homeSection in the rail.
+    // …player-live, conveyor feature — module compiles and
+    // playerLiveModule is registered LATENT: the player screen + engine
+    // factory/audio/renderer seams are Android-only (androidMain) and
+    // Route.LiveTvChannelPlayer stays guarded in DesktopAppRoot, so
+    // nothing constructs the live-player VM on desktop. The jvm target
+    // exists for the shared ViewModel's jvmTest suite.
+    // …player-audio, conveyor (legacy :feature:player:audio deleted):
+    // LIVE since real audio — desktopPlayerModule provides the four
+    // playback/cast ctor deps (DesktopAudioQueueManager implements
+    // AudioQueueManager + AudioPlayerEngine over an audio-only MpvDesktop
+    // Engine; state-only DesktopAudioEffectsManager; never-connected
+    // DesktopAudioPlayerCast), and DesktopAppRoot registers
+    // audioPlayerSection (Route.AudioPlayer + Route.Ambient) so music track
+    // clicks open the now-playing screen.
+    // …player-book, conveyor: the CBZ/PDF reader behind Route.BookReader.
+    // …player-video, the conveyor slice → playback LIVE on
+    // Windows: the ViewModel/session cluster is commonMain and
+    // desktop-resolvable (desktopPlayerVideoModule registers the VM + no-op
+    // seam actuals, jvmMain), DesktopAppRoot registers Route.VideoPlayer for
+    // Windows with the commonMain screen's SwingPanel/HWND surface, and
+    // desktopPlayerModule binds PlayerEngineFactory to a per-session
+    // MpvDesktopEngine carrying that surface's HWND. Other OSes keep
+    // Route.VideoPlayer dead-end-guarded.
+    // Shared shell graph (shared appSections): one entryProvider behind both
+    // shells — DesktopAppRoot supplies the desktop ShellHostHooks and the
+    // conditional VideoPlayer registration; the dead-end guard derives from
+    // the same graph's registration ledger.
+```

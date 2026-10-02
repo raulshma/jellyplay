@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.feature.player.video
 
-import com.raulshma.jellyplay.core.data.playback.SleepTimerManager
+import com.raulshma.jellyplay.core.data.playback.SleepCountdown
 import com.raulshma.jellyplay.core.datastore.audio.AudioStore
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import com.raulshma.jellyplay.feature.player.video.state.SleepTimerState
@@ -26,7 +26,7 @@ import kotlin.test.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class SleepTimerControllerTest {
 
-    private lateinit var sleepTimerManager: SleepTimerManager
+    private lateinit var sleepCountdown: SleepCountdown
     private lateinit var audioStore: AudioStore
     private lateinit var engine: MediaEngine
     private val testDispatcher = UnconfinedTestDispatcher()
@@ -36,13 +36,13 @@ class SleepTimerControllerTest {
 
     @BeforeTest
     fun setUp() {
-        sleepTimerManager = mockk(relaxed = true)
+        sleepCountdown = mockk<SleepCountdown>(relaxed = true)
         audioStore = mockk(relaxed = true)
         engine = mockk(relaxed = true)
         every { engine.volume } returns 0.8f
 
         controller = SleepTimerController(
-            sleepTimerManager = sleepTimerManager,
+            sleepCountdown = sleepCountdown,
             audioStore = audioStore,
             scope = testScope,
             getEngine = { engine },
@@ -57,7 +57,7 @@ class SleepTimerControllerTest {
         coVerify { audioStore.setSleepTimerDurationMs(15_000L) }
         coVerify { audioStore.setSleepTimerEndOfEpisode(false) }
 
-        verify { sleepTimerManager.start(15_000L) }
+        verify { sleepCountdown.startSleepTimer(15_000L) }
         assertEquals(
             SleepTimerState(
                 sleepTimerActive = true,
@@ -69,7 +69,7 @@ class SleepTimerControllerTest {
 
         // Verify timer expiration callback invokes pause on engine
         val expireSlot = slot<() -> Unit>()
-        verify { sleepTimerManager.setOnTimerExpired(capture(expireSlot)) }
+        verify { sleepCountdown.setOnTimerExpired(capture(expireSlot)) }
         expireSlot.captured.invoke()
         verify { engine.pause() }
     }
@@ -79,7 +79,7 @@ class SleepTimerControllerTest {
         controller.startSleepTimerEndOfEpisode()
 
         coVerify { audioStore.setSleepTimerEndOfEpisode(true) }
-        verify { sleepTimerManager.startEndOfEpisode() }
+        verify { sleepCountdown.startEndOfEpisodeTimer() }
         assertTrue(controller.state.value.sleepTimerActive)
         assertTrue(controller.state.value.sleepTimerEndOfEpisode)
     }
@@ -92,7 +92,7 @@ class SleepTimerControllerTest {
         // Cancel timer
         controller.cancelSleepTimer()
 
-        verify { sleepTimerManager.cancel() }
+        verify { sleepCountdown.cancelSleepTimer() }
         // the restore is PROGRAMMATIC (isUserChange = false) — a
         // cancelled fade must never overwrite the remembered volume bucket.
         verify { engine.setVolume(0.8f, isUserChange = false) }
@@ -103,7 +103,7 @@ class SleepTimerControllerTest {
     @Test
     fun triggerSleepTimerEndOfEpisode_delegatesToManager() {
         controller.triggerSleepTimerEndOfEpisode()
-        verify { sleepTimerManager.triggerEndOfEpisode() }
+        verify { sleepCountdown.triggerEndOfEpisode() }
     }
 
     /**
@@ -133,7 +133,7 @@ class SleepTimerControllerTest {
     fun `release clears fade callback`() {
         controller.startSleepTimer(20_000L)
         controller.onRelease()
-        verify { sleepTimerManager.setOnFadeProgress(null) }
+        verify { sleepCountdown.setOnExpiring(null) }
     }
 
     /** Prefs seed (the former SettingsProjector projection of the last-used duration). */

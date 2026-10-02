@@ -1,14 +1,14 @@
 package com.raulshma.jellyplay.feature.settings
 
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
+import com.raulshma.jellyplay.core.data.repository.ClientCertificateRepository
 import com.raulshma.jellyplay.core.data.repository.SelfSignedTrustRepositoryImpl
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineSlice
 import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore
+import com.raulshma.jellyplay.core.model.ClientCertificateImport
+import com.raulshma.jellyplay.core.model.ClientCertificateStatus
 import com.raulshma.jellyplay.core.model.ServerInfo
-import com.raulshma.jellyplay.core.network.config.ClientCertificateFacade
-import com.raulshma.jellyplay.core.network.config.ClientCertificateImport
-import com.raulshma.jellyplay.core.network.config.ClientCertificateStatus
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -91,7 +91,7 @@ class ServerManagementViewModelTest {
     )
 
     /** In-memory seam double: status + recorded calls, no file IO. */
-    private class FakeClientCertificateFacade : ClientCertificateFacade {
+    private class FakeClientCertificateRepository : ClientCertificateRepository {
         val statusState = MutableStateFlow(ClientCertificateStatus())
         override val status: StateFlow<ClientCertificateStatus> = statusState
         var lastImport: ClientCertificateImport? = null
@@ -115,7 +115,7 @@ class ServerManagementViewModelTest {
         }
     }
 
-    private val certificateFacade = FakeClientCertificateFacade()
+    private val certificateFacade = FakeClientCertificateRepository()
 
     // ------------------------------------------------------- toggle semantics
 

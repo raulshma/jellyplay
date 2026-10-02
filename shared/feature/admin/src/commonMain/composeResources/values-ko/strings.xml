@@ -404,4 +404,22 @@
     <string name="admin_plugin_config_unavailable">이 플랫폼에서는 플러그인 구성을 사용할 수 없습니다.</string>
 
     <string name="admin_no_delete_permission">계정에 콘텐츠를 삭제할 권한이 없습니다. 서버 관리자에게 문의하세요.</string>
+    <string name="admin_backups_title">백업</string>
+    <string name="admin_backups_create">백업 만들기</string>
+    <string name="admin_backups_create_title">백업 만들기</string>
+    <string name="admin_backups_empty">아직 백업이 없습니다</string>
+    <string name="admin_backups_empty_hint">백업을 실행하면 이 서버의 구성과 데이터가 저장됩니다.</string>
+    <string name="admin_backups_unsupported_title">백업을 사용할 수 없음</string>
+    <string name="admin_backups_unsupported_body">이 Jellyfin 서버는 백업을 지원하지 않습니다. Jellyfin 10.11 이상의 서버가 필요합니다.</string>
+    <string name="admin_backups_component_metadata">메타데이터</string>
+    <string name="admin_backups_component_trickplay">Trickplay</string>
+    <string name="admin_backups_component_subtitles">자막</string>
+    <string name="admin_backups_component_database">데이터베이스</string>
+    <string name="admin_backups_restore">복원</string>
+    <string name="admin_backups_restore_confirm_title">백업을 복원할까요?</string>
+    <string name="admin_backups_restore_confirm_body">서버가 즉시 다시 시작되고 현재 데이터가 모두 "%1$s"의 내용으로 교체됩니다. 이 작업은 되돌릴 수 없습니다.</string>
+    <string name="admin_backups_restoring">복원 중 — 서버가 다시 시작되는 중</string>
+    <string name="admin_backups_reconnecting">서버가 돌아왔습니다 — 다시 연결 중…</string>
+    <string name="admin_backups_restore_complete">복원 완료 — 서버에 다시 연결되었습니다.</string>
+    <string name="admin_backups_restore_server_unreachable">복원 후 서버가 돌아오지 않았습니다. 실행 중인지 확인한 후 다시 로그인하세요.</string>
 </resources>

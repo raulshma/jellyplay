@@ -60,7 +60,8 @@ import com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleFormatCatalo
 
 import com.raulshma.jellyplay.feature.player.video.state.GestureSeekController
 import com.raulshma.jellyplay.feature.player.video.engine.styleChangedExcludingDelay
-import com.raulshma.jellyplay.feature.player.video.engine.controlsAutoHideTimeoutMs
+import com.raulshma.jellyplay.feature.player.video.chrome.controlsAutoHideTimeoutMs
+import com.raulshma.jellyplay.feature.player.video.chrome.shouldScheduleControlsAutoHide
 import com.raulshma.jellyplay.feature.player.video.engine.ZoomSafeSubtitleStrategy
 import com.raulshma.jellyplay.feature.player.video.components.PlaybackErrorDialog
 import com.raulshma.jellyplay.feature.player.video.components.CompanionDashboard
@@ -422,6 +423,9 @@ fun VideoPlayerScreen(
     // Drives the Up Next overlay's in-flight state: play button shows progress
     // and stops accepting clicks until the next-episode load settles (#146).
     val isNextEpisodeLoading by viewModel.isNextEpisodeLoading.collectAsStateWithLifecycle()
+    // The "Still watching?" confirm overlay (feature 1.3) — collected at the
+    // root like the other controller-owned slices and passed into the tier.
+    val stillWatchingPrompt by viewModel.stillWatchingPrompt.collectAsStateWithLifecycle()
 
     LaunchedEffect(aspectRatio, detectedAspectRatio, engine) {
         // The engine maps the enum to its native mode (media3 resize mode / mpv
@@ -502,18 +506,21 @@ fun VideoPlayerScreen(
             viewModel.onEvent(VideoPlayerUiEvent.TransportPlay(play = false))
         }
     }
-    val doSeekTo: (Long) -> Unit = remember(engine, isInSyncPlaySession, isCastConnected) {
-        { ms ->
-            if (isInSyncPlaySession) viewModel.syncPlay.seekTo(ms)
-            else if (isCastConnected) viewModel.cast.castSeekTo(ms)
-            else viewModel.onEvent(VideoPlayerUiEvent.SeekTo(ms))
-        }
+    // Seek delegates to the VM's routing funnel, same as the play/pause
+    // lambdas above: the same SyncPlay -> cast -> local order, so the seek
+    // bar, gesture commit, D-pad commit, chapter/go-to-time sheet and PiP
+    // steps all land on the ONE ladder and can never diverge. No routing
+    // captures remain, so no remember keys are needed.
+    val doSeekTo: (Long) -> Unit = remember {
+        { ms -> viewModel.onEvent(VideoPlayerUiEvent.SeekTo(ms)) }
     }
     // Skip steps route through the VM's single funnel (C3): the clamp math
-    // lives in PlayerScreenPolicies.stepSeekTargetMs and the SyncPlay/cast/
-    // local routing in VideoPlayerViewModel.seekByStep — this screen and the
-    // PiP transport's SKIP actions can no longer diverge. The funnel reads
-    // the live gesture step, so no step-duration remember keys are needed.
+    // lives in the shared player-contract's stepSeekTargetMs
+    // (PlayerChromePolicies — the live player's screen cites the same policy)
+    // and the SyncPlay/cast/local routing in VideoPlayerViewModel.seekByStep —
+    // this screen and the PiP transport's SKIP actions can no longer diverge.
+    // The funnel reads the live gesture step, so no step-duration remember
+    // keys are needed.
     val doSeekBack: () -> Unit = remember {
         { viewModel.onEvent(VideoPlayerUiEvent.SeekByStep(-1)) }
     }
@@ -545,7 +552,6 @@ fun VideoPlayerScreen(
         windowOps,
         uiState.gestures.swipeSeekMaxMs,
         isCastConnected,
-        doSeekTo,
     ) {
         GestureSeekController(
             scope = scope,
@@ -741,7 +747,7 @@ fun VideoPlayerScreen(
                 )
                 .then(
                     Modifier.playerTapAndZoomGestures(
-                        gesturesEnabled = uiState.gestures.gesturesEnabled,
+                        tapGesturesEnabled = uiState.gestures.tapGesturesEnabled,
                         isScreenLocked = isScreenLocked,
                         onUserInteraction = { viewModel.onEvent(VideoPlayerUiEvent.UserInteraction) },
                         isHoldSpeedActive = { uiState.gestures.isHoldSpeedActive },
@@ -917,7 +923,7 @@ fun VideoPlayerScreen(
                 seekState = seekState,
                 gestureController = gestureController,
                 gestureIndicatorSide = uiState.gestures.gestureIndicatorSide,
-                gesturesEnabled = uiState.gestures.gesturesEnabled && !isScreenLocked,
+                swipeGesturesEnabled = uiState.gestures.swipeGesturesEnabled && !isScreenLocked,
                 swipeSeekMaxMs = uiState.gestures.swipeSeekMaxMs,
                 showControls = showControls,
                 onShowControlsChange = { showControls = it },
@@ -953,6 +959,7 @@ fun VideoPlayerScreen(
                 isSheetOpen = currentSheet != PlayerSheet.None,
                 isScreenLocked = isScreenLocked,
                 playbackIntended = playbackIntended,
+                stillWatchingPrompt = stillWatchingPrompt,
             )
 
             if (isScreenLocked && !isInPipMode) {
@@ -1025,7 +1032,7 @@ fun VideoPlayerScreen(
             val onPlayPause by remember(doTogglePlayPause) { mutableStateOf({ doTogglePlayPause() }) }
             val onPreviousEpisode by remember { mutableStateOf({ viewModel.onEvent(VideoPlayerUiEvent.PlayPreviousEpisode) }) }
             val onNextEpisode by remember { mutableStateOf({ viewModel.onEvent(VideoPlayerUiEvent.PlayNextEpisode) }) }
-            val onSeekEnd by remember(duration, doSeekTo) {
+            val onSeekEnd by remember(duration) {
                 mutableStateOf({
                     isSeeking = false
                     if (duration > 0) doSeekTo(seekPositionMs)
@@ -1231,6 +1238,7 @@ fun VideoPlayerScreen(
                         null
                     },
                     onDeinterlaceCycle = { viewModel.onEvent(VideoPlayerUiEvent.CycleDeinterlace) },
+                    onVersionClick = { openSheet(PlayerSheet.Version) },
                 ),
                 tracks = TrackControls(
                     streamingQuality = uiState.uiPrefs.streamingQuality,
@@ -1243,6 +1251,7 @@ fun VideoPlayerScreen(
                     isConnectionMetered = uiState.isConnectionMetered,
                     subtitleDelayMs = uiState.subtitleStyle.offsetMs,
                     showPlaybackMetadata = uiState.uiPrefs.showPlaybackMetadata,
+                    hasMultipleVersions = uiState.media.mediaSources.size > 1,
                 ),
                 currentAspectRatio = aspectRatio,
                 detectedAspectRatio = detectedAspectRatio,

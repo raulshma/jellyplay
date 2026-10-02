@@ -9,6 +9,7 @@ import com.raulshma.jellyplay.core.data.repository.applyTo
 import com.raulshma.jellyplay.core.database.dao.DownloadDao
 import com.raulshma.jellyplay.core.database.entity.DownloadEntity
 import com.raulshma.jellyplay.core.model.DownloadStatus
+import com.raulshma.jellyplay.core.model.wallNowMillis
 import kotlinx.coroutines.CancellationException
 import java.io.File
 import java.io.IOException
@@ -326,7 +327,7 @@ class DownloadTransferRunner(
             return sizeMismatch(downloadId, entity.downloadPath, downloadedBytes)
         }
 
-        dao.updateProgressWithSpeed(downloadId, downloadedBytes, DownloadStatus.COMPLETED.name, 0L)
+        dao.markCompleted(downloadId, downloadedBytes, wallNowMillis())
         dao.resetRetryCount(downloadId)
         dismissForeground(notificationId)
         return TransferOutcome.Success

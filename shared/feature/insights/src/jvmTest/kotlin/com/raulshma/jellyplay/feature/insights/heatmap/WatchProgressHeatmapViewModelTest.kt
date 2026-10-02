@@ -3,8 +3,8 @@ package com.raulshma.jellyplay.feature.insights.heatmap
 import com.raulshma.jellyplay.core.data.repository.DailyWatchActivity
 import com.raulshma.jellyplay.core.data.repository.HeatmapFilter
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
-import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.repository.WatchHistoryRepository
+import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
@@ -53,7 +53,7 @@ class WatchProgressHeatmapViewModelTest {
 
     private lateinit var watchHistoryRepository: WatchHistoryRepository
     private lateinit var mediaRepository: MediaRepository
-    private lateinit var playbackRepository: PlaybackRepository
+    private lateinit var imageUrlProvider: ImageUrlProvider
 
     /** Backing flow behind WatchHistoryRepository.playbackReportingStatus. */
     private lateinit var playbackReportingStatus: MutableStateFlow<PlaybackReportingStatus>
@@ -66,13 +66,13 @@ class WatchProgressHeatmapViewModelTest {
         Dispatchers.setMain(mainDispatcher)
         watchHistoryRepository = mockk()
         mediaRepository = mockk()
-        playbackRepository = mockk()
+        imageUrlProvider = mockk()
         playbackReportingStatus = MutableStateFlow(PlaybackReportingStatus.AVAILABLE)
         every { watchHistoryRepository.playbackReportingStatus } returns playbackReportingStatus
         coEvery { watchHistoryRepository.refreshPlaybackReportingStatus() } just Runs
         coEvery { watchHistoryRepository.getMinimumActivityDate() } returns null
         coEvery { watchHistoryRepository.getItemsForDay(any(), any()) } returns emptyList()
-        every { playbackRepository.getImageUrl(any(), any(), any()) } returns "http://img"
+        every { imageUrlProvider.getImageUrl(any(), any()) } returns "http://img"
         stubDailyActivity { emptyList() }
     }
 
@@ -94,7 +94,7 @@ class WatchProgressHeatmapViewModelTest {
     private fun newViewModel(): WatchProgressHeatmapViewModel = WatchProgressHeatmapViewModel(
         watchHistoryRepository = watchHistoryRepository,
         mediaRepository = mediaRepository,
-        playbackRepository = playbackRepository,
+        imageUrlProvider = imageUrlProvider,
     )
 
     private fun activity(date: LocalDate, value: Long) =

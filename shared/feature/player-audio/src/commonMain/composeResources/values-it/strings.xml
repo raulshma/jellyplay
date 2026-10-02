@@ -126,4 +126,6 @@
     <string name="audio_cast_to_device">Trasmetti al dispositivo</string>
     <string name="audio_cast_no_devices">Nessun dispositivo di trasmissione trovato. Assicurati che il tuo dispositivo sia sulla stessa rete.</string>
     <string name="audio_cast_ok">OK</string>
+    <string name="audio_queue_radio">Radio</string>
+    <string name="audio_queue_radio_stop">Tocca per fermare la radio</string>
 </resources>

@@ -87,43 +87,38 @@ class MediaRepositoryImplTest {
             sessionCacheRegistry,
         )
         val internals = MediaRepositoryInternals(apiClient, homeSession)
-        repository = MediaRepositoryImpl(
-            apiClient,
+        val timeSource = SystemTimeSource()
+        // Snapshot-store extraction: the repo now ctor-injects the persisted
+        // half of the home pipeline (the same store the Koin graph wires);
+        // this suite never touches home persistence, so the relaxed DAO
+        // mock under the store is inert.
+        val homeSnapshotStore = HomeSectionsSnapshotStore(
             homeSectionCacheDao,
+            homeSession,
+            timeSource,
+        )
+        repository = MediaRepositoryImpl(
+            // One union mock covers both family seams (the JellyfinApiClient
+            // mock implements each of them).
+            apiClient,
+            apiClient,
+            // The home cache-maintenance port (inert here — this suite pins
+            // the detail-cache / staleness choreography).
+            mockk(relaxed = true),
+            apiClient,
+            homeSnapshotStore,
             playedStateSync,
             episodeCatalogue,
             userDataRealtimeChannel,
-            SystemTimeSource(),
+            timeSource,
             homeSession,
             sessionCacheRegistry,
             internals,
+            // The deepened createSyncPlayGroup's engine (inert here — this
+            // suite never creates a SyncPlay group).
+            mockk(relaxed = true),
         )
         playlistRepository = PlaylistRepositoryImpl(apiClient, internals)
-    }
-
-    @Test
-    fun `getSpecialFeatures delegates to apiClient and maps items`() = runTest {
-        val extras = listOf(
-            MediaItem(id = "extra-1", name = "Making Of", mediaType = MediaType.MOVIE),
-            MediaItem(id = "extra-2", name = "Deleted Scenes", mediaType = MediaType.MOVIE),
-        )
-        coEvery { apiClient.getSpecialFeatures("item-1") } returns Result.success(extras)
-
-        val result = repository.getSpecialFeatures("item-1")
-
-        assertTrue(result.isSuccess)
-        assertEquals(extras, result.getOrNull())
-        coVerify(exactly = 1) { apiClient.getSpecialFeatures("item-1") }
-    }
-
-    @Test
-    fun `getSpecialFeatures empty when apiClient returns empty`() = runTest {
-        coEvery { apiClient.getSpecialFeatures("item-1") } returns Result.success(emptyList())
-
-        val result = repository.getSpecialFeatures("item-1")
-
-        assertTrue(result.isSuccess)
-        assertTrue(result.getOrNull().isNullOrEmpty())
     }
 
     @Test

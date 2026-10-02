@@ -15,7 +15,6 @@ import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.model.SearchResult
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
-import com.raulshma.jellyplay.core.model.seerr.SeerrSearchResponse
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -89,7 +88,7 @@ class MediaSearchEngineTest {
 
     private fun stubSeerrSearch(items: List<SeerrSearchItem>) {
         coEvery { seerrRepository.search(any(), any()) } returns
-            Result.success(SeerrSearchResponse(results = items, totalResults = items.size))
+            Result.success(items)
     }
 
     private fun item(id: String) = MediaItem(id = id, name = id, mediaType = MediaType.MOVIE)

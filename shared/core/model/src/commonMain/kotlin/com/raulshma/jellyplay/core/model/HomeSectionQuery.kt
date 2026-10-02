@@ -32,6 +32,19 @@ data class HomeSectionQuery(
      * are spliced in at the DISCOVER block position afterwards.
      */
     val discoverRows: List<DiscoverRowConfig> = emptyList(),
+    /**
+     * Classic (pre-Jellyfin-12) home-row semantics (#168), true 1:1 with the
+     * pre-12 wire results: Continue Watching keeps the exact pre-12 request
+     * (the Series/Season resume rollups a 12.x server reports are dropped by
+     * a client-side fold), and TV latest rows re-run the 10.x grouping
+     * client-side over a raw-Episode pool — a series with several recent
+     * episodes becomes a Series card, a single one stays its Episode card,
+     * ordered by episode recency (grouping stops where 10.x's own row-limit
+     * break did — an episode arriving after the row filled never joins its
+     * group). False (default) = modern server
+     * behavior, unchanged. Rides [cacheKey] so a flip re-fetches.
+     */
+    val classicRows: Boolean = false,
 ) {
     /**
      * Structural fingerprint of the query params, used as the `cacheKey` for both
@@ -45,6 +58,6 @@ data class HomeSectionQuery(
     fun cacheKey(): String = cachedKey
 
     private val cachedKey by lazy {
-        "${enabledSections.sortedBy { it.name }}|$libraryHomeSectionOverrides|$nextUpRewatching|$nextUpMaxDays|$nextUpExcludedSeriesIds|$hiddenCwItemIds|$pinnedSections|$discoverRows"
+        "${enabledSections.sortedBy { it.name }}|$libraryHomeSectionOverrides|$nextUpRewatching|$nextUpMaxDays|$nextUpExcludedSeriesIds|$hiddenCwItemIds|$pinnedSections|$discoverRows|$classicRows"
     }
 }

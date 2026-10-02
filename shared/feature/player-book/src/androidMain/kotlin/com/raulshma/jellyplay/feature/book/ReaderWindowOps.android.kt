@@ -1,8 +1,6 @@
 package com.raulshma.jellyplay.feature.book
 
 import android.app.Activity
-import android.content.Context
-import android.content.ContextWrapper
 import android.view.View
 import android.view.WindowManager
 import androidx.compose.runtime.Composable
@@ -12,6 +10,7 @@ import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import com.raulshma.jellyplay.core.ui.player.findActivity
 
 @Composable
 internal actual fun rememberReaderWindowOps(): ReaderWindowOps {
@@ -44,13 +43,4 @@ private class AndroidReaderWindowOps(
         WindowCompat.getInsetsController(window, view)
             .show(WindowInsetsCompat.Type.systemBars())
     }
-}
-
-private fun Context.findActivity(): Activity? {
-    var current: Context = this
-    while (current is ContextWrapper) {
-        if (current is Activity) return current
-        current = current.baseContext
-    }
-    return null
 }

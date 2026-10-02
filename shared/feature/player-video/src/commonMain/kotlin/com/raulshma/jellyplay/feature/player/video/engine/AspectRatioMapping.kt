@@ -6,8 +6,13 @@ package com.raulshma.jellyplay.feature.player.video.engine
  * `setAspectRatio` bodies (one of which — libVLC — silently dropped CROP).
  * The engines only APPLY the returned plan to their native handles; the enum
  * → native decision lives here and is pinned by unit tests.
+ *
+ * Public (not `internal` like its birthplace implied): the desktop mpv engine
+ * lives in `apps/desktop`, a separate Gradle module, and consumes the same
+ * plan Android's engines do — the former `internal` visibility is exactly how
+ * the desktop kept its drifted hand-rolled `setAspectRatio`.
  */
-internal object AspectRatioMapping {
+object AspectRatioMapping {
 
     // ── Media3 ──────────────────────────────────────────────────────────────
 

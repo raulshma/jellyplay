@@ -61,19 +61,27 @@ class OfflineLibraryViewModelQueryBoundaryTest {
     private fun TestScope.collectAndSettle(): kotlinx.coroutines.Job {
         val job = launch { viewModel.offlineLibrary.collect {} }
         advanceUntilIdle()
-        repeat(5) {
-            Thread.sleep(20)
-            advanceUntilIdle()
-        }
         return job
     }
 
-    private fun TestScope.settle() {
-        advanceUntilIdle()
-        repeat(5) {
-            Thread.sleep(20)
+    /**
+     * Waits for [OfflineLibraryViewModel.offlineLibrary] to show [expectedIds].
+     * The filter pipeline hops to Dispatchers.Default and back (a real
+     * thread), and the virtual scheduler cannot see the returning
+     * continuation — so poll with real time until the projection lands, the
+     * same idiom the music suites' awaitGenerated uses. A fixed sleep budget
+     * loses that race on a loaded machine.
+     */
+    private fun TestScope.awaitLibrary(expectedIds: List<String>) {
+        val deadline = System.currentTimeMillis() + 5_000
+        while (viewModel.offlineLibrary.value.map { it.id } != expectedIds &&
+            System.currentTimeMillis() < deadline
+        ) {
             advanceUntilIdle()
+            Thread.sleep(10)
         }
+        advanceUntilIdle()
+        assertEquals(expectedIds, viewModel.offlineLibrary.value.map { it.id })
     }
 
     @Test
@@ -85,9 +93,8 @@ class OfflineLibraryViewModelQueryBoundaryTest {
         val job = collectAndSettle()
 
         viewModel.setQuery("du")
-        settle()
 
-        assertEquals(listOf("hit"), viewModel.offlineLibrary.value.map { it.id })
+        awaitLibrary(listOf("hit"))
         job.cancel()
     }
 
@@ -100,9 +107,8 @@ class OfflineLibraryViewModelQueryBoundaryTest {
         val job = collectAndSettle()
 
         viewModel.setQuery("  dune  ")
-        settle()
 
-        assertEquals(listOf("hit"), viewModel.offlineLibrary.value.map { it.id })
+        awaitLibrary(listOf("hit"))
         job.cancel()
     }
 
@@ -115,10 +121,9 @@ class OfflineLibraryViewModelQueryBoundaryTest {
         val job = collectAndSettle()
 
         viewModel.setQuery("   ")
-        settle()
 
         // Trimmed below the 2-char gate → everything stays visible.
-        assertEquals(listOf("a", "b"), viewModel.offlineLibrary.value.map { it.id })
+        awaitLibrary(listOf("a", "b"))
         job.cancel()
     }
 

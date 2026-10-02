@@ -24,7 +24,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import com.raulshma.jellyplay.core.ui.components.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -40,11 +39,9 @@ import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
-import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.ExpressiveToolbarIconButton
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
-import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState
 import com.raulshma.jellyplay.core.ui.components.rememberStableCallback
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
@@ -58,6 +55,7 @@ import androidx.compose.runtime.LaunchedEffect
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
+import com.raulshma.jellyplay.feature.livetv.components.LiveTvTabScaffold
 import com.composables.icons.tabler.outline.*
 import com.composables.icons.tabler.filled.*
 import org.jetbrains.compose.resources.stringResource
@@ -111,65 +109,61 @@ fun ChannelsScreen(
             )
         },
     ) {
-        if (uiState.error != null && uiState.channels.isEmpty()) {
-            ErrorScreen(
-                message = uiState.error!!,
-                onRetry = { viewModel.loadChannels() },
-            )
-        } else if (uiState.channels.isEmpty() && !uiState.isLoading) {
-            ScreenEmptyState(
-                icon = Tabler.Outline.DeviceTv,
-                title = stringResource(Res.string.livetv_no_channels_available),
-            )
-        } else {
-            PullToRefreshBox(
-                isRefreshing = uiState.isLoading,
-                onRefresh = { viewModel.loadChannels() },
+        // The shared tab ladder — this tab's former hand-copied ladder had NO
+        // loading rung (a first load rendered a blank pull-to-refresh body);
+        // riding the shared scaffold fixed that drift for free.
+        LiveTvTabScaffold(
+            isLoading = uiState.isLoading,
+            error = uiState.error,
+            isEmpty = uiState.channels.isEmpty(),
+            emptyIcon = Tabler.Outline.DeviceTv,
+            emptyTitleRes = Res.string.livetv_no_channels_available,
+            isRefreshing = uiState.isLoading,
+            onRefresh = { viewModel.loadChannels() },
+        ) {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .tvFocusRestorer()
+                    .focusRequester(focusRequester),
+                contentPadding = PaddingValues(
+                    start = contentPad,
+                    end = contentPad,
+                    top = 8.dp,
+                    bottom = bottomPad,
+                ),
+                verticalArrangement = Arrangement.spacedBy(spacing),
             ) {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .tvFocusRestorer()
-                        .focusRequester(focusRequester),
-                    contentPadding = PaddingValues(
-                        start = contentPad,
-                        end = contentPad,
-                        top = 8.dp,
-                        bottom = bottomPad,
-                    ),
-                    verticalArrangement = Arrangement.spacedBy(spacing),
-                ) {
-                    items(
-                        items = uiState.channels,
-                        key = { it.id },
-                        contentType = { "channel" },
-                    ) { channel ->
-                        // Memoized per-item derivations + click lambdas keep
-                        // ChannelCard skippable across uiState emissions
-                        // (favorite toggle, refresh) — the LibraryScreen grid
-                        // pattern.
-                        val imageUrl = remember(channel.id, channel.imageTag) {
-                            viewModel.getImageUrl(channel.id, channel.imageTag)
-                        }
-                        val memoizedClick = rememberStableCallback {
-                            onChannelClick(channel.id, channel.name)
-                        }
-                        val memoizedPlay = rememberStableCallback {
-                            onPlayChannel(channel.id, channel.name)
-                        }
-                        val memoizedFavoriteToggle = rememberStableCallback {
-                            viewModel.toggleFavorite(channel.id)
-                        }
-                        ChannelCard(
-                            channel = channel,
-                            imageUrl = imageUrl,
-                            isNowPlaying = channel.id == nowPlayingChannelId,
-                            isFavorite = channel.id in favoriteChannelIds,
-                            onClick = memoizedClick,
-                            onPlay = memoizedPlay,
-                            onFavoriteToggle = memoizedFavoriteToggle,
-                        )
+                items(
+                    items = uiState.channels,
+                    key = { it.id },
+                    contentType = { "channel" },
+                ) { channel ->
+                    // Memoized per-item derivations + click lambdas keep
+                    // ChannelCard skippable across uiState emissions
+                    // (favorite toggle, refresh) — the LibraryScreen grid
+                    // pattern.
+                    val imageUrl = remember(channel.id, channel.imageTag) {
+                        viewModel.getImageUrl(channel.id, channel.imageTag)
                     }
+                    val memoizedClick = rememberStableCallback {
+                        onChannelClick(channel.id, channel.name)
+                    }
+                    val memoizedPlay = rememberStableCallback {
+                        onPlayChannel(channel.id, channel.name)
+                    }
+                    val memoizedFavoriteToggle = rememberStableCallback {
+                        viewModel.toggleFavorite(channel.id)
+                    }
+                    ChannelCard(
+                        channel = channel,
+                        imageUrl = imageUrl,
+                        isNowPlaying = channel.id == nowPlayingChannelId,
+                        isFavorite = channel.id in favoriteChannelIds,
+                        onClick = memoizedClick,
+                        onPlay = memoizedPlay,
+                        onFavoriteToggle = memoizedFavoriteToggle,
+                    )
                 }
             }
         }
