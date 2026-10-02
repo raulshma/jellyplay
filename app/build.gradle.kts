@@ -1,5 +1,8 @@
 import java.util.zip.ZipFile
 
+import org.gradle.api.plugins.ExtensionAware
+import org.gradle.api.provider.MapProperty
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -192,14 +195,20 @@ aboutLibraries {
 //     — deliberately not hardcoded, so a NEW resource-carrying module without
 //     the enable flag fails here, and a module that stops carrying resources
 //     drops out of scope by itself;
-//   * the per-module asset namespace is the module's compose
-//     `packageOfResClass` (parsed from its build.gradle.kts; fallback
-//     `<android namespace>.generated.resources`), which is exactly the
-//     directory name compose-resources creates under assets/composeResources/
-//     in the APK (verified against the real phoneDebug artifact:
-//     e.g. shared/feature/home → com.raulshma.jellyplay.feature.home.
-//     generated.resources/values-de/strings.commonMain.cvr — note the legacy
-//     import paths, NOT the kotlin.android namespace);
+//   * the per-module asset namespace is the module's CONFIGURED compose
+//     `packageOfResClass` — captured from the evaluated Gradle model (see the
+//     capture block below the task), which is exactly the directory name
+//     compose-resources creates under assets/composeResources/ in the APK
+//     (verified against the real phoneDebug artifact: e.g. shared/feature/home
+//     → com.raulshma.jellyplay.feature.home.generated.resources/values-de/
+//     strings.commonMain.cvr — note the legacy import paths, NOT the
+//     kotlin.android namespace). The predecessor parsed `packageOfResClass =
+//     "..."` literals out of each module's build.gradle.kts (namespace
+//     fallback); the build-convention bundle moved those tails into the
+//     convention plugin's path-derived default, the parse fell back to the
+//     `.shared.`-bearing namespace, and every module read as "missing" while
+//     the APK was fine — so the guard now reads the one source of truth
+//     instead of a text-parse that can drift from it;
 //   * the locale set derives from the module's values/values-xx directory
 //     names (today 9 per module: values, -de, -es, -fr, -it, -ja, -ko, -pt,
 //     -zh) and the derivation reproduces the measured baseline of
@@ -217,6 +226,14 @@ abstract class VerifyPhoneDebugComposeResourcesTask : DefaultTask() {
     @get:Internal
     abstract val repoRoot: DirectoryProperty
 
+    /**
+     * Module path ("shared/core/ui") → configured compose
+     * `packageOfResClass` for that module, captured from the evaluated
+     * Gradle model at configuration time (see the capture block below).
+     */
+    @get:Internal
+    abstract val resPackages: MapProperty<String, String>
+
     @TaskAction
     fun verify() {
         val root = repoRoot.get().asFile
@@ -232,19 +249,19 @@ abstract class VerifyPhoneDebugComposeResourcesTask : DefaultTask() {
             for (module in group.listFiles { f -> f.isDirectory }.orEmpty()) {
                 val resRoot = module.resolve("src/commonMain/composeResources")
                 if (!resRoot.isDirectory) continue
-                val script = module.resolve("build.gradle.kts").readText()
-                val namespace = Regex("""packageOfResClass\s*=\s*"([^"]+)"""").find(script)?.groupValues?.get(1)
-                    ?: Regex("""namespace\s*=\s*"([^"]+)"""").find(script)?.groupValues?.get(1)
-                        ?.plus(".generated.resources")
+                val modulePath = "shared/${group.name}/${module.name}"
+                val namespace = resPackages.get()[modulePath]
                     ?: throw GradleException(
-                        "verifyPhoneDebugComposeResources: shared/${group.name}/${module.name} carries " +
-                            "composeResources but its build.gradle.kts declares neither packageOfResClass " +
-                            "nor namespace — cannot derive its assets/composeResources/ directory"
+                        "verifyPhoneDebugComposeResources: $modulePath carries " +
+                            "composeResources but no configured compose.resources.packageOfResClass " +
+                            "was captured for it — the module must apply jellyplay.kmp.library.compose " +
+                            "(or set packageOfResClass) so the guard can know its " +
+                            "assets/composeResources/ directory"
                     )
                 val localeDirs = resRoot
                     .listFiles { f -> f.isDirectory && (f.name == "values" || f.name.startsWith("values-")) }
                     .orEmpty().map { it.name }.sorted()
-                expected.add(Triple("shared/${group.name}/${module.name}", namespace, localeDirs))
+                expected.add(Triple(modulePath, namespace, localeDirs))
             }
         }
         expected.sortBy { it.first }
@@ -319,6 +336,27 @@ val verifyPhoneDebugComposeResources = tasks.register<VerifyPhoneDebugComposeRes
     apkDir.set(layout.buildDirectory.dir("outputs/apk/phone/debug"))
     repoRoot.set(rootProject.layout.projectDirectory)
     outputs.upToDateWhen { false }
+}
+
+// Capture each module's CONFIGURED compose.resources.packageOfResClass after
+// every project — including the convention plugin's afterEvaluate
+// path-derived default and any per-module `jellyplay { resPackage }`
+// override — had its say (projectsEvaluated). The guard then asserts against
+// what the build actually packages. Reflection keeps :app from needing the
+// JetBrains Compose plugin types on its buildscript classpath (:app applies
+// the androidx compose compiler plugin only; `compose` below is the JB
+// plugin's extension and is absent here).
+gradle.projectsEvaluated {
+    val captured = mutableMapOf<String, String>()
+    for (project in rootProject.subprojects) {
+        val compose = project.extensions.findByName("compose") as? ExtensionAware ?: continue
+        val resources = compose.extensions.findByName("resources") ?: continue
+        val resPackage = runCatching {
+            resources.javaClass.getMethod("getPackageOfResClass").invoke(resources) as? String
+        }.getOrNull()?.takeIf { it.isNotBlank() } ?: continue
+        captured[project.path.removePrefix(":").replace(':', '/')] = resPackage
+    }
+    verifyPhoneDebugComposeResources.configure { resPackages.putAll(captured) }
 }
 
 // Baseline Profile consumers. The androidx.baselineprofile 1.5.x plugin
