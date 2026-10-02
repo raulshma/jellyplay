@@ -31,10 +31,16 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
  *    [GitHubReleasesApiImpl.RELEASES_LIST_URL] identities).
  *  - Asset/download URLs — and release PAGE urls, which share the
  *    `github.com/<owner>/<repo>/…` shape: https, host in
- *    [ALLOWED_ASSET_HOSTS], and an owner-repo path — except the legacy S3
- *    signer `objects.githubusercontent.com`, whose signed paths are opaque
- *    tokens bound to one object by the query signature, so host + non-empty
- *    path is the strongest owner check available there.
+ *    [ALLOWED_ASSET_HOSTS], and an owner-repo path. Two opaque-path
+ *    carve-outs where the path carries no owner/repo at all:
+ *    - `release-assets.githubusercontent.com` (GitHub's CURRENT asset
+ *      redirect target): `/github-production-release-asset/<repoId>/<uuid>`
+ *      accepted only under the compiled-in [ALLOWED_REPO_ID] prefix — the
+ *      ID, unlike the name, survives renames/transfers.
+ *    - the legacy S3 signer `objects.githubusercontent.com`, whose signed
+ *      paths are opaque tokens bound to one object by the query signature,
+ *      so host + non-empty path is the strongest owner check available
+ *      there.
  *
  * Unparseable, non-https, or unknown-host URLs never pass (fail closed).
  * Pure and JVM-side by design: `okhttp3.HttpUrl` is a jvmShared dependency
@@ -51,6 +57,16 @@ object GitHubRepoAllowList {
     /** The only repo whose asset/page paths we accept (owner + repo). */
     const val ALLOWED_REPO = "jellyplay"
 
+    /**
+     * The compiled-in pin for the repo's immutable GitHub ID. GitHub's
+     * current release-asset CDN identifies the object's repo by ID, not by
+     * owner/repo name (the redirect path is
+     * `/github-production-release-asset/<id>/<uuid>`), and the ID — unlike
+     * the name — survives owner renames AND transfers, so it is the
+     * strongest owner check available on that host.
+     */
+    const val ALLOWED_REPO_ID = 1227884704L
+
     /** Hosts allowed to serve the release-API endpoint (post-redirect final host). */
     val ALLOWED_RELEASE_HOSTS = setOf("api.github.com", "github.com")
 
@@ -64,8 +80,18 @@ object GitHubRepoAllowList {
     /** The legacy S3 signer whose paths are opaque signed tokens. */
     private const val SIGNED_CDN_HOST = "objects.githubusercontent.com"
 
+    /**
+     * GitHub's current release-asset CDN host: the redirect target's path is
+     * an opaque `/github-production-release-asset/<repoId>/<uuid>` token —
+     * no owner/repo in the path (that binding lives in the signed query), so
+     * the repo-ID prefix is the owner check available there.
+     */
+    private const val RELEASE_ASSET_CDN_HOST = "release-assets.githubusercontent.com"
+
     private const val API_PATH_PREFIX = "/repos/$ALLOWED_OWNER/"
     private const val REPO_PATH_PREFIX = "/$ALLOWED_OWNER/$ALLOWED_REPO/"
+    private const val RELEASE_ASSET_CDN_PATH_PREFIX =
+        "/github-production-release-asset/$ALLOWED_REPO_ID/"
 
     /**
      * Whether [url] is the pinned GitHub Releases API endpoint. Checked on
@@ -93,6 +119,11 @@ object GitHubRepoAllowList {
         if (host !in ALLOWED_ASSET_HOSTS) return false
         val path = url.encodedPath.lowercase()
         return path.startsWith(REPO_PATH_PREFIX) ||
+            // GitHub's current release-asset CDN: the post-redirect path is
+            // the opaque /github-production-release-asset/<repoId>/<uuid>
+            // token; the compiled-in repo-ID prefix is the only owner check
+            // available on that host (the signed query binds the object).
+            (host == RELEASE_ASSET_CDN_HOST && path.startsWith(RELEASE_ASSET_CDN_PATH_PREFIX)) ||
             // The legacy S3 signer: opaque signed paths (e.g.
             // /production-asset-…/<token>?X-Amz-Signature=…) bind the object
             // by its query signature, so a non-root path is the strongest
