@@ -545,6 +545,22 @@ class AudioPlaybackManager(
             ?: createPlayer()
     }
 
+    /**
+     * Guarantees the audio MediaLibrarySession exists without starting
+     * playback — the Android Auto / Automotive cold-connect path. A car
+     * client binds [JellyPlayPlaybackService] and asks for its session before
+     * any phone-side play has run; the player + session are otherwise built
+     * lazily on the first play, so the service would hand the head unit a
+     * null session and the app would appear unavailable on the car screen.
+     * Idempotent: [getOrCreatePlayer] short-circuits on the live engine, so
+     * this is a no-op once playback has built the session (and a full
+     * recreate after [stopAndRelease], matching the play path). Main thread
+     * only — [createPlayer] builds the ExoPlayer on the calling looper.
+     */
+    fun ensureAudioSession() {
+        getOrCreatePlayer()
+    }
+
     private fun createPlayer(): ExoPlayer {
         val audioAttributes = AudioAttributes.Builder()
             .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)

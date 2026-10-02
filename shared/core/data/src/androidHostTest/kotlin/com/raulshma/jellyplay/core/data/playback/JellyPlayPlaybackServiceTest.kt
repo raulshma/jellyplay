@@ -83,6 +83,7 @@ class JellyPlayPlaybackServiceTest {
             playbackSourceResolver = mockk<PlaybackSourceResolver>(relaxed = true),
             streamingQualityProvider = { StreamingQuality.AUTO },
             adaptiveBitrateSelector = mockk<AdaptiveBitrateSelector>(relaxed = true),
+            audioQueueFacadeProvider = { mockk<AudioQueueFacade>(relaxed = true) },
         )
     }
 
@@ -120,6 +121,22 @@ class JellyPlayPlaybackServiceTest {
 
         assertSame(active.session, handed)
         assertTrue(handed is androidx.media3.session.MediaLibraryService.MediaLibrarySession)
+    }
+
+    /**
+     * The Android Auto cold-connect pin: the head unit binds the service and
+     * asks for a session before any phone-side play has built one, so
+     * [JellyPlayPlaybackService.onGetSession] must force the manager's
+     * lazy player+session construction — otherwise it answers null and the
+     * app appears unavailable on the car screen.
+     */
+    @Test
+    fun `onGetSession ensures the audio session exists before answering`() {
+        val service = buildService()
+
+        service.onGetSession(mockk<ControllerInfo>(relaxed = true))
+
+        verify(exactly = 1) { audioPlaybackManager.ensureAudioSession() }
     }
 
     @Test

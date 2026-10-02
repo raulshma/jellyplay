@@ -56,6 +56,10 @@ internal fun androidPlaybackStackModule(context: Context): Module = module {
             playbackSourceResolver = get(),
             streamingQualityProvider = { get<PlaybackStore>().playback.value.streamingQuality },
             adaptiveBitrateSelector = get(),
+            // Call-time facade access — a direct dep would be circular
+            // (browser ← manager ← facade). Resolved only when a controller
+            // (Android Auto) issues setMediaItems, well after construction.
+            audioQueueFacadeProvider = { get<AudioQueueFacade>() },
         )
     }
     single {

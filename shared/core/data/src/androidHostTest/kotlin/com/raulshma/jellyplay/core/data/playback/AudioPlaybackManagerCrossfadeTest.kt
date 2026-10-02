@@ -77,6 +77,7 @@ class AudioPlaybackManagerCrossfadeTest {
             playbackSourceResolver = mockk<PlaybackSourceResolver>(relaxed = true),
             streamingQualityProvider = { StreamingQuality.AUTO },
             adaptiveBitrateSelector = mockk<AdaptiveBitrateSelector>(relaxed = true),
+            audioQueueFacadeProvider = { mockk<AudioQueueFacade>(relaxed = true) },
         )
     }
 

@@ -211,6 +211,7 @@ class AudioPlaybackManagerQueueSemanticsTest {
             playbackSourceResolver = playbackSourceResolver,
             streamingQualityProvider = { com.raulshma.jellyplay.core.model.StreamingQuality.AUTO },
             adaptiveBitrateSelector = mockk(relaxed = true),
+            audioQueueFacadeProvider = { mockk<AudioQueueFacade>(relaxed = true) },
         )
 
         val manager: AudioPlaybackManager = AudioPlaybackManager(
