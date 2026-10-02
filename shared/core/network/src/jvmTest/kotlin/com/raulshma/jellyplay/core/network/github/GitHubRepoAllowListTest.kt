@@ -25,6 +25,7 @@ class GitHubRepoAllowListTest {
         // These ARE the security contract — a silent change here is a takeover.
         assertEquals("raulshma", GitHubRepoAllowList.ALLOWED_OWNER)
         assertEquals("jellyplay", GitHubRepoAllowList.ALLOWED_REPO)
+        assertEquals(1227884704L, GitHubRepoAllowList.ALLOWED_REPO_ID)
         assertEquals(setOf("api.github.com", "github.com"), GitHubRepoAllowList.ALLOWED_RELEASE_HOSTS)
         assertEquals(
             setOf("github.com", "objects.githubusercontent.com", "release-assets.githubusercontent.com"),
@@ -107,6 +108,27 @@ class GitHubRepoAllowListTest {
             "https://release-assets.githubusercontent.com/raulshma/jellyplay/releases/download/v1.0.0/app.apk" to true,
             // Host comparison is case-insensitive.
             "https://GitHub.com/raulshma/jellyplay/releases/tag/v1.0.0" to true,
+        )
+    }
+
+    @Test
+    fun `isAssetEndpoint accepts the production release-asset CDN redirect shape`() {
+        // GitHub's CURRENT release-asset redirect target: an opaque
+        // /github-production-release-asset/<repoId>/<uuid> path — no owner or
+        // repo in the path, the object is bound by the signed query. This is
+        // the exact final URL (signature redacted) the v0.11.2 download died
+        // on in production ("Download redirected off the pinned GitHub
+        // hosts"), captured with curl -L on the browser_download_url.
+        assertTable(
+            "isAssetEndpoint",
+            verdict = GitHubRepoAllowList::isAssetEndpoint,
+            "https://release-assets.githubusercontent.com/github-production-release-asset/1227884704/e808a82b-45e9-4c12-b3f7-e564865d760a?sig=REDACTED&jwt=REDACTED" to true,
+            // A different repo's object on the same CDN host stays rejected.
+            "https://release-assets.githubusercontent.com/github-production-release-asset/99999999/e808a82b-45e9-4c12-b3f7-e564865d760a?sig=REDACTED" to false,
+            // The CDN prefix without a repo id binds nothing — fail closed.
+            "https://release-assets.githubusercontent.com/github-production-release-asset/e808a82b-45e9-4c12-b3f7-e564865d760a?sig=REDACTED" to false,
+            // The other CDN host never serves this path shape.
+            "https://objects.githubusercontent.com/github-production-release-asset/1227884704/e808a82b-45e9-4c12-b3f7-e564865d760a?sig=REDACTED" to true,
         )
     }
 
