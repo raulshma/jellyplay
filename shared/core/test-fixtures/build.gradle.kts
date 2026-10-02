@@ -66,13 +66,19 @@ kotlin {
 // TestFixturesScopeGuardTest scans every build.gradle.kts in the repo, so its
 // real inputs sit far outside the test classpath — wire them in explicitly or
 // the tripwire goes stale (up-to-date skip) exactly when someone adds the bad
-// reference it exists to catch.
+// reference it exists to catch. The scripts are enumerated per root instead of
+// one fileTree over the repo root: a tree rooted at the project directory
+// overlaps the desktop fetchBundledLibmpv outputs under tools/mpv, and Gradle
+// 9's task-graph validation fails any single invocation that runs both (e.g.
+// `gradlew jvmTest :apps:desktop:test`). Same file set, no location overlap —
+// tools/ carries no build scripts, and a newly added module enters
+// `subprojects` (recomputing this list) in the same configuration pass its
+// settings include triggers.
 tasks.named<Test>("jvmTest") {
     inputs.files(
-        fileTree(rootDir) {
-            include("**/build.gradle.kts")
-            exclude("**/build/**", "**/.git/**", "**/.gradle/**", "**/.kotlin/**")
-        },
+        rootProject.files("build.gradle.kts"),
+        rootProject.subprojects.map { it.files("build.gradle.kts") },
+        gradle.includedBuilds.map { it.projectDir.resolve("build.gradle.kts") },
     ).withPropertyName("guardScannedBuildScripts")
         .withPathSensitivity(PathSensitivity.NONE)
 }

@@ -257,7 +257,12 @@ class AndroidOfflineModeManagerTest {
 
     @Test
     fun `no active network with the auto pref engages OFFLINE_AUTO`() {
+        // The monitor status must mirror the probe's view (see the
+        // validated-network test below): with the status still Online, the
+        // collector's async initial emission can land after the probe's
+        // synchronous OFFLINE_AUTO and clobber it back to ONLINE.
         setNoActiveNetwork()
+        statusFlow.value = NetworkStatus.Offline
         sliceFlow.value = NetworkOfflineSlice(autoOfflineEnabled = true)
         val manager = manager()
 
@@ -292,8 +297,11 @@ class AndroidOfflineModeManagerTest {
     @Test
     fun `an internet-but-unvalidated network is treated as offline (captive portal)`() {
         // INTERNET capability without VALIDATION: the app cannot reach the
-        // server through a captive portal — the auto rule must engage.
+        // server through a captive portal — the auto rule must engage. The
+        // monitor status mirrors the probe's view (same race as the
+        // no-active-network test above).
         setReachableNetwork(validated = false)
+        statusFlow.value = NetworkStatus.Offline
         sliceFlow.value = NetworkOfflineSlice(autoOfflineEnabled = true)
         val manager = manager()
 

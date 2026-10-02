@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.network
 
+import com.raulshma.jellyplay.core.model.DiscoveredServer
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
@@ -94,11 +95,26 @@ class ServerDiscoveryServiceJvmTest {
         responder.close()
     }
 
+    /**
+     * Runs whole discovery rounds until one surfaces a server or [deadlineMs]
+     * pass. A single 1s broadcast window is schedulable-to-death on a loaded
+     * box (the suite shares a JVM with the rest of the module's tests): the
+     * responder or the SDK socket can miss the window outright and the flow
+     * completes empty. Real UDP is not the subject here — the address
+     * rewrite is — so retry rounds to a deadline instead of gambling on one.
+     */
+    private suspend fun discoverFirst(deadlineMs: Long = 10_000): DiscoveredServer? {
+        var found: DiscoveredServer? = null
+        val deadline = System.currentTimeMillis() + deadlineMs
+        while (found == null && System.currentTimeMillis() < deadline) {
+            found = service.discoverLocalServers(timeoutMs = 1_000, maxServers = 1).firstOrNull()
+        }
+        return found
+    }
+
     @Test
     fun `discovery surfaces the reachable NAT source address, not the Docker container address`() = runBlocking {
-        val found = withTimeout(15_000) {
-            service.discoverLocalServers(timeoutMs = 1_000, maxServers = 1).firstOrNull()
-        }
+        val found = withTimeout(30_000) { discoverFirst() }
 
         val sourceIp = responder.lastQuerySourceIp
         assertNotNull(found, "No server discovered — UDP broadcast/response loop failed")
@@ -121,9 +137,7 @@ class ServerDiscoveryServiceJvmTest {
     fun `payload address survives verbatim when it already matches the datagram source (host network)`() = runBlocking {
         // Docker --network=host or bare-metal server: the payload address host
         // equals the packet source. The rewritten address must not drift from it.
-        val found = withTimeout(15_000) {
-            service.discoverLocalServers(timeoutMs = 1_000, maxServers = 1).firstOrNull()
-        }
+        val found = withTimeout(30_000) { discoverFirst() }
         val sourceIp = responder.lastQuerySourceIp ?: fail("Responder never received the discovery query")
         assertNotNull(found)
         assertEquals(SERVER_ID, found.id)
