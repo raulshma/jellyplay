@@ -128,6 +128,25 @@ class EpgViewModel(
     private val rebuildGridMutex = Mutex()
 
     /**
+     * Serializes [fetchGuideIntoState] passes. The user-triggered [loadGuide]
+     * (also the record-success reload) and the auto-refresh loop can overlap;
+     * without the lock two full guide fetches run concurrently and the slower
+     * one can publish last, leaving channels/programs/window mutually
+     * inconsistent. Waiting for the lock keeps the trailing refresh — each
+     * pass computes its window at the moment it holds the lock, so a pass
+     * queued behind an in-flight one re-fetches fresh rather than being
+     * dropped.
+     *
+     * Declared BEFORE the [init] block below on purpose: [loadGuide] launches
+     * on Dispatchers.Main.immediate, so the coroutine body runs synchronously
+     * inside the constructor and reaches [fetchGuideIntoState] (locking this
+     * mutex) before the constructor has finished — a declaration after the
+     * init block would still be null here (crash: "Mutex.lock on a null
+     * object reference" when opening the Guide/Channels tabs).
+     */
+    private val guideFetchMutex = Mutex()
+
+    /**
      * Recompute the cached grid snapshot from the current source data. The
      * CPU-heavy groupBy + per-channel filter + sort runs on [gridDispatcher];
      * reading the inputs and publishing the snapshot happen inside
@@ -154,18 +173,6 @@ class EpgViewModel(
     init {
         loadGuide()
     }
-
-    /**
-     * Serializes [fetchGuideIntoState] passes. The user-triggered [loadGuide]
-     * (also the record-success reload) and the auto-refresh loop can overlap;
-     * without the lock two full guide fetches run concurrently and the slower
-     * one can publish last, leaving channels/programs/window mutually
-     * inconsistent. Waiting for the lock keeps the trailing refresh — each
-     * pass computes its window at the moment it holds the lock, so a pass
-     * queued behind an in-flight one re-fetches fresh rather than being
-     * dropped.
-     */
-    private val guideFetchMutex = Mutex()
 
     /**
      * Fetches the guide for the standard window ([guideWindow] over the
