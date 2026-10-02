@@ -27,12 +27,12 @@ import com.raulshma.jellyplay.feature.player.video.engine.BufferedRanges
 import com.raulshma.jellyplay.feature.player.video.engine.EngineCapabilities
 import com.raulshma.jellyplay.feature.player.video.engine.EngineCapabilityMatrix
 import com.raulshma.jellyplay.feature.player.video.engine.EngineConfig
-import com.raulshma.jellyplay.feature.player.video.engine.EngineConfigDelta
 import com.raulshma.jellyplay.feature.player.video.engine.EngineError
 import com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState
 import com.raulshma.jellyplay.feature.player.video.engine.EnginePositionTicker
 import com.raulshma.jellyplay.feature.player.video.engine.EngineStateChassis
 import com.raulshma.jellyplay.feature.player.video.engine.EngineVideoStats
+import com.raulshma.jellyplay.feature.player.video.engine.MpvConfigApplier
 import com.raulshma.jellyplay.feature.player.video.engine.MpvConfigMapping
 import com.raulshma.jellyplay.feature.player.video.engine.MpvErrorTaxonomy
 import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvFoldApplier
@@ -46,6 +46,7 @@ import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvSubtitleStylePh
 import com.raulshma.jellyplay.feature.player.video.engine.MpvTlsOptions
 import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvTrackCatalog
 import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvUserSubtitleKeys
+import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvVideoEffectChain
 import com.raulshma.jellyplay.feature.player.video.engine.PlaybackRequest
 import com.raulshma.jellyplay.feature.player.video.engine.PlaybackVolumePolicy
 import com.raulshma.jellyplay.feature.player.video.engine.SubtitleSource
@@ -93,7 +94,7 @@ import kotlinx.coroutines.launch
  *
  * The former V2 cuts are closed (the "when the player feature
  * migrates" trigger fired long ago): `EngineConfig.videoEffects` is applied
- * as a live mpv `vf` chain + `video-rotate` property ([DesktopVideoEffectChain]
+ * as a live mpv `vf` chain + `video-rotate` property ([MpvVideoEffectChain]
  * builds the strings — see its shared→mpv parity table), screenshot capture
  * goes through mpv's `screenshot-to-file` ([captureVideoFrame], the desktop
  * seam's COMPOSE engine hook), and [currentCues] accumulates the live-cue
@@ -407,16 +408,13 @@ open class MpvDesktopEngine(
     @Volatile private var lastAppliedVfChain: String? = null
     @Volatile private var lastAppliedRotationDeg: Int = 0
 
-    // The structured [MpvEngineConfig] diff cache (shared MpvConfigMapping —
-    // the groundwork that makes the desktop engine read the config Android's
-    // mpv engine has always consumed): scale/deband/interpolation(+video-sync)/
-    // framedrop/skiploopfilter/demuxer budgets/audio-device/audio-exclusive/
-    // audio-spdif/extras. Starts empty so the first FILE_LOADED application
-    // writes every owned key once; subsequent applies (every FILE_LOADED, plus
-    // live `engineSpecific` changes) write only actual CHANGES. scaler/deband
+    // The structured [MpvEngineConfig] diff cache lives in the shared
+    // [MpvConfigApplier] now (its `lastAppliedConfigProps`, same discipline:
+    // starts empty so the first FILE_LOADED application writes every owned
+    // key once; subsequent applies — every FILE_LOADED, plus live
+    // `engineSpecific` changes — write only actual CHANGES. scaler/deband
     // changes reconfigure the vo pipeline, `audio-device` re-opens the ao —
-    // both only ever written on a real change.
-    @Volatile private var lastAppliedEngineConfigProps: Map<String, String> = emptyMap()
+    // both only ever written on a real change).
 
     /**
      * The `sub-*` styling keys the user explicitly owns via the in-app
@@ -1091,99 +1089,67 @@ open class MpvDesktopEngine(
     // The chassis's final [EngineStateChassis.updateConfig] owns the dedup
     // guard + assignment (the desktop's former copy is gone); the ownership
     // refresh that used to sit between the assignment and the hook now runs
-    // at the top of the hook — the same call shape (only on a real diff,
-    // after `currentConfig` was assigned).
+    // at the top of the shared [MpvConfigApplier] dispatch — the same call
+    // shape (only on a real diff, after `currentConfig` was assigned).
 
-    override protected fun onConfigChanged(oldConfig: EngineConfig, newConfig: EngineConfig) {
-        // Ownership first: an edited extra config re-claims/renounces sub-*
-        // keys before any style re-apply below consults the set.
-        refreshUserOwnedSubtitleKeys(newConfig)
-        // Slice decisions come from the shared pure delta (EngineConfigDelta.of
-        // — the single diff both mpv hosts consume); only the native writes
-        // stay engine-owned. Per-slice dispatch replaces the former
-        // engineSpecific-triggered full applyConfigToMpv, which unconditionally
-        // re-wrote the (unchanged) delay/hwdec/subtitle-style values.
-        val delta = EngineConfigDelta.of(oldConfig, newConfig)
-        if (delta.audioDelayChanged) {
-            ctx?.let { MpvLib.setPropertyDouble(it, "audio-delay", newConfig.audioDelayMs / 1000.0) }
-        }
-        if (delta.subtitleDelayChanged) {
-            ctx?.let { MpvLib.setPropertyDouble(it, "sub-delay", newConfig.subtitleDelayMs / 1000.0) }
-        }
-        if (delta.decoderModeChanged) {
-            ctx?.let { MpvLib.setPropertyString(it, "hwdec", hwdecFor(newConfig.decoderMode)) }
-        }
-        if (delta.subtitleStyleChanged) {
-            applySubtitleStyle(newConfig.subtitleStyle)
-        }
-        if (delta.sharedPairsChanged) {
-            // engineSpecific + audioPassthrough + deinterlace + hdrSource —
-            // the shared pairs must be re-diffed when any of them moves, on
-            // every such edge (see EngineConfigDelta.sharedPairsChanged).
-            applyEngineConfig(newConfig)
-        }
-        if (delta.audioEffectsChanged || delta.engineSpecificChanged) {
-            // Live re-apply — mpv re-inits the af chain / audio-channels /
-            // pitch on property writes (verified against the bundled libmpv).
-            // engineSpecific rides along because the output mode's STEREO
-            // forced downmix folds into the audio-channels value
-            // (MpvConfigMapping.effectiveAudioChannels composes); the diff
-            // caches keep an unrelated engineSpecific change write-free.
-            applyAudioEffects(newConfig)
-        }
-        if (delta.videoEffectsChanged) {
+    /**
+     * The shared config-delta dispatcher (player-contract, the
+     * [MpvFoldApplier] family): it owns the arm ORDER (ownership refresh →
+     * audio-delay → sub-delay → hwdec → shared pairs → subtitle style →
+     * audio → video — the ladder both engines' hand-mirrored bodies ran and
+     * had already drifted once) and the genuinely-shared arms; this engine
+     * contributes only its native surfaces — the live `shaderDir` +
+     * HDR-active `toneMappingSuppressed` extras, the mode-derived `hwdec`
+     * value and its diff-cached audio trio (channels/pitch/af) inside the
+     * audio hook. The FILE_LOADED full apply is [MpvConfigApplier.applyFull]
+     * on the same applier.
+     */
+    private val configApplier = MpvConfigApplier(
+        surface = { aliveCtx()?.let(::DesktopMpvSurface) },
+        extras = {
+            MpvConfigApplier.Extras(
+                // No low-RAM axis on desktop: the AUTO demuxer budget takes
+                // the normal pair (the mapper's device-dependent branch stays
+                // Android's).
+                lowRamDevice = false,
+                shaderDir = shaderDir,
+                // While HDR passthrough is ACTIVE (setting on + HDR item +
+                // HDR display target) `tone-mapping` falls to mpv's `auto`
+                // default — HDR→HDR, the colorspace-hint path owns the output
+                // (and a stale preset from an SDR session is explicitly
+                // reset). Before the target probe lands the gate is open
+                // (the preset is written): the safe fallback for SDR displays.
+                toneMappingSuppressed = hdrPassthroughRequested(currentConfig) && hdrTargetIsHdr,
+            )
+        },
+        refreshOwnedKeys = { refreshUserOwnedSubtitleKeys(currentConfig) },
+        hwdecValue = { cfg -> hwdecFor(cfg.decoderMode) },
+        applySubtitleStyle = { cfg -> applySubtitleStyle(cfg.subtitleStyle) },
+        applyAudioEffects = { _, new, delta, full ->
+            if (full || delta.audioEffectsChanged || delta.engineSpecificChanged) {
+                // Live re-apply — mpv re-inits the af chain / audio-channels /
+                // pitch on property writes (verified against the bundled
+                // libmpv). engineSpecific rides along because the output
+                // mode's STEREO forced downmix folds into the audio-channels
+                // value (MpvConfigMapping.effectiveAudioChannels composes);
+                // the diff caches keep an unrelated engineSpecific change
+                // write-free.
+                applyAudioEffects(new)
+            }
+        },
+        applyVideoEffects = { cfg ->
             // Video twin: mpv re-inits the video pipeline on `vf` writes
             // (same class of live re-apply as the af chain above).
-            applyVideoEffects(newConfig)
-        }
+            applyVideoEffects(cfg)
+        },
+    )
+
+    override protected fun onConfigChanged(oldConfig: EngineConfig, newConfig: EngineConfig) {
+        configApplier.applyDelta(oldConfig, newConfig)
     }
 
     private fun applyConfigToMpv(config: EngineConfig) {
-        val context = aliveCtx() ?: return
-        refreshUserOwnedSubtitleKeys(config)
-        MpvLib.setPropertyDouble(context, "audio-delay", config.audioDelayMs / 1000.0)
-        MpvLib.setPropertyDouble(context, "sub-delay", config.subtitleDelayMs / 1000.0)
-        MpvLib.setPropertyString(context, "hwdec", hwdecFor(config.decoderMode))
-        applySubtitleStyle(config.subtitleStyle)
-        applyEngineConfig(config)
-        applyAudioEffects(config)
-        applyVideoEffects(config)
-    }
-
-    /**
-     * Applies the structured [MpvEngineConfig] through the shared
-     * [MpvConfigMapping] with the diff-then-write discipline above — the
-     * desktop half of the engine-config parity groundwork. Runs at every
-     * FILE_LOADED (fresh loads re-write nothing thanks to the cache) and on
-     * live `engineSpecific` changes, so the settings-surface knobs (scaler,
-     * deband, interpolation, framedrop, skip-loop-filter, demuxer budgets,
-     * audio device/exclusive/passthrough, shader pack, tone mapping, render
-     * quality, `mpvExtraConfig`) all reach the desktop mpv exactly as they
-     * reach Android's.
-     */
-    private fun applyEngineConfig(config: EngineConfig) {
-        val context = aliveCtx() ?: return
-        val mpvCfg = config.engineSpecific as? MpvEngineConfig ?: MpvEngineConfig()
-        val pairs = MpvConfigMapping.configPairs(
-            config = mpvCfg,
-            audioPassthrough = config.audioPassthrough,
-            passthroughCodecs = config.audioPassthroughCodecs,
-            // No low-RAM axis on desktop: the AUTO demuxer budget takes the
-            // normal pair (the mapper's device-dependent branch stays Android's).
-            lowRamDevice = false,
-            deinterlace = config.deinterlace,
-            shaderDir = shaderDir,
-            // While HDR passthrough is ACTIVE (setting on + HDR item +
-            // HDR display target) `tone-mapping` falls to mpv's `auto`
-            // default — HDR→HDR, the colorspace-hint path owns the output
-            // (and a stale preset from an SDR session is explicitly reset).
-            // Before the target probe lands the gate is open (the preset is
-            // written): the safe fallback for SDR displays.
-            toneMappingSuppressed = hdrPassthroughRequested(config) && hdrTargetIsHdr,
-        )
-        lastAppliedEngineConfigProps = MpvConfigMapping.applyChanged(pairs, lastAppliedEngineConfigProps) { key, value ->
-            MpvLib.setPropertyString(context, key, value)
-        }
+        configApplier.applyFull(config)
     }
 
     /**
@@ -1240,16 +1206,17 @@ open class MpvDesktopEngine(
 
     /**
      * push the video-effects config onto mpv — the `vf` chain
-     * ([DesktopVideoEffectChain.buildVfChain]) and the rotation via the
-     * separate `video-rotate` property (rotation is an output transform, not
-     * a filter). Both are runtime-settable; mpv rebuilds the video pipeline
-     * on `vf` writes — which is why unchanged values are never re-written
-     * (see the pacing note on the last-applied fields above).
+     * ([MpvVideoEffectChain.buildVfChain], the shared contract builder both
+     * mpv engines apply) and the rotation via the separate `video-rotate`
+     * property (rotation is an output transform, not a filter). Both are
+     * runtime-settable; mpv rebuilds the video pipeline on `vf` writes —
+     * which is why unchanged values are never re-written (see the pacing
+     * note on the last-applied fields above).
      */
     private fun applyVideoEffects(config: EngineConfig) {
         val context = aliveCtx() ?: return
         val fx = config.videoEffects
-        val chain = DesktopVideoEffectChain.buildVfChain(fx)
+        val chain = MpvVideoEffectChain.buildVfChain(fx)
         if (chain != lastAppliedVfChain) {
             if (chain != null) {
                 MpvLib.setPropertyString(context, "vf", chain)
@@ -1258,7 +1225,7 @@ open class MpvDesktopEngine(
             }
             lastAppliedVfChain = chain
         }
-        val rotation = DesktopVideoEffectChain.rotationDegrees(fx)
+        val rotation = MpvVideoEffectChain.rotationDegrees(fx)
         if (rotation != lastAppliedRotationDeg) {
             // STRING, not DOUBLE: this libmpv REJECTS FORMAT_DOUBLE writes on
             // the integer `video-rotate` property (verified live — the write

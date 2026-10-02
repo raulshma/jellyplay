@@ -18,6 +18,10 @@ import com.raulshma.jellyplay.core.data.repository.UserDataContainer
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.model.HomeFreshness
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestStateHolder
+import com.raulshma.jellyplay.core.data.seerr.TmdbCompanionFetches
+import com.raulshma.jellyplay.core.data.seerr.TmdbCompanionLanding
+import com.raulshma.jellyplay.core.data.seerr.TmdbCompanionRequest
+import com.raulshma.jellyplay.core.data.seerr.TmdbCompanionStateHolder
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.experimental.directArrEnabled
 import com.raulshma.jellyplay.core.model.DetailCapabilities
@@ -46,8 +50,6 @@ import com.raulshma.jellyplay.core.ui.components.seerr.SeerrRequestDialogHolder
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -1439,6 +1441,20 @@ class DetailViewModel internal constructor(
     suspend fun getAvailableStorageBytes(isAudio: Boolean): Long =
         storageProbe.availableBytes(isAudio)
 
+    /**
+     * The TMDB-companion choreography shared with [SeerrDetailViewModel]
+     * (formerly hand-copied here): the holder owns the movie/tv videos fork,
+     * the connected × recommendations-enabled × staleness gate, the bounded
+     * fan-out, per-leg error tolerance, and the take-limits. Built on the
+     * [SeerrRequestStateHolder] template — constructor-lambda fetch seams
+     * straight onto [RemoteDiscoveryClients.seerrRepository], a single
+     * snapshot surface, landings folded into this screen's bag below.
+     */
+    private val tmdbCompanion = TmdbCompanionStateHolder(
+        scope = scope,
+        fetches = TmdbCompanionFetches.of(remoteDiscovery.seerrRepository),
+    )
+
     private fun loadSeerrData(detail: MediaDetail, generation: Long) {
         launch {
             if (!loadGuard.isCurrent(generation)) return@launch
@@ -1459,17 +1475,6 @@ class DetailViewModel internal constructor(
             val tmdbId = resolveTmdbId(detail) // top-level fn in TmdbIdResolver.kt
             if (tmdbId == null) return@launch
 
-            // Reviews come straight from TMDB — neither the Seerr connection nor
-            // the recommendations preference gates them. Separate launch so the
-            // review section doesn't serialize behind the Seerr fetches below.
-            launch {
-                val reviews = remoteDiscovery.seerrRepository.getTmdbReviews(tmdbId, mediaType)
-                    .getOrElse { emptyList() }
-                if (loadGuard.isCurrent(generation)) {
-                    _uiState.update { it.copy(tmdbReviews = reviews.take(5)) }
-                }
-            }
-
             // Read the already-resolved Seerr connection booleans from the
             // published [uiState] aggregator — NOT [_uiState]. The flags are
             // folded into [uiState] by the outer combine (Group 3 → seerrFlags),
@@ -1480,57 +1485,38 @@ class DetailViewModel internal constructor(
             val connected = uiState.value.isSeerrConnected
 
             if (!loadGuard.isCurrent(generation)) return@launch
-            coroutineScope {
-                // 1. Fetch related videos (trailers)
-                val videosDeferred = async {
-                    if (connected) {
-                        if (mediaType == MediaType.MOVIE) {
-                            remoteDiscovery.seerrRepository.getMovieDetails(tmdbId).map { it.relatedVideos }
-                        } else {
-                            remoteDiscovery.seerrRepository.getTvDetails(tmdbId).map { it.relatedVideos }
-                        }
-                    } else {
-                        remoteDiscovery.seerrRepository.getTmdbVideos(tmdbId, mediaType)
-                    }
-                }
 
-                // 2. Fetch recommendations and similar if enabled
-                val enabled = uiState.value.isSeerrRecommendationsEnabled
-                val loadRecs = connected && enabled && loadGuard.isCurrent(generation)
-                val recsDeferred = if (loadRecs) {
-                    async {
-                        remoteDiscovery.seerrRepository.getRecommendations(tmdbId, mediaType)
-                            .getOrElse { emptyList() }
-                    }
-                } else {
-                    null
-                }
-                val similarDeferred = if (loadRecs) {
-                    async {
-                        remoteDiscovery.seerrRepository.getSimilar(tmdbId, mediaType)
-                            .getOrElse { emptyList() }
-                    }
-                } else {
-                    null
-                }
+            // Fire-and-forget: each leg lands into [_uiState] as it resolves,
+            // staleness-checked atomically with its write via the request's
+            // [TmdbCompanionRequest.isCurrent] (this screen's captured epoch —
+            // the same seam startInstantMix passes its guard through).
+            tmdbCompanion.load(
+                TmdbCompanionRequest(
+                    tmdbId = tmdbId,
+                    mediaType = mediaType,
+                    connected = connected,
+                    recommendationsEnabled = uiState.value.isSeerrRecommendationsEnabled,
+                    loadVideos = true,
+                    loadReviews = true,
+                    loadRecommendations = true,
+                    isCurrent = { loadGuard.isCurrent(generation) },
+                    onLanding = ::foldCompanionLanding,
+                ),
+            )
+        }
+    }
 
-                val videosResult = videosDeferred.await()
-                if (loadGuard.isCurrent(generation)) {
-                    val videos = videosResult.getOrElse { emptyList() }
-                    _uiState.update { it.copy(relatedVideos = videos) }
-                }
-                if (recsDeferred != null && similarDeferred != null) {
-                    val recs = recsDeferred.await()
-                    val similar = similarDeferred.await()
-                    if (loadGuard.isCurrent(generation)) {
-                        _uiState.update {
-                            it.copy(
-                                seerrRecommendations = recs.take(20),
-                                seerrSimilar = similar.take(20),
-                            )
-                        }
-                    }
-                }
+    /** Maps one holder landing onto its [DetailUiState] field. */
+    private fun foldCompanionLanding(landing: TmdbCompanionLanding) {
+        _uiState.update {
+            when (landing) {
+                is TmdbCompanionLanding.Videos -> it.copy(relatedVideos = landing.videos)
+                is TmdbCompanionLanding.Reviews -> it.copy(tmdbReviews = landing.reviews)
+                is TmdbCompanionLanding.Recommendations -> it.copy(seerrRecommendations = landing.items)
+                is TmdbCompanionLanding.Similar -> it.copy(seerrSimilar = landing.items)
+                // This screen never requests the ratings leg (the ratings row
+                // renders from the loaded detail's own fields here).
+                is TmdbCompanionLanding.Ratings -> it
             }
         }
     }

@@ -338,8 +338,9 @@ class PreferenceProjections constructor(
     /**
      * Fields read by `HomeSettingsScreen` — a single-store slice over
      * [HomeDiscoveryStore] so the home config hub recomposes only on
-     * home-discovery writes. The card-display toggles stay out (app-wide card
-     * settings owned by the Appearance screen).
+     * home-discovery writes. Includes the card-display quartet since the
+     * finished Appearance → HomeSettings move (PS-4): the knobs are
+     * home-discovery state and their rows render on the hub's Cards group.
      */
     val homeScreenPreferences: StateFlow<HomeScreenPreferences> =
         stores.homeDiscovery.homeDiscovery.map { home ->
@@ -362,6 +363,10 @@ class PreferenceProjections constructor(
                 pinnedHomeSections = home.pinnedHomeSections,
                 discoverRows = home.discoverRows,
                 homeLayoutPresets = home.homeLayoutPresets,
+                showUnwatchedBadge = home.showUnwatchedBadge,
+                showWatchedCheckmark = home.showWatchedCheckmark,
+                hideWatchedItems = home.hideWatchedItems,
+                showExternalRatings = home.showExternalRatings,
             )
         }.distinctUntilChanged()
             .stateIn(scope, SharingStarted.WhileSubscribed(5_000), HomeScreenPreferences())

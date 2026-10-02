@@ -401,9 +401,11 @@ data class ExperimentalPreferences(
 
 /**
  * Fields read by `AppearanceSettingsScreen`. This is the broadest slice because
- * the Appearance screen surfaces theme, home layout, discovery, newsletter, and
- * accessibility settings together. Navigation-customization fields are excluded
- * — they live in [navigationCustomization].
+ * the Appearance screen surfaces theme, layout, library-card display,
+ * newsletter, and accessibility settings together. Navigation-customization
+ * fields are excluded — they live in [navigationCustomization]; the
+ * home-discovery card-display quartet is excluded too — it moved (with its
+ * rows) to `HomeScreenPreferences` (PS-4).
  */
 @Immutable
 @Serializable
@@ -447,13 +449,10 @@ data class AppearanceScreenPreferences(
     val homeLayoutPresets: List<HomeLayoutPreset> = emptyList(),
     val libraryHomeSectionOverrides: Map<String, Set<HomeSectionType>> = emptyMap(),
     val hiddenCwItemIds: Set<String> = emptySet(),
-    val showUnwatchedBadge: Boolean = true,
-    val hideWatchedItems: Boolean = false,
     val mergeContinueWatchingAndNextUp: Boolean = false,
     val nextUpMaxDays: Int = 0,
     val nextUpRewatching: Boolean = false,
     val continueWatchingClickBehavior: ContinueWatchingClickBehavior = ContinueWatchingClickBehavior.DETAILS,
-    val showWatchedCheckmark: Boolean = true,
     val hideEpisodeThumbnails: Boolean = false,
     val skipSpecials: Boolean = false,
     val compactEpisodeList: Boolean = false,
@@ -463,7 +462,6 @@ data class AppearanceScreenPreferences(
     val preferLogos: Boolean = false,
     /** Whether the library "Reset" pill shows a confirmation dialog before clearing. */
     val confirmLibraryReset: Boolean = true,
-    val showExternalRatings: Boolean = true,
     val showShareMediaOption: Boolean = true,
     val hideSearchHistory: Boolean = false,
     val showClockOnHome: Boolean = false,
@@ -491,11 +489,11 @@ data class AppearanceScreenPreferences(
 
 /**
  * Fields read by `HomeSettingsScreen` — the home-screen config hub (display
- * rows, Continue Watching / Next Up behavior, and the home layout editor).
- * Everything here projects from the single [HomeDiscoveryStore] slice; the
- * card-display toggles (unwatched badge, watched checkmark, hide watched,
- * external ratings) are deliberately excluded because they are app-wide card
- * settings that stay on the Appearance screen.
+ * rows, Continue Watching / Next Up behavior, the home layout editor, and —
+ * since the finished Appearance → HomeSettings move, PS-4 — the card-display
+ * toggles: unwatched badge, watched checkmark, hide watched, external
+ * ratings). Everything here projects from the single [HomeDiscoveryStore]
+ * slice.
  */
 @Immutable
 @Serializable
@@ -521,4 +519,9 @@ data class HomeScreenPreferences(
     /** The user's custom Discover rows (config order). */
     val discoverRows: List<DiscoverRowConfig> = emptyList(),
     val homeLayoutPresets: List<HomeLayoutPreset> = emptyList(),
+    /** The card-display quartet, moved here with its rows (PS-4). */
+    val showUnwatchedBadge: Boolean = true,
+    val showWatchedCheckmark: Boolean = true,
+    val hideWatchedItems: Boolean = false,
+    val showExternalRatings: Boolean = true,
 )

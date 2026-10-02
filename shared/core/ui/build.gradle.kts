@@ -36,37 +36,21 @@ kotlin {
             // runCatchingRethrowingCancellation — the repo's one
             // cancellation-safety seam (zero-dependency leaf, no cycle).
             implementation(project(":shared:core:concurrency"))
-            // JetBrains CMP distribution (see catalog note): Android targets
-            // redirect to the androidx artifacts.
-            implementation(libs.jb.compose.runtime)
-            implementation(libs.jb.compose.ui)
-            implementation(libs.jb.compose.foundation)
-            implementation(libs.jb.compose.animation)
-            implementation(libs.jb.compose.material3)
             implementation(libs.jb.compose.saveable)
-            // Compose-resources runtime (stringResource/StringResource API).
-            implementation(compose.components.resources)
-            implementation(libs.tabler.icons.outline)
-            implementation(libs.tabler.icons.filled)
             implementation(libs.coil.compose)
             // MarkdownText's engine: the mikepenz 0.41.0 pin
             // publishes Kotlin-2.3-built klibs, so the SAME GFM pipeline
             // renders on android + desktop (see the catalog note).
             implementation(libs.multiplatform.markdown.renderer)
             implementation(libs.multiplatform.markdown.renderer.m3)
-            // Nav3 ships KMP variants from google maven directly (desktop/iOS/
-            // js variants in the same androidx coordinates) — no mirror.
-            implementation(libs.navigation3.runtime)
-            implementation(libs.navigation3.ui)
-            implementation(libs.lifecycle.viewmodel)
             // DeferredRefreshEffect (the screen side of the deferred
             // user-data refresh contract) is driven by LifecycleResumeEffect.
-            implementation(libs.lifecycle.runtime.compose)
             implementation(libs.paging.compose)
             implementation(libs.kotlinx.serialization.json)
             // v0.10.6 merge: coreUiMessageModule owns the shared
-            // UserMessageBus single (see di/CoreUiMessageModule.kt).
-            implementation(libs.koin.core)
+            // UserMessageBus single (see di/CoreUiMessageModule.kt) —
+            // koin-core itself rides the convention plugin's universal
+            // commonMain bundle.
         }
         // BlurHashCache byte-budget regression tests construct real ImageBitmaps;
         // the skiko JVM artifacts on main are code-only, natives (dll.sha256)
@@ -112,13 +96,11 @@ kotlin.sourceSets.configureEach {
     }
 }
 
-// `compose.resources` is a nested extension with no generated Kotlin-DSL
-// accessor; configure it explicitly. Same package as the legacy :core:ui so
-// migrated files keep their `com.raulshma.jellyplay.core.ui` imports; generated
-// accessors land in `...core.ui.generated.resources`.
+// `compose.resources` packageOfResClass comes from the convention plugin's
+// path-derived default (`...core.ui.generated.resources`, byte-identical to
+// the legacy per-module value). Cross-module string sharing: shared/feature
+// modules resolve a handful of core strings (core_delete/core_cancel, ...)
+// directly, which requires the generated Res object + accessors to be public
+// (internal by default) — that flag stays per-module.
 val composeResources = (compose as ExtensionAware).extensions.getByName("resources") as org.jetbrains.compose.resources.ResourcesExtension
-composeResources.packageOfResClass = "com.raulshma.jellyplay.core.ui.generated.resources"
-// Cross-module string sharing: shared/feature modules resolve a handful of
-// core strings (core_delete/core_cancel, ...) directly, which requires the
-// generated Res object + accessors to be public (internal by default).
 composeResources.publicResClass = true

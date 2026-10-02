@@ -102,6 +102,8 @@ class SettingsSearchCatalogTest {
         // Picture-in-Picture" toggle (issue #167): 307.
         // Added the home display group's "Classic Row Behavior" toggle
         // (issue #168): 308.
+        // The appearance library group's home-discovery card-display quartet
+        // moved into a new home.cards group (same ids, PS-4): count unchanged.
         // Bump this count when you deliberately add items.
         assertEquals(308, items.size)
         // Curated flat order starts with the account/session pair that used to
@@ -112,7 +114,7 @@ class SettingsSearchCatalogTest {
             AccountSearchItems.size + IntegrationsSearchItems.size +
                 ActivityInsightsSearchItems.size + SystemSearchItems.size +
                 HomeDisplaySearchItems.size + HomeNextUpSearchItems.size +
-                HomeLayoutSearchItems.size +
+                HomeLayoutSearchItems.size + HomeCardsSearchItems.size +
                 AppearanceThemeSearchItems.size + AppearanceNavigationSearchItems.size +
                 AppearanceLibrarySearchItems.size +
                 AppearancePerformanceSearchItems.size + AppearanceEyeCareSearchItems.size +

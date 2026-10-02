@@ -265,6 +265,14 @@
     <string name="core_refresh_metadata_mode_replace_all_desc">현재 메타데이터를 공급자 데이터로 덮어씁니다. 시리즈는 에피소드도 함께 새로 고쳐집니다.</string>
     <string name="core_refresh_metadata_mode_replace_images">모든 이미지 교체</string>
     <string name="core_refresh_metadata_mode_replace_images_desc">공급자에서 모든 이미지를 다시 받고 메타데이터는 유지합니다.</string>
+    <!-- Played/progress filter chips + clear-all (kept beside
+         core_filter_has_* below, mirroring the default file grouping). -->
+    <string name="core_filter_played_all">전체</string>
+    <string name="core_filter_played_played">재생됨</string>
+    <string name="core_filter_played_unplayed">재생 안 됨</string>
+    <string name="core_filter_rating_plus">%1$s+</string>
+    <string name="core_filter_in_progress">진행 중</string>
+    <string name="core_clear_all">모두 지우기</string>
     <string name="core_filter_has_subtitles">자막 있음</string>
     <string name="core_filter_has_trailer">예고편 있음</string>
 

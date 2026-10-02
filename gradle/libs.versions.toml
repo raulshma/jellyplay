@@ -144,6 +144,12 @@ jb-compose-ui-desktop = { group = "org.jetbrains.compose.ui", name = "ui-desktop
 jb-compose-foundation = { group = "org.jetbrains.compose.foundation", name = "foundation", version.ref = "composeMultiplatform" }
 jb-compose-animation = { group = "org.jetbrains.compose.animation", name = "animation", version.ref = "composeMultiplatform" }
 jb-compose-material3 = { group = "org.jetbrains.compose.material3", name = "material3", version.ref = "composeMultiplatformMaterial3" }
+# Compose-resources runtime — what the per-module `compose.components.resources`
+# DSL notation resolves to (org.jetbrains.compose.components:components-resources
+# on the composeMultiplatform train). Declared here so the convention plugin's
+# universal bundle (jellyplay.kmp.library.compose) can add it without the
+# type-safe `compose` accessor, which does not generate inside plugin code.
+jb-compose-components-resources = { group = "org.jetbrains.compose.components", name = "components-resources", version.ref = "composeMultiplatform" }
 jb-compose-saveable = { group = "org.jetbrains.compose.runtime", name = "runtime-saveable", version.ref = "composeMultiplatform" }
 compose-runtime = { group = "androidx.compose.runtime", name = "runtime" }
 compose-ui = { group = "androidx.compose.ui", name = "ui" }

@@ -7,11 +7,11 @@ import com.raulshma.jellyplay.core.data.playback.PlayerLifecycleManager
 import com.raulshma.jellyplay.core.data.playback.SleepCountdown
 import com.raulshma.jellyplay.core.data.playback.VideoMiniPlayerState
 import com.raulshma.jellyplay.core.data.playback.dischargePipDismissal
-import com.raulshma.jellyplay.core.data.playback.focus.FocusClaimState
-import com.raulshma.jellyplay.core.data.playback.focus.FocusOutcome
 import com.raulshma.jellyplay.core.data.playback.focus.PlaybackFocus
+import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.data.playback.focus.PlaybackSurfaceId
 import com.raulshma.jellyplay.core.data.playback.focus.VideoFocusPolicyInput
+import com.raulshma.jellyplay.core.data.playback.focus.claimOnPlayEdge
 import com.raulshma.jellyplay.core.data.network.NetworkMonitor
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.ItemPlaybackPreferenceRepository
@@ -1049,13 +1049,13 @@ internal class PlayerWiring(
 
     /**
      * Owns the runtime engine-config sync (the [SubtitleStyleController]
-     * shape): the [EngineConfigBuilder] invocation over narrow state slices +
-     * the live-engine dispatch — both trigger paths moved VERBATIM: the
-     * immediate rebuild (`markDirty` — the former `updateConfigWithUiState`)
+     * shape): the [EngineConfigBuilder] invocation over the [EngineConfigSlices]
+     * snapshot + the live-engine dispatch — both trigger paths moved VERBATIM:
+     * the immediate rebuild (`markDirty` — the former `updateConfigWithUiState`)
      * and the drag-settling debounce (`markDirtyDebounced`). The uiState bag
-     * never crosses (god-count ratchet unmoved); `getEngine` is read at
-     * dispatch time, so a debounce settling after an engine swap lands on
-     * the NEW engine.
+     * never crosses (god-count ratchet unmoved) — this ONE sanctioned uiState
+     * site projects the slices; `getEngine` is read at dispatch time, so a
+     * debounce settling after an engine swap lands on the NEW engine.
      *
      * Declared near the END of phase 1 — after every collaborator whose
      * wiring reads it through [engineConfigSyncRef]. Because every such read
@@ -1067,21 +1067,61 @@ internal class PlayerWiring(
      */
     private val engineConfigSync = EngineConfigSync(
         scope = scope,
-        getSubtitleStyle = { uiState.value.subtitleStyle },
-        getVideoEffects = { uiState.value.videoFx.videoEffects },
-        isDialogueBoostEnabled = { uiState.value.dialogueBoostEnabled },
-        getDialogueBoostStrength = { uiState.value.dialogueBoostStrength },
-        getMediaStreams = { uiState.value.media.mediaStreams },
-        getEffectsState = { effects.state.value },
-        getAggregate = { cachedAggregate },
-        // the session's effective mpv config (global slice + the
-        // item/series render override + in-sheet quality pick) rides EVERY
-        // runtime build — the render sheet's writes reach the engine
-        // through this path (the engines' diff caches apply the delta).
-        getEngineSpecific = { sessionRender.effectiveMpvConfig(cachedAggregate.engine.mpvConfig) },
-        // the session-scoped deinterlace cycle.
-        getDeinterlace = { sessionRender.deinterlace },
+        slices = {
+            EngineConfigSlices(
+                subtitleStyle = uiState.value.subtitleStyle,
+                videoEffects = uiState.value.videoFx.videoEffects,
+                dialogueBoostEnabled = uiState.value.dialogueBoostEnabled,
+                dialogueBoostStrength = uiState.value.dialogueBoostStrength,
+                mediaStreams = uiState.value.media.mediaStreams,
+                effects = effects.state.value,
+                agg = cachedAggregate,
+                // the session's effective mpv config (global slice + the
+                // item/series render override + in-sheet quality pick) rides EVERY
+                // runtime build — the render sheet's writes reach the engine
+                // through this path (the engines' diff caches apply the delta).
+                engineSpecific = sessionRender.effectiveMpvConfig(cachedAggregate.engine.mpvConfig),
+                // the session-scoped deinterlace cycle.
+                deinterlace = sessionRender.deinterlace,
+            )
+        },
         getEngine = { playerSessionManager.engine },
+    )
+
+    /**
+     * The resolved-preference collector's side-effecting half (the
+     * [PlayerPrefsFanout] shape): the dialogue-boost default fold + enabled
+     * mirror write, the track helper's series-pref reflection, the
+     * engine-config rebuild trigger and the language-preference re-apply
+     * ladder (with its autoplay-race rationale) live in
+     * [TrackPreferenceFanout.onPreferenceResolved]; this builder only
+     * registers the collector. Declared after [trackSelectionHelper] and
+     * [engineConfigSync] — its lambdas read them, but only run from the
+     * arm-phase collector, long after construction.
+     */
+    private val trackPreferenceFanout = TrackPreferenceFanout(
+        applyDialogueBoostResolution = { resolvedBoost ->
+            uiState.update {
+                it.copy(
+                    dialogueBoostStrength = resolvedBoost,
+                    dialogueBoostEnabled = resolvedBoost != EffectStrength.NONE,
+                )
+            }
+        },
+        onSeriesPreferenceResolved = trackSelectionHelper::onSeriesPreferenceResolved,
+        rebuildEngineConfig = { engineConfigSyncRef.markDirty() },
+        reapplyTracksFromEngine = { trackSelectionHelper.updateTracksFromEngine() },
+    )
+
+    /**
+     * The displaced-holder self-pause collector's decision half (the reader's
+     * observation pattern — the rationale lives on
+     * [DisplacedHolderSelfPause]): which focus-claim states warrant pausing a
+     * still-playing engine. The builder only registers the collector.
+     */
+    private val displacedHolderSelfPause = DisplacedHolderSelfPause(
+        isEnginePlaying = { playerSessionManager.engine?.isPlaying?.value == true },
+        pauseEngine = { playerSessionManager.engine?.pause() },
     )
 
     /** The render sheet's session-scoped state (sheet + deinterlace cycle). */
@@ -1229,23 +1269,12 @@ internal class PlayerWiring(
             onRestore = { playerSessionManager.engine?.let { host.applyResumeSkip(it) } },
         )
 
-        // Displaced-holder self-pause (the reader's observation pattern):
-        // skip ONLY while the floor is HELD by us — every other state falls
-        // through and pauses an engine that is somehow still playing. That
-        // includes our OWN Suspended(VIDEO) claims: a user pause (engine
-        // idle, the pause is a no-op) and a permanent-loss ruling (redundant
-        // with suspendHolder's command, harmless as a belt).
-        // Load-bearing on desktop — the desktop focus
-        // binding registers only the music surface, so a MUSIC eviction of a
-        // held VIDEO claim arrives as no command; on Android the surface
-        // command path already paused and this is an idempotent belt. The
-        // duck row never lands here (the claim stays Held while ducked).
+        // Displaced-holder self-pause: the decision (which claim states
+        // warrant the pause, and why the desktop depends on it) lives in
+        // [displacedHolderSelfPause] — this is the registration only.
         scope.launch {
             playbackFocus.claimState.collect { state ->
-                if (state is FocusClaimState.Held && state.holder == PlaybackSurfaceId.VIDEO) return@collect
-                if (playerSessionManager.engine?.isPlaying?.value == true) {
-                    playerSessionManager.engine?.pause()
-                }
+                displacedHolderSelfPause.onClaimStateChanged(state)
             }
         }
 
@@ -1267,35 +1296,13 @@ internal class PlayerWiring(
 
         // Reflect the resolved per-item/series language preference into the
         // track slice (series-pref toggle rows) + dialogue boost so the sheets
-        // show the series-pref toggle state.
+        // show the series-pref toggle state. The whole fold (boost default +
+        // enabled mirror, the series-pref reflection, the config rebuild and
+        // the hasLangPref-gated re-apply with its autoplay-race rationale)
+        // lives in [trackPreferenceFanout] — this is the registration only.
         scope.launch {
             playbackPreferenceResolver.resolved.collect { pref ->
-                // Dialogue Boost is resolved per-item: a stored rule
-                // pins the strength; otherwise the effective default is OFF (NONE),
-                // so the effect never silently carries across items. The global
-                // setting is intentionally NOT used as the auto fallback here.
-                val resolvedBoost = pref?.dialogueBoostStrength
-                    ?: com.raulshma.jellyplay.core.model.EffectStrength.NONE
-                uiState.update {
-                    it.copy(
-                        dialogueBoostStrength = resolvedBoost,
-                        dialogueBoostEnabled = resolvedBoost != com.raulshma.jellyplay.core.model.EffectStrength.NONE,
-                    )
-                }
-                trackSelectionHelper.onSeriesPreferenceResolved(pref)
-                engineConfigSyncRef.markDirty()
-                // Re-apply the language preference once it resolves. The DAO
-                // read in ItemPlaybackPreferenceResolver is async; on next-episode
-                // autoplay the engine often publishes its track list (triggering
-                // updateTracksFromEngine) before the preference lands. Without
-                // re-running here, the preference never gets applied for that
-                // load. Only re-run when a language preference actually exists so
-                // we don't churn on null resolutions (no engine yet ⇒ no-op).
-                val hasLangPref = pref?.audioLanguage != null || pref?.subtitleLanguage != null ||
-                    pref?.subtitleDisabled == true
-                if (hasLangPref) {
-                    trackSelectionHelper.updateTracksFromEngine()
-                }
+                trackPreferenceFanout.onPreferenceResolved(pref)
             }
         }
 
@@ -1377,23 +1384,18 @@ internal class PlayerWiring(
     }
 
     /**
-     * The VIDEO claim edge (the video focus slice, ADR-0004). A granted
-     * claim evicts the other surfaces synchronously before returning; a
-     * DENIED claim means another holder is Suspended under an OS loss
-     * (e.g. read-aloud during a phone call) — the newest user action does
-     * not outrank an OS suspension, so the engine pauses (mirroring the
-     * user's own pause: playWhenReady drops, nothing auto-resumes, and the
-     * resulting isPlaying=false edge releases below). The duck path never
+     * The VIDEO claim edge (the video focus slice, ADR-0004), folded onto
+     * the shared [claimOnPlayEdge] body: a granted claim evicts the other
+     * surfaces synchronously before returning; a DENIED claim pauses the
+     * engine (see the helper's KDoc for the contract). The duck path never
      * crosses here: a ducked claim stays Held and the engine keeps playing.
      */
     private fun onVideoPlayEdge(isPlaying: Boolean) {
-        if (isPlaying) {
-            if (playbackFocus.acquire(PlaybackSurfaceId.VIDEO) is FocusOutcome.Denied) {
-                playerSessionManager.engine?.pause()
-            }
-        } else {
-            playbackFocus.release(PlaybackSurfaceId.VIDEO)
-        }
+        playbackFocus.claimOnPlayEdge(
+            surfaceId = PlaybackSurfaceId.VIDEO,
+            isPlaying = isPlaying,
+            onDenied = { playerSessionManager.engine?.pause() },
+        )
     }
 
     // ── SessionLoadOutputs (the load pipeline's uiState-shaped outputs) ─────

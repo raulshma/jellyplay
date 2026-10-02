@@ -202,6 +202,10 @@ class SettingsCatalogScreenContractTest {
             // The unhide row rides hidden-CW content state — no admission
             // vocabulary; the screen adds the +1 explicitly.
             "home.display" to setOf(HomeSettingsIds.UNHIDE_CW),
+            // The cards group (the PS-4 Appearance → HomeSettings move)
+            // renders every declared row unconditionally — declared Always
+            // per id, fully covered.
+            "home.cards" to emptySet(),
             // The theme group's content-gated rows: their emission depends on
             // theme state the admission vocabulary does not carry (variant
             // accent support, standard-vs-themed branch, active-dark + OLED
@@ -1121,9 +1125,23 @@ class SettingsCatalogScreenContractTest {
             SettingsScreenGroups.appearanceLibrary.items.size + 1,
             appearanceLibraryScreenRowTotal(),
         )
-        // 12 declared rows (the shipped set + Show Missing Episodes + Prefer
-        // Logo Images) + the screen-local confirm-library-reset action row.
-        assertEquals(13, appearanceLibraryScreenRowTotal())
+        // 8 declared rows (the shipped set minus the home-discovery
+        // card-display quartet that moved to HomeSettingsScreen — PS-4) plus
+        // the screen-local confirm-library-reset action row.
+        assertEquals(9, appearanceLibraryScreenRowTotal())
+    }
+
+    @Test
+    fun `home cards row total is the four moved card-display rows`() {
+        // The PS-4 moved quartet: every row renders unconditionally on the
+        // home hub (no advanced gate), so the strict derivation counts all
+        // four under the no-flag input.
+        assertEquals(4, SettingsScreenGroups.homeCards.items.size, "the cards declaration changed — update this pin")
+        assertEquals(
+            SettingsScreenGroups.homeCards.items.size,
+            homeCardsScreenRowTotal(),
+        )
+        assertTrue(SettingsScreenGroups.homeCards.items.all { !it.isAdvanced }, "the cards rows must stay always-on")
     }
 
     @Test

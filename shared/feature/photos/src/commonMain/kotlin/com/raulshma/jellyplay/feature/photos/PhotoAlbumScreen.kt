@@ -1,13 +1,10 @@
 package com.raulshma.jellyplay.feature.photos
 
-import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.DropdownMenu
@@ -17,57 +14,36 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import com.raulshma.jellyplay.core.ui.components.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusProperties
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.onFocusChanged
 import org.jetbrains.compose.resources.stringResource
 import androidx.compose.ui.unit.dp
 import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.paging.LoadState
 import androidx.paging.compose.collectAsLazyPagingItems
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Check
 import com.composables.icons.tabler.outline.DotsVertical
 import com.composables.icons.tabler.outline.Photo
-import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.adaptive.gridCellSize
 import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
-import com.raulshma.jellyplay.core.ui.components.AppendErrorFooter
-import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
-import com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator
-import com.raulshma.jellyplay.core.ui.components.PagedAppendRung
-import com.raulshma.jellyplay.core.ui.components.PagedCollectionRung
-import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
-import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
-import com.raulshma.jellyplay.core.ui.components.pagedAppendRung
-import com.raulshma.jellyplay.core.ui.components.pagedCollectionRung
+import com.raulshma.jellyplay.core.ui.components.PagedCollectionGrid
 import com.raulshma.jellyplay.core.ui.components.rememberPagedCollectionStatus
-import com.raulshma.jellyplay.core.ui.components.toPagedRefreshPhase
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
-import com.raulshma.jellyplay.core.ui.tv.TvFocusableGrid
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
-import com.raulshma.jellyplay.core.ui.util.safeItemKey
 import com.raulshma.jellyplay.feature.photos.generated.resources.Res
 import com.raulshma.jellyplay.feature.photos.generated.resources.photos_failed_to_load_more
 import com.raulshma.jellyplay.feature.photos.generated.resources.photos_failed_to_load_photos
@@ -158,97 +134,43 @@ fun PhotoAlbumScreen(
             )
         },
     ) { _ ->
-        PullToRefreshBox(
-            isRefreshing = photos.loadState.refresh is LoadState.Loading && photos.itemCount > 0,
-            onRefresh = { photos.refresh() },
-            enabled = !isTv,
-            modifier = Modifier.fillMaxSize(),
-        ) {
-            Box(modifier = Modifier.fillMaxSize()) {
-                // The shared refresh ladder (core:ui chassis) — content wins
-                // over the spinner once pages exist; this screen's own
-                // pull-to-refresh gate above is unchanged.
-                when (pagedCollectionRung(photos.loadState.refresh.toPagedRefreshPhase(), photos.itemCount)) {
-                    PagedCollectionRung.InitialLoading -> {
-                        ScreenLoadingState()
-                    }
-                    PagedCollectionRung.RefreshError -> {
-                        ErrorScreen(
-                            message = UserErrorMessages.resolve(
-                                (photos.loadState.refresh as LoadState.Error).error,
-                                stringResource(Res.string.photos_failed_to_load_photos),
-                            ),
-                            onRetry = { photos.refresh() },
-                        )
-                    }
-                    PagedCollectionRung.Empty -> {
-                        ScreenEmptyState(
-                            icon = Tabler.Outline.Photo,
-                            title = stringResource(Res.string.photos_no_photos_found),
-                        )
-                    }
-                    PagedCollectionRung.Content -> {
-                        TvFocusableGrid(
-                            itemCount = photos.itemCount,
-                            key = photos.safeItemKey { it.id },
-                            columns = GridCells.Adaptive(adaptiveInfo.gridCellSize(isTv)),
-                            state = gridState,
-                            contentPadding = PaddingValues(
-                                start = adaptiveInfo.contentPadding(isTv),
-                                end = adaptiveInfo.contentPadding(isTv),
-                                top = 8.dp,
-                                bottom = adaptiveInfo.bottomPadding(isTv),
-                            ),
-                            horizontalArrangement = Arrangement.spacedBy(adaptiveInfo.itemSpacing(isTv)),
-                            verticalArrangement = Arrangement.spacedBy(adaptiveInfo.itemSpacing(isTv)),
-                            modifier = Modifier.fillMaxSize(),
-                            contentType = { "photoItem" },
-                        ) { index, itemModifier ->
-                            val photo = photos[index]
-                            if (photo != null) {
-                                val imageUrl = remember(photo.id) {
-                                    viewModel.getImageUrl(photo.id, maxWidth = 400)
-                                }
-                                val memoizedClick = remember(photo.id, parentId) {
-                                    { onPhotoClick(photo.id, parentId) }
-                                }
-                                PhotoGridCard(
-                                    imageUrl = imageUrl,
-                                    contentDescription = photo.name,
-                                    blurHash = photo.blurHashes.primary,
-                                    onClick = memoizedClick,
-                                    modifier = itemModifier,
-                                )
-                            }
-                        }
-                    }
-                }
-
-                when (pagedAppendRung(photos.loadState.append.toPagedRefreshPhase())) {
-                    PagedAppendRung.Loading -> {
-                        JellyPlayLoadingIndicator(
-                            modifier = Modifier
-                                .align(Alignment.BottomCenter)
-                                .padding(16.dp),
-                        )
-                    }
-                    PagedAppendRung.Retry -> {
-                        // Declared unification: the former raw-Text append
-                        // error becomes the shared retry footer.
-                        AppendErrorFooter(
-                            message = UserErrorMessages.resolve(
-                                (photos.loadState.append as LoadState.Error).error,
-                                stringResource(Res.string.photos_failed_to_load_more),
-                            ),
-                            onRetry = { photos.retry() },
-                            modifier = Modifier
-                                .align(Alignment.BottomCenter)
-                                .padding(16.dp),
-                        )
-                    }
-                    PagedAppendRung.Hidden -> Unit
-                }
+        // The shared paged-collection renderer (core:ui): the refresh ladder
+        // (content wins over the spinner once pages exist), pull-to-refresh
+        // (TV-off via pullToRefreshEnabled, this screen's own gate unchanged),
+        // the append footer and the TV-focusable grid composed once. The
+        // saved scroll state rides the `state` param.
+        PagedCollectionGrid(
+            items = photos,
+            itemKey = { it.id },
+            state = gridState,
+            columns = GridCells.Adaptive(adaptiveInfo.gridCellSize(isTv)),
+            contentPadding = PaddingValues(
+                start = adaptiveInfo.contentPadding(isTv),
+                end = adaptiveInfo.contentPadding(isTv),
+                top = 8.dp,
+                bottom = adaptiveInfo.bottomPadding(isTv),
+            ),
+            horizontalArrangement = Arrangement.spacedBy(adaptiveInfo.itemSpacing(isTv)),
+            verticalArrangement = Arrangement.spacedBy(adaptiveInfo.itemSpacing(isTv)),
+            pullToRefreshEnabled = !isTv,
+            emptyIcon = Tabler.Outline.Photo,
+            emptyTitle = stringResource(Res.string.photos_no_photos_found),
+            errorFallbackMessage = stringResource(Res.string.photos_failed_to_load_photos),
+            appendErrorFallbackMessage = stringResource(Res.string.photos_failed_to_load_more),
+        ) { photo, itemModifier ->
+            val imageUrl = remember(photo.id) {
+                viewModel.getImageUrl(photo.id, maxWidth = 400)
             }
+            val memoizedClick = remember(photo.id, parentId) {
+                { onPhotoClick(photo.id, parentId) }
+            }
+            PhotoGridCard(
+                imageUrl = imageUrl,
+                contentDescription = photo.name,
+                blurHash = photo.blurHashes.primary,
+                onClick = memoizedClick,
+                modifier = itemModifier,
+            )
         }
     }
 }

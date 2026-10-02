@@ -65,23 +65,16 @@ kotlin {
             // peers — the desktop bridge-probed video-player alternative
             // lives there.
             implementation(project(":shared:feature:player-live"))
-            // The musicContent lambda invokes the @Composable MusicHomeScreen.
-            implementation(libs.jb.compose.runtime)
-            implementation(libs.jb.compose.ui)
-            implementation(libs.jb.compose.foundation)
-            implementation(libs.jb.compose.material3)
             // The UserMessageHost seam's shared UiText resolver (suspend
             // getString) — the shared core:ui keeps compose-resources
             // implementation-scoped, so the module that resolves messages
             // carries the runtime (core/ui precedent).
-            implementation(compose.components.resources)
             // ShellHostHooks.surpriseRequests is Flow<Unit>.
             implementation(libs.kotlinx.coroutines.core)
             // RealtimeSessionController's capabilities arm swallows a failed
             // re-post without eating structured cancellation (house util).
             implementation(project(":shared:core:concurrency"))
             // entryProvider / EntryProviderScope / NavEntry — runtime only.
-            implementation(libs.navigation3.runtime)
         }
         // AdminRefreshGate policy pins (settings/core-data precedent).
         // (kotlin("test") comes from the convention plugin.)
@@ -96,17 +89,13 @@ kotlin {
             implementation(libs.mockk)
         }
         // SharedFeatureModules (jvmShared) collects every feature Koin
-        // module as a Module value — the features' own koin edges are
-        // implementation-scoped and invisible cross-project, so the
-        // aggregator declares the type it collects.
-        getByName("jvmShared").dependencies {
-            implementation(libs.koin.core)
-            // SignedOutAuthHost (the shared signed-out shell, beside
-            // ShellHostHooks/appSections) hosts the NavDisplay itself —
-            // nav3-ui, not just nav3-runtime. On desktop the google -ui
-            // artifact is jvm-stubbed; the desktop app's dependency
-            // substitution swaps the JetBrains fork in at runtime.
-            implementation(libs.navigation3.ui)
-        }
+        // module as a Module value, and SignedOutAuthHost (the shared
+        // signed-out shell, beside ShellHostHooks/appSections) hosts the
+        // NavDisplay itself — nav3-ui, not just nav3-runtime. On desktop the
+        // google -ui artifact is jvm-stubbed; the desktop app's dependency
+        // substitution swaps the JetBrains fork in at runtime. Both
+        // koin-core and navigation3-ui ride the convention plugin's
+        // universal commonMain bundle — jvmShared sees commonMain's
+        // dependencies, so no local edges are declared.
     }
 }

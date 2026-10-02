@@ -52,6 +52,7 @@ import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvSubtitleStyleAp
 import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvSubtitleStylePhase
 import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvTrackCatalog
 import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvUserSubtitleKeys
+import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvVideoEffectChain
 
 class MpvPlayerEngine(
     private val context: Context,
@@ -433,9 +434,10 @@ class MpvPlayerEngine(
             // sole consumer): scale/deband/interpolation(+video-sync)/framedrop/
             // skiploopfilter/demuxer budgets/audio trio/extras, in that order,
             // with the user's mpvExtraConfig lines LAST (a raw line overrides
-            // its structured counterpart). Init seeds the runtime diff cache
-            // (see onConfigChanged) with exactly the pairs written here so a
-            // runtime push of an unchanged config performs zero writes.
+            // its structured counterpart). Init seeds the shared applier's
+            // runtime diff cache (see onConfigChanged) with exactly the pairs
+            // written here so a runtime push of an unchanged config performs
+            // zero writes.
             val configPairs = MpvConfigMapping.configPairs(
                 config = mpvCfg,
                 audioPassthrough = currentConfig.audioPassthrough,
@@ -453,7 +455,7 @@ class MpvPlayerEngine(
                     Log.w(TAG, "mpv config: rejected '${option.key}=${option.value}' (${e.message})")
                 }
             }
-            lastAppliedEngineConfigProps = configPairs.associate { it.key to it.value }
+            configApplier.seedAppliedConfigProps(configPairs.associate { it.key to it.value })
 
             // Force CPU-side AV1 film-grain synthesis. The GPU film-grain path
             // (default on hwdec) stalls on several drivers — frames back up and
@@ -755,12 +757,12 @@ class MpvPlayerEngine(
         try { mpvView?.mpv?.setPropertyDouble("speed", speed.toDouble()) } catch (e: Exception) { Log.w(TAG, "setPlaybackSpeed failed", e) }
     }
 
-    // The structured-config runtime diff cache (MpvConfigMapping.applyChanged):
-    // seeded by initOptions with the pairs it wrote, so onConfigChanged writes
-    // only actual CHANGES. Same discipline as the desktop engine's
+    // The structured-config runtime diff cache lives on the shared
+    // [MpvConfigApplier] below (`lastAppliedConfigProps` — seeded by
+    // initOptions with the pairs it wrote, so onConfigChanged writes only
+    // actual CHANGES). Same discipline as the desktop engine's former
     // lastApplied* caches — an unchanged re-write is at best noise and at
     // worst (af/vf-class properties) a pipeline re-init.
-    @Volatile private var lastAppliedEngineConfigProps: Map<String, String> = emptyMap()
 
     /** mpv's config-dir (`<filesDir>/mpv`); the user's `mpv.conf` lives here. */
     private val mpvConfigDir: java.io.File get() = java.io.File(context.filesDir, "mpv")
@@ -784,58 +786,46 @@ class MpvPlayerEngine(
         userOwnedSubtitleKeys = MpvUserSubtitleKeys.ownedKeys(confText, mpvCfg.mpvExtraConfig)
     }
 
-    override fun onConfigChanged(oldConfig: EngineConfig, newConfig: EngineConfig) {
-        val mpvCfg = (newConfig.engineSpecific as? MpvEngineConfig) ?: MpvEngineConfig()
-        val oldMpvCfg = oldConfig.engineSpecific as? MpvEngineConfig
-        // Slice decisions come from the shared pure delta (EngineConfigDelta.of
-        // — the single diff both mpv hosts consume); only the native writes and
-        // the mpv-config sub-field checks below stay engine-owned.
-        val delta = EngineConfigDelta.of(oldConfig, newConfig)
+    /**
+     * The shared config-delta dispatcher (player-contract, the
+     * [MpvFoldApplier] family): it owns the arm ORDER (ownership refresh →
+     * audio-delay → sub-delay → hwdec → shared pairs → subtitle style →
+     * audio → video — the ladder this engine's hand-mirrored body ran) and
+     * the genuinely-shared arms; this engine contributes only its native
+     * surfaces — the `hwdecOverride`-aware hwdec value, the `ao` chain +
+     * AudioEffect-session arms inside the audio hook, and the low-RAM demuxer
+     * extra. The runtime diff cache (`lastAppliedConfigProps`, seeded by
+     * `initOptions`) lives on the applier.
+     */
+    private val configApplier = MpvConfigApplier(
+        surface = { mpvView?.mpv?.let { MpvSurface(it) } },
+        extras = { MpvConfigApplier.Extras(lowRamDevice = isLowRamDevice) },
+        refreshOwnedKeys = ::refreshUserOwnedSubtitleKeys,
+        hwdecValue = { cfg ->
+            (cfg.engineSpecific as? MpvEngineConfig)?.hwdecOverride?.key
+                ?: decoderModeToHwdec(cfg.decoderMode)
+        },
+        applySubtitleStyle = { cfg -> applySubtitleStyleInternal(cfg.subtitleStyle) },
+        applyAudioEffects = { old, new, delta, _ -> applyAndroidAudioArms(old, new, delta) },
+        applyVideoEffects = { cfg -> applyVideoFilters(cfg.videoEffects) },
+    )
 
+    override fun onConfigChanged(oldConfig: EngineConfig, newConfig: EngineConfig) {
+        configApplier.applyDelta(oldConfig, newConfig)
+    }
+
+    /**
+     * This engine's audio arms inside the shared dispatch's audio hook —
+     * the bodies (and their internal arm conditions) are Android-native and
+     * stay here verbatim; only their ORDER-anchored position moved into the
+     * applier (they always ran after the subtitle-style re-apply, which is
+     * where the applier invokes the hook).
+     */
+    private fun applyAndroidAudioArms(oldConfig: EngineConfig, newConfig: EngineConfig, delta: EngineConfigDelta) {
         try {
             val mpv = mpvView?.mpv ?: return
-
-            if (delta.audioDelayChanged) {
-                mpv.setPropertyDouble("audio-delay", newConfig.audioDelayMs / 1000.0)
-            }
-            if (delta.subtitleDelayChanged) {
-                mpv.setPropertyDouble("sub-delay", newConfig.subtitleDelayMs / 1000.0)
-            }
-
-            if (delta.decoderModeChanged || oldMpvCfg?.hwdecOverride != mpvCfg.hwdecOverride) {
-                val hwdecValue = mpvCfg.hwdecOverride?.key ?: decoderModeToHwdec(newConfig.decoderMode)
-                mpv.setPropertyString("hwdec", hwdecValue)
-            }
-
-            // The shared mapping's runtime half: diff the new pair list against
-            // what init (or the previous change) wrote and push only the
-            // changed keys — covers scaler, deband, interpolation(+video-sync),
-            // framedrop, skiploopfilter, the demuxer budgets, the audio trio
-            // (audio-device / audio-exclusive / audio-spdif via the output
-            // mode + passthrough reconciliation) and the extra-config lines.
-            // mpvExtraConfig lives in engineSpecific, so any change that
-            // re-applies engine pairs or subtitle style may also have
-            // re-claimed/renounced sub-* ownership — refresh once here (a
-            // combined change used to read the conf twice) so both re-applies
-            // below run against fresh ownership.
-            if (delta.sharedPairsChanged || delta.subtitleStyleChanged) {
-                refreshUserOwnedSubtitleKeys()
-            }
-
-            if (delta.sharedPairsChanged) {
-                // engineSpecific + audioPassthrough + audioPassthroughCodecs
-                // + deinterlace + hdrSource (see EngineConfigDelta.sharedPairsChanged).
-                val pairs = MpvConfigMapping.configPairs(
-                    config = mpvCfg,
-                    audioPassthrough = newConfig.audioPassthrough,
-                    passthroughCodecs = newConfig.audioPassthroughCodecs,
-                    lowRamDevice = isLowRamDevice,
-                    deinterlace = newConfig.deinterlace,
-                )
-                lastAppliedEngineConfigProps = MpvConfigMapping.applyChanged(pairs, lastAppliedEngineConfigProps) { key, value ->
-                    mpv.setPropertyString(key, value)
-                }
-            }
+            val mpvCfg = newConfig.engineSpecific as? MpvEngineConfig ?: MpvEngineConfig()
+            val oldMpvCfg = oldConfig.engineSpecific as? MpvEngineConfig
 
             if (oldMpvCfg?.audioOutput != mpvCfg.audioOutput || oldMpvCfg?.audioFallback != mpvCfg.audioFallback) {
                 val aoValue = buildString {
@@ -843,13 +833,6 @@ class MpvPlayerEngine(
                     mpvCfg.audioFallback?.let { append(",").append(it.key) }
                 }
                 mpv.setPropertyString("ao", aoValue)
-            }
-
-            if (delta.subtitleStyleChanged) {
-                // Ownership was refreshed above, so a conf/extra-config edit
-                // that arrived with (or since) the last change is honored by
-                // the re-apply.
-                applySubtitleStyleInternal(newConfig.subtitleStyle)
             }
 
             if (delta.channelMixChanged || oldMpvCfg?.audioOutputMode != mpvCfg.audioOutputMode) {
@@ -890,10 +873,6 @@ class MpvPlayerEngine(
                 }
             }
 
-            if (delta.videoEffectsChanged) {
-                applyVideoFilters(newConfig.videoEffects)
-            }
-
             if (delta.audioSessionEffectsChanged) {
                 applyAndroidAudioEffects()
             }
@@ -902,38 +881,25 @@ class MpvPlayerEngine(
         }
     }
 
+    /**
+     * Pushes the video-effects config onto mpv. The chain body is the shared
+     * [MpvVideoEffectChain] (the desktop builder moved to player-contract —
+     * one parity table, one stage order, one number format for both hosts);
+     * this engine keeps only its transport writes and the declared
+     * rotation-write divergence (FORMAT_DOUBLE here — this binding accepts
+     * it; the desktop's JNA transport needs the string form). The caller's
+     * `delta.videoEffectsChanged` guard is the diff discipline (this engine
+     * has no vf diff cache — the delta fires only on a real slice change).
+     */
     private fun applyVideoFilters(effects: VideoEffectsConfig) {
         try {
-            val filters = mutableListOf<String>()
-            val hasBrightness = effects.brightness != 0f
-            val hasContrast = effects.contrast != 1f
-            val hasSaturation = effects.saturation != 1f
-            val hasHue = effects.hue != 0f
-            val hasRgbGain = effects.redGain != 1f || effects.greenGain != 1f || effects.blueGain != 1f
-            if (hasBrightness || hasContrast || hasSaturation || hasHue || hasRgbGain) {
-                val eqParts = mutableListOf<String>()
-                if (hasBrightness) eqParts.add("brightness=${effects.brightness}")
-                if (hasContrast) eqParts.add("contrast=${effects.contrast}")
-                if (hasSaturation) eqParts.add("saturation=${effects.saturation}")
-                if (hasHue) eqParts.add("hue=${effects.hue}")
-                if (effects.redGain != 1f) eqParts.add("gamma_r=${effects.redGain}")
-                if (effects.greenGain != 1f) eqParts.add("gamma_g=${effects.greenGain}")
-                if (effects.blueGain != 1f) eqParts.add("gamma_b=${effects.blueGain}")
-                filters.add("eq=${eqParts.joinToString(":")}")
-            }
-            if (effects.sharpness > 0f) {
-                filters.add("unsharp=5:5:${(effects.sharpness * 1.5f).coerceIn(0.5f, 3.0f)}")
-            }
-            if (effects.gaussianBlur > 0f) {
-                // lavfi gblur sigma ~ half the user value to keep 0..10 range sensible
-                filters.add("lavfi=[gblur=sigma=${effects.gaussianBlur / 2f}]")
-            }
+            val chain = MpvVideoEffectChain.buildVfChain(effects)
             val rawDiscrete = kotlin.math.round(effects.rotationDegrees / 90f).toInt() * 90
             val discrete = ((rawDiscrete % 360) + 360) % 360
             mpvView?.mpv?.setPropertyDouble("video-rotate", discrete.toDouble())
 
-            if (filters.isNotEmpty()) {
-                mpvView?.mpv?.setPropertyString("vf", filters.joinToString(","))
+            if (chain != null) {
+                mpvView?.mpv?.setPropertyString("vf", chain)
             } else {
                 mpvView?.mpv?.command("vf", "clr", "")
             }

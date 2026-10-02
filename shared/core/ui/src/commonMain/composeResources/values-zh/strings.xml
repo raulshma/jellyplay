@@ -265,6 +265,14 @@
     <string name="core_refresh_metadata_mode_replace_all_desc">用提供商数据覆盖当前元数据。刷新剧集时其分集也会刷新。</string>
     <string name="core_refresh_metadata_mode_replace_images">替换全部图像</string>
     <string name="core_refresh_metadata_mode_replace_images_desc">重新下载全部图像，元数据保持不变。</string>
+    <!-- Played/progress filter chips + clear-all (kept beside
+         core_filter_has_* below, mirroring the default file grouping). -->
+    <string name="core_filter_played_all">全部</string>
+    <string name="core_filter_played_played">已播放</string>
+    <string name="core_filter_played_unplayed">未播放</string>
+    <string name="core_filter_rating_plus">%1$s+</string>
+    <string name="core_filter_in_progress">进行中</string>
+    <string name="core_clear_all">全部清除</string>
     <string name="core_filter_has_subtitles">含字幕</string>
     <string name="core_filter_has_trailer">含预告片</string>
 

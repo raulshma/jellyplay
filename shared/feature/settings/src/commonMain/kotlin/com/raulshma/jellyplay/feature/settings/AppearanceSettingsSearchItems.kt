@@ -2,6 +2,9 @@ package com.raulshma.jellyplay.feature.settings
 
 import com.composables.icons.tabler.outline.*
 import com.composables.icons.tabler.Tabler
+import com.raulshma.jellyplay.core.datastore.appearance.AppearancePreferenceSpecs
+import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalPreferenceSpecs
+import com.raulshma.jellyplay.core.datastore.spec.PreferenceSearchSpec
 import com.raulshma.jellyplay.core.ui.generated.resources.core_ui_accent_color_subtitle
 import com.raulshma.jellyplay.core.ui.generated.resources.core_ui_accent_color_title
 import com.raulshma.jellyplay.core.ui.generated.resources.core_ui_color_style_subtitle
@@ -25,7 +28,6 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hand
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_haptic_feedback
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hide_episode_thumbnails
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hide_search_history
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hide_watched_items
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_library_view_mode
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_layout_mode
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_morning_starts_at
@@ -36,14 +38,10 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_nigh
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_oled_mode
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_performance_mode
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_prefer_logos
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_prefer_logos_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_reduce_motion
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_external_ratings
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_nav_labels
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_missing_episodes
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_share_media
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_unwatched_badge
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_watched_checkmark
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_skip_special_episodes
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_theme_mode
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_theme_style
@@ -70,12 +68,10 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_hide_episo
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_hide_episode_thumbnails_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_hide_search_history_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_hide_search_history_title
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_hide_watched_items_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_hide_watched_items_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_library_view_mode_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_library_view_mode_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_layout_mode_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_layout_mode_title
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_library_view_mode_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_nav_bar_customization_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_nav_bar_customization_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_nav_hide_on_scroll_subtitle
@@ -99,16 +95,10 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_scheduled_
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_scheduled_end_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_scheduled_start_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_scheduled_start_title
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_show_external_ratings_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_show_external_ratings_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_show_missing_episodes_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_show_missing_episodes_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_show_share_media_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_show_share_media_title
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_show_unwatched_badge_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_show_unwatched_badge_title
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_show_watched_checkmark_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_show_watched_checkmark_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_skip_specials_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_skip_specials_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_style_accent_subtitle
@@ -151,9 +141,6 @@ internal object AppearanceSettingsIds {
     const val SCHEDULED_END = "scheduled_end"
     const val NAV_BAR_CUSTOMIZATION = "nav_bar_customization"
     const val NAV_HIDE_ON_SCROLL = "nav_hide_on_scroll"
-    const val SHOW_UNWATCHED_BADGE = "show_unwatched_badge"
-    const val SHOW_WATCHED_CHECKMARK = "show_watched_checkmark"
-    const val HIDE_WATCHED_ITEMS = "hide_watched_items"
     const val HIDE_EPISODE_THUMBNAILS = "hide_episode_thumbnails"
     const val COMPACT_EPISODE_LIST = "compact_episode_list"
     const val SKIP_SPECIALS = "skip_specials"
@@ -161,7 +148,6 @@ internal object AppearanceSettingsIds {
     const val PREFER_LOGOS = "prefer_logos"
     const val HAPTICS_ENABLED = "haptics_enabled"
     const val SHOW_SHARE_MEDIA = "show_share_media"
-    const val SHOW_EXTERNAL_RATINGS = "show_external_ratings"
     const val HIDE_SEARCH_HISTORY = "hide_search_history"
     const val PERFORMANCE_MODE = "performance_mode"
     const val REDUCE_MOTION = "reduce_motion"
@@ -172,130 +158,96 @@ internal object AppearanceSettingsIds {
     const val NEWSLETTER_SECTIONS = "newsletter_sections"
 }
 
+// ═══════════════════════════════════════════════════════════════════════
+// The spec-derived derivation inputs: the
+// appearance screen's searchable semantics live on the datastore-side spec
+// declarations — this domain's own ([AppearancePreferenceSpecs]) plus the
+// cross-domain knobs the library group renders (the experimental
+// share-media / hide-search-history toggles). The record lists below stay
+// the ordered spine — screen faces + the residual rows' hand search faces
+// (the library/rows whose knobs live in the spec-less Library/Navigation/
+// UserPreferences stores). (The home-discovery watch-state quartet moved to
+// HomeSettingsSearchItems.kt's cards group — PS-4.)
+// ═══════════════════════════════════════════════════════════════════════
+
+private val searchRoutes: Map<String, Route> = mapOf(
+    AppearancePreferenceSpecs.ROUTE_APPEARANCE_SETTINGS to Route.AppearanceSettings(),
+)
+
+private val appearanceSpecEntries: List<PreferenceSearchSpec> =
+    AppearancePreferenceSpecs.searchEntries +
+        ExperimentalPreferenceSpecs.appearanceSearchEntries
+
+private fun specsFor(bindings: List<SettingsSearchBinding>): List<PreferenceSearchSpec> {
+    val ids = bindings.map { it.id }.toSet()
+    val matched = appearanceSpecEntries.filter { it.id in ids }
+    val missing = ids - matched.map { it.id }.toSet()
+    require(missing.isEmpty()) { "settings-search binding ids without a spec entry: $missing" }
+    return matched
+}
+
+private val appearanceCategory = CoreUiRes.string.ss_cat_appearance
+
+/**
+ * The theme group's binding table — the search faces of its 17 spec-backed
+ * rows (library_view_mode and nav_labels are the group's feature-side
+ * residuals).
+ */
+private val appearanceThemeBindings = listOf(
+    SettingsSearchBinding(AppearanceSettingsIds.DATE_FORMAT, Res.string.ss_date_format_title, Res.string.ss_date_format_subtitle, appearanceCategory, Tabler.Outline.Calendar),
+    SettingsSearchBinding(AppearanceSettingsIds.FONT_SCALE, Res.string.ss_font_scale_title, Res.string.ss_font_scale_subtitle, appearanceCategory, Tabler.Outline.TextSize),
+    SettingsSearchBinding(AppearanceSettingsIds.COLOR_BLIND_MODE, Res.string.ss_color_blind_mode_title, Res.string.ss_color_blind_mode_subtitle, appearanceCategory, Tabler.Outline.Eye),
+    SettingsSearchBinding(AppearanceSettingsIds.HAND_MODE, Res.string.ss_hand_mode_title, Res.string.ss_hand_mode_subtitle, appearanceCategory, Tabler.Outline.HandClick),
+    SettingsSearchBinding(AppearanceSettingsIds.THEME_SCHEDULER, Res.string.ss_theme_scheduler_title, Res.string.ss_theme_scheduler_subtitle, appearanceCategory, Tabler.Outline.Clock),
+    SettingsSearchBinding(AppearanceSettingsIds.THEME_MODE, Res.string.ss_theme_mode_title, Res.string.ss_theme_mode_subtitle, appearanceCategory, Tabler.Outline.Moon),
+    // The search hit restates the row's screen title (the fold).
+    SettingsSearchBinding(AppearanceSettingsIds.THEME_STYLE, Res.string.settings_theme_style, Res.string.ss_theme_style_subtitle, appearanceCategory, Tabler.Outline.Palette),
+    SettingsSearchBinding(AppearanceSettingsIds.STYLE_ACCENT, Res.string.ss_style_accent_title, Res.string.ss_style_accent_subtitle, appearanceCategory, Tabler.Outline.Palette),
+    SettingsSearchBinding(
+        AppearanceSettingsIds.DYNAMIC_THEMING,
+        Res.string.ss_dynamic_theming_title,
+        Res.string.ss_dynamic_theming_subtitle,
+        appearanceCategory,
+        Tabler.Outline.Video,
+        platforms = platformsForCapability(settingsCapabilities.supportsDynamicColor),
+    ),
+    SettingsSearchBinding(AppearanceSettingsIds.OLED_MODE, Res.string.ss_oled_mode_title, Res.string.ss_oled_mode_subtitle, appearanceCategory, Tabler.Outline.BrightnessHalf),
+    SettingsSearchBinding(AppearanceSettingsIds.CONTRAST, Res.string.ss_contrast_title, Res.string.ss_contrast_subtitle, appearanceCategory, Tabler.Outline.Adjustments),
+    SettingsSearchBinding(AppearanceSettingsIds.LAYOUT_MODE, Res.string.ss_layout_mode_title, Res.string.ss_layout_mode_subtitle, appearanceCategory, Tabler.Outline.Devices),
+    SettingsSearchBinding(AppearanceSettingsIds.THEME_MUSIC, Res.string.ss_theme_music_title, Res.string.ss_theme_music_subtitle, appearanceCategory, Tabler.Outline.Music),
+    SettingsSearchBinding(AppearanceSettingsIds.ACCENT_COLOR, CoreUiRes.string.core_ui_accent_color_title, CoreUiRes.string.core_ui_accent_color_subtitle, appearanceCategory, Tabler.Outline.Palette),
+    SettingsSearchBinding(AppearanceSettingsIds.COLOR_STYLE, CoreUiRes.string.core_ui_color_style_title, CoreUiRes.string.core_ui_color_style_subtitle, appearanceCategory, Tabler.Outline.Palette),
+    SettingsSearchBinding(AppearanceSettingsIds.SCHEDULED_START, Res.string.ss_scheduled_start_title, Res.string.ss_scheduled_start_subtitle, appearanceCategory, Tabler.Outline.Sunrise),
+    SettingsSearchBinding(AppearanceSettingsIds.SCHEDULED_END, Res.string.ss_scheduled_end_title, Res.string.ss_scheduled_end_subtitle, appearanceCategory, Tabler.Outline.Sunset),
+)
+
 /**
  * Settings-search items for the "Theme" group (theme mode/style/accent, dynamic color, display and player-adjacent appearance rows) of AppearanceSettingsScreen.
  * Split from the single flat appearance list along the screen-group line so
  * each screen group derives its facts from its own declaration list
  * (decision Q11a). Aggregated in [SettingsSearchCatalog].
+ *
+ * Spec-derived for the 17 rows whose knobs live in the appearance store (or
+ * are its standalone catalog facts); library_view_mode (LibraryStore) and
+ * nav_labels (NavigationStore) stay feature-side residuals.
  */
 internal val AppearanceThemeRowRecords = listOf(
-    SettingsRowRecord(
-        id = AppearanceSettingsIds.DATE_FORMAT,
-        titleRes = Res.string.settings_date_format,
-        searchTitleRes = Res.string.ss_date_format_title,
-        searchSubtitleRes = Res.string.ss_date_format_subtitle,
-        keywords = listOf("date", "format", "time", "calendar", "day", "month", "year", "display"),
-        route = Route.AppearanceSettings(),
-        icon = Tabler.Outline.Calendar,
-        isAdvanced = true
-    )
-,
-    SettingsRowRecord(
-        id = AppearanceSettingsIds.FONT_SCALE,
-        titleRes = Res.string.settings_font_size_app,
-        searchTitleRes = Res.string.ss_font_scale_title,
-        searchSubtitleRes = Res.string.ss_font_scale_subtitle,
-        keywords = listOf("font", "size", "text", "scale", "accessibility", "readability", "large", "small"),
-        route = Route.AppearanceSettings(),
-        icon = Tabler.Outline.TextSize,
-        isAdvanced = true
-    )
-,
-    SettingsRowRecord(
-        id = AppearanceSettingsIds.COLOR_BLIND_MODE,
-        titleRes = Res.string.settings_color_blind_mode,
-        searchTitleRes = Res.string.ss_color_blind_mode_title,
-        searchSubtitleRes = Res.string.ss_color_blind_mode_subtitle,
-        keywords = listOf("color", "blind", "daltonize", "accessibility", "protanopia", "deuteranopia", "tritanopia", "vision"),
-        route = Route.AppearanceSettings(),
-        icon = Tabler.Outline.Eye,
-        isAdvanced = true
-    )
-,
-    SettingsRowRecord(
-        id = AppearanceSettingsIds.HAND_MODE,
-        titleRes = Res.string.settings_handedness,
-        searchTitleRes = Res.string.ss_hand_mode_title,
-        searchSubtitleRes = Res.string.ss_hand_mode_subtitle,
-        keywords = listOf("hand", "left", "right", "handed", "accessibility", "mirror", "one-handed"),
-        route = Route.AppearanceSettings(),
-        icon = Tabler.Outline.HandClick,
-        isAdvanced = true
-    )
-,
-    SettingsRowRecord(
-        id = AppearanceSettingsIds.THEME_SCHEDULER,
-        titleRes = Res.string.settings_theme_mode,
-        searchTitleRes = Res.string.ss_theme_scheduler_title,
-        searchSubtitleRes = Res.string.ss_theme_scheduler_subtitle,
-        keywords = listOf("theme", "scheduler", "day", "night", "auto", "time", "scheduled", "dark", "light"),
-        route = Route.AppearanceSettings(),
-        icon = Tabler.Outline.Clock,
-        isAdvanced = true
-    )
-,
-    SettingsRowRecord(
-        id = AppearanceSettingsIds.THEME_MODE,
-        titleRes = Res.string.settings_theme_mode,
-        searchTitleRes = Res.string.ss_theme_mode_title,
-        searchSubtitleRes = Res.string.ss_theme_mode_subtitle,
-        keywords = listOf("theme", "mode", "light", "dark", "system", "black"),
-        route = Route.AppearanceSettings(),
-        icon = Tabler.Outline.Moon
-    )
-,
-    SettingsRowRecord(
-        id = AppearanceSettingsIds.THEME_STYLE,
-        titleRes = Res.string.settings_theme_style,
-        searchSubtitleRes = Res.string.ss_theme_style_subtitle,
-        keywords = listOf("theme", "style", "variant", "synthwave", "soothing", "monochrome", "vivid", "aurora", "sakura", "vector", "pop", "pastel", "neon", "retro", "look"),
-        route = Route.AppearanceSettings(),
-        icon = Tabler.Outline.Palette
-    )
-,
-    SettingsRowRecord(
-        id = AppearanceSettingsIds.STYLE_ACCENT,
-        titleRes = null,
-        searchTitleRes = Res.string.ss_style_accent_title,
-        searchSubtitleRes = Res.string.ss_style_accent_subtitle,
-        keywords = listOf("accent", "color", "swatch", "synthwave", "soothing", "vivid", "aurora", "sakura", "vector", "neon", "theme"),
-        route = Route.AppearanceSettings(),
-        icon = Tabler.Outline.Palette,
-        isAdvanced = true
-    )
-,
-    SettingsRowRecord(
-        id = AppearanceSettingsIds.DYNAMIC_THEMING,
-        titleRes = Res.string.settings_dynamic_theming,
-        searchTitleRes = Res.string.ss_dynamic_theming_title,
-        searchSubtitleRes = Res.string.ss_dynamic_theming_subtitle,
-        keywords = listOf("dynamic", "artwork", "colors", "theme", "wallpaper"),
-        route = Route.AppearanceSettings(),
-        icon = Tabler.Outline.Video,
-        platforms = platformsForCapability(settingsCapabilities.supportsDynamicColor),
-    )
-,
-    SettingsRowRecord(
-        id = AppearanceSettingsIds.OLED_MODE,
-        titleRes = Res.string.settings_oled_mode,
-        searchTitleRes = Res.string.ss_oled_mode_title,
-        searchSubtitleRes = Res.string.ss_oled_mode_subtitle,
-        keywords = listOf("oled", "black", "amoled", "pure black", "battery"),
-        route = Route.AppearanceSettings(),
-        icon = Tabler.Outline.BrightnessHalf
-    )
-,
-    SettingsRowRecord(
-        id = AppearanceSettingsIds.CONTRAST,
-        titleRes = Res.string.settings_contrast,
-        searchTitleRes = Res.string.ss_contrast_title,
-        searchSubtitleRes = Res.string.ss_contrast_subtitle,
-        keywords = listOf("contrast", "accessibility", "legibility", "readability"),
-        route = Route.AppearanceSettings(),
-        icon = Tabler.Outline.Adjustments,
-        isAdvanced = true
-    )
-,
+    SettingsRowRecord(id = AppearanceSettingsIds.DATE_FORMAT, titleRes = Res.string.settings_date_format, icon = Tabler.Outline.Calendar),
+    SettingsRowRecord(id = AppearanceSettingsIds.FONT_SCALE, titleRes = Res.string.settings_font_size_app, icon = Tabler.Outline.TextSize),
+    SettingsRowRecord(id = AppearanceSettingsIds.COLOR_BLIND_MODE, titleRes = Res.string.settings_color_blind_mode, icon = Tabler.Outline.Eye),
+    SettingsRowRecord(id = AppearanceSettingsIds.HAND_MODE, titleRes = Res.string.settings_handedness, icon = Tabler.Outline.HandClick),
+    // The theme-scheduler highlight-alias row: its screen face IS the
+    // theme_mode row (a search deep-link highlights through THEME_HIGHLIGHT_IDS).
+    SettingsRowRecord(id = AppearanceSettingsIds.THEME_SCHEDULER, titleRes = Res.string.settings_theme_mode, icon = Tabler.Outline.Clock),
+    SettingsRowRecord(id = AppearanceSettingsIds.THEME_MODE, titleRes = Res.string.settings_theme_mode, icon = Tabler.Outline.Moon),
+    SettingsRowRecord(id = AppearanceSettingsIds.THEME_STYLE, titleRes = Res.string.settings_theme_style, icon = Tabler.Outline.Palette),
+    // style_accent: the hand-built VariantAccentPicker (titled per-variant by
+    // core_ui_variant_accent_title) — no single screen title resource.
+    SettingsRowRecord(id = AppearanceSettingsIds.STYLE_ACCENT, titleRes = null, icon = Tabler.Outline.Palette),
+    SettingsRowRecord(id = AppearanceSettingsIds.DYNAMIC_THEMING, titleRes = Res.string.settings_dynamic_theming, icon = Tabler.Outline.Video),
+    SettingsRowRecord(id = AppearanceSettingsIds.OLED_MODE, titleRes = Res.string.settings_oled_mode, icon = Tabler.Outline.BrightnessHalf),
+    SettingsRowRecord(id = AppearanceSettingsIds.CONTRAST, titleRes = Res.string.settings_contrast, icon = Tabler.Outline.Adjustments),
+    // ── RESIDUAL row (LibraryStore — no spec machinery).
     SettingsRowRecord(
         id = AppearanceSettingsIds.LIBRARY_VIEW_MODE,
         titleRes = Res.string.settings_library_view_mode,
@@ -304,31 +256,11 @@ internal val AppearanceThemeRowRecords = listOf(
         keywords = listOf("library", "view", "grid", "list", "layout"),
         route = Route.AppearanceSettings(),
         icon = Tabler.Outline.LayoutGrid,
-        isAdvanced = true
-    )
-,
-    SettingsRowRecord(
-        id = AppearanceSettingsIds.LAYOUT_MODE,
-        titleRes = Res.string.settings_layout_mode,
-        searchTitleRes = Res.string.ss_layout_mode_title,
-        searchSubtitleRes = Res.string.ss_layout_mode_subtitle,
-        keywords = listOf("layout", "tablet", "phone", "adaptive", "two pane", "window", "compact", "expanded"),
-        route = Route.AppearanceSettings(),
-        icon = Tabler.Outline.Devices,
-        isAdvanced = true
-    )
-,
-    SettingsRowRecord(
-        id = AppearanceSettingsIds.THEME_MUSIC,
-        titleRes = Res.string.settings_backdrop_theme_music,
-        searchTitleRes = Res.string.ss_theme_music_title,
-        searchSubtitleRes = Res.string.ss_theme_music_subtitle,
-        keywords = listOf("theme", "music", "backdrop", "ambience", "song", "score"),
-        route = Route.AppearanceSettings(),
-        icon = Tabler.Outline.Music,
-        isAdvanced = true
-    )
-,
+        isAdvanced = true,
+    ),
+    SettingsRowRecord(id = AppearanceSettingsIds.LAYOUT_MODE, titleRes = Res.string.settings_layout_mode, icon = Tabler.Outline.Devices),
+    SettingsRowRecord(id = AppearanceSettingsIds.THEME_MUSIC, titleRes = Res.string.settings_backdrop_theme_music, icon = Tabler.Outline.Music),
+    // ── RESIDUAL row (NavigationStore — no spec machinery).
     SettingsRowRecord(
         id = AppearanceSettingsIds.NAV_LABELS,
         titleRes = Res.string.settings_show_nav_labels,
@@ -337,51 +269,22 @@ internal val AppearanceThemeRowRecords = listOf(
         keywords = listOf("navigation", "labels", "text", "icons", "bottom bar"),
         route = Route.AppearanceSettings(),
         icon = Tabler.Outline.TextSize,
-        isAdvanced = true
-    )
-,
-    SettingsRowRecord(
-        id = AppearanceSettingsIds.ACCENT_COLOR,
-        titleRes = CoreUiRes.string.core_ui_accent_color_title,
-        searchSubtitleRes = CoreUiRes.string.core_ui_accent_color_subtitle,
-        keywords = listOf("accent", "color", "theme", "swatch", "palette", "customize"),
-        route = Route.AppearanceSettings(),
-        icon = Tabler.Outline.Palette
-    )
-,
-    SettingsRowRecord(
-        id = AppearanceSettingsIds.COLOR_STYLE,
-        titleRes = CoreUiRes.string.core_ui_color_style_title,
-        searchSubtitleRes = CoreUiRes.string.core_ui_color_style_subtitle,
-        keywords = listOf("color style", "palette", "vibe", "generated", "mood", "theme"),
-        route = Route.AppearanceSettings(),
-        icon = Tabler.Outline.Palette
-    )
-,
-    SettingsRowRecord(
-        id = AppearanceSettingsIds.SCHEDULED_START,
-        titleRes = Res.string.settings_night_starts_at,
-        searchTitleRes = Res.string.ss_scheduled_start_title,
-        searchSubtitleRes = Res.string.ss_scheduled_start_subtitle,
-        keywords = listOf("theme", "schedule", "start", "hour", "day", "auto"),
-        route = Route.AppearanceSettings(),
-        icon = Tabler.Outline.Sunrise,
-        isAdvanced = true
-    )
-,
-    SettingsRowRecord(
-        id = AppearanceSettingsIds.SCHEDULED_END,
-        titleRes = Res.string.settings_morning_starts_at,
-        searchTitleRes = Res.string.ss_scheduled_end_title,
-        searchSubtitleRes = Res.string.ss_scheduled_end_subtitle,
-        keywords = listOf("theme", "schedule", "end", "hour", "night", "auto"),
-        route = Route.AppearanceSettings(),
-        icon = Tabler.Outline.Sunset,
-        isAdvanced = true
-    ))
+        isAdvanced = true,
+    ),
+    SettingsRowRecord(id = AppearanceSettingsIds.ACCENT_COLOR, titleRes = CoreUiRes.string.core_ui_accent_color_title, icon = Tabler.Outline.Palette),
+    SettingsRowRecord(id = AppearanceSettingsIds.COLOR_STYLE, titleRes = CoreUiRes.string.core_ui_color_style_title, icon = Tabler.Outline.Palette),
+    SettingsRowRecord(id = AppearanceSettingsIds.SCHEDULED_START, titleRes = Res.string.settings_night_starts_at, icon = Tabler.Outline.Sunrise),
+    SettingsRowRecord(id = AppearanceSettingsIds.SCHEDULED_END, titleRes = Res.string.settings_morning_starts_at, icon = Tabler.Outline.Sunset),
+)
 
-/** The catalog projection of `AppearanceThemeRowRecords`: the search faces + the shared category. */
-internal val AppearanceThemeSearchItems: List<SettingsSearchItem> = AppearanceThemeRowRecords.toSearchItems(CoreUiRes.string.ss_cat_appearance)
+/** The catalog projection of the spec-backed theme rows + the residuals. */
+internal val AppearanceThemeSearchItems: List<SettingsSearchItem> =
+    AppearanceThemeRowRecords.toSearchItems(
+        specEntries = specsFor(appearanceThemeBindings),
+        bindings = appearanceThemeBindings,
+        routes = searchRoutes,
+        categoryRes = appearanceCategory,
+    )
 
 
 /**
@@ -389,6 +292,9 @@ internal val AppearanceThemeSearchItems: List<SettingsSearchItem> = AppearanceTh
  * Split from the single flat appearance list along the screen-group line so
  * each screen group derives its facts from its own declaration list
  * (decision Q11a). Aggregated in [SettingsSearchCatalog].
+ *
+ * HAND-MAINTAINED: the navigation knobs live in the spec-less NavigationStore —
+ * these rows stay feature-side records until that store migrates.
  */
 internal val AppearanceNavigationRowRecords = listOf(
     SettingsRowRecord(
@@ -415,45 +321,32 @@ internal val AppearanceNavigationSearchItems: List<SettingsSearchItem> = Appeara
 
 
 /**
+ * The "Library & Cards" group's binding table — the search faces of its 3
+ * spec-backed rows (the appearance haptics toggle and the experimental
+ * share-media / hide-search-history toggles). The five library-content rows
+ * are the group's feature-side residuals. (The home-discovery watch-state
+ * quartet moved to HomeSettingsSearchItems.kt's cards group — PS-4.)
+ */
+private val appearanceLibraryBindings = listOf(
+    SettingsSearchBinding(AppearanceSettingsIds.HAPTICS_ENABLED, Res.string.ss_haptics_enabled_title, Res.string.ss_haptics_enabled_subtitle, appearanceCategory, Tabler.Outline.DeviceMobileVibration),
+    SettingsSearchBinding(AppearanceSettingsIds.SHOW_SHARE_MEDIA, Res.string.ss_show_share_media_title, Res.string.ss_show_share_media_subtitle, appearanceCategory, Tabler.Outline.Share),
+    SettingsSearchBinding(AppearanceSettingsIds.HIDE_SEARCH_HISTORY, Res.string.ss_hide_search_history_title, Res.string.ss_hide_search_history_subtitle, appearanceCategory, Tabler.Outline.EyeOff),
+)
+
+/**
  * Settings-search items for the "Library & Cards" group of AppearanceSettingsScreen.
  * Split from the single flat appearance list along the screen-group line so
  * each screen group derives its facts from its own declaration list
  * (decision Q11a). Aggregated in [SettingsSearchCatalog].
+ *
+ * Spec-derived for the haptics toggle (appearance store) and the
+ * share-media / hide-search-history toggles (experimental store); the five
+ * library-content rows stay feature-side residuals (LibraryStore — no spec
+ * machinery). (The home-discovery watch-state quartet moved to
+ * HomeSettingsSearchItems.kt's cards group — PS-4.)
  */
 internal val AppearanceLibraryRowRecords = listOf(
-    SettingsRowRecord(
-        id = AppearanceSettingsIds.SHOW_UNWATCHED_BADGE,
-        titleRes = Res.string.settings_show_unwatched_badge,
-        searchTitleRes = Res.string.ss_show_unwatched_badge_title,
-        searchSubtitleRes = Res.string.ss_show_unwatched_badge_subtitle,
-        keywords = listOf("unwatched", "badge", "indicator", "new", "marker"),
-        route = Route.AppearanceSettings(),
-        icon = Tabler.Outline.Folder,
-        isAdvanced = true
-    )
-,
-    SettingsRowRecord(
-        id = AppearanceSettingsIds.SHOW_WATCHED_CHECKMARK,
-        titleRes = Res.string.settings_show_watched_checkmark,
-        searchTitleRes = Res.string.ss_show_watched_checkmark_title,
-        searchSubtitleRes = Res.string.ss_show_watched_checkmark_subtitle,
-        keywords = listOf("watched", "checkmark", "badge", "indicator", "finished"),
-        route = Route.AppearanceSettings(),
-        icon = Tabler.Outline.CircleCheck,
-        isAdvanced = true
-    )
-,
-    SettingsRowRecord(
-        id = AppearanceSettingsIds.HIDE_WATCHED_ITEMS,
-        titleRes = Res.string.settings_hide_watched_items,
-        searchTitleRes = Res.string.ss_hide_watched_items_title,
-        searchSubtitleRes = Res.string.ss_hide_watched_items_subtitle,
-        keywords = listOf("hide", "watched", "filter", "library", "clean"),
-        route = Route.AppearanceSettings(),
-        icon = Tabler.Outline.EyeOff,
-        isAdvanced = true
-    )
-,
+    // ── RESIDUAL rows (LibraryStore — no spec machinery).
     SettingsRowRecord(
         id = AppearanceSettingsIds.HIDE_EPISODE_THUMBNAILS,
         titleRes = Res.string.settings_hide_episode_thumbnails,
@@ -463,8 +356,7 @@ internal val AppearanceLibraryRowRecords = listOf(
         route = Route.AppearanceSettings(),
         icon = Tabler.Outline.PhotoOff,
         isAdvanced = true
-    )
-,
+    ),
     SettingsRowRecord(
         id = AppearanceSettingsIds.COMPACT_EPISODE_LIST,
         titleRes = Res.string.settings_compact_episode_list,
@@ -472,8 +364,7 @@ internal val AppearanceLibraryRowRecords = listOf(
         keywords = listOf("episode", "list", "compact", "vertical", "layout", "rows", "dense"),
         route = Route.AppearanceSettings(),
         icon = Tabler.Outline.List
-    )
-,
+    ),
     SettingsRowRecord(
         id = AppearanceSettingsIds.SKIP_SPECIALS,
         titleRes = Res.string.settings_skip_special_episodes,
@@ -483,8 +374,7 @@ internal val AppearanceLibraryRowRecords = listOf(
         route = Route.AppearanceSettings(),
         icon = Tabler.Outline.PlayerSkipForward,
         isAdvanced = true
-    )
-,
+    ),
     SettingsRowRecord(
         id = AppearanceSettingsIds.SHOW_MISSING_EPISODES,
         titleRes = Res.string.settings_show_missing_episodes,
@@ -494,8 +384,7 @@ internal val AppearanceLibraryRowRecords = listOf(
         route = Route.AppearanceSettings(),
         icon = Tabler.Outline.Eye,
         isAdvanced = true
-    )
-,
+    ),
     SettingsRowRecord(
         id = AppearanceSettingsIds.PREFER_LOGOS,
         titleRes = Res.string.settings_prefer_logos,
@@ -504,55 +393,30 @@ internal val AppearanceLibraryRowRecords = listOf(
         keywords = listOf("logo", "clear logo", "title", "artwork", "image", "banner", "details", "prefer"),
         route = Route.AppearanceSettings(),
         icon = Tabler.Outline.Photo
-    )
-,
-    SettingsRowRecord(
-        id = AppearanceSettingsIds.HAPTICS_ENABLED,
-        titleRes = Res.string.settings_haptic_feedback,
-        searchTitleRes = Res.string.ss_haptics_enabled_title,
-        searchSubtitleRes = Res.string.ss_haptics_enabled_subtitle,
-        keywords = listOf("haptic", "vibration", "feedback", "vibrate", "touch"),
-        route = Route.AppearanceSettings(),
-        icon = Tabler.Outline.DeviceMobileVibration,
-        isAdvanced = true
-    )
-,
-    SettingsRowRecord(
-        id = AppearanceSettingsIds.SHOW_SHARE_MEDIA,
-        titleRes = Res.string.settings_show_share_media,
-        searchTitleRes = Res.string.ss_show_share_media_title,
-        searchSubtitleRes = Res.string.ss_show_share_media_subtitle,
-        keywords = listOf("share", "media", "send", "details"),
-        route = Route.AppearanceSettings(),
-        icon = Tabler.Outline.Share,
-        isAdvanced = true
-    )
-,
-    SettingsRowRecord(
-        id = AppearanceSettingsIds.SHOW_EXTERNAL_RATINGS,
-        titleRes = Res.string.settings_show_external_ratings,
-        searchTitleRes = Res.string.ss_show_external_ratings_title,
-        searchSubtitleRes = Res.string.ss_show_external_ratings_subtitle,
-        keywords = listOf("ratings", "imdb", "tmdb", "critic", "score", "star"),
-        route = Route.AppearanceSettings(),
-        icon = Tabler.Outline.Star,
-        isAdvanced = true
-    )
-,
-    SettingsRowRecord(
-        id = AppearanceSettingsIds.HIDE_SEARCH_HISTORY,
-        titleRes = Res.string.settings_hide_search_history,
-        searchTitleRes = Res.string.ss_hide_search_history_title,
-        searchSubtitleRes = Res.string.ss_hide_search_history_subtitle,
-        keywords = listOf("search", "history", "hide", "privacy", "recent"),
-        route = Route.AppearanceSettings(),
-        icon = Tabler.Outline.EyeOff,
-        isAdvanced = true
-    ))
+    ),
+    SettingsRowRecord(id = AppearanceSettingsIds.HAPTICS_ENABLED, titleRes = Res.string.settings_haptic_feedback, icon = Tabler.Outline.DeviceMobileVibration),
+    SettingsRowRecord(id = AppearanceSettingsIds.SHOW_SHARE_MEDIA, titleRes = Res.string.settings_show_share_media, icon = Tabler.Outline.Share),
+    SettingsRowRecord(id = AppearanceSettingsIds.HIDE_SEARCH_HISTORY, titleRes = Res.string.settings_hide_search_history, icon = Tabler.Outline.EyeOff),
+)
 
-/** The catalog projection of `AppearanceLibraryRowRecords`: the search faces + the shared category. */
-internal val AppearanceLibrarySearchItems: List<SettingsSearchItem> = AppearanceLibraryRowRecords.toSearchItems(CoreUiRes.string.ss_cat_appearance)
+/** The catalog projection of the spec-backed library rows + the residuals. */
+internal val AppearanceLibrarySearchItems: List<SettingsSearchItem> =
+    AppearanceLibraryRowRecords.toSearchItems(
+        specEntries = specsFor(appearanceLibraryBindings),
+        bindings = appearanceLibraryBindings,
+        routes = searchRoutes,
+        categoryRes = appearanceCategory,
+    )
 
+
+/**
+ * The advanced-gated "Performance" group's binding table (both rows
+ * spec-backed by the appearance store).
+ */
+private val appearancePerformanceBindings = listOf(
+    SettingsSearchBinding(AppearanceSettingsIds.PERFORMANCE_MODE, Res.string.ss_performance_mode_title, Res.string.ss_performance_mode_subtitle, appearanceCategory, Tabler.Outline.Gauge),
+    SettingsSearchBinding(AppearanceSettingsIds.REDUCE_MOTION, Res.string.ss_reduce_motion_title, Res.string.ss_reduce_motion_subtitle, appearanceCategory, Tabler.Outline.Activity),
+)
 
 /**
  * Settings-search items for the advanced-gated "Performance" group of AppearanceSettingsScreen.
@@ -561,31 +425,25 @@ internal val AppearanceLibrarySearchItems: List<SettingsSearchItem> = Appearance
  * (decision Q11a). Aggregated in [SettingsSearchCatalog].
  */
 internal val AppearancePerformanceRowRecords = listOf(
-    SettingsRowRecord(
-        id = AppearanceSettingsIds.PERFORMANCE_MODE,
-        titleRes = Res.string.settings_performance_mode,
-        searchTitleRes = Res.string.ss_performance_mode_title,
-        searchSubtitleRes = Res.string.ss_performance_mode_subtitle,
-        keywords = listOf("performance", "speed", "lag", "battery", "animations"),
-        route = Route.AppearanceSettings(),
-        icon = Tabler.Outline.Gauge,
-        isAdvanced = true
+    SettingsRowRecord(id = AppearanceSettingsIds.PERFORMANCE_MODE, titleRes = Res.string.settings_performance_mode, icon = Tabler.Outline.Gauge),
+    SettingsRowRecord(id = AppearanceSettingsIds.REDUCE_MOTION, titleRes = Res.string.settings_reduce_motion, icon = Tabler.Outline.Activity),
+)
+
+/** The catalog projection of the spec-derived performance rows. */
+internal val AppearancePerformanceSearchItems: List<SettingsSearchItem> =
+    AppearancePerformanceRowRecords.toSearchItems(
+        specEntries = specsFor(appearancePerformanceBindings),
+        bindings = appearancePerformanceBindings,
+        routes = searchRoutes,
+        categoryRes = appearanceCategory,
     )
-,
-    SettingsRowRecord(
-        id = AppearanceSettingsIds.REDUCE_MOTION,
-        titleRes = Res.string.settings_reduce_motion,
-        searchTitleRes = Res.string.ss_reduce_motion_title,
-        searchSubtitleRes = Res.string.ss_reduce_motion_subtitle,
-        keywords = listOf("motion", "reduce", "animations", "parallax", "effects"),
-        route = Route.AppearanceSettings(),
-        icon = Tabler.Outline.Activity,
-        isAdvanced = true
-    ))
 
-/** The catalog projection of `AppearancePerformanceRowRecords`: the search faces + the shared category. */
-internal val AppearancePerformanceSearchItems: List<SettingsSearchItem> = AppearancePerformanceRowRecords.toSearchItems(CoreUiRes.string.ss_cat_appearance)
 
+/** The advanced-gated "Eye Care" group's binding table (both rows spec-backed). */
+private val appearanceEyeCareBindings = listOf(
+    SettingsSearchBinding(AppearanceSettingsIds.BLUE_LIGHT_FILTER, Res.string.ss_blue_light_filter_title, Res.string.ss_blue_light_filter_subtitle, appearanceCategory, Tabler.Outline.Moon),
+    SettingsSearchBinding(AppearanceSettingsIds.BLUE_LIGHT_STRENGTH, Res.string.ss_blue_light_strength_title, Res.string.ss_blue_light_strength_subtitle, appearanceCategory, Tabler.Outline.Adjustments),
+)
 
 /**
  * Settings-search items for the advanced-gated "Eye Care" group of AppearanceSettingsScreen.
@@ -594,30 +452,18 @@ internal val AppearancePerformanceSearchItems: List<SettingsSearchItem> = Appear
  * (decision Q11a). Aggregated in [SettingsSearchCatalog].
  */
 internal val AppearanceEyeCareRowRecords = listOf(
-    SettingsRowRecord(
-        id = AppearanceSettingsIds.BLUE_LIGHT_FILTER,
-        titleRes = Res.string.settings_blue_light_filter,
-        searchTitleRes = Res.string.ss_blue_light_filter_title,
-        searchSubtitleRes = Res.string.ss_blue_light_filter_subtitle,
-        keywords = listOf("blue light", "amber", "eye care", "night", "filter", "tint"),
-        route = Route.AppearanceSettings(),
-        icon = Tabler.Outline.Moon,
-        isAdvanced = true
-    )
-,
-    SettingsRowRecord(
-        id = AppearanceSettingsIds.BLUE_LIGHT_STRENGTH,
-        titleRes = Res.string.settings_blue_light_filter_strength,
-        searchTitleRes = Res.string.ss_blue_light_strength_title,
-        searchSubtitleRes = Res.string.ss_blue_light_strength_subtitle,
-        keywords = listOf("blue light", "strength", "amber", "intensity", "overlay"),
-        route = Route.AppearanceSettings(),
-        icon = Tabler.Outline.Adjustments,
-        isAdvanced = true
-    ))
+    SettingsRowRecord(id = AppearanceSettingsIds.BLUE_LIGHT_FILTER, titleRes = Res.string.settings_blue_light_filter, icon = Tabler.Outline.Moon),
+    SettingsRowRecord(id = AppearanceSettingsIds.BLUE_LIGHT_STRENGTH, titleRes = Res.string.settings_blue_light_filter_strength, icon = Tabler.Outline.Adjustments),
+)
 
-/** The catalog projection of `AppearanceEyeCareRowRecords`: the search faces + the shared category. */
-internal val AppearanceEyeCareSearchItems: List<SettingsSearchItem> = AppearanceEyeCareRowRecords.toSearchItems(CoreUiRes.string.ss_cat_appearance)
+/** The catalog projection of the spec-derived eye-care rows. */
+internal val AppearanceEyeCareSearchItems: List<SettingsSearchItem> =
+    AppearanceEyeCareRowRecords.toSearchItems(
+        specEntries = specsFor(appearanceEyeCareBindings),
+        bindings = appearanceEyeCareBindings,
+        routes = searchRoutes,
+        categoryRes = appearanceCategory,
+    )
 
 
 /**
@@ -625,6 +471,9 @@ internal val AppearanceEyeCareSearchItems: List<SettingsSearchItem> = Appearance
  * Split from the single flat appearance list along the screen-group line so
  * each screen group derives its facts from its own declaration list
  * (decision Q11a). Aggregated in [SettingsSearchCatalog].
+ *
+ * HAND-MAINTAINED: the newsletter knobs live in spec-less stores — these rows
+ * stay feature-side records until their store migrates.
  */
 internal val AppearanceNewsletterRowRecords = listOf(
     SettingsRowRecord(
@@ -666,14 +515,15 @@ internal val AppearanceNewsletterSearchItems: List<SettingsSearchItem> = Appeara
 // ── Declared row admissions (the gates the screen totals AND emissions read) ──
 
 /**
- * The theme group's declared admissions: every record rides its own
- * [SettingsRowRecord.isAdvanced] base ([admissionsByAdvancedFlag]) EXCEPT the
- * ids in [AppearanceThemeContentGatedIds] (content-gated screen rows) and
- * [AppearanceSettingsIds.THEME_SCHEDULER] (the highlight-alias row — see
- * below). Both stay undeclared, so the strict [rowTotalFor] counts neither —
- * the shipped count semantics (the hand-built `appearanceItems` list never
- * contained either). The contract test's strict per-id ratchet pins this
- * exception set; the screen's
+ * The theme group's declared admissions: every row rides its declared
+ * advanced flag ([SettingsSearchItem.isAdvanced] — from the spec
+ * declarations for the spec-derived rows, from the residual records
+ * otherwise) EXCEPT the ids in [AppearanceThemeContentGatedIds] (content-
+ * gated screen rows) and [AppearanceSettingsIds.THEME_SCHEDULER] (the
+ * highlight-alias row — see below). Both stay undeclared, so the strict
+ * [rowTotalFor] counts neither — the shipped count semantics (the hand-built
+ * `appearanceItems` list never contained either). The contract test's strict
+ * per-id ratchet pins this exception set; the screen's
  * [com.raulshma.jellyplay.feature.settings.appearanceThemeScreenRowTotal]
  * adds the content-gated rows back as explicit content terms (the
  * home.display unhide-row precedent).
@@ -699,13 +549,13 @@ internal val AppearanceThemeAliasRowId: String = AppearanceSettingsIds.THEME_SCH
 
 /** The theme group's declared admissions — see [AppearanceThemeContentGatedIds]. */
 internal val AppearanceThemeRowAdmissions: Map<String, RowAdmission> =
-    AppearanceThemeRowRecords
+    AppearanceThemeSearchItems
         .filter { it.id !in AppearanceThemeContentGatedIds && it.id != AppearanceThemeAliasRowId }
         .admissionsByAdvancedFlag()
 
 /**
  * The "Library & Cards" group's admissions: every declared row renders
- * unconditionally (the shipped always-on behavior — the records declare most
+ * unconditionally (the shipped always-on behavior — the rows declare most
  * of them advanced, yet the group predates and outlives the advanced gate,
  * the language high-contrast shipped quirk), so each id states
  * [RowAdmission.Always] explicitly instead of riding its advanced base.
@@ -715,11 +565,11 @@ internal val AppearanceLibraryRowAdmissions: Map<String, RowAdmission> =
 
 /** The advanced-gated performance group: both rows ride the advanced toggle (the group only composes behind it). */
 internal val AppearancePerformanceRowAdmissions: Map<String, RowAdmission> =
-    AppearancePerformanceRowRecords.admissionsByAdvancedFlag()
+    AppearancePerformanceSearchItems.admissionsByAdvancedFlag()
 
 /** The advanced-gated eye-care group: both rows ride the advanced toggle (the group only composes behind it). */
 internal val AppearanceEyeCareRowAdmissions: Map<String, RowAdmission> =
-    AppearanceEyeCareRowRecords.admissionsByAdvancedFlag()
+    AppearanceEyeCareSearchItems.admissionsByAdvancedFlag()
 
 /**
  * The advanced-gated newsletter group: the three declared rows ride the
@@ -729,4 +579,3 @@ internal val AppearanceEyeCareRowAdmissions: Map<String, RowAdmission> =
  */
 internal val AppearanceNewsletterRowAdmissions: Map<String, RowAdmission> =
     AppearanceNewsletterRowRecords.admissionsByAdvancedFlag()
-

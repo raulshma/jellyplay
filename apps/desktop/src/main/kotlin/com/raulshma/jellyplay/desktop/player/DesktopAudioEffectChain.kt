@@ -7,6 +7,7 @@ import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.EqualizerSettings
 import com.raulshma.jellyplay.core.model.ReverbPreset
 import com.raulshma.jellyplay.feature.player.video.engine.AudioEffectsConfig
+import com.raulshma.jellyplay.feature.player.video.engine.DYNAMIC_COMPRESSOR_FILTER
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.log10
@@ -42,10 +43,6 @@ import kotlin.math.pow
  * | Visualizer (`AudioVisualizerHelper` fft/waveform taps) | none | no mpv equivalent without an in-sink PCM tap; the desktop manager keeps `fftData`/`waveformData` empty (declared divergence, unchanged) |
  */
 internal object DesktopAudioEffectChain {
-
-    /** Android `DynamicsCompressorAudioProcessor` default params, as the Android MPV path emits them. */
-    internal const val DYNAMIC_COMPRESSOR_FILTER: String =
-        "acompressor=ratio=3:threshold=0.05:attack=10:release=200"
 
     /** Below the ~85 Hz fundamental of the lowest male voice (HighPassFilterAudioProcessor default). */
     internal const val DIALOGUE_HIGH_PASS_FILTER: String = "highpass=f=80"

@@ -518,18 +518,10 @@ internal fun SearchScreen(
                 val offlineResults by viewModel.offlineResults.collectAsStateWithLifecycle()
                 // De-duplicate against the library grid below so a downloaded item
                 // that also exists in the library isn't rendered twice (Home already
-                // does this for its downloaded row).
+                // does this for its downloaded row) — the pure fold in
+                // [dedupeOfflineAgainstLibrary].
                 val dedupedOfflineResults = remember(offlineResults, pagedResults.itemSnapshotList) {
-                    if (offlineResults.isEmpty()) offlineResults
-                    else {
-                        val onlineIds = buildSet {
-                            for (item in pagedResults.itemSnapshotList) {
-                                item?.id?.takeUnless { it.isBlank() }?.let { add(it) }
-                            }
-                        }
-                        if (onlineIds.isEmpty()) offlineResults
-                        else offlineResults.filter { it.id !in onlineIds }
-                    }
+                    dedupeOfflineAgainstLibrary(offlineResults, pagedResults.itemSnapshotList)
                 }
                 val showOffline = dedupedOfflineResults.isNotEmpty() && queryHasText
                 if (showOffline) {
@@ -666,35 +658,16 @@ internal fun SearchScreen(
                 Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
                     when (surface) {
                         SearchSurface.NoResults -> {
-                            // Typo tolerance fallback: Jellyfin's media search is substring/prefix
-                            // only, so a misspelled query ("Interstelar") returns nothing. With no
-                            // easy way to push a fuzzy variant through the server query, surface
-                            // "Did you mean?" suggestions derived from the user's own recent
-                            // searches — a pure client-side prefix heuristic, no extra fetches.
+                            // Typo tolerance fallback: with no results for the typed
+                            // query, surface "Did you mean?" suggestions derived from
+                            // the user's own recent searches — the pure client-side
+                            // prefix heuristic in [didYouMeanSuggestions], no extra
+                            // fetches. (The former inline derivedStateOf added nothing:
+                            // both of its snapshot inputs were already this block's
+                            // remember keys.)
                             val query = viewModel.query
-                            val didYouMean by remember(query, searchHistory) {
-                                derivedStateOf {
-                                    if (query.length < 3 || searchHistory.isEmpty()) {
-                                        emptyList()
-                                    } else {
-                                        searchHistory
-                                            .asSequence()
-                                            .map { it.query }
-                                            .filter { it != query }
-                                            .filter {
-                                                // Suggest a past query that shares a meaningful
-                                                // leading run of characters (catches single-word
-                                                // typos) or any whitespace token with the typed query.
-                                                it.commonPrefixWith(query, ignoreCase = true).length >= 3 ||
-                                                    it.lowercase().split(' ', '\t').any { token ->
-                                                        token.length >= 3 && query.lowercase().contains(token)
-                                                    }
-                                            }
-                                            .distinct()
-                                            .take(4)
-                                            .toList()
-                                    }
-                                }
+                            val didYouMean = remember(query, searchHistory) {
+                                didYouMeanSuggestions(query, searchHistory)
                             }
                             Column(
                                 modifier = Modifier
@@ -876,6 +849,14 @@ internal fun SearchScreen(
                             } // close verticalScroll Column
                         }
                         is SearchSurface.Content -> {
+                            // Deliberately NOT core:ui's PagedCollectionGrid — the
+                            // chassis decisions ARE shared (the fold's refresh phase
+                            // and the append states below speak pagedCollectionRung/
+                            // pagedAppendRung), but this renderer overlays refresh
+                            // loading/error ON TOP of the settled grid instead of
+                            // swapping rungs, fades its append footer in over a
+                            // gradient, and wraps each result in AnimatedSearchItem —
+                            // none of which the shared grid variants compose.
                             // ── Library grid ──
                             TvFocusableGrid(
                                 itemCount = pagedResults.itemCount,

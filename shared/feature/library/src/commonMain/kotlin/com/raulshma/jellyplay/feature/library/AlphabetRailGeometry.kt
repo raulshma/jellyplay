@@ -87,3 +87,26 @@ internal fun libraryRailFirstVisibleItemIndex(
         LibraryViewMode.LIST -> listFirstVisibleItemIndex
         else -> gridFirstVisibleItemIndex
     }
+
+/**
+ * The rail's letter→index fold, extracted verbatim from the library screen's
+ * inline `derivedStateOf`: a single pass over the loaded items records the
+ * first index at which each normalized leading letter appears (`#` for every
+ * non A–Z leading character). Jellyfin returns library items sorted by
+ * SortName by default, so the first snapshot index per letter is stable
+ * within the loaded pages — a local-only jump target (no NameStartsWith
+ * server filter is plumbed through the data layer). Insertion order is the
+ * letters' display order; [nameOf] keeps the fold generic over the item type
+ * (the screen passes the paged snapshot, tests pass plain strings).
+ */
+internal fun <T> jumpIndexByLetter(items: List<T>, nameOf: (T) -> String?): Map<Char, Int> {
+    val map = LinkedHashMap<Char, Int>()
+    for (i in items.indices) {
+        val key = nameOf(items[i])?.firstOrNull()
+            ?.lowercaseChar()
+            ?.takeIf { it in 'a'..'z' }
+            ?: '#'
+        if (key !in map) map[key] = i
+    }
+    return map
+}

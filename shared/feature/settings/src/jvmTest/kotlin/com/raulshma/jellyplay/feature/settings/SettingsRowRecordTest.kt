@@ -39,30 +39,26 @@ import kotlin.test.assertTrue
  */
 class SettingsRowRecordTest {
 
-    /** Every (record list, derived item list) pair — one line per declaration list. */
+    /**
+     * Every (record list, derived item list) pair — one line per declaration
+     * list. The SPEC-DERIVED lists (the playback
+     * player/advanced-video/external/segment rows, the appearance
+     * theme/library/performance/eye-care groups, the three home groups and
+     * the system dream/shell rows) are absent here: their records are
+     * ordered screen-face spines, and their search faces project from the
+     * datastore-side specs (pinned by `SpecDerivedSearchItemsTest`).
+     */
     private val pairs: List<Pair<List<SettingsRowRecord>, List<SettingsSearchItem>>> = listOf(
         AccountRowRecords to AccountSearchItems,
         IntegrationsRowRecords to IntegrationsSearchItems,
         ActivityInsightsRowRecords to ActivityInsightsSearchItems,
-        SystemRowRecords to SystemSearchItems,
-        HomeDisplayRowRecords to HomeDisplaySearchItems,
-        HomeNextUpRowRecords to HomeNextUpSearchItems,
-        HomeLayoutRowRecords to HomeLayoutSearchItems,
-        AppearanceThemeRowRecords to AppearanceThemeSearchItems,
         AppearanceNavigationRowRecords to AppearanceNavigationSearchItems,
-        AppearanceLibraryRowRecords to AppearanceLibrarySearchItems,
-        AppearancePerformanceRowRecords to AppearancePerformanceSearchItems,
-        AppearanceEyeCareRowRecords to AppearanceEyeCareSearchItems,
         AppearanceNewsletterRowRecords to AppearanceNewsletterSearchItems,
-        PlaybackSettingsRowRecords to PlaybackSettingsSearchItems,
-        PlaybackAdvancedVideoRowRecords to PlaybackAdvancedVideoSearchItems,
         MpvEngineRowRecords to MpvEngineSearchItems,
         VlcEngineRowRecords to VlcEngineSearchItems,
         ExoPlayerEngineRowRecords to ExoPlayerEngineSearchItems,
-        ExternalEngineRowRecords to ExternalEngineSearchItems,
         SyncPlayRowRecords to SyncPlaySearchItems,
         CastingRowRecords to CastingSearchItems,
-        LiveTvRowRecords to LiveTvSearchItems,
         AudioSettingsRowRecords to AudioSettingsSearchItems,
         AudioCacheRowRecords to AudioCacheSearchItems,
         LanguageSettingsRowRecords to LanguageSettingsSearchItems,
@@ -102,19 +98,23 @@ class SettingsRowRecordTest {
     }
 
     @Test
-    fun `the record registry covers the record lists exactly and single-valued`() {
+    fun `the record registry stays single-valued and covers the hand-projection lists`() {
         val allIds = SettingsRowRecords.all.map { it.id }
         val pairIds = pairs.flatMap { (records, _) -> records.map { it.id } }
-        assertEquals(pairIds.toSet(), allIds.toSet(), "the registry is not exactly the union of the record lists")
+        // The hand-projection lists are a SUBSET of the registry now: the
+        // spec-derived lists' records (the screen-face spines) fill the rest.
+        assertTrue(allIds.containsAll(pairIds.toSet()), "registry is missing a hand-projection record id")
         assertEquals(allIds.size, allIds.toSet().size, "duplicate record ids in the registry")
         assertEquals(SettingsRowRecords.all.size, SettingsRowRecords.byId.size, "byId collapsed a duplicate id")
     }
 
     @Test
     fun `records span the declared catalog minus the experimental binding-derived screen`() {
-        // 271 hand-declared records; the experimental screen's 5 rows stay on
-        // the ExperimentalPreferenceSpecs derivation (the Stage-A pilot) and
-        // are the documented records exception.
+        // Every non-experimental catalog row keeps its record — full hand
+        // faces for the residual rows, ordered screen-face spines for the
+        // spec-derived rows — so the registry still spans the catalog minus
+        // the experimental screen's 5 rows (derived from
+        // ExperimentalPreferenceSpecs with no records at all).
         val experimentalIds = setOf(
             ExperimentalSettingsIds.EXPERIMENTAL,
             ExperimentalSettingsIds.HOME_CARD_CLIPPING,
@@ -143,9 +143,12 @@ class SettingsRowRecordTest {
         // The default-title fold resolves null searchTitleRes to titleRes;
         // a record defaulting with a null titleRes would have nothing to fold
         // to (toSearchItem's requireNotNull) — the no-screen-title exceptions
-        // must keep their explicit ss_*_title declarations instead.
+        // must keep their explicit ss_*_title declarations instead. The check
+        // reads the HAND rows only (route != null): the spec-derived
+        // screen-face spines carry no search faces at all — their projection
+        // is the spec + binding derivation, not the fold.
         val orphanDefaults = SettingsRowRecords.all
-            .filter { it.searchTitleRes == null && it.titleRes == null }
+            .filter { it.route != null && it.searchTitleRes == null && it.titleRes == null }
             .map { it.id }
         assertEquals(emptyList(), orphanDefaults, "records defaulting the search title but declaring no screen title")
     }

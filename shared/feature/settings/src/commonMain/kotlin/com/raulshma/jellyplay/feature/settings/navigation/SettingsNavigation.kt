@@ -88,15 +88,8 @@ fun EntryProviderScope<NavKey>.settingsSection(
     }
 
     entry<Route.AppearanceSettings> { entry ->
-        // Navigator-backed facade: the moved-settings pointer card on the
-        // Appearance screen deep-links into the Home hub through the same
-        // onNavigate seam.
-        val navActions = remember(navigator) {
-            SettingsNavActions(onNavigate = { route -> navigator.navigate(route) })
-        }
         AppearanceSettingsScreen(
             onBack = { navigator.goBack() },
-            navActions = navActions,
             highlightSettingId = entry.highlightSettingId,
         )
     }

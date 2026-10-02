@@ -115,15 +115,17 @@ internal object SettingsScreenGroups {
 
     // ── HomeSettingsScreen ─────────────────────────────────────────────
     /**
-     * The home config hub's three screen groups — the rows moved off
+     * The home config hub's four screen groups — the rows moved off
      * Appearance (the former advanced-gated home display rows, the Next Up
-     * behavior rows, and the former `appearance.homeLayout` drill-in group).
-     * Ids carried over verbatim, so persisted deep-links/recents keep
-     * resolving — only the owning screen changed.
+     * behavior rows, the former `appearance.homeLayout` drill-in group, and
+     * the "Library & Cards" card-display quartet, PS-4). Ids carried over
+     * verbatim, so persisted deep-links/recents keep resolving — only the
+     * owning screen changed.
      */
     val homeDisplay = HomeDisplaySearchItems.asSearchGroup("home.display", HomeDisplayRowAdmissions)
     val homeNextUp = HomeNextUpSearchItems.asSearchGroup("home.nextUp")
     val homeLayout = HomeLayoutSearchItems.asSearchGroup("home.layout")
+    val homeCards = HomeCardsSearchItems.asSearchGroup("home.cards", HomeCardsRowAdmissions)
 
     // ── AppearanceSettingsScreen ────────────────────────────────────────
     val appearanceTheme = AppearanceThemeSearchItems.asSearchGroup("appearance.theme", AppearanceThemeRowAdmissions)
@@ -233,6 +235,7 @@ internal object SettingsScreenGroups {
         homeDisplay,
         homeNextUp,
         homeLayout,
+        homeCards,
         appearanceTheme,
         appearanceNavigation,
         appearanceLibrary,

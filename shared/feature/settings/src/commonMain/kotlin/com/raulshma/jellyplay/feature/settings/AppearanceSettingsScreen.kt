@@ -1,20 +1,10 @@
 package com.raulshma.jellyplay.feature.settings
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
@@ -22,22 +12,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import org.koin.compose.viewmodel.koinViewModel
 import com.raulshma.jellyplay.core.model.AppearanceScreenPreferences
 import com.raulshma.jellyplay.core.designsystem.theme.ThemeVariant
 import com.raulshma.jellyplay.core.designsystem.theme.accentOptions
-import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
-import com.raulshma.jellyplay.core.designsystem.theme.LocalIsLightTheme
-import com.raulshma.jellyplay.core.designsystem.theme.lightModeHairlineBorder
-import com.raulshma.jellyplay.core.designsystem.theme.settingsGroupContainerColor
 import com.raulshma.jellyplay.core.model.ContrastLevel
 import com.raulshma.jellyplay.core.model.DateFormatPreference
 import com.raulshma.jellyplay.core.model.AppFontScale
@@ -45,12 +26,8 @@ import com.raulshma.jellyplay.core.model.ThemeMode
 import com.raulshma.jellyplay.core.model.LayoutMode
 import com.raulshma.jellyplay.core.model.LibraryViewMode
 import com.raulshma.jellyplay.core.model.NewsletterSectionType
-import com.raulshma.jellyplay.core.ui.navigation.Route
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.raulshma.jellyplay.core.ui.animation.pressScale
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
-import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
-import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.components.SettingListItem
 import com.raulshma.jellyplay.core.ui.components.SettingToggleItem
 import com.raulshma.jellyplay.core.ui.components.ConsumeSettingsItemIndex
@@ -90,8 +67,6 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_day_
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_day_tuesday
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_day_wednesday
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_disabled
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_moved_info
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dynamic_theming
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dynamic_theming_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_enable_newsletter
@@ -107,7 +82,6 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hide
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hide_search_history
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hide_search_history_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hide_watched_items
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hide_watched_items_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_library_cards
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_library_view_grid
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_library_view_list
@@ -153,28 +127,21 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_rese
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_reset_defaults_cd
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_reduced_motion
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_external_ratings
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_external_ratings_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_nav_labels
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_missing_episodes
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_missing_episodes_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_share_media
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_share_media_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_unwatched_badge
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_unwatched_badge_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_watched_checkmark
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_watched_checkmark_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_skip_special_episodes
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_skip_special_episodes_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_standard_experience
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_style_summary
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_summary_all_hidden
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_summary_external_ratings
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_summary_hide_thumbnails
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_summary_hide_watched
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_summary_share_button
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_summary_skip_specials
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_summary_unwatched_badges
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_summary_watched_checkmarks
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_theme
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_theme_always_dark
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_theme_always_light
@@ -194,8 +161,8 @@ private val THEME_HIGHLIGHT_IDS = setOf(AppearanceSettingsIds.THEME_MODE, Appear
  * source the deep-link scroll resolver consumes (see HighlightScroll.kt), so
  * the scroll target can never drift from the UI. Indices 0-2 always render;
  * 3-5 (performance, eye care, newsletter) only compose when advanced settings
- * are shown. (The home display / Next Up / home-layout rows moved to
- * HomeSettingsScreen.)
+ * are shown. (The home display / Next Up / home-layout rows AND the
+ * home-discovery card-display quartet moved to HomeSettingsScreen.)
  */
 private val appearanceScreenGroups: List<Set<String>> = listOf(
     SettingsScreenGroups.appearanceTheme.itemIdSet,
@@ -264,14 +231,12 @@ private fun appearanceThemeSummary(preferences: AppearanceScreenPreferences): St
 
 @Composable
 private fun appearanceLibrarySummary(preferences: AppearanceScreenPreferences): String {
-    val unwatched = if (preferences.showUnwatchedBadge) stringResource(Res.string.settings_summary_unwatched_badges) else null
-    val checkmarks = if (preferences.showWatchedCheckmark) stringResource(Res.string.settings_summary_watched_checkmarks) else null
-    val hideWatched = if (preferences.hideWatchedItems) stringResource(Res.string.settings_summary_hide_watched) else null
+    // The group's remaining rows (the home-discovery card-display quartet
+    // moved to HomeSettingsScreen — PS-4, so its terms left the summary).
     val hideThumbnails = if (preferences.hideEpisodeThumbnails) stringResource(Res.string.settings_summary_hide_thumbnails) else null
     val skipSpecials = if (preferences.skipSpecials) stringResource(Res.string.settings_summary_skip_specials) else null
     val shareOpt = if (preferences.showShareMediaOption) stringResource(Res.string.settings_summary_share_button) else null
-    val ratingsOpt = if (preferences.showExternalRatings) stringResource(Res.string.settings_summary_external_ratings) else null
-    return listOfNotNull(unwatched, checkmarks, hideWatched, hideThumbnails, skipSpecials, shareOpt, ratingsOpt)
+    return listOfNotNull(hideThumbnails, skipSpecials, shareOpt)
         .joinToString(", ")
         .ifEmpty { stringResource(Res.string.settings_summary_all_hidden) }
 }
@@ -339,7 +304,6 @@ internal fun appearanceThemeScreenRowTotal(
 @Composable
 fun AppearanceSettingsScreen(
     onBack: () -> Unit,
-    navActions: SettingsNavActions = SettingsNavActions(),
     highlightSettingId: String? = null,
     viewModel: AppearanceSettingsViewModel = koinViewModel(),
 ) {
@@ -395,15 +359,6 @@ fun AppearanceSettingsScreen(
                 highlightSettingId = highlightSettingId,
                 viewModel = viewModel,
             )
-        }
-
-        // Pointer for the moved home settings: the former Home Screen
-        // Layout group (and the home display rows) now live on the
-        // dedicated Home Screen settings page. Styled as a collapsed
-        // group card (navigates instead of expanding), so it reads as a
-        // sibling of the SettingsGroups around it.
-        item {
-            AppearanceHomeMovedCard(onNavigate = { navActions.onNavigate(Route.HomeSettings()) })
         }
 
         // Remaining groups are expert-level; keep them behind the Advanced gate.
@@ -825,33 +780,6 @@ private fun AppearanceLibraryGroup(
         SettingsItemList(total = appearanceLibraryScreenRowTotal()) {
 
         SettingToggleItem(
-            icon = Tabler.Outline.Folder,
-            title = rowTitle(AppearanceSettingsIds.SHOW_UNWATCHED_BADGE),
-            subtitle = stringResource(Res.string.settings_show_unwatched_badge_subtitle),
-            checked = preferences.showUnwatchedBadge,
-            highlighted = highlightSettingId == AppearanceSettingsIds.SHOW_UNWATCHED_BADGE,
-            onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setShowUnwatchedBadge(it) } },
-        )
-
-        SettingToggleItem(
-            icon = Tabler.Outline.CircleCheck,
-            title = rowTitle(AppearanceSettingsIds.SHOW_WATCHED_CHECKMARK),
-            subtitle = stringResource(Res.string.settings_show_watched_checkmark_subtitle),
-            checked = preferences.showWatchedCheckmark,
-            highlighted = highlightSettingId == AppearanceSettingsIds.SHOW_WATCHED_CHECKMARK,
-            onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setShowWatchedCheckmark(it) } },
-        )
-
-        SettingToggleItem(
-            icon = Tabler.Outline.EyeOff,
-            title = rowTitle(AppearanceSettingsIds.HIDE_WATCHED_ITEMS),
-            subtitle = stringResource(Res.string.settings_hide_watched_items_subtitle),
-            checked = preferences.hideWatchedItems,
-            highlighted = highlightSettingId == AppearanceSettingsIds.HIDE_WATCHED_ITEMS,
-            onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setHideWatchedItems(it) } },
-        )
-
-        SettingToggleItem(
             icon = Tabler.Outline.PhotoOff,
             title = rowTitle(AppearanceSettingsIds.HIDE_EPISODE_THUMBNAILS),
             subtitle = stringResource(Res.string.settings_hide_episode_thumbnails_subtitle),
@@ -931,84 +859,7 @@ private fun AppearanceLibraryGroup(
             highlighted = highlightSettingId == AppearanceSettingsIds.HIDE_SEARCH_HISTORY,
             onCheckedChange = { viewModel.edit { scope -> scope.experimental.setHideSearchHistory(it) } },
         )
-
-        SettingToggleItem(
-            icon = Tabler.Outline.Star,
-            title = rowTitle(AppearanceSettingsIds.SHOW_EXTERNAL_RATINGS),
-            subtitle = stringResource(Res.string.settings_show_external_ratings_subtitle),
-            checked = preferences.showExternalRatings,
-            highlighted = highlightSettingId == AppearanceSettingsIds.SHOW_EXTERNAL_RATINGS,
-            onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setShowExternalRatings(it) } },
-        )
         }
-    }
-}
-
-/** The collapsed group card pointing at the moved HomeScreen settings page. */
-@Composable
-private fun AppearanceHomeMovedCard(onNavigate: () -> Unit) {
-    val movedTvFocusState = rememberTvFocusState(focusedScale = 1.02f)
-    val movedInteractionSource = remember { MutableInteractionSource() }
-    val isLight = LocalIsLightTheme.current
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .then(if (isLight) Modifier.shadow(2.dp, ShapeCache.smooth24) else Modifier)
-            .clip(ShapeCache.smooth24)
-            .background(settingsGroupContainerColor())
-            .lightModeHairlineBorder(ShapeCache.smooth24)
-            .pressScale(
-                interactionSource = movedInteractionSource,
-                defaultScale = 0.98f,
-                spec = MaterialTheme.motionScheme.fastSpatialSpec(),
-            )
-            .then(movedTvFocusState.focusModifier)
-            .tvFocusIndicator(movedTvFocusState, ShapeCache.smooth24)
-            .clickable(
-                interactionSource = movedInteractionSource,
-                indication = null,
-            ) { onNavigate() }
-            .padding(horizontal = 16.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(
-            modifier = Modifier
-                .size(36.dp)
-                .clip(ShapeCache.smooth12)
-                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f)),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                Tabler.Outline.InfoCircle,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(20.dp),
-            )
-        }
-        Spacer(Modifier.width(14.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = stringResource(Res.string.settings_home_title),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text = stringResource(Res.string.settings_home_moved_info),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-        Icon(
-            Tabler.Outline.ChevronRight,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(24.dp),
-        )
     }
 }
 

@@ -35,14 +35,29 @@ internal enum class PreferenceStorage { BOOLEAN, STRING, INT, FLOAT, LONG }
  * `SettingsSearchItem`).
  *
  * Only the rules the declarations actually use exist — capability-derived
- * tags (`platformsForCapability`) stay feature-side until their backing
- * capability becomes spec data, and `ANDROID_ONLY` returns with its first
- * Android-only declaration (TV-only rows will want it when they migrate:
- * form factor is the runtime `LocalTvMode` axis, not a platform).
+ * tags (`platformsForCapability`) stay feature-side (the binding's
+ * `platforms` override) until their backing capability becomes spec data.
+ * TV-only rows stay tagged ANDROID — form factor is the runtime
+ * `LocalTvMode` axis, not a platform.
  */
 enum class PreferencePlatformRule(val platforms: Set<PlatformKind>) {
     /** Offered on every platform — the catalog default. */
     ALL(PlatformKind.entries.toSet()),
+
+    /**
+     * Android-only rows (the TV watch-next row, the TV zoom mode): the
+     * backing surface exists only in the Android binary's stack, so the row
+     * must never surface as a search hit on desktop.
+     */
+    ANDROID_ONLY(setOf(PlatformKind.ANDROID)),
+
+    /**
+     * Desktop-only rows (the desktop-shell integrations: Discord Rich
+     * Presence, the mpv-shim shell hooks): the backing surface exists only
+     * in the desktop binary, so the row must never surface as a search hit
+     * on Android.
+     */
+    DESKTOP_ONLY(setOf(PlatformKind.DESKTOP)),
 }
 
 /**
@@ -136,12 +151,24 @@ class PreferenceSpec<T> internal constructor(
      * store's existing `Keys` object without rewiring it.
      */
     @Suppress("UNCHECKED_CAST")
-    internal fun typedKey(): Preferences.Key<T> = when (storage) {
-        PreferenceStorage.BOOLEAN -> booleanPreferencesKey(keyName)
-        PreferenceStorage.STRING -> stringPreferencesKey(keyName)
-        PreferenceStorage.INT -> intPreferencesKey(keyName)
-        PreferenceStorage.FLOAT -> floatPreferencesKey(keyName)
-        PreferenceStorage.LONG -> longPreferencesKey(keyName)
+    internal fun typedKey(): Preferences.Key<T> = typedKeyNamed(keyName)
+
+    /**
+     * Rebuilds the row's typed key under an overridden wire [name], keeping
+     * the row's declared storage type — the spec-side key-rebuild hook for
+     * stores that namespace their keys per active user
+     * (`HomeDiscoveryStore`'s `u_<userId>::<canonical>` grammar): the
+     * namespaced key is rebuilt from the row's ONE declared [keyName] plus
+     * the row's storage, so a namespaced slot can never drift its canonical
+     * declaration (same name-based equality guarantee as [typedKey]).
+     */
+    @Suppress("UNCHECKED_CAST")
+    internal fun typedKeyNamed(name: String): Preferences.Key<T> = when (storage) {
+        PreferenceStorage.BOOLEAN -> booleanPreferencesKey(name)
+        PreferenceStorage.STRING -> stringPreferencesKey(name)
+        PreferenceStorage.INT -> intPreferencesKey(name)
+        PreferenceStorage.FLOAT -> floatPreferencesKey(name)
+        PreferenceStorage.LONG -> longPreferencesKey(name)
     } as Preferences.Key<T>
 
     /**
@@ -237,6 +264,7 @@ class PreferenceSpec<T> internal constructor(
             keyName: String,
             default: Boolean,
             resetCategory: PreferenceResetCategory? = null,
+            search: PreferenceSearchSpec? = null,
         ): PreferenceSpec<Boolean> {
             val key = booleanPreferencesKey(keyName)
             return PreferenceSpec(
@@ -248,7 +276,7 @@ class PreferenceSpec<T> internal constructor(
                 keyName = keyName,
                 default = default,
                 resetCategory = resetCategory,
-                search = null,
+                search = search,
             )
         }
 
@@ -261,6 +289,7 @@ class PreferenceSpec<T> internal constructor(
             keyName: String,
             default: Int,
             resetCategory: PreferenceResetCategory? = null,
+            search: PreferenceSearchSpec? = null,
         ): PreferenceSpec<Int> {
             val key = intPreferencesKey(keyName)
             return PreferenceSpec(
@@ -272,7 +301,7 @@ class PreferenceSpec<T> internal constructor(
                 keyName = keyName,
                 default = default,
                 resetCategory = resetCategory,
-                search = null,
+                search = search,
             )
         }
 
@@ -285,6 +314,7 @@ class PreferenceSpec<T> internal constructor(
             keyName: String,
             default: Long,
             resetCategory: PreferenceResetCategory? = null,
+            search: PreferenceSearchSpec? = null,
         ): PreferenceSpec<Long> {
             val key = longPreferencesKey(keyName)
             return PreferenceSpec(
@@ -296,7 +326,7 @@ class PreferenceSpec<T> internal constructor(
                 keyName = keyName,
                 default = default,
                 resetCategory = resetCategory,
-                search = null,
+                search = search,
             )
         }
 
@@ -312,6 +342,7 @@ class PreferenceSpec<T> internal constructor(
             default: Float,
             resetCategory: PreferenceResetCategory? = null,
             transform: (Float) -> Float = { it },
+            search: PreferenceSearchSpec? = null,
         ): PreferenceSpec<Float> {
             val key = floatPreferencesKey(keyName)
             return PreferenceSpec(
@@ -323,7 +354,7 @@ class PreferenceSpec<T> internal constructor(
                 keyName = keyName,
                 default = default,
                 resetCategory = resetCategory,
-                search = null,
+                search = search,
             )
         }
 
@@ -337,6 +368,7 @@ class PreferenceSpec<T> internal constructor(
             keyName: String,
             default: E,
             resetCategory: PreferenceResetCategory? = null,
+            search: PreferenceSearchSpec? = null,
         ): PreferenceSpec<E> {
             val key = stringPreferencesKey(keyName)
             return PreferenceSpec(
@@ -345,7 +377,7 @@ class PreferenceSpec<T> internal constructor(
                 keyName = keyName,
                 default = default,
                 resetCategory = resetCategory,
-                search = null,
+                search = search,
             )
         }
 
@@ -370,6 +402,7 @@ class PreferenceSpec<T> internal constructor(
             resetCategory: PreferenceResetCategory? = null,
             read: (prefs: Preferences, raw: String?) -> T,
             encode: ((value: T) -> String)? = null,
+            search: PreferenceSearchSpec? = null,
         ): PreferenceSpec<T> {
             val key = stringPreferencesKey(keyName)
             return PreferenceSpec(
@@ -378,7 +411,7 @@ class PreferenceSpec<T> internal constructor(
                 keyName = keyName,
                 default = default,
                 resetCategory = resetCategory,
-                search = null,
+                search = search,
             )
         }
     }

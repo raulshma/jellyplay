@@ -1775,12 +1775,14 @@ surviving half on partial failure).
 
 The music collections ride the **collection chassis**: `MusicCollectionKind`
 is the pure decision table (sort admission, media-type binding, layout,
-empty/error presentation) for the five collections; `PagedGrid` grew into
-the ONE ladder (refresh-phase folds, append footer, pull-to-refresh, a
-`PagedList` variant for tracks, `SimpleCollectionGrid` for the
+empty/error presentation) for the five collections; the ONE ladder grew into
+core:ui's `PagedCollectionGrid` family (refresh-phase folds, append footer,
+pull-to-refresh, a `PagedCollectionList` variant for tracks,
+`SimpleCollectionGrid` for the
 list-sourced genres/playlists — its rung decision is the pure
 `simpleCollectionRung`, pinned beside `pagedCollectionRung` in
-`PagedCollectionLadderTest`); `MusicSortMenuButton` + `musicArtUrl` kill
+`PagedCollectionLadderTest`; the geometry composables were promoted out of
+music's since-deleted `PagedGrid.kt`); `MusicSortMenuButton` + `musicArtUrl` kill
 the 4-copy dropdown and image-url copies; `SortedPagedCollection` takes
 the kind. Error presentation rides the table for both families:
 `SimpleListCollection`'s error is the failure `Throwable` itself, the
@@ -4934,11 +4936,15 @@ docs/adr/0004-playback-focus.md.
  once pages exist), the list-sourced `simpleCollectionRung` twin, the
  `PagedAppendRung` load-more footer ladder, and the
  `rememberPagedCollectionStatus` / `rememberSimpleCollectionStatus`
- `HeaderStatus` derivations — while music keeps the geometry
- composables (`PagedGrid`/`PagedList`/`SimpleCollectionGrid`) and
- composes them on top. Adopted by Library / Favorites / StudioDetail /
- Search / PhotoAlbum / music's GenreDetail; two declared unifications
- rode the adoption: PhotoAlbum's raw-Text append error became the shared
+ `HeaderStatus` derivations. The geometry composables have since joined
+ core:ui too (`PagedCollectionGrid.kt` — `PagedCollectionGrid`/
+ `PagedCollectionList`/`SimpleCollectionGrid`, promoted from the same
+ music file, whose local copy is deleted), adopted by
+ music / Favorites / StudioDetail / PhotoAlbum; Library and Search keep
+ local renderers (reasons recorded at their call sites — both still ride
+ the ladder's rung decisions). Ladder adoption: Library / Favorites /
+ StudioDetail / Search / PhotoAlbum / music's GenreDetail; two declared
+ unifications rode the adoption: PhotoAlbum's raw-Text append error became the shared
  retry footer with both its messages resolving through
  `UserErrorMessages.resolve`, and StudioDetail/GenreDetail gained the
  chassis's content-wins precedence over the refresh spinner. Pinned by
@@ -5433,16 +5439,12 @@ re-derives the designs nor lands them casually.
  now owned by both VMs, per-kind filter/sort staying pure adapters; state
  is snapshot-backed, not flows, and errors stay `String?` (screens read
  plain getters in composition and render the error verbatim).
-- **`DetailContentBody` section admission** (`MediaDetailBody.kt`): which
- sections render in what order is an inline mediaType × origin ×
- capabilities decision table inside a ~935-line composable — the last
- untested decision surface in the details screen tree
- (`SeasonsSection`'s 24-parameter interface is the same hand-splicing
- `DetailContentState` was built to avoid). Design: a pure
- `DetailSectionPolicy` + the state bundle threaded whole. Deferred: the
- sequencing blocker is gone (the `DetailViewModel` intent fold landed
- 2026-09-21), but the work is composition-shape with pixel-visible
- regression risk — still deserves device eyes, do not batch it.
+- **`DetailContentBody` section admission**: the pure policy
+ shipped as `DetailSectionAdmission` + `DetailSectionKind` (details
+ jvmShared — see Details feature; the 18-input fold over
+ `DetailSectionAdmissionTest`'s 26 pins), and the hand-spliced
+ `SeasonsSection` interface this entry called out resolved
+ (`SeasonsPresentation` + the 7-param section).
 - **User-feedback conveyor completion** (the VM-POSTS half): the seven
  Messenger trios are gone (features read commonMain
  `LocalUserMessageBus` directly; see Navigation destinations). What
@@ -5904,3 +5906,4 @@ commonMain promotion (rewrite-scale), baseline profiles payload (needs one GMD
 generate run + commit, then restore the hard gate), settings security rows
 (supportsAppLock capability — landed by a parallel session; contract test
 counts updated).
+

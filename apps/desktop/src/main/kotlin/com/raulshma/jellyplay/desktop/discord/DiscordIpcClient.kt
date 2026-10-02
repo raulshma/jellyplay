@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.desktop.discord
 
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.log.Log
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
@@ -144,7 +145,12 @@ internal class DiscordIpcClient(
                 if (transport === channel) {
                     closeTransport()
                 } else {
-                    runCatching { channel.close() }
+                    // The cancellation-rethrowing form: this finally rides a
+                    // suspend body, and a bare stdlib runCatching here would
+                    // mask structured cancellation (the ratchet's bug class).
+                    // channel.close() itself never throws CancellationException,
+                    // so behavior is otherwise identical.
+                    runCatchingRethrowingCancellation { channel.close() }
                 }
             }
             if (!started.get()) return

@@ -88,15 +88,19 @@ class EngineConfigSyncTest {
 
     private fun buildController(scope: CoroutineScope): EngineConfigSync = EngineConfigSync(
         scope = scope,
-        getSubtitleStyle = { subtitleStyle },
-        getVideoEffects = { videoEffects },
-        isDialogueBoostEnabled = { dialogueBoostEnabled },
-        getDialogueBoostStrength = { dialogueBoostStrength },
-        getMediaStreams = { mediaStreams },
-        getEffectsState = { effectsState },
-        getAggregate = { aggregate },
-        getEngineSpecific = { engineSpecific },
-        getDeinterlace = { deinterlace },
+        slices = {
+            EngineConfigSlices(
+                subtitleStyle = subtitleStyle,
+                videoEffects = videoEffects,
+                dialogueBoostEnabled = dialogueBoostEnabled,
+                dialogueBoostStrength = dialogueBoostStrength,
+                mediaStreams = mediaStreams,
+                effects = effectsState,
+                agg = aggregate,
+                engineSpecific = engineSpecific,
+                deinterlace = deinterlace,
+            )
+        },
         getEngine = { engineReads++; engine },
     )
 

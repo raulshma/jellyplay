@@ -1,9 +1,9 @@
 package com.raulshma.jellyplay.core.data.playback
 
-import com.raulshma.jellyplay.core.data.playback.focus.FocusOutcome
 import com.raulshma.jellyplay.core.data.playback.focus.NoopPlaybackFocus
 import com.raulshma.jellyplay.core.data.playback.focus.PlaybackFocus
 import com.raulshma.jellyplay.core.data.playback.focus.PlaybackSurfaceId
+import com.raulshma.jellyplay.core.data.playback.focus.claimOnPlayEdge
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.LrcLibTrack
@@ -13,7 +13,7 @@ import com.raulshma.jellyplay.feature.player.video.engine.EngineConfig
 import com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState
 import com.raulshma.jellyplay.feature.player.video.engine.EnginePositionTicker
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
-import com.raulshma.jellyplay.feature.player.video.engine.PlaybackRequest
+import com.raulshma.jellyplay.feature.player.video.engine.PlaybackRequest
 import com.raulshma.jellyplay.core.model.PlaybackRequestSpecific
 import java.awt.EventQueue
 import kotlinx.coroutines.CoroutineScope
@@ -32,12 +32,11 @@ import kotlinx.coroutines.launch
  * output; the factory is ctor-injected so this module never references the
  * app-side `MpvDesktopEngine`).
  *
- * Lives in core:data jvmMain (relocated from apps/desktop — the recorded
- * "audio queue chassis" first stage): everything it touches was already a
- * core:data collaborator except the engine factory, the effects stack and
- * the AWT main-thread guard, all of which are ctor seams. jvmMain (not
- * jvmShared) because `java.awt.EventQueue` must never reach the Android
- * bootclasspath.
+ * Lives in core:data jvmMain (relocated from apps/desktop): everything it
+ * touches was already a core:data collaborator except the engine factory,
+ * the effects stack and the AWT main-thread guard, all of which are ctor
+ * seams. jvmMain (not jvmShared) because `java.awt.EventQueue` must never
+ * reach the Android bootclasspath.
  *
  * The Android media3 `AudioPlaybackManager` (androidMain) is the SEMANTICS
  * SOURCE OF TRUTH; every observable behavior was mirrored case-by-case and
@@ -213,9 +212,8 @@ class DesktopAudioQueueManager(
      * crosses — the engine observer below; see [onPlayingEdge]) and pauses
      * when the matrix commands it (read-aloud took the floor; the app-side
      * `DesktopAudioQueueManagerSurface` forwards that pause back here).
-     * MUSIC claims publish state at slices 1-2 and, since the ADR-0004
-     * migration slice landed in core:data (osLegClaimants is now
-     * READ_ALOUD + MUSIC), they also request the OS seat — which on desktop
+     * MUSIC claims publish state and, with osLegClaimants covering
+     * READ_ALOUD + MUSIC, requests the OS seat — which on desktop
      * still degrades to vacuous arbitration (the app-side binding is the
      * in-process `DesktopFocusArbiter`, whose grant is vacuously true and
      * whose listener is never invoked, so no OS seat is actually held and
@@ -523,22 +521,18 @@ class DesktopAudioQueueManager(
      * ONE observer, so no per-entry-point claim sites can drift. Newest user
      * action wins: a true edge publishes Held(MUSIC) — the reader (whose
      * speech loop is NOT a commandable surface) pauses on that state — and a
-     * false edge releases. A Denied claim honors the interface contract
-     * ("the caller MUST NOT produce audio"): `pause()` mirrors the user's
-     * own pause and the resulting isPlaying=false edge releases the attempt
-     * on the observer's next pass. Desktop today never produces a denial
-     * (the in-process twin grants vacuously and nothing suspends), but the
-     * branch is mirrored verbatim so the seam holds the day an authority
-     * behind it grows teeth.
+     * false edge releases. The edge rule (and the Denied contract the
+     * `pause()` arm below honors) lives once on [claimOnPlayEdge]. Desktop
+     * today never produces a denial (the in-process twin grants vacuously
+     * and nothing suspends), but the branch is mirrored so the seam holds
+     * the day an authority behind it grows teeth.
      */
     private fun onPlayingEdge(playing: Boolean) {
-        if (playing) {
-            if (playbackFocus.acquire(PlaybackSurfaceId.MUSIC) is FocusOutcome.Denied) {
-                pause()
-            }
-        } else {
-            playbackFocus.release(PlaybackSurfaceId.MUSIC)
-        }
+        playbackFocus.claimOnPlayEdge(
+            surfaceId = PlaybackSurfaceId.MUSIC,
+            isPlaying = playing,
+            onDenied = { pause() },
+        )
     }
 
     /** Resolves the item and loads it into the engine (the prepare port body). */

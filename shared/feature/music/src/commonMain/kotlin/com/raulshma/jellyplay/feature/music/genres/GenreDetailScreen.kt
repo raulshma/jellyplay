@@ -12,9 +12,10 @@ import androidx.paging.compose.collectAsLazyPagingItems
 import com.raulshma.jellyplay.core.ui.components.HeaderStatusIndicator
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.rememberPagedCollectionStatus
-import com.raulshma.jellyplay.feature.music.components.PagedList
+import com.raulshma.jellyplay.core.ui.components.PagedCollectionList
 import com.raulshma.jellyplay.feature.music.components.TrackRow
 import com.raulshma.jellyplay.feature.music.generated.resources.Res
+import com.raulshma.jellyplay.feature.music.generated.resources.music_failed_load_more
 import com.raulshma.jellyplay.feature.music.generated.resources.music_failed_load_tracks
 import com.raulshma.jellyplay.feature.music.generated.resources.music_no_tracks_found
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
@@ -53,7 +54,7 @@ fun GenreDetailScreen(
         // delta: the chassis's content-wins precedence keeps the stale page
         // visible during a deferred refresh where the hand-rolled ladder
         // blanked to a full-screen spinner.
-        PagedList(
+        PagedCollectionList(
             items = tracks,
             itemKey = { it.id },
             contentPadding = PaddingValues(
@@ -64,6 +65,7 @@ fun GenreDetailScreen(
             emptyIcon = Tabler.Outline.Music,
             emptyTitle = stringResource(Res.string.music_no_tracks_found),
             errorFallbackMessage = stringResource(Res.string.music_failed_load_tracks),
+            appendErrorFallbackMessage = stringResource(Res.string.music_failed_load_more),
             tvInitialFocusTag = "genre_detail_init",
         ) { track ->
             // Memoize per-item so getImageUrl + the click

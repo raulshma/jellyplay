@@ -266,6 +266,14 @@
     <string name="core_refresh_metadata_mode_replace_all_desc">Écrase les métadonnées actuelles avec celles du fournisseur. Pour une série, les épisodes sont aussi actualisés.</string>
     <string name="core_refresh_metadata_mode_replace_images">Remplacer toutes les images</string>
     <string name="core_refresh_metadata_mode_replace_images_desc">Retélécharge toutes les images du fournisseur, métadonnées inchangées.</string>
+    <!-- Played/progress filter chips + clear-all (kept beside
+         core_filter_has_* below, mirroring the default file grouping). -->
+    <string name="core_filter_played_all">Tous</string>
+    <string name="core_filter_played_played">Vu</string>
+    <string name="core_filter_played_unplayed">Non vu</string>
+    <string name="core_filter_rating_plus">%1$s+</string>
+    <string name="core_filter_in_progress">En cours</string>
+    <string name="core_clear_all">Tout effacer</string>
     <string name="core_filter_has_subtitles">Avec sous-titres</string>
     <string name="core_filter_has_trailer">Avec bande-annonce</string>
 

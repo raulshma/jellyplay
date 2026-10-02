@@ -134,6 +134,18 @@ internal fun List<SettingsRowRecord>.admissionsByAdvancedFlag(): Map<String, Row
     associate { record -> record.id to if (record.isAdvanced) RowAdmission.Advanced else RowAdmission.Always }
 
 /**
+ * The catalog-list twin of [admissionsByAdvancedFlag]: the derived
+ * `*SearchItems` projection carries each row's effective advanced flag —
+ * from the spec declaration for spec-derived rows, from the residual
+ * record's own flag otherwise — so a CONVERTED group's admissions base
+ * derives from the list it actually renders (the record lists' reduced
+ * screen-face records carry no advanced flag anymore).
+ */
+@JvmName("admissionsByAdvancedFlagOfItems")
+internal fun List<SettingsSearchItem>.admissionsByAdvancedFlag(): Map<String, RowAdmission> =
+    associate { item -> item.id to if (item.isAdvanced) RowAdmission.Advanced else RowAdmission.Always }
+
+/**
  * THE row-total derivation: how many of [SettingsSearchItemGroup.items] the
  * screen emits under [flags] — every included row's declared
  * [RowAdmission] evaluated, strict about ids that declare no gate (they are

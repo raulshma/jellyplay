@@ -8,19 +8,13 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
-import com.raulshma.jellyplay.core.datastore.CachedJsonNullPolicy
-import com.raulshma.jellyplay.core.datastore.ParsedCache
-import com.raulshma.jellyplay.core.datastore.PreferenceCodec
 import com.raulshma.jellyplay.core.datastore.sliceStateFlow
-import com.raulshma.jellyplay.core.datastore.toEnumOrNull
 import com.raulshma.jellyplay.core.model.DreamImageCategory
 import com.raulshma.jellyplay.core.model.DreamTransitionStyle
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.encodeToString
 
 /**
  * Deep module owning the **screensaver / Android dream** preference domain:
@@ -39,8 +33,35 @@ import kotlinx.serialization.encodeToString
  * keys, setters, read projection, JSON memoisation, and reset list end-to-end.
  * Mirrors the `PlaybackStore` / `AppearanceStore` shape.
  *
+ * **Spec derivation**: every key this store owns is declared exactly once as a row in
+ * [ScreensaverPreferenceSpecs] (wire name, default, reset category, read/write
+ * encoding) and the machinery below is derived from those rows — each [Keys]
+ * member rebuilds its row's typed key from the row's wire name, each [read]
+ * projection row delegates to its row encoding, the single-key setters and
+ * [restore] delegate to the rows' derived writes, and [resetKeysFor] filters
+ * the rows by reset category. The image-categories JSON memoisation lives in
+ * the [ScreensaverPreferenceSpecs.DREAM_IMAGE_CATEGORIES] row's encoding now,
+ * next to the key it applies to.
+ *
+ * **Cross-key invariants owned here (hand-written by decision — a bounds
+ * policy or a value-type codec spanning more than a row encoding cannot be
+ * derived):**
+ *  - [setDreamDimAfterMs] coerces to `coerceAtLeast(0)`; [setDreamDimPercent]
+ *    clamps to `0..MAX_DREAM_DIM_PERCENT` (the derived write stores the raw
+ *    value — the setter is the clamp owner).
+ *  - [setDreamMaxParentalRating] / [restore] fold the slice's `Int?` rating
+ *    domain into the row's stored Int slot via [encodeDreamMaxParentalRating]
+ *    (0 = none, else canonical age + 1); the read unfolds it in
+ *    [readDreamMaxParentalRating].
+ *
  * **Storage:** reuses the shared `"user_prefs"` DataStore; key strings match the
  * legacy `UserPreferencesStore.Keys` names — no migration file.
+ *
+ * **Residual (accepted):** the slice plumbing stays hand-written by the
+ * no-reflection rule — adding a preference still means one
+ * [ScreensaverPreferenceSpecs] row + one [ScreensaverSlice] property + one
+ * [read] / [restore] row (and its setter) + one write-through test line. See
+ * the spec KDoc.
  */
 class ScreensaverStore constructor(
     private val dataStore: DataStore<Preferences>,
@@ -48,107 +69,103 @@ class ScreensaverStore constructor(
 ) {
     private val scope = externalScope
 
-    private val json get() = PreferenceCodec.json
-
-    internal object Keys {
-        val DREAM_IMAGE_CATEGORIES = stringPreferencesKey("dream_image_categories")
-        val DREAM_SLIDESHOW_INTERVAL_MS = longPreferencesKey("dream_slideshow_interval_ms")
-        val DREAM_KEN_BURNS_ENABLED = booleanPreferencesKey("dream_ken_burns_enabled")
-        val DREAM_TRANSITION_STYLE = stringPreferencesKey("dream_transition_style")
-        val DREAM_SHOW_TITLE = booleanPreferencesKey("dream_show_title")
-        val DREAM_MAX_PARENTAL_RATING = intPreferencesKey("dream_max_parental_rating")
-        val DREAM_DIM_AFTER_MS = longPreferencesKey("dream_dim_after_ms")
-        val DREAM_DIM_PERCENT = intPreferencesKey("dream_dim_percent")
-        val IDLE_AMBIENT_ENABLED = booleanPreferencesKey("idle_ambient_enabled")
-        val IDLE_AMBIENT_TIMEOUT_MIN = longPreferencesKey("idle_ambient_timeout_min")
-        val DISCORD_PRESENCE_ENABLED = booleanPreferencesKey("discord_presence_enabled")
-        val HOOKS_ENABLED = booleanPreferencesKey("hooks_enabled")
-        val HOOKS_PLAY_CMD = stringPreferencesKey("hooks_play_cmd")
-        val HOOKS_STOP_CMD = stringPreferencesKey("hooks_stop_cmd")
-        val HOOKS_ENDED_CMD = stringPreferencesKey("hooks_ended_cmd")
-        val HOOKS_IDLE_CMD = stringPreferencesKey("hooks_idle_cmd")
-        val HOOKS_IDLE_ENDED_CMD = stringPreferencesKey("hooks_idle_ended_cmd")
-    }
-
     /**
-     * Memoised decode of the JSON-encoded dream image categories, keyed on the
-     * raw string so the decode is skipped when the underlying key has not
-     * changed on a given `dataStore.data` emission.
+     * The store's DataStore keys, each derived from its
+     * [ScreensaverPreferenceSpecs] row — the member rebuilds the row's typed
+     * key from the row's single-declared wire name (`Preferences.Key`
+     * equality is name-based, so these interoperate with any hand-built key
+     * of the same name). Kept as a plain object rather than folded into the
+     * rows because it is the reflection anchor for the JVM reset-coverage
+     * guard and the key-identity reference for the hand-written codec lines
+     * below.
      */
-    private var cachedDreamImageCategories: ParsedCache<Set<DreamImageCategory>> =
-        ParsedCache(null, DEFAULT_DREAM_IMAGE_CATEGORIES)
+    internal object Keys {
+        val DREAM_IMAGE_CATEGORIES = stringPreferencesKey(ScreensaverPreferenceSpecs.DREAM_IMAGE_CATEGORIES.keyName)
+        val DREAM_SLIDESHOW_INTERVAL_MS = longPreferencesKey(ScreensaverPreferenceSpecs.DREAM_SLIDESHOW_INTERVAL_MS.keyName)
+        val DREAM_KEN_BURNS_ENABLED = booleanPreferencesKey(ScreensaverPreferenceSpecs.DREAM_KEN_BURNS_ENABLED.keyName)
+        val DREAM_TRANSITION_STYLE = stringPreferencesKey(ScreensaverPreferenceSpecs.DREAM_TRANSITION_STYLE.keyName)
+        val DREAM_SHOW_TITLE = booleanPreferencesKey(ScreensaverPreferenceSpecs.DREAM_SHOW_TITLE.keyName)
+        val DREAM_MAX_PARENTAL_RATING = intPreferencesKey(ScreensaverPreferenceSpecs.DREAM_MAX_PARENTAL_RATING.keyName)
+        val DREAM_DIM_AFTER_MS = longPreferencesKey(ScreensaverPreferenceSpecs.DREAM_DIM_AFTER_MS.keyName)
+        val DREAM_DIM_PERCENT = intPreferencesKey(ScreensaverPreferenceSpecs.DREAM_DIM_PERCENT.keyName)
+        val IDLE_AMBIENT_ENABLED = booleanPreferencesKey(ScreensaverPreferenceSpecs.IDLE_AMBIENT_ENABLED.keyName)
+        val IDLE_AMBIENT_TIMEOUT_MIN = longPreferencesKey(ScreensaverPreferenceSpecs.IDLE_AMBIENT_TIMEOUT_MIN.keyName)
+        val DISCORD_PRESENCE_ENABLED = booleanPreferencesKey(ScreensaverPreferenceSpecs.DISCORD_PRESENCE_ENABLED.keyName)
+        val HOOKS_ENABLED = booleanPreferencesKey(ScreensaverPreferenceSpecs.HOOKS_ENABLED.keyName)
+        val HOOKS_PLAY_CMD = stringPreferencesKey(ScreensaverPreferenceSpecs.HOOKS_PLAY_CMD.keyName)
+        val HOOKS_STOP_CMD = stringPreferencesKey(ScreensaverPreferenceSpecs.HOOKS_STOP_CMD.keyName)
+        val HOOKS_ENDED_CMD = stringPreferencesKey(ScreensaverPreferenceSpecs.HOOKS_ENDED_CMD.keyName)
+        val HOOKS_IDLE_CMD = stringPreferencesKey(ScreensaverPreferenceSpecs.HOOKS_IDLE_CMD.keyName)
+        val HOOKS_IDLE_ENDED_CMD = stringPreferencesKey(ScreensaverPreferenceSpecs.HOOKS_IDLE_ENDED_CMD.keyName)
+    }
 
     val screensaver: StateFlow<ScreensaverSlice> =
         dataStore.sliceStateFlow(scope, seed = ScreensaverSlice(), read = ::read)
 
+    /**
+     * Pure read of the screensaver fields from a raw [Preferences] snapshot,
+     * each field delegated to its [ScreensaverPreferenceSpecs] row encoding
+     * (including the image-categories JSON memoisation — the row's derived
+     * read), except the parental-rating field, which unfolds the row's stored
+     * Int slot into the slice's canonical-age domain. Exposed so the facade
+     * can fold these into the whole preference projection without duplicating
+     * the read logic.
+     */
     internal fun read(prefs: Preferences): ScreensaverSlice = ScreensaverSlice(
-        dreamImageCategories = readDreamImageCategories(prefs),
-        dreamSlideshowIntervalMs = PreferenceCodec.readLong(prefs, Keys.DREAM_SLIDESHOW_INTERVAL_MS, "dream_slideshow_interval_ms", 15_000L),
-        dreamKenBurnsEnabled = PreferenceCodec.readBool(prefs, Keys.DREAM_KEN_BURNS_ENABLED, "dream_ken_burns_enabled", true),
-        dreamTransitionStyle = readDreamTransitionStyle(prefs),
-        dreamShowTitle = PreferenceCodec.readBool(prefs, Keys.DREAM_SHOW_TITLE, "dream_show_title", true),
+        dreamImageCategories = ScreensaverPreferenceSpecs.DREAM_IMAGE_CATEGORIES.readFrom(prefs),
+        dreamSlideshowIntervalMs = ScreensaverPreferenceSpecs.DREAM_SLIDESHOW_INTERVAL_MS.readFrom(prefs),
+        dreamKenBurnsEnabled = ScreensaverPreferenceSpecs.DREAM_KEN_BURNS_ENABLED.readFrom(prefs),
+        dreamTransitionStyle = ScreensaverPreferenceSpecs.DREAM_TRANSITION_STYLE.readFrom(prefs),
+        dreamShowTitle = ScreensaverPreferenceSpecs.DREAM_SHOW_TITLE.readFrom(prefs),
         dreamMaxParentalRating = readDreamMaxParentalRating(prefs),
-        dreamDimAfterMs = PreferenceCodec.readLong(prefs, Keys.DREAM_DIM_AFTER_MS, "dream_dim_after_ms", DEFAULT_DREAM_DIM_AFTER_MS),
-        dreamDimPercent = PreferenceCodec.readInt(prefs, Keys.DREAM_DIM_PERCENT, "dream_dim_percent", DEFAULT_DREAM_DIM_PERCENT),
-        idleAmbientEnabled = PreferenceCodec.readBool(prefs, Keys.IDLE_AMBIENT_ENABLED, "idle_ambient_enabled", true),
-        idleAmbientTimeoutMin = PreferenceCodec.readLong(prefs, Keys.IDLE_AMBIENT_TIMEOUT_MIN, "idle_ambient_timeout_min", DEFAULT_IDLE_AMBIENT_TIMEOUT_MIN),
-        discordPresenceEnabled = PreferenceCodec.readBool(prefs, Keys.DISCORD_PRESENCE_ENABLED, "discord_presence_enabled", DEFAULT_DISCORD_PRESENCE_ENABLED),
-        hooksEnabled = PreferenceCodec.readBool(prefs, Keys.HOOKS_ENABLED, "hooks_enabled", DEFAULT_HOOKS_ENABLED),
-        hooksPlayCmd = prefs[Keys.HOOKS_PLAY_CMD] ?: "",
-        hooksStopCmd = prefs[Keys.HOOKS_STOP_CMD] ?: "",
-        hooksEndedCmd = prefs[Keys.HOOKS_ENDED_CMD] ?: "",
-        hooksIdleCmd = prefs[Keys.HOOKS_IDLE_CMD] ?: "",
-        hooksIdleEndedCmd = prefs[Keys.HOOKS_IDLE_ENDED_CMD] ?: "",
+        dreamDimAfterMs = ScreensaverPreferenceSpecs.DREAM_DIM_AFTER_MS.readFrom(prefs),
+        dreamDimPercent = ScreensaverPreferenceSpecs.DREAM_DIM_PERCENT.readFrom(prefs),
+        idleAmbientEnabled = ScreensaverPreferenceSpecs.IDLE_AMBIENT_ENABLED.readFrom(prefs),
+        idleAmbientTimeoutMin = ScreensaverPreferenceSpecs.IDLE_AMBIENT_TIMEOUT_MIN.readFrom(prefs),
+        discordPresenceEnabled = ScreensaverPreferenceSpecs.DISCORD_PRESENCE_ENABLED.readFrom(prefs),
+        hooksEnabled = ScreensaverPreferenceSpecs.HOOKS_ENABLED.readFrom(prefs),
+        hooksPlayCmd = ScreensaverPreferenceSpecs.HOOKS_PLAY_CMD.readFrom(prefs),
+        hooksStopCmd = ScreensaverPreferenceSpecs.HOOKS_STOP_CMD.readFrom(prefs),
+        hooksEndedCmd = ScreensaverPreferenceSpecs.HOOKS_ENDED_CMD.readFrom(prefs),
+        hooksIdleCmd = ScreensaverPreferenceSpecs.HOOKS_IDLE_CMD.readFrom(prefs),
+        hooksIdleEndedCmd = ScreensaverPreferenceSpecs.HOOKS_IDLE_ENDED_CMD.readFrom(prefs),
     )
-
-    // MemoizeNull (this store's pre-promotion policy): a null raw is a
-    // cacheable input — the decoded value depends only on the raw string, so
-    // a memoised default is safe to serve.
-    private fun readDreamImageCategories(prefs: Preferences): Set<DreamImageCategory> =
-        PreferenceCodec.cachedJson(
-            raw = prefs[Keys.DREAM_IMAGE_CATEGORIES],
-            cache = cachedDreamImageCategories,
-            default = DEFAULT_DREAM_IMAGE_CATEGORIES,
-            parse = { json.decodeFromString<Set<DreamImageCategory>>(it) },
-            cacheRef = { cachedDreamImageCategories = it },
-            nullPolicy = CachedJsonNullPolicy.MemoizeNull,
-        )
-
-    private fun readDreamTransitionStyle(prefs: Preferences): DreamTransitionStyle =
-        prefs[Keys.DREAM_TRANSITION_STYLE].toEnumOrNull() ?: DreamTransitionStyle.CROSSFADE
 
     /**
      * The stored `dream_max_parental_rating` Int unfolds back to the slice's
      * canonical-age domain: 0 = none (`null` = no local cap), else the stored
-     * value is [canonical age + 1] ([encodeDreamMaxParentalRating]'s inverse).
+     * value is [canonical age + 1] ([encodeDreamMaxParentalRating]'s inverse)
+     * — the hand-written codec beside the
+     * [ScreensaverPreferenceSpecs.DREAM_MAX_PARENTAL_RATING] row.
      */
     private fun readDreamMaxParentalRating(prefs: Preferences): Int? =
-        PreferenceCodec.readInt(prefs, Keys.DREAM_MAX_PARENTAL_RATING, "dream_max_parental_rating", 0)
+        ScreensaverPreferenceSpecs.DREAM_MAX_PARENTAL_RATING.readFrom(prefs)
             .takeIf { it > 0 }
             ?.let { it - 1 }
 
     // ------------------------------------------------------------------
-    // Setters
+    // Setters — single-key setters delegate to their row's derived write;
+    // the bounds coercions and the rating codec live below, hand-written.
     // ------------------------------------------------------------------
 
     suspend fun setDreamImageCategories(categories: Set<DreamImageCategory>) {
-        dataStore.edit { it[Keys.DREAM_IMAGE_CATEGORIES] = json.encodeToString(categories) }
+        dataStore.edit { ScreensaverPreferenceSpecs.DREAM_IMAGE_CATEGORIES.writeTo(it, categories) }
     }
 
     suspend fun setDreamSlideshowIntervalMs(ms: Long) {
-        dataStore.edit { it[Keys.DREAM_SLIDESHOW_INTERVAL_MS] = ms }
+        dataStore.edit { ScreensaverPreferenceSpecs.DREAM_SLIDESHOW_INTERVAL_MS.writeTo(it, ms) }
     }
 
     suspend fun setDreamKenBurnsEnabled(enabled: Boolean) {
-        dataStore.edit { it[Keys.DREAM_KEN_BURNS_ENABLED] = enabled }
+        dataStore.edit { ScreensaverPreferenceSpecs.DREAM_KEN_BURNS_ENABLED.writeTo(it, enabled) }
     }
 
     suspend fun setDreamTransitionStyle(style: DreamTransitionStyle) {
-        dataStore.edit { it[Keys.DREAM_TRANSITION_STYLE] = style.name }
+        dataStore.edit { ScreensaverPreferenceSpecs.DREAM_TRANSITION_STYLE.writeTo(it, style) }
     }
 
     suspend fun setDreamShowTitle(enabled: Boolean) {
-        dataStore.edit { it[Keys.DREAM_SHOW_TITLE] = enabled }
+        dataStore.edit { ScreensaverPreferenceSpecs.DREAM_SHOW_TITLE.writeTo(it, enabled) }
     }
 
     /**
@@ -160,17 +177,19 @@ class ScreensaverStore constructor(
      * G cap (canonical age 0) stays distinguishable from the off sentinel.
      */
     suspend fun setDreamMaxParentalRating(age: Int?) {
-        dataStore.edit { it[Keys.DREAM_MAX_PARENTAL_RATING] = encodeDreamMaxParentalRating(age) }
+        dataStore.edit {
+            ScreensaverPreferenceSpecs.DREAM_MAX_PARENTAL_RATING.writeTo(it, encodeDreamMaxParentalRating(age))
+        }
     }
 
     /** Slideshow runtime after which the dream dims; 0 = never dims. */
     suspend fun setDreamDimAfterMs(ms: Long) {
-        dataStore.edit { it[Keys.DREAM_DIM_AFTER_MS] = ms.coerceAtLeast(0L) }
+        dataStore.edit { ScreensaverPreferenceSpecs.DREAM_DIM_AFTER_MS.writeTo(it, ms.coerceAtLeast(0L)) }
     }
 
     /** The dim scrim's target opacity in percent; clamped to 0–95. */
     suspend fun setDreamDimPercent(percent: Int) {
-        dataStore.edit { it[Keys.DREAM_DIM_PERCENT] = percent.coerceIn(0, MAX_DREAM_DIM_PERCENT) }
+        dataStore.edit { ScreensaverPreferenceSpecs.DREAM_DIM_PERCENT.writeTo(it, percent.coerceIn(0, MAX_DREAM_DIM_PERCENT)) }
     }
 
     /**
@@ -178,11 +197,11 @@ class ScreensaverStore constructor(
      * MINUTES; 0 disables regardless of the toggle (the picker's "Off" entry).
      */
     suspend fun setIdleAmbientEnabled(enabled: Boolean) {
-        dataStore.edit { it[Keys.IDLE_AMBIENT_ENABLED] = enabled }
+        dataStore.edit { ScreensaverPreferenceSpecs.IDLE_AMBIENT_ENABLED.writeTo(it, enabled) }
     }
 
     suspend fun setIdleAmbientTimeoutMin(minutes: Long) {
-        dataStore.edit { it[Keys.IDLE_AMBIENT_TIMEOUT_MIN] = minutes }
+        dataStore.edit { ScreensaverPreferenceSpecs.IDLE_AMBIENT_TIMEOUT_MIN.writeTo(it, minutes) }
     }
 
     /**
@@ -190,12 +209,12 @@ class ScreensaverStore constructor(
      * default) leaves the presence service disconnected.
      */
     suspend fun setDiscordPresenceEnabled(enabled: Boolean) {
-        dataStore.edit { it[Keys.DISCORD_PRESENCE_ENABLED] = enabled }
+        dataStore.edit { ScreensaverPreferenceSpecs.DISCORD_PRESENCE_ENABLED.writeTo(it, enabled) }
     }
 
     /** The desktop playback-event shell hooks' master toggle (feature 4.3). */
     suspend fun setHooksEnabled(enabled: Boolean) {
-        dataStore.edit { it[Keys.HOOKS_ENABLED] = enabled }
+        dataStore.edit { ScreensaverPreferenceSpecs.HOOKS_ENABLED.writeTo(it, enabled) }
     }
 
     /**
@@ -205,23 +224,23 @@ class ScreensaverStore constructor(
      * by the runner.
      */
     suspend fun setHooksPlayCmd(command: String) {
-        dataStore.edit { it[Keys.HOOKS_PLAY_CMD] = command }
+        dataStore.edit { ScreensaverPreferenceSpecs.HOOKS_PLAY_CMD.writeTo(it, command) }
     }
 
     suspend fun setHooksStopCmd(command: String) {
-        dataStore.edit { it[Keys.HOOKS_STOP_CMD] = command }
+        dataStore.edit { ScreensaverPreferenceSpecs.HOOKS_STOP_CMD.writeTo(it, command) }
     }
 
     suspend fun setHooksEndedCmd(command: String) {
-        dataStore.edit { it[Keys.HOOKS_ENDED_CMD] = command }
+        dataStore.edit { ScreensaverPreferenceSpecs.HOOKS_ENDED_CMD.writeTo(it, command) }
     }
 
     suspend fun setHooksIdleCmd(command: String) {
-        dataStore.edit { it[Keys.HOOKS_IDLE_CMD] = command }
+        dataStore.edit { ScreensaverPreferenceSpecs.HOOKS_IDLE_CMD.writeTo(it, command) }
     }
 
     suspend fun setHooksIdleEndedCmd(command: String) {
-        dataStore.edit { it[Keys.HOOKS_IDLE_ENDED_CMD] = command }
+        dataStore.edit { ScreensaverPreferenceSpecs.HOOKS_IDLE_ENDED_CMD.writeTo(it, command) }
     }
 
     /**
@@ -235,62 +254,44 @@ class ScreensaverStore constructor(
         PreferenceResetCategory.entries.flatMap(::resetKeysFor)
 
     /**
-     * Category reset participation: every key owned here sits in the single
-     * `SCREENSAVER` reset category.
+     * Category reset participation: the subset of [resetKeys] that belongs to
+     * [category] — the [ScreensaverPreferenceSpecs] rows whose declared reset
+     * category matches, mapped to their derived keys. Every key owned here
+     * sits in the single `SCREENSAVER` category.
      */
-    internal fun resetKeysFor(category: PreferenceResetCategory): List<Preferences.Key<*>> = when (category) {
-        PreferenceResetCategory.SCREENSAVER -> listOf(
-            Keys.DREAM_IMAGE_CATEGORIES,
-            Keys.DREAM_TRANSITION_STYLE,
-            Keys.DREAM_KEN_BURNS_ENABLED,
-            Keys.DREAM_SHOW_TITLE,
-            Keys.DREAM_SLIDESHOW_INTERVAL_MS,
-            Keys.DREAM_MAX_PARENTAL_RATING,
-            Keys.DREAM_DIM_AFTER_MS,
-            Keys.DREAM_DIM_PERCENT,
-            Keys.IDLE_AMBIENT_ENABLED,
-            Keys.IDLE_AMBIENT_TIMEOUT_MIN,
-            Keys.DISCORD_PRESENCE_ENABLED,
-            Keys.HOOKS_ENABLED,
-            Keys.HOOKS_PLAY_CMD,
-            Keys.HOOKS_STOP_CMD,
-            Keys.HOOKS_ENDED_CMD,
-            Keys.HOOKS_IDLE_CMD,
-            Keys.HOOKS_IDLE_ENDED_CMD,
-        )
-        else -> emptyList()
-    }
+    internal fun resetKeysFor(category: PreferenceResetCategory): List<Preferences.Key<*>> =
+        ScreensaverPreferenceSpecs.resetKeysFor(category)
 
     /**
      * Faithful inverse of [read]: writes every field of [slice] back to the
-     * DataStore using the same encoding as [restorePreferences] (image-category
-     * set via this store's [json] codec).
+     * DataStore via its row's derived write (the same encoding the row reads
+     * with — the image-category set through the row's JSON encode).
      */
     suspend fun restore(slice: ScreensaverSlice) {
-        dataStore.edit { it ->
-            it[Keys.DREAM_IMAGE_CATEGORIES] = json.encodeToString(slice.dreamImageCategories)
-            it[Keys.DREAM_SLIDESHOW_INTERVAL_MS] = slice.dreamSlideshowIntervalMs
-            it[Keys.DREAM_KEN_BURNS_ENABLED] = slice.dreamKenBurnsEnabled
-            it[Keys.DREAM_TRANSITION_STYLE] = slice.dreamTransitionStyle.name
-            it[Keys.DREAM_SHOW_TITLE] = slice.dreamShowTitle
-            it[Keys.DREAM_MAX_PARENTAL_RATING] = encodeDreamMaxParentalRating(slice.dreamMaxParentalRating)
-            it[Keys.DREAM_DIM_AFTER_MS] = slice.dreamDimAfterMs
-            it[Keys.DREAM_DIM_PERCENT] = slice.dreamDimPercent
-            it[Keys.IDLE_AMBIENT_ENABLED] = slice.idleAmbientEnabled
-            it[Keys.IDLE_AMBIENT_TIMEOUT_MIN] = slice.idleAmbientTimeoutMin
-            it[Keys.DISCORD_PRESENCE_ENABLED] = slice.discordPresenceEnabled
-            it[Keys.HOOKS_ENABLED] = slice.hooksEnabled
-            it[Keys.HOOKS_PLAY_CMD] = slice.hooksPlayCmd
-            it[Keys.HOOKS_STOP_CMD] = slice.hooksStopCmd
-            it[Keys.HOOKS_ENDED_CMD] = slice.hooksEndedCmd
-            it[Keys.HOOKS_IDLE_CMD] = slice.hooksIdleCmd
-            it[Keys.HOOKS_IDLE_ENDED_CMD] = slice.hooksIdleEndedCmd
+        dataStore.edit { prefs ->
+            ScreensaverPreferenceSpecs.DREAM_IMAGE_CATEGORIES.writeTo(prefs, slice.dreamImageCategories)
+            ScreensaverPreferenceSpecs.DREAM_SLIDESHOW_INTERVAL_MS.writeTo(prefs, slice.dreamSlideshowIntervalMs)
+            ScreensaverPreferenceSpecs.DREAM_KEN_BURNS_ENABLED.writeTo(prefs, slice.dreamKenBurnsEnabled)
+            ScreensaverPreferenceSpecs.DREAM_TRANSITION_STYLE.writeTo(prefs, slice.dreamTransitionStyle)
+            ScreensaverPreferenceSpecs.DREAM_SHOW_TITLE.writeTo(prefs, slice.dreamShowTitle)
+            ScreensaverPreferenceSpecs.DREAM_MAX_PARENTAL_RATING.writeTo(
+                prefs,
+                encodeDreamMaxParentalRating(slice.dreamMaxParentalRating),
+            )
+            ScreensaverPreferenceSpecs.DREAM_DIM_AFTER_MS.writeTo(prefs, slice.dreamDimAfterMs)
+            ScreensaverPreferenceSpecs.DREAM_DIM_PERCENT.writeTo(prefs, slice.dreamDimPercent)
+            ScreensaverPreferenceSpecs.IDLE_AMBIENT_ENABLED.writeTo(prefs, slice.idleAmbientEnabled)
+            ScreensaverPreferenceSpecs.IDLE_AMBIENT_TIMEOUT_MIN.writeTo(prefs, slice.idleAmbientTimeoutMin)
+            ScreensaverPreferenceSpecs.DISCORD_PRESENCE_ENABLED.writeTo(prefs, slice.discordPresenceEnabled)
+            ScreensaverPreferenceSpecs.HOOKS_ENABLED.writeTo(prefs, slice.hooksEnabled)
+            ScreensaverPreferenceSpecs.HOOKS_PLAY_CMD.writeTo(prefs, slice.hooksPlayCmd)
+            ScreensaverPreferenceSpecs.HOOKS_STOP_CMD.writeTo(prefs, slice.hooksStopCmd)
+            ScreensaverPreferenceSpecs.HOOKS_ENDED_CMD.writeTo(prefs, slice.hooksEndedCmd)
+            ScreensaverPreferenceSpecs.HOOKS_IDLE_CMD.writeTo(prefs, slice.hooksIdleCmd)
+            ScreensaverPreferenceSpecs.HOOKS_IDLE_ENDED_CMD.writeTo(prefs, slice.hooksIdleEndedCmd)
         }
     }
 }
-
-private val DEFAULT_DREAM_IMAGE_CATEGORIES: Set<DreamImageCategory> =
-    setOf(DreamImageCategory.MOVIES, DreamImageCategory.SERIES)
 
 /** Default: the dream never dims (the dim-after picker's "Off" entry). */
 internal const val DEFAULT_DREAM_DIM_AFTER_MS = 0L
@@ -329,7 +330,8 @@ private fun encodeDreamMaxParentalRating(age: Int?): Int = age?.coerceAtLeast(0)
 
 /**
  * The screensaver / dream preference slice. Plain data class. Defaults mirror
- * the projection defaults in [ScreensaverStore.read].
+ * the projection defaults in [ScreensaverStore.read] (declared on the
+ * [ScreensaverPreferenceSpecs] rows).
  */
 @Immutable
 @Serializable

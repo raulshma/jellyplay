@@ -7,8 +7,8 @@ import com.raulshma.jellyplay.core.data.playback.PipController
 import com.raulshma.jellyplay.core.data.playback.dischargePipDismissal
 import com.raulshma.jellyplay.core.data.playback.reArmPipTransport
 import com.raulshma.jellyplay.core.data.playback.PlaybackIdentity
-import com.raulshma.jellyplay.core.data.playback.focus.FocusOutcome
 import com.raulshma.jellyplay.core.data.playback.focus.PlaybackSurfaceId
+import com.raulshma.jellyplay.core.data.playback.focus.claimOnPlayEdge
 import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.util.EpochMillisSource
@@ -380,20 +380,17 @@ class LiveTvPlayerViewModel(
                 _state.value = _state.value.copy(isPlaying = event.isPlaying)
                 pip?.setPlaying(event.isPlaying)
                 // The focus claim rides this ONE edge (the music manager's
-                // onIsPlayingChanged pattern): a granted claim evicts MUSIC
-                // synchronously; a DENIED claim means another holder is
-                // Suspended under an OS loss (read-aloud during a phone
-                // call) — pause mirrors the user's own pause so nothing
-                // auto-resumes, and the resulting playing=false edge
-                // releases below. The duck path never crosses here: a
-                // ducked live claim stays Held and the stream keeps playing.
-                if (event.isPlaying) {
-                    if (playbackFocus.acquire(PlaybackSurfaceId.VIDEO) is FocusOutcome.Denied) {
-                        playbackSession.pause()
-                    }
-                } else {
-                    playbackFocus.release(PlaybackSurfaceId.VIDEO)
-                }
+                // onIsPlayingChanged pattern), folded onto the shared
+                // [claimOnPlayEdge] body: a granted claim evicts MUSIC
+                // synchronously; a DENIED claim pauses (see the helper's
+                // KDoc for the contract). The duck path never crosses here:
+                // a ducked live claim stays Held and the stream keeps
+                // playing.
+                playbackFocus.claimOnPlayEdge(
+                    surfaceId = PlaybackSurfaceId.VIDEO,
+                    isPlaying = event.isPlaying,
+                    onDenied = { playbackSession.pause() },
+                )
             }
             is LivePlaybackEvent.AtLiveEdgeChanged ->
                 _state.value = _state.value.copy(isAtLiveEdge = event.atLiveEdge)

@@ -198,8 +198,8 @@ val settingsModule: Module = module {
             // behind this repository so no core:network type reaches here.
             selfSignedTrustRepository = get(),
             // the app-level client certificate (mTLS) import /
-            // toggle / remove seam — one Koin single shared with the
-            // handshake layer (applyTls).
+            // toggle / remove seam (core:data) — delegates to the same
+            // manager single the handshake layer (applyTls) reads.
             clientCertificate = get(),
         )
     }

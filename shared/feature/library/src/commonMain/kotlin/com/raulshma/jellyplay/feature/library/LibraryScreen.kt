@@ -848,6 +848,19 @@ internal fun LibraryScreen(
                         }
 
                         PagedCollectionRung.Content -> {
+                            // Deliberately NOT core:ui's PagedCollectionGrid (the
+                            // renderer — the rung DECISIONS above already ride the
+                            // shared chassis, pagedCollectionRung/PagedCollectionLadder):
+                            // this body is not a plain grid. It swaps four view modes
+                            // through an AnimatedContent whose per-branch
+                            // AnimatedVisibilityScope drives the cards' shared-element
+                            // morphs, adds client-side grouped rendering (GroupBy),
+                            // keeps a per-mode scroll state, routes refresh through the
+                            // VM event channel (LibraryUiEvent.Refresh, not
+                            // LazyPagingItems.retry), uses a DelayedLoadingScreen
+                            // initial spinner, an empty state that carries the
+                            // clear-filters action, and a gradient append footer none
+                            // of the shared variants compose.
                                 // Drive the view-mode swap through AnimatedContent so each
                                 // branch receives its own AnimatedVisibilityScope. That scope
                                 // is published via LocalAnimatedVisibilityScope, letting the
@@ -953,20 +966,12 @@ internal fun LibraryScreen(
                     // layer). Disabled in grouped mode because GroupedLibraryContent owns
                     // its own internal scroll states the rail can't reach.
                     val alphabetScope = rememberCoroutineScope()
+                    // Single pass over the loaded snapshot: the first index at
+                    // which each normalized leading letter appears — the pure
+                    // fold in [jumpIndexByLetter] (beside AlphabetRailGeometry).
                     val jumpIndexByLetter by remember {
                         derivedStateOf {
-                            // Single pass over the loaded snapshot: record the first
-                            // index at which each normalized leading letter appears.
-                            val items = pagedItems.itemSnapshotList.items
-                            val map = LinkedHashMap<Char, Int>()
-                            for (i in items.indices) {
-                                val key = items[i].name.firstOrNull()
-                                    ?.lowercaseChar()
-                                    ?.takeIf { it in 'a'..'z' }
-                                    ?: '#'
-                                if (key !in map) map[key] = i
-                            }
-                            map
+                            jumpIndexByLetter(pagedItems.itemSnapshotList.items) { it.name }
                         }
                     }
                     // First visible index from whichever scroll state backs the active

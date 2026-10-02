@@ -4,6 +4,8 @@ import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.AuthRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.BookTocCacheRepository
 import com.raulshma.jellyplay.core.data.repository.BookTocCacheRepositoryImpl
+import com.raulshma.jellyplay.core.data.repository.ClientCertificateRepository
+import com.raulshma.jellyplay.core.data.repository.ClientCertificateRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.ItemPlaybackPreferenceRepository
 import com.raulshma.jellyplay.core.data.repository.ItemPlaybackPreferenceRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.MetadataEditorRepository
@@ -75,6 +77,13 @@ internal val dataRepositoriesModule: Module = module {
     // granted set arrives per call — so the impl single takes no deps.
     single { SelfSignedTrustRepositoryImpl() }
     single<SelfSignedTrustRepository> { get<SelfSignedTrustRepositoryImpl>() }
+
+    // The client-certificate half of the same Server Management screen: the
+    // feature-visible seam over core:network's ClientCertificateManager (the
+    // ClientCertificateFacade single bound by the network DI modules). One
+    // delegate, no own state — the manager owns the status flow.
+    single { ClientCertificateRepositoryImpl(facade = get()) }
+    single<ClientCertificateRepository> { get<ClientCertificateRepositoryImpl>() }
 
     single { ServerDiscoveryRepositoryImpl(get()) }
     single<ServerDiscoveryRepository> { get<ServerDiscoveryRepositoryImpl>() }

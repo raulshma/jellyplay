@@ -177,6 +177,13 @@ internal data class HomeContentState(
     val offlineContent: OfflineHomeContent? get() = (feed as? HomeFeed.Offline)?.content
 }
 
+/**
+ * The content list's per-surface event sinks + the seams only it consumes
+ * ([getImageUrl] for the series-art resolvers, the per-item photo-folder
+ * URL slice). The shared render wiring (URL builders, click funnels,
+ * prefetch/loading, hero focus) lives in [HomeRenderInputs] — passed beside
+ * these callbacks so the two bundles never re-thread the same lambdas.
+ */
 @Immutable
 internal data class HomeContentCallbacks(
     val onRetrySectionLoad: () -> Unit,
@@ -185,26 +192,14 @@ internal data class HomeContentCallbacks(
     val onOfflineLibraryClick: () -> Unit,
     val onItemClick: (String) -> Unit,
     val onFocusChange: (Boolean) -> Unit,
-    val mediaOnItemClick: (MediaItem) -> Unit,
-    val mediaOnPlayClick: (MediaItem) -> Unit,
-    val mediaImageUrlBuilder: (MediaItem) -> String,
-    val mediaBackdropUrlBuilder: (MediaItem) -> String,
+    /** Image URL for an item ID — the series-poster resolver's source. */
     val getImageUrl: (String) -> String,
-    val getBackdropUrl: (String) -> String,
-    /**
-     * Backdrop builder for the HERO only — the caller resolves online-vs-offline
-     * once (offline items resolve to their local backdrop/poster file path), so
-     * the list never re-branches. Row artwork keeps using [getBackdropUrl].
-     */
-    val heroBackdropUrlBuilder: (String) -> String,
-    val fallbackImageUrlBuilder: (MediaItem) -> List<String>,
     /** Per-item slice of the photo-folder child-URL cache — collected at the
      * photo-folder card, not orchestrator scope, so a prefetch merge only
      * recomposes the card whose urls changed. */
     val photoFolderChildUrlsFor: (String) -> Flow<List<String>>,
     val onSeerrItemClick: (Int, String) -> Unit,
     val onSeerrRequest: (com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem) -> Unit,
-    val seerrPrefetch: (Int, String, () -> Unit) -> Unit,
     /** Open the inline section-config sheet for a given section. Carries the
      * optional [libraryId] for per-library sections (LATEST_MEDIA) so the sheet
      * can apply a per-library override instead of a global toggle. */
@@ -247,10 +242,9 @@ private fun offlineSectionItems(
 internal fun HomeContentList(
     state: HomeContentState,
     callbacks: HomeContentCallbacks,
+    renderInputs: HomeRenderInputs,
     listState: LazyListState,
     density: Density,
-    seerrCardLoadingState: SeerrCardLoadingState,
-    heroFocusRequester: FocusRequester?,
 ) {
     val isTv = LocalTvMode.current
     val adaptiveInfo = LocalAdaptiveInfo.current
@@ -274,8 +268,8 @@ internal fun HomeContentList(
         backgroundColor = state.backgroundColor,
         homeBackdropEnabled = state.homeBackdropEnabled,
         clippingEnabled = state.experimentalCardClippingEnabled,
-        seerrCardLoadingState = seerrCardLoadingState,
-        seerrPrefetch = callbacks.seerrPrefetch,
+        seerrCardLoadingState = renderInputs.seerrCardLoadingState,
+        seerrPrefetch = renderInputs.seerrPrefetch,
         onSeerrItemClick = callbacks.onSeerrItemClick,
         onSeerrRequest = callbacks.onSeerrRequest,
     )
@@ -287,10 +281,10 @@ internal fun HomeContentList(
     // funnels; HomeContentCallbacks is a data class, so whole-callbacks keys
     // are stable) and handed to resumeRowClick / posterRowClick below, so no
     // render branch can rebuild a divergent triple.
-    val resumeSinks = remember(callbacks) {
+    val resumeSinks = remember(callbacks, renderInputs) {
         ResumeRowSinks(
-            onDetails = callbacks.mediaOnItemClick,
-            onPlay = callbacks.mediaOnPlayClick,
+            onDetails = renderInputs.mediaOnItemClick,
+            onPlay = renderInputs.mediaOnPlayClick,
             onAsk = { askContinueItem = it },
         )
     }
@@ -388,8 +382,8 @@ internal fun HomeContentList(
                     // the id is all the routing needs.
                     AnimatedHeroHeader(
                         featuredItem = featured,
-                        getBackdropUrl = remember(callbacks.heroBackdropUrlBuilder) {
-                            { id: String -> callbacks.heroBackdropUrlBuilder(id) }
+                        getBackdropUrl = remember(renderInputs.heroBackdropUrlBuilder) {
+                            { id: String -> renderInputs.heroBackdropUrlBuilder(id) }
                         },
                         height = state.headerHeight,
                         backgroundColor = state.backgroundColor,
@@ -400,7 +394,7 @@ internal fun HomeContentList(
                         onDetailsClick = callbacks.onItemClick,
                         requestInitialFocus = !savedRowIsValid,
                         onFocusChange = callbacks.onFocusChange,
-                        focusRequester = heroFocusRequester,
+                        focusRequester = renderInputs.heroFocusRequester,
                     )
                 }
             } else {
@@ -536,15 +530,15 @@ internal fun HomeContentList(
                     onRowFocused = { homeFocusRow = index },
                     currentOfflineById = currentOfflineById,
                     discoverSpacing = discoverSpacing,
-                    seerrCardLoadingState = seerrCardLoadingState,
+                    seerrCardLoadingState = renderInputs.seerrCardLoadingState,
                 )
                 if (section.seerrItems.isNotEmpty()) {
-                    HomeSectionSeerrRow(ctx = armContext, state = state, callbacks = callbacks)
+                    HomeSectionSeerrRow(ctx = armContext, state = state, callbacks = callbacks, renderInputs = renderInputs)
                 } else when (homeRowChassis(section, offlineContent != null)) {
-                    is HomeRowChassis.OfflinePoster -> HomeSectionOfflinePosterRow(ctx = armContext, state = state, callbacks = callbacks)
-                    is HomeRowChassis.OfflineWide -> HomeSectionOfflineWideRow(ctx = armContext, state = state, callbacks = callbacks)
-                    is HomeRowChassis.OnlineWide -> HomeSectionOnlineWideRow(ctx = armContext, state = state, callbacks = callbacks)
-                    is HomeRowChassis.OnlinePoster -> HomeSectionOnlinePosterRow(ctx = armContext, state = state, callbacks = callbacks)
+                    is HomeRowChassis.OfflinePoster -> HomeSectionOfflinePosterRow(ctx = armContext, state = state, callbacks = callbacks, renderInputs = renderInputs)
+                    is HomeRowChassis.OfflineWide -> HomeSectionOfflineWideRow(ctx = armContext, state = state, callbacks = callbacks, renderInputs = renderInputs)
+                    is HomeRowChassis.OnlineWide -> HomeSectionOnlineWideRow(ctx = armContext, state = state, callbacks = callbacks, renderInputs = renderInputs)
+                    is HomeRowChassis.OnlinePoster -> HomeSectionOnlinePosterRow(ctx = armContext, state = state, callbacks = callbacks, renderInputs = renderInputs)
                 }
             }
 
@@ -621,11 +615,11 @@ internal fun HomeContentList(
             onDismissRequest = { askContinueItem = null },
             onPlay = {
                 askContinueItem = null
-                callbacks.mediaOnPlayClick(askItem)
+                renderInputs.mediaOnPlayClick(askItem)
             },
             onDetails = {
                 askContinueItem = null
-                callbacks.mediaOnItemClick(askItem)
+                renderInputs.mediaOnItemClick(askItem)
             },
         )
     }
@@ -652,6 +646,7 @@ private fun HomeSectionSeerrRow(
     ctx: HomeRowArmContext,
     state: HomeContentState,
     callbacks: HomeContentCallbacks,
+    renderInputs: HomeRenderInputs,
 ) {
     Column(modifier = ctx.modifier) {
         HomeRowTitle(
@@ -668,7 +663,7 @@ private fun HomeSectionSeerrRow(
             homeBackdropEnabled = state.homeBackdropEnabled,
             clippingEnabled = state.experimentalCardClippingEnabled,
             seerrCardLoadingState = ctx.seerrCardLoadingState,
-            seerrPrefetch = callbacks.seerrPrefetch,
+            seerrPrefetch = renderInputs.seerrPrefetch,
             onSeerrItemClick = callbacks.onSeerrItemClick,
             onSeerrRequest = callbacks.onSeerrRequest,
         )
@@ -681,6 +676,7 @@ private fun HomeSectionOfflinePosterRow(
     ctx: HomeRowArmContext,
     state: HomeContentState,
     callbacks: HomeContentCallbacks,
+    renderInputs: HomeRenderInputs,
 ) {
     val section = ctx.section
     val sectionTitle = ctx.title
@@ -739,8 +735,8 @@ private fun HomeSectionOfflinePosterRow(
         // Mirrored RECENTLY_ADDED / LATEST_MEDIA rows keep the
         // online "See All" pill and play overlay (#147).
         onSeeAllClick = seeAllClick,
-        onPlayClick = remember(callbacks) {
-            { item -> callbacks.mediaOnPlayClick(item.toMediaItem()) }
+        onPlayClick = remember(renderInputs.mediaOnPlayClick) {
+            { item -> renderInputs.mediaOnPlayClick(item.toMediaItem()) }
         },
         onFocusedItemChange = callbacks.onFocusedMediaItem,
         // Book reading bars: the TOC-cache decodes picked
@@ -767,6 +763,7 @@ private fun HomeSectionOfflineWideRow(
     ctx: HomeRowArmContext,
     state: HomeContentState,
     callbacks: HomeContentCallbacks,
+    renderInputs: HomeRenderInputs,
 ) {
     val section = ctx.section
     val sectionTitle = ctx.title
@@ -801,8 +798,8 @@ private fun HomeSectionOfflineWideRow(
         backdropUrl = { it.backdropPath.orEmpty() },
         key = { it.id },
         onItemClick = rowItemClick,
-        onPlayClick = remember(callbacks) {
-            { item -> callbacks.mediaOnPlayClick(item.toMediaItem()) }
+        onPlayClick = remember(renderInputs.mediaOnPlayClick) {
+            { item -> renderInputs.mediaOnPlayClick(item.toMediaItem()) }
         },
         modifier = sectionModifier,
         focusRequester = ctx.focusRequester,
@@ -819,13 +816,14 @@ private fun HomeSectionOnlineWideRow(
     ctx: HomeRowArmContext,
     state: HomeContentState,
     callbacks: HomeContentCallbacks,
+    renderInputs: HomeRenderInputs,
 ) {
     val section = ctx.section
     val sectionTitle = ctx.title
     val sectionModifier = ctx.modifier
     val sectionLongClick = ctx.onSectionLongClick
     val rowItemClick: (MediaItem) -> Unit = remember(
-        section.type, state.continueWatchingClickBehavior, callbacks.mediaOnItemClick, callbacks.mediaOnPlayClick,
+        section.type, state.continueWatchingClickBehavior, renderInputs.mediaOnItemClick, renderInputs.mediaOnPlayClick,
     ) {
         resumeRowClick(
             sectionType = section.type,
@@ -838,10 +836,10 @@ private fun HomeSectionOnlineWideRow(
         title = sectionTitle,
         items = section.items,
         toMediaItem = { it },
-        imageUrl = callbacks.mediaImageUrlBuilder,
-        backdropUrl = callbacks.mediaBackdropUrlBuilder,
+        imageUrl = renderInputs.mediaImageUrlBuilder,
+        backdropUrl = renderInputs.mediaBackdropUrlBuilder,
         onItemClick = rowItemClick,
-        onPlayClick = callbacks.mediaOnPlayClick,
+        onPlayClick = renderInputs.mediaOnPlayClick,
         modifier = sectionModifier,
         focusRequester = ctx.focusRequester,
         onRowFocused = ctx.onRowFocused,
@@ -857,6 +855,7 @@ private fun HomeSectionOnlinePosterRow(
     ctx: HomeRowArmContext,
     state: HomeContentState,
     callbacks: HomeContentCallbacks,
+    renderInputs: HomeRenderInputs,
 ) {
     val section = ctx.section
     val sectionTitle = ctx.title
@@ -870,17 +869,16 @@ private fun HomeSectionOnlinePosterRow(
     // opens details — the selection lives in posterRowClick
     // so the offline poster row cannot drift from it.
     // (Same remember-key shape as the offline poster
-    // branch: HomeContentCallbacks is a data class, so
-    // whole-callbacks keys are stable.)
+    // branch: whole-bundle keys are stable.)
     val rowItemClick: (MediaItem) -> Unit = remember(
-        section.type, state.continueWatchingClickBehavior, callbacks,
+        section.type, state.continueWatchingClickBehavior, renderInputs.mediaOnItemClick,
     ) {
         posterRowClick(
             sectionType = section.type,
             behavior = state.continueWatchingClickBehavior,
             toMediaItem = { it },
             sinks = ctx.resumeSinks,
-            onPlainClick = callbacks.mediaOnItemClick,
+            onPlainClick = renderInputs.mediaOnItemClick,
         )
     }
     // Dice affordance: RANDOM-sorted custom discover rows only
@@ -900,10 +898,10 @@ private fun HomeSectionOnlinePosterRow(
     HomeMediaRow(
         title = sectionTitle,
         items = section.items,
-        imageUrlBuilder = callbacks.mediaImageUrlBuilder,
-        fallbackImageUrlBuilder = callbacks.fallbackImageUrlBuilder,
+        imageUrlBuilder = renderInputs.mediaImageUrlBuilder,
+        fallbackImageUrlBuilder = renderInputs.fallbackImageUrlBuilder,
         onItemClick = rowItemClick,
-        onPlayClick = callbacks.mediaOnPlayClick,
+        onPlayClick = renderInputs.mediaOnPlayClick,
         modifier = sectionModifier,
         photoFolderChildUrlsFor = callbacks.photoFolderChildUrlsFor,
         focusRequester = ctx.focusRequester,
@@ -933,7 +931,7 @@ private fun HomeSectionOnlinePosterRow(
             null
         },
         seriesPosterResolver = remember(callbacks.getImageUrl) { { id: String -> callbacks.getImageUrl(id) } },
-        seriesBackdropResolver = remember(callbacks.getBackdropUrl) { { id: String -> callbacks.getBackdropUrl(id) } },
+        seriesBackdropResolver = remember(renderInputs.onlineBackdropResolver) { { id: String -> renderInputs.onlineBackdropResolver(id) } },
     )
 }
 

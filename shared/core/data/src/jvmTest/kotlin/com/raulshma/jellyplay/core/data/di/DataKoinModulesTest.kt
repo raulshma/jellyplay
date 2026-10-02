@@ -225,6 +225,9 @@ class DataKoinModulesTest {
             // The auth-cluster narrow seam the Server Management screen's
             // trust toggle resolves (stateless impl single — no ctor graph).
             assertResolves<SelfSignedTrustRepository>(koin)
+            // The certificate half of the same screen: delegates to the
+            // ClientCertificateFacade single the desktop network module binds.
+            assertResolves<com.raulshma.jellyplay.core.data.repository.ClientCertificateRepository>(koin)
 
             // The @IntoMap subtitle fan-out flipped to Koin: same two keys the
             // legacy SubtitleProviderModule built, values wrapped resilient.

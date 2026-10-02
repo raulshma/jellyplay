@@ -17,17 +17,13 @@ import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.MediaSession
 import androidx.compose.runtime.Immutable
-import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
-import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
-import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
-import com.raulshma.jellyplay.core.concurrency.mapConcurrent
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
-import com.raulshma.jellyplay.core.data.playback.focus.FocusOutcome
 import com.raulshma.jellyplay.core.data.playback.focus.NoopPlaybackFocus
 import com.raulshma.jellyplay.core.data.playback.focus.PlaybackFocus
 import com.raulshma.jellyplay.core.data.playback.focus.PlaybackSurfaceId
+import com.raulshma.jellyplay.core.data.playback.focus.claimOnPlayEdge
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.ChannelMixMode
 import com.raulshma.jellyplay.core.model.EffectStrength
@@ -49,7 +45,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Semaphore
 import com.raulshma.jellyplay.feature.player.video.engine.EnginePositionTicker
 import kotlin.math.pow
 
@@ -61,18 +56,18 @@ class AudioPlaybackManager(
     private val context: Context,
     private val mediaRepository: MediaRepository,
     /**
-     * Pass-through to [AudioLibraryBrowser]'s catalogue reads (artist albums /
-     * album tracks — the repository's [com.raulshma.jellyplay.core.data.repository.MusicCatalogue]
-     * family seam, the same split the browser made off the union).
+     * The library/browse ladder (detail+local resolve, playable-[MediaItem]
+     * building, the [androidx.media3.session.MediaLibrarySession] builder) —
+     * DI-constructed since the constructor diet: the browser's five family
+     * deps (music catalogue / collection reads / playlists / downloads /
+     * adaptive bitrate) ride its own single and never reached this manager's
+     * own call sites. The manager keeps the pass-through READS its public
+     * surface needs ([buildMediaItemForQueueItem], [createPlayer]'s and the
+     * crossfade path's `buildMediaSession`).
      */
-    private val musicCatalogue: com.raulshma.jellyplay.core.data.repository.MusicCatalogue,
-    /** Pass-through to [AudioLibraryBrowser]'s collection reads (the union's getMediaItems/getFavorites seam). */
-    private val mediaCollectionReads: com.raulshma.jellyplay.core.data.repository.MediaCollectionReads,
-    private val playlistRepository: PlaylistRepository,
+    private val libraryBrowser: AudioLibraryBrowser,
     private val playbackRepository: PlaybackRepository,
     private val imageUrlProvider: ImageUrlProvider,
-    private val downloadRepository: DownloadRepository,
-    private val offlineRepository: OfflineRepository,
     private val playbackSourceResolver: PlaybackSourceResolver,
     private val sessionManager: PlaybackSessionManager,
     private val audioStore: com.raulshma.jellyplay.core.datastore.audio.AudioStore,
@@ -80,7 +75,6 @@ class AudioPlaybackManager(
     private val playbackStore: com.raulshma.jellyplay.core.datastore.playback.PlaybackStore,
     private val queuePersistenceHelper: QueuePersistenceHelper,
     private val bandwidthMonitor: com.raulshma.jellyplay.core.data.streaming.BandwidthMonitor,
-    private val adaptiveBitrateSelector: com.raulshma.jellyplay.core.data.streaming.AdaptiveBitrateSelector,
     private val bandwidthInterceptor: com.raulshma.jellyplay.core.network.interceptor.BandwidthInterceptor,
     private val lyricsManager: AudioLyricsManager,
     private val effectsProcessor: AudioEffectsProcessor,
@@ -112,8 +106,6 @@ class AudioPlaybackManager(
     private val scope = playbackScope ?: CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val testPlayerFactory = playerFactory
 
-    private val queuePreWarmPermits = Semaphore(8)
-
     companion object {
         // Position-poll interval while playback is actively progressing. Matches
         // the video side's default ticker cadence (≈4 Hz). The paused re-check
@@ -121,14 +113,6 @@ class AudioPlaybackManager(
         // (POSITION_PAUSED_RECHECK_MS / POSITION_NOT_READY_*), which now owns
         // this loop.
         private const val POSITION_POLL_INTERVAL_MS = 250L
-
-        // Queue pre-warm lookahead: queue rows mirrored ahead of the cursor.
-        // The gapless auto-advance / crossfade horizon is the single next row
-        // (AudioCrossfader fades into currentMediaItemIndex + 1, at most one
-        // 12 s fade before it), so the lookahead is margin for the window
-        // extension on rapid transitions — and must stay well inside the
-        // 30-entry detail TtlCache so the window cannot thrash it by itself.
-        private const val PREWARM_LOOKAHEAD_ITEMS = 12
     }
 
     private var exoPlayer: ExoPlayer? = null
@@ -136,18 +120,22 @@ class AudioPlaybackManager(
     private var currentEffects = com.raulshma.jellyplay.core.datastore.audioeffects.AudioEffectsSlice()
     private var currentPlayback = com.raulshma.jellyplay.core.datastore.playback.PlaybackSlice()
 
-    private val libraryBrowser = AudioLibraryBrowser(
+    /**
+     * The windowed queue→playlist mirror ([QueuePlaylistMirror]) — the ONE
+     * owner of the prefix invariant, the window math, the build cache +
+     * permits, the loading/window job guards, the remove-of-current-row
+     * coordination and every non-echo player-playlist write (the play-path
+     * pre-warm, the transition window slide, the crossfade re-mirror, the
+     * shuffle/undo rebuild). This manager keeps only the pass-through call
+     * sites.
+     */
+    private val queueMirror = QueuePlaylistMirror(
         scope = scope,
-        mediaRepository = mediaRepository,
-        musicCatalogue = musicCatalogue,
-        mediaCollectionReads = mediaCollectionReads,
-        playlistRepository = playlistRepository,
-        downloadRepository = downloadRepository,
-        playbackRepository = playbackRepository,
-        imageUrlProvider = imageUrlProvider,
-        playbackSourceResolver = playbackSourceResolver,
-        streamingQualityProvider = { currentPlayback.streamingQuality },
-        adaptiveBitrateSelector = adaptiveBitrateSelector,
+        playerProvider = { exoPlayer },
+        queueProvider = { state.queue.value },
+        cursorProvider = { state.currentIndex.value },
+        writeCursor = { state._currentIndex.value = it },
+        buildItem = { queueItem -> buildMediaItemForQueueItem(queueItem) },
     )
 
     // Promoted reporter (commonMain): the former `exoPlayerProvider`
@@ -165,14 +153,6 @@ class AudioPlaybackManager(
     )
 
     /**
-     * Set around a remove-of-the-current-row [removeFromQueue]: the chassis
-     * transition's player write is that caller's own `removeMediaItem` (the
-     * shifted-in row then plays and its transition echo reconciles), so
-     * [engineDispatch.prepare] must not also seek/rebuild on top of it.
-     */
-    private var removingCurrentRow = false
-
-    /**
      * The engine-command port — [state]'s ONLY engine touch (the desktop
      * adapter's dispatch twin, shaped over ExoPlayer). The media3 player
      * OWNS the playlist, so [prepare] is a window seek to the chassis cursor
@@ -186,12 +166,12 @@ class AudioPlaybackManager(
 
         override fun prepare(item: AudioQueueItem, startPositionMs: Long) {
             val player = exoPlayer ?: return
-            if (removingCurrentRow) return
+            if (queueMirror.removingCurrentRow) return
             val index = state.currentIndex.value
-            if (playlistMirrorsQueue(player) && index < player.mediaItemCount) {
+            if (queueMirror.mirrorsQueue(player) && index < player.mediaItemCount) {
                 player.seekTo(index, startPositionMs)
             } else {
-                rebuildPlaylist(
+                queueMirror.rebuild(
                     items = state.queue.value,
                     targetIndex = index,
                     positionMs = { startPositionMs },
@@ -225,31 +205,12 @@ class AudioPlaybackManager(
     }
 
     /**
-     * True while the player's playlist is an index-aligned prefix of the
-     * chassis queue — the one shape the pre-warm maintains: rows
-     * [0, mediaItemCount) are the queue's FIRST rows, so player index equals
-     * queue index for every mirrored row (the crossfader's next-row read,
-     * the per-mutation remove/move writes and [EngineDispatch.prepare]'s
-     * window seek all ride that equality). Rows past the pre-warm lookahead
-     * are simply not mirrored yet.
-     */
-    private fun playlistMirrorsQueue(player: ExoPlayer): Boolean {
-        val queue = state.queue.value
-        val mirrored = player.mediaItemCount
-        if (mirrored > queue.size) return false
-        for (i in 0 until mirrored) {
-            if (player.getMediaItemAt(i).mediaId != queue[i].id) return false
-        }
-        return true
-    }
-
-    /**
      * The queue-state chassis (commonMain [AudioQueueStateCore]) — the ONE
      * owner of the playback state flows (re-exposed below by reference), the
      * undo stack + events, the advance/retreat/wrap/shuffle/repeat/restart
      * selection and the cursor/remap semantics this manager previously
      * inlined. What stays here: the media3 playlist mirror (per-mutation
-     * writes above + the [rebuildPlaylist] shuffle/undo restore), the
+     * writes above + the [QueuePlaylistMirror.rebuild] shuffle/undo restore), the
      * transition choreography listener (the engine's `onMediaItemTransition`
      * IS the choreographer — the chassis runs with its built-in report block
      * suppressed), the play()/pre-warm path, crossfade, A-B loop, effects,
@@ -306,9 +267,6 @@ class AudioPlaybackManager(
     private var mediaSession: MediaSession? = null
     private var _isLoadingItemFlag = false
     private var positionJob: Job? = null
-    private var queueLoadingJob: Job? = null
-    private var queueWindowJob: Job? = null
-    private val mediaItemCache = android.util.LruCache<String, MediaItem>(25)
 
     private val _gaplessEnabled = MutableStateFlow(true)
     val gaplessEnabled: StateFlow<Boolean> = _gaplessEnabled.asStateFlow()
@@ -446,23 +404,11 @@ class AudioPlaybackManager(
             // no per-entry-point claim sites can drift. Newest user action
             // wins: this publishes Held(MUSIC), and the reader (whose loop is
             // not a commandable surface) pauses its speech on the state.
-            if (isPlaying) {
-                val outcome = playbackFocus.acquire(PlaybackSurfaceId.MUSIC)
-                if (outcome is FocusOutcome.Denied) {
-                    // Honor the interface contract ("the caller MUST NOT
-                    // produce audio"): a Denied claim here means another
-                    // holder is Suspended under an OS loss (e.g. read-aloud
-                    // during a phone call) — the newest user action does not
-                    // outrank an OS suspension. Pause mirrors the user's own
-                    // pause: playWhenReady drops, so neither the OS focus
-                    // stack nor a later release can auto-resume this denial.
-                    // The resulting isPlaying=false edge releases the claim
-                    // attempt below on the next listener pass.
-                    pause()
-                }
-            } else {
-                playbackFocus.release(PlaybackSurfaceId.MUSIC)
-            }
+            playbackFocus.claimOnPlayEdge(
+                surfaceId = PlaybackSurfaceId.MUSIC,
+                isPlaying = isPlaying,
+                onDenied = { pause() },
+            )
         }
 
         override fun onPlayerError(error: PlaybackException) {
@@ -713,24 +659,16 @@ class AudioPlaybackManager(
         )
     }
 
+    /**
+     * The item-builder path — one queue row → its playable [MediaItem]
+     * through the browser ladder (an unresolvable row builds null). The
+     * segment fan-out (permits + cache) lives on [QueuePlaylistMirror]; the
+     * direct single-row appends ([addToQueue] / [addToQueueAll]) and the
+     * play-path load call this directly, as before.
+     */
     private suspend fun buildMediaItemForQueueItem(queueItem: AudioQueueItem, startPositionMs: Long = 0L): MediaItem? {
         return libraryBrowser.buildPlayableMediaItem(queueItem.id, startPositionMs)
     }
-
-    /**
-     * Builds [MediaItem]s for a queue segment concurrently (bounded by
-     * [queuePreWarmPermits], via [Semaphore.mapConcurrent]) while preserving
-     * input order, so result order — and therefore the [mediaItemCache]
-     * insertion order — matches the sequential `mapNotNull { ... }` loops
-     * this replaces. Already-cached items short-circuit inside the transform
-     * (the old ladder skipped their permit acquire via a completed deferred);
-     * per-item failures cancel the siblings and propagate, exactly as the
-     * old `coroutineScope { ... }` did.
-     */
-    private suspend fun buildMediaItemsForQueueItems(queueItems: List<AudioQueueItem>): List<MediaItem> =
-        queuePreWarmPermits.mapConcurrent(queueItems) { qi ->
-            mediaItemCache.get(qi.id) ?: buildMediaItemForQueueItem(qi)
-        }.mapNotNull { it?.also { mediaItemCache.put(it.mediaId, it) } }
 
     /**
      * The shared (commonMain) play-path skeleton — everything from the stop
@@ -949,87 +887,14 @@ class AudioPlaybackManager(
 
     /**
      * [AudioPlayPath.afterLoad] seam (Android's windowed queue pre-warm — the
-     * declared divergence from the desktop's next-item-only prefetch): mirrors
-     * the queue onto the player playlist as the index-aligned prefix
-     * `[0, min(playIndex + [PREWARM_LOOKAHEAD_ITEMS], queue.size))`. The
-     * prefix below the cursor stays full so player index keeps equaling queue
-     * index (the crossfader's next-row read, the remove/move writes and the
-     * prepare seek all ride that equality); only the lookahead ahead of the
-     * cursor — the rows gapless auto-advance and the crossfade consume — is
-     * bounded. [extendPrewarmWindow] slides the lookahead forward on every
-     * media-item transition.
-     *
-     * The default 25-entry mediaItemCache would still thrash under the
-     * out-of-window fallbacks ([rebuildPlaylist] resolves rows past the
-     * lookahead on demand) — size the LRU to the queue.
+     * declared divergence from the desktop's next-item-only prefetch): the
+     * whole choreography (window math, cache, job guards, invariant, the
+     * prepend's cursor reconciliation) lives on [QueuePlaylistMirror]; this
+     * only supplies the play path's engine acquisition — the player must be
+     * created NOW and captured for the mirror's Main-write identity guard.
      */
     private fun preWarmPlaylistAroundCursor() {
-        val player = getOrCreatePlayer()
-        val queueItems = state.queue.value
-        val playIndex = state.currentIndex.value
-
-        queueLoadingJob?.cancel()
-        queueWindowJob?.cancel()
-        mediaItemCache.resize(queueItems.size.coerceAtLeast(25))
-        val windowEnd = (playIndex + 1 + PREWARM_LOOKAHEAD_ITEMS).coerceAtMost(queueItems.size)
-        queueLoadingJob = scope.launch(Dispatchers.IO) {
-            coroutineScope {
-                val afterJob = async { buildMediaItemsForQueueItems(queueItems.subList(playIndex + 1, windowEnd)) }
-                val beforeJob = async { buildMediaItemsForQueueItems(queueItems.subList(0, playIndex)) }
-                val mediaItemsAfter = afterJob.await()
-                val mediaItemsBefore = beforeJob.await()
-
-                launch(Dispatchers.Main) {
-                    if (exoPlayer == player) {
-                        if (mediaItemsAfter.isNotEmpty()) {
-                            player.addMediaItems(mediaItemsAfter)
-                        }
-                        if (mediaItemsBefore.isNotEmpty()) {
-                            player.addMediaItems(0, mediaItemsBefore)
-                            state._currentIndex.value = playIndex
-                        }
-                    }
-                    queueLoadingJob = null
-                }
-            }
-        }
-    }
-
-    /**
-     * Slides the pre-warm window forward after a media-item transition:
-     * mirrors the queue rows that entered the [PREWARM_LOOKAHEAD_ITEMS]
-     * lookahead since the last write. Everything is recomputed from the live
-     * queue, cursor and player at trigger time — no window math survives a
-     * queue mutation. Skipped while a build elsewhere owns the mirror (the
-     * play-path pre-warm until its prepend restores alignment, the crossfade
-     * re-mirror): appending under it would interleave out of queue order.
-     */
-    private fun extendPrewarmWindow() {
-        val player = exoPlayer ?: return
-        val queueItems = state.queue.value
-        val cursor = state.currentIndex.value
-        if (cursor !in queueItems.indices) return
-        if (!playlistMirrorsQueue(player)) return
-        val frontier = player.mediaItemCount
-        val windowEnd = (cursor + 1 + PREWARM_LOOKAHEAD_ITEMS).coerceAtMost(queueItems.size)
-        if (windowEnd <= frontier) return
-        val pending = queueItems.subList(frontier, windowEnd)
-        // This cancel/restart (and preWarmPlaylistAroundCursor's) is what makes
-        // SingleFlight.getOrFetch's retry-on-cancel recursion reachable — it
-        // produced a fatal StackOverflowError on the first track-skip in device
-        // testing (2026-10-02; parent 7e498f767 does not crash). If the
-        // SingleFlight retry is not fixed first, consider coalescing these
-        // restarts instead of cancelling in-flight builds.
-        queueWindowJob?.cancel()
-        queueWindowJob = scope.launch(Dispatchers.IO) {
-            val mediaItems = buildMediaItemsForQueueItems(pending)
-            launch(Dispatchers.Main) {
-                if (exoPlayer == player && state.queue.value === queueItems && player.mediaItemCount == frontier) {
-                    player.addMediaItems(mediaItems)
-                }
-                queueWindowJob = null
-            }
-        }
+        queueMirror.prewarm(getOrCreatePlayer())
     }
 
     /**
@@ -1093,14 +958,14 @@ class AudioPlaybackManager(
 
     override fun removeFromQueue(index: Int) {
         assertMainThread("removeFromQueue")
-        if (queueLoadingJob != null) return
+        if (queueMirror.isLoading) return
         if (index < 0 || index >= state.queue.value.size) return
         // Remove-of-the-current-row: the chassis transition must not write
         // the player — the removeMediaItem below IS the write (media3 plays
         // the shifted-in row and its transition echo reconciles).
-        removingCurrentRow = index == state.currentIndex.value
+        queueMirror.removingCurrentRow = index == state.currentIndex.value
         state.removeFromQueue(index)
-        removingCurrentRow = false
+        queueMirror.removingCurrentRow = false
         val player = exoPlayer ?: return
         if (index < player.mediaItemCount) {
             player.removeMediaItem(index)
@@ -1131,14 +996,14 @@ class AudioPlaybackManager(
             // The move straddles the mirrored frontier in either direction:
             // mirrored rows shifted under an unmirrored tail — rebuild the
             // windowed mirror instead of writing a stale move.
-            rebuildPlaylist(state.queue.value, state.currentIndex.value) { player.currentPosition }
+            queueMirror.rebuild(state.queue.value, state.currentIndex.value) { player.currentPosition }
         }
         // Fully beyond the frontier: the mirrored prefix is untouched.
     }
 
     override fun skipToNext() {
         assertMainThread("skipToNext")
-        if (queueLoadingJob != null) return
+        if (queueMirror.isLoading) return
         crossfader.cancel()
         // Chassis: the shared advance/wrap rule (+1 mid-queue, wrap to 0
         // under repeat ≥ ALL, blocked at the RepeatNone tail — no undo
@@ -1149,7 +1014,7 @@ class AudioPlaybackManager(
 
     override fun skipToPrevious() {
         assertMainThread("skipToPrevious")
-        if (queueLoadingJob != null) return
+        if (queueMirror.isLoading) return
         val player = exoPlayer ?: return
         crossfader.cancel()
         // Chassis: restart-in-place above the threshold (strictly > — seek
@@ -1231,55 +1096,16 @@ class AudioPlaybackManager(
      */
     override fun undoLastQueueOperation(): Boolean {
         assertMainThread("undoLastQueueOperation")
-        if (queueLoadingJob != null) return false
+        if (queueMirror.isLoading) return false
         return state.undoLastQueueOperation()
     }
 
     /**
      * The ONE queue-rebuild write (the shuffle reorder/restore mirror in
      * [toggleShuffle], the undo restore and the out-of-window fallback via
-     * [EngineDispatch.prepare]): builds MediaItems for the index-aligned
-     * prefix window of [items] around [targetIndex] — the same shape
-     * [preWarmPlaylistAroundCursor] maintains, so rows past
-     * [PREWARM_LOOKAHEAD_ITEMS] ahead of the target stay unmirrored until
-     * [extendPrewarmWindow] slides over them — then replaces the player's
-     * playlist with `setMediaItems(items, targetIndex, positionMs)` + prepare
-     * on Main.
-     *
-     * ONE canonical player-identity-check placement, chosen here: AFTER the
-     * async build, on the Main thread, immediately before the write — the
-     * check closest to the write is the only one that can actually close the
-     * swap window (a check before the build would still race the swap that
-     * happens while the build runs). Bail = no write, as in all pre-fold
-     * copies (they only disagreed on where the check sat).
-     *
-     * [positionMs] is a provider evaluated at WRITE time on Main: the
-     * shuffle arms read `player.currentPosition` there so playback that
-     * continues during the build is not rewound, while the undo restore pins
-     * the captured snapshot value. [targetIndex] is coerced into the BUILT
-     * list's bounds — a partial build must not crash the write.
+     * [EngineDispatch.prepare]) is [QueuePlaylistMirror.rebuild] — the
+     * mirror's own KDoc carries the write's contract.
      */
-    private fun rebuildPlaylist(
-        items: List<AudioQueueItem>,
-        targetIndex: Int,
-        positionMs: () -> Long,
-    ) {
-        val player = exoPlayer ?: return
-        if (items.isEmpty()) return
-        scope.launch(Dispatchers.IO) {
-            val windowEnd = (targetIndex + 1 + PREWARM_LOOKAHEAD_ITEMS).coerceAtMost(items.size)
-            val mediaItems = buildMediaItemsForQueueItems(items.subList(0, windowEnd))
-            launch(Dispatchers.Main) {
-                if (mediaItems.isEmpty() || exoPlayer != player) return@launch
-                player.setMediaItems(
-                    mediaItems,
-                    targetIndex.coerceIn(0, mediaItems.lastIndex),
-                    positionMs(),
-                )
-                player.prepare()
-            }
-        }
-    }
 
     fun seekByDelta(deltaMs: Long) {
         assertMainThread("seekByDelta")
@@ -1315,7 +1141,7 @@ class AudioPlaybackManager(
         state.toggleShuffle()
         val player = exoPlayer ?: return
         if (state.queue.value !== queueBefore) {
-            rebuildPlaylist(
+            queueMirror.rebuild(
                 items = state.queue.value,
                 targetIndex = state.currentIndex.value,
                 positionMs = { player.currentPosition },
@@ -1445,7 +1271,7 @@ class AudioPlaybackManager(
 
     override fun playFromQueue(index: Int) {
         assertMainThread("playFromQueue")
-        if (queueLoadingJob != null) return
+        if (queueMirror.isLoading) return
         if (index < 0 || index >= state.queue.value.size) return
         crossfader.cancel()
         // Chassis: same-index clicks seek the CURRENT item to zero (no
@@ -1562,7 +1388,7 @@ class AudioPlaybackManager(
                 nextItem = nextItem,
                 reapplyReplayGain = true,
             )
-            extendPrewarmWindow()
+            queueMirror.extend()
 
             scope.launch {
                 progressReporter.reportStopped(
@@ -1649,31 +1475,9 @@ class AudioPlaybackManager(
 
         _isCrossfading.value = false
 
-        val queueItems = state.queue.value
-        if (queueItems.size > 1) {
-            // Same windowed mirror as the play-path pre-warm: full prefix
-            // below the crossfaded row, bounded lookahead ahead of it.
-            val windowEnd = (nextIndex + 1 + PREWARM_LOOKAHEAD_ITEMS).coerceAtMost(queueItems.size)
-            scope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                coroutineScope {
-                    val afterJob = async { buildMediaItemsForQueueItems(queueItems.subList(nextIndex + 1, windowEnd)) }
-                    val beforeJob = async { buildMediaItemsForQueueItems(queueItems.subList(0, nextIndex)) }
-                    val itemsAfter = afterJob.await()
-                    val itemsBefore = beforeJob.await()
-
-                    launch(kotlinx.coroutines.Dispatchers.Main) {
-                        if (exoPlayer == secondary) {
-                            if (itemsAfter.isNotEmpty()) {
-                                secondary.addMediaItems(itemsAfter)
-                            }
-                            if (itemsBefore.isNotEmpty()) {
-                                secondary.addMediaItems(0, itemsBefore)
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        // Same windowed mirror as the play-path pre-warm: full prefix
+        // below the crossfaded row, bounded lookahead ahead of it.
+        queueMirror.prewarmAround(secondary, nextIndex)
 
         playbackRepository.reportPlaybackStart(startReportFor(nextItem))
     }

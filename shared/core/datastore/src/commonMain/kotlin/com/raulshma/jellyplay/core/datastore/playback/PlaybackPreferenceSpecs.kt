@@ -4,6 +4,8 @@ import androidx.datastore.preferences.core.Preferences
 import com.raulshma.jellyplay.core.datastore.CachedJsonNullPolicy
 import com.raulshma.jellyplay.core.datastore.ParsedCache
 import com.raulshma.jellyplay.core.datastore.PreferenceCodec
+import com.raulshma.jellyplay.core.datastore.spec.PreferenceSearchSpec
+import com.raulshma.jellyplay.core.datastore.spec.PreferencePlatformRule
 import com.raulshma.jellyplay.core.datastore.spec.PreferenceSpec
 import com.raulshma.jellyplay.core.datastore.toEnumOrNull
 import com.raulshma.jellyplay.core.model.AudioPassthroughCodec
@@ -68,8 +70,21 @@ private var cachedAudioPassthroughCodecs: ParsedCache<Set<AudioPassthroughCodec>
  * `read()` row, one `restore()` row (and its setter) — plus one write-through
  * test line; the derivation covers key identity, encodings and reset lists,
  * not the slice plumbing or its coverage.
+ *
+ * Public (the [com.raulshma.jellyplay.core.datastore.experimental
+ * .ExperimentalPreferenceSpecs] precedent): the settings feature derives its
+ * spec-backed catalog rows from [searchEntries], so the object must cross the
+ * module boundary even though the store itself stays internal.
  */
-internal object PlaybackPreferenceSpecs {
+object PlaybackPreferenceSpecs {
+
+    /**
+     * Route kind shared by every settings-search row that deep-links into the
+     * playback settings screen (this domain's and the in-player video
+     * domain's catalog rows alike) — the plain id the feature layer maps to
+     * `Route.PlaybackSettings()`.
+     */
+    const val ROUTE_PLAYBACK_SETTINGS = "playback_settings"
 
     // ------------------------------------------------------------------
     // Engine + delivery quality
@@ -92,18 +107,43 @@ internal object PlaybackPreferenceSpecs {
         resetCategory = PreferenceResetCategory.PLAYBACK,
         read = { _, raw -> normalizePreferredPlayer(raw) },
         encode = { it.name },
+        search = PreferenceSearchSpec(
+            id = "player_engine",
+            titleKey = "ss_player_engine_title",
+            subtitleKey = "ss_player_engine_subtitle",
+            categoryKey = "ss_cat_playback",
+            keywords = listOf("player", "engine", "mpv", "exoplayer", "vlc", "playback"),
+            routeKind = ROUTE_PLAYBACK_SETTINGS,
+        ),
     )
 
     val PREFERRED_EXTERNAL_PLAYER: PreferenceSpec<ExternalPlayerApp> = PreferenceSpec.enumRow(
         keyName = "preferred_external_player",
         default = ExternalPlayerApp.SYSTEM_CHOOSER,
         resetCategory = PreferenceResetCategory.PLAYBACK,
+        search = PreferenceSearchSpec(
+            id = "external_player_app",
+            titleKey = "ss_external_player_app_title",
+            subtitleKey = "ss_external_player_app_subtitle",
+            categoryKey = "ss_cat_playback",
+            keywords = listOf("external", "player", "app", "mpv", "mx player", "vlc", "mpvkt", "handoff"),
+            routeKind = ROUTE_PLAYBACK_SETTINGS,
+        ),
     )
 
     val STREAMING_QUALITY: PreferenceSpec<StreamingQuality> = PreferenceSpec.enumRow(
         keyName = "streaming_quality",
         default = StreamingQuality.AUTO,
         resetCategory = PreferenceResetCategory.PLAYBACK,
+        search = PreferenceSearchSpec(
+            id = "streaming_quality",
+            titleKey = "ss_streaming_quality_title",
+            subtitleKey = "ss_streaming_quality_subtitle",
+            categoryKey = "ss_cat_playback",
+            keywords = listOf("quality", "streaming", "resolution", "4k", "1080p", "sd"),
+            routeKind = ROUTE_PLAYBACK_SETTINGS,
+            isAdvanced = true,
+        ),
     )
 
     val CELLULAR_STREAMING_QUALITY: PreferenceSpec<StreamingQuality> = PreferenceSpec.enumRow(
@@ -164,12 +204,32 @@ internal object PlaybackPreferenceSpecs {
         keyName = "live_stream_option",
         default = LiveStreamOption.AUTO,
         resetCategory = PreferenceResetCategory.SYNCPLAY_CASTING,
+        search = PreferenceSearchSpec(
+            id = "live_stream_option",
+            titleKey = "ss_live_stream_option_title",
+            subtitleKey = "ss_live_stream_option_subtitle",
+            categoryKey = "ss_cat_playback",
+            keywords = listOf("live tv", "direct stream", "transcode", "tuner", "htsp", "tvheadend", "channel", "mpeg-ts", "mpeg ts", "broadcast"),
+            routeKind = ROUTE_PLAYBACK_SETTINGS,
+            isAdvanced = true,
+        ),
     )
 
     val OFFLINE_PLAYBACK_PREFERENCE: PreferenceSpec<OfflinePlaybackPreference> = PreferenceSpec.enumRow(
         keyName = "offline_playback_preference",
         default = OfflinePlaybackPreference.PREFER_DOWNLOADED,
         resetCategory = PreferenceResetCategory.PLAYBACK,
+        search = PreferenceSearchSpec(
+            // The search hit restates the row's screen title (the fold): the
+            // catalog row declares no ss_*_title twin.
+            titleKey = "settings_offline_playback",
+            id = "offline_playback",
+            subtitleKey = "ss_offline_playback_subtitle",
+            categoryKey = "ss_cat_playback",
+            keywords = listOf("offline", "download", "downloaded", "streaming", "prefer", "direct play", "local", "copy"),
+            routeKind = ROUTE_PLAYBACK_SETTINGS,
+            isAdvanced = true,
+        ),
     )
 
     // ------------------------------------------------------------------
@@ -180,12 +240,30 @@ internal object PlaybackPreferenceSpecs {
         keyName = "decoder_mode",
         default = DecoderMode.HW_PREFERRED,
         resetCategory = PreferenceResetCategory.PLAYBACK,
+        search = PreferenceSearchSpec(
+            id = "decoder",
+            titleKey = "ss_decoder_title",
+            subtitleKey = "ss_decoder_subtitle",
+            categoryKey = "ss_cat_playback",
+            keywords = listOf("decoder", "hardware", "software", "decoding", "codec"),
+            routeKind = ROUTE_PLAYBACK_SETTINGS,
+            isAdvanced = true,
+        ),
     )
 
     val AUDIO_PASSTHROUGH: PreferenceSpec<Boolean> = PreferenceSpec.plainBoolean(
         keyName = "audio_passthrough",
         default = false,
         resetCategory = PreferenceResetCategory.PLAYBACK,
+        search = PreferenceSearchSpec(
+            id = "audio_passthrough",
+            titleKey = "ss_audio_passthrough_title",
+            subtitleKey = "ss_audio_passthrough_subtitle",
+            categoryKey = "ss_cat_playback",
+            keywords = listOf("passthrough", "surround", "hdmi", "receiver", "raw"),
+            routeKind = ROUTE_PLAYBACK_SETTINGS,
+            isAdvanced = true,
+        ),
     )
 
     /**
@@ -221,6 +299,17 @@ internal object PlaybackPreferenceSpecs {
         keyName = "max_audio_channels",
         default = MaxAudioChannelsEnum.AUTO,
         resetCategory = PreferenceResetCategory.PLAYBACK,
+        search = PreferenceSearchSpec(
+            // The search hit restates the row's screen title (the fold): the
+            // catalog row declares no ss_*_title twin.
+            titleKey = "settings_max_audio_channels",
+            id = "max_audio_channels",
+            subtitleKey = "ss_max_audio_channels_subtitle",
+            categoryKey = "ss_cat_playback",
+            keywords = listOf("channels", "speaker", "layout", "5.1", "7.1", "stereo", "surround", "downmix"),
+            routeKind = ROUTE_PLAYBACK_SETTINGS,
+            isAdvanced = true,
+        ),
     )
 
     /**
@@ -233,7 +322,19 @@ internal object PlaybackPreferenceSpecs {
         keyName = "downmix_boost_db",
         default = DEFAULT_DOWNMIX_BOOST_DB,
         resetCategory = PreferenceResetCategory.PLAYBACK,
-    ) { it.coerceIn(MIN_DOWNMIX_BOOST_DB, MAX_DOWNMIX_BOOST_DB) }
+        transform = { it.coerceIn(MIN_DOWNMIX_BOOST_DB, MAX_DOWNMIX_BOOST_DB) },
+        search = PreferenceSearchSpec(
+            // The search hit restates the row's screen title (the fold): the
+            // catalog row declares no ss_*_title twin.
+            titleKey = "settings_downmix_boost",
+            id = "downmix_boost",
+            subtitleKey = "ss_downmix_boost_subtitle",
+            categoryKey = "ss_cat_playback",
+            keywords = listOf("downmix", "boost", "stereo", "loudness", "volume", "night", "gain", "db"),
+            routeKind = ROUTE_PLAYBACK_SETTINGS,
+            isAdvanced = true,
+        ),
+    )
 
     // ------------------------------------------------------------------
     // Frame-rate ↔ refresh-rate matching (legacy bool + enum pair)
@@ -253,6 +354,11 @@ internal object PlaybackPreferenceSpecs {
      * [RefreshRateMode.FRAME_RATE_ONLY] (the old single-resolution
      * behaviour). The boolean itself stays in sync via the hand-written
      * cross-key invariant setters, not via this row.
+     *
+     * The settings-search row (`frame_rate_matching`) is cataloged here: this
+     * is the canonical projection of the legacy boolean + mode pair — the
+     * picker's knob — while [FRAME_RATE_MATCHING] stays the wire-compat
+     * surface.
      */
     val REFRESH_RATE_MODE: PreferenceSpec<RefreshRateMode> = PreferenceSpec.derived(
         keyName = "refresh_rate_mode",
@@ -278,6 +384,15 @@ internal object PlaybackPreferenceSpecs {
             }
         },
         encode = { it.name },
+        search = PreferenceSearchSpec(
+            id = "frame_rate_matching",
+            titleKey = "ss_frame_rate_matching_title",
+            subtitleKey = "ss_frame_rate_matching_subtitle",
+            categoryKey = "ss_cat_playback",
+            keywords = listOf("refresh rate", "frame rate", "hz", "judder", "tv"),
+            routeKind = ROUTE_PLAYBACK_SETTINGS,
+            isAdvanced = true,
+        ),
     )
 
     // ------------------------------------------------------------------
@@ -288,30 +403,74 @@ internal object PlaybackPreferenceSpecs {
         keyName = "keep_screen_on_during_video",
         default = true,
         resetCategory = PreferenceResetCategory.PLAYBACK,
+        search = PreferenceSearchSpec(
+            id = "keep_screen_on",
+            titleKey = "ss_keep_screen_on_title",
+            subtitleKey = "ss_keep_screen_on_subtitle",
+            categoryKey = "ss_cat_playback",
+            keywords = listOf("screen", "awake", "lock", "stay on", "timeout"),
+            routeKind = ROUTE_PLAYBACK_SETTINGS,
+            isAdvanced = true,
+        ),
     )
 
     val PAUSE_ON_AUDIO_FOCUS_LOSS: PreferenceSpec<Boolean> = PreferenceSpec.plainBoolean(
         keyName = "pause_on_audio_focus_loss",
         default = true,
         resetCategory = PreferenceResetCategory.PLAYBACK,
+        search = PreferenceSearchSpec(
+            id = "pause_on_focus_loss",
+            titleKey = "ss_pause_on_focus_loss_title",
+            subtitleKey = "ss_pause_on_focus_loss_subtitle",
+            categoryKey = "ss_cat_playback",
+            keywords = listOf("pause", "focus", "loss", "audio focus", "interruption"),
+            routeKind = ROUTE_PLAYBACK_SETTINGS,
+            isAdvanced = true,
+        ),
     )
 
     val DUCK_ON_TRANSIENT_FOCUS_LOSS: PreferenceSpec<Boolean> = PreferenceSpec.plainBoolean(
         keyName = "duck_on_transient_focus_loss",
         default = false,
         resetCategory = PreferenceResetCategory.PLAYBACK,
+        search = PreferenceSearchSpec(
+            id = "duck_on_transient_focus_loss",
+            titleKey = "ss_duck_on_transient_focus_loss_title",
+            subtitleKey = "ss_duck_on_transient_focus_loss_subtitle",
+            categoryKey = "ss_cat_playback",
+            keywords = listOf("duck", "phone", "call", "focus", "transient", "volume", "rewind"),
+            routeKind = ROUTE_PLAYBACK_SETTINGS,
+            isAdvanced = true,
+        ),
     )
 
     val AUTO_PLAY_COUNTDOWN_SEC: PreferenceSpec<Int> = PreferenceSpec.plainInt(
         keyName = "auto_play_countdown_sec",
         default = 10,
         resetCategory = PreferenceResetCategory.PLAYBACK,
+        search = PreferenceSearchSpec(
+            id = "autoplay_countdown",
+            titleKey = "ss_autoplay_countdown_title",
+            subtitleKey = "ss_autoplay_countdown_subtitle",
+            categoryKey = "ss_cat_playback",
+            keywords = listOf("countdown", "timer", "autoplay", "next"),
+            routeKind = ROUTE_PLAYBACK_SETTINGS,
+        ),
     )
 
     val BACKGROUND_VIDEO_AUDIO_ENABLED: PreferenceSpec<Boolean> = PreferenceSpec.plainBoolean(
         keyName = "background_video_audio_enabled",
         default = false,
         resetCategory = PreferenceResetCategory.PLAYBACK,
+        search = PreferenceSearchSpec(
+            id = "background_audio",
+            titleKey = "ss_background_audio_title",
+            subtitleKey = "ss_background_audio_subtitle",
+            categoryKey = "ss_cat_playback",
+            keywords = listOf("background", "audio", "video background", "pip"),
+            routeKind = ROUTE_PLAYBACK_SETTINGS,
+            isAdvanced = true,
+        ),
     )
 
     /**
@@ -324,6 +483,16 @@ internal object PlaybackPreferenceSpecs {
         keyName = "auto_enter_pip",
         default = true,
         resetCategory = PreferenceResetCategory.PLAYBACK,
+        search = PreferenceSearchSpec(
+            id = "auto_enter_pip",
+            titleKey = "ss_auto_pip_title",
+            subtitleKey = "ss_auto_pip_subtitle",
+            categoryKey = "ss_cat_playback",
+            keywords = listOf("pip", "picture in picture", "home", "minimize", "background", "floating window"),
+            routeKind = ROUTE_PLAYBACK_SETTINGS,
+            isAdvanced = true,
+            platformRule = PreferencePlatformRule.ANDROID_ONLY,
+        ),
     )
 
     // ------------------------------------------------------------------
@@ -348,6 +517,76 @@ internal object PlaybackPreferenceSpecs {
         keyName = "android_tv_watch_next_enabled",
         default = true,
         resetCategory = PreferenceResetCategory.MISC_APP,
+        search = PreferenceSearchSpec(
+            id = "android_tv_watch_next",
+            titleKey = "ss_android_tv_watch_next_title",
+            subtitleKey = "ss_android_tv_watch_next_subtitle",
+            categoryKey = "ss_cat_playback",
+            keywords = listOf("android tv", "watch next", "home", "tv", "continue"),
+            routeKind = ROUTE_PLAYBACK_SETTINGS,
+            isAdvanced = true,
+            platformRule = PreferencePlatformRule.ANDROID_ONLY,
+        ),
+    )
+
+    // ------------------------------------------------------------------
+    // Settings-search standalone entries: the five per-codec passthrough
+    // catalog rows. Five catalog facts over the ONE [AUDIO_PASSTHROUGH_CODECS]
+    // knob (the experimental feature-set precedent: the knob is a set, the
+    // catalog rows are its members), declared here in the advanced-video
+    // group's catalog order.
+    // ------------------------------------------------------------------
+
+    private val searchPassthroughCodecAc3 = PreferenceSearchSpec(
+        // The search hit restates the row's screen title (the fold): the
+        // catalog row declares no ss_*_title twin.
+        titleKey = "settings_passthrough_codec_ac3",
+        id = "passthrough_codec_ac3",
+        subtitleKey = "ss_passthrough_codec_subtitle",
+        categoryKey = "ss_cat_playback",
+        keywords = listOf("passthrough", "codec", "ac3", "dolby digital", "bitstream", "receiver"),
+        routeKind = ROUTE_PLAYBACK_SETTINGS,
+        isAdvanced = true,
+    )
+
+    private val searchPassthroughCodecEac3 = PreferenceSearchSpec(
+        titleKey = "settings_passthrough_codec_eac3",
+        id = "passthrough_codec_eac3",
+        subtitleKey = "ss_passthrough_codec_subtitle",
+        categoryKey = "ss_cat_playback",
+        keywords = listOf("passthrough", "codec", "eac3", "dolby digital plus", "dd+", "bitstream", "receiver"),
+        routeKind = ROUTE_PLAYBACK_SETTINGS,
+        isAdvanced = true,
+    )
+
+    private val searchPassthroughCodecDts = PreferenceSearchSpec(
+        titleKey = "settings_passthrough_codec_dts",
+        id = "passthrough_codec_dts",
+        subtitleKey = "ss_passthrough_codec_subtitle",
+        categoryKey = "ss_cat_playback",
+        keywords = listOf("passthrough", "codec", "dts", "bitstream", "receiver"),
+        routeKind = ROUTE_PLAYBACK_SETTINGS,
+        isAdvanced = true,
+    )
+
+    private val searchPassthroughCodecDtshd = PreferenceSearchSpec(
+        titleKey = "settings_passthrough_codec_dtshd",
+        id = "passthrough_codec_dtshd",
+        subtitleKey = "ss_passthrough_codec_subtitle",
+        categoryKey = "ss_cat_playback",
+        keywords = listOf("passthrough", "codec", "dts-hd", "dtshd", "dts hd", "bitstream", "receiver"),
+        routeKind = ROUTE_PLAYBACK_SETTINGS,
+        isAdvanced = true,
+    )
+
+    private val searchPassthroughCodecTruehd = PreferenceSearchSpec(
+        titleKey = "settings_passthrough_codec_truehd",
+        id = "passthrough_codec_truehd",
+        subtitleKey = "ss_passthrough_codec_subtitle",
+        categoryKey = "ss_cat_playback",
+        keywords = listOf("passthrough", "codec", "truehd", "dolby atmos", "mlp", "bitstream", "receiver"),
+        routeKind = ROUTE_PLAYBACK_SETTINGS,
+        isAdvanced = true,
     )
 
     /**
@@ -394,4 +633,43 @@ internal object PlaybackPreferenceSpecs {
      */
     internal fun resetKeysFor(category: PreferenceResetCategory): List<Preferences.Key<*>> =
         all.filter { it.resetCategory == category }.map { it.typedKey() }
+
+    /**
+     * The domain's settings-search declarations, in the settings feature's
+     * catalog order (the order the retired hand records carried): every row
+     * above that carries a [PreferenceSearchSpec], plus the five standalone
+     * per-codec passthrough entries. The settings feature derives its
+     * spec-backed catalog rows from this list (and
+     * [com.raulshma.jellyplay.core.datastore.videoplayer
+     * .VideoPlayerPreferenceSpecs.searchEntries]) over its ordered record
+     * spine, binding the declared resource keys to real resources.
+     */
+    val searchEntries: List<PreferenceSearchSpec> = listOf(
+        PREFERRED_PLAYER.searchEntry(),
+        AUTO_PLAY_COUNTDOWN_SEC.searchEntry(),
+        DUCK_ON_TRANSIENT_FOCUS_LOSS.searchEntry(),
+        BACKGROUND_VIDEO_AUDIO_ENABLED.searchEntry(),
+        AUTO_ENTER_PIP.searchEntry(),
+        KEEP_SCREEN_ON_DURING_VIDEO.searchEntry(),
+        PAUSE_ON_AUDIO_FOCUS_LOSS.searchEntry(),
+        ANDROID_TV_WATCH_NEXT_ENABLED.searchEntry(),
+        DECODER_MODE.searchEntry(),
+        AUDIO_PASSTHROUGH.searchEntry(),
+        searchPassthroughCodecAc3,
+        searchPassthroughCodecEac3,
+        searchPassthroughCodecDts,
+        searchPassthroughCodecDtshd,
+        searchPassthroughCodecTruehd,
+        MAX_AUDIO_CHANNELS.searchEntry(),
+        DOWNMIX_BOOST_DB.searchEntry(),
+        REFRESH_RATE_MODE.searchEntry(),
+        OFFLINE_PLAYBACK_PREFERENCE.searchEntry(),
+        STREAMING_QUALITY.searchEntry(),
+        LIVE_STREAM_OPTION.searchEntry(),
+        PREFERRED_EXTERNAL_PLAYER.searchEntry(),
+    )
+
+    /** The projection hook for [searchEntries]: a row's declared search entry. */
+    private fun PreferenceSpec<*>.searchEntry(): PreferenceSearchSpec =
+        requireNotNull(search) { "row '$keyName' declares no search entry" }
 }

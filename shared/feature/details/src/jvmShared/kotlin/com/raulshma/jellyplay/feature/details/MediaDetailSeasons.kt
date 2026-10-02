@@ -19,6 +19,7 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -57,6 +58,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -69,17 +71,13 @@ import com.raulshma.jellyplay.core.designsystem.theme.detailCardBorder
 import com.raulshma.jellyplay.core.designsystem.theme.sharedElementBoundsSpec
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MissingEpisodeReason
-import com.raulshma.jellyplay.core.model.hasWatchProgress
 import com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator
 import com.raulshma.jellyplay.core.ui.components.LocalSharedTransitionScope
 import com.raulshma.jellyplay.core.ui.components.MediaCardProgressOverlay
 import com.raulshma.jellyplay.core.ui.components.clickModifier
-import com.raulshma.jellyplay.core.ui.components.formatDurationFromTicks
 import com.raulshma.jellyplay.core.ui.components.formatRelativeTime
-import com.raulshma.jellyplay.core.ui.components.formatRemainingTimeFromTicks
 import com.raulshma.jellyplay.core.ui.components.localDateFromIsoTimestamp
 import com.raulshma.jellyplay.core.ui.components.shortMonthDayYear
-import com.raulshma.jellyplay.core.model.progressFraction
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.rowCardWidth
 import com.raulshma.jellyplay.core.ui.image.MediaImage
@@ -115,70 +113,46 @@ import org.jetbrains.compose.resources.stringResource
 @OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalSharedTransitionApi::class)
 @Composable
 internal fun SeasonsSection(
+    /**
+     * The section's folded presentation (season tabs, filtered episode map,
+     * display-preference echoes, downloaded/current-item slices) — produced by
+     * [SeasonsPresentation.from] and memoized by [DetailSeasonsSection], which
+     * owns the local-origin neutralization decisions this section used to
+     * re-derive inline.
+     */
+    presentation: SeasonsPresentation,
     seriesItem: MediaItem,
-    seasons: List<MediaItem>,
-    episodes: Map<String, List<MediaItem>>,
-    fetchedSeasonIds: Set<String>,
     smartPlayTarget: DetailUiState.SmartPlayTarget?,
-    getImageUrl: (String) -> String,
-    currentItemId: String? = null,
-    currentSeasonId: String? = null,
+    fetchedSeasonIds: Set<String>,
     /**
      * The season id the user last pinned for this series (persisted across
      * navigation). Fed into [SeasonStartResolver]; an active resume still wins.
      * Null when nothing is persisted (or the screen is for a non-series item),
      * in which case resolution behaves exactly as it did before this feature.
      */
-    persistedSeasonId: String? = null,
-    onEpisodePlayClick: (MediaItem) -> Unit,
-    onEpisodeDetailClick: (MediaItem) -> Unit,
-    onEpisodeLongPress: (MediaItem) -> Unit = {},
-    onFocusedEpisodeChange: (MediaItem) -> Unit = {},
-    onSeasonSelected: (seasonId: String) -> Unit = {},
-    /**
-     * Fires ONLY on a user-initiated season-tab select (the split-button
-     * leading onClick). Distinct from [onSeasonSelected], which the init
-     * `LaunchedEffect` also calls with the computed default. Routing the
-     * persistence through this callback (and never through [onSeasonSelected])
-     * is what stops the default/smart-play season from overwriting the user's
-     * real pinned choice on every screen open.
-     */
-    onSeasonPinned: (seasonId: String) -> Unit = {},
-    hideEpisodeThumbnails: Boolean = false,
-    episodesDescending: Boolean = true,
-    onEpisodesDescendingChange: (Boolean) -> Unit = {},
-    compactEpisodeList: Boolean = false,
-    onCompactEpisodeListChange: (Boolean) -> Unit = {},
-    onMarkSeasonPlayed: (seasonId: String) -> Unit = {},
-    onMarkSeasonUnplayed: (seasonId: String) -> Unit = {},
-    // ── Unified episode parity ──
-    // Set of downloaded episode ids (gates the per-episode delete badge) — null
-    // hides the affordance entirely (plain remote series with no downloads).
-    downloadedEpisodeIds: Set<String>? = null,
-    /** Per-episode delete (downloaded episodes only). */
-    onEpisodeDeleteClick: (MediaItem) -> Unit = {},
-    /**
-     * Per-episode local artwork resolver: returns an on-disk path when the
-     * episode has a downloaded thumbnail, else null (caller falls back to the
-     * server [getImageUrl]). Null disables the local-first lookup.
-     */
-    getEpisodeLocalImagePath: ((MediaItem) -> String?)? = null,
+    persistedSeasonId: String?,
+    getImageUrl: (String) -> String,
+    /** Season-tab, episode-list and mark callbacks (see [SeasonsSectionCallbacks] for the pin/select split). */
+    callbacks: SeasonsSectionCallbacks,
 ) {
-    // ── DEFERRED FOR LOCAL ORIGIN ────────────────────────────────────────────
+    // ── DEFERRED FOR LOCAL ORIGIN (decided in [SeasonsPresentation.from]) ────
     // The following affordances remain ONLINE-ONLY and are deliberately NOT
     // implemented for a local/offline origin:
     //   • hideEpisodeThumbnails / spoiler overlay — local cards always show art
     //     (hiding thumbnails without guaranteed local artwork yields blank tiles).
     //   • skipSpecials (S0 filtering) — local series render every season.
     //   • press-and-hold peek (rememberMediaPeek) — local cards don't peek.
-    // Episode sort order ([episodesDescending]) and its toggle ARE honored for a
-    // local origin: offline episodes load in canonical ascending playback order
-    // (same as online), so reversing to newest-first is a meaningful choice.
+    // Episode sort order ([SeasonsPresentation.episodesDescending]) and its
+    // toggle ARE honored for a local origin: offline episodes load in canonical
+    // ascending playback order (same as online), so reversing to newest-first
+    // is a meaningful choice.
     // ─────────────────────────────────────────────────────────────────────────
+    val seasons = presentation.seasons
+    val episodes = presentation.episodes
     val initialSeasonIndex = SeasonStartResolver.resolveInitialSeasonIndex(
         seasons = seasons,
         smartPlayTarget = smartPlayTarget,
-        currentSeasonId = currentSeasonId,
+        currentSeasonId = presentation.currentSeasonId,
         persistedSeasonId = persistedSeasonId,
     )
     var userSelectedSeasonId by remember(seriesItem.id) { mutableStateOf<String?>(null) }
@@ -198,7 +172,7 @@ internal fun SeasonsSection(
     LaunchedEffect(selectedSeasonIndex, seasons) {
         val season = seasons.getOrNull(selectedSeasonIndex)
         if (season != null) {
-            onSeasonSelected(season.id)
+            callbacks.onSeasonSelected(season.id)
         }
     }
 
@@ -211,7 +185,7 @@ internal fun SeasonsSection(
     val isCompactWidth = LocalAdaptiveInfo.current.windowSizeClass ==
         com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass.Compact
     val useCompactListAvailable = !isTv && isCompactWidth
-    val useCompactList = useCompactListAvailable && compactEpisodeList
+    val useCompactList = useCompactListAvailable && presentation.compactEpisodeList
 
     Column {
         FadingItem {
@@ -242,16 +216,16 @@ internal fun SeasonsSection(
                                 .clip(ShapeCache.smooth16)
                                 .then(layoutFocusState.focusModifier)
                                 .then(Modifier.tvFocusIndicator(layoutFocusState, ShapeCache.smooth16))
-                                .clickable { onCompactEpisodeListChange(!compactEpisodeList) },
-                            color = if (compactEpisodeList) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                                .clickable { callbacks.onCompactEpisodeListChange(!presentation.compactEpisodeList) },
+                            color = if (presentation.compactEpisodeList) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
                             else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
                             contentColor = MaterialTheme.colorScheme.onSurface,
                             shape = ShapeCache.smooth16,
                         ) {
                             Icon(
-                                imageVector = if (compactEpisodeList) Tabler.Outline.LayoutGrid else Tabler.Outline.List,
+                                imageVector = if (presentation.compactEpisodeList) Tabler.Outline.LayoutGrid else Tabler.Outline.List,
                                 contentDescription = stringResource(
-                                    if (compactEpisodeList) Res.string.detail_cd_switch_to_cards
+                                    if (presentation.compactEpisodeList) Res.string.detail_cd_switch_to_cards
                                     else Res.string.detail_cd_switch_to_list
                                 ),
                                 modifier = Modifier.padding(8.dp),
@@ -264,15 +238,15 @@ internal fun SeasonsSection(
                             .clip(ShapeCache.smooth16)
                             .then(sortFocusState.focusModifier)
                             .then(Modifier.tvFocusIndicator(sortFocusState, ShapeCache.smooth16))
-                            .clickable { onEpisodesDescendingChange(!episodesDescending) },
+                            .clickable { callbacks.onEpisodesDescendingChange(!presentation.episodesDescending) },
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
                         contentColor = MaterialTheme.colorScheme.onSurface,
                         shape = ShapeCache.smooth16,
                     ) {
                         Icon(
-                            imageVector = if (episodesDescending) Tabler.Outline.SortDescending2 else Tabler.Outline.SortAscending2,
+                            imageVector = if (presentation.episodesDescending) Tabler.Outline.SortDescending2 else Tabler.Outline.SortAscending2,
                             contentDescription = stringResource(
-                                if (episodesDescending) Res.string.detail_cd_sort_oldest_first
+                                if (presentation.episodesDescending) Res.string.detail_cd_sort_oldest_first
                                 else Res.string.detail_cd_sort_newest_first
                             ),
                             modifier = Modifier.padding(8.dp),
@@ -334,7 +308,7 @@ internal fun SeasonsSection(
                                     // init LaunchedEffect (which calls only
                                     // onSeasonSelected) — so the smart-play /
                                     // default season can't overwrite the pin.
-                                    onSeasonPinned(season.id)
+                                    callbacks.onSeasonPinned(season.id)
                                 },
                                 colors = seasonColors,
                                 shapes = SplitButtonDefaults.leadingButtonShapesFor(containerHeight),
@@ -377,7 +351,7 @@ internal fun SeasonsSection(
                             text = { Text(stringResource(Res.string.detail_mark_season_watched)) },
                             onClick = {
                                 menuExpanded = false
-                                onMarkSeasonPlayed(season.id)
+                                callbacks.onMarkSeasonPlayed(season.id)
                             },
                             leadingIcon = { Icon(Tabler.Outline.Eye, contentDescription = null) },
                         )
@@ -385,7 +359,7 @@ internal fun SeasonsSection(
                             text = { Text(stringResource(Res.string.detail_mark_season_unwatched)) },
                             onClick = {
                                 menuExpanded = false
-                                onMarkSeasonUnplayed(season.id)
+                                callbacks.onMarkSeasonUnplayed(season.id)
                             },
                             leadingIcon = { Icon(Tabler.Outline.EyeOff, contentDescription = null) },
                         )
@@ -432,10 +406,10 @@ internal fun SeasonsSection(
             // Memoize the sort + reverse so a recomposition triggered by an
             // unrelated parent state change (e.g. sibling animation) doesn't
             // re-sort this season's episode list.
-            val currentEpisodes = remember(seasonIdx, episodes, episodesDescending) {
+            val currentEpisodes = remember(seasonIdx, episodes, presentation.episodesDescending) {
                 seasons.getOrNull(seasonIdx)?.let { episodes[it.id] }
                     ?.sortedBy { it.episodeNumber ?: it.indexNumber ?: Int.MAX_VALUE }
-                    ?.let { sorted -> if (episodesDescending) sorted.reversed() else sorted }
+                    ?.let { sorted -> if (presentation.episodesDescending) sorted.reversed() else sorted }
             }
             val currentIsFetched = seasons.getOrNull(seasonIdx)?.id?.let { fetchedSeasonIds.contains(it) } ?: false
             val currentIsLoading = target.isLoading || (currentEpisodes == null && seasons.getOrNull(seasonIdx) != null && !currentIsFetched)
@@ -469,14 +443,14 @@ internal fun SeasonsSection(
                                 CompactEpisodeRow(
                                     episode = episode,
                                     getImageUrl = getImageUrl,
-                                    isCurrentEpisode = episode.id == currentItemId,
-                                    onPlayClick = { onEpisodePlayClick(episode) },
-                                    onDetailClick = { onEpisodeDetailClick(episode) },
-                                    onLongPress = { onEpisodeLongPress(episode) },
-                                    hideThumbnail = hideEpisodeThumbnails,
-                                    isDownloaded = downloadedEpisodeIds?.contains(episode.id) == true,
-                                    onDeleteClick = { onEpisodeDeleteClick(episode) },
-                                    localImagePath = getEpisodeLocalImagePath?.invoke(episode),
+                                    isCurrentEpisode = episode.id == presentation.currentItemId,
+                                    onPlayClick = { callbacks.onEpisodePlayClick(episode) },
+                                    onDetailClick = { callbacks.onEpisodeDetailClick(episode) },
+                                    onLongPress = { callbacks.onEpisodeLongPress(episode) },
+                                    hideThumbnail = presentation.hideEpisodeThumbnails,
+                                    isDownloaded = presentation.downloadedEpisodeIds?.contains(episode.id) == true,
+                                    onDeleteClick = { callbacks.onEpisodeDeleteClick(episode) },
+                                    localImagePath = presentation.episodeLocalImagePaths[episode.id],
                                     sharedThumbnailModifier = episodeThumbSharedModifier(
                                         episodeId = episode.id,
                                         sharedTransitionScope = sharedTransitionScope,
@@ -494,21 +468,21 @@ internal fun SeasonsSection(
                             contentPadding = PaddingValues(horizontal = 24.dp),
                             horizontalArrangement = Arrangement.spacedBy(16.dp),
                             onFocusedIndexChange = { index ->
-                                currentEpisodes.getOrNull(index)?.let(onFocusedEpisodeChange)
+                                currentEpisodes.getOrNull(index)?.let(callbacks.onFocusedEpisodeChange)
                             },
                         ) { _, episode, focusModifier ->
                                 EpisodeCard(
                                     episode = episode,
                                     getImageUrl = getImageUrl,
-                                    isCurrentEpisode = episode.id == currentItemId,
-                                    onPlayClick = { onEpisodePlayClick(episode) },
-                                    onDetailClick = { onEpisodeDetailClick(episode) },
-                                    onLongPress = { onEpisodeLongPress(episode) },
+                                    isCurrentEpisode = episode.id == presentation.currentItemId,
+                                    onPlayClick = { callbacks.onEpisodePlayClick(episode) },
+                                    onDetailClick = { callbacks.onEpisodeDetailClick(episode) },
+                                    onLongPress = { callbacks.onEpisodeLongPress(episode) },
                                     modifier = focusModifier,
-                                    hideThumbnail = hideEpisodeThumbnails,
-                                    isDownloaded = downloadedEpisodeIds?.contains(episode.id) == true,
-                                    onDeleteClick = { onEpisodeDeleteClick(episode) },
-                                    localImagePath = getEpisodeLocalImagePath?.invoke(episode),
+                                    hideThumbnail = presentation.hideEpisodeThumbnails,
+                                    isDownloaded = presentation.downloadedEpisodeIds?.contains(episode.id) == true,
+                                    onDeleteClick = { callbacks.onEpisodeDeleteClick(episode) },
+                                    localImagePath = presentation.episodeLocalImagePaths[episode.id],
                                     sharedThumbnailModifier = episodeThumbSharedModifier(
                                         episodeId = episode.id,
                                         sharedTransitionScope = sharedTransitionScope,
@@ -644,7 +618,17 @@ internal fun EpisodeCard(
 
     // Virtual (missing/unaired) episodes dim like watched ones: the row is a
     // placeholder, not playable content, so it recedes behind real episodes.
-    val isDimmed = episode.isDimmedInRow
+    // The whole watch-state decision set (dim, overlays, tags, meta lines)
+    // folds once here and is shared verbatim with the compact row — see
+    // [EpisodeRowPresentation].
+    val cardPrefs = com.raulshma.jellyplay.core.ui.components.LocalCardDisplayPreferences.current
+    val presentation = EpisodeRowPresentation.from(
+        episode = episode,
+        hideThumbnail = hideThumbnail,
+        isDownloaded = isDownloaded,
+        showWatchedCheckmark = cardPrefs.showWatchedCheckmark,
+    )
+    val isDimmed = presentation.isDimmed
 
     Column(
         modifier = modifier
@@ -679,41 +663,23 @@ internal fun EpisodeCard(
                 .then(sharedThumbnailModifier),
             contentAlignment = Alignment.Center,
         ) {
-            if (!hideThumbnail) {
-                MediaImage(
-                    url = episodeImageUrl,
-                    contentDescription = episode.name,
-                    blurHash = episode.blurHashes.primary,
-                    // Episode thumbnails render up to ~480 dp wide × 16:9. Decode a
-                    // right-sized bitmap (4–8 cards compose simultaneously).
-                    size = coil3.size.Size(640, 360),
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .playedAlpha(isDimmed, PLAYED_THUMBNAIL_ALPHA),
-                    contentScale = ContentScale.Crop,
-                )
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(episodeScrimColor(isDimmed))
+            if (presentation.showSpoilerPlaceholder) {
+                EpisodeSpoilerPlaceholder(
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.fillMaxSize(),
                 )
             } else {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(MaterialTheme.colorScheme.surfaceVariant),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        text = stringResource(Res.string.detail_spoiler),
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+                EpisodeThumbArt(
+                    url = episodeImageUrl,
+                    episode = episode,
+                    isDimmed = presentation.isDimmed,
+                    decodeSize = coil3.size.Size(640, 360),
+                    modifier = Modifier.fillMaxSize(),
+                )
             }
             // No play affordance on a virtual episode — there is no file to
             // play behind it (detail navigation stays available).
-            if (!episode.isVirtual) {
+            if (presentation.showPlayAffordance) {
                 EpisodePlayAffordance(
                     playScale = playScale,
                     interactionSource = playInteractionSource,
@@ -726,7 +692,7 @@ internal fun EpisodeCard(
 
             // Missing/unaired badge — the virtual episode's own state marker,
             // top-start so it never collides with the watched tag or progress.
-            if (episode.isVirtual) {
+            if (presentation.showVirtualBadge) {
                 VirtualEpisodeBadge(
                     episode = episode,
                     modifier = Modifier
@@ -735,8 +701,8 @@ internal fun EpisodeCard(
                 )
             }
 
-            if (episode.hasWatchProgress) {
-                val progress = episode.progressFraction() ?: 0f
+            if (presentation.hasWatchProgress) {
+                val progress = presentation.progressFraction ?: 0f
                 MediaCardProgressOverlay(
                     progressFraction = progress,
                     modifier = Modifier
@@ -744,17 +710,14 @@ internal fun EpisodeCard(
                         .fillMaxWidth(progress),
                     trackColor = null,
                 )
-            } else if (episode.isPlayed) {
-                Box(
+            } else if (presentation.showPlayedBar) {
+                EpisodePlayedBar(
                     modifier = Modifier
                         .align(Alignment.BottomStart)
-                        .fillMaxWidth()
-                        .height(3.dp)
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.7f))
+                        .fillMaxWidth(),
                 )
             }
-            val cardPrefs = com.raulshma.jellyplay.core.ui.components.LocalCardDisplayPreferences.current
-            if (episode.isPlayed && cardPrefs.showWatchedCheckmark) {
+            if (presentation.showWatchedTag) {
                 com.raulshma.jellyplay.core.ui.components.EpisodeWatchedTag(
                     label = stringResource(Res.string.detail_watched_badge),
                     modifier = Modifier
@@ -768,7 +731,7 @@ internal fun EpisodeCard(
             // episode-id set or the local origin). Online episodes never show
             // this (downloading stays in `SeriesDownloadSheet`), and a virtual
             // episode has no file on disk to delete either.
-            if (isDownloaded && !episode.isVirtual) {
+            if (presentation.showDeleteAffordance) {
                 val deleteFocusState = rememberTvFocusState(focusedScale = 1.1f)
                 Box(
                     modifier = Modifier
@@ -801,71 +764,13 @@ internal fun EpisodeCard(
                 .padding(16.dp)
                 .playedAlpha(isDimmed, PLAYED_META_ALPHA),
         ) {
-            Text(
-                text = buildString {
-                    episode.indexNumber?.let { append("$it. ") }
-                    append(episode.name)
-                },
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+            EpisodeMetaLines(
+                episode = episode,
+                presentation = presentation,
+                titleStyle = MaterialTheme.typography.titleMedium,
+                metaStyle = MaterialTheme.typography.labelMedium,
+                runtimeTopPadding = 4.dp,
             )
-            val runtimeTicks = episode.runTimeTicks
-            val positionTicks = episode.playbackPositionTicks
-            val hasWatchProgress = episode.hasWatchProgress
-            val remainingTime = if (hasWatchProgress && runtimeTicks != null && positionTicks != null) {
-                formatRemainingTimeFromTicks(runtimeTicks, positionTicks)
-            } else null
-            val totalTime = if (runtimeTicks != null) {
-                formatDurationFromTicks(runtimeTicks)
-            } else null
-
-            if (remainingTime != null && totalTime != null) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    modifier = Modifier.padding(top = 4.dp)
-                ) {
-                    Text(
-                        text = stringResource(Res.string.detail_time_left_format, remainingTime),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                    Text(
-                        text = "•",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.outlineVariant,
-                    )
-                    Text(
-                        text = totalTime,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            } else if (totalTime != null) {
-                Text(
-                    text = totalTime,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 4.dp)
-                )
-            }
-
-            // Last-watched relative timestamp (e.g. "2d ago"). Ports the offline
-            // card's lastPlayedDate line so the field is not lost in the unified
-            // card. Shown when the episode has any watch activity and the relative
-            // formatter could parse the stored timestamp.
-            val lastWatched = remember(episode.lastPlayedDate) { formatRelativeTime(episode.lastPlayedDate) }
-            if (lastWatched != null && (episode.isPlayed || (positionTicks != null && positionTicks > 0))) {
-                Text(
-                    text = lastWatched,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 2.dp),
-                )
-            }
             episode.overview?.takeIf { it.isNotBlank() }?.let { overview ->
                 Spacer(Modifier.height(8.dp))
                 Text(
@@ -889,7 +794,9 @@ internal fun EpisodeCard(
  * "Xm left") on the right. Mirrors the [EpisodeCard] semantics — tap opens the
  * episode detail screen, long-press peeks — but trades the wide-card horizontal
  * scroller for vertical scrolling, which is more natural on a phone and lets the
- * watched tag pop while quickly swiping through a season.
+ * watched tag pop while quickly swiping through a season. Both layouts read the
+ * same [EpisodeRowPresentation] fold, so the watch-state decisions are shared
+ * verbatim and only the geometry differs.
  *
  * No per-episode download/delete: online episodes have no delete action
  * (downloading stays in `SeriesDownloadSheet`), matching [EpisodeCard]. A
@@ -929,8 +836,16 @@ private fun CompactEpisodeRow(
     val episodeImageUrl = remember(episode.id, localImagePath) {
         localImagePath ?: getImageUrl(episode.id)
     }
-    // Virtual (missing/unaired) episodes dim like watched ones — see EpisodeCard.
-    val isDimmed = episode.isDimmedInRow
+    // Same watch-state fold as EpisodeCard — dim/overlays/tags/meta lines all
+    // come from [EpisodeRowPresentation] so the two layouts can't drift.
+    val cardPrefs = com.raulshma.jellyplay.core.ui.components.LocalCardDisplayPreferences.current
+    val presentation = EpisodeRowPresentation.from(
+        episode = episode,
+        hideThumbnail = hideThumbnail,
+        isDownloaded = isDownloaded,
+        showWatchedCheckmark = cardPrefs.showWatchedCheckmark,
+    )
+    val isDimmed = presentation.isDimmed
 
     // Press-and-hold "peek" preview; mirrors EpisodeCard.
     val peek = rememberMediaPeek(
@@ -966,38 +881,22 @@ private fun CompactEpisodeRow(
                 .then(sharedThumbnailModifier),
             contentAlignment = Alignment.Center,
         ) {
-            if (!hideThumbnail) {
-                MediaImage(
-                    url = episodeImageUrl,
-                    contentDescription = episode.name,
-                    blurHash = episode.blurHashes.primary,
-                    size = coil3.size.Size(256, 144),
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .playedAlpha(isDimmed, PLAYED_THUMBNAIL_ALPHA),
-                    contentScale = ContentScale.Crop,
-                )
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(episodeScrimColor(isDimmed))
+            if (presentation.showSpoilerPlaceholder) {
+                EpisodeSpoilerPlaceholder(
+                    style = MaterialTheme.typography.labelSmall,
+                    modifier = Modifier.fillMaxSize(),
                 )
             } else {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(MaterialTheme.colorScheme.surfaceVariant),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        text = stringResource(Res.string.detail_spoiler),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+                EpisodeThumbArt(
+                    url = episodeImageUrl,
+                    episode = episode,
+                    isDimmed = presentation.isDimmed,
+                    decodeSize = coil3.size.Size(256, 144),
+                    modifier = Modifier.fillMaxSize(),
+                )
             }
             // No play affordance on a virtual episode — see EpisodeCard.
-            if (!episode.isVirtual) {
+            if (presentation.showPlayAffordance) {
                 EpisodePlayAffordance(
                     playScale = playScale,
                     interactionSource = playInteractionSource,
@@ -1010,7 +909,7 @@ private fun CompactEpisodeRow(
 
             // Missing/unaired badge — top-start so it never collides with the
             // watched tag or progress overlay.
-            if (episode.isVirtual) {
+            if (presentation.showVirtualBadge) {
                 VirtualEpisodeBadge(
                     episode = episode,
                     modifier = Modifier
@@ -1019,8 +918,8 @@ private fun CompactEpisodeRow(
                 )
             }
 
-            if (episode.hasWatchProgress) {
-                val progress = episode.progressFraction() ?: 0f
+            if (presentation.hasWatchProgress) {
+                val progress = presentation.progressFraction ?: 0f
                 Box(
                     modifier = Modifier
                         .align(Alignment.BottomStart)
@@ -1028,17 +927,14 @@ private fun CompactEpisodeRow(
                         .height(3.dp)
                         .background(MaterialTheme.colorScheme.primary)
                 )
-            } else if (episode.isPlayed) {
-                Box(
+            } else if (presentation.showPlayedBar) {
+                EpisodePlayedBar(
                     modifier = Modifier
                         .align(Alignment.BottomStart)
-                        .fillMaxWidth()
-                        .height(3.dp)
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.7f))
+                        .fillMaxWidth(),
                 )
             }
-            val cardPrefs = com.raulshma.jellyplay.core.ui.components.LocalCardDisplayPreferences.current
-            if (episode.isPlayed && cardPrefs.showWatchedCheckmark) {
+            if (presentation.showWatchedTag) {
                 com.raulshma.jellyplay.core.ui.components.EpisodeWatchedTag(
                     label = stringResource(Res.string.detail_watched_badge),
                     modifier = Modifier
@@ -1054,76 +950,20 @@ private fun CompactEpisodeRow(
                 .padding(horizontal = 12.dp, vertical = 8.dp)
                 .playedAlpha(isDimmed, PLAYED_META_ALPHA),
         ) {
-            Text(
-                text = buildString {
-                    episode.indexNumber?.let { append("$it. ") }
-                    append(episode.name)
-                },
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+            EpisodeMetaLines(
+                episode = episode,
+                presentation = presentation,
+                titleStyle = MaterialTheme.typography.titleSmall,
+                metaStyle = MaterialTheme.typography.labelSmall,
+                runtimeTopPadding = 2.dp,
             )
-            val runtimeTicks = episode.runTimeTicks
-            val positionTicks = episode.playbackPositionTicks
-            val hasWatchProgress = episode.hasWatchProgress
-            val remainingTime = if (hasWatchProgress && runtimeTicks != null && positionTicks != null) {
-                formatRemainingTimeFromTicks(runtimeTicks, positionTicks)
-            } else null
-            val totalTime = if (runtimeTicks != null) {
-                formatDurationFromTicks(runtimeTicks)
-            } else null
-
-            if (remainingTime != null && totalTime != null) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    modifier = Modifier.padding(top = 2.dp)
-                ) {
-                    Text(
-                        text = stringResource(Res.string.detail_time_left_format, remainingTime),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                    Text(
-                        text = "•",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.outlineVariant,
-                    )
-                    Text(
-                        text = totalTime,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            } else if (totalTime != null) {
-                Text(
-                    text = totalTime,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 2.dp)
-                )
-            }
-
-            // Last-watched relative timestamp — ports the offline compact row's
-            // lastPlayedDate line so the field is not lost in the unified card.
-            val lastWatched = remember(episode.lastPlayedDate) { formatRelativeTime(episode.lastPlayedDate) }
-            if (lastWatched != null && (episode.isPlayed || (positionTicks != null && positionTicks > 0))) {
-                Text(
-                    text = lastWatched,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 2.dp),
-                )
-            }
         }
 
         // Per-episode delete (downloaded episodes only). Sits at the trailing
         // edge of the row rather than overlaid on the thumbnail (as on the card)
         // — the compact row has room for a dedicated affordance. Mirrors the
         // offline compact row. A virtual episode has no on-disk file to delete.
-        if (isDownloaded && !episode.isVirtual) {
+        if (presentation.showDeleteAffordance) {
             val deleteFocusState = rememberTvFocusState(focusedScale = 1.1f)
             Box(
                 modifier = Modifier
@@ -1167,6 +1007,153 @@ private fun episodeScrimColor(isPlayed: Boolean): Color =
 /** Applies [alpha] only when [isPlayed], leaving unplayed cards untouched. */
 private fun Modifier.playedAlpha(isPlayed: Boolean, alpha: Float): Modifier =
     if (isPlayed) graphicsLayer { this.alpha = alpha } else this
+// endregion
+
+// region Shared episode-row leaves
+// Leaf pieces the two episode layouts (EpisodeCard, CompactEpisodeRow) render
+// identically; the layouts pass their own type scale / paddings / decode
+// budget and keep their geometry. Every decision feeding them lives in
+// [EpisodeRowPresentation], so the two layouts cannot drift on watch-state
+// semantics — only on chrome.
+
+/**
+ * The episode row's artwork: image + the watched-dim scrim pair. Shared by
+ * both layouts — they differ only in the decode budget ([decodeSize]).
+ */
+@Composable
+private fun EpisodeThumbArt(
+    url: String,
+    episode: MediaItem,
+    isDimmed: Boolean,
+    decodeSize: coil3.size.Size,
+    modifier: Modifier = Modifier,
+) {
+    MediaImage(
+        url = url,
+        contentDescription = episode.name,
+        blurHash = episode.blurHashes.primary,
+        // Episode thumbnails render up to ~480 dp wide × 16:9. Decode a
+        // right-sized bitmap (4–8 cards compose simultaneously).
+        size = decodeSize,
+        modifier = modifier.playedAlpha(isDimmed, PLAYED_THUMBNAIL_ALPHA),
+        contentScale = ContentScale.Crop,
+    )
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(episodeScrimColor(isDimmed))
+    )
+}
+
+/**
+ * Spoiler-safe placeholder rendered instead of artwork when thumbnails are
+ * hidden. Both layouts show it at full thumbnail size; only the type scale
+ * differs.
+ */
+@Composable
+private fun EpisodeSpoilerPlaceholder(
+    style: TextStyle,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier
+            .background(MaterialTheme.colorScheme.surfaceVariant),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = stringResource(Res.string.detail_spoiler),
+            style = style,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/** The 3-dp watched bar under the thumbnail (a fully-played episode without a progress overlay). */
+@Composable
+private fun EpisodePlayedBar(modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .height(3.dp)
+            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.7f))
+    )
+}
+
+/**
+ * The episode row's metadata stack — title ("N. Name"), the runtime line
+ * ("Xm left • 42m", or a bare "42m"), and the last-watched relative
+ * timestamp. Shared by [EpisodeCard] and [CompactEpisodeRow]; the caller
+ * picks the type scale and the runtime line's top padding (the only
+ * per-layout differences) and keeps its own column padding/geometry.
+ * Extension on [ColumnScope] so the texts join the caller's column directly
+ * (no wrapper node between them).
+ */
+@Composable
+private fun ColumnScope.EpisodeMetaLines(
+    episode: MediaItem,
+    presentation: EpisodeRowPresentation,
+    titleStyle: TextStyle,
+    metaStyle: TextStyle,
+    runtimeTopPadding: Dp,
+) {
+    Text(
+        text = buildString {
+            episode.indexNumber?.let { append("$it. ") }
+            append(episode.name)
+        },
+        style = titleStyle,
+        fontWeight = FontWeight.Bold,
+        color = MaterialTheme.colorScheme.onSurface,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+    )
+    val remainingTime = presentation.remainingTime
+    val totalTime = presentation.totalTime
+    if (remainingTime != null && totalTime != null) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            modifier = Modifier.padding(top = runtimeTopPadding)
+        ) {
+            Text(
+                text = stringResource(Res.string.detail_time_left_format, remainingTime),
+                style = metaStyle,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            Text(
+                text = "•",
+                style = metaStyle,
+                color = MaterialTheme.colorScheme.outlineVariant,
+            )
+            Text(
+                text = totalTime,
+                style = metaStyle,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    } else if (totalTime != null) {
+        Text(
+            text = totalTime,
+            style = metaStyle,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = runtimeTopPadding)
+        )
+    }
+
+    // Last-watched relative timestamp (e.g. "2d ago"). Ports the offline
+    // card's lastPlayedDate line so the field is not lost in the unified
+    // card. Shown when the episode has any watch activity (the fold's
+    // [EpisodeRowPresentation.showLastWatched] gate) and the relative
+    // formatter could parse the stored timestamp.
+    val lastWatched = remember(episode.lastPlayedDate) { formatRelativeTime(episode.lastPlayedDate) }
+    if (lastWatched != null && presentation.showLastWatched) {
+        Text(
+            text = lastWatched,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 2.dp),
+        )
+    }
+}
 // endregion
 
 // region Virtual (missing/unaired) episode badge
@@ -1232,14 +1219,6 @@ private fun MissingEpisodeTag(
         }
     }
 }
-
-/**
- * An episode row renders dimmed when played or virtual (missing/unaired): a
- * virtual row is a placeholder, not playable content, so it recedes behind
- * real episodes like a watched one does.
- */
-private val MediaItem.isDimmedInRow: Boolean
-    get() = isPlayed || isVirtual
 
 /**
  * The in-thumbnail play affordance shared by both episode-row layouts; they

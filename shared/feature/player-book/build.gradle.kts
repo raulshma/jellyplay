@@ -1,5 +1,3 @@
-import org.gradle.api.plugins.ExtensionAware
-
 plugins {
     id("jellyplay.kmp.library.compose")
 }
@@ -35,26 +33,6 @@ kotlin {
             // okio.Path is the commonMain file handle the document/opener
             // seams pass around.
             implementation(libs.okio)
-            // JetBrains CMP distribution (see catalog note): Android targets
-            // redirect to the androidx artifacts.
-            implementation(libs.jb.compose.runtime)
-            implementation(libs.jb.compose.ui)
-            implementation(libs.jb.compose.foundation)
-            implementation(libs.jb.compose.animation)
-            implementation(libs.jb.compose.material3)
-            // Compose-resources runtime (stringResource/StringResource API).
-            implementation(compose.components.resources)
-            implementation(libs.tabler.icons.outline)
-            implementation(libs.tabler.icons.filled)
-            // Nav3 ships KMP variants from google maven directly — no mirror.
-            implementation(libs.navigation3.runtime)
-            implementation(libs.navigation3.ui)
-            implementation(libs.lifecycle.viewmodel)
-            implementation(libs.lifecycle.runtime.compose)
-            // Koin owns the book-reader ViewModel (one framework per type).
-            implementation(libs.koin.core)
-            implementation(libs.koin.compose)
-            implementation(libs.koin.compose.viewmodel)
         }
         getByName("jvmShared").dependencies {
             // Plain GET streaming for the reader cache (BookContentResolver).
@@ -97,8 +75,12 @@ kotlin {
     }
 }
 
-// `compose.resources` is a nested extension with no generated Kotlin-DSL
-// accessor; configure it explicitly. Generated accessors land in
-// `...feature.book.generated.resources`.
-val composeResources = (compose as ExtensionAware).extensions.getByName("resources") as org.jetbrains.compose.resources.ResourcesExtension
-composeResources.packageOfResClass = "com.raulshma.jellyplay.feature.book.generated.resources"
+// The convention plugin derives `compose.resources.packageOfResClass` from the
+// module path (`...feature.player.book.generated.resources`), but this
+// module's legacy Res package predates that convention: the generated
+// accessors land in `...feature.book.generated.resources` (the legacy module
+// had already collapsed the `player` segment — the namespace carries the same
+// legacy shape). Explicit override:
+jellyplay {
+    resPackage = "com.raulshma.jellyplay.feature.book.generated.resources"
+}

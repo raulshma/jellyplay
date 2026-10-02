@@ -43,7 +43,7 @@ private class StubPlaylist {
 }
 
 /**
- * The manager's pre-warm lookahead ([AudioPlaybackManager]'s private
+ * The mirror's pre-warm lookahead ([QueuePlaylistMirror]'s
  * PREWARM_LOOKAHEAD_ITEMS) — pinned here so the window tests assert the
  * exact mirrored prefix the production constant produces.
  */
@@ -165,10 +165,12 @@ class AudioPlaybackManagerQueueSemanticsTest {
         val scope = CoroutineScope(SupervisorJob() + StandardTestDispatcher(scheduler))
         val player: ExoPlayer = stubPlayer(playlist)
 
-        val manager: AudioPlaybackManager = AudioPlaybackManager(
-            context = ApplicationProvider.getApplicationContext(),
-            mediaCollectionReads = mockk(relaxed = true),
-            mediaRepository = mockk(relaxed = true) {
+        // Shared collaborators the manager AND its DI-hoisted
+        // [AudioLibraryBrowser] both read (since the constructor diet the
+        // browser is a ctor param — the harness constructs it over the same
+        // mocks, exactly the production Koin shape).
+        private val mediaRepository: com.raulshma.jellyplay.core.data.repository.MediaRepository =
+            mockk(relaxed = true) {
                 // Real Result values (value classes cannot be proxied): the
                 // resolve ladder fails and buildPlayableMediaItem falls to
                 // the local-source arm stubbed below (unless the harness was
@@ -177,14 +179,13 @@ class AudioPlaybackManagerQueueSemanticsTest {
                     detail?.let { Result.success(it) }
                         ?: Result.failure(RuntimeException("test"))
                 coEvery { getMediaDetail(any()) } returns detailResult
-            },
-            musicCatalogue = mockk(relaxed = true),
-            playlistRepository = mockk(relaxed = true),
-            playbackRepository = mockk(relaxed = true),
-            imageUrlProvider = mockk(relaxed = true),
-            downloadRepository = mockk(relaxed = true),
-            offlineRepository = mockk(relaxed = true),
-            playbackSourceResolver = mockk(relaxed = true) {
+            }
+        private val playbackRepository: com.raulshma.jellyplay.core.data.repository.PlaybackRepository =
+            mockk(relaxed = true)
+        private val imageUrlProvider: com.raulshma.jellyplay.core.data.util.ImageUrlProvider =
+            mockk(relaxed = true)
+        private val playbackSourceResolver: PlaybackSourceResolver =
+            mockk(relaxed = true) {
                 coEvery { resolveLocalSource(any()) } answers {
                     val itemId = firstArg<String>()
                     ResolvedPlaybackSource.Local(
@@ -196,14 +197,35 @@ class AudioPlaybackManagerQueueSemanticsTest {
                         offlineItem = null,
                     )
                 }
-            },
+            }
+
+        private val libraryBrowser = AudioLibraryBrowser(
+            scope = scope,
+            mediaRepository = mediaRepository,
+            musicCatalogue = mockk(relaxed = true),
+            mediaCollectionReads = mockk(relaxed = true),
+            playlistRepository = mockk(relaxed = true),
+            downloadRepository = mockk(relaxed = true),
+            playbackRepository = playbackRepository,
+            imageUrlProvider = imageUrlProvider,
+            playbackSourceResolver = playbackSourceResolver,
+            streamingQualityProvider = { com.raulshma.jellyplay.core.model.StreamingQuality.AUTO },
+            adaptiveBitrateSelector = mockk(relaxed = true),
+        )
+
+        val manager: AudioPlaybackManager = AudioPlaybackManager(
+            context = ApplicationProvider.getApplicationContext(),
+            libraryBrowser = libraryBrowser,
+            mediaRepository = mediaRepository,
+            playbackRepository = playbackRepository,
+            imageUrlProvider = imageUrlProvider,
+            playbackSourceResolver = playbackSourceResolver,
             sessionManager = mockk(relaxed = true),
             audioStore = mockk(relaxed = true),
             audioEffectsStore = mockk(relaxed = true),
             playbackStore = mockk(relaxed = true),
             queuePersistenceHelper = mockk(relaxed = true),
             bandwidthMonitor = mockk(relaxed = true),
-            adaptiveBitrateSelector = mockk(relaxed = true),
             bandwidthInterceptor = mockk(relaxed = true),
             lyricsManager = mockk(relaxed = true),
             effectsProcessor = mockk(relaxed = true) {

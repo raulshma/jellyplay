@@ -97,7 +97,7 @@ import com.composables.icons.tabler.outline.*
  * screen keeps its own scaffolding (the load ladder itself still rides the
  * chassis via [PlaylistsViewModel]'s [SimpleListCollection]). The browse
  * tab's playlists page is the one that renders the shared
- * [com.raulshma.jellyplay.feature.music.components.SimpleCollectionGrid].
+ * [com.raulshma.jellyplay.core.ui.components.SimpleCollectionGrid].
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

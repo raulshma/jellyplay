@@ -39,14 +39,23 @@ class DesktopPdfDocument private constructor(
         if (pageIndex !in 0 until pageCount) return null
         pageSizes[pageIndex]?.let { return it }
         return withContext(Dispatchers.IO) {
-            synchronized(renderLock) {
-                runCatching {
-                    val box = document.getPage(pageIndex).mediaBox
-                    Size(box.width, box.height).also { pageSizes[pageIndex] = it }
-                }.getOrNull()
-            }
+            pageSizeLocked(pageIndex)
         }
     }
+
+    /**
+     * The pure page-box read — non-suspend on purpose (the ratchet keeps bare
+     * runCatching out of suspend bodies, the [renderPageLocked] precedent):
+     * a read failure maps to null, the same cannot-open contract [open]
+     * hands back.
+     */
+    private fun pageSizeLocked(pageIndex: Int): Size? =
+        synchronized(renderLock) {
+            runCatching {
+                val box = document.getPage(pageIndex).mediaBox
+                Size(box.width, box.height).also { pageSizes[pageIndex] = it }
+            }.getOrNull()
+        }
 
     override suspend fun renderPage(pageIndex: Int, widthPx: Int): ImageBitmap? =
         withContext(Dispatchers.IO) {

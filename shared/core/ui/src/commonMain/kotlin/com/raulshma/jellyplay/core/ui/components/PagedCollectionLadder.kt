@@ -9,11 +9,11 @@ import androidx.paging.compose.LazyPagingItems
 /**
  * The shared paged-collection ladder chassis: the phase vocabulary, the pure
  * refresh/append rung decisions and the header-status derivations that every
- * paged collection screen renders through. Promoted verbatim from the music
- * module's `PagedGrid.kt`, which keeps the geometry composables (PagedGrid/
- * PagedList/SimpleCollectionGrid — the music grid styling) and composes them
- * on top of these decisions; the hand-rolled loadState ladders in the library/
- * search/photos screens render the same rungs directly.
+ * paged collection screen renders through. Promoted from the music module's
+ * `PagedGrid.kt`; the renderer trio built on these decisions
+ * ([PagedCollectionGrid]/[PagedCollectionList]/[SimpleCollectionGrid] — see
+ * `PagedCollectionGrid.kt`) lives beside it, and screens whose body is not a
+ * plain grid (view-mode swaps, grouped content) render these rungs directly.
  */
 
 /**

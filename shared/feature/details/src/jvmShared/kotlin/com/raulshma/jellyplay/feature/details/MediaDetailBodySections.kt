@@ -956,61 +956,39 @@ internal fun DetailSeasonsSection(
         val showSeasons = showsSeasonTree(item.mediaType) && state.seasons.isNotEmpty()
         if (showSeasons) {
             CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
-                // Episode-card preferences: hideEpisodeThumbnails and skipSpecials
-                // are neutralized for a LOCAL origin (see MediaDetailSeasons
-                // "DEFERRED FOR LOCAL ORIGIN") — local cards always show art
-                // (hiding without guaranteed local artwork yields blank tiles)
-                // and render every season. Episode sort ([episodesDescending])
-                // IS honored for a local origin since offline episodes load in
-                // canonical ascending playback order, same as online.
-                val effectiveSkipSpecials = !isLocalOrigin && state.preferences.skipSpecials
-                val effectiveHideThumbnails = !isLocalOrigin && state.preferences.hideEpisodeThumbnails
-                val effectiveEpisodesDescending = state.preferences.episodesDescending
-                // Memoize the skip-specials filter so it is not recomputed (allocating
-                // a new Map + per-season Lists) on every recomposition of this
-                // detail item (scroll-driven FadingItem animations, sibling
-                // sections animating). Only re-runs when episodes or the
-                // skipSpecials flag actually change.
-                val filteredEpisodes = remember(state.episodes, effectiveSkipSpecials) {
-                    if (effectiveSkipSpecials) {
-                        state.episodes.mapValues { (_, eps) -> eps.filter { it.seasonNumber != 0 } }
-                    } else {
-                        state.episodes
-                    }
+                // The section's presentation (skip-specials filter + hide-
+                // thumbnails neutralization for a LOCAL origin, the downloaded-
+                // episode three-way fold, the SEASON entry filter, the
+                // current-item/current-season pair — see SeasonsPresentation)
+                // folds once here. Memoized on exactly the inputs that feed it
+                // so it is not recomputed (allocating a new Map + per-season
+                // Lists) on every recomposition of this detail item
+                // (scroll-driven FadingItem animations, sibling sections
+                // animating).
+                val presentation = remember(
+                    state.seasons,
+                    state.episodes,
+                    state.preferences,
+                    state.downloadedEpisodeIds,
+                    state.assets,
+                    item.id,
+                    item.mediaType,
+                    item.seasonId,
+                    isLocalOrigin,
+                ) {
+                    SeasonsPresentation.from(state, item, isLocalOrigin)
                 }
-                val downloadedEpisodeIds = remember(isLocalOrigin, state.episodes, state.downloadedEpisodeIds) {
-                    when {
-                        isLocalOrigin -> state.episodes.values.flatten().map { it.id }.toSet()
-                        state.downloadedEpisodeIds.isNotEmpty() -> state.downloadedEpisodeIds
-                        else -> null
-                    }
-                }
-                // A SEASON entry carries the parent series' whole snapshot (the
-                // resolver loads it through seriesIdForDetail), but the page IS
-                // the entry season: render only its tab so the tree matches the
-                // header ("Season 5" shows Season 5's episodes, not every
-                // sibling season's).
-                val entrySeasons = if (item.mediaType == MediaType.SEASON) {
-                    state.seasons.filter { it.id == item.id }
-                } else {
-                    state.seasons
-                }
-                SeasonsSection(
-                    seriesItem = item,
-                    seasons = entrySeasons,
-                    episodes = filteredEpisodes,
-                    fetchedSeasonIds = state.fetchedSeasonIds,
-                    smartPlayTarget = state.smartPlayTarget,
-                    getImageUrl = callbacks.artwork.getImageUrl,
-                    currentItemId = if (item.mediaType == MediaType.EPISODE) item.id else null,
-                    // SEASON preselects its own tab; EPISODE anchors the tab its
-                    // episode belongs to (both feed SeasonStartResolver).
-                    currentSeasonId = when (item.mediaType) {
-                        MediaType.EPISODE -> item.seasonId
-                        MediaType.SEASON -> item.id
-                        else -> null
-                    },
-                    persistedSeasonId = state.persistedSeasonId,
+                // The section-level callback bundle: the screen-level seasons
+                // bundle plus the episode interactions, which the screen
+                // bundles express one level up (play dispatch, item
+                // navigation, quick-action intake, per-episode delete).
+                val sectionCallbacks = SeasonsSectionCallbacks(
+                    onSeasonSelected = callbacks.seasons.onSeasonSelected,
+                    onSeasonPinned = callbacks.seasons.onSeasonPinned,
+                    onEpisodesDescendingChange = callbacks.seasons.onEpisodesDescendingChange,
+                    onCompactEpisodeListChange = callbacks.seasons.onCompactEpisodeListChange,
+                    onMarkSeasonPlayed = callbacks.seasons.onMarkSeasonPlayed,
+                    onMarkSeasonUnplayed = callbacks.seasons.onMarkSeasonUnplayed,
                     onEpisodePlayClick = { episode ->
                         val sourceId = null
                         val startPos = episode.playbackPositionTicks ?: 0L
@@ -1021,25 +999,16 @@ internal fun DetailSeasonsSection(
                     },
                     onEpisodeLongPress = callbacks.screen.onMediaQuickActions,
                     onFocusedEpisodeChange = callbacks.screen.onFocusedMediaItem,
-                    onSeasonSelected = callbacks.seasons.onSeasonSelected,
-                    onSeasonPinned = callbacks.seasons.onSeasonPinned,
-                    hideEpisodeThumbnails = effectiveHideThumbnails,
-                    episodesDescending = effectiveEpisodesDescending,
-                    onEpisodesDescendingChange = callbacks.seasons.onEpisodesDescendingChange,
-                    compactEpisodeList = state.preferences.compactEpisodeList,
-                    onCompactEpisodeListChange = callbacks.seasons.onCompactEpisodeListChange,
-                    onMarkSeasonPlayed = callbacks.seasons.onMarkSeasonPlayed,
-                    onMarkSeasonUnplayed = callbacks.seasons.onMarkSeasonUnplayed,
-                    // ── Episode parity: per-episode delete + local artwork ──
-                    // Downloaded-episode set: for a LOCAL origin every episode is
-                    // downloaded; for a REMOTE series we surface the loaded
-                    // downloadedEpisodeIds (populated when the download sheet
-                    // opened) so the trash badge matches the on-disk truth.
-                    downloadedEpisodeIds = downloadedEpisodeIds,
                     onEpisodeDeleteClick = { episode -> callbacks.download.onDeleteEpisode(episode.id) },
-                    // Resolve a downloaded episode thumbnail from DetailAssets before
-                    // falling back to the server image url (which won't load offline).
-                    getEpisodeLocalImagePath = { episode -> state.assets.episodeImages[episode.id] },
+                )
+                SeasonsSection(
+                    presentation = presentation,
+                    seriesItem = item,
+                    smartPlayTarget = state.smartPlayTarget,
+                    fetchedSeasonIds = state.fetchedSeasonIds,
+                    persistedSeasonId = state.persistedSeasonId,
+                    getImageUrl = callbacks.artwork.getImageUrl,
+                    callbacks = sectionCallbacks,
                 )
             }
         }

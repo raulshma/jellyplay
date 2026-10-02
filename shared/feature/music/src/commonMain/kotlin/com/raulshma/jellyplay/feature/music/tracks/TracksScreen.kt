@@ -17,7 +17,7 @@ import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.formatDurationMs
 import com.raulshma.jellyplay.feature.music.collection.MusicCollectionKind
 import com.raulshma.jellyplay.feature.music.components.MusicSortMenuButton
-import com.raulshma.jellyplay.feature.music.components.PagedList
+import com.raulshma.jellyplay.core.ui.components.PagedCollectionList
 import com.raulshma.jellyplay.feature.music.components.TrackRow
 import com.raulshma.jellyplay.core.ui.components.rememberPagedCollectionStatus
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
@@ -25,12 +25,13 @@ import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.feature.music.generated.resources.Res
 import com.raulshma.jellyplay.feature.music.generated.resources.music_tracks
+import com.raulshma.jellyplay.feature.music.generated.resources.music_failed_load_more
 
 /**
  * Standalone tracks route — a thin adapter over the collection chassis:
  * [MusicCollectionKind.TRACKS] supplies the declared sort set and
- * empty/error presentation, the chassis list variant [PagedList] supplies the
- * ladder (including the TV focus-on-launch grab via [PagedList.tvInitialFocusTag]
+ * empty/error presentation, the chassis list variant [PagedCollectionList] supplies the
+ * ladder (including the TV focus-on-launch grab via [PagedCollectionList.tvInitialFocusTag]
  * — kept from the former standalone screen), and the screen keeps only its scaffold
  * chrome and the track-row factory, whose play-all / add-to-queue lambdas are
  * the tracks-only commands ([TracksViewModel]).
@@ -63,13 +64,14 @@ fun TracksScreen(
             )
         },
     ) { _ ->
-        PagedList(
+        PagedCollectionList(
             items = tracks,
             itemKey = { it.id },
             contentPadding = PaddingValues(
                 top = 8.dp,
                 bottom = adaptiveInfo.bottomPadding(isTv),
             ),
+            appendErrorFallbackMessage = stringResource(Res.string.music_failed_load_more),
             emptyIcon = kind.emptyIcon,
             emptyTitle = stringResource(kind.emptyTitleRes),
             errorFallbackMessage = stringResource(kind.errorFallbackRes),

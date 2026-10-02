@@ -27,7 +27,7 @@ import org.jetbrains.compose.resources.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
-import com.raulshma.jellyplay.core.network.config.ClientCertificateStatus
+import com.raulshma.jellyplay.core.model.ClientCertificateStatus
 import com.raulshma.jellyplay.core.ui.components.SheetHeader
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
 import com.raulshma.jellyplay.core.ui.components.formatDate
@@ -198,14 +198,14 @@ private fun ClientCertificateDetailLine(label: String, value: String) {
  * The import sheet: certificate pick (.p12/.pfx bundle OR a PEM .crt — a
  * PEM pick reveals the private-key row), optional passphrase for protected
  * PKCS#12 bundles, and the optional server CA override. Import assembles the
- * [com.raulshma.jellyplay.core.network.config.ClientCertificateImport]; the
- * facade's parse failures land on the message bus.
+ * [com.raulshma.jellyplay.core.model.ClientCertificateImport]; the
+ * repository's parse failures land on the message bus.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun CertificateImportSheet(
     onDismiss: () -> Unit,
-    onImport: (com.raulshma.jellyplay.core.network.config.ClientCertificateImport) -> Unit,
+    onImport: (com.raulshma.jellyplay.core.model.ClientCertificateImport) -> Unit,
 ) {
     val picker = rememberCertificateFilePicker()
     var certificatePick by remember { mutableStateOf<CertificatePick?>(null) }
@@ -288,7 +288,7 @@ internal fun CertificateImportSheet(
                     onClick = {
                         val cert = checkNotNull(certificatePick)
                         onImport(
-                            com.raulshma.jellyplay.core.network.config.ClientCertificateImport(
+                            com.raulshma.jellyplay.core.model.ClientCertificateImport(
                                 pkcs12Bytes = if (certificateIsPem) null else cert.bytes,
                                 certificatePemBytes = if (certificateIsPem) cert.bytes else null,
                                 privateKeyPemBytes = keyPick?.bytes,

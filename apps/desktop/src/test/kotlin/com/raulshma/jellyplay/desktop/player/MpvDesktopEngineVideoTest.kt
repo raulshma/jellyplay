@@ -20,7 +20,7 @@ import org.junit.jupiter.api.io.TempDir
 
 /**
  *  real-libmpv slice for the closed V2 cuts — the live `vf` /
- * `video-rotate` application ([DesktopVideoEffectChain] through
+ * `video-rotate` application ([MpvVideoEffectChain] through
  * [MpvDesktopEngine.updateConfig]), the [MpvDesktopEngine.captureVideoFrame]
  * screenshot path, and the [MediaEngine.currentCues] live-cue history. Cases
  * mirror the real-engine af test's property-level assertion style:

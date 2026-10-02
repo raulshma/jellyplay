@@ -5,6 +5,9 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import com.raulshma.jellyplay.core.datastore.CachedJsonNullPolicy
 import com.raulshma.jellyplay.core.datastore.ParsedCache
 import com.raulshma.jellyplay.core.datastore.PreferenceCodec
+import com.raulshma.jellyplay.core.datastore.playback.PlaybackPreferenceSpecs
+import com.raulshma.jellyplay.core.datastore.spec.PreferenceSearchSpec
+import com.raulshma.jellyplay.core.datastore.spec.PreferencePlatformRule
 import com.raulshma.jellyplay.core.datastore.spec.PreferenceSpec
 import com.raulshma.jellyplay.core.datastore.toEnumOrNull
 import com.raulshma.jellyplay.core.model.GestureIndicatorSide
@@ -51,8 +54,13 @@ import kotlinx.serialization.serializer
  * `read()` row, one `restore()` row (and its setter) — plus one write-through
  * test line; the derivation covers key identity, encodings and reset lists,
  * not the slice plumbing or its coverage.
+ *
+ * Public (the [com.raulshma.jellyplay.core.datastore.experimental
+ * .ExperimentalPreferenceSpecs] precedent): the settings feature derives its
+ * spec-backed catalog rows from [searchEntries], so the object must cross the
+ * module boundary even though the store itself stays internal.
  */
-internal object VideoPlayerPreferenceSpecs {
+object VideoPlayerPreferenceSpecs {
 
     // ------------------------------------------------------------------
     // Transport timing
@@ -62,12 +70,30 @@ internal object VideoPlayerPreferenceSpecs {
         keyName = "video_seek_duration_ms",
         default = 10_000L,
         resetCategory = PreferenceResetCategory.PLAYBACK,
+        search = PreferenceSearchSpec(
+            id = "seek_duration",
+            titleKey = "ss_seek_duration_title",
+            subtitleKey = "ss_seek_duration_subtitle",
+            categoryKey = "ss_cat_playback",
+            keywords = listOf("seek", "duration", "skip", "double tap", "seconds"),
+            routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+            platformRule = PreferencePlatformRule.ANDROID_ONLY,
+        ),
     )
 
     val VIDEO_CONTROLS_TIMEOUT_MS: PreferenceSpec<Long> = PreferenceSpec.plainLong(
         keyName = "video_controls_timeout_ms",
         default = 5_000L,
         resetCategory = PreferenceResetCategory.PLAYBACK,
+        search = PreferenceSearchSpec(
+            id = "controls_timeout",
+            titleKey = "ss_controls_timeout_title",
+            subtitleKey = "ss_controls_timeout_subtitle",
+            categoryKey = "ss_cat_playback",
+            keywords = listOf("controls", "timeout", "hide", "overlay"),
+            routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+            isAdvanced = true,
+        ),
     )
 
     // ------------------------------------------------------------------
@@ -78,6 +104,14 @@ internal object VideoPlayerPreferenceSpecs {
         keyName = "video_default_orientation",
         default = OrientationMode.SENSOR_LANDSCAPE,
         resetCategory = PreferenceResetCategory.PLAYBACK,
+        search = PreferenceSearchSpec(
+            id = "orientation",
+            titleKey = "ss_orientation_title",
+            subtitleKey = "ss_orientation_subtitle",
+            categoryKey = "ss_cat_playback",
+            keywords = listOf("orientation", "rotation", "landscape", "portrait", "sensor"),
+            routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+        ),
     )
 
     /**
@@ -92,6 +126,14 @@ internal object VideoPlayerPreferenceSpecs {
         resetCategory = PreferenceResetCategory.PLAYBACK,
         read = { _, raw -> raw ?: "AUTO" },
         encode = { it },
+        search = PreferenceSearchSpec(
+            id = "default_aspect",
+            titleKey = "ss_default_aspect_title",
+            subtitleKey = "ss_default_aspect_subtitle",
+            categoryKey = "ss_cat_playback",
+            keywords = listOf("aspect", "ratio", "stretch", "zoom", "fit", "fill"),
+            routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+        ),
     )
 
     // ------------------------------------------------------------------
@@ -126,6 +168,14 @@ internal object VideoPlayerPreferenceSpecs {
             }
         },
         encode = { it.name },
+        search = PreferenceSearchSpec(
+            id = "gestures",
+            titleKey = "ss_gestures_title",
+            subtitleKey = "ss_gestures_subtitle",
+            categoryKey = "ss_cat_playback",
+            keywords = listOf("gestures", "swipe", "tap", "brightness", "volume", "seeking"),
+            routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+        ),
     )
 
     /**
@@ -146,6 +196,14 @@ internal object VideoPlayerPreferenceSpecs {
         keyName = "video_gesture_indicator_side",
         default = GestureIndicatorSide.OPPOSITE,
         resetCategory = PreferenceResetCategory.PLAYBACK,
+        search = PreferenceSearchSpec(
+            id = "gesture_indicator_side",
+            titleKey = "ss_gesture_indicator_side_title",
+            subtitleKey = "ss_gesture_indicator_side_subtitle",
+            categoryKey = "ss_cat_playback",
+            keywords = listOf("indicator", "brightness", "volume", "bar", "side", "gesture", "opposite"),
+            routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+        ),
     )
 
     // ------------------------------------------------------------------
@@ -156,18 +214,44 @@ internal object VideoPlayerPreferenceSpecs {
         keyName = "video_pass_out_protection_hours",
         default = 0,
         resetCategory = PreferenceResetCategory.PLAYBACK,
+        search = PreferenceSearchSpec(
+            id = "pass_out_protection",
+            titleKey = "ss_pass_out_protection_title",
+            subtitleKey = "ss_pass_out_protection_subtitle",
+            categoryKey = "ss_cat_playback",
+            keywords = listOf("pass out", "fall asleep", "auto pause", "sleep", "hours"),
+            routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+            isAdvanced = true,
+        ),
     )
 
     val VIDEO_SKIP_BACK_ON_RESUME_MS: PreferenceSpec<Long> = PreferenceSpec.plainLong(
         keyName = "video_skip_back_on_resume_ms",
         default = 0L,
         resetCategory = PreferenceResetCategory.PLAYBACK,
+        search = PreferenceSearchSpec(
+            id = "skip_back_on_resume",
+            titleKey = "ss_skip_back_on_resume_title",
+            subtitleKey = "ss_skip_back_on_resume_subtitle",
+            categoryKey = "ss_cat_playback",
+            keywords = listOf("skip", "back", "resume", "rewind", "unpause", "seek"),
+            routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+            isAdvanced = true,
+        ),
     )
 
     val VIDEO_HOLD_SPEED_ENABLED: PreferenceSpec<Boolean> = PreferenceSpec.plainBoolean(
         keyName = "video_hold_speed_enabled",
         default = true,
         resetCategory = PreferenceResetCategory.PLAYBACK,
+        search = PreferenceSearchSpec(
+            id = "hold_speed_multiplier",
+            titleKey = "ss_hold_speed_multiplier_title",
+            subtitleKey = "ss_hold_speed_multiplier_subtitle",
+            categoryKey = "ss_cat_playback",
+            keywords = listOf("hold", "seek", "speed", "multiplier", "fast", "fast forward", "rewind", "long press", "off", "disable"),
+            routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+        ),
     )
 
     val VIDEO_HOLD_SPEED_MULTIPLIER: PreferenceSpec<Float> = PreferenceSpec.plainFloat(
@@ -180,12 +264,28 @@ internal object VideoPlayerPreferenceSpecs {
         keyName = "video_default_speed",
         default = 1.0f,
         resetCategory = PreferenceResetCategory.PLAYBACK,
+        search = PreferenceSearchSpec(
+            id = "default_speed",
+            titleKey = "ss_default_speed_title",
+            subtitleKey = "ss_default_speed_subtitle",
+            categoryKey = "ss_cat_playback",
+            keywords = listOf("speed", "rate", "fast", "slow", "playback speed"),
+            routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+        ),
     )
 
     val VIDEO_AUTOPLAY_NEXT: PreferenceSpec<Boolean> = PreferenceSpec.plainBoolean(
         keyName = "video_autoplay_next",
         default = true,
         resetCategory = PreferenceResetCategory.PLAYBACK,
+        search = PreferenceSearchSpec(
+            id = "video_autoplay_next",
+            titleKey = "ss_video_autoplay_next_title",
+            subtitleKey = "ss_video_autoplay_next_subtitle",
+            categoryKey = "ss_cat_playback",
+            keywords = listOf("autoplay", "next", "continuous", "episode", "sequence"),
+            routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+        ),
     )
 
     // ------------------------------------------------------------------
@@ -196,42 +296,103 @@ internal object VideoPlayerPreferenceSpecs {
         keyName = "still_watching_mode",
         default = StillWatchingMode.OFF,
         resetCategory = PreferenceResetCategory.PLAYBACK,
+        search = PreferenceSearchSpec(
+            id = "still_watching_mode",
+            titleKey = "ss_still_watching_mode_title",
+            subtitleKey = "ss_still_watching_mode_subtitle",
+            categoryKey = "ss_cat_playback",
+            keywords = listOf("still watching", "confirm", "binge", "unattended", "idle", "pass out", "autoplay"),
+            routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+        ),
     )
 
     val STILL_WATCHING_EPISODE_THRESHOLD: PreferenceSpec<Int> = PreferenceSpec.plainInt(
         keyName = "still_watching_episode_threshold",
         default = 0,
         resetCategory = PreferenceResetCategory.PLAYBACK,
+        search = PreferenceSearchSpec(
+            id = "still_watching_episodes",
+            titleKey = "ss_still_watching_episodes_title",
+            subtitleKey = "ss_still_watching_episodes_subtitle",
+            categoryKey = "ss_cat_playback",
+            keywords = listOf("still watching", "episodes", "threshold", "count", "binge", "consecutive"),
+            routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+        ),
     )
 
     val TRAILER_AUTOPLAY: PreferenceSpec<Boolean> = PreferenceSpec.plainBoolean(
         keyName = "trailer_autoplay",
         default = true,
         resetCategory = PreferenceResetCategory.PLAYBACK,
+        search = PreferenceSearchSpec(
+            id = "autoplay_trailers",
+            titleKey = "ss_autoplay_trailers_title",
+            subtitleKey = "ss_autoplay_trailers_subtitle",
+            categoryKey = "ss_cat_playback",
+            keywords = listOf("trailer", "autoplay", "preview", "details"),
+            routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+            isAdvanced = true,
+        ),
     )
 
     val CINEMA_MODE_ENABLED: PreferenceSpec<Boolean> = PreferenceSpec.plainBoolean(
         keyName = "cinema_mode_enabled",
         default = false,
         resetCategory = PreferenceResetCategory.PLAYBACK,
+        search = PreferenceSearchSpec(
+            id = "cinema_mode",
+            titleKey = "ss_cinema_mode_title",
+            subtitleKey = "ss_cinema_mode_subtitle",
+            categoryKey = "ss_cat_playback",
+            keywords = listOf("cinema", "intro", "preroll", "pre-roll", "trailer"),
+            routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+            isAdvanced = true,
+        ),
     )
 
     val VIDEO_SWIPE_SEEK_MAX_MS: PreferenceSpec<Long> = PreferenceSpec.plainLong(
         keyName = "video_swipe_seek_max_ms",
         default = 120_000L,
         resetCategory = PreferenceResetCategory.PLAYBACK,
+        search = PreferenceSearchSpec(
+            id = "swipe_seek_range",
+            titleKey = "ss_swipe_seek_range_title",
+            subtitleKey = "ss_swipe_seek_range_subtitle",
+            categoryKey = "ss_cat_playback",
+            keywords = listOf("seek range", "swipe limit", "skip max"),
+            routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+            isAdvanced = true,
+        ),
     )
 
     val VIDEO_REMEMBER_BRIGHTNESS: PreferenceSpec<Boolean> = PreferenceSpec.plainBoolean(
         keyName = "video_remember_brightness",
         default = true,
         resetCategory = PreferenceResetCategory.PLAYBACK,
+        search = PreferenceSearchSpec(
+            id = "remember_brightness",
+            titleKey = "ss_remember_brightness_title",
+            subtitleKey = "ss_remember_brightness_subtitle",
+            categoryKey = "ss_cat_playback",
+            keywords = listOf("brightness", "remember", "save", "light"),
+            routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+            isAdvanced = true,
+        ),
     )
 
     val VIDEO_BRIGHTNESS_LEVEL: PreferenceSpec<Float> = PreferenceSpec.plainFloat(
         keyName = "video_brightness_level",
         default = 0.5f,
         resetCategory = PreferenceResetCategory.PLAYBACK,
+        search = PreferenceSearchSpec(
+            id = "default_brightness_level",
+            titleKey = "ss_default_brightness_level_title",
+            subtitleKey = "ss_default_brightness_level_subtitle",
+            categoryKey = "ss_cat_playback",
+            keywords = listOf("brightness", "default", "screen", "light", "level"),
+            routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+            isAdvanced = true,
+        ),
     )
 
     val VIDEO_REMEMBER_MUTED: PreferenceSpec<Boolean> = PreferenceSpec.plainBoolean(
@@ -266,30 +427,75 @@ internal object VideoPlayerPreferenceSpecs {
         keyName = "trickplay_enabled",
         default = true,
         resetCategory = PreferenceResetCategory.PLAYBACK,
+        search = PreferenceSearchSpec(
+            id = "trickplay_preview",
+            titleKey = "ss_trickplay_preview_title",
+            subtitleKey = "ss_trickplay_preview_subtitle",
+            categoryKey = "ss_cat_playback",
+            keywords = listOf("trickplay", "thumbnails", "scrubbing", "preview", "seek preview"),
+            routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+            isAdvanced = true,
+        ),
     )
 
     val TRICKPLAY_ON_SEEK_GESTURE: PreferenceSpec<Boolean> = PreferenceSpec.plainBoolean(
         keyName = "trickplay_on_seek_gesture",
         default = true,
         resetCategory = PreferenceResetCategory.PLAYBACK,
+        search = PreferenceSearchSpec(
+            id = "trickplay_on_gestures",
+            titleKey = "ss_trickplay_on_gestures_title",
+            subtitleKey = "ss_trickplay_on_gestures_subtitle",
+            categoryKey = "ss_cat_playback",
+            keywords = listOf("trickplay", "thumbnails", "gesture", "swipe", "seek"),
+            routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+            isAdvanced = true,
+        ),
     )
 
     val VIDEO_EPISODE_BROWSER_ENABLED: PreferenceSpec<Boolean> = PreferenceSpec.plainBoolean(
         keyName = "video_episode_browser_enabled",
         default = true,
         resetCategory = PreferenceResetCategory.PLAYBACK,
+        search = PreferenceSearchSpec(
+            id = "episode_browser",
+            titleKey = "ss_episode_browser_title",
+            subtitleKey = "ss_episode_browser_subtitle",
+            categoryKey = "ss_cat_playback",
+            keywords = listOf("episodes", "browser", "list", "in-player"),
+            routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+            isAdvanced = true,
+        ),
     )
 
     val VIDEO_SHOW_PLAYBACK_METADATA: PreferenceSpec<Boolean> = PreferenceSpec.plainBoolean(
         keyName = "video_show_playback_metadata",
         default = true,
         resetCategory = PreferenceResetCategory.PLAYBACK,
+        search = PreferenceSearchSpec(
+            id = "playback_metadata",
+            titleKey = "ss_playback_metadata_title",
+            subtitleKey = "ss_playback_metadata_subtitle",
+            categoryKey = "ss_cat_playback",
+            keywords = listOf("metadata", "codec", "bitrate", "stream stats", "debug"),
+            routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+            isAdvanced = true,
+        ),
     )
 
     val VIDEO_PRELOAD_BUFFER_SIZE: PreferenceSpec<PreloadBufferSize> = PreferenceSpec.enumRow(
         keyName = "video_preload_buffer_size",
         default = PreloadBufferSize.MEDIUM,
         resetCategory = PreferenceResetCategory.PLAYBACK,
+        search = PreferenceSearchSpec(
+            id = "preload_buffer",
+            titleKey = "ss_preload_buffer_title",
+            subtitleKey = "ss_preload_buffer_subtitle",
+            categoryKey = "ss_cat_playback",
+            keywords = listOf("buffer", "preload", "cache", "size", "network cache"),
+            routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+            isAdvanced = true,
+        ),
     )
 
     /**
@@ -304,30 +510,78 @@ internal object VideoPlayerPreferenceSpecs {
         keyName = "video_cache_size_mb",
         default = 1024,
         resetCategory = PreferenceResetCategory.PLAYBACK,
+        search = PreferenceSearchSpec(
+            // The search hit restates the row's screen title (the fold):
+            // the catalog row declares no ss_*_title twin.
+            titleKey = "settings_video_cache_size",
+            id = "video_cache_size",
+            subtitleKey = "ss_video_cache_size_subtitle",
+            categoryKey = "ss_cat_playback",
+            keywords = listOf("cache", "video cache", "size", "storage", "stream cache"),
+            routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+            isAdvanced = true,
+        ),
     )
 
     val SHOW_CLOCK_IN_PLAYER: PreferenceSpec<Boolean> = PreferenceSpec.plainBoolean(
         keyName = "show_clock_in_player",
         default = false,
         resetCategory = PreferenceResetCategory.PLAYBACK,
+        search = PreferenceSearchSpec(
+            id = "show_clock_player",
+            titleKey = "ss_show_clock_player_title",
+            subtitleKey = "ss_show_clock_player_subtitle",
+            categoryKey = "ss_cat_playback",
+            keywords = listOf("clock", "time", "player", "wall", "current"),
+            routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+            isAdvanced = true,
+        ),
     )
 
     val SHOW_TIME_REMAINING: PreferenceSpec<Boolean> = PreferenceSpec.plainBoolean(
         keyName = "show_time_remaining",
         default = false,
         resetCategory = PreferenceResetCategory.PLAYBACK,
+        search = PreferenceSearchSpec(
+            id = "show_time_remaining",
+            titleKey = "ss_show_time_remaining_title",
+            subtitleKey = "ss_show_time_remaining_subtitle",
+            categoryKey = "ss_cat_playback",
+            keywords = listOf("time", "remaining", "elapsed", "duration", "countdown"),
+            routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+            isAdvanced = true,
+        ),
     )
 
     val TV_ZOOM_MODE_PERCENT: PreferenceSpec<Float> = PreferenceSpec.plainFloat(
         keyName = "tv_zoom_mode_percent",
         default = 0f,
         resetCategory = PreferenceResetCategory.PLAYBACK,
+        search = PreferenceSearchSpec(
+            id = "tv_zoom_mode",
+            titleKey = "ss_tv_zoom_mode_title",
+            subtitleKey = "ss_tv_zoom_mode_subtitle",
+            categoryKey = "ss_cat_playback",
+            keywords = listOf("tv", "zoom", "crop", "fill", "screen"),
+            routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+            isAdvanced = true,
+            platformRule = PreferencePlatformRule.ANDROID_ONLY,
+        ),
     )
 
     val INCOGNITO_MODE_ENABLED: PreferenceSpec<Boolean> = PreferenceSpec.plainBoolean(
         keyName = "incognito_mode_enabled",
         default = false,
         resetCategory = PreferenceResetCategory.PLAYBACK,
+        search = PreferenceSearchSpec(
+            id = "incognito_mode",
+            titleKey = "ss_incognito_mode_title",
+            subtitleKey = "ss_incognito_mode_subtitle",
+            categoryKey = "ss_cat_playback",
+            keywords = listOf("incognito", "private", "history", "stealth"),
+            routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+            isAdvanced = true,
+        ),
     )
 
     // ------------------------------------------------------------------
@@ -418,6 +672,87 @@ internal object VideoPlayerPreferenceSpecs {
         keyName = "skip_segments_on_seek",
         default = false,
         resetCategory = PreferenceResetCategory.PLAYBACK,
+        search = PreferenceSearchSpec(
+            // The search hit restates the row's screen title (the fold): the
+            // catalog row declares no ss_*_title twin.
+            titleKey = "settings_skip_segments_on_seek",
+            id = "skip_segments_on_seek",
+            subtitleKey = "ss_skip_segments_on_seek_subtitle",
+            categoryKey = "ss_cat_playback",
+            keywords = listOf("segment", "skip", "seek", "forward", "commercial", "auto"),
+            routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+            isAdvanced = true,
+        ),
+    )
+
+    // ------------------------------------------------------------------
+    // Settings-search standalone entries: the per-segment-type catalog rows.
+    // Six catalog facts over the ONE [SEGMENT_BEHAVIORS] knob (the
+    // experimental feature-set precedent: the knob is a set, the catalog
+    // rows are its members), declared here in the media-segment group's
+    // catalog order.
+    // ------------------------------------------------------------------
+
+    private val searchMediaSegmentIntro = PreferenceSearchSpec(
+        // The search hit reuses the enum's core_segment_* faces (the fold):
+        // the catalog row declares no ss_*_title twin.
+        titleKey = "core_segment_intro",
+        id = "media_segment_intro",
+        subtitleKey = "core_segment_intro_desc",
+        categoryKey = "ss_cat_playback",
+        keywords = listOf("segment", "intro", "skip", "opening", "credits", "marker"),
+        routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+        isAdvanced = true,
+    )
+
+    private val searchMediaSegmentOutro = PreferenceSearchSpec(
+        titleKey = "core_segment_outro",
+        id = "media_segment_outro",
+        subtitleKey = "core_segment_outro_desc",
+        categoryKey = "ss_cat_playback",
+        keywords = listOf("segment", "outro", "ending", "skip", "credits", "marker"),
+        routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+        isAdvanced = true,
+    )
+
+    private val searchMediaSegmentPreview = PreferenceSearchSpec(
+        titleKey = "core_segment_preview",
+        id = "media_segment_preview",
+        subtitleKey = "core_segment_preview_desc",
+        categoryKey = "ss_cat_playback",
+        keywords = listOf("segment", "preview", "next episode", "recap", "skip", "marker"),
+        routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+        isAdvanced = true,
+    )
+
+    private val searchMediaSegmentRecap = PreferenceSearchSpec(
+        titleKey = "core_segment_recap",
+        id = "media_segment_recap",
+        subtitleKey = "core_segment_recap_desc",
+        categoryKey = "ss_cat_playback",
+        keywords = listOf("segment", "recap", "previously on", "skip", "marker"),
+        routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+        isAdvanced = true,
+    )
+
+    private val searchMediaSegmentCommercial = PreferenceSearchSpec(
+        titleKey = "core_segment_commercial",
+        id = "media_segment_commercial",
+        subtitleKey = "core_segment_commercial_desc",
+        categoryKey = "ss_cat_playback",
+        keywords = listOf("segment", "commercial", "ad", "advertisement", "skip", "marker"),
+        routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+        isAdvanced = true,
+    )
+
+    private val searchMediaSegmentUnknown = PreferenceSearchSpec(
+        titleKey = "core_segment_unknown",
+        id = "media_segment_unknown",
+        subtitleKey = "core_segment_unknown_desc",
+        categoryKey = "ss_cat_playback",
+        keywords = listOf("segment", "unknown", "skip", "marker", "unidentified"),
+        routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+        isAdvanced = true,
     )
 
     /**
@@ -528,4 +863,58 @@ internal object VideoPlayerPreferenceSpecs {
      */
     internal fun resetKeysFor(category: PreferenceResetCategory): List<Preferences.Key<*>> =
         all.filter { it.resetCategory == category }.map { it.typedKey() }
+
+    /**
+     * The domain's settings-search declarations, in the settings feature's
+     * catalog order (the order the retired hand records carried): every row
+     * above that carries a [PreferenceSearchSpec], plus the six standalone
+     * per-segment-type entries. The settings feature derives its
+     * spec-backed catalog rows from this list (and
+     * [PlaybackPreferenceSpecs.searchEntries]) over its ordered record
+     * spine, binding the declared resource keys to real resources.
+     */
+    val searchEntries: List<PreferenceSearchSpec> = listOf(
+        VIDEO_SEEK_DURATION_MS.searchEntry(),
+        VIDEO_DEFAULT_ORIENTATION.searchEntry(),
+        VIDEO_GESTURE_MODE.searchEntry(),
+        VIDEO_GESTURE_INDICATOR_SIDE.searchEntry(),
+        VIDEO_DEFAULT_SPEED.searchEntry(),
+        VIDEO_DEFAULT_ASPECT_RATIO.searchEntry(),
+        VIDEO_AUTOPLAY_NEXT.searchEntry(),
+        STILL_WATCHING_MODE.searchEntry(),
+        STILL_WATCHING_EPISODE_THRESHOLD.searchEntry(),
+        VIDEO_CONTROLS_TIMEOUT_MS.searchEntry(),
+        VIDEO_SKIP_BACK_ON_RESUME_MS.searchEntry(),
+        SHOW_CLOCK_IN_PLAYER.searchEntry(),
+        VIDEO_PASS_OUT_PROTECTION_HOURS.searchEntry(),
+        TRAILER_AUTOPLAY.searchEntry(),
+        CINEMA_MODE_ENABLED.searchEntry(),
+        VIDEO_EPISODE_BROWSER_ENABLED.searchEntry(),
+        VIDEO_SHOW_PLAYBACK_METADATA.searchEntry(),
+        VIDEO_SWIPE_SEEK_MAX_MS.searchEntry(),
+        VIDEO_REMEMBER_BRIGHTNESS.searchEntry(),
+        TRICKPLAY_ENABLED.searchEntry(),
+        VIDEO_PRELOAD_BUFFER_SIZE.searchEntry(),
+        VIDEO_CACHE_SIZE_MB.searchEntry(),
+        INCOGNITO_MODE_ENABLED.searchEntry(),
+        VIDEO_HOLD_SPEED_ENABLED.searchEntry(),
+        TV_ZOOM_MODE_PERCENT.searchEntry(),
+        VIDEO_BRIGHTNESS_LEVEL.searchEntry(),
+        TRICKPLAY_ON_SEEK_GESTURE.searchEntry(),
+        SHOW_TIME_REMAINING.searchEntry(),
+        searchMediaSegmentIntro,
+        searchMediaSegmentOutro,
+        searchMediaSegmentPreview,
+        searchMediaSegmentRecap,
+        searchMediaSegmentCommercial,
+        searchMediaSegmentUnknown,
+        SKIP_SEGMENTS_ON_SEEK.searchEntry(),
+    )
+
+    /**
+     * The projection hook for [searchEntries]: a row's declared search entry.
+     * Rows without search metadata are simply not listed.
+     */
+    private fun PreferenceSpec<*>.searchEntry(): PreferenceSearchSpec =
+        requireNotNull(search) { "row '$keyName' declares no search entry" }
 }

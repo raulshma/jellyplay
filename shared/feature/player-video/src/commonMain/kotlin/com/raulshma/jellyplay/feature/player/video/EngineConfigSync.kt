@@ -22,6 +22,35 @@ import kotlinx.coroutines.launch
 internal const val CONFIG_SYNC_DEBOUNCE_MS = 150L
 
 /**
+ * The state-bag slice set [EngineConfigBuilder.buildFromSlices] reads, as one
+ * snapshot value. Replaces the former nine-mirror constructor lambdas: the
+ * wiring supplies ONE `() -> EngineConfigSlices` provider (one of its
+ * sanctioned uiState sites) and the mirror cannot drift from the builder's
+ * parameter list — a builder slice added without a provider field is a
+ * compile error here, not a silent default.
+ */
+internal data class EngineConfigSlices(
+    /** The in-memory subtitle style mirror (style AND the per-item delay). */
+    val subtitleStyle: SubtitleStyle,
+    /** The video-effects slice mirror (per-item persisted filters included). */
+    val videoEffects: VideoEffectsConfig,
+    /** The dialogue-boost enabled mirror. */
+    val dialogueBoostEnabled: Boolean,
+    /** The dialogue-boost strength mirror. */
+    val dialogueBoostStrength: EffectStrength,
+    /** The current item's media streams (drives the HDR gate). */
+    val mediaStreams: List<MediaStream>,
+    /** The audio-effects slice owned by [VideoEffectsController]. */
+    val effects: AudioEffectsState,
+    /** The cached aggregate-preferences snapshot. */
+    val agg: VideoPlayerAggregate,
+    /** The session's effective per-engine config (global slice + overrides). */
+    val engineSpecific: EngineSpecificConfig?,
+    /** The session-scoped deinterlace cycle value. */
+    val deinterlace: DeinterlaceMode,
+)
+
+/**
  * Owns the runtime engine-config sync extracted from [VideoPlayerViewModel]
  * (the [SubtitleStyleController] shape): the [EngineConfigBuilder]
  * invocation over the current state slices and the dispatch onto the live
@@ -38,12 +67,14 @@ internal const val CONFIG_SYNC_DEBOUNCE_MS = 150L
  *    fires after the drag settles. Moved VERBATIM — window
  *    ([CONFIG_SYNC_DEBOUNCE_MS]), buffer policy and job wiring included.
  *
- * Every fact the builder reads arrives as a narrow constructor lambda — the
- * uiState bag never crosses this boundary (the god-count ratchet stays at
- * its baseline; this class references no [VideoPlayerUiState] in code).
- * `getEngine` is read at DISPATCH time, so a debounce that settles after an
- * engine swap (mode/quality reload, engine switch, retry) lands on the NEW
- * engine — the pre-extraction `configSyncJob` collector dispatched through
+ * Every fact the builder reads arrives in the [EngineConfigSlices] snapshot
+ * the [slices] provider returns — read at BUILD time, so the coalesced
+ * debounce lands on the last values (the uiState bag itself never crosses
+ * this boundary; the god-count ratchet stays at its baseline; this class
+ * references no [VideoPlayerUiState] in code). `getEngine` is read at
+ * DISPATCH time, so a debounce that settles after an engine swap (mode/
+ * quality reload, engine switch, retry) lands on the NEW engine — the
+ * pre-extraction `configSyncJob` collector dispatched through
  * `playerSessionManager.engine` at fire time and was itself never cancelled
  * outside the ViewModel scope; that semantics is preserved unchanged.
  *
@@ -57,24 +88,8 @@ internal const val CONFIG_SYNC_DEBOUNCE_MS = 150L
  */
 internal class EngineConfigSync(
     private val scope: CoroutineScope,
-    /** The in-memory subtitle style mirror (style AND the per-item delay). */
-    private val getSubtitleStyle: () -> SubtitleStyle,
-    /** The video-effects slice mirror (per-item persisted filters included). */
-    private val getVideoEffects: () -> VideoEffectsConfig,
-    /** The dialogue-boost enabled mirror. */
-    private val isDialogueBoostEnabled: () -> Boolean,
-    /** The dialogue-boost strength mirror. */
-    private val getDialogueBoostStrength: () -> EffectStrength,
-    /** The current item's media streams (drives the HDR gate). */
-    private val getMediaStreams: () -> List<MediaStream>,
-    /** The audio-effects slice owned by [VideoEffectsController]. */
-    private val getEffectsState: () -> AudioEffectsState,
-    /** The cached aggregate-preferences snapshot. */
-    private val getAggregate: () -> VideoPlayerAggregate,
-    /** The session's effective per-engine config (global slice + overrides). */
-    private val getEngineSpecific: () -> EngineSpecificConfig?,
-    /** The session-scoped deinterlace cycle value. */
-    private val getDeinterlace: () -> DeinterlaceMode,
+    /** The slice snapshot the builder reads — evaluated per build. */
+    private val slices: () -> EngineConfigSlices,
     /** The live engine handle — read at dispatch time, never cached. */
     private val getEngine: () -> MediaEngine?,
 ) {
@@ -100,17 +115,18 @@ internal class EngineConfigSync(
      * false at every build.
      */
     fun markDirty() {
+        val s = slices()
         val config = EngineConfigBuilder.buildFromSlices(
-            subtitleStyle = getSubtitleStyle(),
-            videoEffects = getVideoEffects(),
-            dialogueBoostEnabled = isDialogueBoostEnabled(),
-            dialogueBoostStrength = getDialogueBoostStrength(),
-            mediaStreams = getMediaStreams(),
-            effects = getEffectsState(),
+            subtitleStyle = s.subtitleStyle,
+            videoEffects = s.videoEffects,
+            dialogueBoostEnabled = s.dialogueBoostEnabled,
+            dialogueBoostStrength = s.dialogueBoostStrength,
+            mediaStreams = s.mediaStreams,
+            effects = s.effects,
             equalizerEnabled = false,
-            agg = getAggregate(),
-            engineSpecific = getEngineSpecific(),
-            deinterlace = getDeinterlace(),
+            agg = s.agg,
+            engineSpecific = s.engineSpecific,
+            deinterlace = s.deinterlace,
         )
         getEngine()?.updateConfig(config)
     }

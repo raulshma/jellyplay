@@ -25,6 +25,7 @@ import com.raulshma.jellyplay.core.ui.components.PullToRefreshBox
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -147,6 +148,45 @@ data class HomeCallbacks(
      * only for LATEST_MEDIA), the optional per-library [collectionType] (used to
      * reproduce the home row's leaf item type + sort), and the resolved title. */
     val onSeeAllClick: (sectionType: HomeSectionType, libraryId: String?, collectionType: String?, title: String) -> Unit = { _, _, _, _ -> },
+)
+
+/**
+ * The wiring-shaped values every rendered surface shares, bundled — the
+ * four adjacent same-typed string-returning lambdas of the former flat
+ * parameter list ([mediaImageUrlBuilder] / [mediaBackdropUrlBuilder] /
+ * [onlineBackdropResolver] / [heroBackdropUrlBuilder]) made transposition a
+ * compile-passing bug, and the same ten values were re-threaded through
+ * [HomeSurfaceContent] into [HomeContentCallbacks] verbatim. Built ONCE in
+ * [MainHomeContent] (every member is already a remembered stable), passed as
+ * one parameter beside the per-surface values (surface, state, contentPad);
+ * `@Immutable` + value equality keep every consumer skippable — the
+ * [HomeDockState]/[HomeDockCallbacks] bundling precedent.
+ */
+@Immutable
+internal data class HomeRenderInputs(
+    /** Media-card click funnel (details routing for every row/hero surface). */
+    val mediaOnItemClick: (MediaItem) -> Unit,
+    /** Media-card play funnel (overlay button, quick-action menu, ASK dialog). */
+    val mediaOnPlayClick: (MediaItem) -> Unit,
+    /** Poster URL for a [MediaItem] (server-backed rows). */
+    val mediaImageUrlBuilder: (MediaItem) -> String,
+    /** Backdrop URL for a [MediaItem] (server-backed wide rows). */
+    val mediaBackdropUrlBuilder: (MediaItem) -> String,
+    /** Backdrop URL for an item ID (online; the series-backdrop resolver's source). */
+    val onlineBackdropResolver: (String) -> String,
+    /**
+     * The single hero backdrop builder — the parent resolves online-vs-offline
+     * once, so children never re-branch.
+     */
+    val heroBackdropUrlBuilder: (String) -> String,
+    /** Ordered fallback poster URLs for a [MediaItem] (see [fallbackImageUrls]). */
+    val fallbackImageUrlBuilder: (MediaItem) -> List<String>,
+    /** Seerr details prefetch (id + media type + completion callback). */
+    val seerrPrefetch: (Int, String, () -> Unit) -> Unit,
+    /** Shared Seerr-card loading mirror (row-Local shimmer state). */
+    val seerrCardLoadingState: SeerrCardLoadingState,
+    /** Focus requester attached to the hero row (D-pad enter routing). */
+    val heroFocusRequester: FocusRequester,
 )
 
 @Composable
@@ -447,6 +487,35 @@ private fun MainHomeContent(
 
     val fallbackImageUrlBuilder = rememberFallbackUrls(viewModel)
 
+    // The shared render wiring, bundled once (see [HomeRenderInputs]) — every
+    // member above is already a remembered stable, so the bundle's identity is
+    // stable too and the surfaces below stay skippable.
+    val renderInputs = remember(
+        mediaOnItemClick,
+        mediaOnPlayClick,
+        mediaImageUrlBuilder,
+        mediaBackdropUrlBuilder,
+        onlineBackdropResolver,
+        heroBackdropUrlBuilder,
+        fallbackImageUrlBuilder,
+        seerrPrefetch,
+        seerrCardLoadingState,
+        heroFocusRequester,
+    ) {
+        HomeRenderInputs(
+            mediaOnItemClick = mediaOnItemClick,
+            mediaOnPlayClick = mediaOnPlayClick,
+            mediaImageUrlBuilder = mediaImageUrlBuilder,
+            mediaBackdropUrlBuilder = mediaBackdropUrlBuilder,
+            onlineBackdropResolver = onlineBackdropResolver,
+            heroBackdropUrlBuilder = heroBackdropUrlBuilder,
+            fallbackImageUrlBuilder = fallbackImageUrlBuilder,
+            seerrPrefetch = seerrPrefetch,
+            seerrCardLoadingState = seerrCardLoadingState,
+            heroFocusRequester = heroFocusRequester,
+        )
+    }
+
     val discoverSectionOrder = remember {
         listOf(DiscoverSectionType.TRENDING, DiscoverSectionType.POPULAR_MOVIES, DiscoverSectionType.POPULAR_TV, DiscoverSectionType.UPCOMING_MOVIES, DiscoverSectionType.UPCOMING_TV)
     }
@@ -575,22 +644,13 @@ private fun MainHomeContent(
                     implicitOfflineBanner = implicitOfflineBanner,
                     discoverRows = discoverRows,
                     allDiscoverItems = allDiscoverItems,
-                    mediaOnItemClick = mediaOnItemClick,
-                    mediaOnPlayClick = mediaOnPlayClick,
-                    mediaImageUrlBuilder = mediaImageUrlBuilder,
-                    mediaBackdropUrlBuilder = mediaBackdropUrlBuilder,
-                    onlineBackdropResolver = onlineBackdropResolver,
-                    heroBackdropUrlBuilder = heroBackdropUrlBuilder,
-                    fallbackImageUrlBuilder = fallbackImageUrlBuilder,
-                    seerrPrefetch = seerrPrefetch,
+                    renderInputs = renderInputs,
                     onConfigureSection = onConfigureSection,
                     onConfigureHomeLayout = onConfigureHomeLayout,
                     onConfigureLibraries = onConfigureLibraries,
                     onFocusedMediaItem = onFocusedMediaItem,
                     listState = listState,
                     density = density,
-                    seerrCardLoadingState = seerrCardLoadingState,
-                    heroFocusRequester = heroFocusRequester,
                 )
             }
 
@@ -663,22 +723,13 @@ private fun HomeSurfaceContent(
     implicitOfflineBanner: String?,
     discoverRows: List<List<SeerrSearchItem>>,
     allDiscoverItems: List<SeerrSearchItem>,
-    mediaOnItemClick: (MediaItem) -> Unit,
-    mediaOnPlayClick: (MediaItem) -> Unit,
-    mediaImageUrlBuilder: (MediaItem) -> String,
-    mediaBackdropUrlBuilder: (MediaItem) -> String,
-    onlineBackdropResolver: (String) -> String,
-    heroBackdropUrlBuilder: (String) -> String,
-    fallbackImageUrlBuilder: (MediaItem) -> List<String>,
-    seerrPrefetch: (Int, String, () -> Unit) -> Unit,
+    renderInputs: HomeRenderInputs,
     onConfigureSection: (HomeSectionType, String?) -> Unit,
     onConfigureHomeLayout: () -> Unit,
     onConfigureLibraries: () -> Unit,
     onFocusedMediaItem: (MediaItem) -> Unit,
     listState: LazyListState,
     density: Density,
-    seerrCardLoadingState: SeerrCardLoadingState,
-    heroFocusRequester: FocusRequester,
 ) {
     when (val s = surface) {
         is HomeSurface.HardError -> {
@@ -754,18 +805,10 @@ private fun HomeSurfaceContent(
                     onOfflineLibraryClick = callbacks.onOfflineLibraryClick,
                     onItemClick = remember(callbacks) { { id: String -> callbacks.onItemClick(id, MediaType.UNKNOWN, null, "") } },
                     onFocusChange = remember { { focused: Boolean -> heroController.onFocusChange(focused) } },
-                    mediaOnItemClick = mediaOnItemClick,
-                    mediaOnPlayClick = mediaOnPlayClick,
-                    mediaImageUrlBuilder = mediaImageUrlBuilder,
-                    mediaBackdropUrlBuilder = mediaBackdropUrlBuilder,
                     getImageUrl = remember(viewModel) { { id: String -> viewModel.getImageUrl(id) } },
-                    getBackdropUrl = onlineBackdropResolver,
-                    heroBackdropUrlBuilder = heroBackdropUrlBuilder,
-                    fallbackImageUrlBuilder = fallbackImageUrlBuilder,
                     photoFolderChildUrlsFor = remember(viewModel) { { id: String -> viewModel.photoFolderChildUrlsFor(id) } },
                     onSeerrItemClick = callbacks.onSeerrItemClick,
                     onSeerrRequest = remember(viewModel) { { item: SeerrSearchItem -> viewModel.onEvent(HomeUiEvent.SelectSeerrRequestItem(item)) } },
-                    seerrPrefetch = seerrPrefetch,
                     onConfigureSection = onConfigureSection,
                     onConfigureHomeLayout = onConfigureHomeLayout,
                     onConfigureLibraries = onConfigureLibraries,
@@ -773,10 +816,9 @@ private fun HomeSurfaceContent(
                     onFocusedMediaItem = onFocusedMediaItem,
                     onRollDiscoverRow = remember(viewModel) { { rowId: String -> viewModel.onEvent(HomeUiEvent.RollDiscoverRow(rowId)) } },
                 ),
+                renderInputs = renderInputs,
                 listState = listState,
                 density = density,
-                seerrCardLoadingState = seerrCardLoadingState,
-                heroFocusRequester = heroFocusRequester,
             )
         }
     }

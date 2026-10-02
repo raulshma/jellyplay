@@ -266,6 +266,14 @@
     <string name="core_refresh_metadata_mode_replace_all_desc">Substitui os metadados atuais pelos do fornecedor. Numa série, os episódios também são atualizados.</string>
     <string name="core_refresh_metadata_mode_replace_images">Substituir todas as imagens</string>
     <string name="core_refresh_metadata_mode_replace_images_desc">Volta a transferir todas as imagens do fornecedor, mantendo os metadados.</string>
+    <!-- Played/progress filter chips + clear-all (kept beside
+         core_filter_has_* below, mirroring the default file grouping). -->
+    <string name="core_filter_played_all">Todos</string>
+    <string name="core_filter_played_played">Reproduzido</string>
+    <string name="core_filter_played_unplayed">Não reproduzido</string>
+    <string name="core_filter_rating_plus">%1$s+</string>
+    <string name="core_filter_in_progress">Em andamento</string>
+    <string name="core_clear_all">Limpar tudo</string>
     <string name="core_filter_has_subtitles">Com legendas</string>
     <string name="core_filter_has_trailer">Com trailer</string>
 

@@ -313,8 +313,9 @@ internal fun AppearanceCoreValues.toAppearancePreferences(): AppearancePreferenc
 
 /**
  * Appearance settings screen projection: the declared appearance-core set
- * plus this screen's accessibility / home-layout / discovery / library /
- * newsletter fields.
+ * plus this screen's accessibility / layout / library / newsletter fields.
+ * (The home-discovery card-display quartet moved to `homeScreenPreferences`
+ * with its rows — PS-4.)
  */
 internal fun AppearanceCoreValues.toAppearanceScreenPreferences(
     appearance: AppearanceSlice,
@@ -362,20 +363,16 @@ internal fun AppearanceCoreValues.toAppearanceScreenPreferences(
         homeLayoutPresets = home.homeLayoutPresets,
         libraryHomeSectionOverrides = home.libraryHomeSectionOverrides,
         hiddenCwItemIds = home.hiddenCwItemIds,
-        showUnwatchedBadge = home.showUnwatchedBadge,
-        hideWatchedItems = home.hideWatchedItems,
         mergeContinueWatchingAndNextUp = home.mergeContinueWatchingAndNextUp,
         nextUpMaxDays = home.nextUpMaxDays,
         nextUpRewatching = home.nextUpRewatching,
         continueWatchingClickBehavior = home.continueWatchingClickBehavior,
-        showWatchedCheckmark = home.showWatchedCheckmark,
         hideEpisodeThumbnails = library.hideEpisodeThumbnails,
         skipSpecials = library.skipSpecials,
         compactEpisodeList = library.compactEpisodeList,
         showMissingEpisodes = library.showMissingEpisodes,
         preferLogos = library.preferLogos,
         confirmLibraryReset = library.confirmLibraryReset,
-        showExternalRatings = home.showExternalRatings,
         showShareMediaOption = experimental.showShareMediaOption,
         hideSearchHistory = experimental.hideSearchHistory,
         showClockOnHome = home.showClockOnHome,
