@@ -64,6 +64,31 @@ internal fun sectionHasSeeAll(sectionType: HomeSectionType): Boolean =
     sectionType == HomeSectionType.RECENTLY_ADDED || sectionType == HomeSectionType.LATEST_MEDIA
 
 /**
+ * Whether a section can be refetched on its own — the single gate for BOTH
+ * sides of the edge-pull refresh: the rows use it to enable the gesture and
+ * the refresher ([HomeRefresher.refreshSectionRow]) re-checks it before
+ * fetching, so they cannot drift.
+ *
+ * Per type: the direct-query sections (Continue Watching / Continue Reading /
+ * Next Up), the per-library latest rows, Recently Added (aggregate — its
+ * refetch re-runs the fan-out), the Jellyfin discover rows and the pinned
+ * rows all map to a single-row fetch (see `HomeSectionsFetcher.refreshSection`).
+ * Seerr-sourced discover rows ride the group gate/last-known-good batch path
+ * and are excluded; RECOMMENDATIONS' seed chain is batch-shaped; FAVORITES,
+ * LIVE_TV and DOWNLOADED are never constructed by the network (offline rows
+ * are excluded upstream — the offline feed never arms the gesture).
+ */
+internal fun isEdgeRefreshableSection(section: HomeSection): Boolean =
+    when (section.type) {
+        HomeSectionType.RECOMMENDATIONS,
+        HomeSectionType.FAVORITES,
+        HomeSectionType.LIVE_TV,
+        HomeSectionType.DOWNLOADED,
+        -> false
+        else -> section.seerrItems.isEmpty()
+    }
+
+/**
  * The three sinks every resume row routes through — the triple
  * [resumeRowClick] and [posterRowClick] share, bundled so the render sites
  * build it once (all rows in a render hand the same funnels) and the two

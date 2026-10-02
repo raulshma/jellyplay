@@ -188,6 +188,9 @@ internal class HomeSectionsFetcher(
      */
     private val homeDiscoverRowCache = TtlCache<List<MediaItem>>(ttlMs = HomeFreshness.DISCOVER_ROW_TTL_MS)
 
+    /** Per-folder latest-media row size — shared by the batch fetch and [refreshSection]. */
+    private val latestRowLimit = 16
+
     /**
      * The dice roll's stall guard, consumed as [cacheThrough]'s write guard
      * by the Jellyfin discover-row reads. Part of the roll protocol — see
@@ -354,15 +357,11 @@ internal class HomeSectionsFetcher(
             foldersResult.onSuccess { folders ->
                 val filteredFolders = folders
                     .filter { it.collectionType != "music" }
-                val latestRowLimit = 16
                 latestPerFolder = Semaphore(4).mapConcurrent(filteredFolders) { folder ->
-                    folder to getLatestMediaForHome(
-                        parentId = folder.id,
-                        limit = latestRowLimit,
-                        // Classic rows (#168): TV folders fetch a raw-Episode
-                        // pool for the client-side pre-12 grouping; modern
-                        // (default) = unconstrained server behavior.
-                        classicEpisodePool = if (query.classicRows) classicLatestEpisodePool(folder.collectionType, limit = latestRowLimit) else null,
+                    folder to latestForLibrary(
+                        libraryId = folder.id,
+                        collectionType = folder.collectionType,
+                        classicRows = query.classicRows,
                         force = force,
                         identity = identity,
                     )
@@ -400,6 +399,213 @@ internal class HomeSectionsFetcher(
         }
         output.result
     }
+
+    /**
+     * The single-row refetch behind the home screen's edge-pull refresh:
+     * re-runs EXACTLY the sub-call(s) [fetch]'s schedule runs for [section]'s
+     * row and reshapes the result with the same identity (id, title, type,
+     * libraryId, collectionType, seedItem — only `items` moves).
+     *
+     * Outcomes:
+     *  - `Result.success(section)`: fresh items; the caller swaps the row in
+     *    place (identity is preserved, so a keyed lazy list animates the
+     *    change, not a removal).
+     *  - `Result.success(null)`: the row's source legitimately returned no
+     *    items — the row should disappear, matching the assembler's
+     *    zero-items-is-not-rendered policy.
+     *  - `Result.failure`: the sub-call failed; the caller keeps the stale
+     *    row on screen. Unlike [fetch], no partial-result semantics exist —
+     *    a single row has nothing partial to publish.
+     *
+     * Caching: [force] (always true from the refresh paths) bypasses the
+     * sub-call memo READS but keeps the WRITES — the fresh rows are what the
+     * next periodic fetch serves, instead of the pre-pull rows reverting for
+     * the TTL (same policy as [fetch]'s forced path). This method NEVER
+     * touches the whole-plan assembled-payload cache or the SWR snapshot
+     * persist — those live a layer up (MediaRepository), keyed by the whole
+     * query, and a single-row result must never masquerade as one.
+     *
+     * Refreshable types and their mapping:
+     *  - CONTINUE_WATCHING / CONTINUE_READING / NEXT_UP: the direct port call
+     *    with the [query]'s parameters, then the assembler's filters verbatim
+     *    (hidden-CW set; Next Up's CW-overlap + excluded-series drops — the
+     *    CW ids come from one extra Continue Watching read, mirroring the
+     *    assembler's seed reuse). CONTINUE_WATCHING additionally honours
+     *    [mergeNextUpIntoContinueWatching]: when the user's layout folds Next
+     *    Up into this row (OrderHomeSectionsUseCase, batch time), the refetch
+     *    rebuilds that fold from BOTH fresh sources — a CW-only refetch would
+     *    swap away the row's Next Up half (and the CW-empty + Next Up-present
+     *    relabel arm would drop a non-empty row).
+     *  - LATEST_MEDIA: one `/Items/Latest` for the row's library (resolved
+     *    from the `latest_<libraryId>` id), through the same TTL memo.
+     *  - RECENTLY_ADDED: the whole latest fan-out (folders → per-library
+     *    latest, music filtered, semaphore-bounded) re-aggregated with the
+     *    assembler's per-folder override + CW-overlap filters — the row is an
+     *    aggregate, so its refetch costs the aggregate.
+     *  - DISCOVER (JELLYFIN rows only): the row's memoised query, behind the
+     *    same dice-roll epoch guard.
+     *  - PINNED: the pin's item resolution, same routing table as the batch.
+     *
+     * RECOMMENDATIONS and Seerr-sourced DISCOVER rows are deliberately NOT
+     * refreshable here (the recommendations seed chain and the Seerr group
+     * gate/last-known-good policy are batch-shaped); the feature layer keeps
+     * the edge-pull gesture off those rows, and an unguarded call fails with
+     * [IllegalStateException] rather than guessing.
+     */
+    suspend fun refreshSection(
+        section: HomeSection,
+        query: HomeSectionQuery,
+        mergeNextUpIntoContinueWatching: Boolean = false,
+        force: Boolean = true,
+    ): Result<HomeSection?> = runCatchingRethrowingCancellation {
+        val identity = cacheIdentity() ?: CacheIdentity.UNKNOWN
+        when (section.type) {
+            HomeSectionType.CONTINUE_WATCHING -> {
+                val cw = sources.getContinueWatching(limit = 20, classicRows = query.classicRows)
+                    .getOrThrow()
+                    .filter { it.id !in query.hiddenCwItemIds }
+                if (!mergeNextUpIntoContinueWatching) {
+                    cw.takeIf { it.isNotEmpty() }
+                        ?.let { HomeSectionType.CONTINUE_WATCHING.descriptor.section(it) }
+                } else {
+                    // Merged row: the batch assembler folded Next Up into this
+                    // row (OrderHomeSectionsUseCase), so the refetch rebuilds
+                    // that fold from BOTH fresh sources — fresh CW first,
+                    // fresh Next Up (same eligibility filters as the NEXT_UP
+                    // arm, deduped by id) appended. A Next Up failure degrades
+                    // to the CW half (the batch's per-source failure policy);
+                    // CW empty + Next Up present is the merge's relabel arm —
+                    // the row survives carrying Next Up; both empty drops it.
+                    val nextUp = sources.getNextUp(
+                        limit = 20,
+                        enableRewatching = query.nextUpRewatching,
+                        maxDays = query.nextUpMaxDays,
+                    )
+                        .getOrDefault(emptyList())
+                        .filterNextUpEligible(cw.map { it.id }.toSet(), query.nextUpExcludedSeriesIds)
+                    val merged = (cw + nextUp).distinctBy { it.id }
+                    merged.takeIf { it.isNotEmpty() }
+                        ?.let { HomeSectionType.CONTINUE_WATCHING.descriptor.section(it) }
+                }
+            }
+
+            HomeSectionType.CONTINUE_READING ->
+                sources.getContinueReading(limit = 20)
+                    .getOrThrow()
+                    .filter { it.id !in query.hiddenCwItemIds }
+                    .takeIf { it.isNotEmpty() }
+                    ?.let { HomeSectionType.CONTINUE_READING.descriptor.section(it) }
+
+            HomeSectionType.NEXT_UP -> {
+                val cwIds = continueWatchingIdsForFilters(query)
+                sources.getNextUp(
+                    limit = 20,
+                    enableRewatching = query.nextUpRewatching,
+                    maxDays = query.nextUpMaxDays,
+                )
+                    .getOrThrow()
+                    .filterNextUpEligible(cwIds, query.nextUpExcludedSeriesIds)
+                    .takeIf { it.isNotEmpty() }
+                    ?.let { HomeSectionType.NEXT_UP.descriptor.section(it) }
+            }
+
+            HomeSectionType.LATEST_MEDIA -> {
+                val libraryId = HomeSectionType.LATEST_MEDIA.descriptor.instanceIdFor(section.id)
+                    ?: error("Latest Media row ${section.id} carries no library id")
+                val latest = latestForLibrary(
+                    libraryId = libraryId,
+                    collectionType = section.collectionType,
+                    classicRows = query.classicRows,
+                    force = force,
+                    identity = identity,
+                ).getOrThrow()
+                refreshedOrNull(section, latest)
+            }
+
+            HomeSectionType.RECENTLY_ADDED -> {
+                val folders = sources.getLibraryFolders().getOrThrow()
+                    .filter { it.collectionType != "music" }
+                val allLatest = Semaphore(4).mapConcurrent(folders) { folder ->
+                    // The assembler feeds the aggregate only from libraries the
+                    // user hasn't disabled Recently Added for.
+                    if (HomeSectionType.RECENTLY_ADDED in query.libraryHomeSectionOverrides[folder.id].orEmpty()) {
+                        emptyList()
+                    } else {
+                        latestForLibrary(
+                            libraryId = folder.id,
+                            collectionType = folder.collectionType,
+                            classicRows = query.classicRows,
+                            force = force,
+                            identity = identity,
+                        ).getOrDefault(emptyList())
+                    }
+                }.flatten()
+                val cwIds = continueWatchingIdsForFilters(query)
+                refreshedOrNull(section, allLatest.distinctBy { it.id }.filter { it.id !in cwIds })
+            }
+
+            HomeSectionType.DISCOVER -> {
+                val row = query.discoverRows.firstOrNull {
+                    it.enabled && HomeSectionType.DISCOVER.descriptor.idFor(it.id) == section.id
+                } ?: error("No enabled discover row for section ${section.id}")
+                check(row.source == DiscoverRowSource.JELLYFIN) {
+                    "Seerr discover rows are not edge-refreshable (${section.id})"
+                }
+                homeDiscoverRowCache.cacheThrough(
+                    identity,
+                    discoverRowCacheKey(row.id, row.limit),
+                    force = force,
+                    currentEpoch = discoverRowEpoch::get,
+                ) {
+                    sources.getDiscoverRowItems(row)
+                }
+                    .getOrThrow()
+                    .let { refreshedOrNull(section, it) }
+            }
+
+            HomeSectionType.PINNED -> {
+                val pin = query.pinnedSections.firstOrNull {
+                    HomeSectionType.PINNED.descriptor.idFor(it.id) == section.id
+                } ?: error("No pinned section configured for ${section.id}")
+                refreshedOrNull(section, getPinnedSectionItems(pin))
+            }
+
+            // Never constructed by the network (FAVORITES, LIVE_TV, DOWNLOADED)
+            // or deliberately unrefreshable (RECOMMENDATIONS — the seed chain
+            // is batch-shaped). The gesture is gated off these; reaching here
+            // is a caller bug.
+            else -> error("Home section type ${section.type} is not refreshable")
+        }
+    }
+
+    /**
+     * The Continue Watching id set the Next Up / Recently Added filters key
+     * on — the assembler derives it from the HIDDEN-FILTERED CW list (an
+     * item hidden from Continue Watching stays eligible for Next Up /
+     * Recently Added, its series' next episode being the intended resume
+     * path), so a single-row refetch derives it identically; a single-row
+     * refetch reads it fresh instead (one extra port call, only when the
+     * user's layout actually enables Continue Watching).
+     */
+    private suspend fun continueWatchingIdsForFilters(query: HomeSectionQuery): Set<String> =
+        if (HomeSectionType.CONTINUE_WATCHING in query.enabledSections) {
+            sources.getContinueWatching(limit = 20, classicRows = query.classicRows)
+                .getOrDefault(emptyList())
+                .filter { it.id !in query.hiddenCwItemIds }
+                .map { it.id }
+                .toSet()
+        } else {
+            emptySet()
+        }
+
+    /**
+     * The one item-swap shape for instance-typed rows (LATEST_MEDIA /
+     * RECENTLY_ADDED / DISCOVER / PINNED): fresh items, every identity field
+     * preserved; an empty result drops the row (the assembler's
+     * zero-items-is-not-rendered policy).
+     */
+    private fun refreshedOrNull(section: HomeSection, items: List<MediaItem>): HomeSection? =
+        if (items.isEmpty()) null else section.copy(items = items)
 
     /**
      * Fetches the enabled discover rows of BOTH sources and emits the
@@ -568,6 +774,30 @@ internal class HomeSectionsFetcher(
         homeLatestMediaCache.cacheThrough(identity, "${parentId}_${limit}_pool${classicEpisodePool ?: 0}", force = force) {
             sources.getLatestMedia(parentId, limit, classicEpisodePool)
         }
+
+    /**
+     * The one per-library Latest Media shape — the batch fan-out and
+     * [refreshSection]'s two latest arms (a row's own library, the Recently
+     * Added aggregate) share it: the row limit and the classic-rows episode
+     * pool derived from the folder's collection type, in one place so the
+     * call sites cannot drift.
+     */
+    private suspend fun latestForLibrary(
+        libraryId: String,
+        collectionType: String?,
+        classicRows: Boolean,
+        force: Boolean,
+        identity: CacheIdentity,
+    ): Result<List<MediaItem>> = getLatestMediaForHome(
+        parentId = libraryId,
+        limit = latestRowLimit,
+        // Classic rows (#168): TV folders fetch a raw-Episode pool for the
+        // client-side pre-12 grouping; modern (default) = unconstrained
+        // server behavior.
+        classicEpisodePool = if (classicRows) classicLatestEpisodePool(collectionType, limit = latestRowLimit) else null,
+        force = force,
+        identity = identity,
+    )
 
     /**
      * Home-path wrapper around [HomeSectionSources.getSimilarItems] that

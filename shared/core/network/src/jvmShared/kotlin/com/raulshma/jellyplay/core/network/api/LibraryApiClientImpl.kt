@@ -4,6 +4,7 @@ import com.raulshma.jellyplay.core.model.CollectionSummary
 import com.raulshma.jellyplay.core.model.CacheIdentity
 import com.raulshma.jellyplay.core.model.DiscoverRowConfig
 import com.raulshma.jellyplay.core.model.Genre
+import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionQuery
 import com.raulshma.jellyplay.core.model.HomeSectionsResult
 import com.raulshma.jellyplay.core.model.LibraryFilters
@@ -214,6 +215,18 @@ class LibraryApiClientImpl(
 
     override fun seedDiscoverRow(row: DiscoverRowConfig, items: List<MediaItem>) {
         homeSectionsFetcher.seedDiscoverRow(row, items)
+    }
+
+    override suspend fun refreshHomeSection(
+        section: HomeSection,
+        query: HomeSectionQuery,
+        mergeNextUpIntoContinueWatching: Boolean,
+        force: Boolean,
+    ): Result<HomeSection?> = engine.apiResultWithRetry {
+        // The fetcher returns Result (per-row failures are values); the retry
+        // wrapper's unit of work is a throw, so unwrap — a failure rethrows
+        // here and comes back as Result.failure with the retry policy applied.
+        homeSectionsFetcher.refreshSection(section, query, mergeNextUpIntoContinueWatching, force).getOrThrow()
     }
 
     override suspend fun getDiscoverRowItems(row: DiscoverRowConfig): Result<List<MediaItem>> = engine.withApi { api ->

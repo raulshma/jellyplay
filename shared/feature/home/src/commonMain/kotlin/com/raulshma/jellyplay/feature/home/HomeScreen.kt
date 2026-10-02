@@ -796,6 +796,9 @@ private fun HomeSurfaceContent(
                     // The dice-roll in-flight mirror: tumbles the
                     // matching row's dice icon while the re-fetch runs.
                     rollingDiscoverRowIds = state.rollingDiscoverRowIds,
+                    // The edge-pull in-flight mirror: spins the matching
+                    // row's edge chip while its single-row refetch runs.
+                    refreshingSectionIds = state.refreshingSectionIds,
                     statusBanner = implicitOfflineBanner,
                 ),
                 callbacks = HomeContentCallbacks(
@@ -815,6 +818,7 @@ private fun HomeSurfaceContent(
                     onSeeAllClick = remember(callbacks) { { type, libraryId, collectionType, title -> callbacks.onSeeAllClick(type, libraryId, collectionType, title) } },
                     onFocusedMediaItem = onFocusedMediaItem,
                     onRollDiscoverRow = remember(viewModel) { { rowId: String -> viewModel.onEvent(HomeUiEvent.RollDiscoverRow(rowId)) } },
+                    onRefreshSection = remember(viewModel) { { sectionId: String -> viewModel.onEvent(HomeUiEvent.RefreshSection(sectionId)) } },
                 ),
                 renderInputs = renderInputs,
                 listState = listState,

@@ -1136,18 +1136,60 @@ owns the home-freshness invalidation verbs the data layer drives —
 `invalidateSubcallCaches`/`invalidateDiscoverRow`/`seedDiscoverRow` — so
 `LibraryApiClient`'s interface stopped carrying cache-maintenance members
 (the impl keeps them; one impl, two seams, pinned by `DataKoinModulesTest`).
+It also carries `refreshHomeSection`, the home edge-pull's single-row
+refetch — a fetch verb rather than an invalidation verb, placed here for
+the same seam reason: its only consumer is the data layer's home path, and
+the port keeps the fetcher's growing surface off the client interface every
+fake and union otherwise has to track.
 The epochs deliberately stay separate: the repository's `discoverRollEpoch`
-(write-guard for roll commits) and the fetcher's `discoverRowEpoch`
+(write-guard for roll commits AND for the single-row refresh's
+assembled-payload drop) and the fetcher's `discoverRowEpoch`
 (network-row stall guard) have distinct documented roles in the roll
 protocol (MediaRepository.kt's KDoc is the spec) — unifying them would
 reopen the #157 race windows.
 
 **`HomeRefresher`** (`shared/feature/home/src/commonMain/kotlin/com/raulshma/jellyplay/feature/home/HomeRefresher.kt`)
-is the Home feed's deep module. Its public interface is five members —
-`state`, `request(RefreshTrigger)`, `start`, `stop`, `patchItems` — plus the
+is the Home feed's deep module. Its public interface is six members —
+`state`, `request(RefreshTrigger)`, `start`, `stop`, `patchItems`,
+`refreshSectionRow` — plus the
 mutex-protected `fetchOnce(force)` suspend core that the internal identity
 transitions and going-online handshake call directly (their fetch must
-survive a mid-flight `stop`). It owns WHAT and WHEN of the home screen:
+survive a mid-flight `stop`). `refreshSectionRow(sectionId)` is the home
+screen's edge-pull refresh of ONE row: the fetch runs UNDER `refreshMutex`
+(a full fetch can never interleave its wholesale sections replace between
+this fetch and patch), the in-flight guard is a CAS check-and-set on
+`HomeRefreshState.refreshingSectionIds` (the verdict ASSIGNED inside the
+update lambda's every run — `MutableStateFlow.update` re-runs it on CAS
+failure, so a losing race cannot inherit a stale run's acceptance), and the
+outcome contract matches
+the batch assembler (fresh row swaps in place with only `items` moved;
+`null` — the source emptied — drops the row; failure keeps the stale row,
+logged and silent). The merge pref rides along: a merged CW+Next-Up row
+(`mergeContinueWatchingAndNextUp`) is refetched as the fold — both fresh
+sources, Next Up rebuilt and appended — so a pull cannot swap away (or, via
+the relabel arm, drop) the row's Next Up half. A Continue Watching swap
+writes the widget store under the mutex and defers the
+broadcast/Watch-Next side effect past it (mirroring `fetchOnce`) and
+SKIPS it on cancellation — an identity transition that cancelled the
+refresh must not fire the previous user's broadcast (the same guarded
+invocation protects `fetchOnce` itself). Identity transitions cancel the
+in-flight section refreshes (`sectionRefreshJobs`). The repository half
+(`MediaRepository.refreshHomeSection` → `HomeSectionsCachePort`) bypasses
+the assembled-payload cache and the SWR persist (a single-row result must
+never masquerade as a whole-query snapshot), writes the network sub-call
+memos on success, and drops the assembled payload behind a
+`discoverRollEpoch` bump — the refresher's mutex only serializes the
+feature layer's fetches, while `TvWatchNextPublisher`/`UserDataSyncWorker`
+call `getHomeSections` mutex-free, so the epoch is what stall-guards a
+worker's assembled write from re-pinning the pre-pull payload across the
+drop. The gesture itself is core/ui's `HorizontalEdgePullRefreshBox`
+(shift-reveal: the row slides toward the pulled edge, a spinner chip is
+revealed underneath, release past threshold fires the refresh; touch-only —
+nested-scroll leftovers + a touch-down guard keep flings, programmatic
+scrolls and mouse wheel out), gated by `isEdgeRefreshableSection`
+(HomeRowChassis) — the single gate BOTH sides read, so the rows and the
+refresher cannot disagree; TV, offline-derived, Seerr-sourced and
+non-refreshable rows render without it. It owns WHAT and WHEN of the home screen:
 exclusive mutex ownership, the job choreography (`refreshJob`,
 `transitionJob`, `discoverJob`, `userDataRefreshJob` — the user-data
 deferral timer on its own job, so an echo arriving mid-fetch only re-arms

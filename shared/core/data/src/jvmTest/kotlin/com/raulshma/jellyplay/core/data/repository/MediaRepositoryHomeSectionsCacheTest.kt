@@ -284,6 +284,64 @@ class MediaRepositoryHomeSectionsCacheTest {
     }
 
     @Test
+    fun `refreshHomeSection is forced all the way to the network layer`() = runBlocking {
+        // The edge-pull refresh's freshness contract, first half: the force
+        // flag must arrive at the network fetcher so its sub-call memos
+        // (latest media / discover rows) are BYPASSED on read — a pull that
+        // served a memoised row would not be a refresh.
+        val repository = buildRepository()
+        signIn("server-1", "user-A")
+        val section = homeSection("latest_lib1")
+        coEvery { homeSectionsCachePort.refreshHomeSection(any(), any(), any(), any()) } returns
+            Result.success(section)
+
+        repository.refreshHomeSection(section, HomeSectionQuery(), force = true)
+
+        coVerify(exactly = 1) { homeSectionsCachePort.refreshHomeSection(section, any(), false, true) }
+    }
+
+    @Test
+    fun `refreshHomeSection success drops the cached home payload - the next ordinary read refetches`() = runBlocking {
+        // The freshness contract's second half (the dice-roll drop's twin):
+        // the in-memory assembled payload still carries the PRE-pull sections,
+        // and a non-forced periodic read landing inside its 60s TTL would
+        // repaint the stale row over the fresh one. Success must evict it, so
+        // the next ordinary read refetches (through the network layer, whose
+        // sub-call memos the pull just refreshed). The SWR snapshot persist
+        // stays untouched — verified structurally: the port call, not a
+        // getHomeSections path, produced the refresh.
+        val repository = buildRepository()
+        signIn("server-1", "user-A")
+        coEvery { apiClient.getHomeSections(any(), any()) } returns homeResult("A")
+        coEvery { homeSectionsCachePort.refreshHomeSection(any(), any(), any(), any()) } returns
+            Result.success(homeSection("latest_lib1_fresh"))
+
+        repository.getHomeSections(HomeSectionQuery()) // populate the assembled cache
+        repository.refreshHomeSection(homeSection("latest_lib1"), HomeSectionQuery(), force = true)
+        repository.getHomeSections(HomeSectionQuery()) // must refetch, not serve pre-pull payload
+
+        coVerify(exactly = 2) { apiClient.getHomeSections(any(), any()) }
+    }
+
+    @Test
+    fun `refreshHomeSection failure keeps the cached home payload`() = runBlocking {
+        // A failed pull leaves every row it didn't touch exactly as they were —
+        // the assembled payload is still accurate for them, so the next
+        // ordinary read keeps serving it instead of paying a full refetch.
+        val repository = buildRepository()
+        signIn("server-1", "user-A")
+        coEvery { apiClient.getHomeSections(any(), any()) } returns homeResult("A")
+        coEvery { homeSectionsCachePort.refreshHomeSection(any(), any(), any(), any()) } returns
+            Result.failure(RuntimeException("server down"))
+
+        repository.getHomeSections(HomeSectionQuery()) // populate the assembled cache
+        repository.refreshHomeSection(homeSection("latest_lib1"), HomeSectionQuery(), force = true)
+        repository.getHomeSections(HomeSectionQuery()) // still within TTL: cached
+
+        coVerify(exactly = 1) { apiClient.getHomeSections(any(), any()) }
+    }
+
+    @Test
     fun `getHomeSections identity-keyed - user A cached result not served to user B`() = runBlocking {
         // The headline C9 test: a wrong identity must be a guaranteed miss by
         // construction, so the previous user's home payload can never surface

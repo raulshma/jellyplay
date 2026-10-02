@@ -600,6 +600,7 @@ internal class HomeViewModel(
                         discoverSections = refresh.discoverSections,
                         recentlyGrabbed = refresh.recentlyGrabbed,
                         rollingDiscoverRowIds = refresh.rollingDiscoverRowIds,
+                        refreshingSectionIds = refresh.refreshingSectionIds,
                         offlineMode = refresh.offlineMode,
                     )
                 }
@@ -669,6 +670,7 @@ internal class HomeViewModel(
             is HomeUiEvent.MoveSection -> moveSection(event.type, event.up)
             is HomeUiEvent.SetLibrarySectionVisible -> setLibrarySectionVisible(event.libraryId, event.type, event.visible)
             is HomeUiEvent.RollDiscoverRow -> rollDiscoverRow(event.rowId)
+            is HomeUiEvent.RefreshSection -> refresher.refreshSectionRow(event.sectionId)
             is HomeUiEvent.PrefetchPhotoFolderChildUrls -> prefetchPhotoFolderChildUrls(event.items)
             is HomeUiEvent.EnsurePendingItemDetails -> ensurePendingItemDetails(event.itemIds)
             is HomeUiEvent.PlaySeries -> resolveSeriesPlay(event)

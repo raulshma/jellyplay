@@ -5,6 +5,7 @@ package com.raulshma.jellyplay.core.network.library
 import com.raulshma.jellyplay.core.model.CacheIdentity
 import com.raulshma.jellyplay.core.model.DiscoverRowConfig
 import com.raulshma.jellyplay.core.model.DiscoverRowSource
+import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionQuery
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.HomeSectionsResult
@@ -27,6 +28,7 @@ import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -987,5 +989,278 @@ class HomeSectionsFetcherTest {
             "a re-enabled row must not resurrect the pre-disable memo",
         )
         assertEquals(1, seerr.calls.size, "the fresh gate still spares the round-trips")
+    }
+
+    // ── refreshSection (the home screen's edge-pull single-row refetch) ────
+    // Pins the per-type mapping and the outcome contract: fresh items with
+    // the row's identity preserved, success(null) for an emptied source, and
+    // failure (stale row kept) for unrefreshable types.
+
+    @Test
+    fun `refreshSection continue watching filters hidden items and keeps identity`() = runTest {
+        val fake = FakeHomeSectionSources()
+        fake.continueWatchingResults += Result.success(listOf(item("a"), item("b")))
+        val section = HomeSectionType.CONTINUE_WATCHING.descriptor.section(listOf(item("old")))
+
+        val refreshed = fetcher(fake).refreshSection(
+            section,
+            HomeSectionQuery(
+                enabledSections = setOf(HomeSectionType.CONTINUE_WATCHING),
+                hiddenCwItemIds = setOf("b"),
+            ),
+        ).getOrThrow()!!
+
+        assertEquals("continue_watching", refreshed.id)
+        assertEquals(listOf("a"), refreshed.items.map { it.id })
+    }
+
+    @Test
+    fun `refreshSection merged continue watching rebuilds the cw + next up fold`() = runTest {
+        // OrderHomeSectionsUseCase folds Next Up into the CW row at batch
+        // time; the single-row refetch must rebuild that fold from BOTH fresh
+        // sources — a CW-only refetch would swap away the row's Next Up half.
+        // Same eligibility filters as the NEXT_UP arm, deduped by id.
+        val fake = FakeHomeSectionSources()
+        fake.continueWatchingResults += Result.success(listOf(item("cw1"), item("gone")))
+        fake.nextUpResults += Result.success(
+            listOf(item("cw1"), item("excluded").copy(seriesId = "s1"), item("n1")),
+        )
+        val section = HomeSectionType.CONTINUE_WATCHING.descriptor.section(listOf(item("old")))
+
+        val refreshed = fetcher(fake).refreshSection(
+            section,
+            HomeSectionQuery(
+                enabledSections = setOf(HomeSectionType.CONTINUE_WATCHING, HomeSectionType.NEXT_UP),
+                hiddenCwItemIds = setOf("gone"),
+                nextUpExcludedSeriesIds = setOf("s1"),
+            ),
+            mergeNextUpIntoContinueWatching = true,
+        ).getOrThrow()!!
+
+        assertEquals("continue_watching", refreshed.id)
+        assertEquals(listOf("cw1", "n1"), refreshed.items.map { it.id })
+    }
+
+    @Test
+    fun `refreshSection merged continue watching degrades to the cw half when next up fails`() = runTest {
+        // The batch's per-source failure policy: a failing sub-call drops its
+        // own row, never the fold — the merged refetch degrades to the CW half.
+        val fake = FakeHomeSectionSources()
+        fake.continueWatchingResults += Result.success(listOf(item("cw1")))
+        fake.nextUpResults += Result.failure(RuntimeException("next up down"))
+        val section = HomeSectionType.CONTINUE_WATCHING.descriptor.section(listOf(item("old")))
+
+        val refreshed = fetcher(fake).refreshSection(
+            section,
+            HomeSectionQuery(enabledSections = setOf(HomeSectionType.CONTINUE_WATCHING, HomeSectionType.NEXT_UP)),
+            mergeNextUpIntoContinueWatching = true,
+        ).getOrThrow()!!
+
+        assertEquals(listOf("cw1"), refreshed.items.map { it.id })
+    }
+
+    @Test
+    fun `refreshSection merged continue watching survives on next up alone when cw empties`() = runTest {
+        // The merge's relabel arm: when Continue Watching is absent, the batch
+        // paints a CW-typed row from Next Up — the refetch must not report the
+        // row emptied (success(null), a drop) while Next Up still has items.
+        val fake = FakeHomeSectionSources()
+        fake.nextUpResults += Result.success(listOf(item("n1")))
+        val section = HomeSectionType.CONTINUE_WATCHING.descriptor.section(listOf(item("old")))
+
+        val refreshed = fetcher(fake).refreshSection(
+            section,
+            HomeSectionQuery(enabledSections = setOf(HomeSectionType.CONTINUE_WATCHING, HomeSectionType.NEXT_UP)),
+            mergeNextUpIntoContinueWatching = true,
+        ).getOrThrow()!!
+
+        assertEquals(listOf("n1"), refreshed.items.map { it.id })
+    }
+
+    @Test
+    fun `refreshSection next up drops cw overlap and excluded series`() = runTest {
+        val fake = FakeHomeSectionSources()
+        fake.continueWatchingResults += Result.success(listOf(item("inCw")))
+        fake.nextUpResults += Result.success(
+            listOf(item("inCw"), item("excluded").copy(seriesId = "s1"), item("kept")),
+        )
+        val section = HomeSectionType.NEXT_UP.descriptor.section(listOf(item("old")))
+
+        val refreshed = fetcher(fake).refreshSection(
+            section,
+            HomeSectionQuery(
+                enabledSections = setOf(HomeSectionType.CONTINUE_WATCHING, HomeSectionType.NEXT_UP),
+                nextUpExcludedSeriesIds = setOf("s1"),
+            ),
+        ).getOrThrow()!!
+
+        assertEquals("next_up", refreshed.id)
+        assertEquals(listOf("kept"), refreshed.items.map { it.id })
+    }
+
+    @Test
+    fun `refreshSection latest media refetches the row's library and keeps instance identity`() = runTest {
+        val fake = FakeHomeSectionSources()
+        fake.latestResults += Result.success(listOf(item("new1")))
+        val descriptor = HomeSectionType.LATEST_MEDIA.descriptor
+        val section = HomeSection(
+            id = descriptor.idFor("lib1"),
+            title = descriptor.titleFor("Lib 1"),
+            type = HomeSectionType.LATEST_MEDIA,
+            items = listOf(item("old")),
+            libraryId = "lib1",
+            collectionType = "movies",
+        )
+
+        val refreshed = fetcher(fake).refreshSection(
+            section,
+            HomeSectionQuery(enabledSections = setOf(HomeSectionType.LATEST_MEDIA)),
+        ).getOrThrow()!!
+
+        assertEquals("latest_lib1", refreshed.id)
+        assertEquals("lib1", refreshed.libraryId)
+        assertEquals(listOf("new1"), refreshed.items.map { it.id })
+        assertTrue("latest:lib1:16:null" in fake.calls, "the row's own library is refetched")
+    }
+
+    @Test
+    fun `refreshSection next up keeps an item hidden from cw - assembler parity`() = runTest {
+        // The assembler keys the overlap set on the HIDDEN-FILTERED CW list
+        // (an item hidden from Continue Watching stays eligible for Next Up —
+        // its series' next episode is the intended resume path). A refetch
+        // deriving the set from the RAW CW list would drop it on pull and
+        // disagree with the batch paint.
+        val fake = FakeHomeSectionSources()
+        fake.continueWatchingResults += Result.success(listOf(item("inCw"), item("hiddenButInCw")))
+        fake.nextUpResults += Result.success(listOf(item("hiddenButInCw"), item("kept")))
+        val section = HomeSectionType.NEXT_UP.descriptor.section(listOf(item("old")))
+
+        val refreshed = fetcher(fake).refreshSection(
+            section,
+            HomeSectionQuery(
+                enabledSections = setOf(HomeSectionType.CONTINUE_WATCHING, HomeSectionType.NEXT_UP),
+                hiddenCwItemIds = setOf("hiddenButInCw"),
+            ),
+        ).getOrThrow()!!
+
+        assertEquals(listOf("hiddenButInCw", "kept"), refreshed.items.map { it.id })
+    }
+
+    @Test
+    fun `refreshSection recently added aggregates folders with overrides and cw overlap`() = runTest {
+        val fake = FakeHomeSectionSources()
+        fake.foldersResults += Result.success(
+            listOf(folder("f1"), folder("f2"), folder("music", collectionType = "music")),
+        )
+        // Only f1 is queried: f2 has Recently Added disabled per-library, and
+        // the music folder is filtered before the fan-out (batch parity).
+        fake.latestResults += Result.success(listOf(item("a"), item("dup")))
+        fake.continueWatchingResults += Result.success(listOf(item("a")))
+        val section = HomeSectionType.RECENTLY_ADDED.descriptor.section(listOf(item("old")))
+
+        val refreshed = fetcher(fake).refreshSection(
+            section,
+            HomeSectionQuery(
+                enabledSections = setOf(HomeSectionType.RECENTLY_ADDED, HomeSectionType.CONTINUE_WATCHING),
+                libraryHomeSectionOverrides = mapOf("f2" to setOf(HomeSectionType.RECENTLY_ADDED)),
+            ),
+        ).getOrThrow()!!
+
+        assertEquals("recently_added", refreshed.id)
+        assertEquals(listOf("dup"), refreshed.items.map { it.id })
+        assertTrue(fake.calls.none { it.startsWith("latest:music") }, "music folders stay filtered")
+        assertTrue(fake.calls.none { it.startsWith("latest:f2") }, "per-library overrides stay honored")
+    }
+
+    @Test
+    fun `refreshSection jellyfin discover row refetches through the row memo`() = runTest {
+        val fake = FakeHomeSectionSources()
+        fake.discoverRowResults += Result.success(listOf(item("d1")))
+        val row = DiscoverRowConfig(id = "r1", title = "Row r1")
+        val sectionId = HomeSectionType.DISCOVER.descriptor.idFor("r1")
+        val section = HomeSection(
+            id = sectionId,
+            title = "Row r1",
+            type = HomeSectionType.DISCOVER,
+            items = listOf(item("old")),
+        )
+
+        val refreshed = fetcher(fake).refreshSection(
+            section,
+            HomeSectionQuery(enabledSections = setOf(HomeSectionType.DISCOVER), discoverRows = listOf(row)),
+        ).getOrThrow()!!
+
+        assertEquals(sectionId, refreshed.id)
+        assertEquals(listOf("d1"), refreshed.items.map { it.id })
+        assertTrue("discover:r1:${row.limit}" in fake.calls)
+    }
+
+    @Test
+    fun `refreshSection rejects a seerr-sourced discover row`() = runTest {
+        val fake = FakeHomeSectionSources()
+        val row = DiscoverRowConfig(id = "m", title = "Seerr", source = DiscoverRowSource.SEERR)
+        val section = HomeSection(
+            id = HomeSectionType.DISCOVER.descriptor.idFor("m"),
+            title = "Seerr",
+            type = HomeSectionType.DISCOVER,
+            items = emptyList(),
+        )
+
+        val result = fetcher(fake).refreshSection(
+            section,
+            HomeSectionQuery(enabledSections = setOf(HomeSectionType.DISCOVER), discoverRows = listOf(row)),
+        )
+
+        assertTrue(result.isFailure, "Seerr rows ride the batch group gate — never a single-row refetch")
+    }
+
+    @Test
+    fun `refreshSection pinned row refetches via the pin routing table`() = runTest {
+        val fake = FakeHomeSectionSources()
+        fake.collectionResults += searchResultOf("p1", "p2")
+        val pin = PinnedHomeSection(PinnedSectionType.COLLECTION, sourceId = "col1", title = "My Collection")
+        val sectionId = HomeSectionType.PINNED.descriptor.idFor(pin.id)
+        val section = HomeSection(
+            id = sectionId,
+            title = "My Collection",
+            type = HomeSectionType.PINNED,
+            items = listOf(item("old")),
+        )
+
+        val refreshed = fetcher(fake).refreshSection(
+            section,
+            HomeSectionQuery(enabledSections = emptySet(), pinnedSections = listOf(pin)),
+        ).getOrThrow()!!
+
+        assertEquals(sectionId, refreshed.id)
+        assertEquals(listOf("p1", "p2"), refreshed.items.map { it.id })
+    }
+
+    @Test
+    fun `refreshSection empty source drops the row via null`() = runTest {
+        val fake = FakeHomeSectionSources()
+        // No scripted result — the fake resolves an empty success.
+        val section = HomeSectionType.CONTINUE_WATCHING.descriptor.section(listOf(item("old")))
+
+        val result = fetcher(fake).refreshSection(
+            section,
+            HomeSectionQuery(enabledSections = setOf(HomeSectionType.CONTINUE_WATCHING)),
+        )
+
+        assertTrue(result.isSuccess)
+        assertNull(result.getOrNull(), "an emptied source must signal the row's removal, not an empty swap")
+    }
+
+    @Test
+    fun `refreshSection rejects unrefreshable types`() = runTest {
+        val fake = FakeHomeSectionSources()
+        val section = HomeSectionType.RECOMMENDATIONS.descriptor.section(listOf(item("old")))
+
+        val result = fetcher(fake).refreshSection(
+            section,
+            HomeSectionQuery(enabledSections = setOf(HomeSectionType.RECOMMENDATIONS)),
+        )
+
+        assertTrue(result.isFailure, "the recommendations seed chain is batch-shaped — the gesture is gated off")
     }
 }

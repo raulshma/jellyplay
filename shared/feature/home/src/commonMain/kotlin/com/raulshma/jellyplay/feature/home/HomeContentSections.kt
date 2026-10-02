@@ -165,6 +165,12 @@ internal data class HomeContentState(
      */
     val rollingDiscoverRowIds: Set<String> = emptySet(),
     /**
+     * Section ids with an edge-pull refresh in flight — the matching online
+     * row's edge spinner spins while its single-row refetch runs (the
+     * refresher's mirror, see [HomeRefreshState.refreshingSectionIds]).
+     */
+    val refreshingSectionIds: Set<String> = emptySet(),
+    /**
      * Non-blocking informational banner (e.g. the implicit-offline
      * "couldn't reach the server — showing your downloads" notice). Null hides it.
      */
@@ -215,6 +221,8 @@ internal data class HomeContentCallbacks(
     val onFocusedMediaItem: (MediaItem) -> Unit = {},
     /** Dice affordance: re-roll one RANDOM-sorted custom discover row (row id). */
     val onRollDiscoverRow: (String) -> Unit = {},
+    /** Edge-pull refresh of ONE section row (section id) — see [HomeRefresher.refreshSectionRow]. */
+    val onRefreshSection: (String) -> Unit = {},
 )
 
 /**
@@ -510,6 +518,21 @@ internal fun HomeContentList(
                     } else null
                 }
 
+                // Edge-pull refresh wiring: online rows of the refreshable
+                // types only ([isEdgeRefreshableSection] — the same gate the
+                // refresher re-checks, so the gesture and the fetch cannot
+                // disagree). Offline-derived and Seerr rows pass null and
+                // render without the gesture.
+                val edgeRefreshCtx = if (offlineContent == null && isEdgeRefreshableSection(section)) {
+                    EdgeRefreshContext(
+                        sectionId = section.id,
+                        inProgress = section.id in state.refreshingSectionIds,
+                        onRefresh = { callbacks.onRefreshSection(section.id) },
+                    )
+                } else {
+                    null
+                }
+
                 // Which row renders is the chassis dispatch's decision (see
                 // homeRowChassis): the offline-mirror rule (#147) and the
                 // wide-row source split live in one pure, pinned place, so
@@ -531,6 +554,7 @@ internal fun HomeContentList(
                     currentOfflineById = currentOfflineById,
                     discoverSpacing = discoverSpacing,
                     seerrCardLoadingState = renderInputs.seerrCardLoadingState,
+                    edgeRefresh = edgeRefreshCtx,
                 )
                 if (section.seerrItems.isNotEmpty()) {
                     HomeSectionSeerrRow(ctx = armContext, state = state, callbacks = callbacks, renderInputs = renderInputs)
@@ -638,6 +662,22 @@ private data class HomeRowArmContext(
     val currentOfflineById: Map<String, OfflineMediaItem>,
     val discoverSpacing: Dp,
     val seerrCardLoadingState: SeerrCardLoadingState,
+    /** Edge-pull refresh wiring; null on every row the gesture is off for. */
+    val edgeRefresh: EdgeRefreshContext?,
+)
+
+/**
+ * The edge-pull refresh wiring for one online row: the section id the
+ * callback targets, whether that row's refetch is in flight (the edge
+ * spinner), and the release callback. Built once per item in
+ * [HomeContentList] — null on every row the gesture is disabled for
+ * ([isEdgeRefreshableSection] excludes the type; the offline feed and Seerr
+ * rows exclude themselves upstream).
+ */
+internal data class EdgeRefreshContext(
+    val sectionId: String,
+    val inProgress: Boolean,
+    val onRefresh: () -> Unit,
 )
 
 /** Seerr-sourced custom discover row (TMDB cards with request actions) — bypasses the row chassis entirely. */
@@ -846,6 +886,7 @@ private fun HomeSectionOnlineWideRow(
         clippingEnabled = state.experimentalCardClippingEnabled,
         onSectionLongClick = sectionLongClick,
         onFocusedItemChange = callbacks.onFocusedMediaItem,
+        edgeRefresh = ctx.edgeRefresh,
     )
 }
 
@@ -932,6 +973,7 @@ private fun HomeSectionOnlinePosterRow(
         },
         seriesPosterResolver = remember(callbacks.getImageUrl) { { id: String -> callbacks.getImageUrl(id) } },
         seriesBackdropResolver = remember(renderInputs.onlineBackdropResolver) { { id: String -> renderInputs.onlineBackdropResolver(id) } },
+        edgeRefresh = ctx.edgeRefresh,
     )
 }
 

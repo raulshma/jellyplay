@@ -111,6 +111,13 @@ sealed interface HomeUiEvent {
      */
     data class RollDiscoverRow(val rowId: String) : HomeUiEvent
 
+    /**
+     * The edge-pull refresh of ONE section row (by section id): refetches
+     * that section's source and swaps it in place (see
+     * [HomeRefresher.refreshSectionRow]).
+     */
+    data class RefreshSection(val sectionId: String) : HomeUiEvent
+
     /** Prefetches the child-image URLs for the visible photo-folder rows. */
     data class PrefetchPhotoFolderChildUrls(val items: List<MediaItem>) : HomeUiEvent
 

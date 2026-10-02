@@ -67,9 +67,15 @@ class MediaRepositorySurfaceTest {
      * music member left on the union is getAlbumTracks: the detail provider's
      * session resolves detail + album tracks together and is a mixed consumer,
      * so its read rides the union. getMusicVideos (already seam-only, zero
-     * callers) retired from the seam outright in the same wave.
+     * callers) retired from the seam outright in the same wave. 29 adds
+     * refreshHomeSection — the home-sections family's single-row refetch (the
+     * home screen's edge-pull refresh), the same row-scoped reasoning as the
+     * discover-row trio: the family's only consumer (HomeRefresher) already
+     * reaches it through this repository, and a collaborator would have to
+     * re-expose the identity/session + section-query plumbing the family
+     * already owns.
      */
-    private val maxInterfaceMembers = 28
+    private val maxInterfaceMembers = 29
 
     /** Walks up from the working dir to the module root that owns src/commonMain/kotlin. */
     private fun moduleRoot(): File {

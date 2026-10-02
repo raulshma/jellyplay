@@ -1,6 +1,8 @@
 package com.raulshma.jellyplay.core.network.library
 
 import com.raulshma.jellyplay.core.model.DiscoverRowConfig
+import com.raulshma.jellyplay.core.model.HomeSection
+import com.raulshma.jellyplay.core.model.HomeSectionQuery
 import com.raulshma.jellyplay.core.model.MediaItem
 
 /**
@@ -49,4 +51,26 @@ public interface HomeSectionsCachePort {
      * derivation matches the fetch path's.
      */
     fun seedDiscoverRow(row: DiscoverRowConfig, items: List<MediaItem>)
+
+    /**
+     * The single-row home refetch (the home screen's edge-pull refresh):
+     * re-runs exactly the sub-call(s) the batch fetch runs for [section]'s
+     * row — see [HomeSectionsFetcher.refreshSection] for the per-type mapping,
+     * the outcome contract (`null` = the row emptied and should drop) and the
+     * caching policy (sub-call memos bypassed on read, written on success;
+     * the assembled-payload cache and the SWR snapshot persist untouched — a
+     * single-row result must never masquerade as a whole-query snapshot down
+     * that path, which the offline layout mirror would pick up by recency).
+     *
+     * Lives on this port rather than [com.raulshma.jellyplay.core.network.api.LibraryApiClient]
+     * for the same reason the cache verbs do: its only consumer is the data
+     * layer's home path, and the port keeps the fetcher's growing surface off
+     * the client interface every fake and union otherwise has to track.
+     */
+    suspend fun refreshHomeSection(
+        section: HomeSection,
+        query: HomeSectionQuery,
+        mergeNextUpIntoContinueWatching: Boolean = false,
+        force: Boolean = true,
+    ): Result<HomeSection?>
 }

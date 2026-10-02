@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.home
 
 import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
+import com.raulshma.jellyplay.core.data.log.Log
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import com.raulshma.jellyplay.core.data.repository.BookTocCacheRepository
@@ -26,6 +27,7 @@ import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -36,7 +38,9 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.time.TimeSource
 
 /**
  * Deep module: the Home screen's entire refresh policy behind one small
@@ -157,14 +161,29 @@ internal class HomeRefresher(
          * this cap a stuck fetch parks on refreshMutex forever and the
          * handshake's full-screen loader never clears, leaving the home
          * stuck until the app is restarted. (The going-online busy flag is
-         * not at risk anymore: [OfflineModeManager.goingOnline] clears at
-         * the ONLINE emission, before this fetch even starts.) The loader
+         * not at risk anymore: [OfflineModeManager.goingOnline] owns it and clears it at the ONLINE
+         * emission, before this fetch even starts.) The loader
          * MAY legitimately stay up across the handshake's whole bounded
          * sequence — drain wait + capped fetch + drain re-await + capped
          * refetch, the slow-sync path in [observeOfflineMode] — every stage
          * is capped and the finally clears the loader on every exit path.
          */
         private const val GOING_ONLINE_TIMEOUT_MS = 30_000L
+
+        /**
+         * Minimum time a single-row edge-pull refresh keeps its per-section
+         * spinner up — the display floor, same rationale as the dice roll's
+         * [DiscoverRowsCoordinator.ROLL_MIN_SPIN_MS]: a fast local server
+         * answering in tens of milliseconds must still show perceptible
+         * feedback or the affordance reads as dead.
+         */
+        private const val SECTION_REFRESH_MIN_SPIN_MS = 500L
+
+        /** Test-visible mirror of [SECTION_REFRESH_MIN_SPIN_MS]. */
+        internal const val SECTION_REFRESH_MIN_SPIN_FOR_TEST = SECTION_REFRESH_MIN_SPIN_MS
+
+        /** Logcat/console tag for the edge-pull section refresh's diagnostics. */
+        private const val SECTION_REFRESH_TAG = "HomeSectionRefresh"
     }
 
     private val _state = stateStore
@@ -192,6 +211,11 @@ internal class HomeRefresher(
     // in-flight full refresh — but they are still tracked so [stop] and the
     // identity transitions can cancel an abandoned fan-out.
     private var discoverJob: Job? = null
+    // In-flight single-row edge-pull refreshes (section id → job): the identity
+    // transitions cancel them alongside the dice rolls — a refresh landing
+    // after a user switch would patch the previous identity's freshly painted
+    // row. Removed by each job's finally (the NonCancellable flag clear).
+    private val sectionRefreshJobs = LinkedHashMap<String, Job>()
     private var lastRefreshTime = 0L
     private var isAppInForeground = true
     // Set when a user-data change lands while backgrounded; consumed by [start].
@@ -454,14 +478,20 @@ internal class HomeRefresher(
             // (The going-online busy flag is not the fetch's to clear —
             // [OfflineModeManager] owns it and clears it at the ONLINE
             // emission, before this handshake's fetch even starts.)
-            // On cancellation the CW side-effect below is intentionally
-            // skipped: a fetch cancelled mid-flight may have stale CW data.
             if (currentCoroutineContext().isActive) {
                 _state.update { it.copy(isLoading = false, isRefreshing = false) }
             }
             refreshMutex.unlock()
         }
-        pendingCwSideEffect?.invoke()
+        // On cancellation the CW side-effect is intentionally skipped: a fetch
+        // cancelled mid-flight may have stale CW data — and after an identity
+        // switch it would broadcast the PREVIOUS user's Continue Watching over
+        // the new identity's widget store. Nothing between the finally and
+        // here suspends, so cancellation does not abort this statement on its
+        // own — the isActive guard is what skips it.
+        if (currentCoroutineContext().isActive) {
+            pendingCwSideEffect?.invoke()
+        }
     }
 
     /**
@@ -521,6 +551,7 @@ internal class HomeRefresher(
                 userDataRefreshJob?.cancel()
                 discoverJob?.cancel()
                 discoverRows.cancelForIdentityChange()
+                cancelSectionRefreshes()
                 // The raced-sync bypass described sections this reset just
                 // dropped — it must not outlive the identity that raced.
                 lastFetchRacedPendingSync = false
@@ -596,6 +627,9 @@ internal class HomeRefresher(
         // discoverSections with the previous user's rows.
         discoverJob?.cancel()
         discoverRows.cancelForIdentityChange()
+        // Same for the in-flight single-row refreshes — see
+        // [cancelSectionRefreshes].
+        cancelSectionRefreshes()
         val sectionPrefs = fetchInputs.sectionPrefs()
         val cachedSections = orderedCachedSections(sectionPrefs)
         // Same single-emission pairing as the fetch write: the SWR paint and
@@ -756,6 +790,188 @@ internal class HomeRefresher(
      */
     fun rollDiscoverRow(row: DiscoverRowConfig, onResult: (Boolean) -> Unit = {}) {
         discoverRows.roll(row, onResult)
+    }
+
+    /**
+     * The edge-pull refresh of ONE section row — the section-scoped sibling of
+     * the dice roll: fetch that row's source fresh (see
+     * `HomeSectionsFetcher.refreshSection` for the per-type mapping) and patch
+     * it in place, no full refresh, sibling rows untouched.
+     *
+     * Concurrency shape, deliberately different from the roll's: the fetch
+     * runs UNDER [refreshMutex] (the roll runs outside it), so a full fetch
+     * can never interleave its wholesale sections replace between this
+     * refresh's fetch and patch — the single-writer discipline makes the
+     * generation registry the rolls need unnecessary here. The cost: an
+     * edge-pull arriving mid-full-refresh queues behind it (correct — the full
+     * fetch's result supersedes the pre-pull rows this refresh was based on).
+     * The in-flight guard is a CAS check-and-set on
+     * [HomeRefreshState.refreshingSectionIds] inside `_state.update` (the
+     * roll's pattern), so a second pull while the row's spinner is up is a
+     * no-op.
+     *
+     * Outcome policy: a fresh row swaps in place (only `items` moves — the
+     * keyed lazy list animates the change); `null` (the row's source emptied)
+     * drops the row, matching the batch assembler's zero-items rule; failure
+     * keeps the stale row (logged, silent — the user's content must not
+     * vanish because a refetch failed). The merge pref rides along
+     * (`prefs.mergeContinueWatchingAndNextUp`): a merged Continue Watching
+     * row's refetch rebuilds the CW + Next Up fold, so a pull cannot swap
+     * away — or drop — the row's Next Up half. A Continue Watching swap
+     * updates the widget store under the mutex and defers the
+     * broadcast/Watch-Next side effect past it (exactly [fetchOnce]'s shape);
+     * a Continue Reading swap or drop decodes its fractions for the same
+     * single emission as the batch's.
+     *
+     * Known (accepted) corner: a concurrent [patchItems] landing between this
+     * refresh's sections read and write could be reverted by the write —
+     * unlike the batch path, the optimistic item patches hold no mutex. The
+     * window is one statement wide and the periodic fetch heals it.
+     */
+    fun refreshSectionRow(sectionId: String) {
+        val section = _state.value.sections.firstOrNull { it.id == sectionId } ?: return
+        if (offlineModeManager.isOffline) return
+        if (!isEdgeRefreshableSection(section)) return
+        // Check-and-set inside _state.update's CAS loop (the roll's pattern):
+        // a concurrent state writer can't slip a second refresh for the same
+        // row between the check and the set. `accepted` is ASSIGNED — not
+        // or-ed — on every lambda run: MutableStateFlow.update re-runs the
+        // lambda when its CAS fails, and the final run's verdict is the
+        // committed outcome, so a stale run's `true` cannot survive a retry
+        // that lost the race (two simultaneous pulls → exactly one accepts).
+        var accepted = false
+        _state.update { current ->
+            accepted = sectionId !in current.refreshingSectionIds
+            if (accepted) {
+                current.copy(refreshingSectionIds = current.refreshingSectionIds + sectionId)
+            } else {
+                current
+            }
+        }
+        if (!accepted) return
+        sectionRefreshJobs[sectionId] = scope.launch {
+            val startedAt = TimeSource.Monotonic.markNow()
+            // Deferred CW side effect — captured under the mutex (where a CW
+            // change is detectable), fired after it, mirroring [fetchOnce].
+            var pendingCwSideEffect: (() -> Unit)? = null
+            try {
+                runCatchingRethrowingCancellation {
+                    refreshMutex.lock()
+                    try {
+                        // Re-check under the lock: an offline flip racing the
+                        // pull must not hit the server.
+                        if (offlineModeManager.isOffline) return@runCatchingRethrowingCancellation
+                        val prefs = fetchInputs.sectionPrefs()
+                        mediaRepository.refreshHomeSection(
+                            section,
+                            prefs.query,
+                            mergeNextUpIntoContinueWatching = prefs.mergeContinueWatchingAndNextUp,
+                            force = true,
+                        )
+                            .onSuccess { fresh ->
+                                if (fresh != null) {
+                                    val patched = _state.value.sections.map {
+                                        if (it.id == sectionId) fresh else it
+                                    }
+                                    // Same single-emission pairing as the batch
+                                    // fetch's CR write: sections and their
+                                    // fractions land together.
+                                    if (section.type == HomeSectionType.CONTINUE_READING) {
+                                        val fractions = decodeBookProgressFractionsFor(patched)
+                                        _state.update { s ->
+                                            s.copy(sections = patched, bookProgressFractions = fractions)
+                                        }
+                                    } else {
+                                        _state.update { s -> s.copy(sections = patched) }
+                                    }
+                                    if (section.type == HomeSectionType.CONTINUE_WATCHING) {
+                                        val currentIds = fresh.items.map { it.id }.toSet()
+                                        if (currentIds != lastContinueWatchingIds) {
+                                            lastContinueWatchingIds = currentIds
+                                            widgetDataStore.setContinueWatching(fresh.items)
+                                            pendingCwSideEffect = {
+                                                continueWatchingBroadcaster.refreshContinueWatching()
+                                                if (fetchInputs.androidTvWatchNextEnabled()) {
+                                                    tvWatchNextScheduler.scheduleRefresh()
+                                                }
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    // The row legitimately emptied (e.g. the
+                                    // user finished everything in it) — drop it,
+                                    // the batch assembler renders nothing for an
+                                    // empty source either. A CONTINUE_READING
+                                    // drop pairs the fractions write with it
+                                    // (same single-emission rule as the swap
+                                    // above — the dropped books' stale fractions
+                                    // must not outlive the row).
+                                    val remaining = _state.value.sections.filterNot { it.id == sectionId }
+                                    if (section.type == HomeSectionType.CONTINUE_READING) {
+                                        val fractions = decodeBookProgressFractionsFor(remaining)
+                                        _state.update { s ->
+                                            s.copy(sections = remaining, bookProgressFractions = fractions)
+                                        }
+                                    } else {
+                                        _state.update { s ->
+                                            s.copy(sections = s.sections.filterNot { it.id == sectionId })
+                                        }
+                                    }
+                                }
+                            }
+                            .onFailure { e ->
+                                // Keep the stale row: a failed refetch must not
+                                // blank content the user is looking at. Silent
+                                // (logged) — the edge spinner simply stops.
+                                Log.w(
+                                    SECTION_REFRESH_TAG,
+                                    "Edge-pull refresh failed for ${section.id}: ${e.message}",
+                                    e,
+                                )
+                            }
+                    } finally {
+                        refreshMutex.unlock()
+                    }
+                }
+            } finally {
+                // Flag + job cleanup, with the spin floor (see
+                // [SECTION_REFRESH_MIN_SPIN_MS]) — NonCancellable so a cancelled
+                // refresh (stop, identity change) still clears the flag: a stuck
+                // flag would disable the row's pull forever. The floor itself is
+                // skipped when the job WAS cancelled: the cleanup must not park
+                // 500ms before the identity transition's fresh paint (or a new
+                // pull on the same row) can proceed.
+                val cancelled = !currentCoroutineContext().isActive
+                withContext(NonCancellable) {
+                    if (!cancelled) {
+                        val remainingMs = SECTION_REFRESH_MIN_SPIN_MS - startedAt.elapsedNow().inWholeMilliseconds
+                        if (remainingMs > 0) delay(remainingMs)
+                    }
+                    sectionRefreshJobs.remove(sectionId)
+                    _state.update { it.copy(refreshingSectionIds = it.refreshingSectionIds - sectionId) }
+                }
+            }
+            // Skipped on cancellation: an identity transition cancelled this
+            // refresh precisely so the previous identity's refetch cannot
+            // reach the new paint — its deferred CW broadcast must not either
+            // (refreshContinueWatching is non-suspending, so cancellation
+            // alone would not stop it; the guard does).
+            if (currentCoroutineContext().isActive) {
+                pendingCwSideEffect?.invoke()
+            }
+        }
+    }
+
+    /**
+     * Identity-transition drain of the edge-pull refreshes (see
+     * [sectionRefreshJobs]): cancel the in-flight row refreshes — their
+     * finally clears the flags via [NonCancellable] — so the previous
+     * identity's refetch cannot patch the incoming identity's freshly painted
+     * row. Same shape as [DiscoverRowsCoordinator.cancelForIdentityChange].
+     */
+    private fun cancelSectionRefreshes() {
+        sectionRefreshJobs.values.forEach { it.cancel() }
+        sectionRefreshJobs.clear()
     }
 
     /**
@@ -1119,6 +1335,14 @@ internal data class HomeRefreshState(
      * Cleared on completion AND failure (the finally in [rollDiscoverRow]).
      */
     val rollingDiscoverRowIds: Set<String> = emptySet(),
+    /**
+     * Section ids with an edge-pull refresh in flight (see
+     * [refreshSectionRow]) — drives the row's edge spinner and the
+     * one-refresh-per-row pull guard. Cleared on completion AND failure (the
+     * finally in [refreshSectionRow]); cancelled wholesale on identity
+     * transitions ([cancelSectionRefreshes]).
+     */
+    val refreshingSectionIds: Set<String> = emptySet(),
     /** Mirror of [OfflineModeManager.offlineMode]; transitions drive the policy in [HomeRefresher.observeOfflineMode]. */
     val offlineMode: OfflineMode = OfflineMode.ONLINE,
 ) {

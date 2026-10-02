@@ -425,6 +425,39 @@ class MediaRepositoryImpl internal constructor(
     override suspend fun getDiscoverRowItems(row: DiscoverRowConfig): Result<List<MediaItem>> =
         libraryApiClient.getDiscoverRowItems(row)
 
+    override suspend fun refreshHomeSection(
+        section: HomeSection,
+        query: HomeSectionQuery,
+        mergeNextUpIntoContinueWatching: Boolean,
+        force: Boolean,
+    ): Result<HomeSection?> =
+        // Straight to the port (the network fetcher owns the per-type
+        // mapping); no assembled-payload cache or SWR persist on this path —
+        // see the interface KDoc for why a single-row result must bypass both.
+        homeSectionsCachePort.refreshHomeSection(section, query, mergeNextUpIntoContinueWatching, force).also { result ->
+            // Evict the assembled whole-plan payload on success: the pull just
+            // changed one row server-side, and the in-memory entry (60s TTL)
+            // still carries the pre-pull sections — the next NON-FORCED read
+            // (the periodic loop's jittered tick can land inside the window)
+            // would serve it and visibly repaint the stale row over the fresh
+            // one. Same race window the dice roll closes, closed the same way:
+            // the epoch bump stall-guards any FULL fetch in flight across the
+            // clear — the refresher's mutex only serializes the feature
+            // layer's own fetches, but TvWatchNextPublisher and
+            // UserDataSyncWorker call getHomeSections directly, so their
+            // assembled write can straddle the clear; the guard turns that
+            // write into a return-but-don't-pin, and the next read refetches
+            // instead of re-pinning the pre-pull payload. The SWR snapshot
+            // persist stays untouched: the next FULL fetch re-persists it
+            // complete. Failure keeps the entry — it is still accurate for
+            // every row the pull didn't touch (same policy as a failed forced
+            // read leaving the network sub-call memos).
+            if (result.isSuccess) {
+                discoverRollEpoch.incrementAndGet()
+                homeSectionsCache.clear()
+            }
+        }
+
     override suspend fun rerollDiscoverRow(row: DiscoverRowConfig): Result<List<MediaItem>> {
         // The roll protocol's implementation: invalidate → fetch → seed. The
         // ordering contract, the three race windows and the epoch bump rule

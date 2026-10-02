@@ -192,7 +192,7 @@ class HomeRefresherTest {
      * TestScope, so the periodic loop's delay chain never blocks runTest's
      * completion wait; stopping it remains each test's job, see the class KDoc).
      */
-    private fun TestScope.buildRefresher(): HomeRefresher {
+    private fun TestScope.buildRefresher(mergeCwAndNextUp: Boolean = false): HomeRefresher {
         val scope = CoroutineScope(SupervisorJob() + StandardTestDispatcher(testScheduler))
         refresherScope = scope
         // One state store shared by the refresher and its side-fetch
@@ -231,7 +231,7 @@ class HomeRefresherTest {
                     HomeSectionPrefs(
                         query = HomeSectionQuery(),
                         homeSectionOrder = HomeSectionType.CONFIGURABLE,
-                        mergeContinueWatchingAndNextUp = false,
+                        mergeContinueWatchingAndNextUp = mergeCwAndNextUp,
                     )
                 },
                 seerrPreferences = { SeerrPreferences() },
@@ -1011,6 +1011,185 @@ class HomeRefresherTest {
         } finally {
             refresher.stop()
         }
+    }
+
+    // ── refreshSectionRow (the edge-pull single-row refresh) ───────────────
+
+    private fun latestSection(items: List<MediaItem>) = HomeSection(
+        id = "latest_lib1",
+        title = "Latest Lib 1",
+        type = HomeSectionType.LATEST_MEDIA,
+        items = items,
+        libraryId = "lib1",
+        collectionType = "movies",
+    )
+
+    /** Paints the given sections through the ordinary fetch path, as production would. */
+    private suspend fun TestScope.paint(vararg sections: HomeSection) {
+        coEvery { mediaRepository.getHomeSections(any(), any()) } returns Result.success(
+            HomeSectionsResult(sections = sections.toList()),
+        )
+        refresher!!.fetchOnce()
+        runCurrent()
+    }
+
+    /** Advances past the single-row refresh's spinner floor and settles the job. */
+    private fun TestScope.settleSectionRefresh() {
+        advanceTimeBy(HomeRefresher.SECTION_REFRESH_MIN_SPIN_FOR_TEST + 1)
+        runCurrent()
+    }
+
+    @Test
+    fun `section refresh swaps only the target row and clears the flag`() = runTest {
+        buildRefresher()
+        paint(
+            section(HomeSectionType.CONTINUE_WATCHING, listOf(item("cw1"))),
+            latestSection(listOf(item("old"))),
+        )
+        coEvery { mediaRepository.refreshHomeSection(any(), any(), any(), any()) } returns Result.success(
+            latestSection(listOf(item("new"))),
+        )
+        val r = refresher!!
+
+        r.refreshSectionRow("latest_lib1")
+        runCurrent()
+        assertTrue("latest_lib1" in r.state.value.refreshingSectionIds, "flag up while the fetch runs")
+
+        settleSectionRefresh()
+
+        val refreshed = r.state.value.sections
+        assertEquals(listOf("new"), refreshed.first { it.id == "latest_lib1" }.items.map { it.id })
+        assertEquals(
+            listOf("cw1"),
+            refreshed.first { it.type == HomeSectionType.CONTINUE_WATCHING }.items.map { it.id },
+            "sibling rows are untouched",
+        )
+        assertTrue("latest_lib1" !in r.state.value.refreshingSectionIds, "flag clears on completion")
+        coVerify(exactly = 1) { mediaRepository.refreshHomeSection(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `section refresh failure keeps the stale row and surfaces no error`() = runTest {
+        buildRefresher()
+        paint(latestSection(listOf(item("old"))))
+        coEvery { mediaRepository.refreshHomeSection(any(), any(), any(), any()) } returns Result.failure(
+            RuntimeException("server down"),
+        )
+        val r = refresher!!
+
+        r.refreshSectionRow("latest_lib1")
+        settleSectionRefresh()
+
+        assertEquals(
+            listOf("old"),
+            r.state.value.sections.single().items.map { it.id },
+            "a failed refetch must not blank the row the user is looking at",
+        )
+        assertNull(r.state.value.error)
+        assertTrue("latest_lib1" !in r.state.value.refreshingSectionIds)
+    }
+
+    @Test
+    fun `section refresh empty result drops the row`() = runTest {
+        buildRefresher()
+        paint(latestSection(listOf(item("old"))))
+        coEvery { mediaRepository.refreshHomeSection(any(), any(), any(), any()) } returns Result.success(null)
+        val r = refresher!!
+
+        r.refreshSectionRow("latest_lib1")
+        settleSectionRefresh()
+
+        assertTrue(r.state.value.sections.isEmpty(), "an emptied source drops the row (batch assembler parity)")
+        assertTrue("latest_lib1" !in r.state.value.refreshingSectionIds)
+    }
+
+    @Test
+    fun `section refresh is a no-op while offline`() = runTest {
+        buildRefresher()
+        paint(latestSection(listOf(item("old"))))
+        every { offlineModeManager.isOffline } returns true
+        val r = refresher!!
+
+        r.refreshSectionRow("latest_lib1")
+        runCurrent()
+
+        coVerify(exactly = 0) { mediaRepository.refreshHomeSection(any(), any(), any(), any()) }
+        assertTrue(r.state.value.refreshingSectionIds.isEmpty())
+    }
+
+    @Test
+    fun `section refresh ignores a second pull while the row's refresh is in flight`() = runTest {
+        buildRefresher()
+        paint(latestSection(listOf(item("old"))))
+        val gate = CompletableDeferred<Unit>()
+        coEvery { mediaRepository.refreshHomeSection(any(), any(), any(), any()) } coAnswers {
+            gate.await()
+            Result.success(latestSection(listOf(item("new"))))
+        }
+        val r = refresher!!
+
+        r.refreshSectionRow("latest_lib1")
+        runCurrent()
+        r.refreshSectionRow("latest_lib1")
+        runCurrent()
+        coVerify(exactly = 1) { mediaRepository.refreshHomeSection(any(), any(), any(), any()) }
+
+        gate.complete(Unit)
+        settleSectionRefresh()
+        assertEquals(listOf("new"), r.state.value.sections.single().items.map { it.id })
+        assertTrue("latest_lib1" !in r.state.value.refreshingSectionIds)
+    }
+
+    @Test
+    fun `section refresh of continue watching updates the widget and fires the side effect`() = runTest {
+        buildRefresher()
+        paint(section(HomeSectionType.CONTINUE_WATCHING, listOf(item("cw1"))))
+        coEvery { mediaRepository.refreshHomeSection(any(), any(), any(), any()) } returns Result.success(
+            section(HomeSectionType.CONTINUE_WATCHING, listOf(item("cw2"))),
+        )
+        val r = refresher!!
+
+        r.refreshSectionRow("CONTINUE_WATCHING")
+        settleSectionRefresh()
+
+        coVerify { widgetDataStore.setContinueWatching(match { items -> items.map { it.id } == listOf("cw2") }) }
+        verify { continueWatchingBroadcaster.refreshContinueWatching() }
+    }
+
+    @Test
+    fun `section refresh passes the merge pref so a merged cw row keeps its next up half`() = runTest {
+        buildRefresher(mergeCwAndNextUp = true)
+        paint(section(HomeSectionType.CONTINUE_WATCHING, listOf(item("cw1"), item("n1"))))
+        coEvery { mediaRepository.refreshHomeSection(any(), any(), any(), any()) } returns Result.success(
+            section(HomeSectionType.CONTINUE_WATCHING, listOf(item("cw2"), item("n2"))),
+        )
+        val r = refresher!!
+
+        r.refreshSectionRow("CONTINUE_WATCHING")
+        settleSectionRefresh()
+
+        // The merge flag must reach the repository: the fetcher owns
+        // rebuilding the CW + Next Up fold (pinned in HomeSectionsFetcherTest);
+        // this pins the feature half — without the flag riding along, a pull
+        // on the merged row would swap away (or drop) its Next Up half.
+        coVerify(exactly = 1) { mediaRepository.refreshHomeSection(any(), any(), true, any()) }
+        assertEquals(
+            listOf("cw2", "n2"),
+            r.state.value.sections.single { it.type == HomeSectionType.CONTINUE_WATCHING }.items.map { it.id },
+        )
+    }
+
+    @Test
+    fun `section refresh ignores non-refreshable section types`() = runTest {
+        buildRefresher()
+        paint(section(HomeSectionType.RECOMMENDATIONS, listOf(item("rec1"))))
+        val r = refresher!!
+
+        r.refreshSectionRow("RECOMMENDATIONS")
+        runCurrent()
+
+        coVerify(exactly = 0) { mediaRepository.refreshHomeSection(any(), any(), any(), any()) }
+        assertTrue(r.state.value.refreshingSectionIds.isEmpty())
     }
 
     private fun section(

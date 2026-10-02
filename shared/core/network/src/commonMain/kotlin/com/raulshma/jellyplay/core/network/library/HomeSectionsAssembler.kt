@@ -59,6 +59,19 @@ internal class HomeSectionsAssemblyOutput(
     val firstError: Throwable?,
 )
 
+/**
+ * The assembler's Next Up eligibility filters — CW-overlap drop (keyed on the
+ * HIDDEN-FILTERED Continue Watching id set) plus the "remove from Next Up"
+ * series blocklist — shared verbatim with [HomeSectionsFetcher.refreshSection]'s
+ * single-row refetch so the two cannot drift.
+ */
+internal fun List<MediaItem>.filterNextUpEligible(
+    continueWatchingIds: Set<String>,
+    excludedSeriesIds: Set<String>,
+): List<MediaItem> =
+    filter { it.id !in continueWatchingIds }
+        .filter { it.seriesId == null || it.seriesId !in excludedSeriesIds }
+
 internal fun assembleHomeSections(input: HomeSectionsAssemblyInputs): HomeSectionsAssemblyOutput {
     val query = input.query
     val enabledSections = query.enabledSections
@@ -104,8 +117,7 @@ internal fun assembleHomeSections(input: HomeSectionsAssemblyInputs): HomeSectio
         input.nextUpResult
             .onSuccess { list ->
                 // Drop items whose series is in the user's "remove from Next Up" blocklist.
-                val filtered = list.filter { it.id !in continueWatchingIds }
-                    .filter { it.seriesId == null || it.seriesId !in query.nextUpExcludedSeriesIds }
+                val filtered = list.filterNextUpEligible(continueWatchingIds, query.nextUpExcludedSeriesIds)
                 if (filtered.isNotEmpty()) {
                     // Title comes from the descriptor ("Next Up") — the
                     // pre-descriptor literal here had drifted to "NextUp".

@@ -82,6 +82,13 @@ data class HomeUiState(
      * choreography owns it).
      */
     val rollingDiscoverRowIds: Set<String> = emptySet(),
+    /**
+     * Section ids with an edge-pull refresh in flight — drives the matching
+     * row's edge spinner and arms the one-refresh-per-row pull guard.
+     * Mirrored from [HomeRefreshState.refreshingSectionIds] (the refresher's
+     * single-row refresh choreography owns it).
+     */
+    val refreshingSectionIds: Set<String> = emptySet(),
     val homeMode: HomeMode = HomeMode.VIDEO,
     /** The appearance/theme quintet — see [AppearanceUiState]. */
     val appearance: AppearanceUiState = AppearanceUiState(),

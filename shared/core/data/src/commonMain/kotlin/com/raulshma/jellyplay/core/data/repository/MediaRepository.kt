@@ -30,6 +30,38 @@ interface MediaRepository {
     ): Result<HomeSectionsResult>
 
     /**
+     * The single-row home refetch (the home screen's edge-pull refresh):
+     * re-runs exactly the sub-call(s) the batch fetch runs for [section]'s
+     * row and returns the fresh row with its identity preserved — see
+     * `HomeSectionsFetcher.refreshSection` (the network layer's single owner
+     * of the mapping) for the per-type contract.
+     *
+     * Outcome contract:
+     *  - `Result.success(section)` — swap the row in place.
+     *  - `Result.success(null)` — the row's source returned no items; the row
+     *    should drop (the batch assembler's zero-items policy).
+     *  - `Result.failure` — keep the stale row; the caller's policy.
+     *
+     * [mergeNextUpIntoContinueWatching] mirrors the batch merge
+     * (OrderHomeSectionsUseCase): a CONTINUE_WATCHING row's refetch then
+     * rebuilds the fold from both fresh sources, so a pull on the merged row
+     * cannot swap away (or drop) its Next Up half.
+     *
+     * Deliberately NOT routed through [getHomeSections]' cache choreography:
+     * a single-row result never enters the assembled-payload TtlCache nor the
+     * SWR snapshot persist (`getLatestForIdentity` picks snapshots by recency,
+     * so a partial snapshot would hijack the offline home's layout mirror).
+     * The network sub-call memos ARE bypassed on read and written on success,
+     * so the next periodic fetch serves the fresh rows.
+     */
+    suspend fun refreshHomeSection(
+        section: HomeSection,
+        query: HomeSectionQuery,
+        mergeNextUpIntoContinueWatching: Boolean = false,
+        force: Boolean = true,
+    ): Result<HomeSection?>
+
+    /**
      * Fetches one custom discover row's items fresh from the server (the
      * editor's unsaved-draft preview) — bypasses every cache by construction
      * (direct client call, not the home-sections path). A ROLL that must
