@@ -11,9 +11,11 @@ import kotlin.test.assertEquals
  *
  *  - priority is **Offline > ServerUnreachable > Local > Error > Loading >
  *    None**, regardless of how many lower-priority signals are also set;
- *  - ServerUnreachable requires connectivity to be Online AND the health to
- *    be [ServerHealth.Unreachable] — an unreachable server while the device is
- *    on a Local-only network degrades to Local (health is indeterminable);
+ *  - ServerUnreachable requires the health to be [ServerHealth.Unreachable]
+ *    on a usable network (Online or Local) — a probed-unreachable server on
+ *    a Local-only network is a dead server or portal, not a working offline
+ *    setup, so it outranks the calm Local wifi-off; only a fully-gone
+ *    network (Offline) beats it, since health can no longer be measured;
  *  - all health states other than Unreachable never alter the result;
  *  - the default `serverHealth` parameter is Unknown, so plain call sites get
  *    the loading/error/none ladder.
@@ -66,10 +68,27 @@ class ResolveHeaderStatusTest {
     }
 
     @Test
-    fun localNetworkWithUnreachableServer_staysLocal() {
-        // Server health cannot be measured without internet; Local wins.
+    fun localNetworkWithHealthyServer_staysLocal() {
+        // The working-LAN shape: no internet, but the server answers — the
+        // calm wifi-off icon, not the error server icon.
         assertEquals(
             HeaderStatus.Local,
+            resolveHeaderStatus(
+                isLoading = false,
+                hasError = false,
+                networkStatus = NetworkStatus.Local,
+                serverHealth = ServerHealth.Healthy(50L),
+            ),
+        )
+    }
+
+    @Test
+    fun localNetworkWithUnreachableServer_yieldsServerUnreachable() {
+        // A LAN-only network that fails the health probe is a dead server or
+        // portal, not a working offline setup — the error-tinted server icon
+        // outranks the calm wifi-off.
+        assertEquals(
+            HeaderStatus.ServerUnreachable,
             resolveHeaderStatus(
                 isLoading = false,
                 hasError = false,

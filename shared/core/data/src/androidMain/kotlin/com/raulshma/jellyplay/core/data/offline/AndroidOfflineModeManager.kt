@@ -2,12 +2,13 @@ package com.raulshma.jellyplay.core.data.offline
 
 import android.content.Context
 import android.net.ConnectivityManager
-import android.net.NetworkCapabilities
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
 import com.raulshma.jellyplay.core.data.network.NetworkMonitor
+import com.raulshma.jellyplay.core.data.network.activeNetworkStatus
 import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore
+import com.raulshma.jellyplay.core.model.NetworkStatus
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
@@ -50,25 +51,23 @@ class AndroidOfflineModeManager(
 }
 
 /**
- * The foreground probe verdict behind [OfflineModeDerivation.fromProbe]: an
- * active network carrying both INTERNET and VALIDATED capabilities. Treats
- * an unvalidated network (captive portal, Wi-Fi with no upstream) as
- * unreachable too — a network can report INTERNET capability yet fail
- * validation, leaving the app unable to reach the server; auto-offline then
- * surfaces the downloaded library instead of erroring.
+ * The foreground probe verdict behind [OfflineModeDerivation.fromProbe]: the
+ * active network mapped through the same ladder the monitor publishes
+ * ([activeNetworkStatus] → [NetworkStatus]) — Online and Local count as
+ * reachable; only [NetworkStatus.Offline] (no active network, or no INTERNET
+ * capability) does not. Validation is deliberately not required — an
+ * unvalidated network (captive portal, Wi-Fi whose uplink is down) is exactly
+ * the shape of a LAN connection whose Jellyfin server may still be reachable,
+ * so demanding VALIDATED engages auto-offline — the downloaded library — over
+ * a usable online session. Reading the shared ladder (not a hand-mirrored
+ * capability check) is what keeps this sync verdict and the monitor's
+ * published status from drifting.
  *
  * A top-level function (not a member) so the super-constructor lambda can
  * reference it from the [Context] parameter alone — no `this` capture before
  * the body's constructor has run.
  */
-private fun Context.probeConnectivityReachable(): Boolean {
-    val connectivityManager =
-        getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-    val activeNetwork = connectivityManager.activeNetwork
-    val capabilities = activeNetwork?.let {
-        connectivityManager.getNetworkCapabilities(it)
-    }
-    val hasInternet = capabilities?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
-    val isValidated = capabilities?.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) == true
-    return activeNetwork != null && hasInternet && isValidated
-}
+private fun Context.probeConnectivityReachable(): Boolean =
+    activeNetworkStatus(
+        getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager,
+    ) != NetworkStatus.Offline

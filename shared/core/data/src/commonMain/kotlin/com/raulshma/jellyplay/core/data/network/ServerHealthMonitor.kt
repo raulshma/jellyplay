@@ -15,7 +15,10 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
  * Periodically checks the health of the connected Jellyfin server by pinging
@@ -23,7 +26,17 @@ import kotlinx.coroutines.launch
  * that can be consumed by the UI.
  *
  * The monitor starts checking when a server is connected and stops when
- * disconnected. The check interval is [HEALTH_CHECK_INTERVAL_MS].
+ * disconnected. The check interval is [HEALTH_CHECK_INTERVAL_MS]; in between
+ * ticks, every network-status transition to a usable network (Online or
+ * Local) re-probes immediately, so the published verdict reflects the
+ * network the device is actually on rather than the one the last periodic
+ * tick saw — the header indicator reads this flow, and a stale
+ * Healthy/Unreachable right after a Wi-Fi change is exactly the wrong
+ * answer. While a re-probe is in flight the previous verdict stays
+ * published: [ServerHealth.Checking] means only "no verdict yet" (before
+ * the first probe completes, or after [stopMonitoring]), never "a verdict
+ * is being re-derived" — the header ladder has no Checking branch, and
+ * republishing it mid-session would flicker the indicator on every probe.
  *
  * promotion from jvmShared: the clock edge narrowed to the common
  * [EpochMillisSource] seam (JVM [TimeSource] fakes in jvmTest still satisfy
@@ -35,10 +48,21 @@ import kotlinx.coroutines.launch
  */
 private const val MONITOR_LOOP = "ServerHealthMonitor.loop"
 
+/** The network-transition re-probe collector, cancelled with the loop. */
+private const val NETWORK_TRIGGER = "ServerHealthMonitor.networkTrigger"
+
 class ServerHealthMonitor(
     private val apiClient: AuthApiClient,
     /** Clock seam for the per-check latency measurement (start/delta pair). */
     private val timeSource: EpochMillisSource,
+    /**
+     * The network seam behind the transition re-probe: every emission after
+     * the collector's initial echo that is still usable (`NetworkStatus.hasNetwork`)
+     * triggers an immediate [checkHealth]. Offline is skipped — with no
+     * network the probe can only fail, and the Offline verdict itself is
+     * already the header's top-priority state.
+     */
+    private val networkMonitor: NetworkMonitor,
 ) {
     // The monitor loop runs on [ioDispatcher] in production. Unit tests swap
     // this for their virtual-time test dispatcher (see [useDispatcherForTest])
@@ -67,6 +91,15 @@ class ServerHealthMonitor(
     private val _serverHealth = MutableStateFlow<ServerHealth>(ServerHealth.Unknown)
     val serverHealth: StateFlow<ServerHealth> = _serverHealth.asStateFlow()
 
+    /**
+     * Serializes probes: the periodic loop and the network-transition
+     * collector can both want to check at once, and without the mutex their
+     * verdict writes can interleave — a slow probe's verdict landing over a
+     * fresh one's. Inside the lock each probe publishes atomically; a queued
+     * second probe simply waits its turn.
+     */
+    private val probeMutex = Mutex()
+
     @Volatile
     private var currentServerAddress: String? = null
 
@@ -85,7 +118,14 @@ class ServerHealthMonitor(
             stopMonitoring()
             return
         }
-        if (currentServerAddress == serverAddress && monitorTasks[MONITOR_LOOP]?.isActive == true) return
+        // Both slots must be alive to call this a no-op — they start and stop
+        // together, and a dead trigger would otherwise survive as a zombie
+        // behind the loop's guard.
+        if (currentServerAddress == serverAddress && monitorTasks[MONITOR_LOOP]?.isActive == true &&
+            monitorTasks[NETWORK_TRIGGER]?.isActive == true
+        ) {
+            return
+        }
 
         // Cancel any in-flight loop before starting a new one to avoid races
         // where two coroutines ping concurrently after an address switch.
@@ -101,9 +141,22 @@ class ServerHealthMonitor(
                 // in use.
                 runCatchingRethrowingCancellation { apiClient.selectReachableAddress() }
                 val activeAddress = apiClient.getServerUrl()?.takeIf { it.isNotBlank() } ?: serverAddress
-                runCatchingRethrowingCancellation { checkHealth(activeAddress) }
+                probeNow(activeAddress)
                 delay(HEALTH_CHECK_INTERVAL_MS)
             }
+            }
+        }
+        monitorTasks.replace(NETWORK_TRIGGER) {
+            scope.launch {
+                // drop(1) skips the StateFlow's startup echo — the loop's
+                // first iteration already checks, so the echo would only
+                // double the initial probe. Every later emission is a real
+                // network transition.
+                networkMonitor.networkStatus.drop(1).collect { status ->
+                    if (status.hasNetwork) {
+                        probeNow(currentServerAddress)
+                    }
+                }
             }
         }
     }
@@ -113,13 +166,25 @@ class ServerHealthMonitor(
      */
     fun stopMonitoring() {
         monitorTasks.cancel(MONITOR_LOOP)
+        monitorTasks.cancel(NETWORK_TRIGGER)
         currentServerAddress = null
         _serverHealth.value = ServerHealth.Unknown
     }
 
     /**
+     * One probe behind the loop/collector's shared guard: [checkHealth] with
+     * cancellation rethrown — both callers sit in infinite loops and
+     * collectors where a swallowed cancellation would leak a zombie task.
+     */
+    private suspend fun probeNow(serverAddress: String?) {
+        runCatchingRethrowingCancellation { checkHealth(serverAddress) }
+    }
+
+    /**
      * Performs a single health check against the given server address
-     * (or the currently monitored address when null).
+     * (or the currently monitored address when null). Serialized by
+     * [probeMutex] so concurrent loop/transition probes publish their
+     * verdicts atomically instead of interleaving.
      */
     suspend fun checkHealth(serverAddress: String? = currentServerAddress) {
         if (serverAddress == null) {
@@ -127,16 +192,25 @@ class ServerHealthMonitor(
             return
         }
 
-        _serverHealth.value = ServerHealth.Checking
+        probeMutex.withLock {
+            // Checking only until the first verdict lands; later probes hold
+            // the previous verdict visible while re-probing. The header has
+            // no Checking branch, so republishing it mid-session rendered a
+            // calm Local frame between two ServerUnreachable frames — a
+            // flicker on every transition re-probe and every periodic tick.
+            if (_serverHealth.value == ServerHealth.Unknown) {
+                _serverHealth.value = ServerHealth.Checking
+            }
 
-        val startTime = timeSource.nowEpochMillis()
-        val result = apiClient.getServerInfo(serverAddress)
-        val latency = timeSource.nowEpochMillis() - startTime
+            val startTime = timeSource.nowEpochMillis()
+            val result = apiClient.getServerInfo(serverAddress)
+            val latency = timeSource.nowEpochMillis() - startTime
 
-        _serverHealth.value = if (result.isSuccess) {
-            ServerHealth.Healthy(latencyMs = latency)
-        } else {
-            ServerHealth.Unreachable
+            _serverHealth.value = if (result.isSuccess) {
+                ServerHealth.Healthy(latencyMs = latency)
+            } else {
+                ServerHealth.Unreachable
+            }
         }
     }
 

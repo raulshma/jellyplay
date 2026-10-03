@@ -53,7 +53,11 @@ sealed class HeaderStatus {
     /** Device is completely offline — no network at all. */
     data object Offline : HeaderStatus()
 
-    /** Server is unreachable despite having network connectivity. */
+    /**
+     * Server is unreachable despite a usable network — either validated
+     * internet or an unvalidated LAN (captive portal / dead uplink with no
+     * server answering on it).
+     */
     data object ServerUnreachable : HeaderStatus()
 }
 
@@ -185,6 +189,16 @@ fun HeaderStatusIndicator(
  *
  * Priority: **offline** > **serverUnreachable** > **local** > **error** > **loading** > **none**
  *
+ * A probed [ServerHealth.Unreachable] outranks the [NetworkStatus.Local]
+ * wifi-off icon: a LAN-only network that cannot answer the health ping is a
+ * dead server/portal, not a working offline setup, so it renders the
+ * error-tinted server icon on both Online and Local networks. Only a
+ * network the OS reports as fully gone outranks it.
+ *
+ * [ServerHealth.Checking] deliberately has no branch: the monitor publishes
+ * it only before the first verdict lands (later probes hold the previous
+ * verdict), so it correctly falls through to the loading/none ladder.
+ *
  * @param isLoading Whether content is currently loading/refreshing.
  * @param hasError Whether an error has occurred.
  * @param networkStatus The current network connectivity state.
@@ -197,7 +211,7 @@ fun resolveHeaderStatus(
     serverHealth: ServerHealth = ServerHealth.Unknown,
 ): HeaderStatus = when {
     networkStatus == NetworkStatus.Offline -> HeaderStatus.Offline
-    networkStatus == NetworkStatus.Online && serverHealth is ServerHealth.Unreachable -> HeaderStatus.ServerUnreachable
+    serverHealth is ServerHealth.Unreachable -> HeaderStatus.ServerUnreachable
     networkStatus == NetworkStatus.Local -> HeaderStatus.Local
     hasError -> HeaderStatus.Error
     isLoading -> HeaderStatus.Loading

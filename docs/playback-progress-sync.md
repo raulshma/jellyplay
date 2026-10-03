@@ -133,8 +133,11 @@ the server's chance to resolve final resume position) is not silently dropped.
 the app's `OfflineMode`, firing `PlaybackSyncScheduler.enqueueNow()` whenever
 the combined state becomes ready (validated Online + Offline Mode disabled).
 That includes an Offline/Local → Online transition and turning **manual Offline
-Mode** off while connectivity is already online. (`Local` is treated as offline
-— captive portals can't reach the server.) It also fires once at app start so
+Mode** off while connectivity is already online. (`Local` is treated the same
+as Offline here — a portal's LAN cannot *reliably* reach the server, so sync
+drains wait for a validated connection; auto-offline, by contrast, stays
+online over a Local network since the LAN server may answer.) It also fires
+once at app start so
 progress captured while the process was killed flushes shortly after launch.
 
 `PlaybackSyncWorker.doWork()`:

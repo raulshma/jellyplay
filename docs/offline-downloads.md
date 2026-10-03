@@ -162,7 +162,7 @@ Open **Settings → Storage** to tune downloads. Defaults are shown below.
 | Setting | Default | Notes |
 | ------- | ------- | ----- |
 | **Manual offline mode** | Off | Force JellyPlay offline until you toggle back |
-| **Auto offline** | On | Switch to offline automatically when the network drops or is metered/unvalidated |
+| **Auto offline** | On | Switch to offline automatically when no usable network is active (an unvalidated / captive-portal network still counts as usable — a LAN server may answer on it) |
 | **Cellular download warning** | Off (0) | Warn before downloading files larger than N MB on a metered network |
 
 ## Managing the queue
@@ -204,8 +204,8 @@ bundled offline subtitles and local trickplay sprites automatically.
 
 You can also toggle **Offline mode** manually from the home screen at any
 time — useful to force offline playback even when a flaky connection is
-available. While offline (manually, automatically on network loss, or when
-the server can't be reached), the home screen keeps its normal layout and
+available. While offline (manually, or automatically when no usable network
+is active), the home screen keeps its normal layout and
 shows rows derived from your downloads — Continue Watching, Next Up,
 Recently Downloaded, Movies, Series, Music — served entirely from the
 on-device store:
@@ -488,7 +488,9 @@ multi-connection chunking, and concurrency than the ExoPlayer helper.
 - **`OfflineModeManager`** — a lifecycle observer that derives
   `OfflineMode` (`ONLINE` / `OFFLINE_MANUAL` / `OFFLINE_AUTO`) by
   combining the manual toggle, the auto toggle, and `NetworkMonitor`
-  (treating captive-portal / unvalidated networks as offline).
+  (an active internet-capable network counts as reachable even when
+  unvalidated — a LAN Jellyfin server may answer on it; only the absence
+  of a usable network engages the auto rule).
 
 ### Persistence (Room)
 

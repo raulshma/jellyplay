@@ -40,8 +40,11 @@ import org.robolectric.annotation.Config
  *     OFFLINE_AUTO; a Local (unvalidated Wi-Fi) network is NOT offline for
  *     the auto rule;
  *  2. [AndroidOfflineModeManager.checkNetworkAndAutoDetect] — the foreground
- *     re-derivation over the ConnectivityManager probe: no network, or an
- *     INTERNET-but-unvalidated network (captive portal), is offline; manual
+ *     re-derivation over the ConnectivityManager probe: only the absence of
+ *     an active INTERNET-capable network is offline; an unvalidated network
+ *     (captive portal, Wi-Fi with a dead uplink) still counts as reachable —
+ *     the LAN Jellyfin server may answer over it, exactly the
+ *     [NetworkStatus.Local] the monitor reports for the same state; manual
  *     short-circuits before the probe; MANUAL is sticky against a reachable
  *     network (only the pref clears it, via the collector).
  *
@@ -81,7 +84,7 @@ class AndroidOfflineModeManagerTest {
         withTimeout(5_000) { manager.offlineMode.first { it == expected } }
     }
 
-    private fun setReachableNetwork(validated: Boolean) {
+    private fun setReachableNetwork(validated: Boolean, internet: Boolean = true) {
         val shadow = Shadows.shadowOf(connectivityManager)
         // getActiveNetwork() in the shadow is non-null only when BOTH
         // defaultNetworkActive is set and activeNetworkInfo is non-null —
@@ -99,7 +102,7 @@ class AndroidOfflineModeManagerTest {
         )
         val network = connectivityManager.activeNetwork
             ?: org.robolectric.shadows.ShadowNetwork.newInstance(1)
-        shadow.setNetworkCapabilities(network, networkCaps(validated))
+        shadow.setNetworkCapabilities(network, networkCaps(validated, internet))
     }
 
     /**
@@ -107,11 +110,11 @@ class AndroidOfflineModeManagerTest {
      * unit-test compilation; the methods exist on Robolectric's android-all
      * runtime, so the capabilities are wired reflectively.
      */
-    private fun networkCaps(validated: Boolean): NetworkCapabilities {
+    private fun networkCaps(validated: Boolean, internet: Boolean = true): NetworkCapabilities {
         val caps = org.robolectric.shadows.ShadowNetworkCapabilities.newInstance()
         val addCapability = NetworkCapabilities::class.java
             .getMethod("addCapability", Int::class.javaPrimitiveType)
-        addCapability(caps, NetworkCapabilities.NET_CAPABILITY_INTERNET)
+        if (internet) addCapability(caps, NetworkCapabilities.NET_CAPABILITY_INTERNET)
         if (validated) addCapability(caps, NetworkCapabilities.NET_CAPABILITY_VALIDATED)
         return caps
     }
@@ -295,12 +298,28 @@ class AndroidOfflineModeManagerTest {
     }
 
     @Test
-    fun `an internet-but-unvalidated network is treated as offline (captive portal)`() {
-        // INTERNET capability without VALIDATION: the app cannot reach the
-        // server through a captive portal — the auto rule must engage. The
-        // monitor status mirrors the probe's view (same race as the
-        // no-active-network test above).
+    fun `an internet-but-unvalidated network is reachable (LAN server may answer)`() {
+        // INTERNET capability without VALIDATION: Wi-Fi with a dead uplink or
+        // a captive portal. The Jellyfin server on the LAN may still be
+        // reachable — the monitor reports NetworkStatus.Local for exactly
+        // this state — so the probe must not engage the auto rule over it.
         setReachableNetwork(validated = false)
+        statusFlow.value = NetworkStatus.Local
+        sliceFlow.value = NetworkOfflineSlice(autoOfflineEnabled = true)
+        val manager = manager()
+
+        manager.checkNetworkAndAutoDetect()
+
+        assertEquals(OfflineMode.ONLINE, manager.offlineMode.value)
+    }
+
+    @Test
+    fun `an active network without the INTERNET capability is offline`() {
+        // The probe's hasInternet half: Android can present an active network
+        // whose capabilities lack NET_CAPABILITY_INTERNET — no more usable
+        // than no network at all, so the auto rule engages (the monitor maps
+        // the same state to Offline, mirroring the probe).
+        setReachableNetwork(validated = false, internet = false)
         statusFlow.value = NetworkStatus.Offline
         sliceFlow.value = NetworkOfflineSlice(autoOfflineEnabled = true)
         val manager = manager()
@@ -308,6 +327,28 @@ class AndroidOfflineModeManagerTest {
         manager.checkNetworkAndAutoDetect()
 
         assertEquals(OfflineMode.OFFLINE_AUTO, manager.offlineMode.value)
+    }
+
+    @Test
+    fun `an unvalidated network clears a stale OFFLINE_AUTO on foreground`() {
+        // The stuck-offline shape: OFFLINE_AUTO engaged while the network was
+        // truly gone, then Wi-Fi returned unvalidated (uplink dead, LAN
+        // server alive) without the collector re-firing. The foreground
+        // probe is the only thing that can clear the stale AUTO — an
+        // unvalidated network must count as reachable for that.
+        setNoActiveNetwork()
+        statusFlow.value = NetworkStatus.Offline
+        sliceFlow.value = NetworkOfflineSlice(autoOfflineEnabled = true)
+        val manager = manager()
+        manager.checkNetworkAndAutoDetect()
+        assertEquals(OfflineMode.OFFLINE_AUTO, manager.offlineMode.value)
+
+        // Wi-Fi returns unvalidated; the monitor has not emitted yet, so the
+        // collector still sees Offline and holds AUTO until the probe runs.
+        setReachableNetwork(validated = false)
+        manager.checkNetworkAndAutoDetect()
+
+        assertEquals(OfflineMode.ONLINE, manager.offlineMode.value)
     }
 
     @Test
