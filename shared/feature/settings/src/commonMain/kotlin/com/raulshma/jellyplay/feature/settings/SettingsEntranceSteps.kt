@@ -19,12 +19,16 @@ internal data class SettingsEntranceSection(
  * 19 hand-typed literals drifting apart.
  *
  * The list mirrors the `settingsSection(...)` call sites in [SettingsScreen]:
- * `item_notifications` and `group_idle_ambient` are the platform-gated
- * sections (they compose only where `settingsCapabilities.supportsNotifications`
- * / `supportsIdleAmbientScreen` hold) but keep their slots — today's literal
- * numbers keep counting them on every platform, and the pinned derivation
- * must equal those numbers exactly (the accepted stagger hole on platforms
- * without the capability).
+ * `item_notifications` and the `group_idle_ambient` / `group_discord_presence`
+ * / `group_shell_hooks` groups are the platform-gated sections (they compose
+ * only where the matching `settingsCapabilities` flag holds) but keep their
+ * slots — today's literal numbers keep counting them on every platform, and
+ * the pinned derivation must equal those numbers exactly (the accepted
+ * stagger hole on platforms without the capability). The gate applies to the
+ * CONTENT, never to this declaration: a call site whose key is missing here
+ * throws on first composition (SettingsScreenKt.settingsSection fails fast),
+ * which on desktop meant crashing on open — SettingsSectionKeysGuardTest
+ * pins the mirror so the drift cannot ship again.
  */
 internal val SETTINGS_ENTRANCE_SECTIONS: List<SettingsEntranceSection> = listOf(
     SettingsEntranceSection("profile"),
@@ -45,6 +49,8 @@ internal val SETTINGS_ENTRANCE_SECTIONS: List<SettingsEntranceSection> = listOf(
     SettingsEntranceSection("item_backup"),
     SettingsEntranceSection("group_screensaver", tvOnly = true),
     SettingsEntranceSection("group_idle_ambient"),
+    SettingsEntranceSection("group_discord_presence"),
+    SettingsEntranceSection("group_shell_hooks"),
     SettingsEntranceSection("item_experimental"),
     SettingsEntranceSection("item_integrations"),
     SettingsEntranceSection("item_about"),

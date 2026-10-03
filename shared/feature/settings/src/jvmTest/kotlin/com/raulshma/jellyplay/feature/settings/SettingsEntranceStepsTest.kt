@@ -13,16 +13,16 @@ import kotlin.test.assertTrue
  * so every (phone, tv) pair is asserted literally.
  *
  * Shape notes (both pinned):
- *  - `group_screensaver` is TV-only; its phone number (15) is the slot it
+ *  - `group_screensaver` is TV-only; its phone number (16) is the slot it
  *    occupies in [SETTINGS_ENTRANCE_SECTIONS] but no phone section ever reads
  *    it — the phone axis skips tvOnly entries, which is why `group_idle_ambient`
  *    keeps phone 16 while its tv step shifts to 17.
- *  - `item_notifications` keeps its (11, 11) slot and `group_idle_ambient` its
- *    (16, 17) slot even though those sections only compose where
- *    `settingsCapabilities.supportsNotifications` / `supportsIdleAmbientScreen`
- *    hold — the literal numbering counts them on every platform (the accepted
- *    stagger hole on platforms without the capability), and this pin holds for
- *    both capability variants.
+ *  - `item_notifications` keeps its (11, 11) slot and the capability-gated
+ *    `group_idle_ambient` / `group_discord_presence` / `group_shell_hooks`
+ *    groups keep their slots even though those sections only compose where
+ *    the matching `settingsCapabilities` flag holds — the literal numbering
+ *    counts them on every platform (the accepted stagger hole on platforms
+ *    without the capability), and this pin holds for both capability variants.
  */
 class SettingsEntranceStepsTest {
 
@@ -46,10 +46,12 @@ class SettingsEntranceStepsTest {
         "item_backup" to (15 to 15),
         "group_screensaver" to (16 to 16),
         "group_idle_ambient" to (16 to 17),
-        "item_experimental" to (17 to 18),
-        "item_integrations" to (18 to 19),
-        "item_about" to (19 to 20),
-        "item_whatsnew" to (20 to 21),
+        "group_discord_presence" to (17 to 18),
+        "group_shell_hooks" to (18 to 19),
+        "item_experimental" to (19 to 20),
+        "item_integrations" to (20 to 21),
+        "item_about" to (21 to 22),
+        "item_whatsnew" to (22 to 23),
     )
 
     @Test
@@ -76,10 +78,11 @@ class SettingsEntranceStepsTest {
     fun `the tv-only group shifts only its tv followers`() {
         // Today's hand-typed trio: the tv-only screensaver group costs the
         // sections after it one tv step but no phone step (the capability-
-        // gated idle-ambient group keeps its slot on both axes).
-        assertEquals(17 to 18, settingsEntranceStep("item_experimental")?.let { it.phone to it.tv })
-        assertEquals(18 to 19, settingsEntranceStep("item_integrations")?.let { it.phone to it.tv })
-        assertEquals(19 to 20, settingsEntranceStep("item_about")?.let { it.phone to it.tv })
+        // gated idle-ambient / discord-presence / shell-hooks groups keep
+        // their slots on both axes).
+        assertEquals(19 to 20, settingsEntranceStep("item_experimental")?.let { it.phone to it.tv })
+        assertEquals(20 to 21, settingsEntranceStep("item_integrations")?.let { it.phone to it.tv })
+        assertEquals(21 to 22, settingsEntranceStep("item_about")?.let { it.phone to it.tv })
     }
 
     @Test
