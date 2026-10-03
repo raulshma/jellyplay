@@ -52,13 +52,13 @@ import com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleSearchResult
 import com.raulshma.jellyplay.core.ui.components.SubtitleResultMetadata
 import com.raulshma.jellyplay.core.ui.components.formatIntPattern
+import com.raulshma.jellyplay.core.ui.components.formatOneDecimal
 import com.raulshma.jellyplay.core.ui.harness.harnessClickTarget
 import com.raulshma.jellyplay.core.ui.model.localizedDisplayName
 import com.raulshma.jellyplay.feature.editor.EditorPickedFile
 import com.raulshma.jellyplay.feature.editor.EditorUiEvent
 import com.raulshma.jellyplay.feature.editor.EditorUiState
 import com.raulshma.jellyplay.feature.editor.EditorViewModel
-import com.raulshma.jellyplay.feature.editor.formatOneDecimal
 import com.raulshma.jellyplay.feature.editor.formatStringPattern
 import com.raulshma.jellyplay.feature.editor.rememberSubtitleFilePicker
 import com.composables.icons.tabler.Tabler

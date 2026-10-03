@@ -22,6 +22,16 @@ import com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchItem
  * group renders only a subset of it (the playback player vs advanced-video
  * split). One declared id maps to exactly one group — pinned by
  * `SettingsCatalogScreenContractTest`.
+ *
+ * **Fused-row rollout state:** every domain but the experimental screen has
+ * converted — its groups derive items AND admissions from the domain's fused
+ * rows in one act ([List.asRowGroup], in the domain's `*SettingsRows.kt`
+ * file), so the decoration here only NAMES the derived group. The
+ * experimental screen keeps the spec-direct binding derivation (its five
+ * rows' search faces derive from
+ * [com.raulshma.jellyplay.core.datastore.experimental.ExperimentalPreferenceSpecs]
+ * through [SettingsSearchBinding]) and decorates with [asSearchGroup] — no
+ * admissions, no records.
  */
 internal class SettingsSearchItemGroup(
     /** Stable group name, e.g. `"playback.engine"`. Unique across [SettingsScreenGroups.all]. */
@@ -61,8 +71,10 @@ internal fun List<SettingsSearchItem>.asSearchGroup(
 ): SettingsSearchItemGroup = SettingsSearchItemGroup(id, this, admissions)
 
 /**
- * The aggregation decoration: every per-screen `*SearchItems` declaration
- * list becomes the named group of the screen region that renders its rows.
+ * The aggregation decoration: every domain's declaration becomes the named
+ * group of the screen region that renders its rows — either by pointing at
+ * the domain's derived group val (the fused domains) or by decorating the
+ * spec-direct derivation (the experimental screen).
  * [SettingsSearchCatalog.items] is the flat concatenation of [all] — the
  * curated flat order the search matcher tie-breaks on — so decorating and
  * aggregating are the same act, and a declaration that lands in no group
@@ -72,46 +84,39 @@ internal object SettingsScreenGroups {
 
     // ── Main settings screen (navigation-type ids; their rows are the
     //    deep-link targets on other screens, so they have none here) ────
-    val account = AccountSearchItems.asSearchGroup("account")
-    val integrations = IntegrationsSearchItems.asSearchGroup("integrations")
-    val activityInsights = ActivityInsightsSearchItems.asSearchGroup("activityInsights")
+    val account = AccountGroup
+    val integrations = IntegrationsGroup
+    val activityInsights = ActivityInsightsGroup
 
     /**
-     * The documented split of [SystemSearchItems]: the leading navigation pair
-     * (admin dashboard, setup wizard) renders as the main screen's System
+     * The documented split of the system declaration: the leading navigation
+     * pair (admin dashboard, setup wizard) renders as the main screen's System
      * group, while the `screensaver_*` rows render as that screen's on-screen
      * screensaver group. The list itself stays whole — the partition happens
-     * here, at the aggregation decoration (the Live TV media-segment
-     * precedent: a prefix split, no second declaration list).
+     * in SystemSettingsRows.kt, at the group derivation (the Live TV
+     * media-segment precedent: a prefix split, no second declaration list).
      */
-    val systemCore = SystemSearchItems.filter {
-        !it.id.startsWith(SCREENSAVER_ID_PREFIX) && !it.id.startsWith(IDLE_AMBIENT_ID_PREFIX) &&
-            !it.id.startsWith(DISCORD_PRESENCE_ID_PREFIX) && !it.id.startsWith(HOOKS_ID_PREFIX)
-    }.asSearchGroup("system.core")
-    val systemScreensaver = SystemSearchItems.filter { it.id.startsWith(SCREENSAVER_ID_PREFIX) }
-        .asSearchGroup("system.screensaver")
+    val systemCore = SystemCoreGroup
+    val systemScreensaver = SystemScreensaverGroup
 
     /**
      * the desktop idle "Ready to play" ambient screen rows — their own
      * screen group (rendered by a capability-gated block beside the TV dream
      * group, so neither group's row totals entangle).
      */
-    val systemIdleAmbient = SystemSearchItems.filter { it.id.startsWith(IDLE_AMBIENT_ID_PREFIX) }
-        .asSearchGroup("system.idleAmbient")
+    val systemIdleAmbient = SystemIdleAmbientGroup
 
     /**
      * the desktop Discord Rich Presence toggle (feature 4.2) — its own
      * capability-gated group beside the idle-ambient one, same shape.
      */
-    val systemDiscordPresence = SystemSearchItems.filter { it.id.startsWith(DISCORD_PRESENCE_ID_PREFIX) }
-        .asSearchGroup("system.discordPresence")
+    val systemDiscordPresence = SystemDiscordPresenceGroup
 
     /**
      * the desktop playback-event shell-hook rows (feature 4.3) — the master
      * toggle plus the five mpv-shim-named commands, one group.
      */
-    val systemHooks = SystemSearchItems.filter { it.id.startsWith(HOOKS_ID_PREFIX) }
-        .asSearchGroup("system.hooks")
+    val systemHooks = SystemHooksGroup
 
     // ── HomeSettingsScreen ─────────────────────────────────────────────
     /**
@@ -122,100 +127,103 @@ internal object SettingsScreenGroups {
      * verbatim, so persisted deep-links/recents keep resolving — only the
      * owning screen changed.
      */
-    val homeDisplay = HomeDisplaySearchItems.asSearchGroup("home.display", HomeDisplayRowAdmissions)
-    val homeNextUp = HomeNextUpSearchItems.asSearchGroup("home.nextUp")
-    val homeLayout = HomeLayoutSearchItems.asSearchGroup("home.layout")
-    val homeCards = HomeCardsSearchItems.asSearchGroup("home.cards", HomeCardsRowAdmissions)
+    val homeDisplay = HomeDisplayGroup
+    val homeNextUp = HomeNextUpGroup
+    val homeLayout = HomeLayoutGroup
+    val homeCards = HomeCardsGroup
 
     // ── AppearanceSettingsScreen ────────────────────────────────────────
-    val appearanceTheme = AppearanceThemeSearchItems.asSearchGroup("appearance.theme", AppearanceThemeRowAdmissions)
-    val appearanceNavigation = AppearanceNavigationSearchItems.asSearchGroup("appearance.navigation")
-    val appearanceLibrary = AppearanceLibrarySearchItems.asSearchGroup("appearance.library", AppearanceLibraryRowAdmissions)
-    val appearancePerformance = AppearancePerformanceSearchItems.asSearchGroup("appearance.performance", AppearancePerformanceRowAdmissions)
-    val appearanceEyeCare = AppearanceEyeCareSearchItems.asSearchGroup("appearance.eyeCare", AppearanceEyeCareRowAdmissions)
-    val appearanceNewsletter = AppearanceNewsletterSearchItems.asSearchGroup("appearance.newsletter", AppearanceNewsletterRowAdmissions)
+    // The appearance domain converted to the fused rows
+    // (AppearanceSettingsRows.kt): the six groups derive items AND
+    // admissions from the row lists in one act ([List.asRowGroup]) — the
+    // per-domain admissions maps this shape replaced delete as each domain
+    // converts (the appearance trio — record + binding + admissions map — is
+    // retired; see [AppearanceThemeGroup]).
+
+    /** Derives from [AppearanceThemeRows]: 17 spec-backed rows + 2 residuals. */
+    val appearanceTheme = AppearanceThemeGroup
+    /** Derives from [AppearanceNavigationRows]: spec-less residual rows. */
+    val appearanceNavigation = AppearanceNavigationGroup
+    /** Derives from [AppearanceLibraryRows]: 3 spec-backed rows + 5 residuals, every row [RowAdmission.Always]. */
+    val appearanceLibrary = AppearanceLibraryGroup
+    /** Derives from [AppearancePerformanceRows]: both rows ride the advanced toggle. */
+    val appearancePerformance = AppearancePerformanceGroup
+    /** Derives from [AppearanceEyeCareRows]: both rows ride the advanced toggle. */
+    val appearanceEyeCare = AppearanceEyeCareGroup
+    /** Derives from [AppearanceNewsletterRows]: three advanced residual rows. */
+    val appearanceNewsletter = AppearanceNewsletterGroup
 
     // ── PlaybackSettingsScreen ──────────────────────────────────────────
-    val playbackPlayer = PlaybackSettingsSearchItems.asSearchGroup("playback.player", PlaybackPlayerRowAdmissions)
-    val playbackAdvancedVideo = PlaybackAdvancedVideoSearchItems.asSearchGroup(
-        "playback.advancedVideo",
-        PlaybackAdvancedVideoRowAdmissions,
-    )
+    val playbackPlayer = PlaybackPlayerGroup
+    val playbackAdvancedVideo = PlaybackAdvancedVideoGroup
 
     /**
-     * One screen group fed by four adjacent engine declaration lists —
+     * One screen group fed by four adjacent engine branch lists —
      * the screen renders a single "Engine Config" group whose rows depend
      * on the preferred player. The desktop-gated mpv audio-device rows
-     * declare their [RowAdmission.Platform] gate here — the same
-     * declaration `playbackEngineScreenRowTotal` and the screen's emission
-     * `if`s read.
+     * declare their [RowAdmission.Platform] gate on their fused rows — the
+     * same declaration `playbackEngineScreenRowTotal` and the screen's
+     * emission `if`s read.
      */
-    val playbackEngine = (MpvEngineSearchItems + VlcEngineSearchItems + ExoPlayerEngineSearchItems + ExternalEngineSearchItems)
-        .asSearchGroup("playback.engine", PlaybackEngineRowAdmissions)
+    val playbackEngine = PlaybackEngineGroup
 
-    val playbackSyncPlay = SyncPlaySearchItems.asSearchGroup("playback.syncPlay")
-    val playbackCasting = CastingSearchItems.asSearchGroup("playback.casting")
+    val playbackSyncPlay = PlaybackSyncPlayGroup
+    val playbackCasting = PlaybackCastingGroup
 
     /**
-     * The documented split of [LiveTvSearchItems]: the DVR rows derive from
-     * the declaration list, while the `media_segment_*` ids render in their
-     * own hand-built group enumerated from `MediaSegmentType.entries` (the
-     * accepted exception pinned in `SettingsCatalogScreenContractTest`), plus
-     * the group's skip-on-seek toggle — a hand-built row like the
+     * The documented split of the Live TV declaration: the DVR rows derive
+     * from the declaration list, while the `media_segment_*` ids render in
+     * their own hand-built group enumerated from `MediaSegmentType.entries`
+     * (the accepted exception pinned in `SettingsCatalogScreenContractTest`),
+     * plus the group's skip-on-seek toggle — a hand-built row like the
      * per-type rows, so it rides the same partition. The list itself stays
-     * whole — the partition happens here, at the aggregation decoration.
+     * whole — the partition happens in PlaybackSettingsRows.kt, at the group
+     * derivation.
      */
-    val playbackDvr = LiveTvSearchItems.filter {
-        !it.id.startsWith(MEDIA_SEGMENT_ID_PREFIX) && it.id != PlaybackSettingsIds.SKIP_SEGMENTS_ON_SEEK
-    }.asSearchGroup("playback.dvr")
-    val playbackMediaSegments = LiveTvSearchItems.filter {
-        it.id.startsWith(MEDIA_SEGMENT_ID_PREFIX) || it.id == PlaybackSettingsIds.SKIP_SEGMENTS_ON_SEEK
-    }.asSearchGroup("playback.mediaSegments")
+    val playbackDvr = PlaybackDvrGroup
+    val playbackMediaSegments = PlaybackMediaSegmentsGroup
 
     // ── AudioSettingsScreen ─────────────────────────────────────────────
-    val audio = AudioSettingsSearchItems.asSearchGroup("audio", AudioRowAdmissions)
+    val audio = AudioGroup
 
     /**
      * The nested audio-cache group — the whole group only exists where
      * `settingsCapabilities.supportsAudioCache` holds, and every item in it
      * derives its platform tag from that same flag.
      */
-    val audioCache = AudioCacheSearchItems.asSearchGroup("audio.cache")
+    val audioCache = AudioCacheGroup
 
     // ── Single-group screens ────────────────────────────────────────────
 
     /**
-     * The documented split of [LanguageSettingsSearchItems]: the leading
-     * language trio renders in the screen's "Language" group, every remaining
-     * row in its "Subtitles" group. The list itself stays whole — the
-     * partition happens here, at the aggregation decoration (the Live TV
-     * precedent); unlike the media-segment prefix split there is no id shape
-     * to key on, so the split line is the leading-trio size, pinned by
-     * `SettingsCatalogScreenContractTest`.
+     * The documented split of the language declaration: the leading language
+     * trio renders in the screen's "Language" group, every remaining row in
+     * its "Subtitles" group. The list itself stays whole — the partition
+     * happens in LanguageSettingsRows.kt, at the group derivation (the Live
+     * TV precedent); unlike the media-segment prefix split there is no id
+     * shape to key on, so the split line is the leading-trio boundary, pinned
+     * by `SettingsCatalogScreenContractTest`.
      */
-    val languageGeneral = LanguageSettingsSearchItems.take(LANGUAGE_GENERAL_GROUP_SIZE)
-        .asSearchGroup("language.general", LanguageGeneralRowAdmissions)
-    val languageSubtitles = LanguageSettingsSearchItems.drop(LANGUAGE_GENERAL_GROUP_SIZE)
-        .asSearchGroup("language.subtitles", LanguageSubtitlesRowAdmissions)
+    val languageGeneral = LanguageGeneralGroup
+    val languageSubtitles = LanguageSubtitlesGroup
 
     /**
      * The language screen's "Track Selection" group — its own
      * declaration list so the general/subtitles split line above is
-     * untouched. Every row always renders ([TrackSelectionRowAdmissions]).
+     * untouched. Every row always renders ([RowAdmission.Always]).
      */
-    val languageTrackSelection = TrackSelectionSearchItems
-        .asSearchGroup("language.trackSelection", TrackSelectionRowAdmissions)
+    val languageTrackSelection = LanguageTrackSelectionGroup
 
-    val notifications = NotificationSettingsSearchItems.asSearchGroup("notifications", NotificationRowAdmissions)
+    val notifications = NotificationGroup
 
     // ── StorageSettingsScreen ───────────────────────────────────────────
-    val storageCache = StorageCacheSearchItems.asSearchGroup("storage.cache", StorageCacheRowAdmissions)
-    val storageNetwork = StorageNetworkSearchItems.asSearchGroup("storage.network")
-    val storageDownloads = StorageDownloadsSearchItems.asSearchGroup("storage.downloads", StorageDownloadsRowAdmissions)
+    val storageCache = StorageCacheGroup
+    val storageNetwork = StorageNetworkGroup
+    val storageDownloads = StorageDownloadsGroup
 
-    val security = SecuritySettingsSearchItems.asSearchGroup("security", SecurityRowAdmissions)
-    val backup = BackupSettingsSearchItems.asSearchGroup("backup")
-    val about = AboutSearchItems.asSearchGroup("about")
+    val security = SecurityGroup
+    val backup = BackupGroup
+    val about = AboutGroup
     val experimental = ExperimentalSettingsSearchItems.asSearchGroup("experimental")
 
     /**
@@ -271,22 +279,15 @@ internal object SettingsScreenGroups {
     /** Prefix shared by every media-segment id in [LiveTvSearchItems]. */
     internal const val MEDIA_SEGMENT_ID_PREFIX = "media_segment_"
 
-    /** Prefix shared by every screensaver (dream) id in [SystemSearchItems]. */
+    /** Prefix shared by every screensaver (dream) id in the system declaration. */
     internal const val SCREENSAVER_ID_PREFIX = "screensaver_"
 
-    /** Prefix shared by every idle-ambient id in [SystemSearchItems]. */
+    /** Prefix shared by every idle-ambient id in the system declaration. */
     internal const val IDLE_AMBIENT_ID_PREFIX = "idle_ambient_"
 
-    /** Prefix shared by every Discord-presence id in [SystemSearchItems]. */
+    /** Prefix shared by every Discord-presence id in the system declaration. */
     internal const val DISCORD_PRESENCE_ID_PREFIX = "discord_"
 
-    /** Prefix shared by every shell-hook id in [SystemSearchItems]. */
+    /** Prefix shared by every shell-hook id in the system declaration. */
     internal const val HOOKS_ID_PREFIX = "hooks_"
-
-    /**
-     * The leading trio of [LanguageSettingsSearchItems] (app / audio /
-     * subtitle language) that renders in the screen's "Language" group — the
-     * split line of the [languageGeneral]/[languageSubtitles] decoration.
-     */
-    internal const val LANGUAGE_GENERAL_GROUP_SIZE = 3
 }

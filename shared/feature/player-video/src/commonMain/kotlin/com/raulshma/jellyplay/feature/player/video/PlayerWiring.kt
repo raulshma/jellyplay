@@ -67,7 +67,7 @@ import org.jetbrains.compose.resources.getString
  * order, with their wiring lambdas attached at their construction sites —
  * the same one-line bodies [VideoSessionHost] used to collect behind its
  * delegate overrides. Collaborators that mutually reference each other's
- * wiring (the six construction cycles that previously forced five
+ * wiring (the seven construction cycles that previously forced five
  * "load-bearing" explicit-type annotations on the ViewModel) are broken with
  * LATE BINDING, not reordering — reordering cannot break a cycle because
  * each edge needs the other side to exist first:
@@ -88,7 +88,12 @@ import org.jetbrains.compose.resources.getString
  *    [playbackPreferenceWriterRef];
  *  - `effects`/`render`/`subtitleStyleController`/`prefsFanout` ↔
  *    `engineConfigSync` (the config-dirty triggers): their lambdas read
- *    [engineConfigSyncRef].
+ *    [engineConfigSyncRef];
+ *  - `sessionSubtitleSources` ↔ `playerSessionManager` (cycle 7: the
+ *    session's subtitle sourcing is a session CONSTRUCTOR argument, so it is
+ *    declared before the session and its wiring lambdas — the
+ *    addExternalSubtitle seam and the session-state reads the sourcing bodies
+ *    call back through — read [playerSessionManagerRef]).
  *
  * Each `...Ref` slot is declared unset (below) and bound ONCE in [arm];
  * the wiring lambdas that read the slots run only from session/engine call
@@ -240,14 +245,46 @@ internal class PlayerWiring(
     /** Cycle 6: the config-dirty triggers (`effects`/`render`/style controller/prefs fan-out) → the sync. */
     private lateinit var engineConfigSyncRef: EngineConfigSync
 
+    /**
+     * Cycle 7: the session's subtitle sourcing. [sessionSubtitleSources] is
+     * constructed BEFORE the session (the session takes it as a constructor
+     * argument), so its wiring lambdas — the side-load mutation seam and the
+     * session-state reads the moved sourcing bodies call back through — read
+     * the session here. The lambdas run only from load chains, long after
+     * [arm] binds this slot.
+     */
+    private lateinit var playerSessionManagerRef: PlayerSessionManager
+
     // ── Phase 1: collaborators (constructed once, in dependency order) ──────
+
+    /**
+     * The session's subtitle-sourcing collaborator (the load-spine sourcing
+     * bodies extracted from [PlayerSessionManager], beside [SubtitleManager]):
+     * the streaming-store / offline-manifest / server-stream side-load
+     * builders plus the attach-new diff. Declared BEFORE the session — the
+     * session takes it as a constructor argument — so its wiring lambdas read
+     * the session through [playerSessionManagerRef] (cycle 7); they run only
+     * from load chains, long after [arm].
+     */
+    private val sessionSubtitleSources = SessionSubtitleSources(
+        streamingSubtitleStore = subtitleSources.streamingSubtitleStore,
+        downloadRepository = offlineSources.downloadRepository,
+        playbackRepository = playbackRepository,
+        addExternalSubtitle = { playerSessionManagerRef.addExternalSubtitle(it) },
+        getExternalSubtitles = { playerSessionManagerRef.currentExternalSubtitles },
+        getCurrentItemId = { playerSessionManagerRef.sessionState.value.currentItemId },
+        getCurrentPlayMethod = { playerSessionManagerRef.sessionState.value.playMethod },
+        matchPlayingMediaSource = { detail ->
+            playerSessionManagerRef.matchedMediaSource(detail, fallbackToFirst = true)
+        },
+        getEngineCapabilities = { playerSessionManagerRef.engine?.capabilities },
+    )
 
     internal val playerSessionManager = PlayerSessionManager(
         scope = scope,
         mediaRepository = mediaRepository,
         playbackRepository = playbackRepository, imageUrlProvider = imageUrlProvider,
         playbackIdentity = sessionStack.playbackIdentity,
-        downloadRepository = offlineSources.downloadRepository,
         offlineRepository = offlineSources.offlineRepository,
         aggregateStore = stores.aggregateStore,
         playerLifecycleManager = sessionStack.playerLifecycleManager,
@@ -255,7 +292,7 @@ internal class PlayerWiring(
         playerEngineFactory = sessionStack.playerEngineFactory,
         pipController = pipController,
         playbackSourceResolver = playbackSourceResolver,
-        streamingSubtitleStore = subtitleSources.streamingSubtitleStore,
+        sessionSubtitleSources = sessionSubtitleSources,
         offlineMediaProbe = platform.offlineMediaProbe,
         offlineModeManager = offlineSources.offlineModeManager,
         userMessageBus = userMessageBus,
@@ -1131,7 +1168,7 @@ internal class PlayerWiring(
     // ── Phase 2: arm ─────────────────────────────────────────────────────────
 
     /**
-     * Binds the five late-bound slots (each to the collaborator phase 1
+     * Binds the six late-bound slots (each to the collaborator phase 1
      * already constructed — the ONE assignment per slot anywhere), then
      * registers every collector the ViewModel's former `init` block
      * launched, in the same order. Called EXACTLY ONCE from the ViewModel's
@@ -1139,6 +1176,7 @@ internal class PlayerWiring(
      */
     fun arm() {
         // The cycle slots: bound once, before any collector or load can run.
+        playerSessionManagerRef = playerSessionManager
         mediaDetailProjectionRef = mediaDetailProjection
         playbackSessionRef = playbackSession
         episodeContinuationRef = episodeContinuation

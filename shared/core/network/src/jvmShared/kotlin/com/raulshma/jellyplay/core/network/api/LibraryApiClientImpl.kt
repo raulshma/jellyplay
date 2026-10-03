@@ -204,17 +204,20 @@ class LibraryApiClientImpl(
     // The home cache-maintenance verbs are NOT on [LibraryApiClient] anymore:
     // the data layer's write/roll paths reach them through
     // [HomeSectionsCachePort], which this impl satisfies with the same
-    // one-line forwards to the fetcher it has always delegated to.
+    // one-line forwards to the fetcher it has always delegated to. The
+    // discover-row verbs' generation parameter rides along untouched: it is
+    // the data layer's post-bump cache-write token, and this client neither
+    // derives nor alters it — pure pass-through to the fetcher's mirror.
     override fun invalidateSubcallCaches() {
         homeSectionsFetcher.invalidateCaches()
     }
 
-    override fun invalidateDiscoverRow(rowId: String) {
-        homeSectionsFetcher.invalidateDiscoverRow(rowId)
+    override fun invalidateDiscoverRow(rowId: String, generation: Long) {
+        homeSectionsFetcher.invalidateDiscoverRow(rowId, generation)
     }
 
-    override fun seedDiscoverRow(row: DiscoverRowConfig, items: List<MediaItem>) {
-        homeSectionsFetcher.seedDiscoverRow(row, items)
+    override fun seedDiscoverRow(row: DiscoverRowConfig, items: List<MediaItem>, generation: Long) {
+        homeSectionsFetcher.seedDiscoverRow(row, items, generation)
     }
 
     override suspend fun refreshHomeSection(

@@ -172,7 +172,7 @@ fun LanguageSettingsScreen(
     // full All(Advanced, WhenOn) declaration.
     val subtitleRowFlags = RowAdmissionFlags(
         showAdvanced = showAdvanced,
-        parentsOn = rowParentsOn(LanguageSettingsIds.HDR_SUBTITLE_STYLE to preferences.hdrSubtitleStyleEnabled),
+        parentsOn = rowParentsOn(LanguageRows.HdrSubtitleStyle.id to preferences.hdrSubtitleStyleEnabled),
     )
     var activeDialog by remember { mutableStateOf<LanguageSettingsDialog>(LanguageSettingsDialog.None) }
 
@@ -208,10 +208,10 @@ fun LanguageSettingsScreen(
                     val appLangLabel = appLanguages.firstOrNull { it.first == preferences.appLanguage }?.second
                         ?: preferences.appLanguage ?: stringResource(Res.string.settings_lang_system_default)
                     val appLangFallback = stringResource(Res.string.settings_lang_system_default)
-                    val audioLangTitle = rowTitle(LanguageSettingsIds.AUDIO_LANGUAGE)
+                    val audioLangTitle = rowTitle(LanguageRows.AudioLanguage)
                     val langDefaultFallback = stringResource(Res.string.settings_lang_default)
-                    val subtitleLangTitle = rowTitle(LanguageSettingsIds.SUBTITLE_LANGUAGE)
-                    val displayLanguageTitle = rowTitle(LanguageSettingsIds.APP_LANGUAGE)
+                    val subtitleLangTitle = rowTitle(LanguageRows.SubtitleLanguage)
+                    val displayLanguageTitle = rowTitle(LanguageRows.AppLanguage)
                     // The per-app display-language override only applies where the
                     // AppLocaleSetter seam is real (desktop's is a no-op), so the
                     // row vanishes there and the remaining rows re-index — the
@@ -222,13 +222,13 @@ fun LanguageSettingsScreen(
                     // The row total derives from the declared leading trio via
                     // rowTotalFor (full per-id admission coverage).
                     SettingsItemList(total = rowTotalFor(SettingsScreenGroups.languageGeneral, languageRowFlags)) {
-                    if (SettingsScreenGroups.languageGeneral.rowAdmitted(LanguageSettingsIds.APP_LANGUAGE, languageRowFlags)) {
+                    if (SettingsScreenGroups.languageGeneral.rowAdmitted(LanguageRows.AppLanguage.id, languageRowFlags)) {
                         SettingListItem(
                             icon = Tabler.Outline.Language,
-                            title = rowTitle(LanguageSettingsIds.APP_LANGUAGE),
+                            title = rowTitle(LanguageRows.AppLanguage),
                             subtitle = stringResource(Res.string.settings_display_language_subtitle),
                             trailingText = appLangLabel,
-                            highlighted = highlightSettingId == LanguageSettingsIds.APP_LANGUAGE,
+                            highlighted = highlightSettingId == LanguageRows.AppLanguage.id,
                             onClick = {
                                 activePicker.value = PickerState.List(
                                     title = displayLanguageTitle,
@@ -245,7 +245,7 @@ fun LanguageSettingsScreen(
                         title = audioLangTitle,
                         subtitle = stringResource(Res.string.settings_audio_language_subtitle),
                         trailingText = preferences.preferredAudioLanguage ?: stringResource(Res.string.settings_lang_default),
-                        highlighted = highlightSettingId == LanguageSettingsIds.AUDIO_LANGUAGE,
+                        highlighted = highlightSettingId == LanguageRows.AudioLanguage.id,
                         onClick = {
                             activePicker.value = PickerState.List(
                                 title = audioLangTitle,
@@ -263,7 +263,7 @@ fun LanguageSettingsScreen(
                         title = subtitleLangTitle,
                         subtitle = stringResource(Res.string.settings_subtitle_language_subtitle),
                         trailingText = preferences.preferredSubtitleLanguage ?: stringResource(Res.string.settings_lang_default),
-                        highlighted = highlightSettingId == LanguageSettingsIds.SUBTITLE_LANGUAGE,
+                        highlighted = highlightSettingId == LanguageRows.SubtitleLanguage.id,
                         onClick = {
                             activePicker.value = PickerState.List(
                                 title = subtitleLangTitle,
@@ -308,13 +308,13 @@ fun LanguageSettingsScreen(
                             TrackSelectionPreset.DUBBED_ALL to stringResource(Res.string.settings_track_preset_dubbed_all_desc),
                             TrackSelectionPreset.CUSTOM to stringResource(Res.string.settings_track_preset_custom_desc),
                         )
-                        val presetTitle = rowTitle(TrackSelectionIds.TRACK_SELECTION_PRESET)
+                        val presetTitle = rowTitle(TrackSelectionRows.TrackSelectionPreset)
                         SettingListItem(
                             icon = Tabler.Outline.AdjustmentsHorizontal,
                             title = presetTitle,
                             subtitle = presetDescriptions[rules.preset].orEmpty(),
                             trailingText = rules.preset.displayName,
-                            highlighted = highlightSettingId == TrackSelectionIds.TRACK_SELECTION_PRESET,
+                            highlighted = highlightSettingId == TrackSelectionRows.TrackSelectionPreset.id,
                             onClick = {
                                 activePicker.value = PickerState.List(
                                     title = presetTitle,
@@ -335,36 +335,36 @@ fun LanguageSettingsScreen(
                         // rule engine's global ordered language rung.
                         SettingListItem(
                             icon = Tabler.Outline.ListNumbers,
-                            title = rowTitle(TrackSelectionIds.TRACK_AUDIO_LANGUAGES),
+                            title = rowTitle(TrackSelectionRows.TrackAudioLanguages),
                             subtitle = stringResource(Res.string.settings_track_audio_order_subtitle),
                             trailingText = rules.audioLanguages.joinToString(", ") { languageNameByCode[it] ?: it }
                                 .ifEmpty { langDefaultFallback },
-                            highlighted = highlightSettingId == TrackSelectionIds.TRACK_AUDIO_LANGUAGES,
+                            highlighted = highlightSettingId == TrackSelectionRows.TrackAudioLanguages.id,
                             onClick = { showAudioOrderEditor = true },
                         )
                         SettingListItem(
                             icon = Tabler.Outline.ArrowsHorizontal,
-                            title = rowTitle(TrackSelectionIds.TRACK_SUBTITLE_LANGUAGES),
+                            title = rowTitle(TrackSelectionRows.TrackSubtitleLanguages),
                             subtitle = stringResource(Res.string.settings_track_subtitle_order_subtitle),
                             trailingText = rules.subtitleLanguages.joinToString(", ") { languageNameByCode[it] ?: it }
                                 .ifEmpty { langDefaultFallback },
-                            highlighted = highlightSettingId == TrackSelectionIds.TRACK_SUBTITLE_LANGUAGES,
+                            highlighted = highlightSettingId == TrackSelectionRows.TrackSubtitleLanguages.id,
                             onClick = { showSubtitleOrderEditor = true },
                         )
                         // Advanced rules: applies-to / title-pattern /
                         // language / mode cards, capped at 10.
                         SettingListItem(
                             icon = Tabler.Outline.Filter,
-                            title = rowTitle(TrackSelectionIds.TRACK_RULES),
+                            title = rowTitle(TrackSelectionRows.TrackRules),
                             subtitle = stringResource(Res.string.settings_track_rules_subtitle),
                             trailingText = stringResource(Res.string.settings_track_rules_count, rules.rules.size),
-                            highlighted = highlightSettingId == TrackSelectionIds.TRACK_RULES,
+                            highlighted = highlightSettingId == TrackSelectionRows.TrackRules.id,
                             onClick = { showRulesEditor = true },
                         )
                     }
                     if (showAudioOrderEditor) {
                         OrderedLanguagesEditorSheet(
-                            title = rowTitle(TrackSelectionIds.TRACK_AUDIO_LANGUAGES),
+                            title = rowTitle(TrackSelectionRows.TrackAudioLanguages),
                             ordered = preferences.languageRules.audioLanguages,
                             onDismiss = { showAudioOrderEditor = false },
                             onChange = { ordered ->
@@ -378,7 +378,7 @@ fun LanguageSettingsScreen(
                     }
                     if (showSubtitleOrderEditor) {
                         OrderedLanguagesEditorSheet(
-                            title = rowTitle(TrackSelectionIds.TRACK_SUBTITLE_LANGUAGES),
+                            title = rowTitle(TrackSelectionRows.TrackSubtitleLanguages),
                             ordered = preferences.languageRules.subtitleLanguages,
                             onDismiss = { showSubtitleOrderEditor = false },
                             onChange = { ordered ->
@@ -427,18 +427,18 @@ fun LanguageSettingsScreen(
                     ) {
                     SettingListItem(
                         icon = Tabler.Outline.Eye,
-                        title = rowTitle(LanguageSettingsIds.SUBTITLE_TESTER),
+                        title = rowTitle(LanguageRows.SubtitleTester),
                         subtitle = stringResource(Res.string.settings_open_subtitle_tester_subtitle),
-                        highlighted = highlightSettingId == LanguageSettingsIds.SUBTITLE_TESTER,
+                        highlighted = highlightSettingId == LanguageRows.SubtitleTester.id,
                         onClick = onOpenSubtitleTester,
                     )
                     val fontSizeTitle = stringResource(Res.string.settings_subtitle_font_size)
                     SettingListItem(
                         icon = Tabler.Outline.Typography,
-                        title = rowTitle(LanguageSettingsIds.SUBTITLE_FONT_SIZE),
+                        title = rowTitle(LanguageRows.SubtitleFontSize),
                         subtitle = stringResource(Res.string.settings_font_size_subtitle),
                         trailingText = "${preferences.subtitleStyle.fontSize}sp",
-                        highlighted = highlightSettingId == LanguageSettingsIds.SUBTITLE_FONT_SIZE,
+                        highlighted = highlightSettingId == LanguageRows.SubtitleFontSize.id,
                         onClick = {
                             val sizes = listOf(14, 18, 22, 24, 28, 32, 36, 40)
                             activePicker.value = pickerChip(
@@ -457,20 +457,20 @@ fun LanguageSettingsScreen(
                     )
                     SettingToggleItem(
                         icon = Tabler.Outline.TextSize,
-                        title = rowTitle(LanguageSettingsIds.SUBTITLE_FORCED_ONLY),
+                        title = rowTitle(LanguageRows.SubtitleForcedOnly),
                         subtitle = if (preferences.subtitlesForcedOnly) stringResource(Res.string.settings_forced_subtitles_on) else stringResource(Res.string.settings_forced_subtitles_off),
                         checked = preferences.subtitlesForcedOnly,
-                        highlighted = highlightSettingId == LanguageSettingsIds.SUBTITLE_FORCED_ONLY,
+                        highlighted = highlightSettingId == LanguageRows.SubtitleForcedOnly.id,
                         onCheckedChange = { enabled ->
                             viewModel.edit { scope -> scope.subtitle.setSubtitlesForcedOnly(enabled) }
                         },
                     )
                     SettingToggleItem(
                         icon = Tabler.Outline.Eye,
-                        title = rowTitle(LanguageSettingsIds.HIGH_CONTRAST_SUBTITLES),
+                        title = rowTitle(LanguageRows.HighContrastSubtitles),
                         subtitle = if (preferences.highContrastSubtitles) stringResource(Res.string.settings_high_contrast_on) else stringResource(Res.string.settings_high_contrast_off),
                         checked = preferences.highContrastSubtitles,
-                        highlighted = highlightSettingId == LanguageSettingsIds.HIGH_CONTRAST_SUBTITLES,
+                        highlighted = highlightSettingId == LanguageRows.HighContrastSubtitles.id,
                         onCheckedChange = { enabled ->
                             viewModel.edit { scope -> scope.subtitle.setHighContrastSubtitles(enabled) }
                         },
@@ -478,31 +478,31 @@ fun LanguageSettingsScreen(
                     if (showAdvanced) {
                         SettingToggleItem(
                             icon = Tabler.Outline.Photo,
-                            title = rowTitle(LanguageSettingsIds.PGS_DIRECT_PLAY),
+                            title = rowTitle(LanguageRows.PgsDirectPlay),
                             subtitle = if (preferences.pgsSubtitleDirectPlay) stringResource(Res.string.settings_pgs_direct_play_on) else stringResource(Res.string.settings_pgs_direct_play_off),
                             checked = preferences.pgsSubtitleDirectPlay,
-                            highlighted = highlightSettingId == LanguageSettingsIds.PGS_DIRECT_PLAY,
+                            highlighted = highlightSettingId == LanguageRows.PgsDirectPlay.id,
                             onCheckedChange = { enabled ->
                                 viewModel.edit { scope -> scope.playback.setPgsSubtitleDirectPlay(enabled) }
                             },
                         )
                         SettingToggleItem(
                             icon = Tabler.Outline.Sun,
-                            title = rowTitle(LanguageSettingsIds.HDR_SUBTITLE_STYLE),
+                            title = rowTitle(LanguageRows.HdrSubtitleStyle),
                             subtitle = if (preferences.hdrSubtitleStyleEnabled) stringResource(Res.string.settings_hdr_subtitle_on) else stringResource(Res.string.settings_hdr_subtitle_off),
                             checked = preferences.hdrSubtitleStyleEnabled,
-                            highlighted = highlightSettingId == LanguageSettingsIds.HDR_SUBTITLE_STYLE,
+                            highlighted = highlightSettingId == LanguageRows.HdrSubtitleStyle.id,
                             onCheckedChange = { enabled ->
                                 viewModel.edit { scope -> scope.subtitle.setHdrSubtitleStyleEnabled(enabled) }
                             },
                         )
-                        if (SettingsScreenGroups.languageSubtitles.rowAdmitted(LanguageSettingsIds.HDR_SUBTITLE_FONT_SIZE, subtitleRowFlags)) {
+                        if (SettingsScreenGroups.languageSubtitles.rowAdmitted(LanguageRows.HdrSubtitleFontSize.id, subtitleRowFlags)) {
                             SettingListItem(
                                 icon = Tabler.Outline.Typography,
-                                title = rowTitle(LanguageSettingsIds.HDR_SUBTITLE_FONT_SIZE),
+                                title = rowTitle(LanguageRows.HdrSubtitleFontSize),
                                 subtitle = stringResource(Res.string.settings_hdr_font_size_subtitle),
                                 trailingText = "${preferences.hdrSubtitleStyle.fontSize}sp",
-                                highlighted = highlightSettingId == LanguageSettingsIds.HDR_SUBTITLE_FONT_SIZE,
+                                highlighted = highlightSettingId == LanguageRows.HdrSubtitleFontSize.id,
                                 onClick = {
                                     val current = preferences.hdrSubtitleStyle.fontSize
                                     val next = if (current >= 40) 16 else current + 2
@@ -513,13 +513,13 @@ fun LanguageSettingsScreen(
                                 },
                             )
                         }
-                        val textColorTitle = rowTitle(LanguageSettingsIds.SUBTITLE_COLOR)
+                        val textColorTitle = rowTitle(LanguageRows.SubtitleColor)
                         SettingListItem(
                             icon = Tabler.Outline.Palette,
-                            title = rowTitle(LanguageSettingsIds.SUBTITLE_COLOR),
+                            title = rowTitle(LanguageRows.SubtitleColor),
                             subtitle = stringResource(Res.string.settings_subtitle_text_color_subtitle),
                             trailingText = preferences.subtitleStyle.fontColor.name,
-                            highlighted = highlightSettingId == LanguageSettingsIds.SUBTITLE_COLOR,
+                            highlighted = highlightSettingId == LanguageRows.SubtitleColor.id,
                             onClick = {
                                 activePicker.value = PickerState.List(
                                     title = textColorTitle,
@@ -537,19 +537,19 @@ fun LanguageSettingsScreen(
                         )
                         SettingListItem(
                             icon = Tabler.Outline.Background,
-                            title = rowTitle(LanguageSettingsIds.SUBTITLE_BACKGROUND),
+                            title = rowTitle(LanguageRows.SubtitleBackground),
                             subtitle = stringResource(Res.string.settings_subtitle_background_subtitle),
                             trailingText = preferences.subtitleStyle.backgroundColor.name,
-                            highlighted = highlightSettingId == LanguageSettingsIds.SUBTITLE_BACKGROUND,
+                            highlighted = highlightSettingId == LanguageRows.SubtitleBackground.id,
                             onClick = { activeDialog = LanguageSettingsDialog.SubtitleBgColorPicker },
                         )
-                        val edgeStyleTitle = rowTitle(LanguageSettingsIds.SUBTITLE_EDGE_STYLE)
+                        val edgeStyleTitle = rowTitle(LanguageRows.SubtitleEdgeStyle)
                         SettingListItem(
                             icon = Tabler.Outline.BorderAll,
-                            title = rowTitle(LanguageSettingsIds.SUBTITLE_EDGE_STYLE),
+                            title = rowTitle(LanguageRows.SubtitleEdgeStyle),
                             subtitle = stringResource(Res.string.settings_subtitle_edge_style_subtitle),
                             trailingText = preferences.subtitleStyle.edgeType.name,
-                            highlighted = highlightSettingId == LanguageSettingsIds.SUBTITLE_EDGE_STYLE,
+                            highlighted = highlightSettingId == LanguageRows.SubtitleEdgeStyle.id,
                             onClick = {
                                 activePicker.value = PickerState.List(
                                     title = edgeStyleTitle,
@@ -565,13 +565,13 @@ fun LanguageSettingsScreen(
                                 )
                             },
                         )
-                        val syncOffsetTitle = rowTitle(LanguageSettingsIds.SUBTITLE_SYNC_OFFSET)
+                        val syncOffsetTitle = rowTitle(LanguageRows.SubtitleSyncOffset)
                         SettingListItem(
                             icon = Tabler.Outline.Clock,
-                            title = rowTitle(LanguageSettingsIds.SUBTITLE_SYNC_OFFSET),
+                            title = rowTitle(LanguageRows.SubtitleSyncOffset),
                             subtitle = if (preferences.subtitleStyle.offsetMs == 0L) stringResource(Res.string.settings_subtitle_no_offset) else "${preferences.subtitleStyle.offsetMs}ms",
                             trailingText = "${preferences.subtitleStyle.offsetMs}ms",
-                            highlighted = highlightSettingId == LanguageSettingsIds.SUBTITLE_SYNC_OFFSET,
+                            highlighted = highlightSettingId == LanguageRows.SubtitleSyncOffset.id,
                             onClick = {
                                 activePicker.value = PickerState.Slider(
                                     title = syncOffsetTitle,
@@ -590,14 +590,14 @@ fun LanguageSettingsScreen(
                                 )
                             },
                         )
-                        val verticalPositionTitle = rowTitle(LanguageSettingsIds.SUBTITLE_VERTICAL_POSITION)
+                        val verticalPositionTitle = rowTitle(LanguageRows.SubtitleVerticalPosition)
                         val subtitlePositionBottomLabel = stringResource(Res.string.settings_subtitle_position_bottom)
                         SettingListItem(
                             icon = Tabler.Outline.ArrowBarDown,
-                            title = rowTitle(LanguageSettingsIds.SUBTITLE_VERTICAL_POSITION),
+                            title = rowTitle(LanguageRows.SubtitleVerticalPosition),
                             subtitle = stringResource(Res.string.settings_subtitle_vertical_position_subtitle),
                             trailingText = "${(preferences.subtitleStyle.verticalPosition * 100).toInt()}%",
-                            highlighted = highlightSettingId == LanguageSettingsIds.SUBTITLE_VERTICAL_POSITION,
+                            highlighted = highlightSettingId == LanguageRows.SubtitleVerticalPosition.id,
                             onClick = {
                                 activePicker.value = PickerState.Slider(
                                     title = verticalPositionTitle,
@@ -640,7 +640,7 @@ fun LanguageSettingsScreen(
                     .padding(horizontal = 24.dp)
                     .padding(bottom = 32.dp),
             ) {
-                SheetHeader(title = rowTitle(LanguageSettingsIds.SUBTITLE_BACKGROUND), icon = Tabler.Outline.Palette)
+                SheetHeader(title = rowTitle(LanguageRows.SubtitleBackground), icon = Tabler.Outline.Palette)
                 LazyColumn(
                     // KMP replacement for the Android-only LocalConfiguration.screenHeightDp:
                     // the window container height in dp (shared/core/ui WindowSizeClass pattern).

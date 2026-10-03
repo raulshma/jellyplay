@@ -60,6 +60,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.components.EpisodeWatchedTag
 import com.raulshma.jellyplay.core.ui.components.ExpandableText
 import com.raulshma.jellyplay.core.ui.components.PosterCard
+import com.raulshma.jellyplay.core.ui.components.formatOneDecimal
 import com.raulshma.jellyplay.core.ui.components.formatRuntimeLabelFromTicks
 import com.raulshma.jellyplay.core.ui.components.formatDurationFromTicks
 import com.raulshma.jellyplay.core.ui.components.OfflinePersonItem
@@ -437,7 +438,12 @@ internal fun DetailHeaderSection(
                         }
                     }
                     item.communityRating?.let { rating ->
-                        val ratingText = remember(rating) { String.format("%.1f", rating) }
+                        // The "%.1f" route (core/ui's formatOneDecimal): the
+                        // exact String.format("%.1f", …) rendering this site
+                        // shipped — HALF_UP at the first decimal, host-locale
+                        // separator (Float.toDouble() is exact, so the pinned
+                        // rounding inputs are unaffected).
+                        val ratingText = remember(rating) { formatOneDecimal(rating.toDouble()) }
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
                                 Tabler.Outline.Heart,

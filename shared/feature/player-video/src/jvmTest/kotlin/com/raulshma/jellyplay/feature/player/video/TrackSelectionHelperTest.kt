@@ -472,7 +472,7 @@ class TrackSelectionHelperTest {
     //
     // The detail screen's local-subtitle selector writes the chosen
     // OfflineSubtitleEntry.index (== the original server stream index) into the
-    // per-item subtitleStreamIndex. PlayerSessionManager.loadOfflineSubtitles
+    // per-item subtitleStreamIndex. SessionSubtitleSources.loadOfflineSubtitles
     // stamps id == "offline:${index}" onto each side-loaded SubtitleSource,
     // and both ExoPlayer and mpv propagate that id into MediaTrack.id. The
     // restore path must resolve the stored index to that track — NOT to the

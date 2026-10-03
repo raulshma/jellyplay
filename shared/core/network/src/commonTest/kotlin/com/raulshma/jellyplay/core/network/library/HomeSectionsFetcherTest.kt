@@ -45,8 +45,10 @@ import kotlin.test.assertTrue
  *
  * Also pins the custom discover rows of BOTH sources, which fetch here in one
  * path since the feature layer's parallel reimplementation died:
- *  - JELLYFIN rows: per-row memo behind the dice-roll epoch guard (seed /
- *    stall-guard) and the shared engine's force nuance (a failed forced fetch
+ *  - JELLYFIN rows: per-row memo behind the dice-roll generation guard (seed
+ *    / stall-guard — the repo-owned cache-write token the fetcher mirrors;
+ *    the tests feed the mirror through the same verb parameters production
+ *    does) and the shared engine's force nuance (a failed forced fetch
  *    keeps the previous entry serving).
  *  - SEERR rows: the whole-group TTL gate, last-known-good across a total
  *    failure (and the gate staying unstamped so the next ordinary fetch
@@ -660,7 +662,10 @@ class HomeSectionsFetcherTest {
         )
 
         // The dice roll's commit: seed the freshly rolled items as if fetched.
-        f.seedDiscoverRow(row, listOf(item("rolled-1"), item("rolled-2")))
+        // The generation value is the data layer's token passed through — any
+        // value works here (the fetch below starts after the seed, so its
+        // guard capture already observes it).
+        f.seedDiscoverRow(row, listOf(item("rolled-1"), item("rolled-2")), generation = 1)
         val after = f.fetch(query)
 
         assertEquals(0, fake.calls.count { it.startsWith("discover:") })
@@ -681,16 +686,24 @@ class HomeSectionsFetcherTest {
             discoverRows = listOf(row),
         )
 
-        // The race the epoch guard exists for: a periodic fetch is already on
+        // The race the generation guard exists for: a periodic fetch is already on
         // the wire for the row when the user rolls the dice. The fetch's own
         // sections write is repaired one layer up (HomeRefresher's pending
         // rolls) — HERE the claim is the cache: its pre-roll response must not
         // overwrite the seed and revert the row for the TTL window.
+        //
+        // Retargeted for the one-token consolidation: the fetcher owns no
+        // counter — the guard mirror is fed by the values the test hands the
+        // two mutating verbs, exactly what the repo funnel passes in
+        // production (post-bump, strictly advancing). The in-flight sub-call
+        // captured the pre-roll generation (0); the roll's verbs deliver 1
+        // then 2, so the stale write must be refused (0 ≠ 2) — same behavior
+        // the old internal counter pinned.
         val gate = fake.gate("discover:r1:${row.limit}")
         val first = launch { f.fetch(query) }
         runCurrent() // the sub-call is now parked on the gate
-        f.invalidateDiscoverRow("r1")
-        f.seedDiscoverRow(row, listOf(item("rolled-1")))
+        f.invalidateDiscoverRow("r1", generation = 1)
+        f.seedDiscoverRow(row, listOf(item("rolled-1")), generation = 2)
         gate.complete(Unit)
         first.join()
 

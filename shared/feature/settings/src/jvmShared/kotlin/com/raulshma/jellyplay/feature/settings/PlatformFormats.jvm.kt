@@ -1,6 +1,8 @@
 package com.raulshma.jellyplay.feature.settings
 
-internal actual fun formatOneDecimal(value: Double): String = "%.1f".format(value)
+// formatOneDecimal folded onto core/ui's DurationFormatter seam (public
+// formatOneDecimal); formatIntPattern onto core/ui's shared pattern seam
+// (PlatformTime.kt) — both actuals deleted from here.
 
 internal actual fun formatTwoDecimals(value: Double): String = "%.2f".format(value)
 

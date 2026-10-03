@@ -110,29 +110,12 @@ class SettingsSearchCatalogTest {
         // open the old registry, and the aggregation is a pure concatenation
         // of the decorated per-screen groups (no dedup, no reordering).
         assertEquals("logout", items.first().id)
-        assertEquals(
-            AccountSearchItems.size + IntegrationsSearchItems.size +
-                ActivityInsightsSearchItems.size + SystemSearchItems.size +
-                HomeDisplaySearchItems.size + HomeNextUpSearchItems.size +
-                HomeLayoutSearchItems.size + HomeCardsSearchItems.size +
-                AppearanceThemeSearchItems.size + AppearanceNavigationSearchItems.size +
-                AppearanceLibrarySearchItems.size +
-                AppearancePerformanceSearchItems.size + AppearanceEyeCareSearchItems.size +
-                AppearanceNewsletterSearchItems.size +
-                PlaybackSettingsSearchItems.size + PlaybackAdvancedVideoSearchItems.size +
-                MpvEngineSearchItems.size + VlcEngineSearchItems.size +
-                ExoPlayerEngineSearchItems.size + ExternalEngineSearchItems.size +
-                SyncPlaySearchItems.size + CastingSearchItems.size +
-                LiveTvSearchItems.size +
-                AudioSettingsSearchItems.size + AudioCacheSearchItems.size +
-                LanguageSettingsSearchItems.size + TrackSelectionSearchItems.size +
-                NotificationSettingsSearchItems.size +
-                StorageCacheSearchItems.size + StorageNetworkSearchItems.size +
-                StorageDownloadsSearchItems.size +
-                SecuritySettingsSearchItems.size + BackupSettingsSearchItems.size +
-                AboutSearchItems.size + ExperimentalSettingsSearchItems.size,
-            items.size,
-        )
+        // The aggregation is a pure concatenation of the derived groups —
+        // no dedup, no reordering, no filtering. (The retired hand-written
+        // per-val sum no longer partitions: post-fusion, vals like
+        // ExternalEngineSearchItems are slices of their group, not disjoint
+        // members.)
+        assertEquals(SettingsScreenGroups.all.sumOf { it.items.size }, items.size)
         assertEquals(ExperimentalSettingsSearchItems.last().id, items.last().id)
     }
 }

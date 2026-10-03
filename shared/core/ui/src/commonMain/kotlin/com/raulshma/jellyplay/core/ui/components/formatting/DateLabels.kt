@@ -29,7 +29,10 @@ import kotlin.time.Instant
  *  - [longMonthDayYear]     "MMMM d, yyyy"
  *  - [monthYear]            "MMMM yyyy"
  *  - [weekdayShortMonthDay] "EEE, MMM d"
- *  - [oneDecimal]           the "%.1f" contract (see [formatOneDecimal])
+ *
+ * (The one-decimal renderer that started here as the public [oneDecimal]
+ * wrapper is gone: [formatOneDecimal] — DurationFormatter.kt — is public
+ * itself, and the newsletter/editor façades route through it directly.)
  */
 
 /** Short month + day, e.g. "Jul 13" (digest entries). */
@@ -46,14 +49,6 @@ expect fun monthYear(year: Int, monthNumber: Int): String
 
 /** Short day-of-week + short month + day, e.g. "Mon, Jul 13" (calendar day headers). */
 expect fun weekdayShortMonthDay(date: LocalDate): String
-
-/**
- * One-decimal fixed notation for ratings/counts — the public route to the
- * internal [formatOneDecimal] machinery ("%.1f" contract: HALF_UP rounding at
- * the first decimal; separator follows the platform's %.1f behavior — see its
- * KDoc). Formerly duplicated by the newsletter and editor seams.
- */
-fun oneDecimal(value: Double): String = formatOneDecimal(value)
 
 /**
  * The Today/Yesterday ladder, pure and clock-free: the exact "Today" /

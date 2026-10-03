@@ -376,6 +376,21 @@ interface HomeFeed {
      * The home screen's section payload. Pass [force] to bypass the in-memory
      * home-sections cache for this read (manual refresh / pull-to-refresh —
      * the sanctioned freshness lever; narrower than a global cache drop).
+     *
+     * WRITE GUARANTEE (all callers, no exceptions): every assembled payload
+     * this read produces is written behind the data layer's ONE home
+     * cache-write generation token (`MediaRepositoryImpl.homeWriteGeneration`,
+     * bumped only by its `bumpHomeWriteGeneration` funnel and observed
+     * downstream by the network fetcher's row memo) — a fetch already on the
+     * wire when a roll or single-row refresh lands still returns to its
+     * caller but never pins its pre-roll payload into either cache. No caller
+     * therefore needs external serialization for cache safety. Historical
+     * rationale for why the guarantee is stated here at all: the feature
+     * refresher's mutex only ever serialized the feature layer's OWN fetches,
+     * while the background refetchers (TvWatchNextPublisher,
+     * UserDataSyncWorker, the library recommendations widget worker) call
+     * this directly — the token owner, not that mutex, is what guards their
+     * assembled writes.
      */
     suspend fun getHomeSections(
         query: HomeSectionQuery,
@@ -442,32 +457,39 @@ interface HomeFeed {
      *     DiscoverRowsCoordinator registry (roll generations + the drain
      *     point in HomeRefresher.fetchOnce, strictly between the last
      *     suspension and the sections write) re-applies registered rolls.
-     *     This layer cannot see that write — it orders FEATURE state only.
-     *  2. REPO cache epoch — [MediaRepositoryImpl.discoverRollEpoch]: a
-     *     getHomeSections already on the wire when the roll landed must not
-     *     pin its pre-roll assembled payload into the repo's in-memory cache
-     *     (the seed's clear cannot stop a LATER write). Bumped at invalidate
-     *     AND at commit; consumed as the write guard on the repo's
-     *     home-sections cache-through read.
-     *  3. NETWORK row epoch — HomeSectionsFetcher's discoverRowEpoch: the
-     *     same stall-guard one layer down, for the per-row TTL memo (a row
+     *     This layer cannot see that write — it orders FEATURE state only,
+     *     a deliberately different axis from the cache-write token below.
+     *  2. REPO assembled cache — [MediaRepositoryImpl.homeWriteGeneration],
+     *     the pipeline's ONE cache-write generation token (bumped only by the
+     *     `bumpHomeWriteGeneration` funnel): a getHomeSections already on the
+     *     wire when the roll landed must not pin its pre-roll assembled
+     *     payload into the repo's in-memory cache (the seed's clear cannot
+     *     stop a LATER write). Bumped at invalidate AND at commit.
+     *  3. NETWORK row memo — the SAME token, one layer down: the fetcher
+     *     keeps no counter of its own; each mutating
+     *     [com.raulshma.jellyplay.core.network.library.HomeSectionsCachePort]
+     *     verb carries the funnel's post-bump value as a `generation`
+     *     parameter, which the fetcher mirrors before its cache mutation.
+     *     The same stall-guard therefore covers the per-row TTL memo (a row
      *     sub-call in flight across the roll must not memoise its pre-roll
-     *     response over the seed). Same bump rule: at invalidate AND at
-     *     commit.
+     *     response over the seed). Same bump rule, ONE bump per rule
+     *     instance: the repo funnel bumps, the verb delivers.
      *
      * The ORDERING is the operation's contract, owned by
      * [MediaRepositoryImpl.rerollDiscoverRow]:
      *   invalidate ([MediaRepositoryImpl.invalidateDiscoverRowCache]:
-     *     repo-epoch bump → network per-row memo drop → assembled home
-     *     payload drop) → fetch (fresh row query, every cache bypassed) →
-     *     seed on success ([MediaRepositoryImpl.seedDiscoverRowCache]:
-     *     network row memo write + epoch bump + assembled payload drop
-     *     again — a periodic fetch that raced the roll may have re-cached
-     *     the pre-roll sections after the pre-fetch invalidate).
+     *     funnel bump + assembled home payload drop → network per-row memo
+     *     drop, carrying the post-bump token) → fetch (fresh row query,
+     *     every cache bypassed) → seed on success
+     *     ([MediaRepositoryImpl.seedDiscoverRowCache]: funnel bump + assembled
+     *     payload drop again — a periodic fetch that raced the roll may have
+     *     re-cached the pre-roll sections after the pre-fetch invalidate —
+     *     then the network row memo write, carrying the new post-bump token).
      *
-     * The "epoch bumped at invalidate AND at commit" rule is what closes the
-     * whole-roll window: a fetch that started BEFORE the invalidate and lands
-     * AFTER the commit stays stall-guarded across both halves.
+     * The "generation bumped at invalidate AND at commit" rule is what closes
+     * the whole-roll window: a fetch that started BEFORE the invalidate and
+     * lands AFTER the commit stays stall-guarded across both halves — one
+     * token, delivered to both caches by the same funnel.
      *
      * A failure or an empty result skips the commit and returns as-is — the
      * caches stay dropped, so the next home fetch re-queries the row rather

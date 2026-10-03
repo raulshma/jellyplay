@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.sp
 import kotlin.math.PI
 import kotlin.math.sin
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.ui.components.formatDurationMsNoHours
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.input.onDpadKey
@@ -50,16 +51,6 @@ private const val WAVE_FREQUENCY = 6.0f
 // slowly enough that display-rate (60-120 Hz) phase writes are wasted redraws;
 // a time-based gate yields ~30 Hz on any display refresh rate.
 private const val MIN_PHASE_UPDATE_INTERVAL_NS = 33_000_000L
-
-private fun formatTime(ms: Long): String {
-    val totalSeconds = ms / 1000
-    val minutes = totalSeconds / 60
-    val seconds = totalSeconds % 60
-    // Locale-free ASCII-digit rendering (the former java.util.Formatter used
-    // default-locale digits) — deliberate fixed-format degrade: a timecode
-    // with ar/hi/fa digit forms is undesirable in a scrubber.
-    return "$minutes:${seconds.toString().padStart(2, '0')}"
-}
 
 @Composable
 fun WaveformSeekBar(
@@ -201,7 +192,7 @@ fun WaveformSeekBar(
         )
 
         if (isDragging && durationMs > 0) {
-            val tooltipTime = formatTime((dragFraction * durationMs).toLong())
+            val tooltipTime = formatDurationMsNoHours((dragFraction * durationMs).toLong())
             // Measure the tooltip's real width so it can be centered exactly over
             // the drag position — the previous fixed 50.dp guess drifted on any
             // label whose width differed (e.g. "1:23" vs "10:45").

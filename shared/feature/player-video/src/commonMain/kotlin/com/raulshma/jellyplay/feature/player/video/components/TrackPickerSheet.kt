@@ -189,42 +189,18 @@ private fun TrackItem(
     onSelect: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val shape = when {
-        itemCount == 1 -> ShapeCache.smooth16
-        isLast -> com.raulshma.jellyplay.core.designsystem.theme.expressiveListShape(if (isLast) itemCount - 1 else 0, itemCount)
-        else -> ShapeCache.smooth8
-    }
-    val focusState = rememberTvFocusState(focusedScale = 1.02f)
-
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 2.dp)
-            .clip(shape)
-            .background(
-                if (track.isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
-                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.04f)
-            )
-            .then(focusState.focusModifier)
-            .tvFocusIndicator(focusState, shape)
-            .clickable { onSelect() }
-            .padding(horizontal = 20.dp, vertical = 14.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
+    TvFocusableOptionRow(
+        selected = track.isSelected,
+        onClick = onSelect,
+        shape = pickerRowShape(itemCount = itemCount, isLast = isLast),
+        modifier = modifier,
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.weight(1f),
         ) {
-            Text(
-                track.label,
-                style = MaterialTheme.typography.bodyLarge.copy(
-                    fontWeight = if (track.isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                ),
-                color = if (track.isSelected) MaterialTheme.colorScheme.primary
-                else MaterialTheme.colorScheme.onSurface,
-            )
+            TvOptionRowLabel(text = track.label, selected = track.isSelected)
             if (track.badges.isNotEmpty()) {
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     track.badges.forEach { badge ->

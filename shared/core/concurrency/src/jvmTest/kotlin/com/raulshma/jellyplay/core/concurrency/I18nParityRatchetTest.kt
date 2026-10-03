@@ -55,8 +55,25 @@ class I18nParityRatchetTest {
      * Allowed MISSING-key count per module+locale. Empty: keys are
      * `"module/dir:locale"`, e.g. `"shared/feature/settings:de"`. Absent key
      * means 0 — no missing keys allowed.
+     *
+     * Accepted gaps: `shared/core/ui` ×8 — the PreferenceEnumNames label
+     * seam's 15 enum-value labels (gesture modes, orientation values,
+     * indicator sides, check frequencies) shipped default-locale-only as a
+     * deliberate translation follow-up; until translated, the 9 non-default
+     * locales fall back to the English default (exactly what the pre-seam
+     * English `displayName` renderings did). Translation follow-up lowers
+     * these back to zero.
      */
-    private val baselineMissingKeys: Map<String, Int> = emptyMap()
+    private val baselineMissingKeys: Map<String, Int> = mapOf(
+        "shared/core/ui:de" to 15,
+        "shared/core/ui:es" to 15,
+        "shared/core/ui:fr" to 15,
+        "shared/core/ui:it" to 15,
+        "shared/core/ui:ja" to 15,
+        "shared/core/ui:ko" to 15,
+        "shared/core/ui:pt" to 15,
+        "shared/core/ui:zh" to 15,
+    )
 
     /**
      * Product/service proper nouns that must not be translated. Belt-and-

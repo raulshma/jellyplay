@@ -121,11 +121,11 @@ fun IntegrationsScreen(
                     val count = 3
                     SettingListItem(
                         icon = Tabler.Outline.Puzzle,
-                        title = rowTitle(IntegrationsScreenIds.SEERR_SETTINGS),
+                        title = rowTitle(IntegrationsRows.SeerrSettings),
                         subtitle = stringResource(Res.string.settings_seerr_integration_subtitle),
                         index = 0,
                         count = count,
-                        highlighted = highlightSettingId == IntegrationsScreenIds.SEERR_SETTINGS,
+                        highlighted = highlightSettingId == IntegrationsRows.SeerrSettings.id,
                         onClick = onSeerrSettings,
                     )
                     SettingListItem(
@@ -139,11 +139,11 @@ fun IntegrationsScreen(
                     )
                     SettingListItem(
                         icon = Tabler.Outline.Subtitles,
-                        title = rowTitle(IntegrationsScreenIds.SUBTITLE_PROVIDER_SETTINGS),
+                        title = rowTitle(IntegrationsRows.SubtitleProviderSettings),
                         subtitle = stringResource(Res.string.settings_integrations_subtitles_subtitle),
                         index = 2,
                         count = count,
-                        highlighted = highlightSettingId == IntegrationsScreenIds.SUBTITLE_PROVIDER_SETTINGS,
+                        highlighted = highlightSettingId == IntegrationsRows.SubtitleProviderSettings.id,
                         onClick = onSubtitleProviderSettings,
                     )
                 }

@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.livetv.epg
 
+import com.raulshma.jellyplay.core.concurrency.SingleFlight
 import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
 import com.raulshma.jellyplay.core.data.util.EpochMillisSource
 import com.raulshma.jellyplay.core.model.EpgGuide
@@ -34,6 +35,9 @@ private const val NOW_TICK_INTERVAL_MS: Long = 30 * 1000L
 private const val GUIDE_LOOKBACK_HOURS: Long = 2L
 /** Total span of the guide window. Matches the 24h timeline used by the jellyfin-web guide. */
 private const val GUIDE_WINDOW_HOURS: Long = 24L
+
+/** The one [SingleFlight] key serializing every [EpgViewModel.fetchGuideIntoState] pass. */
+private const val GUIDE_FETCH_KEY = "EpgViewModel.guideFetch"
 
 /**
  * The standard guide fetch window for [now] — the ONE formula behind both the
@@ -128,23 +132,27 @@ class EpgViewModel(
     private val rebuildGridMutex = Mutex()
 
     /**
-     * Serializes [fetchGuideIntoState] passes. The user-triggered [loadGuide]
-     * (also the record-success reload) and the auto-refresh loop can overlap;
-     * without the lock two full guide fetches run concurrently and the slower
-     * one can publish last, leaving channels/programs/window mutually
-     * inconsistent. Waiting for the lock keeps the trailing refresh — each
-     * pass computes its window at the moment it holds the lock, so a pass
-     * queued behind an in-flight one re-fetches fresh rather than being
-     * dropped.
+     * Serializes [fetchGuideIntoState] passes under the single
+     * [GUIDE_FETCH_KEY]. The user-triggered [loadGuide] (also the
+     * record-success reload) and the auto-refresh loop can overlap; without
+     * the serialization two full guide fetches run concurrently and the
+     * slower one can publish last, leaving channels/programs/window mutually
+     * inconsistent. [SingleFlight.inFlight] keeps the trailing refresh — same-key
+     * callers queue and each eventually runs — so every pass computes its
+     * window at the moment it holds the key's lock, and a pass queued behind
+     * an in-flight one re-fetches fresh rather than being dropped.
      *
-     * Declared BEFORE the [init] block below on purpose: [loadGuide] launches
-     * on Dispatchers.Main.immediate, so the coroutine body runs synchronously
-     * inside the constructor and reaches [fetchGuideIntoState] (locking this
-     * mutex) before the constructor has finished — a declaration after the
-     * init block would still be null here (crash: "Mutex.lock on a null
-     * object reference" when opening the Guide/Channels tabs).
+     * The init-order trap this field used to document (99e665a35: a bare
+     * `Mutex()` field reached by [loadGuide]'s init-block launch on
+     * Dispatchers.Main.immediate before the field's declaration line had
+     * executed — "Mutex.lock on a null object reference" when opening the
+     * Guide/Channels tabs) is structural now: the lock table is born inside
+     * this [SingleFlight] val, and per-key locks materialize in it on first
+     * use — there is no per-key lock declaration left to race the
+     * constructor. The val itself stays declared before the [init] block
+     * below, like every other field that launch touches.
      */
-    private val guideFetchMutex = Mutex()
+    private val guideFetchSingleFlight = SingleFlight()
 
     /**
      * Recompute the cached grid snapshot from the current source data. The
@@ -179,19 +187,20 @@ class EpgViewModel(
      * injected clock) and, on success, publishes channels, programs, the
      * window bounds and the rebuilt grid. Shared by the user-triggered
      * [loadGuide] and the auto-refresh loop; callers own loading/error UX.
-     * Serialized by [guideFetchMutex].
+     * Serialized under [GUIDE_FETCH_KEY] on [guideFetchSingleFlight].
      */
-    private suspend fun fetchGuideIntoState(): Result<EpgGuide> = guideFetchMutex.withLock {
-        val (start, end) = guideWindow(timeSource.nowInstant())
-        mediaRepository.getLiveTvGuide(startDateUtc = start.toString(), endDateUtc = end.toString(), limit = 100)
-            .onSuccess { guide ->
-                _channels.value = guide.channels
-                _programs.value = guide.programs
-                _windowStart.value = start
-                _windowEnd.value = end
-                rebuildGrid()
-            }
-    }
+    private suspend fun fetchGuideIntoState(): Result<EpgGuide> =
+        guideFetchSingleFlight.inFlight(GUIDE_FETCH_KEY) {
+            val (start, end) = guideWindow(timeSource.nowInstant())
+            mediaRepository.getLiveTvGuide(startDateUtc = start.toString(), endDateUtc = end.toString(), limit = 100)
+                .onSuccess { guide ->
+                    _channels.value = guide.channels
+                    _programs.value = guide.programs
+                    _windowStart.value = start
+                    _windowEnd.value = end
+                    rebuildGrid()
+                }
+        }
 
     fun loadGuide() {
         launch {

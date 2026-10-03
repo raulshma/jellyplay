@@ -15,15 +15,16 @@ import com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchItem
  * `SettingsCatalogScreenContractTest` can pin each gate against the
  * declaration.
  *
- * A gated row's admission is declared ONCE, per id, beside the group item
- * declaration ([SettingsSearchItemGroup.admissions] — decision Q11a:
- * `SettingsSearchItem` in core/ui is not widened): [rowTotalFor] and the
- * screens' emission `if`s (via `SettingsSearchItemGroup.rowAdmitted`) both
- * read that one [RowAdmission] value. Coverage is total: every id a group's
- * screen feeds a total from declares its gate (the strict unknown-id default
- * counts nothing, so a missing declaration fails the count loudly), with the
- * base gate derived from the record's own `isAdvanced` flag
- * ([admissionsByAdvancedFlag]) and only the genuinely-gated rows overridden.
+ * A gated row's admission is declared ONCE, ON the row
+ * ([SettingsRow.gate] — decision Q11a: `SettingsSearchItem` in core/ui is
+ * not widened): [rowTotalFor] and the screens' emission `if`s (via
+ * `SettingsSearchItemGroup.rowAdmitted`) both read that one [RowAdmission]
+ * value, derived per group from the rows' gates ([List.asRowGroup]).
+ * Coverage is total: every id a group's screen feeds a total from declares
+ * its gate (the strict unknown-id default counts nothing, so a missing
+ * declaration fails the count loudly); [RowAdmission.ContentGated] rows
+ * declare the exception the flags vocabulary does not carry, and the screens
+ * add their counts explicitly.
  */
 
 /**
@@ -57,9 +58,35 @@ internal sealed interface RowAdmission {
         override fun admitted(flags: RowAdmissionFlags): Boolean = flags.isTv
     }
 
+    /**
+     * The touch/desktop form-factor gate — [Tv]'s mirror image: the rows that
+     * render only off-TV (the appearance layout fork: the TV branch bypasses
+     * the width-class fork entirely).
+     */
+    data object NotTv : RowAdmission {
+        override fun admitted(flags: RowAdmissionFlags): Boolean = !flags.isTv
+    }
+
     /** The advanced-toggle gate. */
     data object Advanced : RowAdmission {
         override fun admitted(flags: RowAdmissionFlags): Boolean = flags.showAdvanced
+    }
+
+    /**
+     * The declared content-state exception: the row's visibility rides state
+     * the [RowAdmissionFlags] vocabulary does not carry (theme variant,
+     * active theme mode, parent toggle values the screen reads locally) — the
+     * screen owns the gate in its emission `if` and adds the row's count term
+     * explicitly. Counts NOTHING in [rowTotalFor] (the strict derivation) and
+     * admits for emission ([SettingsSearchItemGroup.rowAdmitted]) — exactly
+     * the retired separate-admissions-maps' absent-entry semantics, promoted
+     * to a declaration ON the row so the exception set is readable where the
+     * rows are declared. The fused-row endgame keeps this variant: every
+     * domain has content-gated rows; what deletes per domain is the separate
+     * map that used to carry the exception implicitly.
+     */
+    data object ContentGated : RowAdmission {
+        override fun admitted(flags: RowAdmissionFlags): Boolean = true
     }
 
     /** A parent toggle's on-state gate — [parentId] is the parent row's id. */
@@ -122,30 +149,6 @@ internal fun rowParentsOn(vararg toggles: Pair<String, Boolean>): Set<String> =
     toggles.toMap().filterValues { it }.keys
 
 /**
- * The default admission of every record a group declares: the record's own
- * `isAdvanced` flag — an advanced row rides the advanced toggle, the rest
- * always render. This is the exact predicate the retired per-screen counts
- * fell back to for undeclared ids (`!isAdvanced || showAdvanced`), promoted
- * to an explicit declaration so the strict derivation needs no fallback. The
- * `*RowAdmissions` maps spread this base and override the genuinely-gated
- * ids.
- */
-internal fun List<SettingsRowRecord>.admissionsByAdvancedFlag(): Map<String, RowAdmission> =
-    associate { record -> record.id to if (record.isAdvanced) RowAdmission.Advanced else RowAdmission.Always }
-
-/**
- * The catalog-list twin of [admissionsByAdvancedFlag]: the derived
- * `*SearchItems` projection carries each row's effective advanced flag —
- * from the spec declaration for spec-derived rows, from the residual
- * record's own flag otherwise — so a CONVERTED group's admissions base
- * derives from the list it actually renders (the record lists' reduced
- * screen-face records carry no advanced flag anymore).
- */
-@JvmName("admissionsByAdvancedFlagOfItems")
-internal fun List<SettingsSearchItem>.admissionsByAdvancedFlag(): Map<String, RowAdmission> =
-    associate { item -> item.id to if (item.isAdvanced) RowAdmission.Advanced else RowAdmission.Always }
-
-/**
  * THE row-total derivation: how many of [SettingsSearchItemGroup.items] the
  * screen emits under [flags] — every included row's declared
  * [RowAdmission] evaluated, strict about ids that declare no gate (they are
@@ -195,11 +198,10 @@ internal fun playbackEngineScreenRowTotal(
 
 /**
  * The appearance screen's "Library & Cards" group: the declared library rows
- * — every one declared [RowAdmission.Always] in
- * [AppearanceLibraryRowAdmissions] (the shipped always-on rows; their records
- * carry a legacy advanced tag the screen never honored) — plus the
- * confirm-library-reset action row (a screen-local row with no search entry —
- * the explicit +1 term).
+ * — every one gated [RowAdmission.Always] on its fused row (the shipped
+ * always-on rows; several carry an advanced tag the screen never honored) —
+ * plus the confirm-library-reset action row (a screen-local row with no
+ * search entry — the explicit +1 term).
  */
 internal fun appearanceLibraryScreenRowTotal(): Int =
     rowTotalFor(SettingsScreenGroups.appearanceLibrary, RowAdmissionFlags()) + 1

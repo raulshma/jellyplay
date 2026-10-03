@@ -100,9 +100,9 @@ class SettingsSearchCatalogPlatformFilterTest {
         // backed (the desktop composition root binds the real enumerator) and
         // must never surface as search hits on Android.
         val audioDeviceTrio = setOf(
-            PlaybackSettingsIds.MPV_AUDIO_DEVICE,
-            PlaybackSettingsIds.MPV_AUDIO_EXCLUSIVE,
-            PlaybackSettingsIds.MPV_AUDIO_MODE,
+            PlaybackRows.MpvAudioDevice.id,
+            PlaybackRows.MpvAudioExclusive.id,
+            PlaybackRows.MpvAudioMode.id,
         )
         val byId = SettingsSearchCatalog.items.associateBy { it.id }
         val broken = audioDeviceTrio.filter { id ->
@@ -125,23 +125,23 @@ class SettingsSearchCatalogPlatformFilterTest {
     }
 
     private fun desktopOnlyIds(): Set<String> = setOf(
-        PlaybackSettingsIds.MPV_AUDIO_DEVICE,
-        PlaybackSettingsIds.MPV_AUDIO_EXCLUSIVE,
-        PlaybackSettingsIds.MPV_AUDIO_MODE,
-        PlaybackSettingsIds.MPV_SHADER_PACK,
-        PlaybackSettingsIds.MPV_TONE_MAPPING,
-        PlaybackSettingsIds.MPV_RENDER_QUALITY,
-        PlaybackSettingsIds.MPV_HDR_PASSTHROUGH,
-        PlaybackSettingsIds.MPV_INTERPOLATION_TSCALE,
-        PlaybackSettingsIds.REMEMBER_VOLUME_PER_CONTENT_TYPE,
+        PlaybackRows.MpvAudioDevice.id,
+        PlaybackRows.MpvAudioExclusive.id,
+        PlaybackRows.MpvAudioMode.id,
+        PlaybackRows.MpvShaderPack.id,
+        PlaybackRows.MpvToneMapping.id,
+        PlaybackRows.MpvRenderQuality.id,
+        PlaybackRows.MpvHdrPassthrough.id,
+        PlaybackRows.MpvInterpolationTscale.id,
+        PlaybackRows.RememberVolumePerContentType.id,
         // The desktop-shell integration rows (features 4.2 + 4.3): the
         // Discord presence toggle and the hooks master + five commands.
-        SettingsScreenIds.DISCORD_PRESENCE_ENABLED,
-        SettingsScreenIds.HOOKS_ENABLED,
-        SettingsScreenIds.HOOKS_PLAY_CMD,
-        SettingsScreenIds.HOOKS_STOP_CMD,
-        SettingsScreenIds.HOOKS_ENDED_CMD,
-        SettingsScreenIds.HOOKS_IDLE_CMD,
-        SettingsScreenIds.HOOKS_IDLE_ENDED_CMD,
+        SystemRows.DiscordPresenceEnabled.id,
+        SystemRows.HooksEnabled.id,
+        SystemRows.HooksPlayCmd.id,
+        SystemRows.HooksStopCmd.id,
+        SystemRows.HooksEndedCmd.id,
+        SystemRows.HooksIdleCmd.id,
+        SystemRows.HooksIdleEndedCmd.id,
     )
 }

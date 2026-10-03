@@ -956,6 +956,37 @@ class MediaRepositoryImplTest {
     }
 
     // ------------------------------------------------------------------
+    // Spec-registry pin: the composite user-data eviction clears exactly the
+    // USER_DATA group's member caches. Latest media is a member (its entries
+    // carry per-item UserData under parent-folder keys — latestMediaSpec);
+    // genres is not — so a user-data mutation refetches the former while the
+    // latter still serves from cache.
+    // ------------------------------------------------------------------
+
+    @Test
+    fun `a user-data mutation refetches the userData-group cache but serves a non-member from cache`() = runTest {
+        coEvery { apiClient.getLatestMedia("folder-1", 20) } returns Result.success(listOf(mediaItem("l1")))
+        coEvery { apiClient.getGenres(any()) } returns Result.success(emptyList())
+
+        // Populate both caches.
+        repository.getLatestMedia("folder-1", 20)
+        repository.getGenres(null)
+        coVerify(exactly = 1) { apiClient.getLatestMedia("folder-1", 20) }
+        coVerify(exactly = 1) { apiClient.getGenres(null) }
+
+        // The composite eviction runs through the mutation wrapper (markPlayed
+        // → withUserDataMutationCacheInvalidation → invalidateUserDataCaches).
+        repository.markPlayed("movie-1")
+
+        // Group member: whole-cache drop → refetch. Non-member: still cached.
+        repository.getLatestMedia("folder-1", 20)
+        repository.getGenres(null)
+
+        coVerify(exactly = 2) { apiClient.getLatestMedia("folder-1", 20) }
+        coVerify(exactly = 1) { apiClient.getGenres(null) }
+    }
+
+    // ------------------------------------------------------------------
     // Broad invalidation: invalidateCaches (the module-internal wholesale
     // drop, reached from the identity observer and the sync worker) must drop
     // the similar cache alongside the detail cache, and additionally the

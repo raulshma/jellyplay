@@ -28,11 +28,18 @@ import com.composables.icons.tabler.outline.Volume
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeState
 import com.raulshma.jellyplay.core.datastore.settings.PreferenceSliceSnapshot
+import com.raulshma.jellyplay.core.model.CheckFrequency
 import com.raulshma.jellyplay.core.model.EqualizerSettings
+import com.raulshma.jellyplay.core.model.GestureIndicatorSide
+import com.raulshma.jellyplay.core.model.GestureMode
 import com.raulshma.jellyplay.core.model.HasDisplayName
+import com.raulshma.jellyplay.core.model.OrientationMode
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import com.raulshma.jellyplay.core.model.SegmentBehavior
 import com.raulshma.jellyplay.core.model.SubtitleStyle
+import com.raulshma.jellyplay.core.ui.components.formatOneDecimal
+import com.raulshma.jellyplay.core.ui.model.labelResource
+import com.raulshma.jellyplay.core.ui.model.preferenceEnumLabelResources
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.getString
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
@@ -88,14 +95,27 @@ class PreferenceDiffSnapshot(
  * @param read the field off [PreferenceSliceSnapshot]; the same slice field
  *   the corresponding screen consumes.
  * @param format the value rendering, ported verbatim from the former rows.
+ * @param enumLabel the enum-label seam for enum-valued rows
+ *   (`PreferenceEnumNames.labelResource`): the value maps to a localized
+ *   resource instead of the [format] fallback, so the review screens show the
+ *   same localized wording as the settings rows. When set, [format] is
+ *   unused — declare the row with the read and the seam reference only.
  */
 class DiffField<V>(
     val labelRes: StringResource,
     private val read: (PreferenceSliceSnapshot) -> V,
-    private val format: (V) -> String,
+    private val format: (V) -> String = { it.toString() },
+    private val enumLabel: ((V) -> StringResource)? = null,
 ) {
-    /** The formatted value for [slices] — the diff compares these strings. */
-    fun value(slices: PreferenceSliceSnapshot): String = format(read(slices))
+    /**
+     * The formatted value for [slices] — the diff compares these strings.
+     * Seam-covered enum rows resolve [enumLabel] through [resolve]; every
+     * other row runs the ported [format]. [resolve] defaults to the same
+     * resource-`toString` fallback a label-table miss produces, so pure
+     * tests can call this without a resolved table.
+     */
+    fun value(slices: PreferenceSliceSnapshot, resolve: (StringResource) -> String = { it.toString() }): String =
+        enumLabel?.let { resolve(it(read(slices))) } ?: format(read(slices))
 }
 
 /**
@@ -118,7 +138,8 @@ class PreferenceCategoryView(
     internal val diffFields: List<DiffField<*>>,
 ) {
     /** The label resources this category resolves — the snapshot's label-table workload. */
-    val labelResources: List<StringResource> = diffFields.map { it.labelRes }
+    val labelResources: List<StringResource> =
+        (diffFields.map { it.labelRes } + preferenceEnumLabelResources).distinct()
 
     /** Rows whose current value differs from the baseline. */
     fun changedFields(prefs: PreferenceDiffSnapshot, baseline: PreferenceDiffSnapshot): List<PreferenceField> =
@@ -136,8 +157,8 @@ class PreferenceCategoryView(
         diffFields.map { field ->
             PreferenceField(
                 label = prefs.label(field.labelRes),
-                currentValue = field.value(prefs.slices),
-                factoryValue = field.value(baseline.slices),
+                currentValue = field.value(prefs.slices, prefs.label),
+                factoryValue = field.value(baseline.slices, prefs.label),
             )
         }
 }
@@ -149,7 +170,11 @@ class PreferenceCategoryView(
 
 private fun Boolean.onOff(): String = if (this) "On" else "Off"
 
-/** Prettify an enum without a `displayName` (e.g. `HW_PREFERRED` → `Hw Preferred`). */
+/**
+ * Prettify an enum without a `displayName` (e.g. `HW_PREFERRED` → `Hw Preferred`).
+ * Fallback only: the enums on the PreferenceEnumNames seam bypass this via
+ * their row's [DiffField.enumLabel] and render localized text instead.
+ */
 private fun Enum<*>.pretty(): String =
     name.split('_').joinToString(" ") { word ->
         word.lowercase().replaceFirstChar { it.titlecase() }
@@ -224,10 +249,10 @@ private val playbackDiffFields: List<DiffField<*>> = listOf(
     DiffField(Res.string.ss_decoder_title, { it.playback.decoderMode }, { v -> v.enumDisplay() }),
     DiffField(Res.string.ss_audio_passthrough_title, { it.playback.audioPassthrough }, Boolean::onOff),
     DiffField(Res.string.ss_frame_rate_matching_title, { it.playback.frameRateMatching }, Boolean::onOff),
-    DiffField(Res.string.ss_orientation_title, { it.videoPlayer.videoDefaultOrientation }, { v -> v.enumDisplay() }),
+    DiffField(Res.string.ss_orientation_title, { it.videoPlayer.videoDefaultOrientation }, enumLabel = OrientationMode::labelResource),
     DiffField(Res.string.ss_default_aspect_title, { it.videoPlayer.videoDefaultAspectRatio }, ::identity),
     DiffField(Res.string.ss_preload_buffer_title, { it.videoPlayer.videoPreloadBufferSize }, { v -> v.enumDisplay() }),
-    DiffField(Res.string.ss_gestures_title, { it.videoPlayer.videoGestureMode }, { v -> v.enumDisplay() }),
+    DiffField(Res.string.ss_gestures_title, { it.videoPlayer.videoGestureMode }, enumLabel = GestureMode::labelResource),
     DiffField(Res.string.ss_pass_out_protection_title, { it.videoPlayer.videoPassOutProtectionHours }, Int::toString),
     DiffField(Res.string.ss_skip_back_on_resume_title, { it.videoPlayer.videoSkipBackOnResumeMs }, Long::millisToSeconds),
     DiffField(Res.string.diff_hold_to_speed, { it.videoPlayer.videoHoldSpeedEnabled }, Boolean::onOff),
@@ -242,7 +267,7 @@ private val playbackDiffFields: List<DiffField<*>> = listOf(
     DiffField(Res.string.diff_auto_skip_outro, { it.videoPlayer.videoAutoSkipOutro }, Boolean::onOff),
     DiffField(Res.string.diff_remember_muted, { it.videoPlayer.videoRememberMuted }, Boolean::onOff),
     DiffField(Res.string.diff_default_muted, { it.videoPlayer.videoMuted }, Boolean::onOff),
-    DiffField(Res.string.ss_gesture_indicator_side_title, { it.videoPlayer.videoGestureIndicatorSide }, { v -> v.enumDisplay() }),
+    DiffField(Res.string.ss_gesture_indicator_side_title, { it.videoPlayer.videoGestureIndicatorSide }, enumLabel = GestureIndicatorSide::labelResource),
     DiffField(Res.string.ss_seek_duration_title, { it.videoPlayer.videoSeekDurationMs }, Long::millisToSeconds),
     DiffField(Res.string.ss_controls_timeout_title, { it.videoPlayer.videoControlsTimeoutMs }, Long::millisToSeconds),
     DiffField(Res.string.ss_swipe_seek_range_title, { it.videoPlayer.videoSwipeSeekMaxMs }, Long::millisToSeconds),
@@ -395,7 +420,7 @@ private val securityDiffFields: List<DiffField<*>> = listOf(
 
 private val notificationsDiffFields: List<DiffField<*>> = listOf(
     DiffField(Res.string.ss_notifications_enable_title, { it.notification.notificationPreferences.enabled }, Boolean::onOff),
-    DiffField(Res.string.ss_notification_check_frequency_title, { it.notification.notificationPreferences.checkFrequency }, { v -> v.enumDisplay() }),
+    DiffField(Res.string.ss_notification_check_frequency_title, { it.notification.notificationPreferences.checkFrequency }, enumLabel = CheckFrequency::labelResource),
     DiffField(Res.string.ss_quiet_hours_title, { it.notification.notificationPreferences.quietHoursEnabled }, Boolean::onOff),
     DiffField(Res.string.ss_quiet_start_title, { it.notification.notificationPreferences.quietHoursStart }, ::minutesSuffix),
     DiffField(Res.string.ss_quiet_end_title, { it.notification.notificationPreferences.quietHoursEnd }, ::minutesSuffix),

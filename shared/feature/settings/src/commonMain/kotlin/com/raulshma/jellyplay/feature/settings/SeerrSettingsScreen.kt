@@ -161,7 +161,7 @@ fun SeerrSettingsScreen(
     val scrollState = rememberLazyListState()
     val scrollIndex = remember(highlightSettingId) {
         when (highlightSettingId) {
-            IntegrationsScreenIds.SEERR_SETTINGS -> 2
+            IntegrationsRows.SeerrSettings.id -> 2
             else -> -1
         }
     }
@@ -386,7 +386,7 @@ fun SeerrSettingsScreen(
                                 }
                             },
                             modifier = Modifier.padding(vertical = 4.dp),
-                            initiallyExpanded = preferences.enabled || highlightSettingId == IntegrationsScreenIds.SEERR_SETTINGS,
+                            initiallyExpanded = preferences.enabled || highlightSettingId == IntegrationsRows.SeerrSettings.id,
                         ) {
                             val showSubFeatures = preferences.enabled
                             val featTotal = if (showSubFeatures) 4 else 1
@@ -398,7 +398,7 @@ fun SeerrSettingsScreen(
                                 checked = preferences.enabled,
                                 index = 0,
                                 count = featTotal,
-                                highlighted = highlightSettingId == IntegrationsScreenIds.SEERR_SETTINGS,
+                                highlighted = highlightSettingId == IntegrationsRows.SeerrSettings.id,
                                 onCheckedChange = viewModel::setEnabled,
                             )
 

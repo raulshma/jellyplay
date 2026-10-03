@@ -26,14 +26,15 @@ import com.raulshma.jellyplay.core.designsystem.theme.RatingColors
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
-import com.raulshma.jellyplay.core.model.hasMeaningfulRuntime
 import com.raulshma.jellyplay.core.model.hasPlaybackPosition
+import com.raulshma.jellyplay.core.model.progressFraction
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.adaptive.gridMinSize
 import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.PosterCard
+import com.raulshma.jellyplay.core.ui.components.formatOneDecimal
 import com.raulshma.jellyplay.core.ui.model.mediaTypeDisplayName
 import com.raulshma.jellyplay.core.ui.tv.TvFocusableGrid
 import com.raulshma.jellyplay.feature.newsletter.generated.resources.Res
@@ -144,9 +145,7 @@ private fun NewsletterGridCard(
                 onClick = onClick,
                 modifier = modifier,
                 showProgress = item.hasPlaybackPosition,
-                progressPercent = if (item.hasMeaningfulRuntime) {
-                    (item.playbackPositionTicks?.toFloat() ?: 0f) / item.runTimeTicks!!.toFloat()
-                } else 0f,
+                progressPercent = item.progressFraction() ?: 0f,
             )
         }
         Text(

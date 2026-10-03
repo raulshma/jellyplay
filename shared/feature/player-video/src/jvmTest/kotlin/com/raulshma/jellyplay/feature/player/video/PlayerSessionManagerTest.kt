@@ -138,7 +138,6 @@ class PlayerSessionManagerTest {
             playbackRepository = playbackRepository,
             imageUrlProvider = mockk(relaxed = true),
             playbackIdentity = mockk(relaxed = true),
-            downloadRepository = downloadRepository,
             offlineRepository = offlineRepository,
             aggregateStore = aggregateStore,
             playerLifecycleManager = playerLifecycleManager,
@@ -148,7 +147,7 @@ class PlayerSessionManagerTest {
             // factory is never invoked on these paths.
             playerEngineFactory = mockk(relaxed = true),
             playbackSourceResolver = playbackSourceResolver,
-            streamingSubtitleStore = noOpStreamingSubtitleStore(),
+            sessionSubtitleSources = sessionSubtitleSources(),
             offlineMediaProbe = mockk(relaxed = true),
             offlineModeManager = offlineModeManager,
             userMessageBus = messageBus,
@@ -380,7 +379,6 @@ class PlayerSessionManagerTest {
             playbackRepository = playbackRepository,
             imageUrlProvider = mockk(relaxed = true),
             playbackIdentity = identity,
-            downloadRepository = downloadRepository,
             offlineRepository = offlineRepository,
             aggregateStore = aggregateStore,
             playerLifecycleManager = playerLifecycleManager,
@@ -388,7 +386,7 @@ class PlayerSessionManagerTest {
             adaptiveBitrateManager = adaptiveBitrateManager,
             playerEngineFactory = factory,
             playbackSourceResolver = playbackSourceResolver,
-            streamingSubtitleStore = noOpStreamingSubtitleStore(),
+            sessionSubtitleSources = sessionSubtitleSources(),
             offlineMediaProbe = mockk(relaxed = true),
             offlineModeManager = offlineModeManager,
             userMessageBus = messageBus,
@@ -476,6 +474,25 @@ class PlayerSessionManagerTest {
     }
 
     // ── Helpers ───────────────────────────────────────────────────────
+
+    /**
+     * The extracted subtitle-sourcing collaborator (the session's constructor
+     * now takes it instead of the bare sourcing dependencies), wired to the
+     * same test doubles. The EXTERNAL-player paths under test short-circuit
+     * before any side-load, so inert seams suffice — the collaborator itself
+     * is exercised through the session's public load behavior, unchanged.
+     */
+    private fun sessionSubtitleSources() = SessionSubtitleSources(
+        streamingSubtitleStore = noOpStreamingSubtitleStore(),
+        downloadRepository = downloadRepository,
+        playbackRepository = playbackRepository,
+        addExternalSubtitle = { },
+        getExternalSubtitles = { null },
+        getCurrentItemId = { null },
+        getCurrentPlayMethod = { PlayMethod.DIRECT_PLAY },
+        matchPlayingMediaSource = { null },
+        getEngineCapabilities = { null },
+    )
 
     private fun downloadItem(
         itemId: String,

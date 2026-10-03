@@ -302,4 +302,28 @@
          for PosterCard/WideMediaCard). -->
     <string name="core_ui_card_percent_complete">%1$d% complete</string>
     <string name="core_ui_card_time_left">%1$s left</string>
+
+    <!-- Localizable labels for the enum-valued preference rows rendered from
+         PreferenceEnumNames.kt (gesture mode, orientation lock, gesture
+         indicator side, notification check frequency). Kept here (not in
+         core/model) because the model layer has no resource access; resolve
+         them via the `labelResource()` / `localizedDisplayName()` seam so the
+         pickers, trailing text and diff values never fall back to the raw
+         wire strings. Default locale only — other locales fall back to
+         English until the translation pass. -->
+    <string name="core_gesture_mode_all">All gestures</string>
+    <string name="core_gesture_mode_tap_only">Tap only</string>
+    <string name="core_gesture_mode_none">Off</string>
+    <string name="core_orientation_sensor_landscape">Landscape</string>
+    <string name="core_orientation_sensor_portrait">Portrait</string>
+    <string name="core_orientation_sensor">Auto Rotate</string>
+    <string name="core_orientation_locked_landscape">Locked Landscape</string>
+    <string name="core_orientation_locked_portrait">Locked Portrait</string>
+    <string name="core_gesture_indicator_opposite">Opposite side</string>
+    <string name="core_gesture_indicator_same">Same side</string>
+    <string name="core_check_frequency_every_hour">Every hour</string>
+    <string name="core_check_frequency_every_3_hours">Every 3 hours</string>
+    <string name="core_check_frequency_every_6_hours">Every 6 hours</string>
+    <string name="core_check_frequency_every_12_hours">Every 12 hours</string>
+    <string name="core_check_frequency_every_24_hours">Every day</string>
 </resources>

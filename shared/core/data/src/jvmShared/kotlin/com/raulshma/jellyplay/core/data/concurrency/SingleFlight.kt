@@ -17,6 +17,10 @@ import kotlin.coroutines.coroutineContext
  * cache-shaped (a TtlCache, a CacheIdentity key grammar, a TTL) left to the
  * wrapper. [SingleFlightFetcher] is the TtlCache/CacheIdentity adapter; the
  * played-items memo in `WatchHistoryRepositoryImpl` is the plain-map one.
+ * NOT the namesake of core:concurrency's `SingleFlight` (FetchGovernor) —
+ * that one is a keyed MUTEX (every caller runs, serialized); this one is a
+ * keyed getOrFetch MEMO (first caller computes, later callers join its
+ * flight).
  * The split exists because that second consumer arrived as a hand-rolled
  * copy of the first (~45 lines: Mutex-guarded in-flight Deferred map,
  * generation counter, cancellation ladder — over a plain map, with no

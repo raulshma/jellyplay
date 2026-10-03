@@ -256,15 +256,43 @@ are relative to the repo root.
  Android 1754→1732, desktop 1445→1506 (the desktop GREW ~60 lines — it
  absorbed the applier choreography, the arm-set selectTrack and the
  late-init construction-race fix; the twin deletion paid for the parity
- additions). The remaining known twin is EVENT
+ additions). The remaining known twin was EVENT
  INTAKE (Android `MPV.EventObserver` block vs desktop
  `registerObservers`/`handleEvent`, ~340/~300 lines — documented in the
  applier's KDoc); a wide `MpvBinding` interface was considered and REJECTED
  for now — the narrow-surface pattern (`MpvPropertySurface`,
  `MpvStatsReads`, the applier sinks) is the repo's seam idiom, and an
  interface without a merged event-intake body would be a hypothetical seam.
+ The twin has since been unified at the DECISION level by
+ `MpvPropertyIntake` (next entry) — the per-engine `when` blocks are gone,
+ the thin reader funnels stay.
  Pinned by `MpvFoldApplierTest`, the `applyBatch`/`trackEntry`/labels cases
  in the catalog suites, and the parity suite.
+- **`MpvPropertyIntake` + `MpvIntakeHost`** (player-contract commonMain
+ `engine/mpv/`) is the ONE mpv property-change → decision table both mpv
+ engines funnel their observer callbacks through — the property-INTAKE
+ half of the `MpvEventFold`/`MpvFoldApplier` unification (that pair owns
+ the fold and its application; this owns the raw-surface translation whose
+ hand-rolled per-engine `when` blocks were the last mpv twin). Pure
+ `(host, property, value, context) → decision`: each host's reader
+ translates its native payload into the binding-agnostic `MpvIntakeValue`
+ union (Android's typed event overloads, the desktop's memory reads) and
+ calls `MpvPropertyIntake.dispatch`; a result is an `MpvPlaybackEvent`
+ (folding through the applier) or a raw cache sink the host lands in its
+ own fields/flows. Per-engine divergence is a DECLARED row, never a silent
+ arm: the `MpvIntakeHost` enum is the per-engine column, and the shipped
+ divergences stay per-platform on purpose — the headline buffered-math
+ pair (Android's `cached position + demuxer-cache-duration` formula vs the
+ desktop's `demuxer-cache-time × 1000`; the desktop does not observe the
+ duration property at all), Android's registered-but-dropped `speed`
+ observation, Android's debug-log `sub-visibility`, the desktop-only
+ channel-count row, Android-only `sub-start`. The engines keep THIN reader
+ funnels — extraction quirks (pointer shapes, null-payload coercions,
+ released guards) stay reader-side, and the non-property mpv EVENTS
+ (START_FILE/FILE_LOADED/END_FILE/IDLE) already fold through
+ `MpvEventFold`. Pinned by `MpvPropertyIntakeTest` (commonTest) — the mpv
+ twins' first contract-law suite (every row with representative values,
+ BOTH buffered formulas, host gating, unknown/wrong-shape nulls).
 - **The desktop mpv engine rides the same commonMain policies** (both
  precedents set by `mergeAccumulatedCues`): `MpvStyleMapping` is now a
  PUBLIC object (and has since moved to player-contract commonMain
@@ -364,11 +392,12 @@ collaborator wiring AND the deleted `VideoSessionHost` pass-through layer
 which existed only because it was BUILT before the session it wired).
 Composition is TWO-PHASE, the invariant being that cycles die by LATE
 BINDING, not reordering (reordering cannot break a cycle): phase 1
-constructs every collaborator ONCE in dependency order, with the six
-mutual-recursion construction cycles broken by five write-once `...Ref`
+constructs every collaborator ONCE in dependency order, with the seven
+mutual-recursion construction cycles broken by six write-once `...Ref`
 slots (`mediaDetailProjectionRef`, `playbackSessionRef`,
 `episodeContinuationRef`, `playbackPreferenceWriterRef`,
-`engineConfigSyncRef`) — the former five "load-bearing" explicit-type
+`engineConfigSyncRef`, `playerSessionManagerRef`) — the former
+"load-bearing" explicit-type
 annotations dissolved because no property's type inference flows through
 another's initializer anymore; phase 2 (`arm()`, called once from the
 VM's `init`) binds the slots and registers every collector the former
@@ -650,10 +679,10 @@ where null means FORGET and issues the explicit `clear*` call (save's
 then fire `onPreferencesChanged` — the resolver refresh the restore ladder
 and sheet toggles read. In the wiring (`PlayerWiring`) the writer sits
 after `trackSelectionHelper` and the two declarations' mutual wiring reads
-— construction cycle 5 of the six — go through a write-once
+— construction cycle 5 of the seven — go through a write-once
 `playbackPreferenceWriterRef` slot bound in the builder's arm phase (the
 former load-bearing explicit-type annotation dissolved with the cycle;
-the same for the other four annotated pairs). Pinned by
+the same for the other five annotated pairs). Pinned by
 `ItemPlaybackPreferenceWriterTest`.
 
 `TrackSelectionHelper.updateTracksFromEngine`'s twin restore ladders are one
@@ -671,6 +700,31 @@ and the item-switch uiState rebuild in `releaseInternalsVmPart` is the
 declared builder `VideoPlayerUiState.keepAcrossItems` (the surviving
 leaves are its constructor arguments, everything else resets to slice
 defaults); the god-count ratchet still counts exactly 3.
+
+**`PickerSheetScaffold` + `TvFocusableOptionRow`**
+(player-video commonMain `components/PickerSheetScaffold.kt`) is the
+sheet/TV-focus chassis the player's ten picker surfaces migrated onto:
+the scaffold owns the TV focus prologue (a `FocusRequester` plus a
+`LaunchedEffect` that grabs D-pad focus onto the sheet's primary row
+while `LocalTvMode` is active — `focusEffectKeys` re-arms the grab when
+a list loads asynchronously, `canGrabFocus` keeps a still-empty list
+from stealing focus), the `PlayerModalBottomSheet` + `SheetHeader`
+envelope (title, optional subtitle/headerTrailing) with the standard
+body padding, and the header-to-content gap ladder (`contentTopGap`).
+`TvFocusableOptionRow` is the option-row chrome (check tick, label
+treatment, the `pickerRowShape` expressiveness ladder over item count).
+Eight sheets ride the scaffold wholesale (aspect ratio, quality,
+chapters, decoder, speed, playback mode, sleep timer, video filters);
+`TrackPickerSheet` and `SubtitleManagerSection` build their own
+envelope but adopt the option row — ten adopters, one chassis. Stays
+per-sheet, passed through `content`: the TV/touch branch itself, where
+initial focus lands (the caller attaches the handed-out requester to its
+first-or-selected row), and one-off header extras via `preContent`.
+`focusedScale` is unified at 1.02f — and the
+`rememberTvFocusState(focusedScale = …)` parameter is DEAD (core/ui's
+impl pins `scale = 1f`; scaling was disabled TV-wide), so the value
+documents modal intent only. `SyncPlayPlayerSheet` and
+`PlaybackInfoOverlay` stay bespoke by design.
 
 ## Playback source resolution
 
@@ -699,10 +753,44 @@ defaults); the god-count ratchet still counts exactly 3.
  `PlayerSessionState` (item, detail, source, streams, play method,
  transcode reasons, play-session id, stream URL, offline flag) — this, not
  uiState, is the session's source of truth.
+- **`SessionSubtitleSources`**
+ (`shared/feature/player-video/src/commonMain/kotlin/.../SessionSubtitleSources.kt`,
+ beside `SubtitleManager`) is the subtitle-SOURCING collaborator extracted
+ from `PlayerSessionManager`'s load spine — where the side-loaded
+ `SubtitleSource` set for a load comes from and how fresh server streams
+ attach mid-session. Four members: the streaming-store builder (provider
+ subtitles persisted in the durable streaming-subtitle store, side-loaded
+ on both online and offline playback and reconciled against the server's
+ live stream list so a deleted subtitle is not resurrected), the offline
+ manifest builder (the bitmap-codec engine-capability gate), the shared
+ external-subtitle URL ladder over the playing source's subtitle streams
+ (what every initial load AND reload rebuilds the side-loaded set from),
+ and the attach-new diff (mid-session side-load of streams a refreshed
+ detail revealed — in-player download/upload — deduped against the
+ already-attached ids). `SubtitleManager` stays the user-facing
+ choreography (download/search/upload); this owns what the session SOURCES
+ into the engine at load time. Deliberately stateless beyond its
+ constructor — the side-loaded set lives on the session's `PlaybackRequest`
+ (immutable, replaced wholesale), every mutation through the
+ `addExternalSubtitle` lambda, every session-state read through narrow
+ getter lambdas (the `SubtitleManager` seam shape) — so
+ `PlayerSessionManager`'s load-spine call sites stay one-liners and the
+ orderings and suspension points are unchanged by the move. `PlayerWiring`
+ constructs it in phase 1; its cycle with the session (the lambdas call
+ back through the session) is construction cycle 7, broken by the
+ `playerSessionManagerRef` slot bound in `arm()`. Its `streaming:` ids
+ join `TrackSelectionPolicy`'s side-load id grammar
+ (`streamingSubtitleTrackId`/`streamingSubtitleTrackRowKey` — build/parse
+ codec beside the `external:`/`offline:` pairs; NO selection rung yet —
+ `SubtitleManager`'s appear-polling still owns selection; the codec exists
+ so prefix-scoped policy CAN exclude/include streaming rows). The session
+ stack's classes (`PlayerSessionManager`, `SessionLoadPipeline`,
+ `SubtitleManager`, `PlayerWiring`) are `internal` to player-video — the
+ VM-facing seams are the interfaces.
 
 ## Direct Play ↔ Transcode
 
-`PlaybackMode` (`shared/core/model/src/commonMain/kotlin/.../PreferenceModels.kt`) is
+`PlaybackMode` (`shared/core/model/src/commonMain/kotlin/.../PreferenceModelsPlayback.kt`) is
 `AUTO` / `FORCE_DIRECT_PLAY` / `FORCE_TRANSCODE`. With **AUTO** the server
 decides via PlaybackInfo against the device profile and the effective max
 bitrate resolved by **`AdaptiveBitrateManager`**
@@ -1142,12 +1230,11 @@ refetch — a fetch verb rather than an invalidation verb, placed here for
 the same seam reason: its only consumer is the data layer's home path, and
 the port keeps the fetcher's growing surface off the client interface every
 fake and union otherwise has to track.
-The epochs deliberately stay separate: the repository's `discoverRollEpoch`
-(write-guard for roll commits AND for the single-row refresh's
-assembled-payload drop) and the fetcher's `discoverRowEpoch`
-(network-row stall guard) have distinct documented roles in the roll
-protocol (the `HomeFeed` KDoc is the spec) — unifying them would
-reopen the #157 race windows.
+The invalidation/seed verbs carry the data layer's post-bump
+`generation` parameter (the home cache-write token, below), which the
+fetcher mirrors into its `observedGeneration` write guard — the
+expect/actual `DiscoverRowEpoch` pair is DELETED; the fetcher keeps a
+mirror, no counter of its own, so the two guarded caches read ONE token.
 
 **`HomeRefresher`** (`shared/feature/home/src/commonMain/kotlin/com/raulshma/jellyplay/feature/home/HomeRefresher.kt`)
 is the Home feed's deep module. Its public interface is six members —
@@ -1179,9 +1266,10 @@ in-flight section refreshes (`sectionRefreshJobs`). The repository half
 the assembled-payload cache and the SWR persist (a single-row result must
 never masquerade as a whole-query snapshot), writes the network sub-call
 memos on success, and drops the assembled payload behind a
-`discoverRollEpoch` bump — the refresher's mutex only serializes the
-feature layer's fetches, while `TvWatchNextPublisher`/`UserDataSyncWorker`
-call `getHomeSections` mutex-free, so the epoch is what stall-guards a
+`bumpHomeWriteGeneration` funnel call — the refresher's mutex only
+serializes the feature layer's fetches, while
+`TvWatchNextPublisher`/`UserDataSyncWorker`
+call `getHomeSections` mutex-free, so the token is what stall-guards a
 worker's assembled write from re-pinning the pre-pull payload across the
 drop. The gesture itself is core/ui's `HorizontalEdgePullRefreshBox`
 (shift-reveal: the row slides toward the pulled edge, a spinner chip is
@@ -1271,11 +1359,13 @@ drain; sources own WHAT; both share the `HomeRefreshState` store seam, so
 (core:data) is the same move for the sync holder. `HomeRefresherTest` still
 constructs the refresher directly — the factory delegates, it adds no
 behavioural seam. The dice-roll protocol's cross-layer composition
-(registry ↔ repo epoch ↔ network row epoch) is pinned by
+(registry ↔ repo write-generation ↔ fetcher's `observedGeneration` mirror)
+is pinned by
 `DiscoverRollContractTest` (home jvmTest): refresh→roll→refresh survival,
-the both-epoch-guards-refuse-stale-writes case, and the
+the in-flight-fetch-never-resurrects-stale-rows case (both write guards
+refuse the stale write), and the
 last-suspension-before-drain case, over the real shared `TtlCache`/
-`cacheThrough` epoch engine behind a `MediaRepository` double (the full
+`cacheThrough` engine behind a `MediaRepository` double (the full
 real stack is unconstructible across the module api edges — the gap is
 documented in the test).
 
@@ -1294,9 +1384,14 @@ await, the custom-Seerr splice await, the book-fraction decode) sit
 strictly before it; a roll registered after applies itself (registration
 happens-before its in-place patch; re-application idempotent; stamps
 ordered, never compared). Vocabulary: "generation" in the feature layer —
-`identityEpoch` owns "epoch" here, and the network/repo layers' store-local
-epoch guards (`discoverRowEpoch` / `discoverRollEpoch`) compose with the
-registry, are not replaced by it; identity transitions clear it wholesale.
+the coordinator stamps `rollGeneration` on every registry entry to name
+that happens-before edge (ordered, never compared; deliberately not reset —
+identity transitions void ordering wholesale by clearing the registry), and
+`HomeRefresher.identityEpoch` owns identity-scoped ordering. Both are
+DELIBERATELY separate axes from the data layer's home cache-write token
+(`MediaRepositoryImpl.homeWriteGeneration`): the feature generations order
+ROLL APPLICATION within one identity, the write token orders CACHE WRITES —
+they compose (the `HomeFeed` KDoc is the spec), they do not unify.
 Pinned by
 `HomeRefresherTest.rollDiscoverRow_landingDuringBookFractionDecode_survivesTheFetchsSectionsWrite`.
 
@@ -1874,7 +1969,12 @@ MOVIE/EPISODE/SEASON/null → direct; any season action → confirm) and
 `dispatchMarkPlayedAction`. `MediaItem.progressFraction(positionTicks)`
 (core/model `MediaItemProgress.kt`) is the single resume-fraction home —
 the core:ui twin extension is deleted, `rememberProgressFraction`
-delegates.
+delegates. The math has since split into a top-level
+`progressFraction(positionTicks, runTimeTicks)` pair-shape (for call
+sites holding ticks without a `MediaItem` — the settings active-devices
+card reads them off the session models) that the `MediaItem` extension
+delegates to, and details' `computeWatchPercentage` now rescales it
+instead of hand-dividing.
 
 **Download/offline cores (core/data):**
 
@@ -2331,11 +2431,52 @@ home renders from) and `clearIdentity` (the logout/switch privacy clear).
 The store depends on `HomeSectionCacheDao` + `HomeSession` + `TimeSource`
 only — never on `MediaRepository`; the repository depends on the store, so
 the Koin graph stays acyclic. `MediaRepositoryImpl` keeps the IN-MEMORY
-half (the TtlCache, the `discoverRollEpoch` and the roll protocol) and its
+half (the TtlCache, the home write-generation funnel and the roll protocol)
+and its
 three entry points (`getHomeSections`' persist hook,
 `getCachedHomeSections`, `getOfflineHomeLayout`) are thin passthroughs —
 persistence ordering byte-preserved. The store is pinned by
 `HomeSectionsSnapshotStoreTest` (in-memory Room).
+
+**`homeWriteGeneration` + `bumpHomeWriteGeneration()`**
+(`MediaRepositoryImpl`) is THE ONE home cache-write token: a single
+monotonic `AtomicLong` guarding every home cache write in the pipeline.
+The funnel is the ONLY writer — bump + assembled-payload drop as one
+indivisible unit — and all three mutation points route through it (the
+dice roll's invalidate/commit halves, `refreshHomeSection` on success);
+the dice-roll halves then hand the post-bump value down to the network
+layer through the `HomeSectionsCachePort` verbs' `generation` parameter,
+which `HomeSectionsFetcher` mirrors into its `observedGeneration` write
+guard (no counter of its own). `refreshHomeSection`'s bump rides NO port
+verb — a single-row pull touches no network row memo (the fetcher's own
+memos were refreshed by the pull itself), so the mirror correctly stays
+put; the bump still stall-guards a full fetch in flight across the
+assembled drop. `HomeFeed.getHomeSections`' KDoc states the
+write guarantee and names the token owner: background refetchers
+(`TvWatchNextPublisher`, `UserDataSyncWorker`) call it mutex-free, so the
+token — not the refresher's feature-layer mutex — is what turns an
+in-flight assembled write into return-but-don't-pin. The wholesale drops
+that are NOT write generations (`invalidateCaches`, identity transitions)
+clear the cache without the funnel — they void by identity, not ordering.
+Deliberately separate axes: `DiscoverRowsCoordinator`'s `rollGeneration`
+registry stamps and `HomeRefresher.identityEpoch` order ROLL APPLICATION
+within an identity (see Home feature), not cache writes.
+
+`MediaRepositoryImpl`'s simple cache-or-forward concepts — the identity-keyed
+`TtlCache` clusters for library folders, genres, studios, latest media,
+collection items and photo-folder child URLs — are declared as
+**`MediaCacheSpec`s** with **`MediaCacheGroup`** membership (`WHOLESALE` /
+`USER_DATA`): one spec per concept naming the cache, the cited
+`FreshnessCeilings` policy and the groups whose ladders clear it, and the
+THREE invalidation ladders (the init block's identity registration,
+`invalidateCaches`' wholesale drop, the whole-cache arm of the composite
+user-data eviction) iterate the `cacheSpecs` registry by group — a concept
+joins every ladder its groups name by declaring one spec (latest media is
+the one `USER_DATA` member: folder-keyed rows the composite eviction cannot
+evict selectively). The BESPOKE caches stay outside the registry on
+purpose: home sections (drops ride the write-generation funnel), the detail
+cluster (per-item evicts + epoch bumps via `DetailCacheGroup`), and
+`episodeCatalogue` (a snapshot store with its own epoch).
 
 **`ExperimentalFeatureGate`** (core:datastore `experimental/`) is the one hot gate over the Direct *arr Integration flag for
 the *arr-gated feature ViewModels (requests / arr-queue / upcoming
@@ -3003,7 +3144,38 @@ deliberately not thread-safe) for hosts owning several independent
 relaunchable jobs; `RestartableJob` is for exactly one. Adopters: the
 shell coordinators (`ShellCoordinator`, `SessionCoordinator`,
 `SyncPlayOpenCoordinator`, `UpdateCoordinator`) and
-`RealtimeSessionController`.
+`RealtimeSessionController`. **`FetchGovernor`** (`FetchGovernor.kt`,
+same module) is the temporal-policy home beside the choreography
+primitives — the deadline / single-flight / cadence triple every poll,
+envelope and serialize site used to answer with hand-rolled copies (five
+recent production fixes landed inside those copies). **`withDeadlineMs`**
+is the envelope: `withTimeoutOrNull` semantics — the value inside
+`deadlineMs`, `null` on expiry, the caller's own cancellation propagating
+untouched (below the envelope there is ONLY OkHttp's per-call read
+timeout, which a half-open socket defeats). **`SingleFlight.inFlight(key)`**
+is keyed mutual exclusion: same-key callers serialize (queue-and-run — no
+coalescing, no supersession; "run only if not already running" is a
+different policy deliberately absent here), different keys never block,
+not reentrant, entries live forever (bounded key spaces only). The lock
+table is born — empty, complete — inside the `SingleFlight` val itself, so
+a coroutine launched from an init block can never observe an
+uninitialized lock: the shipped EPG crash class (`Mutex.lock on a null
+object reference`, Guide tabs, 99e665a35 — a bare `Mutex()` field raced
+its own declaration line on Main.immediate). **`boundedPoll(PollSpec)`**
+is the cadence: a null attempt CONSUMES the round (the busy-server rule —
+"busy, try later" is a completed round, not a free retry), the interval
+gap follows every null attempt but the last (no trailing delay), and the
+spec carries the whole-poll envelope, backoff factor/cap and jitter.
+Retry is NOT owned here: per-attempt retry stays in core:network's
+`RetryPolicy` — an envelope or a cadence wraps a retrying call, never the
+reverse (the retry must see the deadline's cancellation to give up).
+Adopters: `EpgViewModel`'s `GUIDE_FETCH` serialization,
+`ServerHealthMonitor`'s probe, `AdminApiClientImpl.pollForNewBackup`
+(interval+attempts), `ServerDiscoveryService`'s scan window,
+`HomeRefresher.cappedForcedFetch` (the 30 s going-online cap) and
+`SyncPlayManager.discoverCreatedGroup` (poll + envelope); `TimeSyncManager`
+deliberately NOT adopted (JVM-hard clock + stop-flag semantics). Pinned by
+`FetchGovernorTest`.
 
 ## Library client policy (network)
 
@@ -3501,71 +3673,78 @@ the bus) is still deferred.
 ## Settings search
 
 The settings-search knowledge lives in `shared/feature/settings`, next to the
-screens it deep-links into — not in shared/core/ui. Each screen (or screen family)
-declares its items in a `*SearchItems.kt` file co-located with the screen
-(`PlaybackSettingsSearchItems.kt` beside `PlaybackSettingsScreen.kt` also
-hosts the MPV/VLC/ExoPlayer engine, SyncPlay, casting and Live TV & DVR
-groups). Every item is a
-`SettingsSearchItem(id, titleRes, subtitleRes, categoryRes, keywords, route,
-icon, isAdvanced, platforms)` (the `*Res` fields are Compose `StringResource`s —
-locale resolves lazily at render/match time); `SettingsSearchCatalog`
-aggregates the per-screen lists in one curated flat order (258 items — the
+screens it deep-links into — not in shared/core/ui. The row declarations are
+SINGLE-HOMED: every domain declares its rows ONCE, as `SettingsRow`s in a
+`<Domain>SettingsRows.kt` file co-located with the screens (`PlaybackSettingsRows.kt`
+also hosts the MPV/VLC/ExoPlayer engine, SyncPlay, casting and Live TV & DVR
+groups). **`SettingsRow`** (`SettingsRow.kt`) is the FUSED type — presentation,
+ordering spine and capability gate in one object (`gate: RowAdmission`) — and
+the ordered row list IS the spine. The shape is deliberately TWO disjoint
+homes, irreducible by layering (core/datastore cannot see core/ui resources):
+the datastore-side `PreferenceSearchSpec` stays the SEMANTICS tier (id,
+keywords, category, isAdvanced, platform rule, routeKind — declared next to
+the owning store), the fused row the PRESENTATION tier (title/icon faces,
+catalog order, admission); `specEntriesFor` joins the tiers at catalog init
+and fails fast when a spec-backed row finds no spec entry.
+`List<SettingsRow>.asRowGroup` derives each screen group and its admissions
+from the rows (`SettingsSearchItemGroup.rowAdmitted` reads the one gate —
+both the row-total derivation and the screens' emission `if`s consult it),
+`toSearchItems` projects the search faces (`SettingsSearchItem` itself —
+`id/titleRes/subtitleRes/categoryRes/keywords/route/icon/isAdvanced/platforms`,
+locale resolved lazily — survives as the projected item), and
+`SettingsSearchCatalog.items` stays the flat concatenation of the aggregation
+decoration (`SettingsScreenGroups.all`) in the curated order (258 items — the
 matcher's stable sort uses that order as the tiebreaker, so keep additions
-deliberate). Catalog records are declared as
-`SettingsRowRecord`s whose `searchTitleRes` is OPTIONAL (`Int? = null`):
-the fold resolves a null to the row's own `titleRes` (the
-~19 restating per-row duplicates were deleted across the four catalogs,
-with 6 now-unreferenced `ss_*_title` strings removed in all 9 locales;
-locale-divergent titles are kept explicit on purpose — base-English
-value-equality is NOT collapse evidence, only every-locale value-equality
-is). The `ss_<id>_title`/`ss_<id>_subtitle` strings live in
-feature/settings' Compose resources; the 14 `ss_cat_*` category strings stay
-in shared/core/ui because both feature modules render them.
+deliberate). Search faces: `searchTitleRes` is optional and folds to the
+row's `titleRes` where the hit restates the screen title (the ~19 restating
+per-row duplicates were deleted at the record wave; locale-divergent titles
+stay explicit on purpose — base-English value-equality is NOT collapse
+evidence, only every-locale value-equality is); `searchSubtitleRes` is
+required for every searchable row. The `ss_<id>_title`/`ss_<id>_subtitle`
+strings live in feature/settings' Compose resources; the `ss_cat_*` category
+strings stay in shared/core/ui because both feature modules render them.
 
-**Rows own their identity (candidate C2)**: every row id is single-sourced —
-each `*SearchItems.kt` file opens with an `*Ids` holder object (`AppearanceSettingsIds`,
-`PlaybackSettingsIds`, …) whose `const val`s are THE declarations of that
-screen's row ids; the `SettingsSearchItem(id = …)` declarations, the screens'
-`highlighted = highlightSettingId == X` comparisons (including the settings
-screen's `openSetting(...)`/`ACTION_ONLY_IDS`/screensaver targets, and the two
-pass-through highlight ids `PINNED_ADD_HIGHLIGHT_ID`/`PRESET_LIST_HIGHLIGHT_ID`
-declared in their consuming screens), the admissions keys, and the row-total
-derivations all reference those constants — a raw id literal exists exactly
-once per row. Every `*SearchItems` list is a pure projection: admissions
-derive via `admissionsByAdvancedFlag()` and totals via `rowTotalFor`
-(`appearanceThemeScreenRowTotal` declares the appearance content gates;
-`theme_scheduler` is a documented highlight-alias row), and the strict
-per-id admission ratchet covers every group — `AppearanceSettingsScreen`
-is decomposed into five group composables + named summaries. The literal is the persisted deep-link/recents contract, so it
-changes only deliberately at the holder; the jvmTest suites that pin exact
-strings (`SettingsSearchCatalogTest`'s order pin,
-`SettingsSearchCatalogPlatformFilterTest`) keep raw literals on purpose as the
-value ratchet. Referential integrity is runtime-pinned, not scanned:
-`SettingsCatalogScreenContractTest` reflects every holder's const fields and
-asserts bidirectional coverage — every holder id resolves to exactly one
-catalog item (and one group), every catalog id comes from a registered holder
-(a raw-literal declaration or an unregistered holder trips it), plus a
-per-group check that admission keys are declared ids. That replaced the
-922-line source-tree regex scanner: the screen-row ↔ catalog pairing is now
-compile-pinned (row and declaration share the constant), and the test keeps
-the behavioral pins (scroll resolution, the aggregation splits, the totals,
-the declared admissions) instead of the noRowExceptions/derivation-usage
-string ratchets, which policed duplication that no longer exists.
+**Rows own their identity**: every row id is single-sourced as the fused
+row's `val id` — the screens' `highlighted = highlightSettingId == SomeRow.id`
+comparisons (including the settings screen's `openSetting(...)`/`ACTION_ONLY_IDS`/
+screensaver targets and the two pass-through highlight ids declared in their
+consuming screens), the admission consults and the row-total derivations all
+reference the row object, so a raw id literal exists exactly once per row and
+the screen-row ↔ catalog pairing is compile-pinned (comparison and catalog
+item share one declaration). The former per-domain `*Ids` holders, the
+`SettingsRowRecord` registry (`SettingsRowRecord.kt` deleted), the
+`SettingsSearchBinding` record-based overloads and the per-group admissions
+maps (`NotificationRowAdmissions`, `LanguageSubtitlesRowAdmissions`,
+`SecurityRowAdmissions`) are RETIRED — a converted row carries no record, IS
+its own binding, and its group's admissions derive from its `gate`. The one
+survivor is the experimental domain: its spec-direct binding derivation
+(`ExperimentalSettingsSearchItems` + its ids holder) stays because the whole
+domain rides ONE search category (the single-category-per-row quirk), so a
+spec cannot carry the per-row binding the fused rows carry. Gate vocabulary
+lives on the rows: `RowAdmission.Always` (the explicit unconditional gate
+for the strict `?: false` totals — notifications enumerate every id, security
+counts nothing undeclared) and the
+`RowAdmissionCapability.SystemNotificationSettings`/`.Biometric`
+entries backing the notification system-settings row and the security
+biometric row (the screen passes its gate-aware computed flag); the
+structural `enabled`/`showAdvanced` wrappers still carry the halves of the
+`All(...)` gates (the playback advanced-video precedent; security's
+`pin_for_player_lock` stays hand-gated, its missing declaration being the
+shipped count quirk). Enforcement: **`FusedRowsRatchetTest`**
+(feature/settings jvmTest) — (1) ZERO retired declarations in production
+source (a source scan: a resurrected binding table, record list, ids holder
+or separate admissions map is a second home by definition; compilation
+cannot catch it), (2) the ordered row lists ARE the spine — every screen
+group carries exactly its row list's ids in order, the vocabulary is their
+duplicate-free union, every fused id resolves to exactly one catalog item,
+(3) the groups' admissions derive from the rows' gates (ContentGated rows
+carry no admission entry), and (4) the entrance pins. The behavioral pins
+stay where they are strongest: `SettingsCatalogScreenContractTest` reads the
+derived admissions through `rowTotalFor` and keeps the scroll-resolution and
+aggregation-split cases; `SpecDerivedSearchItemsTest` /
+`SettingsSearchCatalogTest` pin the projections field-for-field.
 
-The row-twin render half is executed too: `SettingsRowRecord` (feature/
-settings commonMain) is one record per row naming every title face once —
-the screen row's `settings_*` title (rendered through `rowTitle`, so the
-resource is referenced from exactly one place in code), the `ss_*_title`
-search hit, and the deliberately-descriptive `ss_*_subtitle` marked by
-field name — and, since the icon batch, every leading ICON once:
-`rowIcon(id)` beside `rowTitle(id)` (same loud-miss `getValue` pattern;
-non-composable `ImageVector` field, the record is the single icon source)
-replaced the 108 hand-written `Tabler.Outline.*` row icons, and the seven
-screen/record icon drifts resolved to the records
-(DVR_RECORDING_QUALITY's hand-written Video → the record's BadgeHd, …).
-Pinned by `SettingsRowRecordTest`.
-
-The screens decomposed with it: `PlaybackSettingsScreen` (2,421 lines)
+The screens decomposed with the single-homing: `PlaybackSettingsScreen` (2,421 lines)
 renders through eleven private group composables (`PlaybackPlayerGroup`,
 `PlaybackPlayerAdvancedRows`, `PlaybackAdvancedVideoGroup`,
 `PlaybackEngineGroup` + the per-engine Mpv/Vlc/Exo row groups,
@@ -3575,20 +3754,13 @@ mid-composable `settingsSection` local is hoisted top-level with five
 Screensaver / IdleAmbient), picker/dialog state threading as
 `activePicker`/`activeDialog` `MutableState`s.
 
-The same pass finished the declared-admissions ratchet: the notification,
-language-subtitles and security groups now declare per-id
-`RowAdmission`s beside their items (`NotificationRowAdmissions`,
-`LanguageSubtitlesRowAdmissions`, `SecurityRowAdmissions`) like
-storage/playback/audio before them, and their screens' emission `if`s read the
-declared gate via `SettingsSearchItemGroup.rowAdmitted` (the structural
-`enabled`/`showAdvanced` wrappers carry those halves of the `All(...)` gates —
-the playback advanced-video precedent; security's `pin_for_player_lock` stays
-hand-gated, its missing declaration being the shipped count quirk). Two gate
-vocabulary additions: `RowAdmission.Always` (the explicit unconditional gate
-for the strict `?: false` totals — notifications enumerate every id, security
-counts nothing undeclared) and the `RowAdmissionCapability.SystemNotificationSettings`/`.Biometric`
-entries backing the notification system-settings row and the security
-biometric row (the screen passes its gate-aware computed flag).
+Entrance sections are single-homed the same way: each converted domain
+declares its root-screen entrance as a **`SettingsEntranceSectionRow`**
+(`SettingsEntranceSteps.kt`, declared at the bottom of the domain's rows
+file) and splices it into `SETTINGS_ENTRANCE_SECTIONS` at its render
+position — the ONE declaration drives both the settings root's section
+emission (icon/title/route id) and the entrance-step index the wizard's
+steps resolve from.
 
 The settings ViewModels share one small shell: `SettingsEditorViewModel(editor)`
 exposes the single `edit { }` command, `SettingsSectionViewModel` adds the
@@ -3633,12 +3805,16 @@ resolver-lambda shape was unimplementable — this Compose compiler
 rejects `stringResource` inside non-inline lambdas).
 
 Adding a settings screen touches: the route (NavKey.kt in shared/core/ui —
-unchanged persistence contract), the screen itself, and its items in the
-co-located `*SearchItems.kt` — ids added to the file's `*Ids` holder first,
-then referenced by the declarations, the screen rows and any admission (+ the
-new strings in feature/settings' Compose resources, + one line in
-`SettingsSearchCatalog`, + one holder registration in
-`SettingsCatalogScreenContractTest`). No core/ui edit, no new callback field.
+unchanged persistence contract), the screen itself, and the domain's rows in
+its `<Domain>SettingsRows.kt` — the row declared once (faces + gate;
+semantics live on the spec at the owning store when the knob is spec-backed,
+residual rows carry the hand search faces until the store migrates), then
+referenced by the screen's emission and any highlight target (+ the new
+strings in feature/settings' Compose resources, + one line in
+`SettingsSearchCatalog` via the `SettingsScreenGroups` decoration, + one
+group assertion in `SettingsCatalogScreenContractTest`; a NEW domain also
+splices its `SettingsEntranceSectionRow`). No core/ui edit, no new callback
+field.
 `SettingsSearchCatalogTest` (feature/settings `jvmTest`,
 kotlin.test — resource resolvability is compile-time-guaranteed by the
 generated `StringResource` accessors, so the suite pins id uniqueness,
@@ -4819,13 +4995,16 @@ auto-resume. See docs/adr/0004-playback-focus.md (+ addendum).
  knobs + 5 entries; the three feature toggles are three specs over the
  ONE `enabled_experimental_features` JSON key);
  `ExperimentalSettingsSearchItems` is reduced to the binding table +
- route map + derivation call. `SettingsCatalogScreenContractTest` passes
+ route map + derivation call — the ONE surviving spec-direct derivation
+ (the whole domain rides one search category; every other domain's rows
+ fused onto `SettingsRow` and consume the specs through `specEntriesFor`,
+ see Settings search). `SettingsCatalogScreenContractTest` passes
  UNCHANGED
  (the binding table keeps literal `id = "..."` arguments visible for
  its source scan). NOT yet derived: `resetKeysFor` (Stage B — deriving
  would move `app_language`/`prefer_audio_description` reset ownership
- away from SubtitleLanguageStore's documented split) and most other
- domains. Derived since: the shared projection field-sets (see
+ away from SubtitleLanguageStore's documented split). Derived since: the
+ shared projection field-sets (see
  `DeclaredProjectionFields.kt` below), and the legacy `UserPreferences.kt`
  aggregate is deleted outright (see `PreferenceSliceSnapshot`).
 - **`directArrEnabled`** (beside `ExperimentalStore`): one extension pair
@@ -4979,7 +5158,7 @@ auto-resume. See docs/adr/0004-playback-focus.md (+ addendum).
  (library's raw `MediaType.name` / English-only `PlayedStatus` labels
  upgraded to the localized vocabulary search already used).
 - **`FeatureDisabledState`** (`components/FeatureDisabledState.kt`) is the full-screen "this feature is switched off"
- state mirroring `ScreenEmptyState`/`ScreenErrorState` — icon, title +
+ state mirroring `ScreenEmptyState`/`ErrorScreen` — icon, title +
  body, settings CTA (strings caller-resolved, the *arr Database mark
  both launch sites shared) — lifted from the arr-queue and upcoming
  calendar screens, which render it when their
@@ -5043,14 +5222,29 @@ auto-resume. See docs/adr/0004-playback-focus.md (+ addendum).
  (jvmShared, locale-per-call preserved). calendar/requests/newsletter
  label files are thin façades;
  editor folded only `formatOneDecimal` (now a façade over `oneDecimal`).
+ The one-decimal half has since consolidated further: `formatOneDecimal`
+ itself went PUBLIC as DurationFormatter.kt's expect (moved out of
+ PlatformTime.kt — the formatting home; its jvmShared actual moved with
+ it), the public `oneDecimal` wrapper is deleted, and every per-module
+ copy folded onto it: the newsletter and editor façades (call sites
+ import it directly), settings' expect (settings keeps only its genuinely
+ distinct `formatTwoDecimals`/`formatSignedInt` expects) and the
+ player-audio `PlatformFormats` expect/actual pair (the whole file pair
+ is deleted). Seerr's integer-math copies stay DELIBERATE — that seam
+ renders the fixed dot separator, not the host locale's. DurationFormatter's
+ clocks were also rewritten locale-free by construction (string templates,
+ ASCII digits — `String.format`'s `%d` shows Arabic-Indic forms under
+ ar/fa) and `formatDurationMs` gained `paddedMinutes` (trickplay's overlay
+ zero-pads the under-hour minutes so the label width doesn't jitter across
+ the 9→10-minute mark while scrubbing); `formatDurationMsNoHours` absorbed
+ WaveformSeekBar's local `formatTime`.
  The integer-pattern half moved the other way: core/ui `PlatformTime`
  gained the PUBLIC `formatIntPattern(pattern, value)` — the one renderer
  for every feature's "N days / N minutes / N downloads" translation
  patterns — and the settings/editor `PlatformFormats` expect/actual
- twins for it are deleted (settings keeps its genuinely distinct
- `formatOneDecimal`/`formatTwoDecimals`/`formatSignedInt` expects).
+ twins for it are deleted.
  Pinned by `DateLabelsTest`, `DateLabelsJvmTest` +
- `PlatformTimeJvmTest`.
+ `PlatformTimeJvmTest` + `DurationFormatterTest`.
 - **Card footer + decode seams**: `MediaCardFooters.kt` owns the card
  footer's whole meta-line decision as pure values. `bookFooterPercent`
  is the ONE book-footer admission + percent derivation for
@@ -5167,7 +5361,13 @@ auto-resume. See docs/adr/0004-playback-focus.md (+ addendum).
  state). `SectionHeader(title, contentPad)` is the grouped-list section
  label (livetv recordings/schedule folded; deliberately not focusable
  on TV — it is a label, not a control). arrqueue's private `ErrorState`
- folded onto `ErrorScreen`, restoring its TV focus requester.
+ folded onto `ErrorScreen`, restoring its TV focus requester. Since
+ consolidated: the scaffold's separate `ScreenErrorState` (icon + retry +
+ report + retryLoading spinner) is DELETED — its consumers (the detail
+ content, the insights heatmap) folded onto `ErrorScreen`, which gained
+ the optional `icon` slot and a declared TV-focus guarantee (focus lands
+ on Retry when present, otherwise the screen itself is the sink, so an
+ error never orphans the D-pad).
 - **`loadInto(start, fetch, onSuccess, onFailure)`** (`viewmodel/
  LoadInto.kt`, beside `JellyPlayViewModel`) is the ONE load ladder —
  raise the caller's start flags + clear the error, run the single
@@ -5270,8 +5470,32 @@ auto-resume. See docs/adr/0004-playback-focus.md (+ addendum).
  overlay's `formatBitrate`/`formatBandwidth` ladders (SI-decimal ÷1000
  NETWORK RATES, not storage sizes — deliberately local) — different
  surface, opportunistic.
+- **`PreferenceEnumNames`** (core/ui `model/PreferenceEnumNames.kt`) is
+ the localized enum-label seam for the enum-valued preference rows whose UI
+ used to render hardcoded English — or the raw persisted wire string — next
+ to an already-localized subtitle on the same row: a `labelResource()`
+ StringResource handle plus a `localizedDisplayName()` convenience per enum
+ (`GestureMode`, `OrientationMode`, `GestureIndicatorSide`, `CheckFrequency`
+ so far; default-locale strings only — translation follow-up). The seam is
+ core/ui's, not feature:settings', because the rows span modules: the
+ settings rows/pickers, the onboarding orientation picker (no dependency
+ edge to feature:settings) and the import-preview `DiffField` `enumLabel`
+ slot all render through it (the SegmentNames pattern — core:model cannot
+ depend on resources). With it landed, the dead `constant` wire fields on
+ `GestureMode`/`OrientationMode`/`GestureIndicatorSide`/`LayoutMode` are
+ deleted — persistence is the enum NAME. The preference enums and groups
+ themselves split from the two monoliths into per-domain files in the SAME
+ `core.model` package (`PreferenceModelsPlayback.kt`, `PreferenceGroupsAudio.kt`,
+ …; the split is a pure declaration move — consumer imports unchanged —
+ and `PreferenceModels.kt` keeps only the types with no single domain), so
+ a domain's enums/groups land in one greppable file.
 - Lazy lists carry `contentType` lambdas (~8 screens) so recycled item
  types don't cross-compose.
+- Auth's server/user cards dropped their hand-rolled synthwave shape
+ branch (`RoundedCornerShape(0.dp)`): `ShapeCache` tokens already flatten
+ under the synthwave variant (`SynthwaveDynamicShape`), so only soothing's
+ larger radius branches. Same `if (isSoothing)` shape in both screens,
+ twin by render site.
 
 ## Editor feature (`shared/feature/editor`)
 
@@ -5389,7 +5613,8 @@ re-derives the designs nor lands them casually. Entries marked
  verification.
 - **Side-load id contract** (the `SideloadedTrackIdRegistry` design,
  executed in pieces): the id grammar (`external:`/`offline:`/`provider:`/
- `local:`) is constructed in `TrackSelectionHelper`/`SubtitleManager` and
+ `local:`/`streaming:`) is constructed in
+ `TrackSelectionHelper`/`SubtitleManager`/`SessionSubtitleSources` and
  matched in `TrackSelectionPolicy`; "keep the caller id alive across the
  engine's track republish" folded where it could — BOTH mpv engines run
  the commonMain `MpvTrackCatalog`/`MpvSubtitleSideLoadPlan` pair

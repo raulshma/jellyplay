@@ -1,16 +1,17 @@
 package com.raulshma.jellyplay.feature.newsletter
 
 import com.raulshma.jellyplay.core.ui.components.longMonthDayYear
-import com.raulshma.jellyplay.core.ui.components.oneDecimal
 import com.raulshma.jellyplay.core.ui.components.relativeInstantDateLabel
 import kotlinx.datetime.LocalDate
 
 /**
  * Thin façades over the core/ui date-label seam — the module-internal names
  * the newsletter's call sites use, kept so churn stays at the seams' edges.
- * The formatting bodies (java.time DateTimeFormatter on android/desktop),
- * the Today/Yesterday ladder, and the
- * one-decimal renderer live ONLY in core:ui's DateLabels.
+ * The formatting bodies (java.time DateTimeFormatter on android/desktop) and
+ * the Today/Yesterday ladder live ONLY in core:ui's DateLabels. (The
+ * one-decimal renderer that used to be façaded here too is gone: core/ui's
+ * public [com.raulshma.jellyplay.core.ui.components.formatOneDecimal] —
+ * DurationFormatter.kt — is imported by the star-rating call sites directly.)
  */
 
 /** The header line's date label, e.g. "January 5, 2026" ("MMMM d, yyyy"). */
@@ -22,10 +23,3 @@ internal fun newsletterHeaderDateLabel(date: LocalDate): String = longMonthDayYe
  * not parse — the exact contract the private `formatRelativeDate` pinned.
  */
 internal fun newsletterRelativeDateLabel(dateStr: String): String = relativeInstantDateLabel(dateStr)
-
-/**
- * One-decimal fixed notation for the star-rating badges ("%.1f" contract:
- * HALF_UP at the first decimal; the JVM keeps the host-locale separator)
- * — see the core/ui seam.
- */
-internal fun formatOneDecimal(value: Double): String = oneDecimal(value)

@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.home
 
 import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
+import com.raulshma.jellyplay.core.concurrency.withDeadlineMs
 import com.raulshma.jellyplay.core.data.log.Log
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.error.UserErrorMessages
@@ -40,7 +41,6 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.time.TimeSource
 
 /**
@@ -162,14 +162,19 @@ internal class HomeRefresher(
 
     internal companion object {
         /**
-         * Hard deadline on the offline→online fetch. There is no withTimeout
-         * anywhere down the getHomeSections / fetchDiscoverSections /
-         * fetchRecentlyGrabbed chain — only OkHttp's per-call read timeout
-         * (which a half-open socket or a hung Seerr await can defeat). Without
-         * this cap a stuck fetch parks on refreshMutex forever and the
-         * handshake's full-screen loader never clears, leaving the home
-         * stuck until the app is restarted. (The going-online busy flag is
-         * not at risk anymore: [OfflineModeManager.goingOnline] owns it and clears it at the ONLINE
+         * Hard deadline on the offline→online fetch, applied with the shared
+         * governor vocabulary (core:concurrency FetchGovernor's
+         * [com.raulshma.jellyplay.core.concurrency.withDeadlineMs] — same
+         * withTimeoutOrNull semantics, now declared policy at the call site).
+         * The gap it caps is UNCHANGED until Wave-4's owner lands: there is
+         * still no deadline anywhere down the getHomeSections /
+         * fetchDiscoverSections / fetchRecentlyGrabbed chain — only OkHttp's
+         * per-call read timeout (which a half-open socket or a hung Seerr
+         * await can defeat). Without this cap a stuck fetch parks on
+         * refreshMutex forever and the handshake's full-screen loader never
+         * clears, leaving the home stuck until the app is restarted. (The
+         * going-online busy flag is not at risk anymore:
+         * [OfflineModeManager.goingOnline] owns it and clears it at the ONLINE
          * emission, before this fetch even starts.) The loader
          * MAY legitimately stay up across the handshake's whole bounded
          * sequence — drain wait + capped fetch + drain re-await + capped
@@ -708,7 +713,7 @@ internal class HomeRefresher(
      * the network recovers.
      */
     private suspend fun cappedForcedFetch(): Boolean =
-        withTimeoutOrNull(GOING_ONLINE_TIMEOUT_MS) { fetchOnce(force = true) } != null
+        withDeadlineMs(GOING_ONLINE_TIMEOUT_MS) { fetchOnce(force = true) } != null
 
     /**
      * onStart: network re-check, stale fetch, periodic-loop start, then the

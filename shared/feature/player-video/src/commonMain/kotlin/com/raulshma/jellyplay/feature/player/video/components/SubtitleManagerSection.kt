@@ -1,6 +1,5 @@
 package com.raulshma.jellyplay.feature.player.video.components
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -38,7 +37,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
@@ -367,30 +365,19 @@ private fun SubtitleDownloadItem(
     onDownload: () -> Unit,
     onUse: () -> Unit,
 ) {
-    val shape = when {
-        itemCount == 1 -> ShapeCache.smooth16
-        isLast -> com.raulshma.jellyplay.core.designsystem.theme.expressiveListShape(if (isLast) itemCount - 1 else 0, itemCount)
-        else -> ShapeCache.smooth8
-    }
-    val focusState = rememberTvFocusState(focusedScale = 1.02f)
     // While a download is in flight or already done, the row itself no longer
     // re-triggers a download — the right-side slot drives the next action
     // (spinner while working, "Use" once done). DELAYED/FAILED let a tap retry.
     val isDownloadActive = status?.state == SubtitleDownloadState.DOWNLOADING ||
         status?.state == SubtitleDownloadState.DOWNLOADED
 
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 2.dp)
-            .clip(shape)
-            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.04f))
-            .then(focusState.focusModifier)
-            .tvFocusIndicator(focusState, shape)
-            .clickable(enabled = !isDownloadActive) { onDownload() }
-            .padding(horizontal = 20.dp, vertical = 14.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
+    // Subtitle rows carry no selected state — the plain onSurface@0.04
+    // background is the chassis' unselected look, so [selected] stays false.
+    TvFocusableOptionRow(
+        selected = false,
+        onClick = onDownload,
+        enabled = !isDownloadActive,
+        shape = pickerRowShape(itemCount = itemCount, isLast = isLast),
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
@@ -903,32 +890,17 @@ private fun ProviderSubtitleRow(
     onDownload: () -> Unit,
     onUse: () -> Unit,
 ) {
-    val shape = when {
-        itemCount == 1 -> ShapeCache.smooth16
-        isLast -> com.raulshma.jellyplay.core.designsystem.theme.expressiveListShape(
-            if (isLast) itemCount - 1 else 0, itemCount,
-        )
-        else -> ShapeCache.smooth8
-    }
-    val focusState = rememberTvFocusState(focusedScale = 1.02f)
     // While a download is in flight or already done, the row itself no longer
     // re-triggers a download — the right-side slot drives the next action
     // (spinner while working, "Use" once done). DELAYED/FAILED let a tap retry.
     val isDownloadActive = status?.state == SubtitleDownloadState.DOWNLOADING ||
         status?.state == SubtitleDownloadState.DOWNLOADED
 
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 2.dp)
-            .clip(shape)
-            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.04f))
-            .then(focusState.focusModifier)
-            .tvFocusIndicator(focusState, shape)
-            .clickable(enabled = !isDownloadActive) { onDownload() }
-            .padding(horizontal = 20.dp, vertical = 14.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
+    TvFocusableOptionRow(
+        selected = false,
+        onClick = onDownload,
+        enabled = !isDownloadActive,
+        shape = pickerRowShape(itemCount = itemCount, isLast = isLast),
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {

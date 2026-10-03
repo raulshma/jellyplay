@@ -43,7 +43,11 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvEventFold
 import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvFoldApplier
+import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvIntakeHost
+import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvIntakeValue
 import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvPlaybackEvent
+import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvPropertyIntake
+import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvPropertyIntakeResult
 import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvPropertySurface
 import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvStatsProjection
 import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvStatsReads
@@ -239,68 +243,37 @@ class MpvPlayerEngine(
         private val observer = object : MPV.EventObserver {
             override fun eventProperty(property: String) {}
             override fun eventProperty(property: String, value: Long) {
-                when (property) {
-                    "demuxer-cache-time" -> cachedBufferedPositionMs = value * 1000L
-                }
+                applyPropertyIntake(property, MpvIntakeValue.Whole(value))
             }
             override fun eventProperty(property: String, value: Double) {
-                when (property) {
-                    // time-pos MUST be observed as DOUBLE: as INT64, mpv emits
-                    // a property change only when the whole-second value
-                    // changes (1 update/sec), so currentPositionMs quantizes
-                    // to 1000ms steps. SyncPlay's correction loop compares it
-                    // against a continuously-advancing server clock and read
-                    // the 0..1000ms quantization gap as drift, SkipToSync-
-                    // seeking (and pulsing "Syncing") on most 2s correction
-                    // ticks — the endless syncing/synced cycle on mpv. DOUBLE
-                    // updates per frame, giving ms precision.
-                    "time-pos" -> cachedPositionMs = (value * 1000L).toLong().coerceAtLeast(0L)
-                    "duration" -> cachedDurationMs = (value * 1000L).toLong().coerceAtLeast(0L)
-                    "sub-start" -> cachedSubStartSec = value
-                    "demuxer-cache-duration" -> {
-                        // demuxer-cache-duration is relative to the current
-                        // position; the ticker folds it into a downstream
-                        // buffered value via updateBufferPosition(). Cache the
-                        // raw seconds here (no JNI) so the getter path stays
-                        // off the main-thread read loop.
-                        cachedBufferedPositionMs = cachedPositionMs + (value * 1000L).toLong()
-                    }
-                }
+                applyPropertyIntake(property, MpvIntakeValue.Decimal(value))
             }
             override fun eventProperty(property: String, value: Boolean) {
                 if (released) return
-                when (property) {
-                    "pause" -> foldApplier.apply(MpvPlaybackEvent.PauseChanged(value))
-                    "paused-for-cache" -> foldApplier.apply(MpvPlaybackEvent.PausedForCacheChanged(value))
-                    "eof-reached" -> foldApplier.apply(
-                        MpvPlaybackEvent.EofReachedChanged(value, pausedNow = livePauseFlag()),
-                    )
-                    "sub-visibility" -> Log.d(TAG, "MPV subtitle visibility changed to $value")
-                }
+                applyPropertyIntake(
+                    property,
+                    MpvIntakeValue.Flag(value),
+                    // Only the eof-reached arm's shipped body paid the live
+                    // pause read (the fold's eof=false re-derivation input) —
+                    // the conditional keeps the other flag arms JNI-free.
+                    livePaused = if (property == "eof-reached") livePauseFlag() else true,
+                )
             }
             override fun eventProperty(property: String, value: String) {
-                when (property) {
-                    "sid", "aid" -> {
-                        Log.d(TAG, "MPV $property changed to ${redactSensitive(value)}")
-                        foldApplier.apply(
-                            MpvPlaybackEvent.TrackSwitch(
-                                if (property == "sid") MpvPlaybackEvent.TrackKind.SUBTITLE
-                                else MpvPlaybackEvent.TrackKind.AUDIO,
-                            ),
-                            refreshReason = "property:$property",
-                        )
-                    }
-                    "sub-text" -> foldApplier.apply(MpvPlaybackEvent.SubTextChanged(value))
+                if (property == "sid" || property == "aid") {
+                    Log.d(TAG, "MPV $property changed to ${redactSensitive(value)}")
                 }
+                applyPropertyIntake(property, MpvIntakeValue.Text(value))
             }
             override fun eventProperty(property: String, value: MPVNode) {
-                if (property == "track-list") {
-                    refreshTracks("property:track-list")
-                } else if (property == "demuxer-cache-state") {
-                    // the range-level buffered surface. Node arrives
-                    // parsed; extraction + clamping is the shared pure
-                    // derivation (see updateBufferedRangesFromCacheState).
-                    updateBufferedRangesFromCacheState(value)
+                when (applyPropertyIntake(property, MpvIntakeValue.Node)) {
+                    MpvPropertyIntakeResult.RefreshTracks -> refreshTracks("property:$property")
+                    MpvPropertyIntakeResult.DecodeBufferedRanges ->
+                        // the range-level buffered surface. Node arrives
+                        // parsed; extraction + clamping is the shared pure
+                        // derivation (see updateBufferedRangesFromCacheState).
+                        updateBufferedRangesFromCacheState(value)
+                    else -> {}
                 }
             }
             override fun event(eventId: Int, data: MPVNode) {
@@ -534,6 +507,17 @@ class MpvPlayerEngine(
         override fun postInitOptions() {
             mpv.addObserver(observer)
             mpv.addLogObserver(logObserver)
+            // time-pos MUST be observed as DOUBLE: as INT64, mpv emits
+            // a property change only when the whole-second value
+            // changes (1 update/sec), so currentPositionMs quantizes
+            // to 1000ms steps. SyncPlay's correction loop compares it
+            // against a continuously-advancing server clock and read
+            // the 0..1000ms quantization gap as drift, SkipToSync-
+            // seeking (and pulsing "Syncing") on most 2s correction
+            // ticks — the endless syncing/synced cycle on mpv. DOUBLE
+            // updates per frame, giving ms precision. (The DECISION for
+            // each observed property lives in the shared MpvPropertyIntake
+            // table; only the observe formats live here.)
             mpv.observeProperty("pause", MPV.mpvFormat.MPV_FORMAT_FLAG)
             mpv.observeProperty("speed", MPV.mpvFormat.MPV_FORMAT_DOUBLE)
             mpv.observeProperty("paused-for-cache", MPV.mpvFormat.MPV_FORMAT_FLAG)
@@ -564,6 +548,49 @@ class MpvPlayerEngine(
             try { mpv.removeObserver(observer) } catch (_: Exception) {}
             try { mpv.removeLogObserver(logObserver) } catch (_: Exception) {}
         }
+    }
+
+    /**
+     * The Android funnel of the shared [MpvPropertyIntake] intake table (the
+     * value-reader half of the property intake — every DECISION is a table
+     * row, this only lands them): events fold through [foldApplier], cache
+     * sinks write this engine's observer-cached scalars (the ticker/gutter
+     * path reads them — no JNI on the hot path), and the decision is returned
+     * so the node-payload caller can run the two seams that need the raw
+     * tree (`track-list` → [refreshTracks], `demuxer-cache-state` →
+     * [updateBufferedRangesFromCacheState]). [positionMs] feeds the Android
+     * buffered formula (position + demuxer-cache-duration — the declared
+     * divergence from the desktop's absolute-only row); [livePaused] feeds
+     * the eof-reached re-derivation. The per-overload `released` guards stay
+     * exactly where the shipped bodies had them (Boolean arm only; the node
+     * sinks carry their own).
+     */
+    private fun applyPropertyIntake(
+        property: String,
+        value: MpvIntakeValue,
+        livePaused: Boolean = true,
+    ): MpvPropertyIntakeResult? {
+        val intake = MpvPropertyIntake.dispatch(
+            host = MpvIntakeHost.ANDROID,
+            property = property,
+            value = value,
+            positionMs = cachedPositionMs,
+            livePaused = livePaused,
+        )
+        when (intake) {
+            is MpvPropertyIntakeResult.Event ->
+                foldApplier.apply(intake.event, refreshReason = "property:$property")
+            is MpvPropertyIntakeResult.CachedPositionMs -> cachedPositionMs = intake.ms
+            is MpvPropertyIntakeResult.CachedDurationMs -> cachedDurationMs = intake.ms
+            is MpvPropertyIntakeResult.CachedBufferedMs -> cachedBufferedPositionMs = intake.ms
+            is MpvPropertyIntakeResult.CachedSubStartSec -> cachedSubStartSec = intake.seconds
+            is MpvPropertyIntakeResult.SubVisibilityObserved ->
+                Log.d(TAG, "MPV subtitle visibility changed to ${intake.visible}")
+            // RefreshTracks / DecodeBufferedRanges land at the node overload;
+            // speed / channel-count are desktop rows and never dispatch here.
+            else -> {}
+        }
+        return intake
     }
 
     /**

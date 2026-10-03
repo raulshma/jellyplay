@@ -41,10 +41,12 @@ import kotlinx.coroutines.flow.MutableStateFlow
  * (desktop int codes / Android error strings), and only then
  * [applyResult] the state — the choreography both engines have always run.
  *
- * Deliberately NOT here (still per-platform, the remaining known mpv twin):
- * the event INTAKE halves — Android's `MPV.EventObserver` block and desktop's
- * `registerObservers`/`handleEvent` JNA decode — which translate raw binding
- * payloads into [MpvPlaybackEvent]s.
+ * Deliberately NOT here: the property-CHANGE intake decisions now ride the
+ * shared [MpvPropertyIntake] table (its per-host value readers land results
+ * through the same applier); what stays per-platform is the non-property mpv
+ * EVENT decode (START_FILE/FILE_LOADED/END_FILE/IDLE — engine choreography)
+ * and each reader's native extraction quirks (pointer shapes, released
+ * guards).
  */
 public class MpvFoldApplier(
     private val isPlaying: MutableStateFlow<Boolean>,

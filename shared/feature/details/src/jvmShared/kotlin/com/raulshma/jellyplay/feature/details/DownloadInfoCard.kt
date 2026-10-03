@@ -29,6 +29,7 @@ import com.raulshma.jellyplay.core.model.DownloadAttachment
 import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.formatBytes
+import com.raulshma.jellyplay.core.model.progressFraction
 import com.raulshma.jellyplay.core.ui.components.formatDurationFromTicks
 import com.raulshma.jellyplay.core.ui.components.formatRelativeTime
 import java.text.DateFormat
@@ -227,12 +228,13 @@ internal fun downloadStatusLabel(status: DownloadStatus): String = when (status)
     DownloadStatus.CANCELLED -> stringResource(Res.string.detail_download_status_cancelled)
 }
 
-/** Derives a 0–100 watched percentage from position/runtime, guarding /0. */
-internal fun computeWatchPercentage(positionTicks: Long?, runTimeTicks: Long?): Double {
-    if (positionTicks == null || positionTicks <= 0L) return 0.0
-    if (runTimeTicks == null || runTimeTicks <= 0L) return 0.0
-    return ((positionTicks.toDouble() / runTimeTicks.toDouble()) * 100.0).coerceIn(0.0, 100.0)
-}
+/**
+ * Derives a 0–100 watched percentage from position/runtime, guarding /0.
+ * Delegates to the model's [progressFraction] — same null/zero-ticks and
+ * clamp rules — rescaled to percent for this card's integer label.
+ */
+internal fun computeWatchPercentage(positionTicks: Long?, runTimeTicks: Long?): Double =
+    (progressFraction(positionTicks, runTimeTicks)?.toDouble() ?: 0.0) * 100.0
 
 /** Best-effort absolute-date fallback for an ISO timestamp string. */
 internal fun formatAbsoluteDate(isoTimestamp: String): String? =

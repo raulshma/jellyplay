@@ -36,7 +36,11 @@ import com.raulshma.jellyplay.feature.player.video.engine.MpvConfigApplier
 import com.raulshma.jellyplay.feature.player.video.engine.MpvConfigMapping
 import com.raulshma.jellyplay.feature.player.video.engine.MpvErrorTaxonomy
 import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvFoldApplier
+import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvIntakeHost
+import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvIntakeValue
 import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvPlaybackEvent
+import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvPropertyIntake
+import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvPropertyIntakeResult
 import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvPropertySurface
 import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvStatsProjection
 import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvStatsReads
@@ -539,52 +543,94 @@ open class MpvDesktopEngine(
         }
     }
 
+    /**
+     * The desktop reader half of the shared [MpvPropertyIntake] intake
+     * table: this when-block is EXTRACTION only — this JNA binding's
+     * per-format decode of the raw `mpv_event_property` payload — and every
+     * DECISION is a table row applied by [applyPropertyIntake]. The
+     * extraction quirks that stay here (declared, not drift): the
+     * null-payload → `false` flag coercion, the `FORMAT_STRING` char**
+     * dereference, the sid/aid payload shipped unread (the fold keys on the
+     * property name alone), and the NODE observations re-read through
+     * [MpvLib.readNode] instead of decoding the event's node memory.
+     */
     private fun handlePropertyChange(event: MpvEvent) {
         val prop = event.data?.let { MpvEventProperty(it).also { it.read() } } ?: return
         val name = prop.name?.getString(0) ?: return
         val data = prop.data
         when (name) {
-            "pause" -> foldApplier.apply(MpvPlaybackEvent.PauseChanged(paused = data != null && data.getInt(0) != 0))
-            "paused-for-cache" -> foldApplier.apply(
-                MpvPlaybackEvent.PausedForCacheChanged(buffering = data != null && data.getInt(0) != 0),
+            "pause", "paused-for-cache" ->
+                applyPropertyIntake(name, MpvIntakeValue.Flag(data != null && data.getInt(0) != 0))
+            "eof-reached" -> applyPropertyIntake(
+                name,
+                MpvIntakeValue.Flag(data != null && data.getInt(0) != 0),
+                // eof flipped false (replay seek-back): the fold re-derives
+                // isPlaying from the live pause — `pause` itself didn't
+                // change, so its observer won't fire (same class as the
+                // FILE_LOADED seed).
+                livePaused = aliveCtx()?.let { propFlag(it, "pause") } ?: true,
             )
-            "eof-reached" -> foldApplier.apply(
-                MpvPlaybackEvent.EofReachedChanged(
-                    eof = data != null && data.getInt(0) != 0,
-                    // eof flipped false (replay seek-back): the fold re-derives
-                    // isPlaying from the live pause — `pause` itself didn't
-                    // change, so its observer won't fire (same class as the
-                    // FILE_LOADED seed).
-                    pausedNow = aliveCtx()?.let { propFlag(it, "pause") } ?: true,
-                ),
-            )
-            "sid" -> foldApplier.apply(MpvPlaybackEvent.TrackSwitch(MpvPlaybackEvent.TrackKind.SUBTITLE))
-            "aid" -> foldApplier.apply(MpvPlaybackEvent.TrackSwitch(MpvPlaybackEvent.TrackKind.AUDIO))
-            "time-pos" -> data?.let {
-                positionMs = ((it.getDouble(0) * 1000).toLong()).coerceAtLeast(0L)
+            "sid", "aid" -> applyPropertyIntake(name, MpvIntakeValue.Unread)
+            "sub-text" ->
+                // Contract: null when no line is active — mpv emits "" on
+                // clear. FORMAT_STRING event data is a char** (client.h hands
+                // the value behind one pointer) — reading the bytes AT data
+                // yielded pointer garbage; dereference first.
+                applyPropertyIntake(name, MpvIntakeValue.Text(data?.getPointer(0)?.getString(0).orEmpty()))
+            "time-pos", "duration", "speed" ->
+                data?.let { applyPropertyIntake(name, MpvIntakeValue.Decimal(it.getDouble(0))) }
+            "demuxer-cache-time", "audio-params/channel-count" ->
+                data?.let { applyPropertyIntake(name, MpvIntakeValue.Whole(it.getLong(0))) }
+            "track-list", "demuxer-cache-state" ->
+                // NODE observation arrives as a raw mpv_node pointer in the
+                // event; the engine re-reads the property through
+                // [MpvLib.readNode] (parsed Kotlin tree) at the sink instead
+                // of decoding the event's node memory here.
+                applyPropertyIntake(name, MpvIntakeValue.Node)
+        }
+    }
+
+    /**
+     * The desktop funnel of the shared [MpvPropertyIntake] table (the
+     * property-intake twin of Android's `applyPropertyIntake`): events fold
+     * through [foldApplier], cache sinks land in this engine's fields/flows
+     * exactly where their shipped bodies wrote them, and the two node sinks
+     * route into this engine's re-read seams. [livePaused] feeds the
+     * eof-reached re-derivation; [previousChannelCount] (fed to
+     * [MpvPropertyIntake.dispatch]) is the channel-count row's change guard
+     * against [observedChannelCount].
+     */
+    private fun applyPropertyIntake(
+        property: String,
+        value: MpvIntakeValue,
+        livePaused: Boolean = true,
+    ) {
+        when (val intake = MpvPropertyIntake.dispatch(
+            host = MpvIntakeHost.DESKTOP,
+            property = property,
+            value = value,
+            positionMs = positionMs,
+            livePaused = livePaused,
+            previousChannelCount = observedChannelCount,
+        )) {
+            is MpvPropertyIntakeResult.Event -> foldApplier.apply(intake.event)
+            is MpvPropertyIntakeResult.CachedPositionMs -> positionMs = intake.ms
+            is MpvPropertyIntakeResult.CachedDurationMs -> durationValue = intake.ms
+            is MpvPropertyIntakeResult.CachedBufferedMs -> _bufferedPositionMs.value = intake.ms
+            is MpvPropertyIntakeResult.CachedSpeed -> speedValue = intake.speed
+            is MpvPropertyIntakeResult.ChannelLayoutChanged -> {
+                observedChannelCount = intake.count
+                // The layout changed (new item / channel-mix edit): the
+                // stereo-gated balance stage must be rebuilt against the
+                // new layout.
+                applyAudioEffects(currentConfig)
             }
-            "duration" -> data?.let { durationValue = (it.getDouble(0) * 1000).toLong() }
-            "demuxer-cache-time" -> data?.let { _bufferedPositionMs.value = it.getLong(0) * 1000 }
-            "demuxer-cache-state" -> refreshBufferedRanges()
-            // Contract: null when no line is active — mpv emits "" on clear.
-            // Non-blank lines also fold into the currentCues history (G10,
-            // same pairing as Android's accumulateMpvSubText).  fix:
-            // FORMAT_STRING event data is a char** (client.h hands the value
-            // behind one pointer) — reading the bytes AT data yielded pointer
-            // garbage; dereference first.
-            "sub-text" -> foldApplier.apply(MpvPlaybackEvent.SubTextChanged(data?.getPointer(0)?.getString(0).orEmpty()))
-            "speed" -> data?.let { speedValue = it.getDouble(0).toFloat() }
-            "track-list" -> refreshTracks()
-            "audio-params/channel-count" -> {
-                val count = data?.getLong(0)?.toInt()
-                if (count != null && count != observedChannelCount) {
-                    observedChannelCount = count
-                    // The layout changed (new item / channel-mix edit): the
-                    // stereo-gated balance stage must be rebuilt against the
-                    // new layout.
-                    applyAudioEffects(currentConfig)
-                }
-            }
+            MpvPropertyIntakeResult.RefreshTracks -> refreshTracks()
+            MpvPropertyIntakeResult.DecodeBufferedRanges -> refreshBufferedRanges()
+            // Android-only rows (sub-start / sub-visibility / the relative
+            // buffered formula) and unknown/dropped properties — no desktop
+            // intake, exactly as the former silent fall-through.
+            else -> {}
         }
     }
 

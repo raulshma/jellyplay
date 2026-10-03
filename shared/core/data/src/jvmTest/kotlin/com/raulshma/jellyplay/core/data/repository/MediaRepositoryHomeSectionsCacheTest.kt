@@ -208,9 +208,9 @@ class MediaRepositoryHomeSectionsCacheTest {
         val result = repository.rerollDiscoverRow(row)
 
         assertEquals(rolledItems, result.getOrNull())
-        coVerify(exactly = 1) { homeSectionsCachePort.invalidateDiscoverRow(row.id) }
+        coVerify(exactly = 1) { homeSectionsCachePort.invalidateDiscoverRow(row.id, any()) }
         coVerify(exactly = 1) { apiClient.getDiscoverRowItems(row) }
-        coVerify(exactly = 1) { homeSectionsCachePort.seedDiscoverRow(row, rolledItems) }
+        coVerify(exactly = 1) { homeSectionsCachePort.seedDiscoverRow(row, rolledItems, any()) }
     }
 
     @Test
@@ -263,6 +263,81 @@ class MediaRepositoryHomeSectionsCacheTest {
     }
 
     @Test
+    fun `invalidate and seed each bump the write generation exactly once - the funnel is the only writer`() = runTest {
+        // The one-token consolidation pin: the repo's home cache-write
+        // generation moves through ONE funnel, and each roll verb hands its
+        // post-bump value down to the network layer as a parameter (the
+        // fetcher keeps no counter of its own). Pinned in two halves:
+        //  - the port verbs receive exactly one generation each, strictly +1
+        //    apart (the funnel bumped once per verb, and nothing else wrote);
+        //  - the guard behaves accordingly: a home fetch parked BETWEEN the
+        //    two verbs (capturing the post-invalidate value) is refused once
+        //    the seed's commit bump lands, and the post-roll ordinary read —
+        //    capturing the settled token — pins and serves, so nothing
+        //    bumped after the commit either.
+        val repository = buildRepository()
+        signIn("server-1", "user-A")
+        val rolledItems = listOf(mockk<MediaItem>(relaxed = true))
+        val row = DiscoverRowConfig(id = "dr_x", title = "Surprise Me")
+
+        val invalidateGenerations = mutableListOf<Long>()
+        val seedGenerations = mutableListOf<Long>()
+        every { homeSectionsCachePort.invalidateDiscoverRow(any(), any()) } answers { invalidateGenerations += arg<Long>(1) }
+        every { homeSectionsCachePort.seedDiscoverRow(any(), any(), any()) } answers { seedGenerations += arg<Long>(2) }
+
+        // The roll's own fresh fetch parks between the two verbs, opening the
+        // invalidate-only window a home fetch can start inside.
+        val rowGate = CompletableDeferred<Unit>()
+        coEvery { apiClient.getDiscoverRowItems(any()) } coAnswers { rowGate.await(); Result.success(rolledItems) }
+
+        // Phase 1 — a home fetch parked BEFORE the roll captures the pre-roll
+        // generation (0).
+        val preRollGate = CompletableDeferred<Result<HomeSectionsResult>>()
+        coEvery { apiClient.getHomeSections(any(), any()) } coAnswers { preRollGate.await() }
+        val beforeRoll = async { repository.getHomeSections(HomeSectionQuery(), force = false) }
+        runCurrent() // parked on preRollGate, generation captured
+
+        val roll = async { repository.rerollDiscoverRow(row) }
+        runCurrent() // invalidate ran (bump 1 + port call); the roll parks on rowGate
+
+        // Phase 2 — a home fetch started INSIDE the invalidate-only window
+        // captures the post-invalidate generation (1).
+        val betweenGate = CompletableDeferred<Result<HomeSectionsResult>>()
+        coEvery { apiClient.getHomeSections(any(), any()) } coAnswers { betweenGate.await() }
+        val midRollFetch = async { repository.getHomeSections(HomeSectionQuery(), force = false) }
+        runCurrent() // parked on betweenGate, post-invalidate generation captured
+
+        // Release the roll: seed runs (bump 2 + port call) and the roll commits.
+        rowGate.complete(Unit)
+        assertTrue(roll.await().isSuccess)
+
+        // Exactly one generation per verb, in order, +1 apart — the funnel is
+        // the only writer and each verb delivered the repo's post-bump token.
+        assertEquals(listOf(1L), invalidateGenerations)
+        assertEquals(listOf(2L), seedGenerations)
+
+        // Phase 1's write lands AFTER both bumps: refused (captured 0 ≠ 2),
+        // still returned to its caller.
+        preRollGate.complete(homeResult("pre-roll"))
+        assertTrue(beforeRoll.await().isSuccess, "the raced fetch still returns its result to its caller")
+
+        // Phase 2's write lands after the seed too: refused as well (captured
+        // 1 ≠ 2) — the window the commit-time bump exists to close.
+        betweenGate.complete(homeResult("between"))
+        assertTrue(midRollFetch.await().isSuccess)
+
+        // The post-roll ordinary read refetches (neither raced write pinned),
+        // captures the settled generation, and PINS; a further read is then
+        // served from the cache with zero new calls — nothing bumped after
+        // the commit.
+        coEvery { apiClient.getHomeSections(any(), any()) } returns homeResult("post-roll")
+        repository.getHomeSections(HomeSectionQuery(), force = false)
+        repository.getHomeSections(HomeSectionQuery(), force = false)
+
+        coVerify(exactly = 3) { apiClient.getHomeSections(any(), any()) }
+    }
+
+    @Test
     fun `rerollDiscoverRow failure returns the failure without committing the memo`() = runBlocking {
         // A failed roll skips the commit: the network memo is untouched and
         // only the pre-fetch drop remains — the next home fetch re-queries the
@@ -276,8 +351,8 @@ class MediaRepositoryHomeSectionsCacheTest {
         val result = repository.rerollDiscoverRow(row)
 
         assertTrue(result.isFailure)
-        coVerify(exactly = 1) { homeSectionsCachePort.invalidateDiscoverRow(row.id) }
-        coVerify(exactly = 0) { homeSectionsCachePort.seedDiscoverRow(any(), any()) }
+        coVerify(exactly = 1) { homeSectionsCachePort.invalidateDiscoverRow(row.id, any()) }
+        coVerify(exactly = 0) { homeSectionsCachePort.seedDiscoverRow(any(), any(), any()) }
     }
 
     @Test

@@ -1,13 +1,13 @@
 package com.raulshma.jellyplay.feature.settings
 
-import com.composables.icons.tabler.outline.*
 import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.*
 import com.raulshma.jellyplay.core.ui.generated.resources.Res as CoreUiRes
 import com.raulshma.jellyplay.core.ui.generated.resources.ss_cat_storage
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchItem
-import com.raulshma.jellyplay.feature.settings.generated.resources.downloads_auto_delete_after_watch
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
+import com.raulshma.jellyplay.feature.settings.generated.resources.downloads_auto_delete_after_watch
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_adaptive_bitrate
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_delete_cache
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_download_clean_up_now
@@ -28,6 +28,7 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_down
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_download_schedule
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_download_schedule_wifi_only
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_download_storage_location
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_downloads_storage
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_manual_bandwidth_cap
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_max_cache_size
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_max_download_storage
@@ -103,441 +104,473 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_wifi_only_
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_wifi_only_downloads_title
 
 /**
- * The single-source row ids of this file's settings-search declarations.
- * Every consumer — the `SettingsSearchItem` declarations below, the screen
- * rows' `highlighted` comparisons, the admissions keys and the row-total
- * derivations — references these constants, so each id literal exists
- * exactly once. The values are the persisted deep-link/recents contract:
- * they change only deliberately, here.
+ * The storage domain's fused row declarations — the feature-side single home
+ * of every storage row's presentation, ordering, and capability (the
+ * [AppearanceRows] template). Each [SettingsRow] replaces the trio the domain
+ * used to declare per row: the `SettingsSearchBinding` entry, the
+ * `SettingsRowRecord` entry, and the `StorageSettingsIds` holder constant
+ * (all retired).
+ *
+ * Every row is a HAND-MAINTAINED residual (the knobs live in spec-less
+ * stores) and carries its full hand search faces; the schedule-window and
+ * auto-download rows declare their [RowAdmission.WhenOn] gates — the one
+ * declaration both the derived totals and the screen emission `if`s read.
+ * The projection ([List.toSearchItems]/[List.asRowGroup]) fails fast at
+ * catalog init on any drift; search results, catalog order, group membership
+ * and per-gate visibility are byte-identical to the retired declarations.
  */
-internal object StorageSettingsIds {
-    const val CLEAR_CACHE = "clear_cache"
-    const val CLEAR_IMAGE_CACHE = "clear_image_cache"
-    const val WIFI_ONLY_DOWNLOADS = "wifi_only_downloads"
-    const val AUTO_DELETE_CACHE = "auto_delete_cache"
-    const val MAX_CACHE_SIZE = "max_cache_size"
-    const val DOWNLOAD_CONNECTIONS = "download_connections"
-    const val MAX_CONCURRENT_DOWNLOADS = "max_concurrent_downloads"
-    const val OFFLINE_MODE = "offline_mode"
-    const val ADAPTIVE_BITRATE = "adaptive_bitrate"
-    const val BANDWIDTH_CAP = "bandwidth_cap"
-    const val DATA_SAVER = "data_saver"
-    const val CELLULAR_DOWNLOAD_WARNING = "cellular_download_warning"
-    const val NETWORK_TIMEOUT = "network_timeout"
-    const val VERBOSE_LOGGING = "verbose_logging"
-    const val USER_DATA_SYNC = "user_data_sync"
-    const val AUTO_OFFLINE = "auto_offline"
-    const val METERED_NETWORK_BEHAVIOR = "metered_network_behavior"
-    const val CELLULAR_STREAMING_QUALITY = "cellular_streaming_quality"
-    const val DOWNLOAD_QUALITY = "download_quality"
-    const val SMART_DOWNLOADS = "smart_downloads"
-    const val AUTO_DOWNLOAD_NEW_EPISODES = "auto_download_new_episodes"
-    const val AUTO_DOWNLOAD_LOOKAHEAD = "auto_download_lookahead"
-    const val AUTO_DOWNLOAD_MAX_PER_PASS = "auto_download_max_per_pass"
-    const val AUTO_DOWNLOAD_KEEP_DAYS = "auto_download_keep_days"
-    const val AUTO_DOWNLOAD_SERVERS = "auto_download_servers"
-    const val AUTO_DOWNLOAD_CLEAN_UP_NOW = "auto_download_clean_up_now"
-    const val DOWNLOAD_SCHEDULE = "download_schedule"
-    const val DOWNLOAD_SCHEDULE_START = "download_schedule_start"
-    const val DOWNLOAD_SCHEDULE_END = "download_schedule_end"
-    const val DOWNLOAD_SCHEDULE_WIFI_ONLY = "download_schedule_wifi_only"
-    const val MAX_DOWNLOAD_STORAGE_LIMIT = "max_download_storage_limit"
-    const val DOWNLOAD_STORAGE_LOCATION = "download_storage_location"
-    const val AUTO_DELETE_AFTER_WATCH = "auto_delete_after_watch"
-}
+internal object StorageRows {
 
-/**
- * Settings-search items for the "Storage" (cache) group of StorageSettingsScreen.
- * The list is the group declaration: SettingsScreenGroups.storageCache decorates
- * it, and the screen derives its scroll group, expand set and row total from it.
- * Aggregated in [SettingsSearchCatalog].
- */
-internal val StorageCacheRowRecords = listOf(
-    SettingsRowRecord(
-        id = StorageSettingsIds.CLEAR_CACHE,
+    // -- The "Storage" (cache) group's seven rows — the two clear rows always-on, the five tuning rows advanced — in catalog order. --
+
+    val ClearCache = SettingsRow(
+        id = "clear_cache",
+        icon = Tabler.Outline.Trash,
         titleRes = Res.string.settings_clear_cache,
         searchTitleRes = Res.string.ss_clear_cache_title,
         searchSubtitleRes = Res.string.ss_clear_cache_subtitle,
         keywords = listOf("clear cache", "trash", "free space", "clean", "reset"),
         route = Route.StorageSettings(),
-        icon = Tabler.Outline.Trash
     )
-,
-    SettingsRowRecord(
-        id = StorageSettingsIds.CLEAR_IMAGE_CACHE,
+
+    val ClearImageCache = SettingsRow(
+        id = "clear_image_cache",
+        icon = Tabler.Outline.Photo,
         titleRes = Res.string.settings_clear_image_cache,
         searchTitleRes = Res.string.ss_clear_image_cache_title,
         searchSubtitleRes = Res.string.ss_clear_image_cache_subtitle,
         keywords = listOf("image cache", "clear images", "posters", "thumbnails", "coil"),
         route = Route.StorageSettings(),
-        icon = Tabler.Outline.Photo
     )
-,
-    SettingsRowRecord(
-        id = StorageSettingsIds.WIFI_ONLY_DOWNLOADS,
+
+    val WifiOnlyDownloads = SettingsRow(
+        id = "wifi_only_downloads",
+        icon = Tabler.Outline.Wifi,
         titleRes = Res.string.settings_wifi_only,
         searchTitleRes = Res.string.ss_wifi_only_downloads_title,
         searchSubtitleRes = Res.string.ss_wifi_only_downloads_subtitle,
         keywords = listOf("wifi only", "downloads", "cellular downloads", "data saving"),
         route = Route.StorageSettings(),
-        icon = Tabler.Outline.Wifi,
-        isAdvanced = true
+        isAdvanced = true,
     )
-,
-    SettingsRowRecord(
-        id = StorageSettingsIds.AUTO_DELETE_CACHE,
+
+    val AutoDeleteCache = SettingsRow(
+        id = "auto_delete_cache",
+        icon = Tabler.Outline.Refresh,
         titleRes = Res.string.settings_auto_delete_cache,
         searchTitleRes = Res.string.ss_auto_delete_cache_title,
         searchSubtitleRes = Res.string.ss_auto_delete_cache_subtitle,
         keywords = listOf("auto delete", "cache limit", "disk full"),
         route = Route.StorageSettings(),
-        icon = Tabler.Outline.Refresh,
-        isAdvanced = true
+        isAdvanced = true,
     )
-,
-    SettingsRowRecord(
-        id = StorageSettingsIds.MAX_CACHE_SIZE,
+
+    val MaxCacheSize = SettingsRow(
+        id = "max_cache_size",
+        icon = Tabler.Outline.Database,
         titleRes = Res.string.settings_max_cache_size,
         searchTitleRes = Res.string.ss_max_cache_size_title,
         searchSubtitleRes = Res.string.ss_max_cache_size_subtitle,
         keywords = listOf("max cache", "size limit", "cache limit"),
         route = Route.StorageSettings(),
-        icon = Tabler.Outline.Database,
-        isAdvanced = true
+        isAdvanced = true,
     )
-,
-    SettingsRowRecord(
-        id = StorageSettingsIds.DOWNLOAD_CONNECTIONS,
+
+    val DownloadConnections = SettingsRow(
+        id = "download_connections",
+        icon = Tabler.Outline.Download,
         titleRes = Res.string.settings_connections_per_download,
         searchTitleRes = Res.string.ss_download_connections_title,
         searchSubtitleRes = Res.string.ss_download_connections_subtitle,
         keywords = listOf("connections", "parallel", "streams", "download", "segments"),
         route = Route.StorageSettings(),
-        icon = Tabler.Outline.Download,
-        isAdvanced = true
+        isAdvanced = true,
     )
-,
-    SettingsRowRecord(
-        id = StorageSettingsIds.MAX_CONCURRENT_DOWNLOADS,
+
+    val MaxConcurrentDownloads = SettingsRow(
+        id = "max_concurrent_downloads",
+        icon = Tabler.Outline.ArrowBarToDown,
         titleRes = Res.string.settings_max_simultaneous_downloads,
         searchTitleRes = Res.string.ss_max_concurrent_downloads_title,
         searchSubtitleRes = Res.string.ss_max_concurrent_downloads_subtitle,
         keywords = listOf("concurrent", "simultaneous", "parallel", "downloads", "max", "queue"),
         route = Route.StorageSettings(),
-        icon = Tabler.Outline.ArrowBarToDown,
-        isAdvanced = true
-    ))
+        isAdvanced = true,
+    )
 
-/** The catalog projection of `StorageCacheRowRecords`: the search faces + the shared category. */
-internal val StorageCacheSearchItems: List<SettingsSearchItem> = StorageCacheRowRecords.toSearchItems(CoreUiRes.string.ss_cat_storage)
+    // The four advanced-tagged rows (cellular download warning, network
+    // timeout, verbose logging, user-data sync) carry a legacy isAdvanced tag
+    // the screen never honored — the "Network & Offline" group predates and
+    // outlives the advanced toggle (the shipped always-on behavior), so each
+    // row's explicit gate overrides its flag (the appearance HapticsEnabled
+    // shape).
+    // -- The "Network & Offline" group's eleven rows — every row renders unconditionally (the screen feeds the declaration size itself) — in catalog order. --
 
-
-/**
- * Settings-search items for the "Network & Offline" group of
- * StorageSettingsScreen. Split from the flat storage list along the
- * screen-group line. Aggregated in [SettingsSearchCatalog].
- */
-internal val StorageNetworkRowRecords = listOf(
-    SettingsRowRecord(
-        id = StorageSettingsIds.OFFLINE_MODE,
+    val OfflineMode = SettingsRow(
+        id = "offline_mode",
+        icon = Tabler.Outline.CloudOff,
         titleRes = Res.string.settings_offline_mode,
         searchTitleRes = Res.string.ss_offline_mode_title,
         searchSubtitleRes = Res.string.ss_offline_mode_subtitle,
         keywords = listOf("offline", "airplane mode", "no network", "local only"),
         route = Route.StorageSettings(),
-        icon = Tabler.Outline.CloudOff
     )
-,
-    SettingsRowRecord(
-        id = StorageSettingsIds.ADAPTIVE_BITRATE,
+
+    val AdaptiveBitrate = SettingsRow(
+        id = "adaptive_bitrate",
+        icon = Tabler.Outline.Gauge,
         titleRes = Res.string.settings_adaptive_bitrate,
         searchTitleRes = Res.string.ss_adaptive_bitrate_title,
         searchSubtitleRes = Res.string.ss_adaptive_bitrate_subtitle,
         keywords = listOf("adaptive bitrate", "network", "bandwidth", "cellular", "buffer"),
         route = Route.StorageSettings(),
-        icon = Tabler.Outline.Gauge
     )
-,
-    SettingsRowRecord(
-        id = StorageSettingsIds.BANDWIDTH_CAP,
+
+    val BandwidthCap = SettingsRow(
+        id = "bandwidth_cap",
+        icon = Tabler.Outline.Lock,
         titleRes = Res.string.settings_manual_bandwidth_cap,
         searchTitleRes = Res.string.ss_bandwidth_cap_title,
         searchSubtitleRes = Res.string.ss_bandwidth_cap_subtitle,
         keywords = listOf("bandwidth cap", "limit", "throttle", "data cap"),
         route = Route.StorageSettings(),
-        icon = Tabler.Outline.Lock
     )
-,
-    SettingsRowRecord(
-        id = StorageSettingsIds.DATA_SAVER,
+
+    val DataSaver = SettingsRow(
+        id = "data_saver",
+        icon = Tabler.Outline.Gauge,
         titleRes = Res.string.settings_data_saver_mode,
         searchTitleRes = Res.string.ss_data_saver_title,
         searchSubtitleRes = Res.string.ss_data_saver_subtitle,
         keywords = listOf("data saver", "saving", "cellular usage", "bandwidth"),
         route = Route.StorageSettings(),
-        icon = Tabler.Outline.Gauge
     )
-,
-    SettingsRowRecord(
-        id = StorageSettingsIds.CELLULAR_DOWNLOAD_WARNING,
+
+    val CellularDownloadWarning = SettingsRow(
+        id = "cellular_download_warning",
+        icon = Tabler.Outline.AlertTriangle,
         titleRes = Res.string.settings_cellular_download_size_warning,
         searchTitleRes = Res.string.ss_cellular_download_warning_title,
         searchSubtitleRes = Res.string.ss_cellular_download_warning_subtitle,
         keywords = listOf("cellular", "download", "warning", "size", "data", "mobile"),
         route = Route.StorageSettings(),
-        icon = Tabler.Outline.AlertTriangle,
-        isAdvanced = true
+        isAdvanced = true,
+        gate = RowAdmission.Always,
     )
-,
-    SettingsRowRecord(
-        id = StorageSettingsIds.NETWORK_TIMEOUT,
+
+    val NetworkTimeout = SettingsRow(
+        id = "network_timeout",
+        icon = Tabler.Outline.Clock,
         titleRes = Res.string.settings_network_timeouts,
         searchTitleRes = Res.string.ss_network_timeout_title,
         searchSubtitleRes = Res.string.ss_network_timeout_subtitle,
         keywords = listOf("timeout", "network", "connect", "read", "write", "slow"),
         route = Route.StorageSettings(),
-        icon = Tabler.Outline.Clock,
-        isAdvanced = true
+        isAdvanced = true,
+        gate = RowAdmission.Always,
     )
-,
-    SettingsRowRecord(
-        id = StorageSettingsIds.VERBOSE_LOGGING,
+
+    val VerboseLogging = SettingsRow(
+        id = "verbose_logging",
+        icon = Tabler.Outline.Code,
         titleRes = Res.string.settings_verbose_logging,
         searchTitleRes = Res.string.ss_verbose_logging_title,
         searchSubtitleRes = Res.string.ss_verbose_logging_subtitle,
         keywords = listOf("verbose", "debug", "logging", "network", "http", "developer"),
         route = Route.StorageSettings(),
-        icon = Tabler.Outline.Code,
-        isAdvanced = true
+        isAdvanced = true,
+        gate = RowAdmission.Always,
     )
-,
-    SettingsRowRecord(
-        id = StorageSettingsIds.USER_DATA_SYNC,
+
+    val UserDataSync = SettingsRow(
+        id = "user_data_sync",
+        icon = Tabler.Outline.Refresh,
         titleRes = Res.string.settings_background_sync,
         searchTitleRes = Res.string.ss_user_data_sync_title,
         searchSubtitleRes = Res.string.ss_user_data_sync_subtitle,
         keywords = listOf("sync", "background", "user-data", "favorites", "played", "progress", "worker"),
         route = Route.StorageSettings(),
-        icon = Tabler.Outline.Refresh,
-        isAdvanced = true
+        isAdvanced = true,
+        gate = RowAdmission.Always,
     )
-,
-    SettingsRowRecord(
-        id = StorageSettingsIds.AUTO_OFFLINE,
+
+    val AutoOffline = SettingsRow(
+        id = "auto_offline",
+        icon = Tabler.Outline.WifiOff,
         titleRes = Res.string.settings_auto_offline,
         searchTitleRes = Res.string.ss_auto_offline_title,
         searchSubtitleRes = Res.string.ss_auto_offline_subtitle,
         keywords = listOf("auto offline", "network lost", "offline", "automatic", "disconnect"),
         route = Route.StorageSettings(),
-        icon = Tabler.Outline.WifiOff
     )
-,
-    SettingsRowRecord(
-        id = StorageSettingsIds.METERED_NETWORK_BEHAVIOR,
+
+    val MeteredNetworkBehavior = SettingsRow(
+        id = "metered_network_behavior",
+        icon = Tabler.Outline.Compass,
         titleRes = Res.string.settings_metered_network_behavior,
         searchTitleRes = Res.string.ss_metered_network_behavior_title,
         searchSubtitleRes = Res.string.ss_metered_network_behavior_subtitle,
         keywords = listOf("metered", "cellular", "behavior", "data", "mobile", "network"),
         route = Route.StorageSettings(),
-        icon = Tabler.Outline.Compass
     )
-,
-    SettingsRowRecord(
-        id = StorageSettingsIds.CELLULAR_STREAMING_QUALITY,
+
+    val CellularStreamingQuality = SettingsRow(
+        id = "cellular_streaming_quality",
+        icon = Tabler.Outline.DeviceMobile,
         titleRes = Res.string.settings_cellular_streaming_quality,
         searchTitleRes = Res.string.ss_cellular_streaming_quality_title,
         searchSubtitleRes = Res.string.ss_cellular_streaming_quality_subtitle,
         keywords = listOf("cellular", "streaming", "quality", "mobile", "data", "resolution"),
         route = Route.StorageSettings(),
-        icon = Tabler.Outline.DeviceMobile
-    ))
+    )
 
-/** The catalog projection of `StorageNetworkRowRecords`: the search faces + the shared category. */
-internal val StorageNetworkSearchItems: List<SettingsSearchItem> = StorageNetworkRowRecords.toSearchItems(CoreUiRes.string.ss_cat_storage)
+    // -- The "Downloads" group's fifteen rows, in catalog order. --
 
-
-/**
- * Settings-search items for the "Downloads" group of StorageSettingsScreen.
- * Split from the flat storage list along the screen-group line. Aggregated
- * in [SettingsSearchCatalog].
- */
-internal val StorageDownloadsRowRecords = listOf(
-    SettingsRowRecord(
-        id = StorageSettingsIds.DOWNLOAD_QUALITY,
+    val DownloadQuality = SettingsRow(
+        id = "download_quality",
+        icon = Tabler.Outline.Video,
         titleRes = Res.string.settings_download_quality,
         searchTitleRes = Res.string.ss_download_quality_title,
         searchSubtitleRes = Res.string.ss_download_quality_subtitle,
         keywords = listOf("download quality", "offline quality", "1080p downloads"),
         route = Route.StorageSettings(),
-        icon = Tabler.Outline.Video
     )
-,
-    SettingsRowRecord(
-        id = StorageSettingsIds.SMART_DOWNLOADS,
+
+    val SmartDownloads = SettingsRow(
+        id = "smart_downloads",
+        icon = Tabler.Outline.Trash,
         titleRes = Res.string.settings_smart_downloads,
         searchTitleRes = Res.string.ss_smart_downloads_title,
         searchSubtitleRes = Res.string.ss_smart_downloads_subtitle,
         keywords = listOf("smart downloads", "auto delete", "episodes", "clean space"),
         route = Route.StorageSettings(),
-        icon = Tabler.Outline.Trash
     )
-,
-    SettingsRowRecord(
-        id = StorageSettingsIds.AUTO_DOWNLOAD_NEW_EPISODES,
+
+    val AutoDownloadNewEpisodes = SettingsRow(
+        id = "auto_download_new_episodes",
+        icon = Tabler.Outline.Download,
         titleRes = Res.string.settings_auto_download_new,
         searchTitleRes = Res.string.ss_auto_download_new_episodes_title,
         searchSubtitleRes = Res.string.ss_auto_download_new_episodes_subtitle,
         keywords = listOf("auto download", "new episodes", "automatic", "next", "series"),
         route = Route.StorageSettings(),
-        icon = Tabler.Outline.Download
     )
-,
-    SettingsRowRecord(
-        id = StorageSettingsIds.AUTO_DOWNLOAD_LOOKAHEAD,
+
+    val AutoDownloadLookahead = SettingsRow(
+        id = "auto_download_lookahead",
+        icon = Tabler.Outline.PlayerTrackNext,
         titleRes = Res.string.settings_auto_download_lookahead,
         searchSubtitleRes = Res.string.ss_auto_download_lookahead_subtitle,
         keywords = listOf("auto download", "lookahead", "ahead", "episodes", "next up"),
         route = Route.StorageSettings(),
-        icon = Tabler.Outline.PlayerTrackNext
+        gate = RowAdmission.WhenOn(StorageRows.AutoDownloadNewEpisodes.id),
     )
-,
-    SettingsRowRecord(
-        id = StorageSettingsIds.AUTO_DOWNLOAD_MAX_PER_PASS,
+
+    val AutoDownloadMaxPerPass = SettingsRow(
+        id = "auto_download_max_per_pass",
+        icon = Tabler.Outline.ArrowBarToDown,
         titleRes = Res.string.settings_auto_download_max_per_pass,
         searchSubtitleRes = Res.string.ss_auto_download_max_per_pass_subtitle,
         keywords = listOf("auto download", "max per pass", "budget", "limit", "check"),
         route = Route.StorageSettings(),
-        icon = Tabler.Outline.ArrowBarToDown
+        gate = RowAdmission.WhenOn(StorageRows.AutoDownloadNewEpisodes.id),
     )
-,
-    SettingsRowRecord(
-        id = StorageSettingsIds.AUTO_DOWNLOAD_KEEP_DAYS,
+
+    val AutoDownloadKeepDays = SettingsRow(
+        id = "auto_download_keep_days",
+        icon = Tabler.Outline.Clock,
         titleRes = Res.string.settings_auto_download_keep_days,
         searchSubtitleRes = Res.string.ss_auto_download_keep_days_subtitle,
         keywords = listOf("keep downloads", "retention", "days", "delete old", "cleanup", "space"),
         route = Route.StorageSettings(),
-        icon = Tabler.Outline.Clock
+        gate = RowAdmission.WhenOn(StorageRows.AutoDownloadNewEpisodes.id),
     )
-,
-    SettingsRowRecord(
-        id = StorageSettingsIds.AUTO_DOWNLOAD_SERVERS,
+
+    val AutoDownloadServers = SettingsRow(
+        id = "auto_download_servers",
+        icon = Tabler.Outline.Server,
         titleRes = Res.string.settings_auto_download_servers,
         searchSubtitleRes = Res.string.ss_auto_download_servers_subtitle,
         keywords = listOf("auto download", "servers", "allow list", "restrict", "which server"),
         route = Route.StorageSettings(),
-        icon = Tabler.Outline.Server
+        gate = RowAdmission.WhenOn(StorageRows.AutoDownloadNewEpisodes.id),
     )
-,
-    SettingsRowRecord(
-        id = StorageSettingsIds.AUTO_DOWNLOAD_CLEAN_UP_NOW,
+
+    val AutoDownloadCleanUpNow = SettingsRow(
+        id = "auto_download_clean_up_now",
+        icon = Tabler.Outline.Trash,
         titleRes = Res.string.settings_auto_download_clean_up_now,
         searchSubtitleRes = Res.string.ss_auto_download_clean_up_now_subtitle,
         keywords = listOf("clean up", "sweep", "retention", "delete old downloads", "free space"),
         route = Route.StorageSettings(),
-        icon = Tabler.Outline.Trash
+        gate = RowAdmission.WhenOn(StorageRows.AutoDownloadKeepDays.id),
     )
-,
-    SettingsRowRecord(
-        id = StorageSettingsIds.AUTO_DELETE_AFTER_WATCH,
+
+    val AutoDeleteAfterWatch = SettingsRow(
+        id = "auto_delete_after_watch",
+        icon = Tabler.Outline.Trash,
         titleRes = Res.string.downloads_auto_delete_after_watch,
         searchTitleRes = Res.string.ss_auto_delete_after_watch_title,
         searchSubtitleRes = Res.string.ss_auto_delete_after_watch_subtitle,
         keywords = listOf("auto delete", "after watching", "watched", "delete downloads", "cleanup", "space"),
         route = Route.StorageSettings(),
-        icon = Tabler.Outline.Trash
     )
-,
-    SettingsRowRecord(
-        id = StorageSettingsIds.DOWNLOAD_SCHEDULE,
+
+    val DownloadSchedule = SettingsRow(
+        id = "download_schedule",
+        icon = Tabler.Outline.Clock,
         titleRes = Res.string.settings_download_schedule,
         searchTitleRes = Res.string.ss_download_schedule_title,
         searchSubtitleRes = Res.string.ss_download_schedule_subtitle,
         keywords = listOf("download", "schedule", "hours", "overnight", "window", "time"),
         route = Route.StorageSettings(),
-        icon = Tabler.Outline.Clock
     )
-,
-    SettingsRowRecord(
-        id = StorageSettingsIds.DOWNLOAD_SCHEDULE_START,
+
+    val DownloadScheduleStart = SettingsRow(
+        id = "download_schedule_start",
+        icon = Tabler.Outline.Sun,
         titleRes = Res.string.settings_schedule_start,
         searchTitleRes = Res.string.ss_download_schedule_start_title,
         searchSubtitleRes = Res.string.ss_download_schedule_start_subtitle,
         keywords = listOf("download", "schedule", "start", "hour", "window", "begin"),
         route = Route.StorageSettings(),
-        icon = Tabler.Outline.Sun
+        gate = RowAdmission.WhenOn(StorageRows.DownloadSchedule.id),
     )
-,
-    SettingsRowRecord(
-        id = StorageSettingsIds.DOWNLOAD_SCHEDULE_END,
+
+    val DownloadScheduleEnd = SettingsRow(
+        id = "download_schedule_end",
+        icon = Tabler.Outline.Moon,
         titleRes = Res.string.settings_schedule_end,
         searchTitleRes = Res.string.ss_download_schedule_end_title,
         searchSubtitleRes = Res.string.ss_download_schedule_end_subtitle,
         keywords = listOf("download", "schedule", "end", "hour", "window", "stop"),
         route = Route.StorageSettings(),
-        icon = Tabler.Outline.Moon
+        gate = RowAdmission.WhenOn(StorageRows.DownloadSchedule.id),
     )
-,
-    SettingsRowRecord(
-        id = StorageSettingsIds.DOWNLOAD_SCHEDULE_WIFI_ONLY,
+
+    val DownloadScheduleWifiOnly = SettingsRow(
+        id = "download_schedule_wifi_only",
+        icon = Tabler.Outline.Wifi,
         titleRes = Res.string.settings_download_schedule_wifi_only,
         searchTitleRes = Res.string.ss_download_schedule_wifi_only_title,
         searchSubtitleRes = Res.string.ss_download_schedule_wifi_only_subtitle,
         keywords = listOf("download", "schedule", "wifi only", "unmetered", "require"),
         route = Route.StorageSettings(),
-        icon = Tabler.Outline.Wifi
+        gate = RowAdmission.WhenOn(StorageRows.DownloadSchedule.id),
     )
-,
-    SettingsRowRecord(
-        id = StorageSettingsIds.MAX_DOWNLOAD_STORAGE_LIMIT,
+
+    val MaxDownloadStorageLimit = SettingsRow(
+        id = "max_download_storage_limit",
+        icon = Tabler.Outline.Database,
         titleRes = Res.string.settings_max_download_storage,
         searchTitleRes = Res.string.ss_max_download_storage_limit_title,
         searchSubtitleRes = Res.string.ss_max_download_storage_limit_subtitle,
         keywords = listOf("download", "storage", "limit", "max", "size", "cap", "gb"),
         route = Route.StorageSettings(),
-        icon = Tabler.Outline.Database
     )
-,
-    SettingsRowRecord(
-        id = StorageSettingsIds.DOWNLOAD_STORAGE_LOCATION,
+
+    val DownloadStorageLocation = SettingsRow(
+        id = "download_storage_location",
+        icon = Tabler.Outline.Folder,
         titleRes = Res.string.settings_download_storage_location,
         searchTitleRes = Res.string.ss_download_storage_location_title,
         searchSubtitleRes = Res.string.ss_download_storage_location_subtitle,
         keywords = listOf("download", "storage", "location", "folder", "sd card", "internal"),
         route = Route.StorageSettings(),
-        icon = Tabler.Outline.Folder
-    ))
-
-/** The catalog projection of `StorageDownloadsRowRecords`: the search faces + the shared category. */
-internal val StorageDownloadsSearchItems: List<SettingsSearchItem> = StorageDownloadsRowRecords.toSearchItems(CoreUiRes.string.ss_cat_storage)
-
-
-/**
- * The cache group's per-id declared row admissions — full coverage, so
- * `rowTotalFor` (plus the screen's explicit cache-used +1 term) reads one gate
- * per id: the base gate is each record's own `isAdvanced` flag — the two
- * clear rows always render, the five tuning rows ride the advanced toggle
- * (the screen's `if (showAdvanced)` block reads the same gates).
- */
-internal val StorageCacheRowAdmissions: Map<String, RowAdmission> =
-    StorageCacheRowRecords.admissionsByAdvancedFlag()
-
-/**
- * The downloads group's per-id declared row admissions — full coverage, so
- * `rowTotalFor` and StorageSettingsScreen's emission `if`s read one gate per
- * id. The base gate is each record's own `isAdvanced` flag (every download
- * record renders unconditionally); the overrides are the three
- * `download_schedule_*` window rows (only while their parent toggle is on),
- * the four auto-download retention-policy rows (only while auto-download is
- * on), and the "Clean up now" action (only while a keep-days window is set).
- */
-internal val StorageDownloadsRowAdmissions: Map<String, RowAdmission> =
-    StorageDownloadsRowRecords.admissionsByAdvancedFlag() + mapOf(
-        StorageSettingsIds.DOWNLOAD_SCHEDULE_START to RowAdmission.WhenOn(StorageSettingsIds.DOWNLOAD_SCHEDULE),
-        StorageSettingsIds.DOWNLOAD_SCHEDULE_END to RowAdmission.WhenOn(StorageSettingsIds.DOWNLOAD_SCHEDULE),
-        StorageSettingsIds.DOWNLOAD_SCHEDULE_WIFI_ONLY to RowAdmission.WhenOn(StorageSettingsIds.DOWNLOAD_SCHEDULE),
-        StorageSettingsIds.AUTO_DOWNLOAD_LOOKAHEAD to RowAdmission.WhenOn(StorageSettingsIds.AUTO_DOWNLOAD_NEW_EPISODES),
-        StorageSettingsIds.AUTO_DOWNLOAD_MAX_PER_PASS to RowAdmission.WhenOn(StorageSettingsIds.AUTO_DOWNLOAD_NEW_EPISODES),
-        StorageSettingsIds.AUTO_DOWNLOAD_KEEP_DAYS to RowAdmission.WhenOn(StorageSettingsIds.AUTO_DOWNLOAD_NEW_EPISODES),
-        StorageSettingsIds.AUTO_DOWNLOAD_SERVERS to RowAdmission.WhenOn(StorageSettingsIds.AUTO_DOWNLOAD_NEW_EPISODES),
-        StorageSettingsIds.AUTO_DOWNLOAD_CLEAN_UP_NOW to RowAdmission.WhenOn(StorageSettingsIds.AUTO_DOWNLOAD_KEEP_DAYS),
     )
+
+    /**
+     * Every fused storage row — the ratchet's vocabulary. A computed accessor
+     * (not an initializer): the group row lists are top-level vals declared
+     * later in this file, and an eager field would turn the
+     * object-to-file-facade initialization order into a cycle.
+     */
+    val all: List<SettingsRow>
+        get() = StorageCacheRows + StorageNetworkRows + StorageDownloadsRows
+}
+
+// ---------------------------------------------------------------------
+// The spec-derived derivation inputs: the searchable semantics live on the
+// datastore-side spec declarations where they exist; the ordered row lists
+// below are the spine — presentation faces, catalog order, gates.
+// ---------------------------------------------------------------------
+
+private val searchRoutes: Map<String, Route> = emptyMap()
+
+private val storageCategory = CoreUiRes.string.ss_cat_storage
+
+internal val StorageCacheRows: List<SettingsRow> = listOf(
+    StorageRows.ClearCache,
+    StorageRows.ClearImageCache,
+    StorageRows.WifiOnlyDownloads,
+    StorageRows.AutoDeleteCache,
+    StorageRows.MaxCacheSize,
+    StorageRows.DownloadConnections,
+    StorageRows.MaxConcurrentDownloads,
+)
+
+internal val StorageNetworkRows: List<SettingsRow> = listOf(
+    StorageRows.OfflineMode,
+    StorageRows.AdaptiveBitrate,
+    StorageRows.BandwidthCap,
+    StorageRows.DataSaver,
+    StorageRows.CellularDownloadWarning,
+    StorageRows.NetworkTimeout,
+    StorageRows.VerboseLogging,
+    StorageRows.UserDataSync,
+    StorageRows.AutoOffline,
+    StorageRows.MeteredNetworkBehavior,
+    StorageRows.CellularStreamingQuality,
+)
+
+internal val StorageDownloadsRows: List<SettingsRow> = listOf(
+    StorageRows.DownloadQuality,
+    StorageRows.SmartDownloads,
+    StorageRows.AutoDownloadNewEpisodes,
+    StorageRows.AutoDownloadLookahead,
+    StorageRows.AutoDownloadMaxPerPass,
+    StorageRows.AutoDownloadKeepDays,
+    StorageRows.AutoDownloadServers,
+    StorageRows.AutoDownloadCleanUpNow,
+    StorageRows.AutoDeleteAfterWatch,
+    StorageRows.DownloadSchedule,
+    StorageRows.DownloadScheduleStart,
+    StorageRows.DownloadScheduleEnd,
+    StorageRows.DownloadScheduleWifiOnly,
+    StorageRows.MaxDownloadStorageLimit,
+    StorageRows.DownloadStorageLocation,
+)
+
+/**
+ * The screen groups — items AND per-row admissions derive from the row
+ * lists above in one act ([List.asRowGroup]), so the declaration is the
+ * single home of the groups' order, faces and gates.
+ */
+internal val StorageCacheGroup =
+    StorageCacheRows.asRowGroup("storage.cache", emptyList(), searchRoutes, storageCategory)
+
+internal val StorageNetworkGroup =
+    StorageNetworkRows.asRowGroup("storage.network", emptyList(), searchRoutes, storageCategory)
+
+internal val StorageDownloadsGroup =
+    StorageDownloadsRows.asRowGroup("storage.downloads", emptyList(), searchRoutes, storageCategory)
+
+// The catalog projections, kept as named vals — the search/catalog-order
+// pins (SpecDerivedSearchItemsTest, SettingsSearchCatalogTest) read these
+// lists.
+
+internal val StorageCacheSearchItems: List<SettingsSearchItem> = StorageCacheGroup.items
+
+internal val StorageNetworkSearchItems: List<SettingsSearchItem> = StorageNetworkGroup.items
+
+internal val StorageDownloadsSearchItems: List<SettingsSearchItem> = StorageDownloadsGroup.items
+
+// -- The domain's root-screen entrance declaration --
+
+/** The storage domain's root-screen entrance — the ONE ordered declaration that drives both the settings root's `item_storage` section emission (icon/title/route id) and its entrance-step index (spliced into [SETTINGS_ENTRANCE_SECTIONS] at this render position). */
+internal val StorageEntrance = SettingsEntranceSectionRow(
+    key = "item_storage",
+    rowId = "storage",
+    icon = Tabler.Outline.Database,
+    titleRes = Res.string.settings_downloads_storage,
+)

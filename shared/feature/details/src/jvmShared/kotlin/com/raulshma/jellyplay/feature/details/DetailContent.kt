@@ -30,12 +30,15 @@ import com.raulshma.jellyplay.core.designsystem.theme.backgroundBrush
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.components.DelayedLoadingScreen
+import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.LoadingScreen
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.input.onDpadKeyEvent
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.AlertTriangle
 import com.raulshma.jellyplay.feature.details.generated.resources.Res
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_share_via
 import org.jetbrains.compose.resources.stringResource
@@ -214,9 +217,10 @@ internal fun DetailContent(
             }
             is DetailUiLoadState.Error -> {
                 if (!contentVisible) {
-                    com.raulshma.jellyplay.core.ui.components.ScreenErrorState(
+                    ErrorScreen(
                         message = loadState.message,
                         onRetry = if (loadState.accessDenied) null else callbacks.screen.onRetry,
+                        icon = Tabler.Outline.AlertTriangle,
                         modifier = Modifier.fillMaxSize(),
                     )
                 }

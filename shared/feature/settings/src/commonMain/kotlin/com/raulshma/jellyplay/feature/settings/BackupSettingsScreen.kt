@@ -85,31 +85,31 @@ fun BackupSettingsScreen(
                 ) {
                     SettingListItem(
                         icon = Tabler.Outline.FileExport,
-                        title = rowTitle(BackupSettingsIds.BACKUP_EXPORT),
+                        title = rowTitle(BackupRows.BackupExport),
                         subtitle = stringResource(Res.string.settings_export_settings_subtitle),
                         index = 0, count = 3,
-                        highlighted = highlightSettingId == BackupSettingsIds.BACKUP_EXPORT,
+                        highlighted = highlightSettingId == BackupRows.BackupExport.id,
                         onClick = {
                             backupPicker?.launchCreateExport("jellyplay-settings.json")
                         },
                     )
                     SettingListItem(
                         icon = Tabler.Outline.FileImport,
-                        title = rowTitle(BackupSettingsIds.BACKUP_IMPORT),
+                        title = rowTitle(BackupRows.BackupImport),
                         subtitle = stringResource(Res.string.settings_import_settings_subtitle),
                         index = 1, count = 3,
-                        highlighted = highlightSettingId == BackupSettingsIds.BACKUP_IMPORT,
+                        highlighted = highlightSettingId == BackupRows.BackupImport.id,
                         onClick = {
                             backupPicker?.launchOpenImport()
                         },
                     )
                     SettingListItem(
                         icon = Tabler.Outline.AlertTriangle,
-                        title = rowTitle(BackupSettingsIds.FACTORY_RESET),
+                        title = rowTitle(BackupRows.FactoryReset),
                         subtitle = stringResource(Res.string.settings_factory_reset_subtitle),
                         index = 2, count = 3,
                         isDestructive = true,
-                        highlighted = highlightSettingId == BackupSettingsIds.FACTORY_RESET,
+                        highlighted = highlightSettingId == BackupRows.FactoryReset.id,
                         onClick = onFactoryReset,
                     )
                 }

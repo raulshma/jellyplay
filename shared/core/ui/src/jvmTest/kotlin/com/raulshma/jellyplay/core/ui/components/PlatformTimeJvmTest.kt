@@ -16,37 +16,18 @@ import kotlin.test.assertTrue
  * bodies moved verbatim out of commonMain, so these tests freeze the
  * desktop/Android behavior contract:
  *
- *  - `formatOneDecimal` keeps the `%.1f` HALF_UP rounding contract (locale
- *    normalization applied so the pinned digits hold under any host locale);
  *  - `currentYear` is the system-calendar year;
  *  - `hourOfDayAt` resolves the given epoch in the system zone and falls back
  *    to "now" for null / non-positive ticks;
  *  - `isoDateIsAfterToday` is strictly-after and false for unparseable input;
  *  - `parseIsoTimestampToEpochMillis` accepts offset-aware (Z / ±HH:mm) and
  *    bare-local (system zone) forms, null for anything else.
+ *
+ * (The `formatOneDecimal` pins moved with their expect — it left
+ * PlatformTime.kt for DurationFormatter.kt when it went public — and now
+ * live in DurationFormatterTest.)
  */
 class PlatformTimeJvmTest {
-
-    /** `%.1f` renders with the host-default decimal separator — normalize it. */
-    private fun String.normalized() = replace(',', '.')
-
-    @Test
-    fun formatOneDecimal_halfUpRoundingAtFirstDecimal() {
-        assertEquals("1.0", formatOneDecimal(1.04).normalized())
-        assertEquals("1.0", formatOneDecimal(0.96).normalized())
-        assertEquals("1.0", formatOneDecimal(1.0).normalized())
-        // HALF_UP: 0.25 rounds away from the 0.24999... boundary.
-        assertEquals("0.3", formatOneDecimal(0.25).normalized())
-        assertEquals("2.0", formatOneDecimal(1.96).normalized())
-    }
-
-    @Test
-    fun formatOneDecimal_rendersStrayNegativeSignSymmetrically() {
-        // "%.1f" of a small negative is "-0.0" — pinned as the documented
-        // ("sign rendered symmetrically") contract, not silently fixed.
-        assertEquals("-0.0", formatOneDecimal(-0.04).normalized())
-        assertEquals("-1.5", formatOneDecimal(-1.54).normalized())
-    }
 
     @Test
     fun currentYear_isTheSystemCalendarYear() {

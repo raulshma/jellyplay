@@ -164,7 +164,7 @@ class SessionLoadHooks(
  * returns the launched [Job] which the VM assigns to its `loadJob` and
  * cancels before the next load's `releaseInternals()`.
  */
-class SessionLoadPipeline(
+internal class SessionLoadPipeline(
     private val sessionManager: PlayerSessionManager,
     /**
      * The item-attached extras seam — the pipeline's one repository read is the

@@ -57,10 +57,10 @@ import kotlin.time.TimeSource
  * no filtering by stamp.
  *
  * Vocabulary: "generation", not "epoch", in the feature layer — the lower
- * layers keep their store-local epoch guards (the repository's
- * discoverRollEpoch, the network layer's discoverRowEpoch; see the roll
- * protocol on `HomeFeed.rerollDiscoverRow` for how the three layers
- * compose). Identity transitions clear this registry wholesale
+ * layers keep their store-local cache-write guard (the repository's
+ * homeWriteGeneration token, which the network layer's row memo observes
+ * through it; see the roll protocol on `HomeFeed.rerollDiscoverRow` for how
+ * the layers compose). Identity transitions clear this registry wholesale
  * ([cancelForIdentityChange]) — clearing alone is sufficient because the
  * generation's job is ordering WITHIN one identity, and an identity change
  * voids ordering wholesale; [rollGeneration] is deliberately not reset.

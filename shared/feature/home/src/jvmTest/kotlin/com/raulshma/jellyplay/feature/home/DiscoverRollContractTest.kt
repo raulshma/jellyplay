@@ -78,8 +78,13 @@ import kotlin.test.assertTrue
  *    [TtlCache] + [cacheThrough] with epoch write guards — the same engine
  *    the real `MediaRepositoryImpl.homeSectionsCache` and
  *    `HomeSectionsFetcher.homeDiscoverRowCache` both ride): an
- *    assembled-payload cache behind the repo epoch, a per-row memo behind
- *    the network row epoch, and a transport whose every raw call serves the
+ *    assembled-payload cache behind the repo token, a per-row memo behind
+ *    the network mirror of that SAME token (production consolidated to ONE
+ *    repo-owned cache-write generation — `MediaRepositoryImpl`'s funnel
+ *    bumps it and hands the post-bump value to the fetcher through the port
+ *    verbs' `generation` parameter — so the double's coordinated
+ *    invalidate/commit bumps of both guards model the token plus its
+ *    mirror), and a transport whose every raw call serves the
  *    NEXT shuffle (a RANDOM-sorted row re-rolls on every true server hit).
  *
  * HONEST GAP (why not the real `MediaRepositoryImpl` + `HomeSectionsFetcher`):
@@ -88,9 +93,11 @@ import kotlin.test.assertTrue
  * `internal` to core:network, and no module sees all three layers (core:data
  * cannot see the feature coordinator; the feature cannot construct the repo).
  * The double re-states the two lower layers' PROTOCOL behavior (the ordering
- * and epoch rules their own suites pin) so the COMPOSITION is what fails if
+ * and bump rules their own suites pin) so the COMPOSITION is what fails if
  * any layer drifts from the contract; the per-layer suites above remain the
- * owners of each layer's implementation details.
+ * owners of each layer's implementation details (including the one-token
+ * consolidation itself — the parameter threading is pinned by
+ * `MediaRepositoryHomeSectionsCacheTest` and `HomeSectionsFetcherTest`).
  *
  * PINS (one user action — the dice re-roll — through refresh cycles on
  * virtual time):
@@ -405,13 +412,17 @@ class DiscoverRollContractTest {
      * shaped after the two production layers it stands in for:
      *  * the REPO half mirrors `MediaRepositoryImpl`: a single-entry
      *    assembled-payload [TtlCache] (60s, [HomeFreshness.REPO_MEMORY_TTL_MS])
-     *    behind `repoEpoch`, with `rerollDiscoverRow` executing the
+     *    behind `repoEpoch` (the one cache-write token; the funnel-shaped
+     *    bump+clear pair), with `rerollDiscoverRow` executing the
      *    protocol's ordering verbatim (invalidate: bump → row memo drop →
      *    payload drop; fetch: raw transport; seed: memo write + bump →
      *    payload drop again).
      *  * the NETWORK half mirrors `HomeSectionsFetcher`: a per-row memo
      *    (10 min, [HomeFreshness.DISCOVER_ROW_TTL_MS], key
-     *    `discover_<rowId>_<limit>`) behind `rowEpoch`, consulted by every
+     *    `discover_<rowId>_<limit>`) behind `rowEpoch` — the MIRROR of the
+     *    repo token production threads through the port verbs'
+     *    `generation` parameter; the double hands the value over at the
+     *    same two points (invalidate, commit) — consulted by every
      *    home fetch with `force` acting as its invalidation.
      * Every raw transport call serves the next shuffle — a RANDOM-sorted
      * row re-rolls on every true server hit, which is what makes a memo HIT
@@ -420,10 +431,10 @@ class DiscoverRollContractTest {
     private inner class RollProtocolRepo {
         private val identity = CacheIdentity.UNKNOWN
 
-        /** Window 2's stall guard — the repo's assembled-payload cache epoch. */
+        /** Window 2's stall guard — the repo's assembled-payload cache epoch (the ONE cache-write token). */
         private val repoEpoch = AtomicLong(0L)
 
-        /** Window 3's stall guard — the network layer's discover-row memo epoch. */
+        /** Window 3's stall guard — the network mirror of that same token (fed at invalidate and commit, as the port verbs' `generation` parameter is in production). */
         private val rowEpoch = AtomicLong(0L)
 
         private val homeSectionsCache = TtlCache<HomeSectionsResult>(
@@ -491,16 +502,17 @@ class DiscoverRollContractTest {
 
         /** The protocol's ordering, verbatim from `MediaRepositoryImpl.rerollDiscoverRow`. */
         suspend fun rerollDiscoverRow(rowConfig: DiscoverRowConfig): Result<List<MediaItem>> {
-            // invalidate: repo-epoch bump → network per-row memo drop (the
-            // fetcher's invalidate bumps ITS epoch first — HomeSectionsFetcher.
-            // invalidateDiscoverRow) → assembled payload drop
+            // invalidate: funnel bump (repo token → the network mirror, as
+            // production's port-verb `generation` parameter delivers it —
+            // HomeSectionsCachePort.invalidateDiscoverRow) → row memo drop →
+            // assembled payload drop
             repoEpoch.incrementAndGet()
             rowEpoch.incrementAndGet()
             rowMemo.removeByKeyPrefix(identity, "discover_${rowConfig.id}")
             homeSectionsCache.clear()
             val result = getDiscoverRowItems()
-            // seed only a real roll: memo write + commit-time epoch bump on
-            // BOTH layers (fetcher seed bumps the row epoch too) + payload drop again
+            // seed only a real roll: commit-time bump (delivered to the
+            // mirror the same way) + memo write + payload drop again
             result.onSuccess { items ->
                 if (items.isNotEmpty()) {
                     repoEpoch.incrementAndGet()

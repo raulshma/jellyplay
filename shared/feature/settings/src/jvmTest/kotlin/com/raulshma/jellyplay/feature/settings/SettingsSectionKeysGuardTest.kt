@@ -30,6 +30,14 @@ import kotlin.test.fail
  *  - a scan that stops matching fails (discovery rot would make the
  *    forward check vacuously green).
  *
+ * CONVERTED domains are exempted from the scan both ways: their section
+ * declaration ([SettingsEntranceSectionRow] — appearance's
+ * [AppearanceEntrance]) is spliced into [SETTINGS_ENTRANCE_SECTIONS] and its
+ * call site reads the same object's key, so the pairing is compile-time and
+ * the text scan cannot see it. The exemption set must list every converted
+ * key — and the scan must NOT find it as a literal (a literal call site
+ * reappearing means the single-homing regressed into a second home).
+ *
  * Source-scanning on plain text (no PSI) — deliberately cheap, but
  * executable, same shape as the desktop KoinModuleRegistrationGuardTest.
  */
@@ -41,6 +49,32 @@ class SettingsSectionKeysGuardTest {
     /** `settingsSection("key"` — every entrance call site passes a literal key. */
     private val callSite = Regex("""settingsSection\s*\(\s*"([A-Za-z0-9_]+)"""")
 
+    /**
+     * The converted domains' entrance keys — declaration-driven, invisible to
+     * the [callSite] scan. Each fused-conversion wave adds its domain's key
+     * here in the same change that splices its [SettingsEntranceSectionRow]
+     * into [SETTINGS_ENTRANCE_SECTIONS]. The whole fused-catalog wave is
+     * converted: appearance plus the home, playback, audio, language,
+     * notifications, storage, security, backup, integrations and about
+     * domains. The scan's reason persists for the sections with no fused row
+     * domain — the composite profile/power-user/devices/account/activity/
+     * system sections, privacy data, the capability-gated on-screen groups,
+     * the experimental entry and what's-new.
+     */
+    private val convertedKeys: Set<String> = setOf(
+        AppearanceEntrance.key,
+        HomeEntrance.key,
+        PlaybackEntrance.key,
+        AudioEntrance.key,
+        LanguageEntrance.key,
+        NotificationEntrance.key,
+        StorageEntrance.key,
+        SecurityEntrance.key,
+        BackupEntrance.key,
+        IntegrationsEntrance.key,
+        AboutEntrance.key,
+    )
+
     @Test
     fun everyScreenSectionCallSite_isDeclaredInTheEntranceList() {
         val root = repoRoot()
@@ -50,8 +84,16 @@ class SettingsSectionKeysGuardTest {
         val screenKeys = callSite.findAll(stripComments(source.readText()))
             .map { it.groupValues[1] }
             .toList()
+        // The 13 remaining literal call sites: the sections with no fused row
+        // domain (profile, power_user_mode, active_devices, account, activity,
+        // system, item_privacy_data, group_screensaver, group_idle_ambient,
+        // group_discord_presence, group_shell_hooks, item_experimental,
+        // item_whatsnew). The 11 converted domains' call sites read their
+        // SettingsEntranceSectionRow.key and are invisible to this scan —
+        // a count below this floor means discovery is broken (renamed
+        // helper? new call shape?), fix the scan here.
         assertTrue(
-            screenKeys.size >= 20,
+            screenKeys.size >= 13,
             "scanned only ${screenKeys.size} settingsSection call sites — discovery is " +
                 "broken (renamed helper? new call shape?), fix the scan in " +
                 javaClass.simpleName,
@@ -73,7 +115,7 @@ class SettingsSectionKeysGuardTest {
             )
         }
 
-        val dead = declaredKeys - screenKeys.toSet()
+        val dead = declaredKeys - screenKeys.toSet() - convertedKeys
         assertTrue(
             dead.isEmpty(),
             "SETTINGS_ENTRANCE_SECTIONS declares section(s) with no settingsSection " +
@@ -83,11 +125,31 @@ class SettingsSectionKeysGuardTest {
 
         assertEquals(
             screenKeys.distinct().sorted(),
-            declaredKeys.sorted(),
+            (declaredKeys - convertedKeys).sorted(),
             "call-site set and declaration set disagree (also fires on a duplicated " +
                 "declaration) — SETTINGS_ENTRANCE_SECTIONS must mirror SettingsScreen.kt's " +
                 "sections exactly; the positional stagger numbering is pinned separately " +
                 "in SettingsEntranceStepsTest",
+        )
+    }
+
+    @Test
+    fun convertedSections_stayDeclarationDriven_notLiteralCallSites() {
+        // A converted key reappearing as a literal call site means the
+        // domain's single-homed entrance regressed into a second home (the
+        // declaration AND a hand-typed key) — exactly the drift this wave's
+        // shape exists to kill.
+        val root = repoRoot()
+        val source = root.resolve(screenFile)
+        val screenKeys = callSite.findAll(stripComments(source.readText()))
+            .map { it.groupValues[1] }
+            .toSet()
+        val regressed = convertedKeys intersect screenKeys
+        assertTrue(
+            regressed.isEmpty(),
+            "converted entrance key(s) reappeared as literal settingsSection call " +
+                "sites: $regressed — the call site must read the domain's " +
+                "SettingsEntranceSectionRow.key instead",
         )
     }
 

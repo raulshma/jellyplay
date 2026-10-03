@@ -38,26 +38,41 @@ fun formatRemainingTimeFromTicks(runTimeTicks: Long, playbackPositionTicks: Long
     return formatDurationFromTicks(remainingTicks)
 }
 
-fun formatDurationMs(ms: Long): String {
-    if (ms <= 0) return "0:00"
+/**
+ * The `h:mm:ss` / `m:ss` scrubber clock. Zero/negative renders `0:00`.
+ *
+ * Locale-free by construction: string templates always emit ASCII digits,
+ * where `String.format`'s `%d` follows the host locale and would show
+ * Arabic-Indic digit forms under e.g. ar/fa — undesirable in a timecode.
+ * The templates also avoid the per-call Formatter + StringBuilder +
+ * boxed-varargs allocation — this runs per-frame during trickplay
+ * scrubbing.
+ *
+ * [paddedMinutes] zero-pads the minutes under the hour (`05:07` instead of
+ * `5:07`) — trickplay's overlay is deliberate about this so the label width
+ * doesn't jitter between the 9-minute and 10-minute marks while scrubbing;
+ * the hours segment is never padded and the `h:mm:ss` branch is unaffected.
+ * Zero/negative follows the same padding (`00:00` under [paddedMinutes]).
+ */
+fun formatDurationMs(ms: Long, paddedMinutes: Boolean = false): String {
+    if (ms <= 0) return if (paddedMinutes) "00:00" else "0:00"
     val totalSeconds = ms / 1000
     val hours = totalSeconds / 3600
     val minutes = (totalSeconds % 3600) / 60
     val seconds = totalSeconds % 60
-    // String templates avoid the Formatter + StringBuilder + boxed-varargs
-    // allocation that String.format makes per call — this runs per-frame
-    // during trickplay scrubbing.
+    val minuteText = if (paddedMinutes) minutes.toString().padStart(2, '0') else minutes.toString()
     return if (hours > 0) {
         "$hours:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}"
     } else {
-        "$minutes:${seconds.toString().padStart(2, '0')}"
+        "$minuteText:${seconds.toString().padStart(2, '0')}"
     }
 }
 
 /**
  * The no-hours clock variant of [formatDurationMs]: durations past an hour
  * roll into plain minutes (`61:01`, the Now Playing widget's convention)
- * instead of switching to `h:mm:ss`. Same zero/negative handling — `0:00`.
+ * instead of switching to `h:mm:ss`. Same zero/negative handling — `0:00` —
+ * and the same locale-free ASCII-digit rendering (see [formatDurationMs]).
  */
 fun formatDurationMsNoHours(ms: Long): String {
     if (ms <= 0) return "0:00"
@@ -82,6 +97,23 @@ fun formatDurationApproxSeconds(seconds: Long): String = when {
     seconds >= 60 -> "${seconds / 60}m"
     else -> "${seconds}s"
 }
+
+/**
+ * One-decimal fixed notation ("%.1f" formatting contract: HALF_UP rounding at
+ * the first decimal, sign rendered symmetrically for stray negatives). The
+ * decimal separator follows the JVM's %.1f behavior — the JVM default
+ * locale (decimal comma under e.g. de-DE hosts) on android/desktop. Every
+ * former `"%.1f".format(x)` site routes through here (ratings, per-feature
+ * PlatformFormats seams — the player-audio/settings expect/actual twins and
+ * the editor/newsletter façades it replaces — plus this file's own hour
+ * branch above).
+ *
+ * Home note: the expect lives in this file (rather than PlatformTime.kt,
+ * where it started as an internal member) because its only job is number
+ * formatting and its in-module consumer is [formatDurationApproxSeconds];
+ * the jvmShared actual (the verbatim `"%.1f".format` body) moved with it.
+ */
+expect fun formatOneDecimal(value: Double): String
 
 /**
  * A self-refreshing wall-clock display string, realigned to minute

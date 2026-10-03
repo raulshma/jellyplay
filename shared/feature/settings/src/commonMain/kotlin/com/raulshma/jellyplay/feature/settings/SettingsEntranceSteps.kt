@@ -1,16 +1,48 @@
 package com.raulshma.jellyplay.feature.settings
 
+import androidx.compose.ui.graphics.vector.ImageVector
+import org.jetbrains.compose.resources.StringResource
+
 /**
  * One entrance section of the settings root screen: the lazy-item [key] plus
  * the visibility axis it renders on. [tvOnly] marks the TV-only on-screen
  * group (the screensaver group) — it occupies a slot in the phone numbering
  * that no phone section ever reads, exactly like the hand-typed literal it
- * replaced (`settingsSection("group_screensaver", 15)` inside `if (isTv)`).
+ * replaced (`settingsSection("group_screensaver", 16)` inside `if (isTv)`).
  */
 internal data class SettingsEntranceSection(
     val key: String,
     val tvOnly: Boolean = false,
 )
+
+/**
+ * One root-screen entrance section OWNED by its domain — the fused-conversion
+ * twin of [SettingsEntranceSection]. A converted domain declares one of these
+ * and single-homes what it owns: the entrance [key] (the step index derives
+ * from the entry's position in [SETTINGS_ENTRANCE_SECTIONS]) AND the
+ * section's static row face (icon, title resource, deep-link row id), which
+ * the root screen's emission consumes. The subtitle (a summary of the
+ * domain's preferences) and the route builder stay at the call site — they
+ * read the root screen's state, not the domain's declaration.
+ *
+ * The rollout recipe (appearance first): declare the section row in the
+ * domain's rows file, splice [section] into [SETTINGS_ENTRANCE_SECTIONS] at
+ * the domain's render position, consume the faces at the
+ * `settingsSection(…)` call site, and add the key to
+ * `SettingsSectionKeysGuardTest`'s converted set — the guard's regex scanner
+ * cannot see declaration-driven call sites, and the compile-time key pairing
+ * makes the scan redundant for converted domains.
+ */
+internal data class SettingsEntranceSectionRow(
+    val key: String,
+    /** The deep-link row id the root screen passes to `openSetting`. */
+    val rowId: String,
+    val icon: ImageVector,
+    val titleRes: StringResource,
+) {
+    /** The entrance-list entry — spliced into [SETTINGS_ENTRANCE_SECTIONS]. */
+    val section: SettingsEntranceSection get() = SettingsEntranceSection(key)
+}
 
 /**
  * The settings root screen's entrance sections in render order — the single
@@ -29,6 +61,15 @@ internal data class SettingsEntranceSection(
  * throws on first composition (SettingsScreenKt.settingsSection fails fast),
  * which on desktop meant crashing on open — SettingsSectionKeysGuardTest
  * pins the mirror so the drift cannot ship again.
+ *
+ * Converted domains splice their OWN entry ([SettingsEntranceSectionRow.section])
+ * at their render position — appearance first, then the whole fused-catalog
+ * wave (home, playback, audio, language, notifications, storage, security,
+ * backup, integrations, about — each entry declared in the domain's rows file
+ * beside its rows) — so the emission and the step index derive from one
+ * declaration. The remaining literal entries are the sections with no fused
+ * row domain (the composite profile/power-user/devices sections, the
+ * capability-gated on-screen groups, privacy data, experimental, what's-new).
  */
 internal val SETTINGS_ENTRANCE_SECTIONS: List<SettingsEntranceSection> = listOf(
     SettingsEntranceSection("profile"),
@@ -37,23 +78,23 @@ internal val SETTINGS_ENTRANCE_SECTIONS: List<SettingsEntranceSection> = listOf(
     SettingsEntranceSection("account"),
     SettingsEntranceSection("activity"),
     SettingsEntranceSection("system"),
-    SettingsEntranceSection("item_home"),
-    SettingsEntranceSection("item_appearance"),
-    SettingsEntranceSection("item_playback"),
-    SettingsEntranceSection("item_audio"),
-    SettingsEntranceSection("item_language"),
-    SettingsEntranceSection("item_notifications"),
-    SettingsEntranceSection("item_storage"),
-    SettingsEntranceSection("item_security"),
+    HomeEntrance.section,
+    AppearanceEntrance.section,
+    PlaybackEntrance.section,
+    AudioEntrance.section,
+    LanguageEntrance.section,
+    NotificationEntrance.section,
+    StorageEntrance.section,
+    SecurityEntrance.section,
     SettingsEntranceSection("item_privacy_data"),
-    SettingsEntranceSection("item_backup"),
+    BackupEntrance.section,
     SettingsEntranceSection("group_screensaver", tvOnly = true),
     SettingsEntranceSection("group_idle_ambient"),
     SettingsEntranceSection("group_discord_presence"),
     SettingsEntranceSection("group_shell_hooks"),
     SettingsEntranceSection("item_experimental"),
-    SettingsEntranceSection("item_integrations"),
-    SettingsEntranceSection("item_about"),
+    IntegrationsEntrance.section,
+    AboutEntrance.section,
     SettingsEntranceSection("item_whatsnew"),
 )
 

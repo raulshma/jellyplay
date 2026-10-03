@@ -164,9 +164,11 @@ private fun codePointToString(codePoint: Int): String =
 // Moved verbatim from the bottom of SeerrDetailScreen.kt (2,196 lines) so
 // they gain test surface beside the rest of these utils. Integer-math
 // helpers replicating the Locale.US output shapes the two replaced
-// java.text.NumberFormat/String.format call sites produced. Same bodies as
-// core:ui's formatOneDecimal actual, which is internal to that module —
-// hence the copies here (now internal, not private).
+// java.text.NumberFormat/String.format call sites produced (now internal,
+// not private). Deliberately NOT core:ui's formatOneDecimal even though it
+// is public now: that seam follows the HOST-locale %.1f separator ("8,7"
+// under de-DE) while these Seerr sites always render the dot — that fixed
+// shape is the point of this copy, not an accident of visibility.
 
 /**
  * "%.1f" formatting contract (the two former `String.format("%.1f", …)` /

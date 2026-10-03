@@ -86,6 +86,7 @@ import com.raulshma.jellyplay.core.ui.components.SettingListItem
 import com.raulshma.jellyplay.core.ui.components.SettingToggleItem
 import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
 import com.raulshma.jellyplay.core.ui.components.JellyPlayBackHandler
+import com.raulshma.jellyplay.core.ui.model.localizedDisplayName
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import com.raulshma.jellyplay.core.ui.navigation.Route
@@ -282,7 +283,7 @@ private val LocalAnimateSettingsEntrance = staticCompositionLocalOf { false }
 // one-off sign-out actions. Kept as a hand list on purpose: what makes these two
 // ids actions is semantics (a destructive confirm), not a derivable structural
 // property of their catalog declarations.
-private val ACTION_ONLY_IDS = setOf(SettingsScreenIds.LOGOUT, SettingsScreenIds.SIGN_OUT_FROM_SERVER)
+private val ACTION_ONLY_IDS = setOf(AccountRows.Logout.id, AccountRows.SignOutFromServer.id)
 
 // Dream-screen pickers (slideshow interval, transition style) flow through the shared
 // `PickerState` dispatcher rather than a screen-local sealed dialog enum.
@@ -350,11 +351,11 @@ internal fun settingsResultClickAction(
     showAdvancedSettings: Boolean,
 ): SettingsSearchResultClick {
     val click = when {
-        id == SettingsScreenIds.LOGOUT -> SettingsSearchResultClick(
+        id == AccountRows.Logout.id -> SettingsSearchResultClick(
             action = SettingsSearchResultAction.OpenSignOutDialog(fromServer = false),
         )
         route == Route.Settings -> {
-            if (id == SettingsScreenIds.SIGN_OUT_FROM_SERVER) {
+            if (id == AccountRows.SignOutFromServer.id) {
                 SettingsSearchResultClick(
                     action = SettingsSearchResultAction.OpenSignOutDialog(fromServer = true),
                 )
@@ -367,7 +368,7 @@ internal fun settingsResultClickAction(
         }
         route == Route.Onboarding -> SettingsSearchResultClick(
             action = SettingsSearchResultAction.OpenSetupWizard,
-            pendingHighlightId = SettingsScreenIds.SETUP_WIZARD,
+            pendingHighlightId = SystemRows.SetupWizard.id,
         )
         else -> SettingsSearchResultClick(
             action = SettingsSearchResultAction.NavigateToScreen(route.withHighlightSettingId(id)),
@@ -1516,64 +1517,70 @@ private fun SettingsBrowsePane(
                         viewModel = viewModel,
                         openSetting = openSetting,
                         onSetupWizardClick = {
-                            onLastClickedSettingIdChange(SettingsScreenIds.SETUP_WIZARD)
+                            onLastClickedSettingIdChange(SystemRows.SetupWizard.id)
                             onSetupWizard()
                         },
                     )
                 }
 
-                settingsSection("item_home", isTv) {
+                settingsSection(HomeEntrance.section.key, isTv) {
                     val homePrefs by viewModel.homePreferences.collectAsStateWithLifecycle()
                     SettingListItem(
-                        icon = Tabler.Outline.Home,
-                        title = stringResource(Res.string.settings_home_title),
+                        icon = HomeEntrance.icon,
+                        title = stringResource(HomeEntrance.titleRes),
                         subtitle = stringResource(
                             Res.string.settings_home_sections_visible,
                             homePrefs.enabledHomeSectionTypes.size,
                             HomeSectionType.CONFIGURABLE.size,
                         ),
                         index = 0, count = 1,
-                        onClick = { openSetting("home") { Route.HomeSettings(it) } },
+                        onClick = { openSetting(HomeEntrance.rowId) { Route.HomeSettings(it) } },
                     )
                 }
 
-                settingsSection("item_appearance", isTv) {
+                // The converted domains' entrances: key, icon, title and
+                // deep-link row id read the domain's declaration
+                // ([AppearanceEntrance] and its wave siblings) — the same
+                // declaration spliced into SETTINGS_ENTRANCE_SECTIONS derives
+                // the section's entrance step — so emission and numbering
+                // single-home on it.
+                settingsSection(AppearanceEntrance.section.key, isTv) {
                     SettingListItem(
-                        icon = Tabler.Outline.Palette,
-                        title = stringResource(Res.string.settings_appearance),
+                        icon = AppearanceEntrance.icon,
+                        title = stringResource(AppearanceEntrance.titleRes),
                         subtitle = appearanceSummarySubtitle(preferences),
                         index = 0, count = 1,
-                        onClick = { openSetting("appearance") { Route.AppearanceSettings(it) } },
+                        onClick = { openSetting(AppearanceEntrance.rowId) { Route.AppearanceSettings(it) } },
                     )
                 }
 
-                settingsSection("item_playback", isTv) {
+                settingsSection(PlaybackEntrance.section.key, isTv) {
                     SettingListItem(
-                        icon = Tabler.Outline.PlayerPlay,
-                        title = stringResource(Res.string.settings_playback),
+                        icon = PlaybackEntrance.icon,
+                        title = stringResource(PlaybackEntrance.titleRes),
                         subtitle = stringResource(Res.string.settings_playback_subtitle, preferences.preferredPlayer.displayName),
                         index = 0, count = 1,
-                        onClick = { openSetting("playback") { Route.PlaybackSettings(it) } },
+                        onClick = { openSetting(PlaybackEntrance.rowId) { Route.PlaybackSettings(it) } },
                     )
                 }
 
-                settingsSection("item_audio", isTv) {
+                settingsSection(AudioEntrance.section.key, isTv) {
                     SettingListItem(
-                        icon = Tabler.Outline.Music,
-                        title = stringResource(Res.string.settings_audio_player),
+                        icon = AudioEntrance.icon,
+                        title = stringResource(AudioEntrance.titleRes),
                         subtitle = stringResource(Res.string.settings_default_speed_value, if (preferences.audioDefaultSpeed == 1.0f) "1x" else "${preferences.audioDefaultSpeed}x"),
                         index = 0, count = 1,
-                        onClick = { openSetting("audio") { Route.AudioSettings(it) } },
+                        onClick = { openSetting(AudioEntrance.rowId) { Route.AudioSettings(it) } },
                     )
                 }
 
-                settingsSection("item_language", isTv) {
+                settingsSection(LanguageEntrance.section.key, isTv) {
                     SettingListItem(
-                        icon = Tabler.Outline.Language,
-                        title = stringResource(Res.string.settings_language_subtitles),
+                        icon = LanguageEntrance.icon,
+                        title = stringResource(LanguageEntrance.titleRes),
                         subtitle = stringResource(Res.string.settings_language_subtitle, preferences.preferredAudioLanguage ?: stringResource(Res.string.settings_lang_default)),
                         index = 0, count = 1,
-                        onClick = { openSetting("language") { Route.LanguageSettings(it) } },
+                        onClick = { openSetting(LanguageEntrance.rowId) { Route.LanguageSettings(it) } },
                     )
                 }
 
@@ -1581,32 +1588,32 @@ private fun SettingsBrowsePane(
                 // NotificationSync seam no-ops there) — entry + screen
                 // stay Android-only.
                 if (settingsCapabilities.supportsNotifications) {
-                    settingsSection("item_notifications", isTv) {
+                    settingsSection(NotificationEntrance.section.key, isTv) {
                         val notifPrefs = preferences.notificationPreferences
                         SettingListItem(
-                            icon = Tabler.Outline.Bell,
-                            title = stringResource(Res.string.settings_notifications),
-                            subtitle = if (notifPrefs.enabled) stringResource(Res.string.settings_notifications_checking, notifPrefs.checkFrequency.displayName.lowercase()) else stringResource(Res.string.settings_disabled),
+                            icon = NotificationEntrance.icon,
+                            title = stringResource(NotificationEntrance.titleRes),
+                            subtitle = if (notifPrefs.enabled) stringResource(Res.string.settings_notifications_checking, notifPrefs.checkFrequency.localizedDisplayName().lowercase()) else stringResource(Res.string.settings_disabled),
                             index = 0, count = 1,
-                            onClick = { openSetting("notifications") { Route.NotificationSettings(it) } },
+                            onClick = { openSetting(NotificationEntrance.rowId) { Route.NotificationSettings(it) } },
                         )
                     }
                 }
 
-                settingsSection("item_storage", isTv) {
+                settingsSection(StorageEntrance.section.key, isTv) {
                     SettingListItem(
-                        icon = Tabler.Outline.Database,
-                        title = stringResource(Res.string.settings_downloads_storage),
+                        icon = StorageEntrance.icon,
+                        title = stringResource(StorageEntrance.titleRes),
                         subtitle = stringResource(Res.string.settings_cache_subtitle, viewModel.cacheSizeMb),
                         index = 0, count = 1,
-                        onClick = { openSetting("storage") { Route.StorageSettings(it) } },
+                        onClick = { openSetting(StorageEntrance.rowId) { Route.StorageSettings(it) } },
                     )
                 }
 
-                settingsSection("item_security", isTv) {
+                settingsSection(SecurityEntrance.section.key, isTv) {
                     SettingListItem(
-                        icon = Tabler.Outline.Lock,
-                        title = stringResource(Res.string.settings_security),
+                        icon = SecurityEntrance.icon,
+                        title = stringResource(SecurityEntrance.titleRes),
                         subtitle = when {
                             preferences.pinLockEnabled && preferences.biometricLockEnabled -> stringResource(Res.string.settings_pin_biometric_on)
                             preferences.biometricLockEnabled -> stringResource(Res.string.settings_biometric_on)
@@ -1614,7 +1621,7 @@ private fun SettingsBrowsePane(
                             else -> stringResource(Res.string.settings_lock_off)
                         },
                         index = 0, count = 1,
-                        onClick = { openSetting("security") { Route.SecuritySettings(it) } },
+                        onClick = { openSetting(SecurityEntrance.rowId) { Route.SecuritySettings(it) } },
                     )
                 }
 
@@ -1628,13 +1635,13 @@ private fun SettingsBrowsePane(
                     )
                 }
 
-                settingsSection("item_backup", isTv) {
+                settingsSection(BackupEntrance.section.key, isTv) {
                     SettingListItem(
-                        icon = Tabler.Outline.DatabaseExport,
-                        title = stringResource(Res.string.settings_backup_restore),
+                        icon = BackupEntrance.icon,
+                        title = stringResource(BackupEntrance.titleRes),
                         subtitle = stringResource(Res.string.settings_backup_restore_subtitle),
                         index = 0, count = 1,
-                        onClick = { openSetting("backup") { Route.BackupSettings(it) } },
+                        onClick = { openSetting(BackupEntrance.rowId) { Route.BackupSettings(it) } },
                     )
                 }
 
@@ -1704,23 +1711,23 @@ private fun SettingsBrowsePane(
                     )
                 }
 
-                settingsSection("item_integrations", isTv) {
+                settingsSection(IntegrationsEntrance.section.key, isTv) {
                     SettingListItem(
-                        icon = rowIcon(IntegrationsScreenIds.INTEGRATIONS),
-                        title = rowTitle(IntegrationsScreenIds.INTEGRATIONS),
+                        icon = IntegrationsEntrance.icon,
+                        title = stringResource(IntegrationsEntrance.titleRes),
                         subtitle = stringResource(Res.string.settings_integrations_subtitle),
                         index = 0, count = 1,
-                        onClick = { openSetting(IntegrationsScreenIds.INTEGRATIONS) { Route.Integrations(it) } },
+                        onClick = { openSetting(IntegrationsEntrance.rowId) { Route.Integrations(it) } },
                     )
                 }
 
-                settingsSection("item_about", isTv) {
+                settingsSection(AboutEntrance.section.key, isTv) {
                     SettingListItem(
-                        icon = Tabler.Outline.InfoCircle,
-                        title = stringResource(Res.string.settings_about),
+                        icon = AboutEntrance.icon,
+                        title = stringResource(AboutEntrance.titleRes),
                         subtitle = stringResource(Res.string.settings_about_subtitle),
                         index = 0, count = 1,
-                        onClick = { openSetting("about") { Route.About } },
+                        onClick = { openSetting(AboutEntrance.rowId) { Route.About } },
                     )
                 }
 
@@ -2263,30 +2270,30 @@ private fun SettingsAccountSection(
                                 // exactly the rows rendered here.
                                 val accountCount = SettingsScreenGroups.account.itemIds.size
                                 SettingListItem(
-                                    icon = rowIcon(SettingsScreenIds.SERVER_MANAGEMENT),
-                                    title = rowTitle(SettingsScreenIds.SERVER_MANAGEMENT),
+                                    icon = rowIcon(AccountRows.ServerManagement),
+                                    title = rowTitle(AccountRows.ServerManagement),
                                     subtitle = stringResource(Res.string.settings_server_management_subtitle),
                                     index = 0, count = accountCount,
-                                    onClick = { openSetting(SettingsScreenIds.SERVER_MANAGEMENT) { Route.ServerManagement(it) } },
+                                    onClick = { openSetting(AccountRows.ServerManagement.id) { Route.ServerManagement(it) } },
                                 )
                                 SettingListItem(
-                                    icon = rowIcon(SettingsScreenIds.USER_MANAGEMENT),
-                                    title = rowTitle(SettingsScreenIds.USER_MANAGEMENT),
+                                    icon = rowIcon(AccountRows.UserManagement),
+                                    title = rowTitle(AccountRows.UserManagement),
                                     subtitle = stringResource(Res.string.settings_switch_user_subtitle),
                                     index = 1, count = accountCount,
-                                    onClick = { openSetting(SettingsScreenIds.USER_MANAGEMENT) { Route.UserManagement(it) } },
+                                    onClick = { openSetting(AccountRows.UserManagement.id) { Route.UserManagement(it) } },
                                 )
                                 SettingListItem(
-                                    icon = rowIcon(SettingsScreenIds.LOGOUT),
-                                    title = rowTitle(SettingsScreenIds.LOGOUT),
+                                    icon = rowIcon(AccountRows.Logout),
+                                    title = rowTitle(AccountRows.Logout),
                                     subtitle = stringResource(Res.string.settings_sign_out_subtitle),
                                     index = 2, count = accountCount,
                                     isDestructive = true,
                                     onClick = { onSignOut(false) },
                                 )
                                 SettingListItem(
-                                    icon = rowIcon(SettingsScreenIds.SIGN_OUT_FROM_SERVER),
-                                    title = rowTitle(SettingsScreenIds.SIGN_OUT_FROM_SERVER),
+                                    icon = rowIcon(AccountRows.SignOutFromServer),
+                                    title = rowTitle(AccountRows.SignOutFromServer),
                                     subtitle = stringResource(Res.string.settings_sign_out_from_server_subtitle),
                                     index = 3, count = accountCount,
                                     isDestructive = true,
@@ -2329,40 +2336,40 @@ private fun SettingsActivitySection(
                                 // group declaration.
                                 val insightsCount = SettingsScreenGroups.activityInsights.itemIds.size
                                 SettingListItem(
-                                    icon = rowIcon(SettingsScreenIds.FAVORITES),
-                                    title = rowTitle(SettingsScreenIds.FAVORITES),
+                                    icon = rowIcon(ActivityInsightsRows.Favorites),
+                                    title = rowTitle(ActivityInsightsRows.Favorites),
                                     subtitle = stringResource(Res.string.settings_browse_favorites_subtitle),
                                     index = 0, count = insightsCount,
-                                    onClick = { openSetting(SettingsScreenIds.FAVORITES) { Route.Favorites } },
+                                    onClick = { openSetting(ActivityInsightsRows.Favorites.id) { Route.Favorites } },
                                 )
                                 SettingListItem(
-                                    icon = rowIcon(SettingsScreenIds.WATCH_PROGRESS_HEATMAP),
-                                    title = rowTitle(SettingsScreenIds.WATCH_PROGRESS_HEATMAP),
+                                    icon = rowIcon(ActivityInsightsRows.WatchProgressHeatmap),
+                                    title = rowTitle(ActivityInsightsRows.WatchProgressHeatmap),
                                     subtitle = stringResource(Res.string.settings_watch_history_heatmap_subtitle),
                                     index = 1, count = insightsCount,
-                                    onClick = { openSetting(SettingsScreenIds.WATCH_PROGRESS_HEATMAP) { Route.WatchProgressHeatmap } },
+                                    onClick = { openSetting(ActivityInsightsRows.WatchProgressHeatmap.id) { Route.WatchProgressHeatmap } },
                                 )
                                 SettingListItem(
-                                    icon = rowIcon(SettingsScreenIds.ACTIVITY_QUEUE),
-                                    title = rowTitle(SettingsScreenIds.ACTIVITY_QUEUE),
+                                    icon = rowIcon(ActivityInsightsRows.ActivityQueue),
+                                    title = rowTitle(ActivityInsightsRows.ActivityQueue),
                                     subtitle = stringResource(Res.string.settings_activity_queue_subtitle),
                                     index = 2, count = insightsCount,
-                                    onClick = { openSetting(SettingsScreenIds.ACTIVITY_QUEUE) { Route.ArrQueue } },
+                                    onClick = { openSetting(ActivityInsightsRows.ActivityQueue.id) { Route.ArrQueue } },
                                 )
                                 SettingListItem(
-                                    icon = rowIcon(SettingsScreenIds.UPCOMING),
-                                    title = rowTitle(SettingsScreenIds.UPCOMING),
+                                    icon = rowIcon(ActivityInsightsRows.Upcoming),
+                                    title = rowTitle(ActivityInsightsRows.Upcoming),
                                     subtitle = stringResource(Res.string.settings_upcoming_subtitle),
                                     index = 3, count = insightsCount,
-                                    onClick = { openSetting(SettingsScreenIds.UPCOMING) { Route.UpcomingCalendar } },
+                                    onClick = { openSetting(ActivityInsightsRows.Upcoming.id) { Route.UpcomingCalendar } },
                                 )
                                 SettingListItem(
-                                    icon = rowIcon(SettingsScreenIds.REQUESTS),
-                                    title = rowTitle(SettingsScreenIds.REQUESTS),
+                                    icon = rowIcon(ActivityInsightsRows.Requests),
+                                    title = rowTitle(ActivityInsightsRows.Requests),
                                     subtitle = stringResource(Res.string.settings_requests_subtitle),
                                     index = 4, count = insightsCount,
                                     trailingText = pendingCount.takeIf { it > 0 }?.toString(),
-                                    onClick = { openSetting(SettingsScreenIds.REQUESTS) { Route.Requests } },
+                                    onClick = { openSetting(ActivityInsightsRows.Requests.id) { Route.Requests } },
                                 )
                             }
 }
@@ -2402,21 +2409,21 @@ private fun SettingsSystemSection(
                                 // declaration: the admin-dashboard row drops for
                                 // non-admins, every other declared row renders.
                                 val systemCount = SettingsScreenGroups.systemCore.items.count { item ->
-                                    item.id != SettingsScreenIds.ADMIN_DASHBOARD || viewModel.currentUser?.isAdmin == true
+                                    item.id != SystemRows.AdminDashboard.id || viewModel.currentUser?.isAdmin == true
                                 }
                                 var systemIndex = 0
                                 if (viewModel.currentUser?.isAdmin == true) {
                                     SettingListItem(
-                                        icon = rowIcon(SettingsScreenIds.ADMIN_DASHBOARD),
-                                        title = rowTitle(SettingsScreenIds.ADMIN_DASHBOARD),
+                                        icon = rowIcon(SystemRows.AdminDashboard),
+                                        title = rowTitle(SystemRows.AdminDashboard),
                                         subtitle = stringResource(Res.string.settings_admin_dashboard_subtitle),
                                         index = systemIndex++, count = systemCount,
-                                        onClick = { openSetting(SettingsScreenIds.ADMIN_DASHBOARD) { Route.AdminDashboard } },
+                                        onClick = { openSetting(SystemRows.AdminDashboard.id) { Route.AdminDashboard } },
                                     )
                                 }
                                 SettingListItem(
-                                    icon = rowIcon(SettingsScreenIds.SETUP_WIZARD),
-                                    title = rowTitle(SettingsScreenIds.SETUP_WIZARD),
+                                    icon = rowIcon(SystemRows.SetupWizard),
+                                    title = rowTitle(SystemRows.SetupWizard),
                                     subtitle = stringResource(Res.string.settings_setup_wizard_subtitle),
                                     index = systemIndex++, count = systemCount,
                                     onClick = { onSetupWizardClick() },
@@ -2447,18 +2454,18 @@ private fun SettingsScreensaverSection(
                                     // declaration — the eight declared dream rows are
                                     // exactly the rows rendered here.
                                     val dreamTotal = SettingsScreenGroups.systemScreensaver.itemIds.size
-                                    val slideshowIntervalTitle = rowTitle(SettingsScreenIds.SCREENSAVER_SLIDESHOW_INTERVAL)
-                                    val transitionStyleTitle = rowTitle(SettingsScreenIds.SCREENSAVER_TRANSITION_STYLE)
+                                    val slideshowIntervalTitle = rowTitle(SystemRows.ScreensaverSlideshowInterval)
+                                    val transitionStyleTitle = rowTitle(SystemRows.ScreensaverTransitionStyle)
                                     val transitionCrossfadeLabel = stringResource(Res.string.settings_transition_crossfade)
                                     val transitionSlideLabel = stringResource(Res.string.settings_transition_slide)
                                     val transitionNoneLabel = stringResource(Res.string.settings_transition_none)
                                     SettingToggleItem(
-                                        icon = rowIcon(SettingsScreenIds.SCREENSAVER_SHOW_TITLE),
-                                        title = rowTitle(SettingsScreenIds.SCREENSAVER_SHOW_TITLE),
+                                        icon = rowIcon(SystemRows.ScreensaverShowTitle),
+                                        title = rowTitle(SystemRows.ScreensaverShowTitle),
                                         subtitle = if (preferences.dreamShowTitle) stringResource(Res.string.settings_display_media_title) else stringResource(Res.string.settings_hide_media_title),
                                         checked = preferences.dreamShowTitle,
                                         index = 0, count = dreamTotal,
-                                        highlighted = lastClickedSettingId == SettingsScreenIds.SCREENSAVER_SHOW_TITLE,
+                                        highlighted = lastClickedSettingId == SystemRows.ScreensaverShowTitle.id,
                                         onCheckedChange = { viewModel.edit { scope -> scope.screensaver.setDreamShowTitle(it) } },
                                     )
                                     val categoryMovies = stringResource(Res.string.settings_category_movies)
@@ -2466,8 +2473,8 @@ private fun SettingsScreensaverSection(
                                     val categoryMusic = stringResource(Res.string.settings_category_music)
                                     val categoryPhotos = stringResource(Res.string.settings_category_photos)
                                     SettingListItem(
-                                        icon = rowIcon(SettingsScreenIds.SCREENSAVER_CATEGORIES),
-                                        title = rowTitle(SettingsScreenIds.SCREENSAVER_CATEGORIES),
+                                        icon = rowIcon(SystemRows.ScreensaverCategories),
+                                        title = rowTitle(SystemRows.ScreensaverCategories),
                                         subtitle = stringResource(Res.string.settings_categories_subtitle),
                                         trailingText = remember(preferences.dreamImageCategories, categoryMovies, categoryTv, categoryMusic, categoryPhotos) {
                                             preferences.dreamImageCategories.joinToString(", ") {
@@ -2480,7 +2487,7 @@ private fun SettingsScreensaverSection(
                                             }
                                         },
                                         index = 1, count = dreamTotal,
-                                        highlighted = lastClickedSettingId == SettingsScreenIds.SCREENSAVER_CATEGORIES,
+                                        highlighted = lastClickedSettingId == SystemRows.ScreensaverCategories.id,
                                         onClick = {
                                             val allCats = DreamImageCategory.entries.toSet()
                                             val current = preferences.dreamImageCategories
@@ -2495,12 +2502,12 @@ private fun SettingsScreensaverSection(
                                         },
                                     )
                                     SettingListItem(
-                                        icon = rowIcon(SettingsScreenIds.SCREENSAVER_SLIDESHOW_INTERVAL),
-                                        title = rowTitle(SettingsScreenIds.SCREENSAVER_SLIDESHOW_INTERVAL),
+                                        icon = rowIcon(SystemRows.ScreensaverSlideshowInterval),
+                                        title = rowTitle(SystemRows.ScreensaverSlideshowInterval),
                                         subtitle = stringResource(Res.string.settings_slideshow_interval_subtitle),
                                         trailingText = "${preferences.dreamSlideshowIntervalMs / 1000}s",
                                         index = 2, count = dreamTotal,
-                                        highlighted = lastClickedSettingId == SettingsScreenIds.SCREENSAVER_SLIDESHOW_INTERVAL,
+                                        highlighted = lastClickedSettingId == SystemRows.ScreensaverSlideshowInterval.id,
                                         onClick = {
                                             activeDialog.value = PickerState.List(
                                                 title = slideshowIntervalTitle,
@@ -2512,21 +2519,21 @@ private fun SettingsScreensaverSection(
                                         },
                                     )
                                     SettingToggleItem(
-                                        icon = rowIcon(SettingsScreenIds.SCREENSAVER_KEN_BURNS),
-                                        title = rowTitle(SettingsScreenIds.SCREENSAVER_KEN_BURNS),
+                                        icon = rowIcon(SystemRows.ScreensaverKenBurns),
+                                        title = rowTitle(SystemRows.ScreensaverKenBurns),
                                         subtitle = if (preferences.dreamKenBurnsEnabled) stringResource(Res.string.settings_ken_burns_on) else stringResource(Res.string.settings_ken_burns_off),
                                         checked = preferences.dreamKenBurnsEnabled,
                                         index = 3, count = dreamTotal,
-                                        highlighted = lastClickedSettingId == SettingsScreenIds.SCREENSAVER_KEN_BURNS,
+                                        highlighted = lastClickedSettingId == SystemRows.ScreensaverKenBurns.id,
                                         onCheckedChange = { viewModel.edit { scope -> scope.screensaver.setDreamKenBurnsEnabled(it) } },
                                     )
                                     SettingListItem(
-                                        icon = rowIcon(SettingsScreenIds.SCREENSAVER_TRANSITION_STYLE),
-                                        title = rowTitle(SettingsScreenIds.SCREENSAVER_TRANSITION_STYLE),
+                                        icon = rowIcon(SystemRows.ScreensaverTransitionStyle),
+                                        title = rowTitle(SystemRows.ScreensaverTransitionStyle),
                                         subtitle = preferences.dreamTransitionStyle.name,
                                         trailingText = preferences.dreamTransitionStyle.name,
                                         index = 4, count = dreamTotal,
-                                        highlighted = lastClickedSettingId == SettingsScreenIds.SCREENSAVER_TRANSITION_STYLE,
+                                        highlighted = lastClickedSettingId == SystemRows.ScreensaverTransitionStyle.id,
                                         onClick = {
                                             val labels = mapOf(
                                                 DreamTransitionStyle.CROSSFADE to transitionCrossfadeLabel,
@@ -2546,7 +2553,7 @@ private fun SettingsScreensaverSection(
                                     // no local cap ("None"). Both the row vocabulary and
                                     // the age resolution come from the canonical rating
                                     // table (core:network's LibraryWirePolicy).
-                                    val maxRatingTitle = rowTitle(SettingsScreenIds.SCREENSAVER_MAX_PARENTAL_RATING)
+                                    val maxRatingTitle = rowTitle(SystemRows.ScreensaverMaxParentalRating)
                                     val maxRatingNoneLabel = stringResource(Res.string.settings_dream_rating_none)
                                     val maxRatingItems = remember(maxRatingNoneLabel) {
                                         buildList {
@@ -2557,14 +2564,14 @@ private fun SettingsScreensaverSection(
                                         }
                                     }
                                     SettingListItem(
-                                        icon = rowIcon(SettingsScreenIds.SCREENSAVER_MAX_PARENTAL_RATING),
-                                        title = rowTitle(SettingsScreenIds.SCREENSAVER_MAX_PARENTAL_RATING),
+                                        icon = rowIcon(SystemRows.ScreensaverMaxParentalRating),
+                                        title = rowTitle(SystemRows.ScreensaverMaxParentalRating),
                                         subtitle = stringResource(Res.string.settings_dream_max_parental_rating_subtitle),
                                         trailingText = maxRatingItems
                                             .firstOrNull { it.first == preferences.dreamMaxParentalRating }
                                             ?.second ?: maxRatingNoneLabel,
                                         index = 5, count = dreamTotal,
-                                        highlighted = lastClickedSettingId == SettingsScreenIds.SCREENSAVER_MAX_PARENTAL_RATING,
+                                        highlighted = lastClickedSettingId == SystemRows.ScreensaverMaxParentalRating.id,
                                         onClick = {
                                             activeDialog.value = PickerState.List(
                                                 title = maxRatingTitle,
@@ -2575,7 +2582,7 @@ private fun SettingsScreensaverSection(
                                             )
                                         },
                                     )
-                                    val dimAfterTitle = rowTitle(SettingsScreenIds.SCREENSAVER_DIM_AFTER)
+                                    val dimAfterTitle = rowTitle(SystemRows.ScreensaverDimAfter)
                                     val dimAfterOffLabel = stringResource(Res.string.settings_dream_dim_after_off)
                                     // The auto-lock ladder minus the 10-minute rung
                                     // (the shared SETTINGS_TIMER_LADDER_MS —
@@ -2595,12 +2602,12 @@ private fun SettingsScreensaverSection(
                                     fun dimAfterLabel(ms: Long): String =
                                         dimAfterChoices.firstOrNull { it.first == ms }?.second ?: dimAfterOffLabel
                                     SettingListItem(
-                                        icon = rowIcon(SettingsScreenIds.SCREENSAVER_DIM_AFTER),
-                                        title = rowTitle(SettingsScreenIds.SCREENSAVER_DIM_AFTER),
+                                        icon = rowIcon(SystemRows.ScreensaverDimAfter),
+                                        title = rowTitle(SystemRows.ScreensaverDimAfter),
                                         subtitle = stringResource(Res.string.settings_dream_dim_after_subtitle),
                                         trailingText = dimAfterLabel(preferences.dreamDimAfterMs),
                                         index = 6, count = dreamTotal,
-                                        highlighted = lastClickedSettingId == SettingsScreenIds.SCREENSAVER_DIM_AFTER,
+                                        highlighted = lastClickedSettingId == SystemRows.ScreensaverDimAfter.id,
                                         onClick = {
                                             activeDialog.value = PickerState.List(
                                                 title = dimAfterTitle,
@@ -2611,14 +2618,14 @@ private fun SettingsScreensaverSection(
                                             )
                                         },
                                     )
-                                    val dimPercentTitle = rowTitle(SettingsScreenIds.SCREENSAVER_DIM_PERCENT)
+                                    val dimPercentTitle = rowTitle(SystemRows.ScreensaverDimPercent)
                                     SettingListItem(
-                                        icon = rowIcon(SettingsScreenIds.SCREENSAVER_DIM_PERCENT),
-                                        title = rowTitle(SettingsScreenIds.SCREENSAVER_DIM_PERCENT),
+                                        icon = rowIcon(SystemRows.ScreensaverDimPercent),
+                                        title = rowTitle(SystemRows.ScreensaverDimPercent),
                                         subtitle = stringResource(Res.string.settings_dream_dim_percent_subtitle),
                                         trailingText = "${preferences.dreamDimPercent}%",
                                         index = 7, count = dreamTotal,
-                                        highlighted = lastClickedSettingId == SettingsScreenIds.SCREENSAVER_DIM_PERCENT,
+                                        highlighted = lastClickedSettingId == SystemRows.ScreensaverDimPercent.id,
                                         onClick = {
                                             activeDialog.value = PickerState.Slider(
                                                 title = dimPercentTitle,
@@ -2653,7 +2660,7 @@ private fun SettingsIdleAmbientSection(
                                     initiallyExpanded = lastClickedSettingId in SettingsScreenGroups.systemIdleAmbient.itemIdSet,
                                 ) {
                                     val idleTotal = SettingsScreenGroups.systemIdleAmbient.itemIds.size
-                                    val idleTimeoutTitle = rowTitle(SettingsScreenIds.IDLE_AMBIENT_TIMEOUT)
+                                    val idleTimeoutTitle = rowTitle(SystemRows.IdleAmbientTimeout)
                                     val idleTimeoutOffLabel = stringResource(Res.string.settings_idle_ambient_timeout_off)
                                     val idleTimeoutOptions = listOf(0L, 1L, 5L, 10L, 15L, 30L)
                                     // stringResource resolves in composition — pre-build the
@@ -2664,26 +2671,26 @@ private fun SettingsIdleAmbientSection(
                                         else stringResource(Res.string.settings_idle_ambient_timeout_minutes, minutes)
                                     }
                                     SettingToggleItem(
-                                        icon = rowIcon(SettingsScreenIds.IDLE_AMBIENT_ENABLED),
-                                        title = rowTitle(SettingsScreenIds.IDLE_AMBIENT_ENABLED),
+                                        icon = rowIcon(SystemRows.IdleAmbientEnabled),
+                                        title = rowTitle(SystemRows.IdleAmbientEnabled),
                                         subtitle = stringResource(Res.string.settings_idle_ambient_enabled_subtitle),
                                         checked = preferences.idleAmbientEnabled,
                                         index = 0, count = idleTotal,
-                                        highlighted = lastClickedSettingId == SettingsScreenIds.IDLE_AMBIENT_ENABLED,
+                                        highlighted = lastClickedSettingId == SystemRows.IdleAmbientEnabled.id,
                                         onCheckedChange = { enabled ->
                                             viewModel.edit { scope -> scope.screensaver.setIdleAmbientEnabled(enabled) }
                                         },
                                     )
                                     SettingListItem(
-                                        icon = rowIcon(SettingsScreenIds.IDLE_AMBIENT_TIMEOUT),
-                                        title = rowTitle(SettingsScreenIds.IDLE_AMBIENT_TIMEOUT),
+                                        icon = rowIcon(SystemRows.IdleAmbientTimeout),
+                                        title = rowTitle(SystemRows.IdleAmbientTimeout),
                                         subtitle = stringResource(Res.string.settings_idle_ambient_timeout_subtitle),
                                         trailingText = idleTimeoutLabels[
                                             idleTimeoutOptions.indexOf(preferences.idleAmbientTimeoutMin)
                                                 .coerceAtMost(idleTimeoutLabels.lastIndex),
                                         ],
                                         index = 1, count = idleTotal,
-                                        highlighted = lastClickedSettingId == SettingsScreenIds.IDLE_AMBIENT_TIMEOUT,
+                                        highlighted = lastClickedSettingId == SystemRows.IdleAmbientTimeout.id,
                                         onClick = {
                                             activeDialog.value = PickerState.List(
                                                 title = idleTimeoutTitle,
@@ -2720,12 +2727,12 @@ private fun SettingsDiscordPresenceSection(
                                 ) {
                                     val discordTotal = SettingsScreenGroups.systemDiscordPresence.itemIds.size
                                     SettingToggleItem(
-                                        icon = rowIcon(SettingsScreenIds.DISCORD_PRESENCE_ENABLED),
-                                        title = rowTitle(SettingsScreenIds.DISCORD_PRESENCE_ENABLED),
+                                        icon = rowIcon(SystemRows.DiscordPresenceEnabled),
+                                        title = rowTitle(SystemRows.DiscordPresenceEnabled),
                                         subtitle = stringResource(Res.string.settings_discord_presence_enabled_subtitle),
                                         checked = preferences.discordPresenceEnabled,
                                         index = 0, count = discordTotal,
-                                        highlighted = lastClickedSettingId == SettingsScreenIds.DISCORD_PRESENCE_ENABLED,
+                                        highlighted = lastClickedSettingId == SystemRows.DiscordPresenceEnabled.id,
                                         onCheckedChange = { enabled ->
                                             viewModel.edit { scope -> scope.screensaver.setDiscordPresenceEnabled(enabled) }
                                         },
@@ -2761,18 +2768,18 @@ private fun SettingsShellHooksSection(
                                     val hooksTotal = SettingsScreenGroups.systemHooks.itemIds.size
                                     val placeholderHint = stringResource(Res.string.settings_hooks_placeholder_hint)
                                     SettingToggleItem(
-                                        icon = rowIcon(SettingsScreenIds.HOOKS_ENABLED),
-                                        title = rowTitle(SettingsScreenIds.HOOKS_ENABLED),
+                                        icon = rowIcon(SystemRows.HooksEnabled),
+                                        title = rowTitle(SystemRows.HooksEnabled),
                                         subtitle = stringResource(Res.string.settings_hooks_enabled_subtitle),
                                         checked = preferences.hooksEnabled,
                                         index = 0, count = hooksTotal,
-                                        highlighted = lastClickedSettingId == SettingsScreenIds.HOOKS_ENABLED,
+                                        highlighted = lastClickedSettingId == SystemRows.HooksEnabled.id,
                                         onCheckedChange = { enabled ->
                                             viewModel.edit { scope -> scope.screensaver.setHooksEnabled(enabled) }
                                         },
                                     )
                                     hooksCommandRow(
-                                        id = SettingsScreenIds.HOOKS_PLAY_CMD,
+                                        row = SystemRows.HooksPlayCmd,
                                         command = preferences.hooksPlayCmd,
                                         index = 1, count = hooksTotal,
                                         lastClickedSettingId = lastClickedSettingId,
@@ -2781,7 +2788,7 @@ private fun SettingsShellHooksSection(
                                         onSave = { viewModel.edit { scope -> scope.screensaver.setHooksPlayCmd(it) } },
                                     )
                                     hooksCommandRow(
-                                        id = SettingsScreenIds.HOOKS_STOP_CMD,
+                                        row = SystemRows.HooksStopCmd,
                                         command = preferences.hooksStopCmd,
                                         index = 2, count = hooksTotal,
                                         lastClickedSettingId = lastClickedSettingId,
@@ -2790,7 +2797,7 @@ private fun SettingsShellHooksSection(
                                         onSave = { viewModel.edit { scope -> scope.screensaver.setHooksStopCmd(it) } },
                                     )
                                     hooksCommandRow(
-                                        id = SettingsScreenIds.HOOKS_ENDED_CMD,
+                                        row = SystemRows.HooksEndedCmd,
                                         command = preferences.hooksEndedCmd,
                                         index = 3, count = hooksTotal,
                                         lastClickedSettingId = lastClickedSettingId,
@@ -2799,7 +2806,7 @@ private fun SettingsShellHooksSection(
                                         onSave = { viewModel.edit { scope -> scope.screensaver.setHooksEndedCmd(it) } },
                                     )
                                     hooksCommandRow(
-                                        id = SettingsScreenIds.HOOKS_IDLE_CMD,
+                                        row = SystemRows.HooksIdleCmd,
                                         command = preferences.hooksIdleCmd,
                                         index = 4, count = hooksTotal,
                                         lastClickedSettingId = lastClickedSettingId,
@@ -2808,7 +2815,7 @@ private fun SettingsShellHooksSection(
                                         onSave = { viewModel.edit { scope -> scope.screensaver.setHooksIdleCmd(it) } },
                                     )
                                     hooksCommandRow(
-                                        id = SettingsScreenIds.HOOKS_IDLE_ENDED_CMD,
+                                        row = SystemRows.HooksIdleEndedCmd,
                                         command = preferences.hooksIdleEndedCmd,
                                         index = 5, count = hooksTotal,
                                         lastClickedSettingId = lastClickedSettingId,
@@ -2822,7 +2829,7 @@ private fun SettingsShellHooksSection(
 /** One shell-hook command row: shows the configured command, opens the text editor. */
 @Composable
 private fun hooksCommandRow(
-    id: String,
+    row: SettingsRow,
     command: String,
     index: Int,
     count: Int,
@@ -2831,14 +2838,14 @@ private fun hooksCommandRow(
     activeDialog: MutableState<PickerState<*>?>,
     onSave: (String) -> Unit,
 ) {
-    val title = rowTitle(id)
+    val title = rowTitle(row)
     val notSet = stringResource(Res.string.settings_hooks_cmd_not_set)
     SettingListItem(
-        icon = rowIcon(id),
+        icon = rowIcon(row),
         title = title,
         subtitle = command.ifBlank { notSet },
         index = index, count = count,
-        highlighted = lastClickedSettingId == id,
+        highlighted = lastClickedSettingId == row.id,
         onClick = {
             activeDialog.value = PickerState.Text(
                 title = title,

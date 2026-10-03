@@ -58,6 +58,7 @@ import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.SessionInfo
+import com.raulshma.jellyplay.core.model.progressFraction
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_active_devices
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_cancel
@@ -315,11 +316,9 @@ private fun ActiveDeviceCard(
                             )
                         }
 
-                        val positionTicks = session.playState?.positionTicks ?: 0L
-                        val runtimeTicks = item.runTimeTicks ?: 0L
-                        if (runtimeTicks > 0) {
+                        val progress = progressFraction(session.playState?.positionTicks, item.runTimeTicks)
+                        if (progress != null) {
                             Spacer(Modifier.height(6.dp))
-                            val progress = (positionTicks.toFloat() / runtimeTicks.toFloat()).coerceIn(0f, 1f)
                             LinearProgressIndicator(
                                 progress = { progress },
                                 modifier = Modifier

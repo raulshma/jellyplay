@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.data.network
 
+import com.raulshma.jellyplay.core.concurrency.SingleFlight
 import com.raulshma.jellyplay.core.concurrency.TaskBundle
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.util.EpochMillisSource
@@ -17,8 +18,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 
 /**
  * Periodically checks the health of the connected Jellyfin server by pinging
@@ -50,6 +49,9 @@ private const val MONITOR_LOOP = "ServerHealthMonitor.loop"
 
 /** The network-transition re-probe collector, cancelled with the loop. */
 private const val NETWORK_TRIGGER = "ServerHealthMonitor.networkTrigger"
+
+/** The single probe-guard key — loop ticks and transition re-probes queue on it. */
+private const val PROBE = "ServerHealthMonitor.probe"
 
 class ServerHealthMonitor(
     private val apiClient: AuthApiClient,
@@ -93,12 +95,19 @@ class ServerHealthMonitor(
 
     /**
      * Serializes probes: the periodic loop and the network-transition
-     * collector can both want to check at once, and without the mutex their
-     * verdict writes can interleave — a slow probe's verdict landing over a
-     * fresh one's. Inside the lock each probe publishes atomically; a queued
-     * second probe simply waits its turn.
+     * collector can both want to check at once, and without the mutual
+     * exclusion their verdict writes can interleave — a slow probe's verdict
+     * landing over a fresh one's. Inside the guard each probe publishes
+     * atomically; a queued second probe simply waits its turn.
+     *
+     * A [SingleFlight] with one key rather than a bare Mutex field — the
+     * same init-order structural fix as EPG's guide mutex (99e665a35): the
+     * lock table is born, empty and complete, inside this val, so there is
+     * no lock declaration left to race a coroutine reaching it ahead of its
+     * initialization. One key — the point here is the born-initialized
+     * table, not fan-out.
      */
-    private val probeMutex = Mutex()
+    private val probes = SingleFlight()
 
     @Volatile
     private var currentServerAddress: String? = null
@@ -183,7 +192,7 @@ class ServerHealthMonitor(
     /**
      * Performs a single health check against the given server address
      * (or the currently monitored address when null). Serialized by
-     * [probeMutex] so concurrent loop/transition probes publish their
+     * [probes] so concurrent loop/transition probes publish their
      * verdicts atomically instead of interleaving.
      */
     suspend fun checkHealth(serverAddress: String? = currentServerAddress) {
@@ -192,7 +201,7 @@ class ServerHealthMonitor(
             return
         }
 
-        probeMutex.withLock {
+        probes.inFlight(PROBE) {
             // Checking only until the first verdict lands; later probes hold
             // the previous verdict visible while re-probing. The header has
             // no Checking branch, so republishing it mid-session rendered a
