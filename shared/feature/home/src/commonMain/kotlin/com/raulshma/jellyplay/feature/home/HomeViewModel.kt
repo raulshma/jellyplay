@@ -10,7 +10,7 @@ import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.BookTocCacheRepository
 import com.raulshma.jellyplay.core.data.repository.NoopBookTocCacheRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxEntry
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.HomeFeed
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.repository.SearchHistoryItem
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
@@ -67,7 +67,7 @@ internal class HomeViewModel(
     private val userDataMutator: UserDataMutator,
     private val mediaSearchEngine: MediaSearchEngine,
     /** Read here only for the offline home's cached-layout mirror (see [offlineHomeGate]). */
-    private val mediaRepository: MediaRepository,
+    private val homeFeed: HomeFeed,
     private val imageUrlProvider: ImageUrlProvider,
     private val photoFolderPrefetcher: PhotoFolderPrefetcher,
     private val downloadIntake: DownloadIntake,
@@ -235,7 +235,7 @@ internal class HomeViewModel(
         // generic offline rows instead of crashing the gate collector, while a
         // cancelled read still propagates.
         homeLayoutProvider = {
-            runCatchingRethrowingCancellation { mediaRepository.getOfflineHomeLayout()?.sections.orEmpty() }
+            runCatchingRethrowingCancellation { homeFeed.getOfflineHomeLayout()?.sections.orEmpty() }
                 .getOrDefault(emptyList())
         },
         bookTocCacheRepository = bookTocCacheRepository,

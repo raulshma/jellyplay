@@ -9,7 +9,7 @@ import androidx.work.WorkerFactory
 import androidx.work.WorkerParameters
 import androidx.work.testing.TestListenableWorkerBuilder
 import androidx.work.testing.WorkManagerTestInitHelper
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.HomeFeed
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackSlice
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
@@ -50,7 +50,7 @@ import org.robolectric.annotation.Config
 class TvWatchNextWorkerTest {
 
     private lateinit var context: Context
-    private val mediaRepository: MediaRepository = mockk(relaxed = true)
+    private val homeFeed: HomeFeed = mockk(relaxed = true)
     private val imageUrlProvider: ImageUrlProvider = mockk(relaxed = true)
     private val playbackStore: PlaybackStore = mockk()
 
@@ -63,7 +63,7 @@ class TvWatchNextWorkerTest {
         )
         every { playbackStore.playback } returns
             MutableStateFlow(PlaybackSlice(androidTvWatchNextEnabled = true))
-        coEvery { mediaRepository.getHomeSections(any(), any()) } returns
+        coEvery { homeFeed.getHomeSections(any(), any()) } returns
             Result.success(HomeSectionsResult(sections = emptyList()))
     }
 
@@ -77,7 +77,7 @@ class TvWatchNextWorkerTest {
                 ): TvWatchNextWorker = TvWatchNextWorker(
                     appContext,
                     workerParameters,
-                    mediaRepository,
+                    homeFeed,
                     imageUrlProvider,
                     playbackStore,
                     SystemTimeSource(),
@@ -100,7 +100,7 @@ class TvWatchNextWorkerTest {
         val result = buildWorker().doWork()
 
         assertTrue(result is ListenableWorker.Result.Success)
-        coVerify(exactly = 0) { mediaRepository.getHomeSections(any(), any()) }
+        coVerify(exactly = 0) { homeFeed.getHomeSections(any(), any()) }
     }
 
     @Test
@@ -112,7 +112,7 @@ class TvWatchNextWorkerTest {
         val result = buildWorker().doWork()
 
         assertTrue(result is ListenableWorker.Result.Success)
-        coVerify(exactly = 0) { mediaRepository.getHomeSections(any(), any()) }
+        coVerify(exactly = 0) { homeFeed.getHomeSections(any(), any()) }
     }
 
     // ── Enabled: publish + result mapping ─────────────────────────────
@@ -125,7 +125,7 @@ class TvWatchNextWorkerTest {
 
         assertTrue(result is ListenableWorker.Result.Success)
         coVerify(exactly = 1) {
-            mediaRepository.getHomeSections(
+            homeFeed.getHomeSections(
                 HomeSectionQuery(
                     enabledSections = setOf(HomeSectionType.CONTINUE_WATCHING, HomeSectionType.NEXT_UP),
                 ),
@@ -141,13 +141,13 @@ class TvWatchNextWorkerTest {
         val result = buildWorker().doWork()
 
         assertTrue(result is ListenableWorker.Result.Success)
-        coVerify(exactly = 0) { mediaRepository.getHomeSections(any(), any()) }
+        coVerify(exactly = 0) { homeFeed.getHomeSections(any(), any()) }
     }
 
     @Test
     fun `publish failure on an early attempt returns retry`() = runTest {
         makeDeviceTv()
-        coEvery { mediaRepository.getHomeSections(any(), any()) } returns
+        coEvery { homeFeed.getHomeSections(any(), any()) } returns
             Result.failure(RuntimeException("server unreachable"))
 
         val result = buildWorker(runAttemptCount = 0).doWork()
@@ -158,7 +158,7 @@ class TvWatchNextWorkerTest {
     @Test
     fun `publish failure after exhausting retries returns failure`() = runTest {
         makeDeviceTv()
-        coEvery { mediaRepository.getHomeSections(any(), any()) } returns
+        coEvery { homeFeed.getHomeSections(any(), any()) } returns
             Result.failure(RuntimeException("server unreachable"))
 
         // MAX_RETRIES is 3: attempt 3 is past the retry budget.

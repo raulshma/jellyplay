@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.settings
 import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.data.repository.MediaBrowseReads
 import com.raulshma.jellyplay.core.data.util.FilterDimensionsHolder
+import com.raulshma.jellyplay.core.data.repository.HomeFeed
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
 import com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore
@@ -153,6 +154,8 @@ class DiscoverRowsViewModel(
     private val homeDiscoveryStore: HomeDiscoveryStore,
     private val editor: PreferencesEditor,
     private val mediaRepository: MediaRepository,
+    /** The home-feed seam (the editor preview's fresh row fetch — off the union). */
+    private val homeFeed: HomeFeed,
     /** The browse-facet seam (People picker + tag facets — off the union). */
     private val mediaBrowseReads: MediaBrowseReads,
 ) : JellyPlayViewModel() {
@@ -334,7 +337,7 @@ class DiscoverRowsViewModel(
         if (!current.previewLoading) _draft.value = current.copy(previewLoading = true)
         val queriedRow = current.row
         previewJob = debounced(previewJob) {
-            val result = mediaRepository.getDiscoverRowItems(queriedRow.copy(limit = PREVIEW_ITEM_COUNT))
+            val result = homeFeed.getDiscoverRowItems(queriedRow.copy(limit = PREVIEW_ITEM_COUNT))
             // The draft may have moved on while the debounce window and the
             // fetch ran — apply only onto the exact row that was queried
             // (guards a draft SWITCH and an in-place chip MUTATION alike;

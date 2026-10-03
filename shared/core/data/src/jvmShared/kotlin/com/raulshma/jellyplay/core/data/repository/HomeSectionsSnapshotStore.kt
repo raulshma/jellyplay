@@ -246,7 +246,7 @@ class HomeSectionsSnapshotStore(
      * The offline home's layout mirror: the most recently persisted
      * snapshot for the current (server, user), across cacheKeys and with NO
      * freshness ceiling. Key-agnostic and unceilinged by contract (see the
-     * `MediaRepository.getOfflineHomeLayout` KDoc): the offline home
+     * `HomeFeed.getOfflineHomeLayout` KDoc): the offline home
      * re-filters membership against the offline store, so staleness only
      * costs section ORDER/titles, never content.
      */

@@ -270,6 +270,7 @@ val settingsModule: Module = module {
             homeDiscoveryStore = get(),
             editor = get(),
             mediaRepository = get(),
+            homeFeed = get(),
             mediaBrowseReads = get(),
         )
     }

@@ -67,15 +67,19 @@ class MediaRepositorySurfaceTest {
      * music member left on the union is getAlbumTracks: the detail provider's
      * session resolves detail + album tracks together and is a mixed consumer,
      * so its read rides the union. getMusicVideos (already seam-only, zero
-     * callers) retired from the seam outright in the same wave. 29 adds
+     * callers) retired from the seam outright in the same wave. 29 added
      * refreshHomeSection — the home-sections family's single-row refetch (the
      * home screen's edge-pull refresh), the same row-scoped reasoning as the
-     * discover-row trio: the family's only consumer (HomeRefresher) already
-     * reaches it through this repository, and a collaborator would have to
-     * re-expose the identity/session + section-query plumbing the family
-     * already owns.
+     * discover-row trio. 23 after the home-feed split: the whole home family
+     * (getHomeSections, refreshHomeSection, getDiscoverRowItems,
+     * rerollDiscoverRow, getCachedHomeSections, getOfflineHomeLayout) lives on
+     * the HomeFeed seam over the same impl, and the user-data change feed's
+     * read val gained the UserDataChanges seam beside it — the home feature's
+     * refresh stack injects the seam alone, and the mixed consumers (the
+     * background home-sections refetchers, the widget, the discover-row
+     * editor) keep the union for their non-home members.
      */
-    private val maxInterfaceMembers = 29
+    private val maxInterfaceMembers = 23
 
     /** Walks up from the working dir to the module root that owns src/commonMain/kotlin. */
     private fun moduleRoot(): File {
@@ -183,7 +187,7 @@ class MediaRepositorySurfaceTest {
         // body can never satisfy the ratchet above.
         val body = interfaceBody()
         assertTrue(
-            countMembers(body) > 0 && body.contains("getHomeSections"),
+            countMembers(body) > 0 && body.contains("getMediaDetail"),
             "interface body parse found no members — the ratchet is vacuous",
         )
     }

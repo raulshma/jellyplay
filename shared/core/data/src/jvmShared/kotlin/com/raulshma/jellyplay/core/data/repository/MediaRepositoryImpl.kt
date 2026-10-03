@@ -25,18 +25,14 @@ import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.SearchResult
 import com.raulshma.jellyplay.core.model.Studio
 import com.raulshma.jellyplay.core.model.UserDataChange
-import com.raulshma.jellyplay.core.model.SyncPlayGroup
-import com.raulshma.jellyplay.core.model.SyncPlayGroupInfo
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.network.api.CollectionApiClient
-import com.raulshma.jellyplay.core.network.api.SyncPlayApiClient
 import com.raulshma.jellyplay.core.network.library.HomeSectionsCachePort
 import com.raulshma.jellyplay.core.network.realtime.UserDataRealtimeChannel
 import com.raulshma.jellyplay.core.data.cache.getOrFetch
 import com.raulshma.jellyplay.core.data.cache.getOrFetchGuarded
 import com.raulshma.jellyplay.core.data.concurrency.StaleReadGroup
 import com.raulshma.jellyplay.core.data.concurrency.StaleReadGroups
-import com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -57,10 +53,7 @@ import kotlinx.coroutines.flow.merge
 // surfaces moved out to their own impls (LiveTvRepositoryImpl,
 // NewsletterRepositoryImpl, PlaylistRepositoryImpl — same package), each
 // over the narrow API family client (the PlaybackRepositoryImpl ctor
-// precedent). SyncPlayRepository STAYS here by decision: its members (four
-// after the transport-command census retired the ignored-Result twins)
-// interleave with the user-data channel's invalidation choreography, not
-// with any family boundary. The one piece of shared state an extracted
+// precedent). The one piece of shared state an extracted
 // surface observes — the detail-cache cluster — moved to the
 // [MediaRepositoryInternals] Koin single this ctor now takes, so the group
 // stays ONE instance across the split. Declared divergence: the primary
@@ -69,8 +62,7 @@ import kotlinx.coroutines.flow.merge
 // (the dataJvmModule Koin definitions + this module's test suites) is
 // inside the module, and no external code names the concrete type.
 class MediaRepositoryImpl internal constructor(
-    /** The catalogue fetch family — every read this repo serves except the
-     * four SyncPlay members below. */
+    /** The catalogue fetch family — every read this repo serves. */
     private val libraryApiClient: LibraryApiClient,
     /**
      * The collection family seam (the PlaylistApiClient over-the-impl
@@ -86,11 +78,9 @@ class MediaRepositoryImpl internal constructor(
      * the wide [LibraryApiClient]: cache management is not API surface, so the
      * write/roll paths below depend on the port alone. Same underlying single
      * (the client impl adapts to the port), so ordering and epochs are exactly
-     * what they were — see the roll protocol on [MediaRepository.rerollDiscoverRow].
+     * what they were — see the roll protocol on [HomeFeed.rerollDiscoverRow].
      */
     private val homeSectionsCachePort: HomeSectionsCachePort,
-    /** The SyncPlay group reads + queue push ([SyncPlayRepository]'s members). */
-    private val syncPlayApiClient: SyncPlayApiClient,
     /**
      * The deep "home-sections snapshot store": the single owner of the
      * PERSISTED half of the home pipeline (the Room SWR snapshot — persist
@@ -159,22 +149,16 @@ class MediaRepositoryImpl internal constructor(
      * copies. A Koin single in dataJvmModule; both impls take the same one.
      */
     private val internals: MediaRepositoryInternals,
-    /**
-     * The deepened [SyncPlayRepository.createSyncPlayGroup]'s engine: the
-     * process-wide SyncPlay facade owns the create→join-MY-group choreography
-     * (bounded discovery/settle windows, duplicate-name disambiguation), so
-     * the seam's create member delegates to it instead of firing a bare `New`
-     * the caller had to recover by name. A Koin single in the same module —
-     * no DI cycle (the manager never depends on a repository).
-     */
-    private val syncPlayManager: SyncPlayManager,
 ) : MediaRepository,
     // Family seams (the SonarrSeriesOperations over-the-impl pattern): the
-    // same single carries the music-catalogue and user-data-write families
-    // alongside the union — [MusicCatalogue] / [UserDataWriteOperations].
+    // same single carries the music-catalogue and user-data-write families,
+    // the home-feed family and the user-data change feed alongside the
+    // union — [MusicCatalogue] / [UserDataWriteOperations] / [HomeFeed] /
+    // [UserDataChanges].
     MusicCatalogue,
     UserDataWriteOperations,
-    SyncPlayRepository,
+    HomeFeed,
+    UserDataChanges,
     MediaRepositoryCacheInvalidation,
     MediaCacheInvalidator {
 
@@ -461,7 +445,7 @@ class MediaRepositoryImpl internal constructor(
     override suspend fun rerollDiscoverRow(row: DiscoverRowConfig): Result<List<MediaItem>> {
         // The roll protocol's implementation: invalidate → fetch → seed. The
         // ordering contract, the three race windows and the epoch bump rule
-        // are owned by the interface KDoc (MediaRepository.rerollDiscoverRow).
+        // are owned by the interface KDoc (HomeFeed.rerollDiscoverRow).
         invalidateDiscoverRowCache(row.id)
         val result = getDiscoverRowItems(row)
         // Commit only a real roll: seedDiscoverRowCache no-ops on an empty
@@ -474,7 +458,7 @@ class MediaRepositoryImpl internal constructor(
 
     /**
      * Reroll half 1 (see the roll protocol on
-     * [MediaRepository.rerollDiscoverRow]): repo-epoch bump + network per-row
+     * [HomeFeed.rerollDiscoverRow]): repo-epoch bump + network per-row
      * memo drop + assembled-payload drop (maxSize is 1, so the clear is
      * exactly the one cached payload — nothing else pays for the roll).
      */
@@ -486,7 +470,7 @@ class MediaRepositoryImpl internal constructor(
 
     /**
      * Reroll half 3 (see the roll protocol on
-     * [MediaRepository.rerollDiscoverRow]): network row-memo write + the
+     * [HomeFeed.rerollDiscoverRow]): network row-memo write + the
      * commit-time epoch bump (a fetch in flight across the whole roll stays
      * stall-guarded) + the assembled-payload drop again. Cheap (maxSize 1).
      * No-op on an empty list.
@@ -717,36 +701,6 @@ class MediaRepositoryImpl internal constructor(
     // through two of those forwards (getMediaItemsPaged / getFavoritesPaged)
     // stay here and call the client directly — same named arguments, so the
     // wire calls are unchanged.
-
-    override suspend fun getSyncPlayGroups(): Result<List<SyncPlayGroup>> =
-        syncPlayApiClient.getSyncPlayGroups()
-
-    // The deepened create: the manager owns create→join MY group (bounded
-    // discovery/settle windows, duplicate-name disambiguation — see its KDoc);
-    // this seam hands the caller the joined group's identifying slice (id +
-    // name — all any UI consumer needs).
-    override suspend fun createSyncPlayGroup(groupName: String): Result<SyncPlayGroupInfo> =
-        syncPlayManager.createGroup(groupName).map { group ->
-            SyncPlayGroupInfo(groupId = group.groupId, groupName = group.groupName)
-        }
-
-    override suspend fun getSyncPlayInfo(groupId: String?): Result<SyncPlayGroupInfo> =
-        syncPlayApiClient.getSyncPlayInfo(groupId)
-
-    // Transport commands (pause/unpause/seek/stop/setRepeat/setShuffle/
-    // setIgnoreWait) used to be one-line pass-throughs here; the second wire
-    // census retired them from the seam — their only repository-typed caller
-    // (SyncPlayViewModel) ignored the Result and now rides SyncPlaySession →
-    // SyncPlayController.safe(). setNewQueue stays: WatchPartyActions awaits
-    // and inspects its Result.
-
-    override suspend fun syncPlaySetNewQueue(
-        itemIds: List<String>,
-        playingItemId: String,
-        mediaSourceId: String?,
-        startPositionTicks: Long,
-    ): Result<Unit> =
-        syncPlayApiClient.syncPlaySetNewQueue(itemIds, playingItemId, mediaSourceId, startPositionTicks)
 
     private val syntheticUserDataChanges = MutableSharedFlow<UserDataChange>(
         extraBufferCapacity = SYNTHETIC_CHANGES_BUFFER,

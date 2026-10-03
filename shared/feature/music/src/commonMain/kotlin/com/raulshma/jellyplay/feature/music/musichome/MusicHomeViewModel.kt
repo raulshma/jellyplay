@@ -6,8 +6,8 @@ import com.raulshma.jellyplay.core.data.download.ActiveDownloadCount
 import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.repository.MediaCollectionReads
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.MusicCatalogue
+import com.raulshma.jellyplay.core.data.repository.UserDataChanges
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore
 import com.raulshma.jellyplay.core.model.HomeMode
@@ -32,8 +32,8 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 
 class MusicHomeViewModel(
-    /** The detail/feed members only; the album/artist catalogue reads ride [musicCatalogue]. */
-    private val mediaRepository: MediaRepository,
+    /** The user-data change feed (the [UserDataChanges] seam — off the union). */
+    private val userDataChanges: UserDataChanges,
     private val musicCatalogue: MusicCatalogue,
     /** The SearchResult-shaped reads (favorites + browse queries — off the union). */
     private val mediaCollectionReads: MediaCollectionReads,
@@ -72,7 +72,7 @@ class MusicHomeViewModel(
      * phase the loud entry publishes (see there).
      */
     private val fetchCoordinator = DeferredFetchCoordinator<Unit, Unit>(
-        userDataChanges = mediaRepository.userDataChanges,
+        userDataChanges = userDataChanges.userDataChanges,
         scope = scope,
         fetch = { _, _ -> fetchSections() },
     )

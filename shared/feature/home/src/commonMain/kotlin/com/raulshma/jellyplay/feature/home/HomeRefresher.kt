@@ -6,8 +6,9 @@ import com.raulshma.jellyplay.core.data.log.Log
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import com.raulshma.jellyplay.core.data.repository.BookTocCacheRepository
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.HomeFeed
 import com.raulshma.jellyplay.core.data.repository.NoopBookTocCacheRepository
+import com.raulshma.jellyplay.core.data.repository.UserDataChanges
 import com.raulshma.jellyplay.core.data.usecase.OrderHomeSectionsUseCase
 import com.raulshma.jellyplay.core.data.widget.ContinueWatchingBroadcaster
 import com.raulshma.jellyplay.core.data.widget.LibrarySyncHook
@@ -99,7 +100,14 @@ internal class HomeRefresher(
     /** The VM's scope: refresh jobs must die with the VM. */
     private val scope: CoroutineScope,
     private val clock: HomeClock,
-    private val mediaRepository: MediaRepository,
+    private val homeFeed: HomeFeed,
+    /**
+     * The user-data change feed (server pushes + this device's confirmed
+     * writes) — the refresher's only other repository surface, injected as its
+     * own seam ([UserDataChanges]) so the wide union stays out of the
+     * refresher entirely.
+     */
+    private val userDataChanges: UserDataChanges,
     private val orderHomeSections: OrderHomeSectionsUseCase,
     private val widgetDataStore: WidgetDataStore,
     private val continueWatchingBroadcaster: ContinueWatchingBroadcaster,
@@ -196,7 +204,7 @@ internal class HomeRefresher(
      * own scope/repository/state so every construction surface that already
      * builds a refresher keeps building a working one.
      */
-    private val discoverRows = DiscoverRowsCoordinator(scope, mediaRepository, _state)
+    private val discoverRows = DiscoverRowsCoordinator(scope, homeFeed, _state)
 
     private val refreshMutex = Mutex()
     private var refreshJob: Job? = null
@@ -345,7 +353,7 @@ internal class HomeRefresher(
                     // custom discover rows of BOTH sources (Jellyfin +
                     // Seerr) — the network layer owns their fan-out, TTL and
                     // ordering; nothing is spliced here anymore.
-                    mediaRepository.getHomeSections(sectionPrefs.query, force = force)
+                    homeFeed.getHomeSections(sectionPrefs.query, force = force)
                 }
                 val discoverDeferred = if (fetchInputs.discoverEnabled()) {
                     async { runCatchingRethrowingCancellation { discoverSources.fetchDiscoverSections(fetchInputs.seerrPreferences()) } }
@@ -785,7 +793,7 @@ internal class HomeRefresher(
      * The dice affordance for one RANDOM-sorted Jellyfin discover row —
      * forwarded to [DiscoverRowsCoordinator.roll], which owns the whole roll
      * choreography (the repository's reroll owns the cache half; see the roll
-     * protocol on `MediaRepository.rerollDiscoverRow`). Kept as a refresher
+     * protocol on `HomeFeed.rerollDiscoverRow`). Kept as a refresher
      * member so the VM's (and tests') surface is unchanged.
      */
     fun rollDiscoverRow(row: DiscoverRowConfig, onResult: (Boolean) -> Unit = {}) {
@@ -862,7 +870,7 @@ internal class HomeRefresher(
                         // pull must not hit the server.
                         if (offlineModeManager.isOffline) return@runCatchingRethrowingCancellation
                         val prefs = fetchInputs.sectionPrefs()
-                        mediaRepository.refreshHomeSection(
+                        homeFeed.refreshHomeSection(
                             section,
                             prefs.query,
                             mergeNextUpIntoContinueWatching = prefs.mergeContinueWatchingAndNextUp,
@@ -1076,7 +1084,7 @@ internal class HomeRefresher(
     @OptIn(FlowPreview::class)
     private fun observeUserDataChanges() {
         scope.launch {
-            mediaRepository.userDataChanges
+            userDataChanges.userDataChanges
                 .debounce(HomeFreshness.USER_DATA_CHANGE_REFRESH_DEBOUNCE_MS)
                 .collect {
                     when {
@@ -1250,7 +1258,7 @@ internal class HomeRefresher(
      * the cold-open path in [fetchOnce].
      */
     private suspend fun orderedCachedSections(sectionPrefs: HomeSectionPrefs): List<HomeSection>? =
-        runCatchingRethrowingCancellation { mediaRepository.getCachedHomeSections(sectionPrefs.query) }
+        runCatchingRethrowingCancellation { homeFeed.getCachedHomeSections(sectionPrefs.query) }
             .getOrNull()
             ?.takeIf { it.sections.isNotEmpty() }
             ?.let { cached ->

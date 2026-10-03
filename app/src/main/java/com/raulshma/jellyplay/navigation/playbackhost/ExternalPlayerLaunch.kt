@@ -34,9 +34,9 @@ data class ExternalPlayerRequest(
 
 /**
  * One external-player hand-off: the launch [intent] plus the identity the
- * reporting pair needs (MainViewModel's report-start / report-stop over the
- * server's playback session), the subtitle payload passed at launch, and the
- * targeting state the result side needs: [preferredApp] is the user's choice,
+ * reporting pair needs (ExternalPlayerReports' report-start / report-stop
+ * over the server's playback session), the subtitle payload passed at
+ * launch, and the targeting state the result side needs: [preferredApp] is the user's choice,
  * [resolvedApp] the app actually targeted (null on the chooser arm — unset
  * preference or uninstalled app), which picks the result contract
  * (`ExternalPlayerResultPolicy`). Previously declared in the app root package
@@ -77,9 +77,9 @@ data class ExternalPlayerLaunch(
  *    its own playback session.
  *
  * Pure construction: no resolver, no PackageManager, no coroutine — the
- * caller (MainViewModel.buildExternalPlayerLaunch) owns the source and
- * subtitle resolution, the host owns the launch choreography (including the
- * per-player component targeting and its uninstalled fallback).
+ * caller (ExternalPlayerReports.buildExternalPlayerLaunch) owns the source
+ * and subtitle resolution, the host owns the launch choreography (including
+ * the per-player component targeting and its uninstalled fallback).
  */
 fun externalPlayerLaunch(
     itemId: String,

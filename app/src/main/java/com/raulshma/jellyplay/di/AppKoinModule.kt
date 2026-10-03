@@ -33,6 +33,7 @@ import com.raulshma.jellyplay.feature.player.audio.AudioPlayerCast
 import com.raulshma.jellyplay.feature.player.video.engine.VideoStreamCache
 import com.raulshma.jellyplay.feature.player.video.subtitle.FontProvider
 import com.raulshma.jellyplay.floating.FloatingPlayerState
+import com.raulshma.jellyplay.navigation.playbackhost.ExternalPlayerReports
 import com.raulshma.jellyplay.shell.AppLockState
 import com.raulshma.jellyplay.shell.SessionCoordinator
 import com.raulshma.jellyplay.shell.SyncPlayOpenCoordinator
@@ -125,6 +126,20 @@ fun androidAppModule(context: Context): Module = module {
     }
     single { SyncPlayOpenCoordinator(syncPlayManager = get()) }
 
+    // External-player reporting contract (navigation/playbackhost): launch
+    // resolution + the server start/stop report pair, over the class's own
+    // fire-and-forget scope (reports may outlive the shell activity — see
+    // the class KDoc). Resolved through ShellInfra's
+    // externalPlayerReportsLazy at the shell's external-player host wiring.
+    single {
+        ExternalPlayerReports(
+            playbackRepository = get(),
+            mediaRepository = get(),
+            playbackSourceResolver = get(),
+            playbackStore = get(),
+        )
+    }
+
     // Startup initializers (formerly field-injected into the Application and
     // driven off the @ApplicationScope coroutine scope).
     single {
@@ -216,10 +231,7 @@ val androidAppViewModelsModule: Module = module {
             remoteControlReceiver = get(),
             appShortcutManager = get(),
             deepLinkHandler = get(),
-            playbackRepository = get(),
             downloadRepository = get(),
-            mediaRepository = get(),
-            playbackSourceResolver = get(),
             offlineModeManager = get(),
             userMessageBus = get(),
             sessionCoordinator = get(),

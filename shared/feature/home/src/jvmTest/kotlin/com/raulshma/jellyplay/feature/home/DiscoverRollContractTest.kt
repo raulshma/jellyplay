@@ -4,7 +4,8 @@ import com.raulshma.jellyplay.feature.home.testutil.FakeTimeSource
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.repository.BookTocCache
 import com.raulshma.jellyplay.core.data.repository.BookTocCacheRepository
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.HomeFeed
+import com.raulshma.jellyplay.core.data.repository.UserDataChanges
 import com.raulshma.jellyplay.core.data.usecase.OrderHomeSectionsUseCase
 import com.raulshma.jellyplay.core.data.widget.ContinueWatchingBroadcaster
 import com.raulshma.jellyplay.core.data.widget.LibrarySyncHook
@@ -60,7 +61,7 @@ import kotlin.test.assertTrue
  * THE DICE-ROLL CROSS-MODULE CONTRACT TEST — the one test that drives a roll
  * through MULTIPLE layers of the protocol instead of one layer against mocks
  * of its neighbours. The protocol's single owner is the KDoc on
- * `MediaRepository.rerollDiscoverRow` (three race windows, one per layer,
+ * `HomeFeed.rerollDiscoverRow` (three race windows, one per layer,
  * bump-at-invalidate-AND-commit); before this suite each layer was pinned in
  * isolation ([DiscoverRowsCoordinatorTest] + [HomeRefresherTest] here,
  * `MediaRepositoryHomeSectionsCacheTest` in core:data, `HomeSectionsFetcherTest`
@@ -117,7 +118,8 @@ class DiscoverRollContractTest {
 
     private val mainDispatcher = StandardTestDispatcher()
 
-    private lateinit var mediaRepository: MediaRepository
+    private lateinit var homeFeed: HomeFeed
+    private lateinit var userDataChanges: UserDataChanges
     private lateinit var offlineModeManager: OfflineModeManager
     private lateinit var fakeTimeSource: FakeTimeSource
 
@@ -180,16 +182,17 @@ class DiscoverRollContractTest {
 
         proto = RollProtocolRepo()
 
-        // The MediaRepository seam: a relaxed mock for the wide interface,
-        // with the roll-protocol members delegated to the double (its cache
-        // and epoch behavior is the code under test, not a stub echo).
-        mediaRepository = mockk(relaxed = true)
-        every { mediaRepository.userDataChanges } returns userDataEvents
-        coEvery { mediaRepository.getCachedHomeSections(any()) } returns null
-        coEvery { mediaRepository.getHomeSections(any(), any<Boolean>()) } coAnswers {
+        // The HomeFeed seam: a relaxed mock with the roll-protocol members
+        // delegated to the double (its cache and epoch behavior is the code
+        // under test, not a stub echo); the change feed is its own seam.
+        homeFeed = mockk(relaxed = true)
+        userDataChanges = mockk(relaxed = true)
+        every { userDataChanges.userDataChanges } returns userDataEvents
+        coEvery { homeFeed.getCachedHomeSections(any()) } returns null
+        coEvery { homeFeed.getHomeSections(any(), any<Boolean>()) } coAnswers {
             proto.getHomeSections(arg(0), arg(1))
         }
-        coEvery { mediaRepository.rerollDiscoverRow(any()) } coAnswers {
+        coEvery { homeFeed.rerollDiscoverRow(any()) } coAnswers {
             proto.rerollDiscoverRow(arg(0))
         }
     }
@@ -211,7 +214,8 @@ class DiscoverRollContractTest {
         return HomeRefresher(
             scope = scope,
             clock = fakeTimeSource,
-            mediaRepository = mediaRepository,
+            homeFeed = homeFeed,
+            userDataChanges = userDataChanges,
             orderHomeSections = OrderHomeSectionsUseCase(),
             widgetDataStore = mockk(relaxed = true),
             continueWatchingBroadcaster = mockk(relaxed = true),

@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.work.WorkerParameters
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.MediaCollectionReads
+import com.raulshma.jellyplay.core.data.repository.HomeFeed
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore
@@ -31,6 +32,8 @@ class LibraryRecommendationsWidgetWorker(
     params: WorkerParameters,
     private val widgetDataStore: WidgetDataStore,
     private val mediaRepository: MediaRepository,
+    /** The home-feed seam (the LATEST source's sections read — off the union). */
+    private val homeFeed: HomeFeed,
     /** The SearchResult-shaped reads (latest/favorites/random queries — off the union). */
     private val mediaCollectionReads: MediaCollectionReads,
     private val imageUrlProvider: ImageUrlProvider,
@@ -87,13 +90,14 @@ class LibraryRecommendationsWidgetWorker(
     }
 
     private suspend fun fetchLatest(): List<MediaItem> {
-        val sectionsResult = mediaRepository.getHomeSections(
+        val sectionsResult = homeFeed.getHomeSections(
             HomeSectionQuery(
                 enabledSections = setOf(
                     com.raulshma.jellyplay.core.model.HomeSectionType.LATEST_MEDIA,
                     com.raulshma.jellyplay.core.model.HomeSectionType.RECENTLY_ADDED,
                 ),
             ),
+            force = false,
         )
         val items = sectionsResult.getOrNull()?.sections.orEmpty()
             .flatMap { it.items }

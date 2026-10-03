@@ -4,8 +4,9 @@ import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.feature.home.testutil.FakeTimeSource
 import kotlin.test.Test
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.HomeFeed
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
+import com.raulshma.jellyplay.core.data.repository.UserDataChanges
 import com.raulshma.jellyplay.core.data.usecase.OrderHomeSectionsUseCase
 import com.raulshma.jellyplay.core.data.widget.ContinueWatchingBroadcaster
 import com.raulshma.jellyplay.core.data.widget.LibrarySyncHook
@@ -82,7 +83,8 @@ class HomeRefresherFetchTest {
 
     private val mainDispatcher = StandardTestDispatcher()
 
-    private lateinit var mediaRepository: MediaRepository
+    private lateinit var homeFeed: HomeFeed
+    private lateinit var userDataChanges: UserDataChanges
     private lateinit var seerrRepository: SeerrRepository
     private lateinit var arrRepository: ArrRepository
     private lateinit var widgetDataStore: WidgetDataStore
@@ -102,7 +104,8 @@ class HomeRefresherFetchTest {
     @BeforeTest
     fun setUp() {
         Dispatchers.setMain(mainDispatcher)
-        mediaRepository = mockk(relaxed = true)
+        homeFeed = mockk(relaxed = true)
+        userDataChanges = mockk(relaxed = true)
         seerrRepository = mockk(relaxed = true)
         arrRepository = mockk(relaxed = true)
         widgetDataStore = mockk(relaxed = true)
@@ -112,7 +115,7 @@ class HomeRefresherFetchTest {
         offlineModeManager = mockk(relaxed = true)
         fakeTimeSource = FakeTimeSource()
 
-        every { mediaRepository.userDataChanges } returns userDataEvents
+        every { userDataChanges.userDataChanges } returns userDataEvents
         every { offlineModeManager.networkStatus } returns networkStatusFlow
         every { offlineModeManager.offlineMode } returns offlineModeFlow
         every { offlineModeManager.isOffline } returns false
@@ -138,7 +141,8 @@ class HomeRefresherFetchTest {
         return HomeRefresher(
             scope = scope,
             clock = fakeTimeSource,
-            mediaRepository = mediaRepository,
+            homeFeed = homeFeed,
+            userDataChanges = userDataChanges,
             orderHomeSections = OrderHomeSectionsUseCase(),
             widgetDataStore = widgetDataStore,
             continueWatchingBroadcaster = continueWatchingBroadcaster,
@@ -174,7 +178,7 @@ class HomeRefresherFetchTest {
 
     @Test
     fun fetchOnce_successWithFailedSectionTypes_raisesPartialLoadError_butKeepsSections() = runTest {
-        coEvery { mediaRepository.getHomeSections(any(), any()) } returns Result.success(
+        coEvery { homeFeed.getHomeSections(any(), any()) } returns Result.success(
             HomeSectionsResult(
                 sections = listOf(section(HomeSectionType.LATEST_MEDIA, listOf(item("m1")))),
                 failedSectionTypes = setOf(HomeSectionType.NEXT_UP),
@@ -196,7 +200,7 @@ class HomeRefresherFetchTest {
 
     @Test
     fun fetchOnce_failureWithEmptySections_setsError_andFetchFailed() = runTest {
-        coEvery { mediaRepository.getHomeSections(any(), any()) } returns
+        coEvery { homeFeed.getHomeSections(any(), any()) } returns
             Result.failure(RuntimeException("server down"))
         val refresher = buildRefresher()
 
@@ -215,7 +219,7 @@ class HomeRefresherFetchTest {
     @Test
     fun fetchOnce_failureWithExistingSections_keepsStaleSections_andSetsFetchFailed() = runTest {
         val stale = section(HomeSectionType.LATEST_MEDIA, listOf(item("m1")))
-        coEvery { mediaRepository.getHomeSections(any(), any()) } returns
+        coEvery { homeFeed.getHomeSections(any(), any()) } returns
             Result.success(HomeSectionsResult(sections = listOf(stale)))
         val refresher = buildRefresher()
         refresher.fetchOnce()
@@ -225,7 +229,7 @@ class HomeRefresherFetchTest {
         // The follow-up fetch fails — the stale content must survive untouched,
         // but the failure is recorded so the offline gate can take over the
         // rows the frozen snapshot can no longer refresh (CW / Next Up).
-        coEvery { mediaRepository.getHomeSections(any(), any()) } returns
+        coEvery { homeFeed.getHomeSections(any(), any()) } returns
             Result.failure(RuntimeException("flaky network"))
         refresher.fetchOnce()
         runCurrent()
@@ -249,7 +253,7 @@ class HomeRefresherFetchTest {
         try {
             refresher.fetchOnce()
             runCurrent()
-            coVerify(exactly = 0) { mediaRepository.getHomeSections(any(), any()) }
+            coVerify(exactly = 0) { homeFeed.getHomeSections(any(), any()) }
             assertNull(refresher.state.value.error)
 
             // The offline attempt counted as fresh: 50s later (past no other
@@ -260,7 +264,7 @@ class HomeRefresherFetchTest {
             refresher.start()
             runCurrent()
 
-            coVerify(exactly = 0) { mediaRepository.getHomeSections(any(), any()) }
+            coVerify(exactly = 0) { homeFeed.getHomeSections(any(), any()) }
         } finally {
             // stop() in the test body, not just @AfterTest: runTest advances
             // virtual time to idle before returning, which would fire the
@@ -273,21 +277,21 @@ class HomeRefresherFetchTest {
 
     @Test
     fun fetchOnce_force_bypassesHomeSectionsCache() = runTest {
-        coEvery { mediaRepository.getHomeSections(any(), any()) } returns
+        coEvery { homeFeed.getHomeSections(any(), any()) } returns
             Result.success(HomeSectionsResult(sections = emptyList()))
         val refresher = buildRefresher()
 
         refresher.fetchOnce(force = true)
         runCurrent()
 
-        coVerify { mediaRepository.getHomeSections(any(), force = true) }
+        coVerify { homeFeed.getHomeSections(any(), force = true) }
     }
 
     // ── request(): PrefsChanged + DiscoverEnabled policies ──────────────────
 
     @Test
     fun request_prefsChanged_fetchesNonForced_withNewQuery() = runTest {
-        coEvery { mediaRepository.getHomeSections(any(), any()) } returns
+        coEvery { homeFeed.getHomeSections(any(), any()) } returns
             Result.success(HomeSectionsResult(sections = emptyList()))
         val refresher = buildRefresher()
 
@@ -296,8 +300,8 @@ class HomeRefresherFetchTest {
             runCurrent()
 
             // Non-forced: the new query is what matters, not cache bypass.
-            coVerify(exactly = 1) { mediaRepository.getHomeSections(any(), force = false) }
-            coVerify(exactly = 0) { mediaRepository.getHomeSections(any(), force = true) }
+            coVerify(exactly = 1) { homeFeed.getHomeSections(any(), force = false) }
+            coVerify(exactly = 0) { homeFeed.getHomeSections(any(), force = true) }
             assertFalse(refresher.state.value.isLoading)
         } finally {
             refresher.stop()
@@ -328,7 +332,7 @@ class HomeRefresherFetchTest {
         runCurrent()
 
         coVerify(exactly = 1) { seerrRepository.getTrending(any()) }
-        coVerify(exactly = 0) { mediaRepository.getHomeSections(any(), any()) }
+        coVerify(exactly = 0) { homeFeed.getHomeSections(any(), any()) }
         assertEquals(mapOf(DiscoverSectionType.TRENDING to trending), refresher.state.value.discoverSections)
         assertNull(refresher.state.value.error)
     }
@@ -337,7 +341,7 @@ class HomeRefresherFetchTest {
 
     @Test
     fun request_manual_clearsContent_andRaisesFullScreenLoader_whileFetchInFlight() = runTest {
-        coEvery { mediaRepository.getHomeSections(any(), any()) } returns
+        coEvery { homeFeed.getHomeSections(any(), any()) } returns
             Result.success(HomeSectionsResult(sections = listOf(section(HomeSectionType.LATEST_MEDIA, listOf(item("m1"))))))
         val refresher = buildRefresher()
         refresher.fetchOnce()
@@ -345,7 +349,7 @@ class HomeRefresherFetchTest {
         assertTrue(refresher.state.value.sections.isNotEmpty())
 
         val fetchGate = CompletableDeferred<Result<HomeSectionsResult>>()
-        coEvery { mediaRepository.getHomeSections(any(), any()) } coAnswers { fetchGate.await() }
+        coEvery { homeFeed.getHomeSections(any(), any()) } coAnswers { fetchGate.await() }
 
         try {
             refresher.request(RefreshTrigger.Manual)
@@ -373,7 +377,7 @@ class HomeRefresherFetchTest {
 
     @Test
     fun request_pullToRefresh_keepsContent_andRaisesInlineSpinner_whileFetchInFlight() = runTest {
-        coEvery { mediaRepository.getHomeSections(any(), any()) } returns
+        coEvery { homeFeed.getHomeSections(any(), any()) } returns
             Result.success(HomeSectionsResult(sections = listOf(section(HomeSectionType.LATEST_MEDIA, listOf(item("m1"))))))
         val refresher = buildRefresher()
         refresher.fetchOnce()
@@ -382,7 +386,7 @@ class HomeRefresherFetchTest {
         assertTrue(onScreen.isNotEmpty())
 
         val fetchGate = CompletableDeferred<Result<HomeSectionsResult>>()
-        coEvery { mediaRepository.getHomeSections(any(), any()) } coAnswers { fetchGate.await() }
+        coEvery { homeFeed.getHomeSections(any(), any()) } coAnswers { fetchGate.await() }
 
         try {
             refresher.request(RefreshTrigger.PullToRefresh)
@@ -416,7 +420,7 @@ class HomeRefresherFetchTest {
             items = listOf(item("m1"), item("m2")),
         )
         val sibling = section(HomeSectionType.LATEST_MEDIA, listOf(item("s1")))
-        coEvery { mediaRepository.getHomeSections(any(), any()) } returns
+        coEvery { homeFeed.getHomeSections(any(), any()) } returns
             Result.success(HomeSectionsResult(sections = listOf(sibling, discoverRow)))
         val refresher = buildRefresher()
         refresher.fetchOnce()
@@ -424,7 +428,7 @@ class HomeRefresherFetchTest {
 
         val rolledRow = DiscoverRowConfig(id = "dr_x", title = "Surprise Me")
         val reRolled = listOf(item("r5"), item("r9"), item("r1"))
-        coEvery { mediaRepository.rerollDiscoverRow(rolledRow) } returns Result.success(reRolled)
+        coEvery { homeFeed.rerollDiscoverRow(rolledRow) } returns Result.success(reRolled)
 
         refresher.rollDiscoverRow(rolledRow)
         runCurrent()
@@ -432,7 +436,7 @@ class HomeRefresherFetchTest {
         // The repository owns the commit — the rolled set is seeded where the
         // next home fetch reads it (pinned at the repo layer); the refresher
         // only patches the row in place.
-        coVerify(exactly = 1) { mediaRepository.rerollDiscoverRow(rolledRow) }
+        coVerify(exactly = 1) { homeFeed.rerollDiscoverRow(rolledRow) }
         assertEquals(
             reRolled,
             refresher.state.value.sections.first { it.type == HomeSectionType.DISCOVER }.items,
@@ -459,7 +463,7 @@ class HomeRefresherFetchTest {
             type = HomeSectionType.DISCOVER,
             items = listOf(item("m1")),
         )
-        coEvery { mediaRepository.getHomeSections(any(), any()) } returns
+        coEvery { homeFeed.getHomeSections(any(), any()) } returns
             Result.success(HomeSectionsResult(sections = listOf(discoverRow)))
         val refresher = buildRefresher()
         refresher.fetchOnce()
@@ -467,14 +471,14 @@ class HomeRefresherFetchTest {
 
         // Park a full refresh mid-fetch (it captured the PRE-roll payload)…
         val fetchGate = CompletableDeferred<Result<HomeSectionsResult>>()
-        coEvery { mediaRepository.getHomeSections(any(), any()) } coAnswers { fetchGate.await() }
+        coEvery { homeFeed.getHomeSections(any(), any()) } coAnswers { fetchGate.await() }
         refresher.request(RefreshTrigger.PullToRefresh)
         runCurrent()
 
         // …then let the dice roll complete while that fetch is still parked.
         val rolledRow = DiscoverRowConfig(id = "dr_x", title = "Surprise Me")
         val reRolled = listOf(item("r2"), item("r7"))
-        coEvery { mediaRepository.rerollDiscoverRow(any()) } returns Result.success(reRolled)
+        coEvery { homeFeed.rerollDiscoverRow(any()) } returns Result.success(reRolled)
         refresher.rollDiscoverRow(rolledRow)
         runCurrent()
         assertEquals(
@@ -510,14 +514,14 @@ class HomeRefresherFetchTest {
             type = HomeSectionType.DISCOVER,
             items = listOf(item("m1")),
         )
-        coEvery { mediaRepository.getHomeSections(any(), any()) } returns
+        coEvery { homeFeed.getHomeSections(any(), any()) } returns
             Result.success(HomeSectionsResult(sections = listOf(discoverRow)))
         val refresher = buildRefresher()
         refresher.fetchOnce()
         runCurrent()
 
         val rolledRow = DiscoverRowConfig(id = "dr_x", title = "Surprise Me")
-        coEvery { mediaRepository.rerollDiscoverRow(any()) } returns
+        coEvery { homeFeed.rerollDiscoverRow(any()) } returns
             Result.failure(RuntimeException("flaky"))
 
         refresher.rollDiscoverRow(rolledRow)
@@ -536,7 +540,7 @@ class HomeRefresherFetchTest {
         // An EMPTY success is the same degrade: nothing to swap, the row keeps
         // its current items (the repository skips the commit for it, the
         // refresher skips the patch).
-        coEvery { mediaRepository.rerollDiscoverRow(any()) } returns Result.success(emptyList())
+        coEvery { homeFeed.rerollDiscoverRow(any()) } returns Result.success(emptyList())
         refresher.rollDiscoverRow(rolledRow)
         runCurrent()
 
@@ -558,7 +562,7 @@ class HomeRefresherFetchTest {
             type = HomeSectionType.DISCOVER,
             items = listOf(item("m1")),
         )
-        coEvery { mediaRepository.getHomeSections(any(), any()) } returns
+        coEvery { homeFeed.getHomeSections(any(), any()) } returns
             Result.success(HomeSectionsResult(sections = listOf(discoverRow)))
         val refresher = buildRefresher()
         refresher.fetchOnce()
@@ -566,7 +570,7 @@ class HomeRefresherFetchTest {
 
         val rolledRow = DiscoverRowConfig(id = "dr_x", title = "Surprise Me")
         val fetchGate = CompletableDeferred<Result<List<MediaItem>>>()
-        coEvery { mediaRepository.rerollDiscoverRow(any()) } coAnswers { fetchGate.await() }
+        coEvery { homeFeed.rerollDiscoverRow(any()) } coAnswers { fetchGate.await() }
 
         refresher.rollDiscoverRow(rolledRow)
         runCurrent()
@@ -579,7 +583,7 @@ class HomeRefresherFetchTest {
         fetchGate.complete(Result.success(listOf(item("r2"))))
         runCurrent()
 
-        coVerify(exactly = 1) { mediaRepository.rerollDiscoverRow(rolledRow) }
+        coVerify(exactly = 1) { homeFeed.rerollDiscoverRow(rolledRow) }
         advanceTimeBy(DiscoverRowsCoordinator.ROLL_MIN_SPIN_FOR_TEST + 1)
         runCurrent()
         assertTrue("dr_x" !in refresher.state.value.rollingDiscoverRowIds)

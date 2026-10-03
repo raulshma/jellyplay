@@ -100,23 +100,19 @@ class MediaRepositoryImplTest {
         repository = MediaRepositoryImpl(
             // One union mock covers both family seams (the JellyfinApiClient
             // mock implements each of them).
-            apiClient,
-            apiClient,
+            libraryApiClient = apiClient,
+            collectionApiClient = apiClient,
             // The home cache-maintenance port (inert here — this suite pins
             // the detail-cache / staleness choreography).
-            mockk(relaxed = true),
-            apiClient,
-            homeSnapshotStore,
-            playedStateSync,
-            episodeCatalogue,
-            userDataRealtimeChannel,
-            timeSource,
-            homeSession,
-            sessionCacheRegistry,
-            internals,
-            // The deepened createSyncPlayGroup's engine (inert here — this
-            // suite never creates a SyncPlay group).
-            mockk(relaxed = true),
+            homeSectionsCachePort = mockk(relaxed = true),
+            homeSnapshotStore = homeSnapshotStore,
+            playedStateSync = playedStateSync,
+            episodeCatalogue = episodeCatalogue,
+            userDataRealtimeChannel = userDataRealtimeChannel,
+            timeSource = timeSource,
+            homeSession = homeSession,
+            sessionCacheRegistry = sessionCacheRegistry,
+            internals = internals,
         )
         playlistRepository = PlaylistRepositoryImpl(apiClient, internals)
     }

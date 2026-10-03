@@ -110,24 +110,21 @@ class MediaRepositoryHomeSectionsCacheTest {
         return MediaRepositoryImpl(
             // One union mock covers both family seams (the JellyfinApiClient
             // mock implements each of them).
-            apiClient,
-            apiClient,
+            libraryApiClient = apiClient,
+            collectionApiClient = apiClient,
             // The home cache-maintenance port (the write/roll paths' verbs —
             // verified directly in the reroll pins below).
-            homeSectionsCachePort,
-            apiClient,
-            homeSnapshotStore,
-            playedStateSync,
-            episodeCatalogue,
-            mockk<UserDataRealtimeChannel>(relaxed = true),
-            fakeTimeSource,
-            homeSession,
-            sessionCacheRegistry,
+            homeSectionsCachePort = homeSectionsCachePort,
+            homeSnapshotStore = homeSnapshotStore,
+            playedStateSync = playedStateSync,
+            episodeCatalogue = episodeCatalogue,
+            userDataRealtimeChannel = mockk<UserDataRealtimeChannel>(relaxed = true),
+            timeSource = fakeTimeSource,
+            homeSession = homeSession,
+            sessionCacheRegistry = sessionCacheRegistry,
             // Facade split: the detail cluster now lives on the shared
             // internals holder (construction-only ctor re-point).
-            MediaRepositoryInternals(apiClient, homeSession),
-            // The deepened createSyncPlayGroup's engine (inert here).
-            mockk(relaxed = true),
+            internals = MediaRepositoryInternals(apiClient, homeSession),
         )
     }
 
@@ -160,8 +157,8 @@ class MediaRepositoryHomeSectionsCacheTest {
         signIn("server-1", "user-A")
         coEvery { apiClient.getHomeSections(any(), any()) } returns homeResult("A")
 
-        repository.getHomeSections(HomeSectionQuery())
-        repository.getHomeSections(HomeSectionQuery())
+        repository.getHomeSections(HomeSectionQuery(), force = false)
+        repository.getHomeSections(HomeSectionQuery(), force = false)
 
         coVerify(exactly = 1) { apiClient.getHomeSections(any(), any()) }
     }
@@ -176,7 +173,7 @@ class MediaRepositoryHomeSectionsCacheTest {
         signIn("server-1", "user-A")
         coEvery { apiClient.getHomeSections(any(), any()) } returns homeResult("A")
 
-        repository.getHomeSections(HomeSectionQuery())
+        repository.getHomeSections(HomeSectionQuery(), force = false)
         repository.getHomeSections(HomeSectionQuery(), force = true)
 
         coVerify(exactly = 2) { apiClient.getHomeSections(any(), any()) }
@@ -188,9 +185,9 @@ class MediaRepositoryHomeSectionsCacheTest {
         signIn("server-1", "user-A")
         coEvery { apiClient.getHomeSections(any(), any()) } returns homeResult("A")
 
-        repository.getHomeSections(HomeSectionQuery())
+        repository.getHomeSections(HomeSectionQuery(), force = false)
         repository.invalidateCaches()
-        repository.getHomeSections(HomeSectionQuery())
+        repository.getHomeSections(HomeSectionQuery(), force = false)
 
         coVerify(exactly = 2) { apiClient.getHomeSections(any(), any()) }
     }
@@ -229,9 +226,9 @@ class MediaRepositoryHomeSectionsCacheTest {
             Result.success(listOf(mockk<MediaItem>(relaxed = true)))
         val row = DiscoverRowConfig(id = "dr_x", title = "Surprise Me")
 
-        repository.getHomeSections(HomeSectionQuery())
+        repository.getHomeSections(HomeSectionQuery(), force = false)
         repository.rerollDiscoverRow(row)
-        repository.getHomeSections(HomeSectionQuery())
+        repository.getHomeSections(HomeSectionQuery(), force = false)
 
         coVerify(exactly = 2) { apiClient.getHomeSections(any(), any()) }
     }
@@ -252,7 +249,7 @@ class MediaRepositoryHomeSectionsCacheTest {
             Result.success(listOf(mockk<MediaItem>(relaxed = true)))
         val row = DiscoverRowConfig(id = "dr_x", title = "Surprise Me")
 
-        val racedFetch = async { repository.getHomeSections(HomeSectionQuery()) }
+        val racedFetch = async { repository.getHomeSections(HomeSectionQuery(), force = false) }
         runCurrent() // the fetch captures its epoch and parks on the gate
         repository.rerollDiscoverRow(row)
 
@@ -260,7 +257,7 @@ class MediaRepositoryHomeSectionsCacheTest {
         assertTrue(racedFetch.await().isSuccess, "the raced fetch still returns its result to its caller")
 
         coEvery { apiClient.getHomeSections(any(), any()) } returns homeResult("post-roll")
-        repository.getHomeSections(HomeSectionQuery())
+        repository.getHomeSections(HomeSectionQuery(), force = false)
 
         coVerify(exactly = 2) { apiClient.getHomeSections(any(), any()) }
     }
@@ -295,7 +292,12 @@ class MediaRepositoryHomeSectionsCacheTest {
         coEvery { homeSectionsCachePort.refreshHomeSection(any(), any(), any(), any()) } returns
             Result.success(section)
 
-        repository.refreshHomeSection(section, HomeSectionQuery(), force = true)
+        repository.refreshHomeSection(
+            section,
+            HomeSectionQuery(),
+            mergeNextUpIntoContinueWatching = false,
+            force = true,
+        )
 
         coVerify(exactly = 1) { homeSectionsCachePort.refreshHomeSection(section, any(), false, true) }
     }
@@ -316,9 +318,14 @@ class MediaRepositoryHomeSectionsCacheTest {
         coEvery { homeSectionsCachePort.refreshHomeSection(any(), any(), any(), any()) } returns
             Result.success(homeSection("latest_lib1_fresh"))
 
-        repository.getHomeSections(HomeSectionQuery()) // populate the assembled cache
-        repository.refreshHomeSection(homeSection("latest_lib1"), HomeSectionQuery(), force = true)
-        repository.getHomeSections(HomeSectionQuery()) // must refetch, not serve pre-pull payload
+        repository.getHomeSections(HomeSectionQuery(), force = false) // populate the assembled cache
+        repository.refreshHomeSection(
+            homeSection("latest_lib1"),
+            HomeSectionQuery(),
+            mergeNextUpIntoContinueWatching = false,
+            force = true,
+        )
+        repository.getHomeSections(HomeSectionQuery(), force = false) // must refetch, not serve pre-pull payload
 
         coVerify(exactly = 2) { apiClient.getHomeSections(any(), any()) }
     }
@@ -334,9 +341,14 @@ class MediaRepositoryHomeSectionsCacheTest {
         coEvery { homeSectionsCachePort.refreshHomeSection(any(), any(), any(), any()) } returns
             Result.failure(RuntimeException("server down"))
 
-        repository.getHomeSections(HomeSectionQuery()) // populate the assembled cache
-        repository.refreshHomeSection(homeSection("latest_lib1"), HomeSectionQuery(), force = true)
-        repository.getHomeSections(HomeSectionQuery()) // still within TTL: cached
+        repository.getHomeSections(HomeSectionQuery(), force = false) // populate the assembled cache
+        repository.refreshHomeSection(
+            homeSection("latest_lib1"),
+            HomeSectionQuery(),
+            mergeNextUpIntoContinueWatching = false,
+            force = true,
+        )
+        repository.getHomeSections(HomeSectionQuery(), force = false) // still within TTL: cached
 
         coVerify(exactly = 1) { apiClient.getHomeSections(any(), any()) }
     }
@@ -350,13 +362,13 @@ class MediaRepositoryHomeSectionsCacheTest {
         signIn("server-1", "user-A")
         coEvery { apiClient.getHomeSections(any(), any()) } returns homeResult("A")
 
-        repository.getHomeSections(HomeSectionQuery()) // populates user-A entry
+        repository.getHomeSections(HomeSectionQuery(), force = false) // populates user-A entry
 
         // Switch to user B on the same server.
         switchUser("user-B")
         coEvery { apiClient.getHomeSections(any(), any()) } returns homeResult("B")
 
-        repository.getHomeSections(HomeSectionQuery())
+        repository.getHomeSections(HomeSectionQuery(), force = false)
 
         // Two distinct network fetches — user A's cached entry did NOT serve user B.
         coVerify(exactly = 2) { apiClient.getHomeSections(any(), any()) }
@@ -378,9 +390,9 @@ class MediaRepositoryHomeSectionsCacheTest {
         signIn("server-1", "user-A")
         coEvery { apiClient.getHomeSections(any(), any()) } returns homeResult("A")
 
-        repository.getHomeSections(HomeSectionQuery())
+        repository.getHomeSections(HomeSectionQuery(), force = false)
         repository.notifyUserDataChanged(listOf("item-1"))
-        repository.getHomeSections(HomeSectionQuery())
+        repository.getHomeSections(HomeSectionQuery(), force = false)
 
         coVerify(exactly = 2) { apiClient.getHomeSections(any(), any()) }
     }
@@ -403,11 +415,11 @@ class MediaRepositoryHomeSectionsCacheTest {
             }
         }
 
-        repository.getHomeSections(HomeSectionQuery()) // populate the cache
+        repository.getHomeSections(HomeSectionQuery(), force = false) // populate the cache
         repository.notifyUserDataChanged(listOf("item-1")) // arm the marker
-        val failed = repository.getHomeSections(HomeSectionQuery()) // consumes, fetch fails
+        val failed = repository.getHomeSections(HomeSectionQuery(), force = false) // consumes, fetch fails
         assertTrue(failed.isFailure)
-        repository.getHomeSections(HomeSectionQuery()) // re-armed: refetches
+        repository.getHomeSections(HomeSectionQuery(), force = false) // re-armed: refetches
 
         coVerify(exactly = 3) { apiClient.getHomeSections(any(), any()) }
     }
@@ -427,9 +439,9 @@ class MediaRepositoryHomeSectionsCacheTest {
             homeResult("A")
         }
 
-        repository.getHomeSections(HomeSectionQuery()) // populate, force = false
+        repository.getHomeSections(HomeSectionQuery(), force = false) // populate, force = false
         repository.notifyUserDataChanged(listOf("item-1")) // arm the marker
-        repository.getHomeSections(HomeSectionQuery()) // consumes the marker
+        repository.getHomeSections(HomeSectionQuery(), force = false) // consumes the marker
 
         coVerify(exactly = 2) { apiClient.getHomeSections(any(), any()) }
         assertEquals(listOf(false, true), forcedFlags)
@@ -441,8 +453,8 @@ class MediaRepositoryHomeSectionsCacheTest {
         signIn("server-1", "user-A")
         coEvery { apiClient.getHomeSections(any(), any()) } returns homeResult("A")
 
-        val first = repository.getHomeSections(HomeSectionQuery())
-        val second = repository.getHomeSections(HomeSectionQuery())
+        val first = repository.getHomeSections(HomeSectionQuery(), force = false)
+        val second = repository.getHomeSections(HomeSectionQuery(), force = false)
 
         coVerify(exactly = 1) { apiClient.getHomeSections(any(), any()) }
         assertEquals(first.getOrNull(), second.getOrNull())
@@ -454,10 +466,10 @@ class MediaRepositoryHomeSectionsCacheTest {
         signIn("server-1", "user-A")
         coEvery { apiClient.getHomeSections(any(), any()) } returns homeResult("A")
 
-        repository.getHomeSections(HomeSectionQuery())
+        repository.getHomeSections(HomeSectionQuery(), force = false)
         repository.notifyUserDataChanged(listOf("item-1"))
-        repository.getHomeSections(HomeSectionQuery()) // consumes the marker, refetches
-        repository.getHomeSections(HomeSectionQuery()) // marker gone: cached
+        repository.getHomeSections(HomeSectionQuery(), force = false) // consumes the marker, refetches
+        repository.getHomeSections(HomeSectionQuery(), force = false) // marker gone: cached
 
         coVerify(exactly = 2) { apiClient.getHomeSections(any(), any()) }
     }
@@ -479,10 +491,10 @@ class MediaRepositoryHomeSectionsCacheTest {
             homeResult("A")
         }
 
-        repository.getHomeSections(HomeSectionQuery()) // populate, force = false
+        repository.getHomeSections(HomeSectionQuery(), force = false) // populate, force = false
         repository.notifyUserDataChanged(listOf("item-1")) // arm the marker
         switchUser("user-B")
-        repository.getHomeSections(HomeSectionQuery()) // identity miss refetches anyway
+        repository.getHomeSections(HomeSectionQuery(), force = false) // identity miss refetches anyway
 
         coVerify(exactly = 2) { apiClient.getHomeSections(any(), any()) }
         assertEquals(listOf(false, false), forcedFlags)
@@ -504,9 +516,9 @@ class MediaRepositoryHomeSectionsCacheTest {
 
         fakeTimeSource.nowMs = 1_000L
 
-        repository.getHomeSections(HomeSectionQuery()) // cached at t=1000
+        repository.getHomeSections(HomeSectionQuery(), force = false) // cached at t=1000
         fakeTimeSource.nowMs += HomeFreshness.REPO_MEMORY_TTL_MS + 1_000L // 61s later
-        repository.getHomeSections(HomeSectionQuery())
+        repository.getHomeSections(HomeSectionQuery(), force = false)
 
         coVerify(exactly = 2) { apiClient.getHomeSections(any(), any()) }
     }

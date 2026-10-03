@@ -5,8 +5,9 @@ import com.raulshma.jellyplay.feature.home.testutil.FakeTimeSource
 import kotlin.test.Test
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
 import com.raulshma.jellyplay.core.data.repository.NoopBookTocCacheRepository
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.HomeFeed
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
+import com.raulshma.jellyplay.core.data.repository.UserDataChanges
 import com.raulshma.jellyplay.core.data.usecase.OrderHomeSectionsUseCase
 import com.raulshma.jellyplay.core.data.widget.ContinueWatchingBroadcaster
 import com.raulshma.jellyplay.core.data.widget.LibrarySyncHook
@@ -48,7 +49,7 @@ import kotlin.test.assertTrue
  * "adds no behavioural seam" by design — this suite pins exactly that):
  *  - [HomeRefresherFactory.create] builds a [HomeRefresher] wired to the SAME
  *    collaborator instances the factory owns — a fetch driven through the
- *    built refresher lands on the factory's [MediaRepository] and its sections
+ *    built refresher lands on the factory's [HomeFeed] and its sections
  *    reach the refresher's state.
  *  - The per-call inputs (offline gate, outbox drain gate, preference
  *    mirrors) are passed through from [create]'s arguments, not silently
@@ -62,7 +63,8 @@ class HomeRefresherFactoryTest {
 
     private val mainDispatcher = StandardTestDispatcher()
 
-    private lateinit var mediaRepository: MediaRepository
+    private lateinit var homeFeed: HomeFeed
+    private lateinit var userDataChanges: UserDataChanges
     private lateinit var seerrRepository: SeerrRepository
     private lateinit var arrRepository: ArrRepository
     private lateinit var widgetDataStore: WidgetDataStore
@@ -82,7 +84,8 @@ class HomeRefresherFactoryTest {
     @BeforeTest
     fun setUp() {
         Dispatchers.setMain(mainDispatcher)
-        mediaRepository = mockk(relaxed = true)
+        homeFeed = mockk(relaxed = true)
+        userDataChanges = mockk(relaxed = true)
         seerrRepository = mockk(relaxed = true)
         arrRepository = mockk(relaxed = true)
         widgetDataStore = mockk(relaxed = true)
@@ -92,7 +95,7 @@ class HomeRefresherFactoryTest {
         offlineModeManager = mockk(relaxed = true)
         fakeTimeSource = FakeTimeSource()
 
-        every { mediaRepository.userDataChanges } returns userDataEvents
+        every { userDataChanges.userDataChanges } returns userDataEvents
         every { offlineModeManager.networkStatus } returns networkStatusFlow
         every { offlineModeManager.offlineMode } returns offlineModeFlow
         every { offlineModeManager.isOffline } returns false
@@ -109,7 +112,8 @@ class HomeRefresherFactoryTest {
     private fun TestScope.createRefresher(): HomeRefresher {
         val factory = HomeRefresherFactory(
             clock = fakeTimeSource,
-            mediaRepository = mediaRepository,
+            homeFeed = homeFeed,
+            userDataChanges = userDataChanges,
             seerrRepository = seerrRepository,
             arrRepository = arrRepository,
             orderHomeSections = OrderHomeSectionsUseCase(),
@@ -149,7 +153,7 @@ class HomeRefresherFactoryTest {
             type = HomeSectionType.LATEST_MEDIA,
             items = listOf(MediaItem(id = "m1", name = "m1", mediaType = MediaType.MOVIE)),
         )
-        coEvery { mediaRepository.getHomeSections(any(), any()) } returns
+        coEvery { homeFeed.getHomeSections(any(), any()) } returns
             Result.success(HomeSectionsResult(sections = listOf(fetched)))
         val refresher = createRefresher()
 
@@ -157,7 +161,7 @@ class HomeRefresherFactoryTest {
         runCurrent()
 
         io.mockk.coVerify {
-            mediaRepository.getHomeSections(any(), force = false)
+            homeFeed.getHomeSections(any(), force = false)
         }
         assertEquals(listOf(fetched), refresher.state.value.sections)
     }
@@ -170,7 +174,7 @@ class HomeRefresherFactoryTest {
         refresher.fetchOnce()
         runCurrent()
 
-        io.mockk.coVerify(exactly = 0) { mediaRepository.getHomeSections(any(), any()) }
+        io.mockk.coVerify(exactly = 0) { homeFeed.getHomeSections(any(), any()) }
         assertTrue(refresher.state.value.sections.isEmpty())
         assertEquals(OfflineMode.ONLINE, refresher.state.value.offlineMode)
     }

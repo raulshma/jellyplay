@@ -47,11 +47,7 @@ import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import com.raulshma.jellyplay.feature.player.video.engine.SubtitleSource
 import com.raulshma.jellyplay.feature.player.video.chrome.mirrorPlaying
 import com.raulshma.jellyplay.feature.player.video.chrome.stepSeekTargetMs
-import com.raulshma.jellyplay.feature.player.video.state.GesturePrefsState
-import com.raulshma.jellyplay.feature.player.video.state.PlayerUiPrefsState
 import com.raulshma.jellyplay.feature.player.video.state.ReadySubtitleHint
-import com.raulshma.jellyplay.feature.player.video.state.SegmentState
-import com.raulshma.jellyplay.feature.player.video.state.VideoFxState
 import com.raulshma.jellyplay.feature.player.video.subtitle.FontProvider
 import com.raulshma.jellyplay.feature.player.video.trickplay.TrickplayPreparation
 import com.raulshma.jellyplay.core.model.VideoEffectsConfig
@@ -80,9 +76,6 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
-// The smart-download cleanup duration gate (MIN_DURATION_FOR_SMART_DELETE_MS)
-// moved into EpisodeContinuationController.kt with the cleanup itself.
-
 /**
  * How long a next-episode load may hold its single-flight latch while waiting
  * for the session to settle onto the new item before the button re-arms. Error
@@ -90,19 +83,9 @@ import kotlinx.coroutines.withTimeoutOrNull
  * paths that change nothing (e.g. remote-play routing). Sized for the slowest
  * network preset's timeout chain (VERY_RELAXED 60 s + failover retries).
  */
-// The process-death resume-position persistence (SavedStateHandle keys,
-// throttle/coalesce windows, the staleness threshold and the pure
-// resolveResumeTicks resolver) moved into PlaybackSession.kt behind the
-// SessionPositionStore seam at B3.
-
-// The debounced engine config-sync (CONFIG_SYNC_DEBOUNCE_MS + the
-// configChangeIntent debounce collector) moved into EngineConfigSync.kt.
 
 /** How long the "Skipped …" segment-skip confirmation caption stays up. */
 private const val SKIPPED_SEGMENT_NOTICE_MS = 2_500L
-
-// The subtitle-delay apply debounce (SUBTITLE_DELAY_APPLY_DEBOUNCE_MS) moved
-// into SubtitleStyleController.kt with the debounce itself (A7).
 
 /**
  * Builds the [SegmentOverlayState] for a given live position against a
@@ -227,22 +210,15 @@ class VideoPlayerViewModel(
 
     // --- High-frequency playback streams ---------------------------------------
     // currentPosition / bufferedPosition / videoStats (and duration) update at
-    // up to 4 Hz while controls are visible. Previously they were folded into
-    // the ~60-field [VideoPlayerUiState], so every tick invalidated the entire
-    // VideoPlayerScreen body. They now live on dedicated StateFlows and are
+    // up to 4 Hz while controls are visible. They live on dedicated StateFlows
     // collected only inside the leaf composables that render them
-    // (PlayerControls seek bar, VideoStatsOverlay). The remaining uiState is
-    // thereby reduced to a low-frequency stream.
+    // (PlayerControls seek bar, VideoStatsOverlay); the remaining uiState is
+    // thereby a low-frequency stream.
     private val _currentPositionMs = MutableStateFlow(0L)
     val currentPositionMs: StateFlow<Long> = _currentPositionMs.asStateFlow()
 
     private val _durationMs = MutableStateFlow(0L)
     val durationMs: StateFlow<Long> = _durationMs.asStateFlow()
-
-    // (The former bufferedPositionMs display flow died in the X1a dead-surface
-    // cut: the seek bar and the stats overlay consume the multi-band
-    // [bufferedRanges] — the scalar's only readers — and the reporter's
-    // buffered-position callback parameter had no remaining consumer.)
 
     /**
      * Multi-band buffered surface, bridged from the active engine's
@@ -263,8 +239,6 @@ class VideoPlayerViewModel(
 
     private val _videoStats = MutableStateFlow(EngineVideoStats())
     val videoStats: StateFlow<EngineVideoStats> = _videoStats.asStateFlow()
-
-    // ---------------------------------------------------------------------------
 
     /**
      * Low-frequency view of the segment / up-next overlays, derived by folding
@@ -340,16 +314,6 @@ class VideoPlayerViewModel(
     )
     val resumeReminder: kotlinx.coroutines.flow.SharedFlow<Long> = _resumeReminder
 
-    // The session manager (and every other collaborator) is constructed once,
-    // inside [wiring] — see the Collaborator graph note above.
-
-    // The former `trickplayManager` / `trickplayPreparation` / `subtitles` /
-    // `sleepTimer` / `abRepeat` / `cast` / `settingsProjector` /
-    // `mediaContentProjector` / `mediaDetailProjection` /
-    // `mediaSessionController` / `playerAudioLifecycle` constructions moved
-    // into [PlayerWiring] phase 1 verbatim; the screen-facing slices stay
-    // exposed below as read-only aliases of the wiring's instances.
-
     // ── Collaborator graph ───────────────────────────────────────────────────
     // The session stack, the controllers and the whole collaborator graph are
     // constructed and armed by [wiring] ([PlayerWiring], the two-phase
@@ -362,14 +326,6 @@ class VideoPlayerViewModel(
     // forwarder, the aggregate-prefs fan-out, the engine-attach
     // choreography). This VM keeps only the state holders, the [onEvent]
     // funnel + its handlers, and the expose-only flows.
-
-    // Cinema Mode sequencing (cinemaIntroContext + loadCinemaIntro /
-    // advanceCinemaIntro + the beginCinemaMode entry point) moved into
-    // PlaybackSession at B4 — the uiState cinemaIntroState write flows through
-    // the session's setCinemaIntroState seam. This VM still reads
-    // playbackSession.cinemaIntroContext (end-of-media policy, skipIntro, the
-    // per-item video-effects persist gate) and clears it in
-    // releaseInternalsVmPart at exactly its old slot.
 
     /** The subtitle slice the screen drives directly (built by [PlayerWiring]). */
     internal val subtitles: SubtitleManager get() = wiring.subtitles
@@ -787,12 +743,11 @@ class VideoPlayerViewModel(
     private fun seekTo(positionMs: Long, userInitiated: Boolean = true) {
         // Seek latches + the process-death position snapshot (via the
         // session's position store) + the coalesced offline-mirror write are
-        // session-owned since B3; the display write and the engine command
-        // stay here.
+        // session-owned; the display write and the engine command stay here.
         if (userInitiated) {
             // A user-initiated seek resets the pass-out interaction clock and
             // feeds the still-watching counter through the same signal.
-            playbackSession.engineEventCoordinator.onUserInteraction()
+            onUserInteraction()
         }
         val effectiveTargetMs = if (userInitiated) {
             resolveForwardSeekSegmentClamp(
@@ -837,7 +792,7 @@ class VideoPlayerViewModel(
     /**
      * The single discrete skip-step owner: the screen's skip buttons /
      * keyboard / D-pad commits and the PiP transport's SKIP actions all
-     * reduce to this funnel (C3). The clamp math stays in
+     * reduce to this funnel. The clamp math stays in
      * [stepSeekTargetMs] — floor at 0 on the back path, cap at the engine's
      * duration on the forward path (skipped for live streams with no
      * resolved duration). The seek itself routes through [routedSeek] — the
@@ -848,7 +803,7 @@ class VideoPlayerViewModel(
     private fun seekByStep(direction: Int) {
         // User-initiated step: resets the interaction clock + the
         // still-watching counter (the SyncPlay/cast arms bypass seekTo).
-        playbackSession.engineEventCoordinator.onUserInteraction()
+        onUserInteraction()
         val engine = playerSessionManager.engine
         routedSeek(
             stepSeekTargetMs(
@@ -906,65 +861,21 @@ class VideoPlayerViewModel(
         )
     }
 
-    // getReportPositionMs moved into PlaybackSession at B3 (seek latches +
-    // engine position are session-owned).
-
-    // The former `progressReporter` construction (whose getPlaySessionId /
-    // onPositionPersisted lambdas were the cycle-2 edge to `playbackSession`)
-    // moved into [PlayerWiring] phase 1 — the session id and persist reads go
-    // through the wiring's late-bound playbackSession slot, so the
-    // load-bearing explicit type is gone with the cycle.
-
     /** The SyncPlay slice the screen drives directly (built by [PlayerWiring]). */
     internal val syncPlay: SyncPlayBridge get() = wiring.syncPlay
 
     // ── Session load pipeline ────────────────────────────────────────────────
-    // The pipeline owns the ORDER of the load stages that the initialize path
-    // used to inline; the VM-bound outputs and hook bodies are implemented by
-    // [PlayerWiring] (its SessionLoadOutputs + SessionLifecycleHooks
-    // implementations, written at the collaborators' construction sites when
-    // VideoSessionHost — the former pass-through layer — was deleted). The
-    // three stage bodies with real logic moved INTO SessionLoadPipeline
-    // (fetchMediaSegments / shouldAttemptCinemaMode / restoreRememberedMuted)
-    // and the server start report into PlaybackSession (beside its
-    // stop-report twin) — see those classes' KDoc.
-
-    // ── Session load pipeline ────────────────────────────────────────────────
-    // The pipeline owns the ORDER of the load stages that the initialize path
-    // used to inline; the host below owns the uiState writes and the
-    // VM-bound bodies (controllers, session bookkeeping, reports).
-    // The former `sessionLoadPipeline` / `sessionPositionStore` / `releaseScope`
-    // / `playbackSession` / `episodeContinuation` constructions moved into
-    // [PlayerWiring] phase 1 verbatim. The pipeline's `outputs`/`hooks` are the
-    // wiring builder itself (this class's session-facing seams became builder
-    // methods), which is what lets the whole VideoSessionHost pass-through
-    // layer die: the cycles it existed to survive are broken by the builder's
-    // late-bound slots instead. The VM reaches the moved collaborators through
-    // the private aliases declared beside [wiring].
+    // The pipeline owns the ORDER of the load stages; the VM-bound outputs and
+    // hook bodies are implemented by [PlayerWiring] (its SessionLoadOutputs +
+    // SessionLifecycleHooks implementations). The three stage bodies with real
+    // logic live in SessionLoadPipeline (fetchMediaSegments /
+    // shouldAttemptCinemaMode / restoreRememberedMuted) and the server start
+    // report in PlaybackSession (beside its stop-report twin). The VM reaches
+    // the moved collaborators through the private aliases declared beside
+    // [wiring].
 
     /** True while a next-episode advance is in flight and unsettled (#146). */
     val isNextEpisodeLoading: StateFlow<Boolean> get() = episodeContinuation.isNextEpisodeLoading
-
-    // The segment-skip dispatch glue (the former `segmentDispatch`
-    // SegmentDispatchController property) folded back into this VM — the
-    // skipIntro / skipSegment / autoSkipSegment arms + the shared executor
-    // now live beside [segmentDispatchFacts]; the pure decision halves stay
-    // in SegmentSkipPolicy.kt (SegmentSkipPolicyTest pins those).
-
-    // markWatchedAndSkip / markUnwatchedAndQuit (the overflow mark-and-then
-    // orchestration) moved into EpisodeContinuationController — the onEvent
-    // arms above route to it directly.
-    //
-    // The engine collector's per-engine collection job moved into
-    // [engineAttachController] with the choreography that cancels and
-    // re-arms it.
-
-    // The subtitle-delay apply job (subtitleDelayApplyJob) moved into
-    // SubtitleStyleController with the debounce it backs (A7).
-
-    // handleSmartDownloadCleanup (the smart-download auto-remove behind the
-    // watched-threshold callback) moved into EpisodeContinuationController;
-    // the reporter's callback above forwards into it.
 
     val hapticsEnabled: Boolean get() = stores.appearance.appearance.value.hapticsEnabled
 
@@ -974,21 +885,6 @@ class VideoPlayerViewModel(
      * pref read at render time, not a dedicated flow.
      */
     val incognitoModeEnabled: Boolean get() = wiring.cachedAggregate.videoPlayer.incognitoModeEnabled
-
-    // The former init-order comment (trackSelectionHelper had to be declared
-    // before `init` because init's engine-flow collector called into it) is
-    // superseded: every collector is now registered in [PlayerWiring.arm],
-    // which cannot run before the builder's phase 1 has constructed the whole
-    // graph. The builder-level order pin lives in PlayerWiringCompositionTest.
-
-    // The former `playbackPreferenceResolver` / `trackSelectionHelper` /
-    // `playbackPreferenceWriter` / `render` constructions moved into
-    // [PlayerWiring] phase 1 verbatim. Cycle 5 (the helper's
-    // persistRememberedTrack lambda vs the writer's onPreferencesChanged
-    // read-back) is broken by the wiring's late-bound playbackPreferenceWriter
-    // slot, so the writer's load-bearing explicit type is gone with the cycle.
-    // The stream-change reload lambda reaches the session through the wiring's
-    // late-bound playbackSession slot (the former VM method-indirection).
 
     /** The Rendering-sheet controller the screen drives directly (built by [PlayerWiring]). */
     internal val render: RenderControls get() = wiring.render
@@ -1002,14 +898,7 @@ class VideoPlayerViewModel(
     internal val sessionRender: SessionRenderState
         get() = render.state
 
-    // The former `subtitlePreview` / `subtitleStyleController` / `effects` /
-    // `engineAttachController` constructions moved into [PlayerWiring] phase 1
-    // verbatim. Cycle 6 (effects' syncConfig lambda vs engineConfigSync's
-    // getEffectsState read-back — plus the render/style-controller/prefs
-    // triggers) is broken by the wiring's late-bound engineConfigSync slot, so
-    // the effects controller's load-bearing explicit type is gone with the
-    // cycle. The engine-attach choreography is registered by [PlayerWiring.arm]
-    // at the same point the former init block ran it; its order stays
+    // The engine-attach choreography's registration order stays
     // jvmTest-pinned in EngineAttachControllerTest.
 
     /** The cue-preview controller the screen drives directly (built by [PlayerWiring]). */
@@ -1029,19 +918,12 @@ class VideoPlayerViewModel(
     val trackState: StateFlow<com.raulshma.jellyplay.feature.player.video.state.TrackState>
         get() = trackSelectionHelper.state
 
-    // The former `prefsFanout` construction (PlayerPrefsFanout, the
-    // aggregate-prefs collector's side-effecting half) moved into [PlayerWiring]
-    // phase 1 verbatim; [PlayerWiring.arm] collects the aggregate store and
-    // drives it exactly where the former init block did.
-
-
-    // The former `startEngineEventCoordinatorOutputs` (the engine-event MIRROR
-    // collectors: play/buffering uiState writes, the still-watching interaction
-    // feed) moved into [PlayerWiring] — called once from `arm` and again
-    // through the session's rearm callback, exactly as before.
+    // The engine-event MIRROR collectors (play/buffering uiState writes, the
+    // still-watching interaction feed) are registered once from
+    // [PlayerWiring.arm] and again through the session's rearm callback.
 
     /**
-     * The transport routing funnel (A1): SyncPlay group first, cast receiver
+     * The transport routing funnel: SyncPlay group first, cast receiver
      * second, local engine last — the same order [routedSeek] routes seeks
      * and the screen's `doPlay`/`doPause` used to inline. The PiP window's
      * PLAY/PAUSE remote actions and the screen's play/pause controls both
@@ -1063,10 +945,9 @@ class VideoPlayerViewModel(
      * longer route a press to a stale target.
      */
     private fun routedPlay(play: Boolean) {
-        // A user-initiated play/pause: reset the pass-out interaction clock
-        // (previously only the resume transition reset it) — the episode
-        // counter rides the same signal (feature 1.3).
-        playbackSession.engineEventCoordinator.onUserInteraction()
+        // A user-initiated play/pause: reset the pass-out interaction clock —
+        // the episode counter rides the same signal (feature 1.3).
+        onUserInteraction()
         when {
             _uiState.value.isInSyncPlaySession -> syncPlay.togglePlayPause()
             cast.isConnectedFlow.value -> if (play) cast.castPlay() else cast.castPause()
@@ -1093,7 +974,7 @@ class VideoPlayerViewModel(
     /**
      * Thin delegate to [PlaybackSession.initialize]: the only VM-side pre-bit
      * is the process-death start-ticks resolution, delegated to the session
-     * (which owns the position store since B3 — this VM no longer touches the
+     * (which owns the position store — the VM must not touch the
      * handle). The session then owns the load sequence — synchronous prologue
      * hooks, routing early-returns, single-flight load tracking, and the
      * pipeline start.
@@ -1139,13 +1020,6 @@ class VideoPlayerViewModel(
      * where the resume-position rule (explicit > 0 wins, else the
      * offline-store ticks) lives once in core.
      */
-
-    // persistPlaybackPosition (throttled process-death persist via the
-    // session's position store + offline-mirror write) and
-    // scheduleCoalescedSeekProgress (the seek-scrub DB-write coalescer, still
-    // launching on this VM's scope) moved into PlaybackSession at B3; the
-    // reporter reaches them through its onPositionPersisted callback and
-    // seekPersisted respectively.
 
     /**
      * Per-item hydration after `loadMedia` — the load spine's
@@ -1205,18 +1079,6 @@ class VideoPlayerViewModel(
         return true
     }
 
-    // restoreOrAllocatePlaySessionId (the process-death play-session id
-    // restore behind the session's position store) moved into
-    // PlaybackSession at B3 — initialize assigns the restored id at exactly
-    // its old position in the sequence.
-
-    // preSeedPlayhead (the resolved-ticks playhead display seed) and the
-    // mini-player reclaim body (detail fetch, engine bind, media session,
-    // tracking restart) moved into PlaybackSession at B4 — the display and
-    // veil writes flow through the session's seedDisplayedPositionMs /
-    // onMiniPlayerReclaimed seams, the hydration fetches through
-    // hydrateReclaimedItem.
-
     private fun setScreenLocked(locked: Boolean) {
         _uiState.update { it.copy(isScreenLocked = locked) }
     }
@@ -1228,7 +1090,7 @@ class VideoPlayerViewModel(
     private fun setPlaybackSpeed(speed: Float) {
         // A user-initiated speed change resets the pass-out interaction clock
         // and feeds the still-watching counter through the same signal.
-        playbackSession.engineEventCoordinator.onUserInteraction()
+        onUserInteraction()
         _uiState.update { it.copy(playbackSpeed = speed) }
         playerSessionManager.engine?.setPlaybackSpeed(speed)
     }
@@ -1257,7 +1119,7 @@ class VideoPlayerViewModel(
 
     private fun selectSubtitleTrack(option: TrackOption) {
         trackSelectionHelper.selectSubtitleTrack(option)
-        // G10: the active subtitle track changed — refresh the cue preview
+        // The active subtitle track changed — refresh the cue preview
         // eagerly so the AV-sync sheet (if open) shows the newly selected
         // track's cues without a reopen.
         subtitlePreview.onTrackSelectionChanged()
@@ -1363,17 +1225,11 @@ class VideoPlayerViewModel(
         // of the in-app resize mode, so it does not need re-deriving here.
     }
 
-    // updatePipAspectRatio / updatePipSourceRect (the PiP window's
-    // aspect-ratio + source-rect pushes) moved into PipTransportController
-    // with the transport registration; the projector's streams-refresh seam
-    // and the UpdatePipSourceRect event arm route to it.
-
     // Subtitle style/delay + dialogue-boost choreography (the style edit
     // persist, the per-item delay write + its debounced engine apply, the
-    // per-item boost persist) lives in [SubtitleStyleController] since A7 —
-    // and, since the SubtitleFontController fold, so do the user-font
-    // install + the direct engine style re-apply; the functions below are
-    // the remaining screen/PiP-facing funnels.
+    // per-item boost persist, the user-font install + the direct engine
+    // style re-apply) lives in [SubtitleStyleController]; the functions
+    // below are the remaining screen/PiP-facing funnels.
 
     private fun toggleDialogueBoost() {
         subtitleStyleController.toggleDialogueBoost()
@@ -1540,12 +1396,6 @@ class VideoPlayerViewModel(
         clearPlaybackErrorState()
     }
 
-    // (Four former quick-settings funs died in the X1a dead-surface cut:
-    // setFrameRateMatching / setRefreshRateMode / toggleEqualizer /
-    // setEqualizerSettings had no player-screen callers — the settings
-    // screens own those preference stores directly, and the aggregate prefs
-    // collector rebuilds the engine config when the stored values change.)
-
     private fun setVideoEffects(effects: VideoEffectsConfig) {
         _uiState.update { it.copy(videoFx = it.videoFx.copy(videoEffects = effects)) }
         wiring.markEngineConfigDirtyDebounced()
@@ -1604,17 +1454,8 @@ class VideoPlayerViewModel(
      */
     private fun cycleDeinterlace() = render.cycleDeinterlace()
 
-    // The former `engineConfigSync` construction (EngineConfigSync — the
-    // runtime engine-config sync) moved into [PlayerWiring] phase 1; the
-    // funnel handlers route their dirty-config reports through the wiring's
-    // markEngineConfigDirty / markEngineConfigDirtyDebounced. The former
-    // `configSyncReady` construction gate died with the move: it existed
-    // because the init-block collectors could fire before the (late-declared)
-    // sync existed, while in the two-phase shape no collector is registered
-    // until after phase 1 has built the whole graph.
-
-    // cancelAutoplay (the Up Next overlay's countdown dismissal) moved into
-    // EpisodeContinuationController; the CancelAutoplay arm above routes to it.
+    // Funnel handlers route their dirty-config reports through the wiring's
+    // markEngineConfigDirty / markEngineConfigDirtyDebounced.
 
     private fun handlePlaybackEnded() {
         // The app-wide now-playing seam's Ended event (feature 4.2): a
@@ -1683,17 +1524,7 @@ class VideoPlayerViewModel(
     // aggregate, the SyncPlay flag, the media-detail holder) and
     // fetchMediaSegments (the offline-first segments fetch + its uiState
     // write) live on SessionLoadPipeline, whose spine owns when both stages
-    // run; the cinema SEQUENCING is session-owned since B4.
-
-    // (skipCredits died in the X1a dead-surface cut: no caller anywhere —
-    // the overlays expose only the intro button, and the dispatch controller's
-    // skipSegment covers the tapped active segment regardless of type.)
-
-    // applyMediaDetail / applyVolumeMemory / fetchCompanionLyrics /
-    // applyMediaDetailAndSourceState (the media-detail application fan-out,
-    // ordering-sensitive) moved verbatim into MediaDetailProjection — the
-    // mediaContentProjector, sessionLoadPipeline and subtitles wirings above
-    // route to it one-line.
+    // run; the cinema SEQUENCING is session-owned.
 
     fun getImageUrl(itemId: String, maxWidth: Int = 400): String =
         imageUrlProvider.getImageUrl(itemId, maxWidth = maxWidth)
@@ -1736,16 +1567,11 @@ class VideoPlayerViewModel(
         return true
     }
 
-    // endregion
-
     // ── Background-cast media-session swap ──────────────────────────────────
-    // Folded back from BackgroundCastController (the behaviour-thin
-    // media-session owner swap): this VM already holds [castManager], the
-    // media-session controller and the engine access, so the pair is two
-    // private funs again. The background-casting state itself lives on
-    // [CastManager] (markBackgroundCasting / isBackgroundCasting) exactly
-    // where the controller kept it — reattach is a no-op unless a detach
-    // armed it. The window-session → event → fun flow is unchanged.
+    // The background-casting state lives on [CastManager]
+    // (markBackgroundCasting / isBackgroundCasting) — reattach is a no-op
+    // unless a detach armed it. The window session drives the pair through
+    // the DetachForBackgroundCast / ReattachFromBackgroundCast events.
 
     /**
      * Hands the media session from the local engine to the cast receiver:
@@ -1821,82 +1647,13 @@ class VideoPlayerViewModel(
         return trickplayManager.getThumbnail(positionMs)
     }
 
-    // reportCurrentPlaybackStopped (incognito gate, session-id resolution,
-    // dedup latch) moved into PlaybackSession at B3 — both write sites (the
-    // reload/decision paths and the final teardown) live session-side now,
-    // along with the media-session release (releaseVideoMediaSession died
-    // with the split; the session calls MediaSessionController.release in its
-    // own teardown half). createVideoMediaSession (the load spine's
-    // createMediaSession hook) is a one-line delegate to
-    // MediaSessionController.createForItem, wired on [PlayerWiring]'s
-    // loadHooks bundle.
-
     /**
-     * The item-switch uiState rebuild, declared once: the surviving leaves are
-     * exactly the constructor arguments here — everything else resets to its
-     * slice default. Each listed slice is rebuilt FRESH (not a `.copy`),
-     * mirroring the old flat reset whitelist where unlisted leaves took slice
-     * defaults.
-     */
-    private fun VideoPlayerUiState.keepAcrossItems(): VideoPlayerUiState = VideoPlayerUiState(
-        preferredPlayerType = preferredPlayerType,
-        // uiPrefs: the prefs-mirror leaves carry across an item switch
-        // (orientation, controls timeout, metadata/clock/time-remaining
-        // visibility, keep-screen-on); the per-item / runtime leaves
-        // (stats overlay, pass-out hours, trickplay info + toggles,
-        // quality, ABR, playback mode, lock/PIN flags) reset to defaults.
-        uiPrefs = PlayerUiPrefsState(
-            defaultOrientation = uiPrefs.defaultOrientation,
-            controlsTimeoutMs = uiPrefs.controlsTimeoutMs,
-            showPlaybackMetadata = uiPrefs.showPlaybackMetadata,
-            showClock = uiPrefs.showClock,
-            showTimeRemaining = uiPrefs.showTimeRemaining,
-            keepScreenOnDuringVideo = uiPrefs.keepScreenOnDuringVideo,
-        ),
-        // gestures: the prefs-mirror leaves carry across an item switch
-        // (seek window, gesture tier flags, default speed, swipe cap,
-        // brightness flag + level); the runtime leaves (hold-speed
-        // toggle/multiplier/active flag, indicator side, frame-rate
-        // matching, refresh-rate mode) reset to defaults. Fresh slice —
-        // same tight semantics as uiPrefs above.
-        gestures = GesturePrefsState(
-            seekDurationMs = gestures.seekDurationMs,
-            gestureMode = gestures.gestureMode,
-            defaultSpeed = gestures.defaultSpeed,
-            swipeSeekMaxMs = gestures.swipeSeekMaxMs,
-            rememberBrightness = gestures.rememberBrightness,
-            brightnessLevel = gestures.brightnessLevel,
-        ),
-        // segmentState: only the behaviors carry across an item switch —
-        // the per-item segment list resets to default (empty).
-        segmentState = SegmentState(
-            segmentBehaviors = segmentState.segmentBehaviors,
-        ),
-        // episodes resets through the navigator's seam right after this
-        // update: only the browser feature toggle carries across an
-        // item switch — adjacency, season/episode lists, season id and
-        // the loading flag are per-item and reset to defaults.
-        // videoFx: only the TV zoom carries across an item switch —
-        // the per-item effects and both aspect fields reset to defaults.
-        videoFx = VideoFxState(tvZoomModePercent = videoFx.tvZoomModePercent),
-        subtitleStyle = subtitleStyle,
-        // Reset per-item dialogue boost so it doesn't bleed into the next
-        // item before the resolver re-applies the per-item rule. (The one
-        // per-item exception in the former effects whitelist; dialogue
-        // boost stays resolver-driven session state — see
-        // VideoEffectsController's KDoc.)
-        dialogueBoostEnabled = false,
-        dialogueBoostStrength = com.raulshma.jellyplay.core.model.EffectStrength.NONE,
-    )
-
-    /**
-     * The ViewModel-owned half of the per-item/full teardown (B3 split of the
-     * old `releaseInternals`). The session-owned half — in-flight load cancel,
-     * reporter jobs, media-session release, PSM release, seek-latch clear —
-     * runs FIRST inside PlaybackSession; this half runs back-to-back right
-     * after it from the same synchronous call chain (no dispatch hop — an
-     * interleaved recomposition could flash the outgoing item's rebuilt stale
-     * title). Reached on the item-switch path through the
+     * The ViewModel-owned half of the per-item/full teardown. The session-owned
+     * half — in-flight load cancel, reporter jobs, media-session release, PSM
+     * release, seek-latch clear — runs FIRST inside PlaybackSession; this half
+     * runs back-to-back right after it from the same synchronous call chain (no
+     * dispatch hop — an interleaved recomposition could flash the outgoing
+     * item's rebuilt stale title). Reached on the item-switch path through the
      * [SessionLifecycleHooks.releaseInternalsVmPart] hook and on full release
      * through [PlaybackSession.release].
      */
@@ -1930,12 +1687,11 @@ class VideoPlayerViewModel(
         subtitlePreview.resetForItem()
         wiring.mediaDetail = null
         autoplayController.setEnabled(false)
-        // Cinema latch clear — the FIELD is session-owned since B4; the clear
-        // itself stays here at exactly its old slot (between equalizer-off and
-        // the uiState rebuild): moving it into the session-owned teardown half
-        // would relocate it ahead of every VM-part neighbor instead. The
-        // uiState rebuild below already nulls cinemaIntroState implicitly
-        // (fresh constructor).
+        // Cinema latch clear — the FIELD is session-owned; the clear itself
+        // stays in this VM half immediately before the uiState rebuild:
+        // moving it into the session-owned teardown half would relocate it
+        // ahead of every VM-part neighbor. The uiState rebuild below
+        // already nulls cinemaIntroState implicitly (fresh constructor).
         playbackSession.cinemaIntroContext = null
 
         // Residual reset: session + prefs-mirror fields only. Everything that
@@ -1960,10 +1716,9 @@ class VideoPlayerViewModel(
 
         // Closes this VM half: the player-lifecycle callbacks clear stays
         // VM-side (a public VM constructor dependency, not a session dep).
-        // It used to run mid-body, directly after the PSM release — the B3
-        // split places the whole session-owned teardown (PSM release
-        // included) ahead of this half, so the relative order against the
-        // PSM release is preserved.
+        // The whole session-owned teardown (PSM release included) runs ahead
+        // of this half, preserving the clear's relative order against the
+        // PSM release.
         playerLifecycleManager.reset()
     }
 
@@ -1976,19 +1731,12 @@ class VideoPlayerViewModel(
     override fun onCleared() {
         super.onCleared()
         release()
-        // Same cancel-after-release ordering as before the release scope became
-        // an injected constructor parameter: the final stop-report /
+        // Cancel-after-release ordering: the final stop-report /
         // pending-seek join (launched on the wiring's release scope by
         // release()) run first, and the scope is only cancelled once the owner
         // is going away for good.
         wiring.releaseScope.cancel()
     }
-
-    // The former `performRelease` body (now-playing Stopped event → collector
-    // teardown → audio-lifecycle + sleep-timer release → the session-owned
-    // release split with the VM's post-internals steps as the callback →
-    // pending-seek join + final stop-report) moved verbatim into
-    // [PlayerWiring.performRelease] with the collaborator graph it drives.
 
     private companion object {
         const val TAG = "VideoPlayerViewModel"

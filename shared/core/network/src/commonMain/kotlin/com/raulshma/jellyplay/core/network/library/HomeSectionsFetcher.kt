@@ -194,7 +194,7 @@ internal class HomeSectionsFetcher(
     /**
      * The dice roll's stall guard, consumed as [cacheThrough]'s write guard
      * by the Jellyfin discover-row reads. Part of the roll protocol — see
-     * `MediaRepository.rerollDiscoverRow` (the protocol's single owner) for
+     * `HomeFeed.rerollDiscoverRow` (the protocol's single owner) for
      * the three race windows and the bump-at-invalidate-AND-commit rule.
      */
     private val discoverRowEpoch = DiscoverRowEpoch()
@@ -233,7 +233,7 @@ internal class HomeSectionsFetcher(
      * fetch re-queries that row — re-rolling a RANDOM sort — while sibling
      * rows keep their cached items. Identity-scoped like every entry, so the
      * evict can never touch another user's row. Ordering and the epoch bump
-     * are roll-protocol concerns — see `MediaRepository.rerollDiscoverRow`.
+     * are roll-protocol concerns — see `HomeFeed.rerollDiscoverRow`.
      */
     fun invalidateDiscoverRow(rowId: String) {
         discoverRowEpoch.incrementAndGet()
@@ -256,7 +256,7 @@ internal class HomeSectionsFetcher(
      * row the user sees survives the next periodic refresh rather than
      * reverting to the pre-roll payload (or silently re-rolling again).
      * No-op on an empty list; the commit-time epoch bump is a roll-protocol
-     * rule — see `MediaRepository.rerollDiscoverRow`.
+     * rule — see `HomeFeed.rerollDiscoverRow`.
      */
     fun seedDiscoverRow(row: DiscoverRowConfig, items: List<MediaItem>) {
         if (items.isEmpty()) return

@@ -515,7 +515,7 @@ wc-lines (3_016 by the suite's lineSequence count), from 3_088; 20 after
 the `EngineConfigSync` extraction (the runtime engine-config rebuild +
 its drag-settling debounce, entered through a narrow-slice
 `EngineConfigBuilder.buildFromSlices` overload) — the VM ceiling now
-3_011 wc-lines (3_012 by the suite's lineSequence count)). Pinned by
+1_752 (actual 1_751 by both wc and the suite's lineSequence count)). Pinned by
 `EpisodeContinuationControllerTest`, `StillWatchingControllerTest`, and
 the ownership suite.
 
@@ -1119,7 +1119,8 @@ inside the refresher; the refresher keeps only the WHAT/WHEN refresh
 policy and calls the coordinator's SYNCHRONOUS `drainRolls` at the
 drain point (the no-suspension window before the single sections write
 is preserved by construction). The roll protocol's single owner is the
-KDoc on `MediaRepository.rerollDiscoverRow` (three numbered race
+KDoc on `HomeFeed.rerollDiscoverRow` (core:data's home-feed family seam;
+three numbered race
 windows, the invalidate→fetch→seed ordering, bump-at-invalidate-AND-
 commit); per-layer restatements are pointers to it. The epoch-guarded
 cache-through write guard is ONE engine, **`TtlCache.cacheThrough`**
@@ -1145,7 +1146,7 @@ The epochs deliberately stay separate: the repository's `discoverRollEpoch`
 (write-guard for roll commits AND for the single-row refresh's
 assembled-payload drop) and the fetcher's `discoverRowEpoch`
 (network-row stall guard) have distinct documented roles in the roll
-protocol (MediaRepository.kt's KDoc is the spec) — unifying them would
+protocol (the `HomeFeed` KDoc is the spec) — unifying them would
 reopen the #157 race windows.
 
 **`HomeRefresher`** (`shared/feature/home/src/commonMain/kotlin/com/raulshma/jellyplay/feature/home/HomeRefresher.kt`)
@@ -1174,7 +1175,7 @@ SKIPS it on cancellation — an identity transition that cancelled the
 refresh must not fire the previous user's broadcast (the same guarded
 invocation protects `fetchOnce` itself). Identity transitions cancel the
 in-flight section refreshes (`sectionRefreshJobs`). The repository half
-(`MediaRepository.refreshHomeSection` → `HomeSectionsCachePort`) bypasses
+(`HomeFeed.refreshHomeSection` → `HomeSectionsCachePort`) bypasses
 the assembled-payload cache and the SWR persist (a single-row result must
 never masquerade as a whole-query snapshot), writes the network sub-call
 memos on success, and drops the assembled payload behind a
@@ -2208,11 +2209,14 @@ extends `LiveTvRepository` / `SyncPlayRepository` / `NewsletterRepository` /
 families; a second shrink wave retired `getMusicVideos`
 (zero callers) and the four user-data write members whose sole union caller
 migrated — see the family seams below). `MediaRepositoryImpl` implements
-`MediaRepository` +
-`SyncPlayRepository` plus the two cache-invalidation seams
+`MediaRepository` plus the family seams below (`MusicCatalogue`,
+`UserDataWriteOperations`, `HomeFeed`, `UserDataChanges`) and the two
+cache-invalidation seams
 (`MediaRepositoryCacheInvalidation`, `MediaCacheInvalidator`) and is bound
 as the `MediaRepository` single; the family surfaces have their own
-production singles and test doubles (the pure pass-through mirrors among
+production singles and test doubles (`SyncPlayRepository` rides its own
+stateless impl, `SyncPlayRepositoryImpl`, bound as the family single —
+the pure pass-through mirrors among
 them are since retired — see "MediaRepository facade split" below). Single-family consumers inject the
 narrow type (the livetv VMs, `LiveTvPlayerViewModel`, `NewsletterViewModel`,
 `SyncPlayViewModel`, `WatchPartyActions`, `PlaylistTargets`); mixed
@@ -2225,8 +2229,9 @@ cross-surface cache invalidation carried by the shared internals single.
 surface ratchet's KDoc mandates — interfaces appended beside their wide
 interface, impl satisfies both, over-the-impl Koin singles
 (`single<Family> { get<MediaRepositoryImpl>() }`), consumers migrate per
-call-site census, `MediaRepositorySurfaceTest` cap lowered 45 → 40 with
-rationale lines:
+call-site census, `MediaRepositorySurfaceTest` cap lowered 45 → 40 and
+since ratcheted to 23 (each step's rationale lives in the test's KDoc
+ledger):
 - **`MusicCatalogue`** (`getArtistAlbums`/`getAlbumTracks`/
   `getInstantMix`/`getThemeSongs` — `getMusicVideos` has since been deleted
   outright: zero callers even on the seam) and **`UserDataWriteOperations`**
@@ -2244,6 +2249,19 @@ rationale lines:
   arguments on the seam — Kotlin forbids an override whose two
   superinterfaces both declare them, so defaults live on the wide interface
   only.
+- **`HomeFeed`** (the home-feed family — `getHomeSections`,
+  `refreshHomeSection`, `getDiscoverRowItems`, `rerollDiscoverRow`,
+  `getCachedHomeSections`, `getOfflineHomeLayout` — surface cap 29 → 23)
+  and **`UserDataChanges`** (the user-data change-feed read val,
+  dual-declared over the same impl — the union keeps the member, the seam
+  lets feed-only consumers narrow off). The home feature's refresh stack
+  (`HomeRefresher`, its dice-roll coordinator, the VM's offline-layout
+  mirror) injects `HomeFeed` ALONE; the mixed consumers (the background
+  home-sections refetchers `TvWatchNextPublisher`/`UserDataSyncWorker`, the
+  recommendations widget, the discover-row editor) keep the union beside it
+  for their non-home members. The roll protocol's KDoc lives on
+  `HomeFeed.rerollDiscoverRow`; the no-default-arguments rule applies —
+  `getHomeSections`/`refreshHomeSection` take `force` explicitly.
 - **`SeerrRepository`** split the same way (cap 43 → 37, retired members
   listed in `SeerrRepositorySurfaceTest`'s `retiredMembers` so re-adding
   fails even under the cap): **`SeerrServiceDirectory`** (the *arr settings

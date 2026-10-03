@@ -12,6 +12,7 @@ import com.raulshma.jellyplay.core.data.repository.MediaBrowseReads
 import com.raulshma.jellyplay.core.data.repository.MediaCollectionReads
 import com.raulshma.jellyplay.core.data.repository.MediaDetailProvider
 import com.raulshma.jellyplay.core.data.repository.MediaExtrasReads
+import com.raulshma.jellyplay.core.data.repository.HomeFeed
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryCacheInvalidation
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryImpl
@@ -27,7 +28,9 @@ import com.raulshma.jellyplay.core.data.repository.PlayedStateSyncImpl
 import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
 import com.raulshma.jellyplay.core.data.repository.PlaylistRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.SyncPlayRepository
+import com.raulshma.jellyplay.core.data.repository.SyncPlayRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.UnifiedMediaDetailProviderImpl
+import com.raulshma.jellyplay.core.data.repository.UserDataChanges
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.data.repository.UserDataMutatorImpl
 import com.raulshma.jellyplay.core.data.repository.UserDataWriteOperations
@@ -118,7 +121,6 @@ internal val dataMediaRepositoryModule: Module = module {
             libraryApiClient = get(),
             collectionApiClient = get(),
             homeSectionsCachePort = get(),
-            syncPlayApiClient = get(),
             homeSnapshotStore = get(),
             playedStateSync = get(),
             episodeCatalogue = get(),
@@ -127,9 +129,6 @@ internal val dataMediaRepositoryModule: Module = module {
             homeSession = get(),
             sessionCacheRegistry = get(),
             internals = get(),
-            // The deepened createSyncPlayGroup routes through the manager
-            // (create→join MY group lives there once — see its KDoc).
-            syncPlayManager = get(),
         )
     }
     single<MediaRepository> { get<MediaRepositoryImpl>() }
@@ -144,6 +143,13 @@ internal val dataMediaRepositoryModule: Module = module {
     // the detail provider's session resolves detail + album tracks together.
     single<MusicCatalogue> { get<MediaRepositoryImpl>() }
     single<UserDataWriteOperations> { get<MediaRepositoryImpl>() }
+    // The home-feed family (the sections payload, the single-row edge-pull
+    // refetch, the SWR snapshot reads, the discover-row verbs) and the
+    // user-data change feed: the same over-the-impl aliasing, so the home
+    // feature's refresh stack injects the seam alone and the background
+    // refetchers take it beside the surfaces they are mixed consumers of.
+    single<HomeFeed> { get<MediaRepositoryImpl>() }
+    single<UserDataChanges> { get<MediaRepositoryImpl>() }
     // Family-repository split, second wave: the nine uncached browse-read
     // members left the union for their own narrow seams over the
     // [LibraryApiClient] single ([MediaUncachedReadsImpl] — one impl, three
@@ -163,15 +169,17 @@ internal val dataMediaRepositoryModule: Module = module {
     // MediaRepositoryCacheInvalidation pattern): keeps the background sync
     // workers in legacy :core:data off the concrete MediaRepositoryImpl type.
     single<MediaCacheInvalidator> { get<MediaRepositoryImpl>() }
-    // Family-repository split: SyncPlay stays a VIEW of the media single by
-    // decision (its 11 members interleave with the user-data channel's
-    // invalidation choreography). LiveTv / Newsletter / Playlist moved to
-    // their own impls over the narrow API family clients (the
-    // PlaybackRepositoryImpl ctor precedent — the family singles compose the
-    // same impls the JellyfinApiClient union delegates to, so the wire
-    // behavior is unchanged); single-family consumers keep injecting the
-    // family type instead of the MediaRepository union.
-    single<SyncPlayRepository> { get<MediaRepositoryImpl>() }
+    // Family-repository split: the SyncPlay family is 4 stateless members on
+    // its own impl (contract: see SyncPlayRepositoryImpl). Single-family
+    // consumers (SyncPlayViewModel, WatchPartyActions) inject the family
+    // type, not the MediaRepository union.
+    single {
+        SyncPlayRepositoryImpl(
+            syncPlayApiClient = get(),
+            syncPlayManager = get(),
+        )
+    }
+    single<SyncPlayRepository> { get<SyncPlayRepositoryImpl>() }
     single {
         LiveTvRepositoryImpl(
             liveTvApiClient = get(),

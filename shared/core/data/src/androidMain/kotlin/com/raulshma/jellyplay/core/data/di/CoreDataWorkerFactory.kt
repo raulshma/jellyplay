@@ -45,7 +45,7 @@ class CoreDataWorkerFactory : WorkerFactory() {
             )
             UserDataSyncWorker::class.simpleName -> UserDataSyncWorker(
                 context, workerParameters,
-                mediaRepository = koin().get(),
+                homeFeed = koin().get(),
                 cacheInvalidator = koin().get(),
                 playbackStore = koin().get(),
                 serverIdentityStore = koin().get(),
@@ -63,7 +63,7 @@ class CoreDataWorkerFactory : WorkerFactory() {
             )
             TvWatchNextWorker::class.simpleName -> TvWatchNextWorker(
                 context, workerParameters,
-                mediaRepository = koin().get(),
+                homeFeed = koin().get(),
                 imageUrlProvider = koin().get(),
                 playbackStore = koin().get(),
                 timeSource = koin().get(),

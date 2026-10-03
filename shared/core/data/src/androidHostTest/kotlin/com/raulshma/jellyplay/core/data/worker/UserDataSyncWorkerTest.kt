@@ -9,7 +9,7 @@ import androidx.work.WorkerParameters
 import androidx.work.testing.TestListenableWorkerBuilder
 import androidx.work.testing.WorkManagerTestInitHelper
 import com.raulshma.jellyplay.core.data.repository.MediaCacheInvalidator
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.HomeFeed
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackSlice
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
@@ -48,7 +48,7 @@ import org.robolectric.annotation.Config
 class UserDataSyncWorkerTest {
 
     private lateinit var context: Context
-    private val mediaRepository: MediaRepository = mockk(relaxed = true)
+    private val homeFeed: HomeFeed = mockk(relaxed = true)
     private val cacheInvalidator: MediaCacheInvalidator = mockk(relaxed = true)
     private val playbackStore: PlaybackStore = mockk()
     private val serverIdentityStore: ServerIdentityStore = mockk()
@@ -62,7 +62,7 @@ class UserDataSyncWorkerTest {
         )
         every { playbackStore.playback } returns MutableStateFlow(PlaybackSlice(userDataSyncEnabled = true))
         every { serverIdentityStore.activeUserId } returns MutableStateFlow("user-1")
-        coEvery { mediaRepository.getHomeSections(any(), any()) } returns
+        coEvery { homeFeed.getHomeSections(any(), any()) } returns
             Result.success(HomeSectionsResult(sections = emptyList()))
     }
 
@@ -76,7 +76,7 @@ class UserDataSyncWorkerTest {
                 ): UserDataSyncWorker = UserDataSyncWorker(
                     appContext,
                     workerParameters,
-                    mediaRepository,
+                    homeFeed,
                     cacheInvalidator,
                     playbackStore,
                     serverIdentityStore,
@@ -98,7 +98,7 @@ class UserDataSyncWorkerTest {
 
         assertTrue(result is ListenableWorker.Result.Success)
         coVerify(exactly = 0) { cacheInvalidator.invalidateCaches() }
-        coVerify(exactly = 0) { mediaRepository.getHomeSections(any(), any()) }
+        coVerify(exactly = 0) { homeFeed.getHomeSections(any(), any()) }
     }
 
     @Test
@@ -118,7 +118,7 @@ class UserDataSyncWorkerTest {
         val result = buildWorker().doWork()
 
         assertTrue(result is ListenableWorker.Result.Success)
-        coVerify(exactly = 0) { mediaRepository.getHomeSections(any(), any()) }
+        coVerify(exactly = 0) { homeFeed.getHomeSections(any(), any()) }
     }
 
     // ── Enabled run: invalidate then refresh ──────────────────────────
@@ -132,7 +132,7 @@ class UserDataSyncWorkerTest {
         assertTrue(result is ListenableWorker.Result.Success)
         coVerifyOrder {
             cacheInvalidator.invalidateCaches()
-            mediaRepository.getHomeSections(capture(querySlot), any())
+            homeFeed.getHomeSections(capture(querySlot), any())
         }
         assertEquals(setOf(HomeSectionType.CONTINUE_WATCHING, HomeSectionType.NEXT_UP), querySlot.captured.enabledSections)
     }
@@ -141,7 +141,7 @@ class UserDataSyncWorkerTest {
 
     @Test
     fun `home sections failure on an early attempt returns retry`() = runTest {
-        coEvery { mediaRepository.getHomeSections(any(), any()) } returns
+        coEvery { homeFeed.getHomeSections(any(), any()) } returns
             Result.failure(RuntimeException("server unreachable"))
 
         val result = buildWorker(runAttemptCount = 0).doWork()
@@ -151,7 +151,7 @@ class UserDataSyncWorkerTest {
 
     @Test
     fun `home sections failure after exhausting retries returns failure`() = runTest {
-        coEvery { mediaRepository.getHomeSections(any(), any()) } returns
+        coEvery { homeFeed.getHomeSections(any(), any()) } returns
             Result.failure(RuntimeException("server unreachable"))
 
         // MAX_RETRIES is 3: attempt 3 is past the retry budget.

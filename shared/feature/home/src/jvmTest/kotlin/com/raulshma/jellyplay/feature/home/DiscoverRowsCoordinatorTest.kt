@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.feature.home
 
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.HomeFeed
 import com.raulshma.jellyplay.core.model.DiscoverRowConfig
 import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionType
@@ -49,7 +49,7 @@ class DiscoverRowsCoordinatorTest {
 
     private val mainDispatcher = StandardTestDispatcher()
 
-    private lateinit var mediaRepository: MediaRepository
+    private lateinit var homeFeed: HomeFeed
     private lateinit var state: MutableStateFlow<HomeRefreshState>
     private lateinit var coordinator: DiscoverRowsCoordinator
     private lateinit var scope: CoroutineScope
@@ -57,7 +57,7 @@ class DiscoverRowsCoordinatorTest {
     @BeforeTest
     fun setUp() {
         Dispatchers.setMain(mainDispatcher)
-        mediaRepository = mockk(relaxed = true)
+        homeFeed = mockk(relaxed = true)
         state = MutableStateFlow(HomeRefreshState(sections = listOf(discoverSection("dr_x", item("m1")))))
     }
 
@@ -69,14 +69,14 @@ class DiscoverRowsCoordinatorTest {
 
     private fun TestScope.buildCoordinator(): DiscoverRowsCoordinator {
         scope = CoroutineScope(SupervisorJob() + StandardTestDispatcher(testScheduler))
-        coordinator = DiscoverRowsCoordinator(scope, mediaRepository, state)
+        coordinator = DiscoverRowsCoordinator(scope, homeFeed, state)
         return coordinator
     }
 
     @Test
     fun roll_patchesTheRowInPlace_andTheNextFetchsDrainReAppliesItOverThePreRollPayloads() = runTest {
         val rolled = listOf(item("r2"), item("r7"))
-        coEvery { mediaRepository.rerollDiscoverRow(any()) } returns Result.success(rolled)
+        coEvery { homeFeed.rerollDiscoverRow(any()) } returns Result.success(rolled)
         val c = buildCoordinator()
 
         c.roll(discoverRow("dr_x"))
@@ -113,7 +113,7 @@ class DiscoverRowsCoordinatorTest {
     @Test
     fun drainRolls_dropsEntriesWhoseRowTheFetchDoesNotCarry() = runTest {
         val rolled = listOf(item("r2"))
-        coEvery { mediaRepository.rerollDiscoverRow(any()) } returns Result.success(rolled)
+        coEvery { homeFeed.rerollDiscoverRow(any()) } returns Result.success(rolled)
         val c = buildCoordinator()
 
         c.roll(discoverRow("dr_x"))
@@ -134,7 +134,7 @@ class DiscoverRowsCoordinatorTest {
     @Test
     fun cancelForIdentityChange_clearsTheRegistry_soTheIncomingIdentitysFetchCannotReApply() = runTest {
         val rolled = listOf(item("r2"))
-        coEvery { mediaRepository.rerollDiscoverRow(any()) } returns Result.success(rolled)
+        coEvery { homeFeed.rerollDiscoverRow(any()) } returns Result.success(rolled)
         val c = buildCoordinator()
 
         c.roll(discoverRow("dr_x"))
@@ -151,7 +151,7 @@ class DiscoverRowsCoordinatorTest {
     @Test
     fun cancelForIdentityChange_cancelsAnInFlightRoll_andItsFlagStillClears() = runTest {
         val gate = CompletableDeferred<Result<List<MediaItem>>>()
-        coEvery { mediaRepository.rerollDiscoverRow(any()) } coAnswers { gate.await() }
+        coEvery { homeFeed.rerollDiscoverRow(any()) } coAnswers { gate.await() }
         val c = buildCoordinator()
 
         c.roll(discoverRow("dr_x"))

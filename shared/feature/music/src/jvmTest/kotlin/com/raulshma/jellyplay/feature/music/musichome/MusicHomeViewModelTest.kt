@@ -6,7 +6,7 @@ import com.raulshma.jellyplay.core.data.download.ActiveDownloadCount
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.feature.music.MusicTrackWithAlbumFallback
 import com.raulshma.jellyplay.core.data.repository.MediaCollectionReads
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.UserDataChanges
 import com.raulshma.jellyplay.core.data.repository.MusicCatalogue
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.home.HomeDiscoverySlice
@@ -67,7 +67,7 @@ class MusicHomeViewModelTest {
     // has no access to that module (search conveyor port pattern).
     private val mainDispatcher = StandardTestDispatcher()
 
-    private val mediaRepository: MediaRepository = mockk()
+    private val userDataChanges: UserDataChanges = mockk()
     private val musicCatalogue: MusicCatalogue = mockk()
     private val mediaCollectionReads: MediaCollectionReads = mockk()
     private val imageUrlProvider: ImageUrlProvider = mockk(relaxed = true)
@@ -94,7 +94,7 @@ class MusicHomeViewModelTest {
         every { userMessageBus.error(any()) } just Runs
         every { offlineModeManager.toggleManualOffline() } just Runs
         // The deferred refresher collects this for the whole VM lifetime.
-        every { mediaRepository.userDataChanges } returns userDataEvents
+        every { userDataChanges.userDataChanges } returns userDataEvents
     }
 
     @AfterTest
@@ -123,7 +123,7 @@ class MusicHomeViewModelTest {
     /** Constructs the VM — the init collectors run their first load inline. */
     private fun createViewModel() {
         viewModel = MusicHomeViewModel(
-            mediaRepository = mediaRepository,
+            userDataChanges = userDataChanges,
             musicCatalogue = musicCatalogue,
             mediaCollectionReads = mediaCollectionReads,
             imageUrlProvider = imageUrlProvider,

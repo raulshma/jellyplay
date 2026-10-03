@@ -19,7 +19,7 @@ import com.raulshma.jellyplay.core.model.MediaItem
  * eviction, the wholesale invalidation, and the dice roll's
  * invalidate→fetch→seed halves on `MediaRepositoryImpl`) — reads go through
  * the ordinary client methods. Ordering and epoch roles are roll-protocol
- * concerns with their single owner on `MediaRepository.rerollDiscoverRow`;
+ * concerns with their single owner on `HomeFeed.rerollDiscoverRow`;
  * this port is the transport those protocol steps land on, nothing more.
  */
 public interface HomeSectionsCachePort {

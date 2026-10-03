@@ -176,19 +176,12 @@ class ControllerOwnershipTest {
         // The size ratchet companion to the member-count ceiling in
         // VideoPlayerViewModelOwnershipTest: the VM shrinks only by moving
         // clusters into extracted modules (constructor-lambda controllers),
-        // so its TOTAL line count is a one-way ratchet too. Baseline: 2_006
-        // by this suite's lineSequence count (2_005 wc-lines + the trailing
-        // newline's empty line) after the PlayerWiring move — the whole
-        // in-VM collaborator graph (~1,400 construction lines) plus the init
-        // collectors moved into the two-phase PlayerWiring builder and the
-        // deleted VideoSessionHost's seams became builder methods — down
-        // from the VideoSessionHost-era 2_900 (ceiling 2_870), itself down
-        // from the EngineConfigSync-era 3_002 (3_012, 3_016 after
-        // StillWatchingController + MediaDetailProjection, 3_089 before
-        // those), pinned EXACTLY like every other ratchet in this suite.
-        // Lower the ceiling when a slice moves out; never raise it to admit
-        // growth.
-        val maxVideoPlayerViewModelLines = 2_006
+        // so its TOTAL line count is a one-way ratchet too. Baseline: 1_752
+        // — the current 1_751 lines by this suite's lineSequence count plus
+        // one line of slack, pinned EXACTLY like every other ratchet in
+        // this suite. Lower the ceiling when a slice moves out; never raise
+        // it to admit growth.
+        val maxVideoPlayerViewModelLines = 1_752
         val vm = mainSources().first { it.name == "VideoPlayerViewModel.kt" }
         val lines = vm.sourceText().lineSequence().count()
         assertTrue(

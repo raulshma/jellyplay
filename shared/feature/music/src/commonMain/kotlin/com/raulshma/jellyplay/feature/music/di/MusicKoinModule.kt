@@ -52,7 +52,7 @@ val musicModule: Module = module {
 
     viewModel {
         MusicHomeViewModel(
-            mediaRepository = get(),
+            userDataChanges = get(),
             musicCatalogue = get(),
             mediaCollectionReads = get(),
             imageUrlProvider = get(),

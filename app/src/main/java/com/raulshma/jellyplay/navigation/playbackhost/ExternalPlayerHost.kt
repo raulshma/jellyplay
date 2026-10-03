@@ -12,11 +12,11 @@ import com.raulshma.jellyplay.navigation.externalPlaybackOutcome
  * that used to live composable-inline in `JellyPlayApp`'s navigate-filter and
  * ActivityResult callback is owned here, so the ORDERING between the pure
  * inputs/outputs around it (already pinned: [externalPlaybackOutcome],
- * `ExternalPlayerResultPolicy`, the MainViewModel report pair) is pinned too
- * (`ExternalPlayerHostTest`, fake-lambda choreography in the
+ * `ExternalPlayerResultPolicy`, the [ExternalPlayerReports] report pair) is
+ * pinned too (`ExternalPlayerHostTest`, fake-lambda choreography in the
  * `NavRequestCollectorTest` shape):
  *
- *  1. **resolve** — [buildLaunch] (MainViewModel's download-vs-stream
+ *  1. **resolve** — [buildLaunch] (the download-vs-stream resolver +
  *     resolver + subtitle payload) decides whether a hand-off is possible at
  *     all; `null` short-circuits everything (no report, no stash, no chooser);
  *  2. **report-start** — the server's playback-start report fires BEFORE the
@@ -56,9 +56,9 @@ import com.raulshma.jellyplay.navigation.externalPlaybackOutcome
  *   launch component ([resolveExternalPlayerComponent] in production);
  *   `null` = uninstalled — the chooser fallback.
  * @param reportStart the server playback-start report
- *   (MainViewModel.reportExternalPlaybackStart).
+ *   (ExternalPlayerReports.reportExternalPlaybackStart).
  * @param reportStopped the server playback-stop report with the parsed
- *   [ExternalPlaybackOutcome] (MainViewModel.reportExternalPlaybackStopped).
+ *   [ExternalPlaybackOutcome] (ExternalPlayerReports.reportExternalPlaybackStopped).
  * @param notifyNoPlayerFound the user-facing "no video player found" error
  *   emission for the failure arm.
  */

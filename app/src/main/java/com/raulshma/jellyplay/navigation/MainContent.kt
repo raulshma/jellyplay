@@ -98,7 +98,9 @@ internal fun MainContent(
     // ActivityResultLauncher, plus the no-player-found message path) —
     // constructed by its own holder (ExternalPlayerLauncherHost.kt); the
     // remembered NavRequestController below takes both members as seams.
-    val externalPlayer = rememberExternalPlayerLauncherHost(model)
+    // The reporting contract resolves through the ShellInfra bundle — the
+    // authenticated branch only, like every other lazy provider here.
+    val externalPlayer = rememberExternalPlayerLauncherHost(infra.externalPlayerReportsLazy.value)
 
     // The request-dispatch half of this composable (NavRequestController): the
     // playback-host navigateFilter + its ONE identity-stable Navigator, the

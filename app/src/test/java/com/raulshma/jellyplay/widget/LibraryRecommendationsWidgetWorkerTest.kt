@@ -5,6 +5,7 @@ import androidx.work.ListenableWorker.Result as WorkResult
 import androidx.work.WorkerParameters
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.MediaCollectionReads
+import com.raulshma.jellyplay.core.data.repository.HomeFeed
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore
@@ -53,6 +54,7 @@ class LibraryRecommendationsWidgetWorkerTest {
     private val workerParameters: WorkerParameters = mockk(relaxed = true)
     private val widgetDataStore: WidgetDataStore = mockk(relaxed = true)
     private val mediaRepository: MediaRepository = mockk(relaxed = true)
+    private val homeFeed: HomeFeed = mockk(relaxed = true)
     private val mediaCollectionReads: MediaCollectionReads = mockk(relaxed = true)
     private val imageUrlProvider: ImageUrlProvider = mockk(relaxed = true)
     private val authRepository: AuthRepository = mockk(relaxed = true)
@@ -76,6 +78,7 @@ class LibraryRecommendationsWidgetWorkerTest {
         params = workerParameters,
         widgetDataStore = widgetDataStore,
         mediaRepository = mediaRepository,
+        homeFeed = homeFeed,
         mediaCollectionReads = mediaCollectionReads,
         imageUrlProvider = imageUrlProvider,
         authRepository = authRepository,
