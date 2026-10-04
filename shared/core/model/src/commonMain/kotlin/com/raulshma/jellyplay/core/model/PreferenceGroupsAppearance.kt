@@ -68,6 +68,8 @@ data class AppearanceScreenPreferences(
     val colorBlindMode: ColorBlindMode = ColorBlindMode.NONE,
     val handMode: HandMode = HandMode.RIGHT,
     val layoutMode: LayoutMode = LayoutMode.AUTO,
+    /** The TV overscan safe-area calibration; the row only renders on TV. */
+    val tvOverscan: TvOverscan = TvOverscan.FIVE,
     val hapticsEnabled: Boolean = true,
     val scheduledThemeStartHour: Int = 22,
     val scheduledThemeEndHour: Int = 7,

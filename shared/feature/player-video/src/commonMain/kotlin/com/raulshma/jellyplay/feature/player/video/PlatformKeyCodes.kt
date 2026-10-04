@@ -19,12 +19,21 @@ internal expect object PlayerKeyCodes {
     val KEYCODE_MEDIA_PLAY: Int
     val KEYCODE_MEDIA_PAUSE: Int
     val KEYCODE_MEDIA_PLAY_PAUSE: Int
+    val KEYCODE_K: Int
     val KEYCODE_DPAD_RIGHT: Int
     val KEYCODE_MEDIA_FAST_FORWARD: Int
     val KEYCODE_L: Int
     val KEYCODE_DPAD_LEFT: Int
     val KEYCODE_MEDIA_REWIND: Int
     val KEYCODE_J: Int
+    val KEYCODE_G: Int
+    val KEYCODE_H: Int
+    val KEYCODE_LEFT_BRACKET: Int
+    val KEYCODE_RIGHT_BRACKET: Int
+    val KEYCODE_PAGE_UP: Int
+    val KEYCODE_PAGE_DOWN: Int
+    val KEYCODE_MOVE_HOME: Int
+    val KEYCODE_MOVE_END: Int
     val KEYCODE_DPAD_UP: Int
     val KEYCODE_VOLUME_UP: Int
     val KEYCODE_DPAD_DOWN: Int
@@ -35,6 +44,7 @@ internal expect object PlayerKeyCodes {
     val KEYCODE_F3: Int
     val KEYCODE_F4: Int
     val KEYCODE_M: Int
+    val KEYCODE_V: Int
     val KEYCODE_ESCAPE: Int
     val KEYCODE_BACK: Int
 }

@@ -132,6 +132,8 @@
     <string name="settings_vibrate_subtitle">Vibra alla notifica</string>
     <string name="settings_notification_lights">Luci di notifica</string>
     <string name="settings_notification_lights_subtitle">Luce di notifica lampeggiante sui dispositivi che la supportano</string>
+    <string name="settings_new_episodes">Notifica i nuovi episodi</string>
+    <string name="settings_new_episodes_subtitle">Pubblica i nuovi episodi in un canale dedicato. Richiede che il monitoraggio dei nuovi media sia attivo per la libreria.</string>
     <string name="settings_max_per_check">Massimo per controllo</string>
     <string name="settings_max_per_check_subtitle">Numero massimo di elementi per batch di notifiche</string>
     <string name="settings_libraries">Librerie</string>
@@ -554,6 +556,7 @@
     <string name="diff_lyrics_visible">Testi visibili</string>
     <string name="diff_subtitle_preview">Anteprima sottotitoli nelle impostazioni</string>
     <string name="diff_subtitle_style">Stile dei sottotitoli</string>
+    <string name="diff_subtitle_style_presets">Preimpostazioni stile sottotitoli</string>
     <string name="diff_hdr_subtitle_style">Stile sottotitoli HDR</string>
     <string name="diff_enabled_home_sections">Sezioni home attive</string>
     <string name="diff_home_section_order">Ordine delle sezioni home</string>

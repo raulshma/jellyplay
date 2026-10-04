@@ -102,6 +102,7 @@ internal fun LibraryListContent(
             val fallbackUrls = item.rememberSeriesImageFallback(getImageUrl)
             Box(modifier = itemModifier) {
                 LibraryListItem(
+                    item = item,
                     title = item.displayTitle(),
                     subtitle = subtitle,
                     imageUrl = remember(item.id) { getImageUrl(item.id) },

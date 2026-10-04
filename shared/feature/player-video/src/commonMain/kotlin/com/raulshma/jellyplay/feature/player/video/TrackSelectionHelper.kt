@@ -69,6 +69,9 @@ internal class TrackSelectionHelper(
     // second). Defaults keep the engine inert-safe for tests that don't care.
     private val getRuleContentType: () -> RuleContentType = { RuleContentType.ALL },
     private val getRuleTitles: () -> List<String> = { emptyList() },
+    // poked after toggleSubtitles flips the active subtitle so the
+    // cross-controller consumers (the cue preview) refresh like a sheet pick.
+    private val onSubtitleSelectionChanged: () -> Unit = {},
     private val scope: CoroutineScope,
 ) {
     private val _state = MutableStateFlow(TrackState())
@@ -91,6 +94,17 @@ internal class TrackSelectionHelper(
     // row via [persistRememberedTrack] so it survives an app restart.
     private var rememberedAudioTrack: RememberedTrack? = null
     private var rememberedSubtitleTrack: RememberedTrack? = null
+
+    // toggle-with-memory latch: the last non-Off subtitle track selected in
+    // this session (user pick or auto-resolution — anything that routes through
+    // [selectSubtitleTrack] with a real track). Turning subtitles OFF through
+    // [toggleSubtitles] snapshots the active track here; turning them back ON
+    // silently restores exactly that track (re-resolved against the CURRENT
+    // picker list by [SubtitleTogglePolicy.resolveRestore], so a stale memory
+    // across an item switch degrades to a no-op instead of a wrong pick).
+    // Deliberately in-memory only — unlike the G5 cross-episode memory above,
+    // this never persists and never leaves with the series.
+    private var subtitleTrackBeforeToggleOff: TrackOption? = null
 
     // A selection (auto or manual) is "held" once applied via selectAudioTrack /
     // selectSubtitleTrack. While held, updateTracksFromEngine does NOT re-run the
@@ -233,6 +247,8 @@ internal class TrackSelectionHelper(
                 codec = resolveSelectedStreamCodec(option, StreamType.SUBTITLE),
             )
             rememberedSubtitleTrack = remembered
+            // Same selection refreshes the toggle latch (see the field KDoc).
+            subtitleTrackBeforeToggleOff = option
             if (isUserOverride) {
                 persistRememberedTrack(TrackType.SUBTITLE, remembered)
             }
@@ -243,6 +259,32 @@ internal class TrackSelectionHelper(
                 subtitleTrackOption = option,
             )
         }
+    }
+
+    /**
+     * The subtitle TOGGLE (mpv's subtitle-visibility key / the CC button's
+     * long-press): subtitles ON → remember the active track in
+     * [subtitleTrackBeforeToggleOff] and select Off; OFF → silently restore
+     * exactly that track. Both arms route through [selectSubtitleTrack] with
+     * `isUserOverride = true`, so they carry the hub's Off/track-row semantics
+     * unchanged (held-selection latch, per-item `-1`/index persistence,
+     * cross-episode memory update). Restore is a no-op when nothing was
+     * remembered or the memory no longer resolves against the current picker
+     * list ([SubtitleTogglePolicy.resolveRestore]) — the user then flips the
+     * toggle again and nothing silently selects a wrong track.
+     */
+    fun toggleSubtitles() {
+        val tracks = _state.value.subtitleTracks
+        val selected = SubtitleTogglePolicy.selectedOption(tracks)
+        if (SubtitleTogglePolicy.isOn(selected)) {
+            subtitleTrackBeforeToggleOff = selected
+            selectSubtitleTrack(SubtitleTogglePolicy.offOption(tracks), isUserOverride = true)
+        } else {
+            val restore = SubtitleTogglePolicy.resolveRestore(subtitleTrackBeforeToggleOff, tracks)
+                ?: return
+            selectSubtitleTrack(restore, isUserOverride = true)
+        }
+        onSubtitleSelectionChanged()
     }
 
     /**

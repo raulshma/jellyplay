@@ -420,6 +420,7 @@ class DesktopAudioQueueManager(
                 repeatMode = state._repeatMode,
                 shuffleEnabled = state._shuffleMode,
                 playbackSpeed = state._speed,
+                shuffleSeed = state._shuffleSeed,
             )
         }
         startNowPlayingMirror()
@@ -825,6 +826,25 @@ class DesktopAudioQueueManager(
     override fun pause() {
         assertMainThread("pause")
         engineDispatch.pause()
+    }
+
+    /**
+     * [AudioPlayerEngine.volume] — the sleep-timer fade's capture source
+     * read off the dedicated audio engine (mpv software gain, the
+     * same `RemotePlayableEngine.volume` the video player rides).
+     */
+    override val volume: Float
+        get() = engine?.volume ?: 1f
+
+    /**
+     * [AudioPlayerEngine.setVolume] — the sleep-timer fade/restore path.
+     * Programmatic write (`isUserChange = false`): mpv must not remember a
+     * fade tick as the user's chosen level. Desktop has no OS stream mirror
+     * to worry about — the software gain IS the audible level here.
+     */
+    override fun setVolume(volume: Float, isUserChange: Boolean) {
+        assertMainThread("setVolume")
+        engine?.setVolume(volume, isUserChange = isUserChange)
     }
 
     override fun changePlaybackSpeed(value: Float) {

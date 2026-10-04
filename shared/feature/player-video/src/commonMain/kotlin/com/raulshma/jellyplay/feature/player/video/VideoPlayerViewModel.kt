@@ -594,6 +594,7 @@ class VideoPlayerViewModel(
             is VideoPlayerUiEvent.SetSeriesSubtitleDisabled -> setSeriesSubtitleDisabled(event.disabled)
             is VideoPlayerUiEvent.SetAspectRatio -> setAspectRatio(event.ratio)
             is VideoPlayerUiEvent.SetSubtitleStyle -> subtitleStyleController.setStyle(event.style)
+            is VideoPlayerUiEvent.ToggleSubtitles -> trackSelectionHelper.toggleSubtitles()
             is VideoPlayerUiEvent.SetPlaybackMode -> setPlaybackMode(event.mode)
             is VideoPlayerUiEvent.SetStreamingQuality -> setStreamingQuality(event.quality)
             is VideoPlayerUiEvent.SetAdaptiveBitrateEnabled -> setAdaptiveBitrateEnabled(event.enabled)
@@ -1028,7 +1029,7 @@ class VideoPlayerViewModel(
      * collaborators) and reached by [PlayerWiring]'s loadHooks bundle
      * through its [PlayerWiring.Host] seam. Restores the per-item persisted video
      * filters (if any) before playback kicks off, then routes the
-     * subtitle-delay hydration through the style controller (A7): resolve
+     * subtitle-delay hydration through the style controller: resolve
      * the effective delay for this item (per-item correction, else the
      * global default) — always applied so the previous item's in-memory
      * delay can't bleed into this one — and pushed to the engine immediately
@@ -1458,19 +1459,20 @@ class VideoPlayerViewModel(
     // markEngineConfigDirty / markEngineConfigDirtyDebounced.
 
     private fun handlePlaybackEnded() {
-        // The app-wide now-playing seam's Ended event (feature 4.2): a
-        // genuine end-of-stream, fired before the autoplay/advance decision
-        // so shell hooks see ended-then-started for an auto-advance chain.
+        // App-wide now-playing seam's Ended event (feature 4.2): fires before
+        // the autoplay/advance decision so shell hooks see ended-then-started.
         nowPlayingReporter.markEnded()
-        val next = _uiState.value.episodes.nextEpisode
-        if (autoplayController.shouldAutoPlayNext(next)) {
-            // "Still watching?" gate (feature 1.3, episode arm): when the
-            // unattended streak reached the armed threshold (mode
-            // EPISODES/BOTH, no SyncPlay — group pacing wins), raise the
-            // confirm overlay INSTEAD of advancing; no answer stops autoplay.
-            if (StillWatchingGate.shouldPrompt(
+        if (autoplayController.shouldAutoPlayNext(_uiState.value.episodes.nextEpisode)) {
+            // End-of-episode sleep timer outranks the advance/still-watching
+            // gates; an explicit skip-credits press still wins (deliberate).
+            if (sleepTimer.interceptsAutoAdvance()) {
+                sleepTimer.triggerSleepTimerEndOfEpisode()
+                return
+            }
+            // "Still watching?" gate (feature 1.3): confirm overlay replaces
+            // the advance; no answer stops autoplay.
+            if (autoplayController.shouldPromptStillWatching(
                     mode = wiring.cachedAggregate.videoPlayer.stillWatchingMode,
-                    episodeCheck = autoplayController.needsStillWatchingCheck(),
                     isInSyncPlaySession = _uiState.value.isInSyncPlaySession,
                 )
             ) {
@@ -1485,11 +1487,9 @@ class VideoPlayerViewModel(
     }
 
     /**
-     * End-of-stream with nothing queued next: a cinema-intro chain advances to
-     * its next item, anything else closes the player. The byte-identical
-     * bodies of the progress reporter's `onPlaybackEndedNoNext` callback and
-     * [handlePlaybackEnded]'s no-autoplay branch, folded so the two can never
-     * drift.
+     * End-of-stream with nothing queued: a cinema-intro chain advances to its
+     * next item, anything else closes the player. Byte-identical fold of the
+     * progress reporter's `onPlaybackEndedNoNext` callback — must not drift.
      */
     private fun onEndedWithNoNext() {
         if (playbackSession.cinemaIntroContext != null) {

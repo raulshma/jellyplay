@@ -498,6 +498,20 @@ class LibraryViewModelTest {
         }
     }
 
+    /** Quick-action favorite toggle: same silent delegation as markItemPlayed. */
+    @Test
+    fun `toggleFavorite delegates to the mutator silently`() = runTest {
+        val vm = createViewModel()
+        val item = MediaItem(id = "m1", name = "Movie", mediaType = MediaType.MOVIE)
+
+        vm.onEvent(LibraryUiEvent.ToggleFavorite(item))
+        advanceUntilIdle()
+
+        coVerify {
+            userDataMutator.setFavorite("m1", UserDataMutator.FlipMode.Silent, emptyList(), null)
+        }
+    }
+
     // ── Offline auto downloaded filter (#147) ────────────────────────────────
 
     @Test

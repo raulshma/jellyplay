@@ -102,10 +102,20 @@ class SettingsSearchCatalogTest {
         // Picture-in-Picture" toggle (issue #167): 307.
         // Added the home display group's "Classic Row Behavior" toggle
         // (issue #168): 308.
+        // Added the playback player group's "Double-Tap-and-Hold Seek"
+        // toggle and the notification group's "New episodes" toggle: 310.
         // The appearance library group's home-discovery card-display quartet
         // moved into a new home.cards group (same ids, PS-4): count unchanged.
+        // Added the playback player group's advanced "Hide OSD on Pause"
+        // toggle (jellyfin-androidtv #3924 — pausing must not summon the
+        // control overlay): 311.
+        // Added the appearance theme group's TV-only "Screen fit" overscan
+        // calibration picker: 312.
+        // Added the playback player group's advanced "Resume When Headphones
+        // Reconnect" toggle (opt-in resume after the
+        // becoming-noisy auto-pause): 313.
         // Bump this count when you deliberately add items.
-        assertEquals(308, items.size)
+        assertEquals(313, items.size)
         // Curated flat order starts with the account/session pair that used to
         // open the old registry, and the aggregation is a pure concatenation
         // of the decorated per-screen groups (no dedup, no reordering).

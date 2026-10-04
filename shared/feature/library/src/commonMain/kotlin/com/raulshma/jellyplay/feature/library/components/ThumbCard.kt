@@ -13,6 +13,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -25,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import coil3.size.Size as CoilSize
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.ui.components.LocalMediaQuickActionController
 import com.raulshma.jellyplay.core.ui.components.clickModifier
 import com.raulshma.jellyplay.core.ui.components.displayTitle
 import com.raulshma.jellyplay.core.ui.components.jellyFocusIndicator
@@ -46,8 +48,10 @@ private val ThumbScrimBrush = Brush.verticalGradient(
  * consumes — while this file keeps its own shape: a backdrop image with the
  * title and year overlaid at the bottom under a full-bleed scrim (its scrim,
  * overlaid title, and 3dp Material progress bar are layout-shaped and stay
- * local). No long-press / peek, and the indication stays hard-null in every
- * motion mode, exactly as before.
+ * local). No peek; long-press opens the host screen's quick-action sheet when
+ * a controller is wired ([LocalMediaQuickActionController] — the PosterCard
+ * pattern), and the indication stays hard-null in every motion mode, exactly
+ * as before.
  */
 @Composable
 fun ThumbCard(
@@ -70,6 +74,14 @@ fun ThumbCard(
     // redundant .focusable() pair.
     val chrome = rememberCardChrome(pressScaleValue = 0.95f)
 
+    // When the host screen provides a quick-action controller, long-press
+    // opens the action sheet — the PosterCard pattern, through the chrome's
+    // existing onLongPress slot (which otherwise falls to the null peek).
+    val quickActionController = LocalMediaQuickActionController.current
+    val onQuickActionsLongPress = quickActionController?.let { controller ->
+        remember(item, controller) { { controller.show(item) } }
+    }
+
     Column(modifier = modifier) {
         Card(
             modifier = Modifier
@@ -77,7 +89,13 @@ fun ThumbCard(
                 .then(chrome.focus.modifier)
                 .then(chrome.pressScale)
                 .jellyFocusIndicator(chrome.focus, cardShape)
-                .then(chrome.clickModifier(onClick = onClick, useReducedMotionIndication = false)),
+                .then(
+                    chrome.clickModifier(
+                        onClick = onClick,
+                        onLongPress = onQuickActionsLongPress,
+                        useReducedMotionIndication = false,
+                    )
+                ),
             shape = cardShape,
             elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         ) {

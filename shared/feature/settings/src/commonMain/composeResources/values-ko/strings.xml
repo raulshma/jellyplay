@@ -132,6 +132,8 @@
     <string name="settings_vibrate_subtitle">알림 시 진동</string>
     <string name="settings_notification_lights">알림 표시등</string>
     <string name="settings_notification_lights_subtitle">지원하는 기기에서 알림 표시등 점멸</string>
+    <string name="settings_new_episodes">새 에피소드 알림</string>
+    <string name="settings_new_episodes_subtitle">새 에피소드를 전용 알림 채널로 게시합니다. 라이브러리의 새 미디어 모니터링이 활성화되어 있어야 합니다.</string>
     <string name="settings_max_per_check">확인별 최대</string>
     <string name="settings_max_per_check_subtitle">알림 묶음당 최대 항목 수</string>
     <string name="settings_libraries">라이브러리</string>
@@ -550,6 +552,7 @@
     <string name="diff_lyrics_visible">가사 표시</string>
     <string name="diff_subtitle_preview">설정 내 자막 미리보기</string>
     <string name="diff_subtitle_style">자막 스타일</string>
+    <string name="diff_subtitle_style_presets">자막 스타일 프리셋</string>
     <string name="diff_hdr_subtitle_style">HDR 자막 스타일</string>
     <string name="diff_enabled_home_sections">활성화된 홈 섹션</string>
     <string name="diff_home_section_order">홈 섹션 순서</string>

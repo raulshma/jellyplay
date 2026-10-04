@@ -21,4 +21,8 @@
     <!-- Summary notification channel -->
     <string name="notification_channel_summary">New Media</string>
     <string name="notification_channel_summary_desc">Summary of new media notifications</string>
+
+    <!-- New-episodes channel (opt-in routing for episode items) -->
+    <string name="notification_channel_new_episodes">New Episodes</string>
+    <string name="notification_channel_new_episodes_desc">Notifications for newly added episodes</string>
 </resources>

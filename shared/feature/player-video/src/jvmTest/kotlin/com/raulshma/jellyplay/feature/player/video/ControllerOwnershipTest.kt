@@ -214,7 +214,7 @@ class ControllerOwnershipTest {
                 "the engine-attach + preference collectors' session handle",
             "internal val playbackSession = PlaybackSession(" to
                 "the session-event forwarder's events flow + the rearm callback",
-            "internal val trackSelectionHelper = TrackSelectionHelper(" to
+            "internal val trackSelectionHelper: TrackSelectionHelper = TrackSelectionHelper(" to
                 "the engine-attach + resolver collectors' track helper",
             "private val playbackPreferenceResolver = ItemPlaybackPreferenceResolver(" to
                 "the arm-phase preference collector's resolver",

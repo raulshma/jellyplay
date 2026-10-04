@@ -28,9 +28,9 @@ class SpecDerivedSearchItemsTest {
     // ── Playback ────────────────────────────────────────────────────────
 
     @Test
-    fun `playback player list keeps its 37-row order and projects the spec faces`() {
+    fun `playback player list keeps its 40-row order and projects the spec faces`() {
         val items = PlaybackSettingsSearchItems
-        assertEquals(37, items.size)
+        assertEquals(40, items.size)
         assertEquals(PlaybackRows.PlayerEngine.id, items.first().id)
         assertEquals(PlaybackRows.RememberVolumePerContentType.id, items.last().id)
 
@@ -54,7 +54,12 @@ class SpecDerivedSearchItemsTest {
             }
         // The capability-derived rows keep the runtime seam's tag (desktop
         // JVM: no orientation / touch gestures → Android-only).
-        listOf(PlaybackRows.Orientation.id, PlaybackRows.Gestures.id, PlaybackRows.GestureIndicatorSide.id).forEach { id ->
+        listOf(
+            PlaybackRows.Orientation.id,
+            PlaybackRows.Gestures.id,
+            PlaybackRows.GestureIndicatorSide.id,
+            PlaybackRows.DoubleTapHoldSeek.id,
+        ).forEach { id ->
             assertEquals(setOf(PlatformKind.ANDROID), items.single { it.id == id }.platforms, "$id must follow the capability seam")
         }
         // The residual volume-memory row keeps its hand desktop tag.
@@ -136,9 +141,9 @@ class SpecDerivedSearchItemsTest {
     // ── Appearance ──────────────────────────────────────────────────────
 
     @Test
-    fun `appearance theme list keeps its 19-row order with the two residuals in place`() {
+    fun `appearance theme list keeps its 20-row order with the two residuals in place`() {
         val items = AppearanceThemeSearchItems
-        assertEquals(19, items.size)
+        assertEquals(20, items.size)
         assertEquals(AppearanceRows.DateFormat.id, items.first().id)
         assertEquals(AppearanceRows.ScheduledEnd.id, items.last().id)
         assertEquals(
@@ -151,6 +156,18 @@ class SpecDerivedSearchItemsTest {
         // …and the capability row keeps the runtime seam's tag (the JVM
         // desktop binary has no dynamic color → Android-only).
         assertEquals(setOf(PlatformKind.ANDROID), items.single { it.id == AppearanceRows.DynamicTheming.id }.platforms)
+        // The TV-only "Screen fit" overscan picker (the layout
+        // override's form-factor twin) sits right beside it: not advanced
+        // (calibration stays reachable without the toggle) and Android-tagged
+        // per the TV-rows-stay-ANDROID convention.
+        val screenFit = items.single { it.id == AppearanceRows.ScreenFit.id }
+        assertFalse(screenFit.isAdvanced)
+        assertEquals(setOf(PlatformKind.ANDROID), screenFit.platforms)
+        assertEquals(
+            listOf(AppearanceRows.LayoutMode.id, AppearanceRows.ScreenFit.id),
+            items.filter { it.id in setOf(AppearanceRows.LayoutMode.id, AppearanceRows.ScreenFit.id) }.map { it.id },
+            "the form-factor fork pair keeps their catalog positions",
+        )
     }
 
     @Test

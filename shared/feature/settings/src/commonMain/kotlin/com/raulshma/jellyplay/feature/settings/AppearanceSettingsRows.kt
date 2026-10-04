@@ -40,6 +40,7 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_oled
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_performance_mode
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_prefer_logos
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_reduce_motion
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_screen_fit
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_missing_episodes
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_nav_labels
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_share_media
@@ -94,6 +95,8 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_scheduled_
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_scheduled_end_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_scheduled_start_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_scheduled_start_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_screen_fit_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_screen_fit_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_show_missing_episodes_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_show_missing_episodes_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_show_share_media_subtitle
@@ -282,6 +285,22 @@ internal object AppearanceRows {
         searchTitleRes = Res.string.ss_layout_mode_title,
         searchSubtitleRes = Res.string.ss_layout_mode_subtitle,
         gate = RowAdmission.All(RowAdmission.Advanced, RowAdmission.NotTv),
+    )
+
+    /**
+     * The TV overscan safe-area calibration: [LayoutMode]'s
+     * form-factor twin — TV-only, always visible on TV (calibration must stay
+     * reachable without the advanced toggle). Declared [RowAdmission.Tv] so
+     * the derived total carries the fork the screen's `if (isTv)` reads; the
+     * spec's ANDROID_ONLY platform rule keeps the search hit off desktop.
+     */
+    val ScreenFit = SettingsRow(
+        id = "screen_fit",
+        icon = Tabler.Outline.DeviceTv,
+        titleRes = Res.string.settings_screen_fit,
+        searchTitleRes = Res.string.ss_screen_fit_title,
+        searchSubtitleRes = Res.string.ss_screen_fit_subtitle,
+        gate = RowAdmission.Tv,
     )
 
     val ThemeMusic = SettingsRow(
@@ -581,7 +600,7 @@ private val appearanceSpecEntries: List<PreferenceSearchSpec> =
 
 private val appearanceCategory = CoreUiRes.string.ss_cat_appearance
 
-/** The theme group's 19 rows, in catalog order (= the spec declarations' order). */
+/** The theme group's 20 rows, in catalog order (= the spec declarations' order). */
 internal val AppearanceThemeRows: List<SettingsRow> = listOf(
     AppearanceRows.DateFormat,
     AppearanceRows.FontScale,
@@ -596,6 +615,7 @@ internal val AppearanceThemeRows: List<SettingsRow> = listOf(
     AppearanceRows.Contrast,
     AppearanceRows.LibraryViewMode,
     AppearanceRows.LayoutMode,
+    AppearanceRows.ScreenFit,
     AppearanceRows.ThemeMusic,
     AppearanceRows.NavLabels,
     AppearanceRows.AccentColor,

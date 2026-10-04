@@ -35,6 +35,8 @@
     <string name="settings_auto_play_countdown_subtitle">自动播放下一集前的倒计时时长</string>
     <string name="settings_controls_timeout">控制栏超时</string>
     <string name="settings_controls_timeout_subtitle">自动隐藏播放器控制栏</string>
+    <string name="settings_hide_osd_on_pause">暂停时隐藏OSD</string>
+    <string name="settings_hide_osd_on_pause_subtitle">暂停时不显示控制层</string>
     <string name="settings_streaming_quality_auto_adaptive">自动（自适应）</string>
     <string name="settings_streaming_quality_auto">自动</string>
     <string name="settings_b_frames_none_best">无（最佳画质）</string>
@@ -84,6 +86,8 @@
     <string name="settings_preferred_player">首选播放器</string>
     <string name="settings_double_tap_seek_duration">双击跳转时长</string>
     <string name="settings_gesture_indicator_side">手势指示器侧</string>
+    <string name="settings_double_tap_hold_seek">双击长按持续快进快退</string>
+    <string name="settings_double_tap_hold_seek_subtitle">双击后按住屏幕持续快进或快退</string>
     <string name="settings_gesture_indicator_opposite">在手势对侧显示亮度/音量条</string>
     <string name="settings_gesture_indicator_same">在与手势同侧显示条</string>
     <string name="settings_countdown_immediate">立即播放下一项</string>
@@ -132,6 +136,8 @@
     <string name="settings_pause_on_focus_loss">失焦时暂停</string>
     <string name="settings_pause_on_focus_loss_on">系统报告失焦时暂停播放</string>
     <string name="settings_pause_on_focus_loss_off">失焦时继续播放</string>
+    <string name="settings_resume_headset_plug">耳机重新连接时恢复播放</string>
+    <string name="settings_resume_headset_plug_subtitle">拔出自动暂停后重新插入耳机时恢复播放</string>
     <string name="settings_decoder_summary">解码器：%1$s</string>
     <string name="settings_decoder">解码器</string>
     <string name="settings_refresh_rate_match">刷新率匹配</string>

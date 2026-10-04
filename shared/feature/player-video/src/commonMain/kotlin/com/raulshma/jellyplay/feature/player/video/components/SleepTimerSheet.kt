@@ -35,37 +35,37 @@ import androidx.compose.ui.graphics.Color
 import org.jetbrains.compose.resources.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
+import com.raulshma.jellyplay.core.ui.components.ConfirmState
+import com.raulshma.jellyplay.core.ui.components.ConfirmTone
+import com.raulshma.jellyplay.core.ui.components.ImeAlertDialog
+import com.raulshma.jellyplay.core.ui.components.SheetSection
+import com.raulshma.jellyplay.core.ui.components.formatDurationMs
+import com.raulshma.jellyplay.core.ui.components.rememberConfirmState
+import com.raulshma.jellyplay.core.ui.tv.ifElse
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
+import com.raulshma.jellyplay.feature.player.video.rememberIs24HourFormat
+import kotlinx.coroutines.delay
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.*
 import com.raulshma.jellyplay.feature.player.video.generated.resources.Res
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_cancel
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_cancel_sleep_timer
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_cancel_sleep_timer_confirm_message
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_cancel_sleep_timer_confirm_title
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_cancel_timer
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_custom_duration
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_custom_ellipsis
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_duration
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_end_of_episode
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_enter_1_600
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_keep_sleep_timer
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_minutes
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_sleep_timer
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_sleep_timer_stops_at
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_start
-
-
-
-
-
-
-
-
-
-
-import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
-import com.raulshma.jellyplay.core.ui.components.ImeAlertDialog
-import com.raulshma.jellyplay.core.ui.components.SheetSection
-import com.raulshma.jellyplay.core.ui.components.formatDurationMs
-import com.raulshma.jellyplay.core.ui.tv.ifElse
-import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
-import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
-import kotlinx.coroutines.delay
-import com.composables.icons.tabler.Tabler
-import com.composables.icons.tabler.outline.*
 
 private val PRESET_DURATIONS = listOf(
     15 * 60 * 1000L,
@@ -87,6 +87,10 @@ internal fun SleepTimerSheet(
     onCancel: () -> Unit,
     onDismiss: () -> Unit,
 ) {
+    // cancelling a timer with more than five minutes left asks for
+    // confirmation (a fat-finger cancel of a long timer is the expensive
+    // accident); the deferred lambda mirrors the repo's ConfirmState idiom.
+    val cancelConfirm = rememberConfirmState()
     PickerSheetScaffold(
         title = stringResource(Res.string.player_video_sleep_timer),
         icon = Tabler.Outline.MoonStars,
@@ -111,7 +115,11 @@ internal fun SleepTimerSheet(
                                 .then(cancelFocusState.focusModifier)
                                 .focusRequester(focusRequester) // Focus the cancel option by default if active
                                 .tvFocusIndicator(cancelFocusState, shape)
-                                .clickable { onCancel(); onDismiss() }
+                                .clickable {
+                                    requestCancel(cancelConfirm, remainingMs) {
+                                        onCancel(); onDismiss()
+                                    }
+                                }
                                 .padding(horizontal = 20.dp, vertical = 14.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically,
@@ -124,14 +132,30 @@ internal fun SleepTimerSheet(
                                     modifier = Modifier.size(18.dp),
                                 )
                                 Spacer(Modifier.size(8.dp))
-                                Text(
-                                    text = stringResource(
-                                        Res.string.player_video_cancel_sleep_timer,
-                                        if (isEndOfEpisodeMode) stringResource(Res.string.player_video_end_of_episode) else formatDurationMs(remainingMs),
-                                    ),
-                                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
-                                    color = MaterialTheme.colorScheme.error,
-                                )
+                                Column {
+                                    Text(
+                                        text = stringResource(
+                                            Res.string.player_video_cancel_sleep_timer,
+                                            if (isEndOfEpisodeMode) stringResource(Res.string.player_video_end_of_episode) else formatDurationMs(remainingMs),
+                                        ),
+                                        style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
+                                        color = MaterialTheme.colorScheme.error,
+                                    )
+                                    // the projected stop wall-clock time under
+                                    // the countdown (end-of-episode arms nothing
+                                    // to project).
+                                    if (!isEndOfEpisodeMode) {
+                                        val stopsAt = rememberStopsAtTime(remainingMs)
+                                        if (stopsAt != null) {
+                                            Spacer(Modifier.height(2.dp))
+                                            Text(
+                                                text = stringResource(Res.string.player_video_sleep_timer_stops_at, stopsAt),
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.error.copy(alpha = 0.8f),
+                                            )
+                                        }
+                                    }
+                                }
                             }
                         }
                         Spacer(Modifier.height(8.dp))
@@ -181,6 +205,7 @@ internal fun SleepTimerSheet(
                         isEndOfEpisodeMode = isEndOfEpisodeMode,
                         remainingMs = remainingMs,
                         originalMs = lastUsedDurationMs,
+                        cancelConfirm = cancelConfirm,
                         onCancel = onCancel,
                     )
                     Spacer(Modifier.height(16.dp))
@@ -243,6 +268,55 @@ internal fun SleepTimerSheet(
             }
         }
     }
+
+    // the cancel-confirmation dialog — cancel keeps the timer running,
+    // confirm tears it down. Each click site keeps its own dismiss behavior
+    // (TV dismisses the sheet on cancel, touch keeps it open), so the
+    // confirmed lambda is the very lambda the immediate path ran.
+    cancelConfirm.ConfirmDialog(
+        title = stringResource(Res.string.player_video_cancel_sleep_timer_confirm_title),
+        message = stringResource(Res.string.player_video_cancel_sleep_timer_confirm_message, formatDurationMs(remainingMs)),
+        confirmText = stringResource(Res.string.player_video_cancel_timer),
+        dismissText = stringResource(Res.string.player_video_keep_sleep_timer),
+        icon = Tabler.Outline.MoonStars,
+        tone = ConfirmTone.WARNING,
+    )
+}
+
+/**
+ * Run [onCancel] immediately when the remaining time is at/below the
+ * confirm threshold (or nothing is left — the end-of-episode arm), else raise
+ * the confirmation dialog behind [confirm].
+ */
+private fun requestCancel(
+    confirm: ConfirmState,
+    remainingMs: Long,
+    onCancel: () -> Unit,
+) {
+    if (SleepTimerSheetPolicy.requiresCancelConfirmation(remainingMs)) {
+        confirm.request(onCancel)
+    } else {
+        onCancel()
+    }
+}
+
+/**
+ * The projected stop wall-clock label ("23:45" / "11:45 PM"), or null when
+ * there is nothing to project (idle / end-of-episode). Re-anchored on every
+ * authoritative [remainingMs] emission (the same wall-clock re-sync model the
+ * countdown itself rides), deduped to minute boundaries so the label holds
+ * steady between them.
+ */
+@Composable
+private fun rememberStopsAtTime(remainingMs: Long): String? {
+    if (remainingMs <= 0L) return null
+    val is24Hour = rememberIs24HourFormat()
+    val stopEpochMs = remember(remainingMs) {
+        SleepTimerSheetPolicy.projectedStopEpochMs(System.currentTimeMillis(), remainingMs)
+    }
+    return remember(stopEpochMs / 60_000L) {
+        SleepTimerSheetPolicy.formatStopTime(stopEpochMs, is24Hour)
+    }
 }
 
 @Composable
@@ -250,6 +324,7 @@ private fun ActiveTimerSection(
     isEndOfEpisodeMode: Boolean,
     remainingMs: Long,
     originalMs: Long,
+    cancelConfirm: ConfirmState,
     onCancel: () -> Unit,
 ) {
     var displayRemaining by remember(remainingMs) { mutableLongStateOf(remainingMs) }
@@ -286,18 +361,35 @@ private fun ActiveTimerSection(
                     modifier = Modifier.size(20.dp),
                 )
                 Spacer(Modifier.size(8.dp))
-                Text(
-                    text = if (isEndOfEpisodeMode) stringResource(Res.string.player_video_end_of_episode) else formatDurationMs(displayRemaining),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary,
-                )
+                Column {
+                    Text(
+                        text = if (isEndOfEpisodeMode) stringResource(Res.string.player_video_end_of_episode) else formatDurationMs(displayRemaining),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    // the projected stop wall-clock time under the
+                    // countdown (end-of-episode arms nothing to project).
+                    if (!isEndOfEpisodeMode) {
+                        val stopsAt = rememberStopsAtTime(displayRemaining)
+                        if (stopsAt != null) {
+                            Spacer(Modifier.height(2.dp))
+                            Text(
+                                text = stringResource(Res.string.player_video_sleep_timer_stops_at, stopsAt),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
             }
             Text(
                 stringResource(Res.string.player_video_cancel),
                 color = MaterialTheme.colorScheme.error,
                 fontWeight = FontWeight.Medium,
-                modifier = Modifier.clickable { onCancel() },
+                modifier = Modifier.clickable {
+                    requestCancel(cancelConfirm, displayRemaining) { onCancel() }
+                },
             )
         }
         if (!isEndOfEpisodeMode) {

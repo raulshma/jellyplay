@@ -67,6 +67,19 @@ data class SubtitleStyle(
     }
 }
 
+/**
+ * One user-named subtitle style preset: the display name plus the
+ * [SubtitleStyle] snapshot it applies. Persisted as a list on the subtitle
+ * slice (capped with oldest eviction by the player's preset policy) and rides
+ * the settings backup's `subtitle` slice for free.
+ */
+@Immutable
+@Serializable
+data class SubtitleStylePreset(
+    val name: String,
+    val style: SubtitleStyle,
+)
+
 @Immutable
 @Serializable
 enum class AssOverrideMode {

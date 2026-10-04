@@ -35,6 +35,8 @@
     <string name="settings_auto_play_countdown_subtitle">Durata del countdown prima della riproduzione automatica dell'episodio successivo</string>
     <string name="settings_controls_timeout">Timeout controlli</string>
     <string name="settings_controls_timeout_subtitle">Nascondi automaticamente i controlli del lettore</string>
+    <string name="settings_hide_osd_on_pause">Nascondi OSD in pausa</string>
+    <string name="settings_hide_osd_on_pause_subtitle">Mantieni i controlli nascosti in pausa</string>
     <string name="settings_streaming_quality_auto_adaptive">Automatico (adattivo)</string>
     <string name="settings_streaming_quality_auto">Automatico</string>
     <string name="settings_b_frames_none_best">Nessuno (qualità migliore)</string>
@@ -84,6 +86,8 @@
     <string name="settings_preferred_player">Player preferito</string>
     <string name="settings_double_tap_seek_duration">Durata salto doppio tocco</string>
     <string name="settings_gesture_indicator_side">Lato indicatore gesto</string>
+    <string name="settings_double_tap_hold_seek">Doppio tocco e tieni premuto per spostarti</string>
+    <string name="settings_double_tap_hold_seek_subtitle">Continua a spostarti tenendo premuto dopo il doppio tocco</string>
     <string name="settings_gesture_indicator_opposite">Mostra barra luminosità/volume dal lato opposto al gesto</string>
     <string name="settings_gesture_indicator_same">Mostra barra sullo stesso lato del gesto</string>
     <string name="settings_countdown_immediate">Riproduci subito l'elemento successivo</string>
@@ -132,6 +136,8 @@
     <string name="settings_pause_on_focus_loss">Pausa alla perdita di focus</string>
     <string name="settings_pause_on_focus_loss_on">Metti in pausa quando il sistema segnala perdita di focus</string>
     <string name="settings_pause_on_focus_loss_off">Continua la riproduzione alla perdita di focus</string>
+    <string name="settings_resume_headset_plug">Riprendi al ricollegamento delle cuffie</string>
+    <string name="settings_resume_headset_plug_subtitle">Riprendi la riproduzione quando le cuffie vengono ricollegate dopo la pausa automatica</string>
     <string name="settings_decoder_summary">Decoder: %1$s</string>
     <string name="settings_decoder">Decoder</string>
     <string name="settings_refresh_rate_match">Corrispondenza frequenza</string>

@@ -234,6 +234,12 @@ internal data class SheetControls(
     val openSheet: (PlayerSheet) -> Unit = {},
     val onSubtitleClick: () -> Unit = {},
     val onSubtitleHubClick: () -> Unit = {},
+    /**
+     * The subtitle-visibility toggle (CC button's long-press): off
+     * remembers the last non-Off track in-session, on silently restores it.
+     * Short-press keeps opening the hub.
+     */
+    val onSubtitleToggle: () -> Unit = {},
     val onSubtitleDelayClick: () -> Unit = {},
     val hasEpisodes: Boolean = false,
     val episodeBrowserEnabled: Boolean = true,
@@ -678,6 +684,7 @@ internal fun PlayerControls(
                             playbackSpeed = playbackSpeed,
                             openSheet = sheets.openSheet,
                             onSubtitleClick = sheets.onSubtitleClick,
+                            onSubtitleToggle = sheets.onSubtitleToggle,
                             chapters = chapters,
                             hasEpisodes = sheets.hasEpisodes,
                             episodeBrowserEnabled = sheets.episodeBrowserEnabled,

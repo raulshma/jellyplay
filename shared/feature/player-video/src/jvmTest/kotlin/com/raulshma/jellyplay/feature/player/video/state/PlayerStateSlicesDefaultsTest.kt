@@ -136,6 +136,7 @@ class PlayerStateSlicesDefaultsTest {
         assertTrue(state.tapGesturesEnabled)
         assertTrue(state.swipeGesturesEnabled)
         assertTrue(state.holdSpeedEnabled)
+        assertTrue(state.doubleTapHoldSeekEnabled)
         assertEquals(2.0f, state.holdSpeedMultiplier, 0.001f)
         assertFalse(state.isHoldSpeedActive)
         assertEquals(1.0f, state.defaultSpeed, 0.001f)

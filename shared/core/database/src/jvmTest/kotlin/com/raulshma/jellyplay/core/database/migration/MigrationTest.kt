@@ -1068,6 +1068,37 @@ class MigrationTest {
         db.close()
     }
 
+    /**
+     * Verifies the v59→v60 migration adds the nullable `shuffleSeed` column to
+     * the `audio_queue_state` singleton (seeded shuffle-order persistence).
+     * The starting schema is executed from the exported `59.json`, then the
+     * full chain re-opens the file — Room validates the post-migration schema
+     * against the v60 entities. Pre-existing rows pick up NULL (shuffle off,
+     * or a row that predates the column), and a seeded write round-trips
+     * through the DAO mapping.
+     */
+    @Test
+    fun migrateV59_60_addsShuffleSeedColumn() = runTest {
+        createDatabase(59) { db ->
+            execSchema(db, 59)
+            db.execSQL(
+                "INSERT INTO audio_queue_state (id, currentIndex, currentPositionMs, isPlaying, repeatMode, shuffleEnabled, playbackSpeed, updatedAt) " +
+                    "VALUES (1, 2, 42_000, 1, 0, 1, 1.0, 5_000)",
+            )
+        }
+
+        val db = openWithMigrations()
+        // The pre-existing row picks up NULL for the new column…
+        val migrated = db.audioQueueDao().getState()
+        assertNotNull(migrated)
+        assertTrue(migrated!!.shuffleEnabled)
+        assertNull(migrated.shuffleSeed)
+        // …and a seeded shuffle write round-trips the column through the mapping.
+        db.audioQueueDao().saveState(migrated.copy(shuffleSeed = 123_456_789L))
+        assertEquals(123_456_789L, db.audioQueueDao().getState()!!.shuffleSeed)
+        db.close()
+    }
+
     @Test
     fun allMigrations_coversContiguousRange() {
         val tokenCipher = JvmTokenCipher.forTestingWithPersistentKey()

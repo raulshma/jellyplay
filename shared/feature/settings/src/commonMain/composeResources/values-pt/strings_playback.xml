@@ -35,6 +35,8 @@
     <string name="settings_auto_play_countdown_subtitle">Duração da contagem decrescente antes de reproduzir o próximo episódio</string>
     <string name="settings_controls_timeout">Limite de tempo dos controlos</string>
     <string name="settings_controls_timeout_subtitle">Ocultar automaticamente os controlos do reprodutor</string>
+    <string name="settings_hide_osd_on_pause">Ocultar OSD ao pausar</string>
+    <string name="settings_hide_osd_on_pause_subtitle">Manter os controles ocultos ao pausar</string>
     <string name="settings_streaming_quality_auto_adaptive">Automático (adaptável)</string>
     <string name="settings_streaming_quality_auto">Automático</string>
     <string name="settings_b_frames_none_best">Nenhum (melhor qualidade)</string>
@@ -84,6 +86,8 @@
     <string name="settings_preferred_player">Reprodutor preferido</string>
     <string name="settings_double_tap_seek_duration">Duração de salto de duplo toque</string>
     <string name="settings_gesture_indicator_side">Lado do indicador de gesto</string>
+    <string name="settings_double_tap_hold_seek">Toque duplo e segurar para buscar</string>
+    <string name="settings_double_tap_hold_seek_subtitle">Continua buscando enquanto segurar apos o toque duplo</string>
     <string name="settings_gesture_indicator_opposite">Mostrar barra de brilho/volume no lado oposto ao gesto</string>
     <string name="settings_gesture_indicator_same">Mostrar barra no mesmo lado do gesto</string>
     <string name="settings_countdown_immediate">Reproduzir o próximo item imediatamente</string>
@@ -132,6 +136,8 @@
     <string name="settings_pause_on_focus_loss">Pausar ao perder foco</string>
     <string name="settings_pause_on_focus_loss_on">Pausar quando o sistema reporta perda de foco</string>
     <string name="settings_pause_on_focus_loss_off">Continuar a reprodução ao perder foco</string>
+    <string name="settings_resume_headset_plug">Retomar ao religar os auscultadores</string>
+    <string name="settings_resume_headset_plug_subtitle">Retomar a reprodução quando os auscultadores forem religados após a pausa automática</string>
     <string name="settings_decoder_summary">Descodificador: %1$s</string>
     <string name="settings_decoder">Descodificador</string>
     <string name="settings_refresh_rate_match">Correspondência de taxa de refrescamento</string>

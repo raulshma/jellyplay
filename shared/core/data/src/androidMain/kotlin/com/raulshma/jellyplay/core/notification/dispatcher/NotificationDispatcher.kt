@@ -10,6 +10,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.NotificationPreferences
 import com.raulshma.jellyplay.core.model.deeplink.DeepLinkGrammar
 import com.raulshma.jellyplay.shared.core.data.R
@@ -32,6 +33,9 @@ class NotificationDispatcher(
         if (prefs.respectSystemDnd && isSystemDndEnabled()) return
 
         channelManager.ensureSummaryChannel()
+        if (prefs.newEpisodesEnabled) {
+            channelManager.ensureNewEpisodesChannel()
+        }
 
         val validLibraryIds = mutableSetOf<String>()
         var globalTotal = 0
@@ -75,7 +79,7 @@ class NotificationDispatcher(
         items.forEachIndexed { index, item ->
             val notificationId = notificationIdFor(library.id, index)
             itemNotificationIds[index] = notificationId
-            val notification = buildItemNotification(item, library.id, channelId, groupId, notificationId)
+            val notification = buildItemNotification(item, library.id, prefs, groupId, notificationId)
             notificationManager.notify(notificationId, notification)
         }
 
@@ -210,10 +214,22 @@ class NotificationDispatcher(
     private fun buildItemNotification(
         item: MediaItem,
         libraryId: String,
-        channelId: String,
+        prefs: NotificationPreferences,
         groupId: String,
         notificationId: Int,
     ): Notification {
+        // Opt-in episode routing: with the new-episodes preference on, episode
+        // items post to the dedicated "New episodes" channel with series/
+        // season/episode framing instead of the generic per-library channel.
+        // Everything else — deep link, mark-seen/open actions, group, seen /
+        // quiet-hours handling upstream — is identical to the generic path.
+        val episodeRouted = prefs.newEpisodesEnabled && item.mediaType == MediaType.EPISODE
+        val channelId = if (episodeRouted) {
+            NotificationChannelManager.CHANNEL_NEW_EPISODES
+        } else {
+            NotificationChannelManager.channelIdFor(libraryId)
+        }
+
         // The content intent is explicit: ACTION_VIEW scoped to our own package so
         // the PendingIntent cannot be hijacked by another app claiming the scheme.
         // `setPackage` is hoisted out of an `Intent(...).apply { ... }` block on
@@ -273,12 +289,22 @@ class NotificationDispatcher(
             item.year?.let { append(" \u00B7 $it") }
         }
 
-        return NotificationCompat.Builder(context, channelId)
+        val builder = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(com.raulshma.jellyplay.shared.core.data.R.drawable.ic_notification_small)
-            .setContentTitle(item.name)
-            .setContentText(subText)
             .setGroup(groupId)
             .setContentIntent(contentIntent)
+        if (episodeRouted) {
+            // Episode framing: "Series S2 · E4" title, episode name as text —
+            // built only from fields the new-media payload already carries.
+            builder
+                .setContentTitle(episodeFramingTitle(item))
+                .setContentText(item.name)
+        } else {
+            builder
+                .setContentTitle(item.name)
+                .setContentText(subText)
+        }
+        return builder
             .addAction(
                 com.raulshma.jellyplay.shared.core.data.R.drawable.ic_notification_small,
                 context.getString(R.string.notification_action_mark_seen),
@@ -293,6 +319,24 @@ class NotificationDispatcher(
             .setOnlyAlertOnce(true)
             .setDefaults(0)
             .build()
+    }
+
+    /**
+     * Episode framing title from the fields the new-media payload already
+     * carries: series name + season/episode numbers. Falls back field by
+     * field — numbers only, series only, and finally the item's own name —
+     * so partial payloads never render a fabricated label.
+     */
+    private fun episodeFramingTitle(item: MediaItem): String {
+        val codes = listOfNotNull(
+            item.seasonNumber?.let { "S$it" },
+            item.episodeNumber?.let { "E$it" },
+        )
+        return when {
+            item.seriesName != null && codes.isNotEmpty() -> "${item.seriesName} ${codes.joinToString(" \u00B7 ")}"
+            codes.isNotEmpty() -> codes.joinToString(" \u00B7 ")
+            else -> item.seriesName ?: item.name
+        }
     }
 
     companion object {

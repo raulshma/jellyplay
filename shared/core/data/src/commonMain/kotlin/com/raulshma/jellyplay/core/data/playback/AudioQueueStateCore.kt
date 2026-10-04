@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.core.data.playback
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.database.entity.AudioQueueStateEntity
 import com.raulshma.jellyplay.core.model.PlaybackStartInfo
+import kotlin.random.Random
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 import kotlinx.coroutines.CoroutineScope
@@ -17,7 +18,7 @@ import kotlinx.coroutines.launch
 /**
  * Deep module for the audio QUEUE-STATE CHASSIS — the ONE owner of the
  * state machine the desktop `DesktopAudioQueueManager` (core:data jvmMain)
- * previously inlined: the eleven playback [MutableStateFlow]s with their
+ * previously inlined: the twelve playback [MutableStateFlow]s with their
  * Android-identical initial values, the [QueueUndoStack] wiring +
  * [QueueUndoEvent] publication, the advance/retreat/wrap/shuffle/restart
  * selection through [AudioQueuePolicy], and the item-transition
@@ -150,6 +151,17 @@ class AudioQueueStateCore(
     internal val _shuffleMode = MutableStateFlow(false)
     val shuffleMode: StateFlow<Boolean> = _shuffleMode.asStateFlow()
 
+    /**
+     * The `kotlin.random.Random` seed behind the CURRENT shuffle order
+     * (the finamp pattern): written when a shuffle applies, cleared when
+     * shuffle is undone, restored with [restorePersisted]. The persisted
+     * queue rows already ARE the shuffled order — the seed's job is
+     * reproducibility: re-applying it through [shuffleWithSeed] over the same
+     * input order yields the exact same arrangement.
+     */
+    internal val _shuffleSeed = MutableStateFlow<Long?>(null)
+    val shuffleSeed: StateFlow<Long?> = _shuffleSeed.asStateFlow()
+
     internal val _repeatMode = MutableStateFlow(0)
     val repeatMode: StateFlow<Int> = _repeatMode.asStateFlow()
 
@@ -232,6 +244,11 @@ class AudioQueueStateCore(
             _currentPosition.value = saved.currentPositionMs
             _repeatMode.value = saved.repeatMode.coerceIn(0, 2)
             _shuffleMode.value = saved.shuffleEnabled
+            // Seed/flag consistency at the restore boundary: a seed only
+            // means anything while shuffle is on (a legacy row — or a
+            // shuffle flipped with no live engine, where the order never
+            // changed — persists a null seed and stays null here).
+            _shuffleSeed.value = saved.shuffleSeed.takeIf { saved.shuffleEnabled }
             _speed.value = saved.playbackSpeed
         }
     }
@@ -410,17 +427,9 @@ class AudioQueueStateCore(
         onQueueShapeInvalidated()
 
         if (_shuffleMode.value) {
-            val q = _queue.value
-            val curIdx = _currentIndex.value
-            unshuffledQueue = q
-            if (q.size <= 1) return
-            val current = q.getOrNull(curIdx)
-            val others = q.filterIndexed { i, _ -> i != curIdx }.toMutableList()
-            others.shuffle()
-            _queue.value = if (current != null) listOf(current) + others else others
-            _currentIndex.value = 0
-            // Android rebuilds the player playlist at the current position;
-            // the desktop keeps the same item playing — state-only.
+            // A fresh seed every enable: persisted alongside
+            // shuffleEnabled so the exact arrangement is reproducible later.
+            applySeededShuffle(seed = Random.nextLong())
         } else {
             val currentId = nowPlayingTracker.currentPlayingItemId.value
             val original = unshuffledQueue
@@ -436,7 +445,50 @@ class AudioQueueStateCore(
                 _currentIndex.value = restoreIndex
                 unshuffledQueue = emptyList()
             }
+            // The seed's meaning dies with the shuffle (a null seed on a
+            // restored row is the documented "not reproducible" state).
+            _shuffleSeed.value = null
         }
+    }
+
+    /**
+     * The deterministic re-shuffle: the exact enable-shuffle
+     * choreography of [toggleShuffle] — flag on, context hook, gate, shape
+     * invalidation, current-row-to-head reorder — driven by the caller's
+     * [seed] instead of a fresh random one, and publishing it through
+     * [shuffleSeed]. `Random(seed)` over the same input order reproduces the
+     * exact arrangement, so a persisted seed can re-derive the order it was
+     * saved with (a later re-shuffle cycle, or a restore on another host).
+     */
+    fun shuffleWithSeed(seed: Long) {
+        if (!_shuffleMode.value) {
+            _shuffleMode.value = true
+            onShuffleModeChanged()
+        }
+        if (!dispatch.isLive) return
+        onQueueShapeInvalidated()
+        applySeededShuffle(seed)
+    }
+
+    /**
+     * The enable-shuffle reorder body, shared byte-for-byte by
+     * [toggleShuffle] (fresh random seed) and [shuffleWithSeed] (caller's
+     * seed): backs up the unshuffled order, keeps the current row at the
+     * head, shuffles the rest under `Random(seed)`, parks the cursor at 0.
+     * Android rebuilds the player playlist at the current position; the
+     * desktop keeps the same item playing — state-only.
+     */
+    private fun applySeededShuffle(seed: Long) {
+        _shuffleSeed.value = seed
+        val q = _queue.value
+        val curIdx = _currentIndex.value
+        unshuffledQueue = q
+        if (q.size <= 1) return
+        val current = q.getOrNull(curIdx)
+        val others = q.filterIndexed { i, _ -> i != curIdx }.toMutableList()
+        others.shuffle(Random(seed))
+        _queue.value = if (current != null) listOf(current) + others else others
+        _currentIndex.value = 0
     }
 
     fun cycleRepeatMode() {

@@ -47,6 +47,8 @@
     <string name="settings_still_watching_episodes_value">%1$d episodes</string>
     <string name="settings_controls_timeout">Controls Timeout</string>
     <string name="settings_controls_timeout_subtitle">Auto-hide player controls</string>
+    <string name="settings_hide_osd_on_pause">Hide OSD on Pause</string>
+    <string name="settings_hide_osd_on_pause_subtitle">Keep controls hidden when pausing</string>
     <string name="settings_streaming_quality_auto_adaptive">Auto (adaptive)</string>
     <string name="settings_streaming_quality_auto">Auto</string>
     <string name="settings_b_frames_none_best">None (Best Quality)</string>
@@ -97,6 +99,8 @@
     <string name="settings_preferred_player">Preferred Player</string>
     <string name="settings_double_tap_seek_duration">Double-Tap Seek Duration</string>
     <string name="settings_gesture_indicator_side">Gesture Indicator Side</string>
+    <string name="settings_double_tap_hold_seek">Double-Tap and Hold Seek</string>
+    <string name="settings_double_tap_hold_seek_subtitle">Keep seeking while holding after a double-tap</string>
     <string name="settings_gesture_indicator_opposite">Show brightness/volume bar opposite the gesture</string>
     <string name="settings_gesture_indicator_same">Show bar on the same side as the gesture</string>
     <string name="settings_countdown_immediate">Play next item immediately</string>
@@ -145,6 +149,8 @@
     <string name="settings_pause_on_focus_loss">Pause on Focus Loss</string>
     <string name="settings_pause_on_focus_loss_on">Pause playback when system reports focus loss</string>
     <string name="settings_pause_on_focus_loss_off">Continue playback on focus loss</string>
+    <string name="settings_resume_headset_plug">Resume When Headphones Reconnect</string>
+    <string name="settings_resume_headset_plug_subtitle">Resume playback when headphones are plugged back in after the unplug auto-pause</string>
     <string name="settings_decoder_summary">Decoder: %1$s</string>
     <string name="settings_decoder">Decoder</string>
     <string name="settings_passthrough_codec_ac3">Dolby Digital (AC3)</string>

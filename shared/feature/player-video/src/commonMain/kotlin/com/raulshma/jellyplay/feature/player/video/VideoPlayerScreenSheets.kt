@@ -136,6 +136,12 @@ internal fun PlayerSheetRouter(
             // branch — only this hub consumes them while the sheet is open.
             val trackState by viewModel.trackState.collectAsStateWithLifecycle()
             val subtitleState by viewModel.subtitles.state.collectAsStateWithLifecycle()
+            // named style presets: the hub's Style tab is the apply/save/
+            // delete surface. Presets are pure data over the subtitle-style
+            // controller slice (the screen drives it directly, the funnel's
+            // controller-handle carve-out); the list rides the subtitle slice.
+            val userStylePresets by viewModel.subtitleStyleController.userStylePresets
+                .collectAsStateWithLifecycle(initialValue = emptyList())
             SubtitleHubSheet(
                 initialTab = com.raulshma.jellyplay.feature.player.video.components.SubtitleHubTab.TRACKS,
                 onDismiss = dismissSheet,
@@ -188,6 +194,13 @@ internal fun PlayerSheetRouter(
                 onPickFont = onPickFont,
                 onOpenTester = onOpenSubtitleTester,
                 capabilities = uiState.engineCapabilities,
+                userStylePresets = userStylePresets,
+                onSaveStylePreset = { name ->
+                    viewModel.subtitleStyleController.savePreset(name, uiState.subtitleStyle)
+                },
+                onDeleteStylePreset = { name ->
+                    viewModel.subtitleStyleController.deletePreset(name)
+                },
                 // Get tab
                 downloadSubtitles = subtitleState.remoteSubtitles,
                 isDownloading = subtitleState.isLoadingRemoteSubtitles,

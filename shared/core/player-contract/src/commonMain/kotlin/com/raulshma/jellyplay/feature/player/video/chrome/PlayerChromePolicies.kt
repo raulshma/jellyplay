@@ -64,6 +64,62 @@ fun stepSeekTargetMs(
     if (direction < 0) seekBackTargetMs(currentPositionMs, stepMs)
     else seekForwardTargetMs(currentPositionMs, stepMs, durationMs)
 
+// ── Modifier-stepped keyboard seek (VLC's arrow map) ─────────────────────
+// The hardware-keyboard layer's per-press seek magnitudes. Plain arrows keep
+// the user's configured jump; the modifier rows are VLC's
+// (VideoPlayerActivity.kt:1288–1317): Shift = fine, Ctrl = coarse,
+// Shift+Ctrl = mid, Alt+Ctrl = very coarse. Home/End take a small step and
+// PgUp/PgDn the big one (jellyfin-media-player's semantics). The key→row
+// mapping lives in player-video's PlayerKeyPolicy.mediaKeySeek — this file
+// owns only the ms math, which is why the two live apart.
+
+/** Shift+arrow seek step. */
+const val KEY_SEEK_STEP_FINE_MS = 5_000L
+
+/** Ctrl+arrow seek step. */
+const val KEY_SEEK_STEP_CTRL_MS = 60_000L
+
+/** Shift+Ctrl+arrow seek step (VLC's mid step — takes precedence over the single-modifier rows). */
+const val KEY_SEEK_STEP_SHIFT_CTRL_MS = 30_000L
+
+/** Alt+Ctrl+arrow seek step. */
+const val KEY_SEEK_STEP_ALT_CTRL_MS = 300_000L
+
+/** Home/End small step (jellyfin-media-player semantics). */
+const val KEY_SEEK_STEP_HOME_END_MS = 10_000L
+
+/** PgUp/PgDn big step (same magnitude as Alt+Ctrl, direction-fixed per key). */
+const val KEY_SEEK_STEP_PAGE_MS = 300_000L
+
+/**
+ * The modifier fold over the table above. Row precedence is VLC's: the
+ * two-modifier rows are checked before the single-modifier ones (Shift+Ctrl
+ * is 30s, never the 5s or 60s a naive first-match would yield), and a plain
+ * press falls through to the caller's configured jump step.
+ */
+fun keyboardSeekStepMs(
+    isShiftPressed: Boolean,
+    isCtrlPressed: Boolean,
+    isAltPressed: Boolean,
+    configuredStepMs: Long,
+): Long =
+    when {
+        isShiftPressed && isCtrlPressed -> KEY_SEEK_STEP_SHIFT_CTRL_MS
+        isAltPressed && isCtrlPressed -> KEY_SEEK_STEP_ALT_CTRL_MS
+        isShiftPressed -> KEY_SEEK_STEP_FINE_MS
+        isCtrlPressed -> KEY_SEEK_STEP_CTRL_MS
+        else -> configuredStepMs
+    }
+
+/**
+ * The keyboard seek chip's commit debounce: the seek commits this long after
+ * the LAST seek key-down. Key-up is not reliably observable (the desktop
+ * deterministic bridge delivers KeyDown only), so the D-pad's commit-on-release
+ * is mirrored with a restart-on-every-press delay instead — held-and-repeating
+ * keys keep re-arming it, and the chip commits once after the final repeat.
+ */
+const val KEYBOARD_SEEK_COMMIT_DELAY_MS = 500L
+
 /**
  * Whether the auto-hide timer may be scheduled at all: controls must be
  * visible with no seek gesture, open sheet, or overflow menu in progress, and
@@ -80,6 +136,23 @@ fun shouldScheduleControlsAutoHide(
 ): Boolean =
     showControls && !isSeeking && !isSheetOpen && !isOverflowMenuOpen &&
         (isTv || !controlsHasFocus)
+
+/**
+ * Whether a play/pause transport toggle may SUMMON the control overlay — the
+ * The pref's decision (jellyfin-androidtv #3924: pausing should not summon the
+ * control overlay). [isPause] is the toggle's DIRECTION: the play arm keeps
+ * today's summon (the option is "don't summon on pause", not "never show"),
+ * and the pause arm is suppressed exactly when [hideOsdOnPause] is on.
+ *
+ * Strictly a SUMMONS gate, not a visibility freeze: an overlay already
+ * visible when the user pauses stays visible — the auto-hide timeout
+ * ([shouldScheduleControlsAutoHide]) continues to own dismissal, and
+ * re-pressing play re-summons as before.
+ */
+fun shouldSummonControlsOnPause(
+    isPause: Boolean,
+    hideOsdOnPause: Boolean,
+): Boolean = !(isPause && hideOsdOnPause)
 
 /**
  * The PiP-transition teardown gate: a player screen disposed while the host

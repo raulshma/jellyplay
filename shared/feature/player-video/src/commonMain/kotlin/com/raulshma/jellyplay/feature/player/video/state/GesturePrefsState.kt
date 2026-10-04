@@ -21,6 +21,13 @@ data class GesturePrefsState(
     val defaultSpeed: Float = 1.0f,
     val swipeSeekMaxMs: Long = 120_000L,
     val seekDurationMs: Long = 10_000L,
+    /**
+     * Holding the second press of a double-tap in a seek zone
+     * keeps repeating the step seek (accelerating) until release, instead of
+     * handing the hold to hold-speed. Default ON; turning it off restores the
+     * legacy long-press = hold-speed behavior everywhere.
+     */
+    val doubleTapHoldSeekEnabled: Boolean = true,
     val rememberBrightness: Boolean = false,
     val brightnessLevel: Float = 0.5f,
     val gestureIndicatorSide: GestureIndicatorSide = GestureIndicatorSide.OPPOSITE,

@@ -80,6 +80,11 @@
     <string name="player_video_sleep_timer">Sleep Timer</string>
     <string name="player_video_sleep_timer_on">Sleep Timer \u00B7 %1$s</string>
     <string name="player_video_cancel_sleep_timer">Cancel Sleep Timer (%1$s left)</string>
+    <string name="player_video_sleep_timer_stops_at">Stops at %1$s</string>
+    <string name="player_video_cancel_sleep_timer_confirm_title">Cancel sleep timer?</string>
+    <string name="player_video_cancel_sleep_timer_confirm_message">The timer still has %1$s left. Cancel it?</string>
+    <string name="player_video_cancel_timer">Cancel timer</string>
+    <string name="player_video_keep_sleep_timer">Keep timer</string>
     <string name="player_video_custom_duration">Custom duration</string>
     <string name="player_video_custom_ellipsis">Custom…</string>
     <string name="player_video_end_of_episode">End of episode</string>
@@ -350,4 +355,15 @@
     <!-- Multi-version selection (1.2) -->
     <string name="player_video_version">Version</string>
     <string name="player_video_remember_version">Remember this version</string>
+
+    <!-- Subtitle style presets -->
+    <string name="player_video_presets_title">Presets</string>
+    <string name="player_video_preset_subtle">Subtle</string>
+    <string name="player_video_preset_big_bold">Big bold</string>
+    <string name="player_video_preset_classic_yellow">Classic yellow</string>
+    <string name="player_video_preset_netflixish">Netflix-ish</string>
+    <string name="player_video_preset_save">Save current</string>
+    <string name="player_video_preset_save_dialog_title">Save preset</string>
+    <string name="player_video_preset_name_label">Preset name</string>
+    <string name="player_video_preset_delete_a11y">Delete preset %1$s</string>
 </resources>

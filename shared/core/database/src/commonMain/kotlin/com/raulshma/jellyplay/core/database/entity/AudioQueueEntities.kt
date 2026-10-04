@@ -42,6 +42,14 @@ data class AudioQueueStateEntity(
     val repeatMode: Int = 0,
     @ColumnInfo(defaultValue = "0")
     val shuffleEnabled: Boolean = false,
+    /**
+     * The `kotlin.random.Random` seed the current shuffle order was generated
+     * with (the finamp pattern) — null when shuffle is off or the row
+     * predates the column. The persisted `audio_queue` rows already ARE the
+     * shuffled order; the seed makes that order reproducible (a re-shuffle
+     * cycle with the same input order yields the exact same arrangement).
+     */
+    val shuffleSeed: Long? = null,
     @ColumnInfo(defaultValue = "1.0")
     val playbackSpeed: Float = 1.0f,
     @ColumnInfo(defaultValue = "0")

@@ -14,6 +14,7 @@ import com.raulshma.jellyplay.core.model.LanguageRuleSet
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import com.raulshma.jellyplay.core.model.SubtitleEdgeType
 import com.raulshma.jellyplay.core.model.SubtitleStyle
+import com.raulshma.jellyplay.core.model.SubtitleStylePreset
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.serialization.Serializable
@@ -22,8 +23,8 @@ import kotlinx.serialization.Serializable
  * Deep module owning the **subtitle &amp; language** preference domain: preferred
  * subtitle/audio languages, the forced-only and audio-description toggles, the
  * high-contrast-subtitles accessibility toggle, the in-app language override, the
- * SDR + HDR subtitle styles, the per-item subtitle-sync delay LRU map, and the
- * settings preview toggle.
+ * SDR + HDR subtitle styles, the per-item subtitle-sync delay LRU map, the
+ * user-named style presets, and the settings preview toggle.
  *
  * Extracted from the `UserPreferencesStore` god object so this concern owns its
  * keys, its setters (including the per-item-delay invariant below), its read
@@ -57,6 +58,7 @@ class SubtitleLanguageStore constructor(
         val HDR_SUBTITLE_STYLE_ENABLED = booleanPreferencesKey("hdr_subtitle_style_enabled")
         val HDR_SUBTITLE_STYLE = stringPreferencesKey("hdr_subtitle_style")
         val TRACK_SELECTION_RULES = stringPreferencesKey("track_selection_rules")
+        val SUBTITLE_STYLE_PRESETS = stringPreferencesKey("subtitle_style_presets")
     }
 
     /** Memoised decode of the SDR subtitle style blob. */
@@ -68,6 +70,9 @@ class SubtitleLanguageStore constructor(
     /** Memoised decode of the track-language rule-set blob. */
     private var cachedTrackSelectionRules: ParsedCache<LanguageRuleSet> =
         ParsedCache(null, LanguageRuleSet())
+    /** Memoised decode of the user-named subtitle style preset list blob. */
+    private var cachedSubtitleStylePresets: ParsedCache<List<SubtitleStylePreset>> =
+        ParsedCache(null, emptyList())
 
     /**
      * The subtitle &amp; language preference slice, derived directly from the raw
@@ -122,6 +127,24 @@ class SubtitleLanguageStore constructor(
             nullPolicy = CachedJsonNullPolicy.MemoizeNull,
         )
 
+        // Absent-key fast path: skip the decode machinery entirely when no
+        // preset blob exists (the default install) so the per-emission read
+        // cost is unchanged from before the field landed.
+        val subtitleStylePresets = prefs[Keys.SUBTITLE_STYLE_PRESETS]
+            ?.let { raw ->
+                PreferenceCodec.cachedJson(
+                    raw = raw,
+                    cache = cachedSubtitleStylePresets,
+                    default = emptyList(),
+                    parse = {
+                        PreferenceCodec.json.decodeFromString<List<SubtitleStylePreset>>(it)
+                    },
+                    cacheRef = { cachedSubtitleStylePresets = it },
+                    nullPolicy = CachedJsonNullPolicy.MemoizeNull,
+                )
+            }
+            ?: emptyList()
+
         return SubtitleSlice(
             preferredSubtitleLanguage = prefs[Keys.PREFERRED_SUBTITLE_LANG],
             subtitlesForcedOnly = PreferenceCodec.readBool(prefs, Keys.SUBTITLES_FORCED_ONLY, "subtitles_forced_only", false),
@@ -139,6 +162,7 @@ class SubtitleLanguageStore constructor(
                 backgroundOpacity = 0.5f,
                 edgeType = SubtitleEdgeType.OUTLINE,
             ),
+            userStylePresets = subtitleStylePresets,
         )
     }
 
@@ -214,6 +238,21 @@ class SubtitleLanguageStore constructor(
     }
 
     /**
+     * Persists the user-named subtitle style presets. The empty list
+     * removes the key so storage carries no no-op blob — matching the
+     * identity-by-absence read default, like [setTrackSelectionRules].
+     */
+    suspend fun setSubtitleStylePresets(presets: List<SubtitleStylePreset>) {
+        dataStore.edit { prefs ->
+            if (presets.isEmpty()) prefs.remove(Keys.SUBTITLE_STYLE_PRESETS)
+            else prefs[Keys.SUBTITLE_STYLE_PRESETS] = PreferenceCodec.encodeDefaultsJson.encodeToString(
+                kotlinx.serialization.serializer<List<SubtitleStylePreset>>(),
+                presets,
+            )
+        }
+    }
+
+    /**
      * Persists the track-language rule set. The identity rule set
      * (MANUAL preset, nothing configured) removes the key so storage carries
      * no no-op blob — matching the identity-by-absence read default.
@@ -258,6 +297,7 @@ class SubtitleLanguageStore constructor(
             Keys.HDR_SUBTITLE_STYLE,
             Keys.SUBTITLE_DELAY_BY_ITEM,
             Keys.TRACK_SELECTION_RULES,
+            Keys.SUBTITLE_STYLE_PRESETS,
         )
         PreferenceResetCategory.MISC_APP -> listOf(
             Keys.APP_LANGUAGE,
@@ -297,6 +337,10 @@ class SubtitleLanguageStore constructor(
                 kotlinx.serialization.serializer<LanguageRuleSet>(),
                 slice.languageRules,
             )
+            prefs[Keys.SUBTITLE_STYLE_PRESETS] = PreferenceCodec.encodeDefaultsJson.encodeToString(
+                kotlinx.serialization.serializer<List<SubtitleStylePreset>>(),
+                slice.userStylePresets,
+            )
         }
     }
 }
@@ -326,4 +370,9 @@ data class SubtitleSlice(
         backgroundOpacity = 0.5f,
         edgeType = SubtitleEdgeType.OUTLINE,
     ),
+    /**
+     * The user-named subtitle style presets. Absent-by-default so the
+     * v2 backup slice decodes unchanged on older data (unknown keys ignored).
+     */
+    val userStylePresets: List<SubtitleStylePreset> = emptyList(),
 )

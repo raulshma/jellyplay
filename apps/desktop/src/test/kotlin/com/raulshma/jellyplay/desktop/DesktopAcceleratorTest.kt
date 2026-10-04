@@ -13,7 +13,10 @@ import kotlin.test.assertTrue
  * menu shortcut literals) now both fold through. Rows are matched exactly as
  * the old if/else-if chain matched: Ctrl rows need `isCtrlPressed`, and the
  * F11 row IGNORES modifiers (the original arm never checked Ctrl — Ctrl+F11
- * still toggles fullscreen).
+ * still toggles fullscreen). The paste row (Ctrl+Shift+V, the
+ * clipboard-open accelerator) additionally gates on Shift: the preview
+ * handler runs BEFORE the Compose focus chain, so a shift-less Ctrl+V must
+ * decline here or it would eat the text fields' paste.
  */
 class DesktopAcceleratorTest {
 
@@ -48,21 +51,42 @@ class DesktopAcceleratorTest {
     }
 
     @Test
+    fun `ctrl+shift+v matches paste-open-link and requires both modifiers`() {
+        assertEquals(
+            DesktopAcceleratorAction.PasteOpenLink,
+            DesktopAccelerators.match(Key.V, isCtrlPressed = true, isShiftPressed = true)?.action,
+        )
+        assertNull(DesktopAccelerators.match(Key.V, isCtrlPressed = false, isShiftPressed = true))
+        assertNull(DesktopAccelerators.match(Key.V, isCtrlPressed = true, isShiftPressed = false))
+        assertNull(DesktopAccelerators.match(Key.V, isCtrlPressed = false, isShiftPressed = false))
+    }
+
+    @Test
+    fun `ctrl+v without shift declines so text fields keep their paste`() {
+        // The load-bearing negative: the window-level preview handler sees
+        // every key before the Compose focus chain — a match here would
+        // starve the sign-in form's paste.
+        assertNull(DesktopAccelerators.match(Key.V, isCtrlPressed = true, isShiftPressed = false))
+    }
+
+    @Test
     fun `rows render the same display literals the menus always showed`() {
         assertEquals("Ctrl+R", DesktopAccelerators.Refresh.displayLabel)
         assertEquals("Ctrl+Q", DesktopAccelerators.Exit.displayLabel)
         assertEquals("F11", DesktopAccelerators.ToggleFullscreen.displayLabel)
+        assertEquals("Ctrl+Shift+V", DesktopAccelerators.PasteOpenLink.displayLabel)
     }
 
     @Test
-    fun `the table is exactly the three rows`() {
-        assertEquals(3, DesktopAccelerators.All.size)
+    fun `the table is exactly the four rows`() {
+        assertEquals(4, DesktopAccelerators.All.size)
         assertEquals(
             DesktopAccelerators.All.map { it.action }.toSet(),
             setOf(
                 DesktopAcceleratorAction.Refresh,
                 DesktopAcceleratorAction.Exit,
                 DesktopAcceleratorAction.ToggleFullscreen,
+                DesktopAcceleratorAction.PasteOpenLink,
             ),
         )
     }

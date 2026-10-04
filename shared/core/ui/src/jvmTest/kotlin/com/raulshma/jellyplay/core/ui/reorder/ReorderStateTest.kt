@@ -1,4 +1,4 @@
-package com.raulshma.jellyplay.feature.settings
+package com.raulshma.jellyplay.core.ui.reorder
 
 import kotlin.test.Test
 import kotlin.test.assertEquals

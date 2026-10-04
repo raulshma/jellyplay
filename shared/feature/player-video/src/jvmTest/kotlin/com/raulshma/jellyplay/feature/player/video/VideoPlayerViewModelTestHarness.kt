@@ -261,6 +261,6 @@ open class VideoPlayerViewModelHarness {
             getCurrentPlaybackMode: () -> com.raulshma.jellyplay.core.model.PlaybackMode,
             getSessionState: () -> PlayerSessionState,
         ): PlayerCastController = NoOpPlayerCastController()
-        override fun createBecomingNoisy(getEngine: () -> MediaEngine?): VideoPlayerAudio = NoOpVideoPlayerAudio
+        override fun createBecomingNoisy(getEngine: () -> MediaEngine?, isResumeOnPlugEnabled: () -> Boolean): VideoPlayerAudio = NoOpVideoPlayerAudio
     }
 }

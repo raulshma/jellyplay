@@ -24,6 +24,7 @@ import com.raulshma.jellyplay.core.model.NavigationCustomizationPreferences
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.navigation.SHORTCUTS_NAV_KEY
 import com.raulshma.jellyplay.core.ui.navigation.navKey
+import com.raulshma.jellyplay.core.ui.reorder.rememberReorderableOrderedList
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.stringResource
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
@@ -158,15 +159,4 @@ fun NavigationCustomizationGroup(
         }
         }
     }
-}
-
-/**
- * Resolves a stored order against the [knownOrder]: known items in their
- * stored position, then any known items missing from the stored order in
- * their default [knownOrder] position. Unknown stored entries are dropped.
- */
-internal fun <T> resolveOrder(storedOrder: List<T>, knownOrder: List<T>): List<T> {
-    val ordered = storedOrder.filter { it in knownOrder }
-    val missing = knownOrder.filter { it !in ordered }
-    return ordered + missing
 }

@@ -737,6 +737,7 @@ fun AudioPlayerScreen(
                 sheets.hide(AudioPlayerSheet.Queue)
             },
             onRemove = { index -> viewModel.onEvent(AudioPlayerUiEvent.RemoveFromQueue(index)) },
+            onMove = { fromIndex, toIndex -> viewModel.onEvent(AudioPlayerUiEvent.MoveQueueItem(fromIndex, toIndex)) },
             onDismiss = { sheets.hide(AudioPlayerSheet.Queue) },
         )
     }

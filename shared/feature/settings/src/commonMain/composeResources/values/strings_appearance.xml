@@ -30,6 +30,8 @@
     <string name="settings_library_view_mode">Library View Mode</string>
     <string name="settings_layout_mode">Layout</string>
     <string name="settings_layout_mode_subtitle">Choose auto, phone, or tablet layout</string>
+    <string name="settings_screen_fit">Screen fit</string>
+    <string name="settings_screen_fit_subtitle">Pad the picture inside the TV safe area so nothing clips at the edges</string>
     <string name="settings_library_view_grid">Display items in a grid layout</string>
     <string name="settings_library_view_list">Display items in a list layout</string>
     <string name="settings_library_view_thumb">Display items as landscape thumbnails</string>

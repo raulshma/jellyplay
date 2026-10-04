@@ -26,7 +26,9 @@ import com.raulshma.jellyplay.core.model.ThemeMode
 import com.raulshma.jellyplay.core.model.LayoutMode
 import com.raulshma.jellyplay.core.model.LibraryViewMode
 import com.raulshma.jellyplay.core.model.NewsletterSectionType
+import com.raulshma.jellyplay.core.model.TvOverscan
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.raulshma.jellyplay.core.ui.reorder.rememberReorderableOrderedList
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.components.SettingListItem
 import com.raulshma.jellyplay.core.ui.components.SettingToggleItem
@@ -125,6 +127,7 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_redu
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_reset_appearance_message
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_reset_appearance_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_reset_defaults_cd
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_screen_fit_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_reduced_motion
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_external_ratings
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_nav_labels
@@ -577,6 +580,29 @@ private fun AppearanceThemeGroup(
                     checked = preferences.oledMode,
                     highlighted = highlightSettingId == AppearanceRows.OledMode.id,
                     onCheckedChange = { viewModel.edit { scope -> scope.appearance.setOledMode(it) } },
+                )
+            }
+            // The TV overscan calibration: TV-only (the layout override's
+            // form-factor twin — the fork the row's RowAdmission.Tv gate
+            // declares), never behind the advanced toggle so TV users can
+            // always reach it.
+            if (isTv) {
+                val screenFitTitle = rowTitle(AppearanceRows.ScreenFit)
+                SettingListItem(
+                    icon = rowIcon(AppearanceRows.ScreenFit),
+                    title = screenFitTitle,
+                    subtitle = stringResource(Res.string.settings_screen_fit_subtitle),
+                    trailingText = preferences.tvOverscan.displayName,
+                    highlighted = highlightSettingId == AppearanceRows.ScreenFit.id,
+                    onClick = {
+                        activePicker.value = PickerState.List(
+                            title = screenFitTitle,
+                            items = TvOverscan.entries,
+                            label = { it.displayName },
+                            isSelected = { it == preferences.tvOverscan },
+                            onSelect = { viewModel.edit { scope -> scope.appearance.setTvOverscan(it) } },
+                        )
+                    },
                 )
             }
             if (showAdvanced) {

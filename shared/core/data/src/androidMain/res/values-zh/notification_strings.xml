@@ -20,4 +20,8 @@
     <!-- Summary notification channel -->
     <string name="notification_channel_summary">新增媒体</string>
     <string name="notification_channel_summary_desc">新增媒体通知摘要</string>
+
+    <!-- New-episodes channel (opt-in routing for episode items) -->
+    <string name="notification_channel_new_episodes">新剧集</string>
+    <string name="notification_channel_new_episodes_desc">新添加剧集的通知</string>
 </resources>

@@ -132,6 +132,8 @@
     <string name="settings_vibrate_subtitle">通知時に振動する</string>
     <string name="settings_notification_lights">通知ライト</string>
     <string name="settings_notification_lights_subtitle">対応端末で通知ライトを点滅させます</string>
+    <string name="settings_new_episodes">新エピソードを通知</string>
+    <string name="settings_new_episodes_subtitle">新しいエピソードを専用の「新エピソード」チャンネルで通知します。ライブラリの新着メディア監視が有効になっている必要があります。</string>
     <string name="settings_max_per_check">1回あたりの最大数</string>
     <string name="settings_max_per_check_subtitle">通知バッチあたりの最大アイテム数</string>
     <string name="settings_libraries">ライブラリー</string>
@@ -550,6 +552,7 @@
     <string name="diff_lyrics_visible">歌詞を表示</string>
     <string name="diff_subtitle_preview">設定内の字幕プレビュー</string>
     <string name="diff_subtitle_style">字幕スタイル</string>
+    <string name="diff_subtitle_style_presets">字幕スタイルのプリセット</string>
     <string name="diff_hdr_subtitle_style">HDR字幕スタイル</string>
     <string name="diff_enabled_home_sections">有効なホームセクション</string>
     <string name="diff_home_section_order">ホームセクションの順序</string>

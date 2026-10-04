@@ -1,21 +1,22 @@
-package com.raulshma.jellyplay.feature.settings
+package com.raulshma.jellyplay.core.ui.reorder
 
 /**
- * The threshold-swap drag-to-reorder policy behind the settings reorderable
- * lists (Appearance → Home Screen Layout, Appearance → Newsletter sections,
- * Navigation Customization Group). Pure Kotlin — no Compose — so the gesture
- * composables stay thin forwarders and [ReorderStateTest] can pin the
- * arithmetic directly.
+ * The threshold-swap drag-to-reorder policy behind the reorderable lists
+ * (settings Appearance → Home Screen Layout, Appearance → Newsletter
+ * sections, Navigation Customization Group, and the audio player's queue
+ * sheet). Pure Kotlin — no Compose — so the gesture composables stay thin
+ * forwarders and `ReorderStateTest` can pin the arithmetic directly.
  *
- * **Why this exists.** All three screens used to inline the same ~35-line
+ * **Why this exists.** Three screens used to inline the same ~35-line
  * `moveSection` / `moveItem` closure: accumulate the drag delta, then loop
  * while the offset crosses the midpoint between the dragged row and its
  * neighbour, `removeAt` + `add`-ing one slot per crossing and charging the
  * crossed neighbour's height against the offset. Three verbatim copies of
  * pixel arithmetic inside composable closures is exactly the shape that
- * drifts silently, so the loop lives here once.
+ * drifts silently, so the loop lives here once (promoted from
+ * `feature/settings`, which had the three copies).
  *
- * Semantics (pinned by [ReorderStateTest], kept byte-for-byte from the
+ * Semantics (pinned by `ReorderStateTest`, kept byte-for-byte from the
  * inline originals):
  *  - Only the row passed to [beginDrag] moves; deltas for any other row are
  *    ignored.
@@ -32,9 +33,9 @@ package com.raulshma.jellyplay.feature.settings
  * The module is the source of truth for the ORDER only. Compose observes it
  * through a mirrored `mutableStateListOf` the call site re-syncs when [drag]
  * reports `true`, and the caller owns persistence (write-on-diff against the
- * stored preference at drag end) — the same shape the inline closures had.
+ * stored order at drag end) — the same shape the inline closures had.
  */
-internal class ReorderState<T : Any> {
+class ReorderState<T : Any> {
 
     private val workingOrder = mutableListOf<T>()
     private val heights = mutableMapOf<T, Int>()
@@ -49,7 +50,7 @@ internal class ReorderState<T : Any> {
 
     /**
      * Replaces the working order wholesale — the list-sync half of the
-     * pattern: whenever the stored preference order changes and no drag is
+     * pattern: whenever the stored order changes and no drag is
      * in flight, the call site re-seeds both its mirror list and this state.
      */
     fun submitOrder(items: List<T>) {

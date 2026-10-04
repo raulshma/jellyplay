@@ -51,7 +51,8 @@ import kotlinx.serialization.encodeToString
  *
  * **Codec note:** the notification booleans (`notifications_enabled`,
  * `notifications_quiet_hours_enabled`, `notifications_sound_enabled`,
- * `notifications_vibrate_enabled`, `notifications_lights_enabled`) and the
+ * `notifications_vibrate_enabled`, `notifications_lights_enabled`,
+ * `notifications_new_episodes_enabled`) and the
  * notification ints (`notifications_quiet_hours_start/end`,
  * `notifications_max_per_check`) are **not** in the legacy-string → typed-key
  * migration lists, so they are read with plain `prefs[key] ?: default`. The
@@ -78,6 +79,7 @@ class NotificationStore constructor(
         val NOTIFICATIONS_LIGHTS_ENABLED = booleanPreferencesKey("notifications_lights_enabled")
         val NOTIFICATIONS_MAX_PER_CHECK = intPreferencesKey("notifications_max_per_check")
         val NOTIFICATIONS_LIBRARY_CONFIGS = stringPreferencesKey("notifications_library_configs")
+        val NOTIFICATIONS_NEW_EPISODES_ENABLED = booleanPreferencesKey("notifications_new_episodes_enabled")
 
         val NEWSLETTER_ENABLED = booleanPreferencesKey("newsletter_enabled")
         val NEWSLETTER_DAY_OF_WEEK = intPreferencesKey("newsletter_day_of_week")
@@ -109,6 +111,7 @@ class NotificationStore constructor(
             lightsEnabled = prefs[Keys.NOTIFICATIONS_LIGHTS_ENABLED] ?: true,
             maxPerCheck = prefs[Keys.NOTIFICATIONS_MAX_PER_CHECK] ?: 10,
             libraryConfigs = readNotificationLibraryConfigs(prefs),
+            newEpisodesEnabled = prefs[Keys.NOTIFICATIONS_NEW_EPISODES_ENABLED] ?: false,
         ),
         newsletterEnabled = PreferenceCodec.readBool(prefs, Keys.NEWSLETTER_ENABLED, "newsletter_enabled", true),
         newsletterDayOfWeek = PreferenceCodec.readInt(prefs, Keys.NEWSLETTER_DAY_OF_WEEK, "newsletter_day_of_week", 7),
@@ -180,6 +183,7 @@ class NotificationStore constructor(
                         json.decodeFromString<Map<String, LibraryNotificationConfig>>(it)
                     } ?: emptyMap()
                 } catch (_: Exception) { emptyMap() },
+                newEpisodesEnabled = prefs[Keys.NOTIFICATIONS_NEW_EPISODES_ENABLED] ?: false,
             )
             val updated = transform(current)
             prefs[Keys.NOTIFICATIONS_ENABLED] = updated.enabled
@@ -192,6 +196,7 @@ class NotificationStore constructor(
             prefs[Keys.NOTIFICATIONS_LIGHTS_ENABLED] = updated.lightsEnabled
             prefs[Keys.NOTIFICATIONS_MAX_PER_CHECK] = updated.maxPerCheck
             prefs[Keys.NOTIFICATIONS_LIBRARY_CONFIGS] = json.encodeToString(updated.libraryConfigs)
+            prefs[Keys.NOTIFICATIONS_NEW_EPISODES_ENABLED] = updated.newEpisodesEnabled
         }
     }
 
@@ -248,6 +253,7 @@ class NotificationStore constructor(
             Keys.NOTIFICATIONS_LIGHTS_ENABLED,
             Keys.NOTIFICATIONS_MAX_PER_CHECK,
             Keys.NOTIFICATIONS_LIBRARY_CONFIGS,
+            Keys.NOTIFICATIONS_NEW_EPISODES_ENABLED,
         )
         PreferenceResetCategory.NEWSLETTER -> listOf(
             Keys.NEWSLETTER_ENABLED,
@@ -277,6 +283,7 @@ class NotificationStore constructor(
             it[Keys.NOTIFICATIONS_LIGHTS_ENABLED] = slice.notificationPreferences.lightsEnabled
             it[Keys.NOTIFICATIONS_MAX_PER_CHECK] = slice.notificationPreferences.maxPerCheck
             it[Keys.NOTIFICATIONS_LIBRARY_CONFIGS] = json.encodeToString(slice.notificationPreferences.libraryConfigs)
+            it[Keys.NOTIFICATIONS_NEW_EPISODES_ENABLED] = slice.notificationPreferences.newEpisodesEnabled
             it[Keys.NEWSLETTER_ENABLED] = slice.newsletterEnabled
             it[Keys.NEWSLETTER_DAY_OF_WEEK] = slice.newsletterDayOfWeek
             it[Keys.NEWSLETTER_LAST_VIEWED_MS] = slice.newsletterLastViewedMs

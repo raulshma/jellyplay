@@ -18,8 +18,10 @@ import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.TextSize
 import com.raulshma.jellyplay.core.model.SubtitleStyle
+import com.raulshma.jellyplay.core.model.SubtitleStylePreset
 import com.raulshma.jellyplay.core.ui.components.PlayerModalBottomSheet
 import com.raulshma.jellyplay.core.ui.components.SheetHeader
+import com.raulshma.jellyplay.feature.player.video.SubtitleStylePresetPolicy
 import com.raulshma.jellyplay.feature.player.video.generated.resources.Res
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_open_tester
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_subtitle_settings
@@ -31,7 +33,11 @@ import com.raulshma.jellyplay.feature.player.video.engine.EngineCapabilities
  * Subtitle settings bottom sheet for the video player. The editable controls
  * live in the shared [SubtitleStyleControls] (also consumed by the standalone
  * subtitle tester) — this composable only owns the sheet chrome (title,
- * "Open tester" action) and forwards style changes.
+ * "Open tester" action) and forwards style changes. The named presets row
+ * ([SubtitleStylePresetsRow]) sits above the manual controls; applying a
+ * preset folds through [SubtitleStylePresetPolicy.appliedStyle] (look forced
+ * authoritative, the current per-item sync delay carried over) and then the
+ * same [onStyleChange] path a manual edit takes.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -42,6 +48,9 @@ fun SubtitleStyleSheet(
     capabilities: EngineCapabilities = EngineCapabilities(),
     onPickFont: () -> Unit = {},
     onOpenTester: () -> Unit = {},
+    userPresets: List<SubtitleStylePreset> = emptyList(),
+    onSavePreset: (String) -> Unit = {},
+    onDeletePreset: (String) -> Unit = {},
 ) {
     PlayerModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -63,6 +72,17 @@ fun SubtitleStyleSheet(
                 },
             )
             Spacer(Modifier.height(16.dp))
+
+            SubtitleStylePresetsRow(
+                userPresets = userPresets,
+                onApplyPreset = { preset ->
+                    onStyleChange(SubtitleStylePresetPolicy.appliedStyle(preset, currentStyle))
+                },
+                onSavePreset = onSavePreset,
+                onDeletePreset = onDeletePreset,
+                modifier = Modifier.padding(horizontal = 16.dp),
+            )
+            Spacer(Modifier.height(12.dp))
 
             SubtitleStyleControls(
                 currentStyle = currentStyle,

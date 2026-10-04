@@ -52,6 +52,8 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_libr
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_libraries_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_max_per_check
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_max_per_check_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_new_episodes
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_new_episodes_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_monitored_libraries
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_no_libraries_found
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_notification_lights
@@ -270,6 +272,16 @@ fun NotificationSettingsScreen(
                             highlighted = highlightSettingId == NotificationRows.NotificationLights.id,
                             onCheckedChange = { enabled ->
                                 viewModel.updateNotificationPreferences { it.copy(lightsEnabled = enabled) }
+                            },
+                        )
+                        SettingToggleItem(
+                            icon = Tabler.Outline.DeviceTv,
+                            title = rowTitle(NotificationRows.NotificationNewEpisodes),
+                            subtitle = stringResource(Res.string.settings_new_episodes_subtitle),
+                            checked = notifPrefs.newEpisodesEnabled,
+                            highlighted = highlightSettingId == NotificationRows.NotificationNewEpisodes.id,
+                            onCheckedChange = { enabled ->
+                                viewModel.updateNotificationPreferences { it.copy(newEpisodesEnabled = enabled) }
                             },
                         )
                         if (showAdvanced) {

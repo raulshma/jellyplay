@@ -45,6 +45,7 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_cast
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_cinema_mode
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_controls_timeout
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_debanding
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_double_tap_hold_seek
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_decoder
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_decoder_fallback
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_decoder_threads
@@ -66,6 +67,7 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_fram
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_gesture_indicator_side
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_gestures
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hdr_passthrough
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hide_osd_on_pause
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hold_to_seek_speed
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hwdec_override
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_incognito_mode
@@ -88,6 +90,8 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_paus
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_playback
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_playback_metadata
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_player_engine
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_resume_headset_plug
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_resume_headset_plug_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_preferred_codecs
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_preferred_renderer
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_preload_buffer
@@ -141,7 +145,9 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_cinema_mod
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_controls_timeout_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_controls_timeout_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_decoder_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_double_tap_hold_seek_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_decoder_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_double_tap_hold_seek_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_default_aspect_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_default_aspect_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_default_brightness_level_subtitle
@@ -184,6 +190,8 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_gesture_in
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_gesture_indicator_side_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_gestures_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_gestures_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_hide_osd_on_pause_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_hide_osd_on_pause_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_hold_speed_multiplier_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_hold_speed_multiplier_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_incognito_mode_subtitle
@@ -242,6 +250,8 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_playback_m
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_playback_metadata_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_player_engine_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_player_engine_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_resume_headset_plug_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_resume_headset_plug_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_preferred_renderer_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_preferred_renderer_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_preload_buffer_subtitle
@@ -325,7 +335,7 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_vlc_video_
  */
 internal object PlaybackRows {
 
-    // -- The "Video Player" group's 37 rows (36 spec-backed + the desktop volume-memory residual), in catalog order. --
+    // -- The "Video Player" group's 40 rows (39 spec-backed + the desktop volume-memory residual), in catalog order. --
 
     val PlayerEngine = SettingsRow(
         id = "player_engine",
@@ -370,6 +380,19 @@ internal object PlaybackRows {
         titleRes = Res.string.settings_gesture_indicator_side,
         searchTitleRes = Res.string.ss_gesture_indicator_side_title,
         searchSubtitleRes = Res.string.ss_gesture_indicator_side_subtitle,
+        platforms = platformsForCapability(settingsCapabilities.supportsTouchGestures),
+        gate = RowAdmission.Platform(RowAdmissionCapability.TouchGestures),
+    )
+
+    // double-tap-and-hold continuous seek — extends the
+    // double-tap seek knobs (same touch-gesture capability gate as
+    // [SeekDuration] / [Gestures], which this row renders beside).
+    val DoubleTapHoldSeek = SettingsRow(
+        id = "double_tap_hold_seek",
+        icon = Tabler.Outline.PlayerTrackNext,
+        titleRes = Res.string.settings_double_tap_hold_seek,
+        searchTitleRes = Res.string.ss_double_tap_hold_seek_title,
+        searchSubtitleRes = Res.string.ss_double_tap_hold_seek_subtitle,
         platforms = platformsForCapability(settingsCapabilities.supportsTouchGestures),
         gate = RowAdmission.Platform(RowAdmissionCapability.TouchGestures),
     )
@@ -432,6 +455,17 @@ internal object PlaybackRows {
         searchSubtitleRes = Res.string.ss_controls_timeout_subtitle,
     )
 
+    // (jellyfin-androidtv #3924): pausing should not summon the control
+    // overlay. Renders beside [ControlsTimeout] — the other controls-visibility
+    // knob — in the advanced block, sharing its admission shape.
+    val HideOsdOnPause = SettingsRow(
+        id = "hide_osd_on_pause",
+        icon = Tabler.Outline.EyeOff,
+        titleRes = Res.string.settings_hide_osd_on_pause,
+        searchTitleRes = Res.string.ss_hide_osd_on_pause_title,
+        searchSubtitleRes = Res.string.ss_hide_osd_on_pause_subtitle,
+    )
+
     val SkipBackOnResume = SettingsRow(
         id = "skip_back_on_resume",
         icon = Tabler.Outline.History,
@@ -462,6 +496,18 @@ internal object PlaybackRows {
         titleRes = Res.string.settings_duck_on_phone_call,
         searchTitleRes = Res.string.ss_duck_on_transient_focus_loss_title,
         searchSubtitleRes = Res.string.ss_duck_on_transient_focus_loss_subtitle,
+    )
+
+    // opt-in resume when headphones reconnect after the
+    // becoming-noisy auto-pause. Renders beside [DuckOnTransientFocusLoss] —
+    // the same headphones/focus playback-interruption family — in the
+    // advanced block, sharing its admission shape.
+    val ResumeHeadsetPlug = SettingsRow(
+        id = "resume_on_headset_plug",
+        icon = Tabler.Outline.Headphones,
+        titleRes = Res.string.settings_resume_headset_plug,
+        searchTitleRes = Res.string.ss_resume_headset_plug_title,
+        searchSubtitleRes = Res.string.ss_resume_headset_plug_subtitle,
     )
 
     val AutoplayTrailers = SettingsRow(
@@ -1405,6 +1451,7 @@ internal val PlaybackPlayerRows: List<SettingsRow> = listOf(
     PlaybackRows.Orientation,
     PlaybackRows.Gestures,
     PlaybackRows.GestureIndicatorSide,
+    PlaybackRows.DoubleTapHoldSeek,
     PlaybackRows.DefaultSpeed,
     PlaybackRows.DefaultAspect,
     PlaybackRows.VideoAutoplayNext,
@@ -1412,10 +1459,12 @@ internal val PlaybackPlayerRows: List<SettingsRow> = listOf(
     PlaybackRows.StillWatchingMode,
     PlaybackRows.StillWatchingEpisodes,
     PlaybackRows.ControlsTimeout,
+    PlaybackRows.HideOsdOnPause,
     PlaybackRows.SkipBackOnResume,
     PlaybackRows.ShowClockPlayer,
     PlaybackRows.PassOutProtection,
     PlaybackRows.DuckOnTransientFocusLoss,
+    PlaybackRows.ResumeHeadsetPlug,
     PlaybackRows.AutoplayTrailers,
     PlaybackRows.CinemaMode,
     PlaybackRows.EpisodeBrowser,

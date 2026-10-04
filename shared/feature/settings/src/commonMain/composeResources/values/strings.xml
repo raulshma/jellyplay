@@ -161,6 +161,8 @@
     <string name="settings_vibrate_subtitle">Vibrate on notification</string>
     <string name="settings_notification_lights">Notification Lights</string>
     <string name="settings_notification_lights_subtitle">Pulse notification light on devices that support it</string>
+    <string name="settings_new_episodes">Notify about new episodes</string>
+    <string name="settings_new_episodes_subtitle">Post new episodes to a dedicated New Episodes channel. Requires the episode\'s library to have new-media monitoring enabled.</string>
     <string name="settings_max_per_check">Max Per Check</string>
     <string name="settings_max_per_check_subtitle">Maximum items per notification batch</string>
     <string name="settings_libraries">Libraries</string>
@@ -617,6 +619,7 @@
     <string name="diff_lyrics_visible">Lyrics Visible</string>
     <string name="diff_subtitle_preview">Subtitle Preview In Settings</string>
     <string name="diff_subtitle_style">Subtitle Style</string>
+    <string name="diff_subtitle_style_presets">Subtitle Style Presets</string>
     <string name="diff_hdr_subtitle_style">HDR Subtitle Style</string>
     <string name="diff_enabled_home_sections">Enabled Home Sections</string>
     <string name="diff_home_section_order">Home Section Order</string>

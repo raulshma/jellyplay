@@ -60,6 +60,8 @@
     <string name="ss_library_view_mode_subtitle">Muestra los elementos de la biblioteca en cuadrícula o lista</string>
     <string name="ss_layout_mode_title">Diseño</string>
     <string name="ss_layout_mode_subtitle">Forzar el diseño de teléfono o tablet en lugar de seguir el tamaño de la ventana</string>
+    <string name="ss_screen_fit_title">Ajuste de pantalla</string>
+    <string name="ss_screen_fit_subtitle">Relleno del área segura de overscan del televisor (apagado / 5 % / 10 %)</string>
     <string name="ss_home_mode_title">Modo de inicio</string>
     <string name="ss_home_mode_subtitle">Define el diseño predeterminado de inicio: vídeo o música</string>
     <string name="ss_hero_section_title">Mostrar sección destacada</string>
@@ -128,6 +130,8 @@
     <string name="ss_gestures_subtitle">Activa o desactiva los gestos de deslizamiento para brillo, volumen y saltos</string>
     <string name="ss_gesture_indicator_side_title">Lado del indicador de gestos</string>
     <string name="ss_gesture_indicator_side_subtitle">Muestra la barra de brillo/volumen en el lado opuesto o el mismo que el gesto</string>
+    <string name="ss_double_tap_hold_seek_title">Doble toque y mantener para buscar</string>
+    <string name="ss_double_tap_hold_seek_subtitle">Repite la busqueda mientras se mantiene tras un doble toque</string>
     <string name="ss_default_speed_title">Velocidad de reproducción predeterminada</string>
     <string name="ss_default_speed_subtitle">Velocidad inicial predeterminada para vídeos</string>
     <string name="ss_default_aspect_title">Relación de aspecto predeterminada</string>
@@ -138,6 +142,8 @@
     <string name="ss_autoplay_countdown_subtitle">Duración de la cuenta atrás antes de reproducir el siguiente episodio</string>
     <string name="ss_controls_timeout_title">Tiempo de espera de los controles</string>
     <string name="ss_controls_timeout_subtitle">Oculta automáticamente los controles del reproductor tras un retardo</string>
+    <string name="ss_hide_osd_on_pause_title">Ocultar OSD al pausar</string>
+    <string name="ss_hide_osd_on_pause_subtitle">No mostrar la superposición de controles al pausar</string>
     <string name="ss_skip_back_on_resume_title">Retroceder al reanudar</string>
     <string name="ss_skip_back_on_resume_subtitle">Retrocede unos segundos al reanudar la reproducción</string>
     <string name="ss_show_clock_player_title">Mostrar reloj en el reproductor</string>
@@ -200,6 +206,8 @@
     <string name="ss_show_time_remaining_subtitle">Muestra el tiempo restante en lugar del transcurrido</string>
     <string name="ss_pause_on_focus_loss_title">Pausar al perder el foco</string>
     <string name="ss_pause_on_focus_loss_subtitle">Pausa la reproducción cuando el sistema reporta pérdida de foco de audio</string>
+    <string name="ss_resume_headset_plug_title">Reanudar al reconectar los auriculares</string>
+    <string name="ss_resume_headset_plug_subtitle">Reanuda la reproducción al volver a conectar los auriculares tras la pausa automática</string>
     <string name="ss_mpv_video_output_title">Salida de vídeo de MPV</string>
     <string name="ss_mpv_video_output_subtitle">Controlador de salida de vídeo de MPV</string>
     <string name="ss_mpv_scaler_title">Escalador de MPV</string>
@@ -383,6 +391,8 @@
     <string name="ss_notification_vibrate_subtitle">Vibra al recibir una notificación</string>
     <string name="ss_notification_lights_title">Luces de notificación</string>
     <string name="ss_notification_lights_subtitle">Parpadea la luz de notificación en dispositivos compatibles</string>
+    <string name="ss_new_episodes_title">Notificaciones de nuevos episodios</string>
+    <string name="ss_new_episodes_subtitle">Canal dedicado para episodios nuevos</string>
     <string name="ss_max_per_check_title">Máximo de notificaciones por comprobación</string>
     <string name="ss_max_per_check_subtitle">Máximo de elementos por lote de notificaciones</string>
     <string name="ss_notification_libraries_title">Bibliotecas de notificaciones</string>

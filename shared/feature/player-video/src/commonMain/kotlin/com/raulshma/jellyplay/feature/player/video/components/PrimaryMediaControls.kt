@@ -1,9 +1,15 @@
 package com.raulshma.jellyplay.feature.player.video.components
 
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 import com.raulshma.jellyplay.core.model.ChapterInfo
@@ -45,6 +51,10 @@ internal fun PrimaryMediaControls(
     // onSubtitleClick stays separate because it flags the hub's tab state.
     openSheet: (PlayerSheet) -> Unit,
     onSubtitleClick: () -> Unit,
+    // subtitle-visibility toggle (the Subtitles button's LONG-press): off
+    // remembers the last non-Off track in-session, on silently restores it.
+    // Short-press keeps opening the hub.
+    onSubtitleToggle: () -> Unit = {},
     chapters: List<ChapterInfo>,
     hasEpisodes: Boolean,
     episodeBrowserEnabled: Boolean,
@@ -63,12 +73,33 @@ internal fun PrimaryMediaControls(
         contentDescription = stringResource(Res.string.player_video_audio),
         onClick = { openSheet(PlayerSheet.Audio) },
     )
+    // The CC button: tap = the subtitle hub, LONG-press = the subtitle
+    // visibility toggle. PlayerIconButton's internal clickable and the
+    // long-press detector below run on separate pointer-input nodes, so a
+    // long-press would still synthesize a click on release — the
+    // subtitleLongPressed flag swallows exactly that one click (it is reset
+    // at every press start, and the semantics/a11y click path never passes
+    // through the detector, so TalkBack / D-pad clicks are unaffected).
+    var subtitleLongPressed by remember { mutableStateOf(false) }
     PlayerIconButton(
         icon = Tabler.Outline.Subtitles,
         contentDescription = stringResource(Res.string.player_video_subtitles),
-        onClick = onSubtitleClick,
+        onClick = {
+            if (!subtitleLongPressed) onSubtitleClick()
+            subtitleLongPressed = false
+        },
         // e2e: click-reach target (harness-gated no-op) — see HarnessClickBridge.
-        modifier = Modifier.harnessClickTarget("player-subtitles-trigger"),
+        modifier = Modifier
+            .harnessClickTarget("player-subtitles-trigger")
+            .pointerInput(onSubtitleToggle) {
+                detectTapGestures(
+                    onPress = { subtitleLongPressed = false },
+                    onLongPress = {
+                        subtitleLongPressed = true
+                        onSubtitleToggle()
+                    },
+                )
+            },
     )
     if (chapters.isNotEmpty()) {
         PlayerIconButton(

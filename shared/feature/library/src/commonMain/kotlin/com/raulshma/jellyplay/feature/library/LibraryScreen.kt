@@ -434,6 +434,7 @@ internal fun LibraryScreen(
         scope = MediaQuickActionScope.LIBRARY,
         includeDownload = viewModel.downloadSupported,
         includeAddToPlaylist = true,
+        includeFavorite = true,
         // Downloaded items flip the download slot to "Remove download"
         // instead of offering both.
         isDownloaded = remember(downloadedIds) {
@@ -446,6 +447,7 @@ internal fun LibraryScreen(
                 onMarkPlayed = { item, played ->
                     viewModel.onEvent(LibraryUiEvent.MarkItemPlayed(item, played))
                 },
+                onToggleFavorite = { item -> viewModel.onEvent(LibraryUiEvent.ToggleFavorite(item)) },
                 // Single-stream items start inline at the default quality;
                 // series (and other non-inline types) open the detail screen —
                 // for a series with the download sheet pre-presented.

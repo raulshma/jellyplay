@@ -79,6 +79,11 @@
     <string name="player_video_sleep_timer">Temporizador</string>
     <string name="player_video_sleep_timer_on">Temporizador \u00B7 %1$s</string>
     <string name="player_video_cancel_sleep_timer">Cancelar temporizador (%1$s restante)</string>
+    <string name="player_video_sleep_timer_stops_at">Para às %1$s</string>
+    <string name="player_video_cancel_sleep_timer_confirm_title">Cancelar o temporizador?</string>
+    <string name="player_video_cancel_sleep_timer_confirm_message">Ainda faltam %1$s no temporizador. Cancelar?</string>
+    <string name="player_video_cancel_timer">Cancelar temporizador</string>
+    <string name="player_video_keep_sleep_timer">Manter temporizador</string>
     <string name="player_video_custom_duration">Duração personalizada</string>
     <string name="player_video_custom_ellipsis">Personalizada…</string>
     <string name="player_video_end_of_episode">Fim do episódio</string>
@@ -343,4 +348,15 @@
     <string name="player_video_source_label">Fonte</string>
     <string name="player_video_version">Versão</string>
     <string name="player_video_remember_version">Memorizar esta versão</string>
+
+    <!-- Subtitle style presets -->
+    <string name="player_video_presets_title">Predefinições</string>
+    <string name="player_video_preset_subtle">Discreto</string>
+    <string name="player_video_preset_big_bold">Grande e negrito</string>
+    <string name="player_video_preset_classic_yellow">Amarelo clássico</string>
+    <string name="player_video_preset_netflixish">Estilo Netflix</string>
+    <string name="player_video_preset_save">Guardar o atual</string>
+    <string name="player_video_preset_save_dialog_title">Guardar predefinição</string>
+    <string name="player_video_preset_name_label">Nome da predefinição</string>
+    <string name="player_video_preset_delete_a11y">Eliminar predefinição %1$s</string>
 </resources>

@@ -3,11 +3,14 @@ package com.raulshma.jellyplay.feature.player.video
 import com.raulshma.jellyplay.core.datastore.subtitle.SubtitleSlice
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.SubtitleStyle
+import com.raulshma.jellyplay.core.model.SubtitleStylePreset
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import com.raulshma.jellyplay.feature.player.video.subtitle.FontProvider
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 
 /**
@@ -74,6 +77,16 @@ internal class SubtitleStyleController(
     private val fontProvider: FontProvider,
     /** The live engine handle for the direct style re-apply ([applySubtitleStyle]). */
     private val getEngine: () -> MediaEngine?,
+    /**
+     * The live user-named style preset list (the subtitle slice's
+     * [SubtitleSlice.userStylePresets] projection). Read-only for the UI;
+     * every write routes through [savePreset] / [deletePreset].
+     */
+    val userStylePresets: Flow<List<SubtitleStylePreset>> = MutableStateFlow(emptyList()),
+    /** Reads the current preset list (synchronous read for the save/delete fold). */
+    private val getUserStylePresets: () -> List<SubtitleStylePreset> = { emptyList() },
+    /** Persists the preset list ([SubtitleLanguageStore.setSubtitleStylePresets]). */
+    private val saveStylePresets: suspend (List<SubtitleStylePreset>) -> Unit = {},
 ) {
 
     // Coalesces a burst of subtitle-delay fine-tune changes into one engine
@@ -211,5 +224,30 @@ internal class SubtitleStyleController(
     fun applySubtitleStyle() {
         val engine = getEngine() ?: return
         engine.applySubtitleStyle(getStyle())
+    }
+
+    // ── Named style presets ───────────────────────────────────────────
+    // Pure list bookkeeping (cap + oldest eviction + same-name replace, and
+    // the preset→style application fold) lives in SubtitleStylePresetPolicy;
+    // this is the thin persistence + apply funnel over it.
+
+    /**
+     * Saves [style] under [name] as a user preset (blank names no-op,
+     * same-name replaces, [SubtitleStylePresetPolicy.MAX_USER_PRESETS] cap
+     * with oldest eviction) and persists the list to the subtitle slice.
+     */
+    fun savePreset(name: String, style: SubtitleStyle) {
+        val updated = SubtitleStylePresetPolicy.saveUser(getUserStylePresets(), name, style)
+        if (updated != getUserStylePresets()) {
+            scope.launch { saveStylePresets(updated) }
+        }
+    }
+
+    /** Deletes the user preset named [name] (unknown names no-op) and persists. */
+    fun deletePreset(name: String) {
+        val updated = SubtitleStylePresetPolicy.delete(getUserStylePresets(), name)
+        if (updated != getUserStylePresets()) {
+            scope.launch { saveStylePresets(updated) }
+        }
     }
 }

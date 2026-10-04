@@ -4,6 +4,7 @@ import com.raulshma.jellyplay.core.data.playback.AudioPlayerEngine
 import com.raulshma.jellyplay.core.data.playback.SleepCountdown
 import com.raulshma.jellyplay.core.datastore.audio.AudioStore
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
@@ -22,6 +23,12 @@ import kotlin.test.assertTrue
  * the load-bearing contract — expiry PAUSES the engine from ONE shared
  * callback (the explicit-pause rationale previously hand-copied at both VM
  * start sites; a toggle would RESUME a manually-paused player).
+ *
+ * Fade pins: the timed arm captures the pre-fade level and ramps the
+ * engine's software volume programmatically, cancel restores the captured
+ * level, expiry pauses THEN restores (the audio semantic: resuming tomorrow
+ * must not start silent), and the end-of-episode arm clears the capture so no
+ * stale level can be restored.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class AudioSleepTimerControllerTest {
@@ -41,6 +48,7 @@ class AudioSleepTimerControllerTest {
         sleepCountdown = mockk<SleepCountdown>(relaxed = true)
         audioStore = mockk(relaxed = true)
         engine = mockk(relaxed = true)
+        every { engine.volume } returns 0.8f
         slice = SleepTimerState()
         controller = AudioSleepTimerController(
             scope = testScope,
@@ -109,5 +117,85 @@ class AudioSleepTimerControllerTest {
             slice,
         )
         assertFalse(slice.active)
+    }
+
+    /** The timed arm captures the engine's current level as the fade's restore point. */
+    @Test
+    fun startSleepTimer_capturesThePreFadeVolume() {
+        controller.startSleepTimer(60_000L)
+
+        verify { engine.volume }
+    }
+
+    /** Fade ticks write the ramp PROGRAMMATICALLY — never as a user level. */
+    @Test
+    fun fadeTick_writesVolumeAsAProgrammaticChange() {
+        val fades = mutableListOf<(Float) -> Unit>()
+        controller.startSleepTimer(60_000L)
+        verify { sleepCountdown.setOnExpiring(capture(fades)) }
+
+        fades.single().invoke(0.4f)
+
+        verify { engine.setVolume(0.4f, isUserChange = false) }
+    }
+
+    /** Cancel restores the captured pre-fade level — programmatically. */
+    @Test
+    fun cancelSleepTimer_restoresThePreFadeVolume() {
+        controller.startSleepTimer(60_000L)
+
+        controller.cancelSleepTimer()
+
+        verify { engine.setVolume(0.8f, isUserChange = false) }
+    }
+
+    /**
+     * expiry PAUSES first, then restores the captured level — the audio
+     * semantic the video host does not have (resuming tomorrow must not start
+     * silent), and the restore is programmatic too.
+     */
+    @Test
+    fun expiry_pausesThenRestoresThePreFadeVolume() {
+        val expiries = mutableListOf<() -> Unit>()
+        controller.startSleepTimer(60_000L)
+        verify { sleepCountdown.setOnTimerExpired(capture(expiries)) }
+
+        expiries.single().invoke()
+
+        io.mockk.verifyOrder {
+            engine.pause()
+            engine.setVolume(0.8f, isUserChange = false)
+        }
+    }
+
+    /**
+     * the end-of-episode arm clears the capture — its expiry pauses but
+     * restores NOTHING (no fade happened), mirroring the video controller's
+     * capture/clear discipline.
+     */
+    @Test
+    fun endOfEpisodeArm_clearsTheCapture_expiryRestoresNothing() {
+        // A timed arm first (captures 0.8f), then the eoe arm must clear it.
+        controller.startSleepTimer(60_000L)
+        controller.startSleepTimerEndOfEpisode()
+
+        val expiries = mutableListOf<() -> Unit>()
+        verify { sleepCountdown.setOnTimerExpired(capture(expiries)) }
+        expiries.last().invoke()
+
+        verify { engine.pause() }
+        verify(exactly = 0) { engine.setVolume(any(), isUserChange = false) }
+    }
+
+    /** A second timed arm re-captures — the restore point tracks the latest arm. */
+    @Test
+    fun reArming_reCapturesTheCurrentVolume() {
+        controller.startSleepTimer(60_000L)
+        every { engine.volume } returns 0.5f
+        controller.startSleepTimer(120_000L)
+
+        controller.cancelSleepTimer()
+
+        verify { engine.setVolume(0.5f, isUserChange = false) }
     }
 }

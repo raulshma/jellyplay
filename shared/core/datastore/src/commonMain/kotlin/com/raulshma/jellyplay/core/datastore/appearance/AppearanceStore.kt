@@ -18,6 +18,7 @@ import com.raulshma.jellyplay.core.model.HandMode
 import com.raulshma.jellyplay.core.model.LayoutMode
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import com.raulshma.jellyplay.core.model.ThemeMode
+import com.raulshma.jellyplay.core.model.TvOverscan
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -115,6 +116,7 @@ class AppearanceStore constructor(
         val COLOR_BLIND_MODE = stringPreferencesKey(AppearancePreferenceSpecs.COLOR_BLIND_MODE.keyName)
         val HAND_MODE = stringPreferencesKey(AppearancePreferenceSpecs.HAND_MODE.keyName)
         val LAYOUT_MODE = stringPreferencesKey(AppearancePreferenceSpecs.LAYOUT_MODE.keyName)
+        val TV_OVERSCAN = stringPreferencesKey(AppearancePreferenceSpecs.TV_OVERSCAN.keyName)
         val HAPTICS_ENABLED = booleanPreferencesKey(AppearancePreferenceSpecs.HAPTICS_ENABLED.keyName)
         val SHOW_ADVANCED_SETTINGS = booleanPreferencesKey(AppearancePreferenceSpecs.SHOW_ADVANCED_SETTINGS.keyName)
     }
@@ -177,6 +179,7 @@ class AppearanceStore constructor(
         colorBlindMode = AppearancePreferenceSpecs.COLOR_BLIND_MODE.readFrom(prefs),
         handMode = AppearancePreferenceSpecs.HAND_MODE.readFrom(prefs),
         layoutMode = AppearancePreferenceSpecs.LAYOUT_MODE.readFrom(prefs),
+        tvOverscan = AppearancePreferenceSpecs.TV_OVERSCAN.readFrom(prefs),
     )
 
     // ------------------------------------------------------------------
@@ -299,6 +302,11 @@ class AppearanceStore constructor(
         dataStore.edit { AppearancePreferenceSpecs.LAYOUT_MODE.writeTo(it, mode) }
     }
 
+    /** The TV overscan safe-area calibration; inert off the TV form factor. */
+    suspend fun setTvOverscan(overscan: TvOverscan) {
+        dataStore.edit { AppearancePreferenceSpecs.TV_OVERSCAN.writeTo(it, overscan) }
+    }
+
     /**
      * Keys owned by this store, for factory-reset participation. Derived as the
      * union of the [resetKeysFor] category lists (in enum declaration order) —
@@ -363,6 +371,7 @@ class AppearanceStore constructor(
             AppearancePreferenceSpecs.COLOR_BLIND_MODE.writeTo(prefs, slice.colorBlindMode)
             AppearancePreferenceSpecs.HAND_MODE.writeTo(prefs, slice.handMode)
             AppearancePreferenceSpecs.LAYOUT_MODE.writeTo(prefs, slice.layoutMode)
+            AppearancePreferenceSpecs.TV_OVERSCAN.writeTo(prefs, slice.tvOverscan)
         }
     }
 }
@@ -402,4 +411,5 @@ data class AppearanceSlice(
     val colorBlindMode: ColorBlindMode = ColorBlindMode.NONE,
     val handMode: HandMode = HandMode.RIGHT,
     val layoutMode: LayoutMode = LayoutMode.AUTO,
+    val tvOverscan: TvOverscan = TvOverscan.FIVE,
 )

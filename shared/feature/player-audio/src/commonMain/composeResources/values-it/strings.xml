@@ -72,6 +72,11 @@
     <string name="audio_sleep_timer_title">Timer di spegnimento</string>
     <string name="audio_sleep_timer_end_of_episode">Fine episodio</string>
     <string name="audio_sleep_timer_duration">Durata</string>
+    <string name="audio_sleep_timer_stops_at">Si ferma alle %1$s</string>
+    <string name="audio_sleep_timer_cancel_title">Annullare il timer?</string>
+    <string name="audio_sleep_timer_cancel_message">Il timer ha ancora %1$s. Annullarlo?</string>
+    <string name="audio_cancel_timer">Annulla timer</string>
+    <string name="audio_sleep_timer_keep">Mantieni timer</string>
 
     <!-- Equalizer -->
     <string name="audio_equalizer_title">Equalizzatore</string>
@@ -97,6 +102,11 @@
     <string name="audio_queue_title">Coda</string>
     <string name="audio_queue_remove">Rimuovi dalla coda</string>
     <string name="audio_queue_position">%1$d di %2$d</string>
+
+    <!-- Queue drag-reorder -->
+    <string name="audio_queue_reorder_handle">Trascina per riordinare</string>
+    <string name="audio_queue_move_up">Sposta su</string>
+    <string name="audio_queue_move_down">Sposta giù</string>
 
     <!-- Add to playlist picker -->
     <string name="audio_playlist_picker_title">Aggiungi a playlist</string>

@@ -35,6 +35,8 @@
     <string name="settings_auto_play_countdown_subtitle">Countdown-Dauer vor automatischer Wiedergabe der nächsten Episode</string>
     <string name="settings_controls_timeout">Steuerungs-Timeout</string>
     <string name="settings_controls_timeout_subtitle">Player-Steuerung automatisch ausblenden</string>
+    <string name="settings_hide_osd_on_pause">OSD beim Pausieren ausblenden</string>
+    <string name="settings_hide_osd_on_pause_subtitle">Steuerelemente beim Pausieren ausgeblendet lassen</string>
     <string name="settings_streaming_quality_auto_adaptive">Auto (adaptiv)</string>
     <string name="settings_streaming_quality_auto">Auto</string>
     <string name="settings_b_frames_none_best">Keine (beste Qualität)</string>
@@ -84,6 +86,8 @@
     <string name="settings_preferred_player">Bevorzugter Player</string>
     <string name="settings_double_tap_seek_duration">Doppel-Tipp Sprung-Dauer</string>
     <string name="settings_gesture_indicator_side">Gesten-Indikator-Seite</string>
+    <string name="settings_double_tap_hold_seek">Doppeltipp und halten zum Spulen</string>
+    <string name="settings_double_tap_hold_seek_subtitle">Spult weiter, solange nach dem Doppeltipp gehalten wird</string>
     <string name="settings_gesture_indicator_opposite">Helligkeits-/Lautstärkebalken auf der gegenüberliegenden Seite der Geste zeigen</string>
     <string name="settings_gesture_indicator_same">Balken auf der gleichen Seite wie die Geste zeigen</string>
     <string name="settings_countdown_immediate">Nächstes Element sofort abspielen</string>
@@ -132,6 +136,8 @@
     <string name="settings_pause_on_focus_loss">Bei Fokusverlust pausieren</string>
     <string name="settings_pause_on_focus_loss_on">Wiedergabe pausieren, wenn das System Fokusverlust meldet</string>
     <string name="settings_pause_on_focus_loss_off">Wiedergabe bei Fokusverlust fortsetzen</string>
+    <string name="settings_resume_headset_plug">Fortsetzen bei erneut angeschlossenen Kopfhörern</string>
+    <string name="settings_resume_headset_plug_subtitle">Wiedergabe fortsetzen, wenn Kopfhörer nach der Automatischen Pause beim Abziehen wieder angeschlossen werden</string>
     <string name="settings_decoder_summary">Decoder: %1$s</string>
     <string name="settings_decoder">Decoder</string>
     <string name="settings_refresh_rate_match">Bildwiederholraten-Anpassung</string>

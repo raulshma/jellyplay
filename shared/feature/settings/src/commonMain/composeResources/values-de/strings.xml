@@ -132,6 +132,8 @@
     <string name="settings_vibrate_subtitle">Bei Benachrichtigung vibrieren</string>
     <string name="settings_notification_lights">Benachrichtigungs-LED</string>
     <string name="settings_notification_lights_subtitle">Benachrichtigungs-LED blinken lassen, wenn vom Gerät unterstützt</string>
+    <string name="settings_new_episodes">Über neue Folgen benachrichtigen</string>
+    <string name="settings_new_episodes_subtitle">Neue Folgen in einem eigenen Benachrichtigungskanal posten. Erfordert aktiviertes Neu-Medien-Monitoring für die Mediathek.</string>
     <string name="settings_max_per_check">Max. pro Prüfung</string>
     <string name="settings_max_per_check_subtitle">Maximale Einträge pro Benachrichtigungs-Charge</string>
     <string name="settings_libraries">Mediatheken</string>
@@ -550,6 +552,7 @@
     <string name="diff_lyrics_visible">Songtext sichtbar</string>
     <string name="diff_subtitle_preview">Untertitel-Vorschau in den Einstellungen</string>
     <string name="diff_subtitle_style">Untertitelstil</string>
+    <string name="diff_subtitle_style_presets">Untertitelstil-Vorlagen</string>
     <string name="diff_hdr_subtitle_style">HDR-Untertitelstil</string>
     <string name="diff_enabled_home_sections">Aktive Startseiten-Bereiche</string>
     <string name="diff_home_section_order">Reihenfolge der Startseiten-Bereiche</string>

@@ -79,6 +79,11 @@
     <string name="player_video_sleep_timer">수면 타이머</string>
     <string name="player_video_sleep_timer_on">수면 타이머 \u00B7 %1$s</string>
     <string name="player_video_cancel_sleep_timer">수면 타이머 취소 (%1$s 남음)</string>
+    <string name="player_video_sleep_timer_stops_at">%1$s에 정지</string>
+    <string name="player_video_cancel_sleep_timer_confirm_title">수면 타이머를 취소할까요?</string>
+    <string name="player_video_cancel_sleep_timer_confirm_message">타이머에 아직 %1$s 남았어요. 취소할까요?</string>
+    <string name="player_video_cancel_timer">타이머 취소</string>
+    <string name="player_video_keep_sleep_timer">타이머 유지</string>
     <string name="player_video_custom_duration">사용자 지정 지속 시간</string>
     <string name="player_video_custom_ellipsis">사용자 지정…</string>
     <string name="player_video_end_of_episode">에피소드 끝</string>
@@ -342,4 +347,15 @@
     <string name="player_video_source_label">소스</string>
     <string name="player_video_version">버전</string>
     <string name="player_video_remember_version">이 버전 기억</string>
+
+    <!-- Subtitle style presets -->
+    <string name="player_video_presets_title">프리셋</string>
+    <string name="player_video_preset_subtle">절제</string>
+    <string name="player_video_preset_big_bold">크고 굵게</string>
+    <string name="player_video_preset_classic_yellow">클래식 옐로</string>
+    <string name="player_video_preset_netflixish">넷플릭스 스타일</string>
+    <string name="player_video_preset_save">현재 설정 저장</string>
+    <string name="player_video_preset_save_dialog_title">프리셋 저장</string>
+    <string name="player_video_preset_name_label">프리셋 이름</string>
+    <string name="player_video_preset_delete_a11y">프리셋 %1$s 삭제</string>
 </resources>

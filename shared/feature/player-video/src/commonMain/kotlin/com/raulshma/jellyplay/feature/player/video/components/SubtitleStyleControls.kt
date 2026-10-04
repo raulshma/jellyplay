@@ -768,13 +768,14 @@ private fun AssOverrideChip(
 
 /**
  * Shared FilterChip styling for the subtitle-style picker chips (text-style
- * toggles, ASS-override mode, edge type, border style). Collapses the
- * byte-identical focusState + FilterChip config (pill shape, primary-tinted
- * selected container/label, transparent border with primary selected border,
- * TV focus indicator) that was previously copy-pasted across four call sites.
+ * toggles, ASS-override mode, edge type, border style, presets row).
+ * Collapses the byte-identical focusState + FilterChip config (pill shape,
+ * primary-tinted selected container/label, transparent border with primary
+ * selected border, TV focus indicator) that was previously copy-pasted across
+ * four call sites. Internal so [SubtitleStylePresetsRow] reuses the idiom.
  */
 @Composable
-private fun SubtitleStyleChip(
+internal fun SubtitleStyleChip(
     label: String,
     selected: Boolean,
     onClick: () -> Unit,

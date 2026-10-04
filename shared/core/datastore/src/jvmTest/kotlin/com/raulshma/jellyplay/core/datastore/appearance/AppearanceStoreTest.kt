@@ -12,6 +12,7 @@ import com.raulshma.jellyplay.core.model.DateFormatPreference
 import com.raulshma.jellyplay.core.model.HandMode
 import com.raulshma.jellyplay.core.model.LayoutMode
 import com.raulshma.jellyplay.core.model.ThemeMode
+import com.raulshma.jellyplay.core.model.TvOverscan
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -142,6 +143,15 @@ class AppearanceStoreTest {
     }
 
     @Test
+    fun `setTvOverscan round-trips and defaults to the guideline 5 percent`() = runTest {
+        assertEquals(TvOverscan.FIVE, store.appearance.first().tvOverscan)
+        store.setTvOverscan(TvOverscan.OFF)
+        assertEquals(TvOverscan.OFF, store.appearance.first().tvOverscan)
+        store.setTvOverscan(TvOverscan.TEN)
+        assertEquals(TvOverscan.TEN, store.appearance.first().tvOverscan)
+    }
+
+    @Test
     fun `corrupt layout_mode falls back to AUTO`() = runTest {
         store.setLayoutMode(LayoutMode.TABLET)
         dataStore.edit {
@@ -194,6 +204,7 @@ class AppearanceStoreTest {
             colorBlindMode = ColorBlindMode.DEUTERANOPIA,
             handMode = HandMode.LEFT,
             layoutMode = LayoutMode.PHONE,
+            tvOverscan = TvOverscan.TEN,
         )
 
         store.restore(slice)

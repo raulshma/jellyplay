@@ -90,7 +90,7 @@ sealed interface VideoPlayerUiEvent {
 
     /**
      * The transport play/pause funnel: SyncPlay group first, cast receiver
-     * second, local engine last (the A1 routing — the PiP window's
+     * second, local engine last (the routing — the PiP window's
      * PLAY/PAUSE actions land on the same path).
      */
     data class TransportPlay(val play: Boolean) : VideoPlayerUiEvent
@@ -167,6 +167,14 @@ sealed interface VideoPlayerUiEvent {
 
     /** Selects a subtitle track (the subtitle picker / downloaded-subtitle activation). */
     data class SelectSubtitleTrack(val option: TrackOption) : VideoPlayerUiEvent
+
+    /**
+     * Toggles subtitle visibility with memory: off remembers the last
+     * non-Off track in-session, on silently restores it. Bound to `V` and the
+     * CC button's long-press; distinct from picking the hub's Off row, which
+     * does not remember a restore target.
+     */
+    data object ToggleSubtitles : VideoPlayerUiEvent
 
     /** Clears the stored audio-track override. */
     data object ResetAudioTrack : VideoPlayerUiEvent

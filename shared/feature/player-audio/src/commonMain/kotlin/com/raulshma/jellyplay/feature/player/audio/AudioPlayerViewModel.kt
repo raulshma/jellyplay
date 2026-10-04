@@ -267,6 +267,7 @@ class AudioPlayerViewModel(
         when (event) {
             is AudioPlayerUiEvent.Play -> play(event.itemId)
             is AudioPlayerUiEvent.RemoveFromQueue -> removeFromQueue(event.index)
+            is AudioPlayerUiEvent.MoveQueueItem -> moveQueueItem(event.fromIndex, event.toIndex)
             is AudioPlayerUiEvent.StopRadio -> audioQueueFacade.stopRadio()
             is AudioPlayerUiEvent.UndoLastQueueOperation -> undoLastQueueOperation()
             is AudioPlayerUiEvent.CycleAbLoop -> cycleAbLoop()
@@ -354,6 +355,10 @@ class AudioPlayerViewModel(
 
     private fun removeFromQueue(index: Int) {
         queueManager.removeFromQueue(index)
+    }
+
+    private fun moveQueueItem(fromIndex: Int, toIndex: Int) {
+        queueManager.moveQueueItem(fromIndex, toIndex)
     }
 
     /** One-shot stream of destructive queue ops the UI can offer to undo. */

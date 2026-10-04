@@ -108,6 +108,35 @@ class VideoPlayerStoreTest {
     }
 
     @Test
+    fun `double tap hold seek defaults on and round-trips`() = runTest {
+        assertTrue(store.videoPlayer.first().videoDoubleTapHoldSeekEnabled)
+        store.setVideoDoubleTapHoldSeekEnabled(false)
+        assertFalse(store.videoPlayer.first().videoDoubleTapHoldSeekEnabled)
+        store.setVideoDoubleTapHoldSeekEnabled(true)
+        assertTrue(store.videoPlayer.first().videoDoubleTapHoldSeekEnabled)
+    }
+
+    @Test
+    fun `hide osd on pause defaults off and round-trips`() = runTest {
+        // Default OFF — today's show-on-pause behavior is untouched.
+        assertFalse(store.videoPlayer.first().videoHideOsdOnPause)
+        store.setVideoHideOsdOnPause(true)
+        assertTrue(store.videoPlayer.first().videoHideOsdOnPause)
+        store.setVideoHideOsdOnPause(false)
+        assertFalse(store.videoPlayer.first().videoHideOsdOnPause)
+    }
+
+    @Test
+    fun `resume on headset plug defaults off and round-trips`() = runTest {
+        // Default OFF — the resume is opt-in.
+        assertFalse(store.videoPlayer.first().videoResumeOnHeadsetPlug)
+        store.setVideoResumeOnHeadsetPlug(true)
+        assertTrue(store.videoPlayer.first().videoResumeOnHeadsetPlug)
+        store.setVideoResumeOnHeadsetPlug(false)
+        assertFalse(store.videoPlayer.first().videoResumeOnHeadsetPlug)
+    }
+
+    @Test
     fun `legacy video_gestures_enabled false migrates to NONE`() = runTest {
         // Pre-mode install with gestures disabled: no `video_gesture_mode` key,
         // so readGestureMode falls back to the legacy boolean.
@@ -198,6 +227,9 @@ class VideoPlayerStoreTest {
             videoDefaultOrientation = OrientationMode.LOCKED_LANDSCAPE,
             videoDefaultAspectRatio = "16:9",
             videoGestureMode = GestureMode.TAP_ONLY,
+            videoDoubleTapHoldSeekEnabled = false,
+            videoHideOsdOnPause = true,
+            videoResumeOnHeadsetPlug = true,
             videoPassOutProtectionHours = 24,
             videoSkipBackOnResumeMs = 10_000L,
             videoHoldSpeedEnabled = false,

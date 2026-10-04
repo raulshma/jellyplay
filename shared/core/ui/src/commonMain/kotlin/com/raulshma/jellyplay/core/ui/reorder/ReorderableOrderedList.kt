@@ -1,4 +1,4 @@
-package com.raulshma.jellyplay.feature.settings
+package com.raulshma.jellyplay.core.ui.reorder
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -7,19 +7,19 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshots.SnapshotStateList
 
 /**
- * One choreography owner for the drag-to-reorder lists (Appearance → Home
- * Screen Layout, Appearance → Newsletter sections, Navigation Customization
- * Group). [ReorderState] already owns the threshold-swap arithmetic, but each
- * call site still hand-copied the ~40 lines AROUND it: a mirror
- * `mutableStateListOf` seeded from the stored preference, a store-emission
- * resync guarded by `!isDragging`, a write-on-diff persist, and the drag
- * callbacks that glue it all together — and the third copy had already
- * drifted (remember-keys reseeding the whole state instead of the guarded
- * resync). This holder owns the choreography once; the call sites shrink to
- * content (row slot + `onPersist = viewModel::setX`).
+ * One choreography owner for drag-to-reorder lists (settings Appearance →
+ * Home Screen Layout, Appearance → Newsletter sections, Navigation
+ * Customization Group, audio player queue sheet). [ReorderState] already owns
+ * the threshold-swap arithmetic, but each call site still hand-copied the
+ * ~40 lines AROUND it: a mirror `mutableStateListOf` seeded from the stored
+ * order, a store-emission resync guarded by `!isDragging`, a write-on-diff
+ * persist, and the drag callbacks that glue it all together — and the third
+ * copy had already drifted (remember-keys reseeding the whole state instead
+ * of the guarded resync). This holder owns the choreography once; the call
+ * sites shrink to content (row slot + `onPersist = viewModel::setX`).
  *
  * Resync semantic (the majority pattern, pinned by
- * [ReorderableOrderedListTest]): a stored-preference emission applies to the
+ * `ReorderableOrderedListTest`): a stored-order emission applies to the
  * mirror and the working order only while NO drag is in flight — an emission
  * that arrives mid-gesture is ignored, not queued; the gesture's final order
  * wins, is persisted on drag end (write-on-diff against the last seeded
@@ -30,7 +30,7 @@ import androidx.compose.runtime.snapshots.SnapshotStateList
  * Compose-observable half: [items] is the mirror the rows render from;
  * [ReorderState] stays unchanged as the order/policy source of truth.
  */
-internal class ReorderableOrderedListState<T : Any>(
+class ReorderableOrderedListState<T : Any>(
     private val onPersist: (List<T>) -> Unit,
 ) {
 
@@ -50,7 +50,7 @@ internal class ReorderableOrderedListState<T : Any>(
     val isDragging: Boolean get() = reorder.isDragging
 
     /**
-     * Applies a stored-preference emission per the pinned semantic: the diff
+     * Applies a stored-order emission per the pinned semantic: the diff
      * base always advances to [order], but the mirror + working order are
      * updated only when no drag is in flight.
      */
@@ -106,10 +106,10 @@ internal class ReorderableOrderedListState<T : Any>(
  * Remembers a [ReorderableOrderedListState] for [storedOrder], seeding it once
  * synchronously and resyncing on every later emission ([knownOrder] included
  * in the key, so the Navigation Customization Group's known-items merge —
- * [resolveOrder] — re-seeds when the available nav items change).
+ * `resolveOrder` — re-seeds when the available nav items change).
  */
 @Composable
-internal fun <T : Any> rememberReorderableOrderedList(
+fun <T : Any> rememberReorderableOrderedList(
     storedOrder: List<T>,
     onPersist: (List<T>) -> Unit,
     knownOrder: List<T>? = null,
@@ -130,3 +130,16 @@ internal fun <T : Any> rememberReorderableOrderedList(
 /** Stored order verbatim, or merged against the known items when provided. */
 private fun <T : Any> seedOrder(storedOrder: List<T>, knownOrder: List<T>?): List<T> =
     if (knownOrder == null) storedOrder else resolveOrder(storedOrder, knownOrder)
+
+/**
+ * Resolves a stored order against the [knownOrder]: known items in their
+ * stored position, then any known items missing from the stored order in
+ * their default [knownOrder] position. Unknown stored entries are dropped.
+ * (Promoted verbatim from `feature/settings`, where the Navigation
+ * Customization Group owned it.)
+ */
+fun <T> resolveOrder(storedOrder: List<T>, knownOrder: List<T>): List<T> {
+    val ordered = storedOrder.filter { it in knownOrder }
+    val missing = knownOrder.filter { it !in ordered }
+    return ordered + missing
+}

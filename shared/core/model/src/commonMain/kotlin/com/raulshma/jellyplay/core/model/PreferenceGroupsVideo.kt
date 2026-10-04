@@ -110,7 +110,18 @@ data class PlaybackPreferences(
     val videoSeekDurationMs: Long = 10_000L,
     val videoDefaultOrientation: OrientationMode = OrientationMode.SENSOR_LANDSCAPE,
     val videoControlsTimeoutMs: Long = 5_000L,
+    /**
+     * (jellyfin-androidtv #3924): pausing must not summon the control
+     * overlay. Default **off** — today's behavior; on, only the summons is
+     * suppressed (an already-visible overlay keeps its auto-hide timeout).
+     */
+    val videoHideOsdOnPause: Boolean = false,
     val videoGestureMode: GestureMode = GestureMode.ALL,
+    /**
+     * double-tap-and-hold continuous seek in the seek zones
+     * (default ON; off = legacy long-press hold-speed everywhere).
+     */
+    val videoDoubleTapHoldSeekEnabled: Boolean = true,
     val videoHoldSpeedEnabled: Boolean = true,
     val videoHoldSpeedMultiplier: Float = 2.0f,
     val videoDefaultSpeed: Float = 1.0f,
@@ -144,6 +155,13 @@ data class PlaybackPreferences(
     val showTimeRemaining: Boolean = false,
     val pauseOnAudioFocusLoss: Boolean = true,
     val duckOnTransientFocusLoss: Boolean = false,
+    /**
+     * (opt-in, Android-only machinery): resume playback when
+     * headphones reconnect, but ONLY for the pause the becoming-noisy event
+     * itself made, and only within its freshness window (see
+     * `HeadsetResumePolicy` in core:data). Default off.
+     */
+    val videoResumeOnHeadsetPlug: Boolean = false,
     val dialogueBoostEnabled: Boolean = false,
     val dialogueBoostStrength: EffectStrength = EffectStrength.MODERATE,
     val audioDelayMs: Long = 0L,

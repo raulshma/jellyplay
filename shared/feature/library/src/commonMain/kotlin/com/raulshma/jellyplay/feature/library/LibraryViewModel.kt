@@ -218,6 +218,12 @@ internal class LibraryViewModel(
                 // is left untouched so the user keeps their scroll position.
                 userDataMutator.setPlayed(event.item.id, event.played)
             }
+            is LibraryUiEvent.ToggleFavorite -> launch {
+                // Same silent contract as MarkItemPlayed: the mutator resolves
+                // the toggle target (server/local) and writes it; the paged
+                // grid is left untouched so the user keeps their position.
+                userDataMutator.setFavorite(event.item.id)
+            }
             is LibraryUiEvent.DownloadItem -> downloadItem(event)
             is LibraryUiEvent.RemoveItemDownload -> quickDownloadActions.removeDownload(event.item)
             is LibraryUiEvent.PrefetchPhotoFolderChildUrls -> photoFolderChildUrlsStore.prefetch(event.items)

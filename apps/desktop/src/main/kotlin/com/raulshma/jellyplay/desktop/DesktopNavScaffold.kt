@@ -119,6 +119,10 @@ internal fun DesktopNavScaffold(
     // The ComposeWindow handle (Main.kt's AWT ref) — the remote
     // navigation ladder's select synthesis posts AWT key events through it.
     windowRef: AtomicReference<ComposeWindow?>? = null,
+    //  open-with: Main.kt's pending link-open queue — the argv seed,
+    // the Ctrl+Shift+V clipboard accelerator and the second-instance forward
+    // watcher all feed it; the drain effect below is its ONE consumer.
+    linkOpens: DesktopLinkOpenQueue? = null,
 ) {
     val navigation = rememberNavigationState(
         startRoute = Route.Home,
@@ -228,6 +232,34 @@ internal fun DesktopNavScaffold(
             readOnboardingCompleted = appRuntimeStateStore::isOnboardingCompleted,
             navigate = guardedNavigator::navigate,
         )
+    }
+
+    //  open-with drain: the ONE consumer of Main.kt's pending link-open
+    // queue. Parsed targets route through the guarded navigator (top-level
+    // destinations switch the tab; details push on the current stack) and a
+    // parsed-but-unroutable target (SyncPlayJoin — the Discord Rich Presence
+    // join payload, see DesktopLinkOpenPolicy.targetRoute) or a clipboard
+    // miss surfaces as this scaffold's own snackbar, so the accelerator never
+    // feels dead. Events that arrived BEFORE this composition (the argv seed
+    // waiting out session restore) are delivered on the first pass — the
+    // channel's replay is the point; the signed-out branch drops its events
+    // instead (see DesktopAppRoot), so nothing stale replays across a
+    // sign-in.
+    LaunchedEffect(linkOpens, guardedNavigator) {
+        linkOpens?.pending?.collect { event ->
+            when (event) {
+                is DesktopOpenLinkEvent.Link -> {
+                    val route = DesktopLinkOpenPolicy.targetRoute(event.target)
+                    if (route != null) {
+                        guardedNavigator.navigate(route)
+                    } else {
+                        snackbarHostState.showSnackbar(DesktopLinkOpenMessages.NO_DESKTOP_ROUTE)
+                    }
+                }
+                DesktopOpenLinkEvent.NoLinkFound ->
+                    snackbarHostState.showSnackbar(DesktopLinkOpenMessages.NO_LINK_IN_CLIPBOARD)
+            }
+        }
     }
 
     // User-message host (the shared seam): ONE collector behind every message

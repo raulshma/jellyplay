@@ -2,12 +2,18 @@ package com.raulshma.jellyplay.feature.player.video.components
 
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextInput
 import com.raulshma.jellyplay.core.model.SubtitleColor
 import com.raulshma.jellyplay.core.model.SubtitleEdgeType
 import com.raulshma.jellyplay.core.model.SubtitleStyle
+import com.raulshma.jellyplay.core.model.SubtitleStylePreset
 import com.raulshma.jellyplay.feature.player.video.engine.EngineCapabilities
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -348,5 +354,106 @@ class SubtitleStyleSheetTest {
             }
         }
         composeTestRule.onNodeWithText("Border Style").assertDoesNotExist()
+    }
+
+    // ─── named style presets: apply / save / delete ─────────────────────
+
+    private fun setContentWith(
+        currentStyle: SubtitleStyle = SubtitleStyle(),
+        userPresets: List<SubtitleStylePreset> = emptyList(),
+        onSavePreset: (String) -> Unit = {},
+        onDeletePreset: (String) -> Unit = {},
+        onStyleChange: (SubtitleStyle) -> Unit = {},
+    ) {
+        composeTestRule.setContent {
+            MaterialTheme {
+                SubtitleStyleSheet(
+                    currentStyle = currentStyle,
+                    onStyleChange = onStyleChange,
+                    onDismiss = {},
+                    userPresets = userPresets,
+                    onSavePreset = onSavePreset,
+                    onDeletePreset = onDeletePreset,
+                )
+            }
+        }
+    }
+
+    @Test
+    fun subtitleStyleSheet_displaysPresetsSectionWithBuiltIns() {
+        setContentWith()
+        composeTestRule.onNodeWithText("Presets").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Subtle").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Big bold").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Classic yellow").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Netflix-ish").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Save current").assertIsDisplayed()
+    }
+
+    @Test
+    fun subtitleStyleSheet_builtinPresetChip_appliesPresetStyle() {
+        var received: SubtitleStyle? = null
+        // The current per-item sync delay must survive the apply.
+        setContentWith(
+            currentStyle = SubtitleStyle(offsetMs = 2000L),
+            onStyleChange = { received = it },
+        )
+        composeTestRule.onNodeWithText("Classic yellow").performClick()
+        val applied = received!!
+        assertEquals(SubtitleColor.YELLOW, applied.fontColor)
+        assertEquals(SubtitleEdgeType.OUTLINE, applied.edgeType)
+        assertTrue("applying a preset must force the override on", applied.applyCustomStyle)
+        assertEquals("the per-item delay never travels with a look", 2000L, applied.offsetMs)
+    }
+
+    @Test
+    fun subtitleStyleSheet_userPresetChip_appliesPresetStyle() {
+        var received: SubtitleStyle? = null
+        setContentWith(
+            userPresets = listOf(
+                SubtitleStylePreset("Mine", SubtitleStyle(fontSize = 40, bold = true)),
+            ),
+            onStyleChange = { received = it },
+        )
+        composeTestRule.onNodeWithText("Mine").performClick()
+        val applied = received!!
+        assertEquals(40, applied.fontSize)
+        assertTrue(applied.bold)
+        assertTrue(applied.applyCustomStyle)
+    }
+
+    @Test
+    fun subtitleStyleSheet_userPresetDelete_callsOnDelete() {
+        var deleted: String? = null
+        setContentWith(
+            userPresets = listOf(
+                SubtitleStylePreset("Mine", SubtitleStyle(fontSize = 40)),
+            ),
+            onDeletePreset = { deleted = it },
+        )
+        composeTestRule
+            .onNodeWithContentDescription("Delete preset Mine")
+            .performClick()
+        assertEquals("Mine", deleted)
+    }
+
+    @Test
+    fun subtitleStyleSheet_saveCurrent_opensDialog_andSavesNamedPreset() {
+        var saved: String? = null
+        setContentWith(onSavePreset = { saved = it })
+
+        composeTestRule.onNodeWithText("Save current").performClick()
+        composeTestRule.onNodeWithText("Save preset").assertIsDisplayed()
+
+        // Confirm follows the module's dialog idiom ("Apply"/"Cancel") and is
+        // disabled while the name is blank. Exact "Apply" matches only the
+        // dialog's confirm button.
+        val confirm = composeTestRule.onNodeWithText("Apply")
+        confirm.assertIsNotEnabled()
+
+        composeTestRule.onNodeWithTag("subtitle-preset-name").performTextInput("Mine")
+        confirm.assertIsEnabled().performClick()
+
+        assertEquals("Mine", saved)
     }
 }

@@ -64,6 +64,8 @@
     <string name="ss_library_view_mode_subtitle">Display library items in grid or list layouts</string>
     <string name="ss_layout_mode_title">Layout</string>
     <string name="ss_layout_mode_subtitle">Force the phone or tablet layout instead of following the window size</string>
+    <string name="ss_screen_fit_title">Screen fit</string>
+    <string name="ss_screen_fit_subtitle">TV overscan safe-area padding (Off / 5% / 10%)</string>
     <string name="ss_home_mode_title">Home Mode</string>
     <string name="ss_home_mode_subtitle">Set default home screen layout: video or music</string>
     <string name="ss_hero_section_title">Show Hero Section</string>
@@ -140,6 +142,8 @@
     <string name="ss_gestures_subtitle">Choose tap and swipe gestures for brightness, volume, and seeking</string>
     <string name="ss_gesture_indicator_side_title">Gesture Indicator Side</string>
     <string name="ss_gesture_indicator_side_subtitle">Show brightness/volume bar opposite or same side as the gesture</string>
+    <string name="ss_double_tap_hold_seek_title">Double-Tap and Hold Seek</string>
+    <string name="ss_double_tap_hold_seek_subtitle">Repeat the seek while holding after a double-tap</string>
     <string name="ss_default_speed_title">Default Playback Speed</string>
     <string name="ss_default_speed_subtitle">Default initial playback speed for videos</string>
     <string name="ss_default_aspect_title">Default Aspect Ratio</string>
@@ -154,6 +158,8 @@
     <string name="ss_still_watching_episodes_subtitle">Consecutive auto-played episodes before the Still Watching prompt appears</string>
     <string name="ss_controls_timeout_title">Controls Timeout</string>
     <string name="ss_controls_timeout_subtitle">Auto-hide on-screen player controls after delay</string>
+    <string name="ss_hide_osd_on_pause_title">Hide OSD on Pause</string>
+    <string name="ss_hide_osd_on_pause_subtitle">Don't show the control overlay when pausing</string>
     <string name="ss_skip_back_on_resume_title">Skip Back on Resume</string>
     <string name="ss_skip_back_on_resume_subtitle">Jump back a few seconds when un-pausing playback</string>
     <string name="ss_show_clock_player_title">Show Clock in Player</string>
@@ -222,6 +228,8 @@
     <string name="ss_show_time_remaining_subtitle">Display remaining time instead of elapsed time</string>
     <string name="ss_pause_on_focus_loss_title">Pause on Focus Loss</string>
     <string name="ss_pause_on_focus_loss_subtitle">Pause playback when system reports audio focus loss</string>
+    <string name="ss_resume_headset_plug_title">Resume When Headphones Reconnect</string>
+    <string name="ss_resume_headset_plug_subtitle">Resume when headphones are plugged back in after the unplug auto-pause</string>
     <string name="ss_mpv_video_output_title">MPV Video Output</string>
     <string name="ss_mpv_video_output_subtitle">MPV video output driver</string>
     <string name="ss_mpv_scaler_title">MPV Scaler</string>
@@ -429,6 +437,8 @@
     <string name="ss_notification_vibrate_subtitle">Vibrate on notification</string>
     <string name="ss_notification_lights_title">Notification Lights</string>
     <string name="ss_notification_lights_subtitle">Pulse notification light on supported devices</string>
+    <string name="ss_new_episodes_title">New Episode Notifications</string>
+    <string name="ss_new_episodes_subtitle">Get a dedicated channel for newly added episodes</string>
     <string name="ss_max_per_check_title">Max Notifications Per Check</string>
     <string name="ss_max_per_check_subtitle">Maximum items per notification batch</string>
     <string name="ss_notification_libraries_title">Notification Libraries</string>

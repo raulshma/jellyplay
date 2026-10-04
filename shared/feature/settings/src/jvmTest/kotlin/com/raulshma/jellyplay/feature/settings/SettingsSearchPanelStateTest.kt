@@ -17,7 +17,7 @@ import kotlin.test.assertTrue
  * tap-through → dismiss) and the recents add/dedupe/clear commands. Pure JVM:
  * the holder's snapshot state reads/writes fine outside composition and the
  * persistence sinks are recorded by lambdas, so no stores, dispatchers or
- * Compose machinery are involved (the [ReorderStateTest] pattern).
+ * Compose machinery are involved (the ReorderStateTest pattern).
  */
 class SettingsSearchPanelStateTest {
 

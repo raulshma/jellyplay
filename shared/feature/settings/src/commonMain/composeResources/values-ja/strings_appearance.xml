@@ -26,6 +26,8 @@
     <string name="settings_library_view_mode">ライブラリーの表示モード</string>
     <string name="settings_layout_mode">レイアウト</string>
     <string name="settings_layout_mode_subtitle">自動、電話、タブレットのレイアウトを選択</string>
+    <string name="settings_screen_fit">画面フィット</string>
+    <string name="settings_screen_fit_subtitle">テレビのセーフエリア内に画像を収め、端が切れないようにします</string>
     <string name="settings_library_view_grid">アイテムをグリッドで表示</string>
     <string name="settings_library_view_list">アイテムをリストで表示</string>
     <string name="settings_library_view_thumb">アイテムを横長のサムネイルで表示</string>

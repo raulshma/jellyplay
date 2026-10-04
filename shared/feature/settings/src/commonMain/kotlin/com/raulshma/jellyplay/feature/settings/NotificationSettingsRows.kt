@@ -11,6 +11,7 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_chec
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_enable_notifications
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_libraries
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_max_per_check
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_new_episodes
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_notification_lights
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_notifications
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_quiet_end
@@ -32,6 +33,8 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_notificati
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_notification_sound_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_notification_vibrate_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_notification_vibrate_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_new_episodes_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_new_episodes_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_notifications_enable_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_notifications_enable_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_quiet_end_subtitle
@@ -55,7 +58,7 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_system_not
  *
  * Every row is a HAND-MAINTAINED residual (the knobs live in the spec-less
  * notification store) and carries its full hand search faces; every id
- * declares its gate — the master toggle [RowAdmission.Always], the four rows
+ * declares its gate — the master toggle [RowAdmission.Always], the five rows
  * behind it ride it, the quiet-hours trio compounds the quiet-hours toggle,
  * the rest ride advanced mode, and the system-settings row the
  * platform-intent capability. The whole list is Android-only (no desktop
@@ -67,7 +70,7 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_system_not
  */
 internal object NotificationRows {
 
-    // -- The "Notifications" group's twelve rows — every id declares its gate (the strict shape) — in catalog order (all Android-only: no desktop notification backend exists). --
+    // -- The "Notifications" group's thirteen rows — every id declares its gate (the strict shape) — in catalog order (all Android-only: no desktop notification backend exists). --
 
     val NotificationsEnable = SettingsRow(
         id = "notifications_enable",
@@ -194,6 +197,18 @@ internal object NotificationRows {
         gate = RowAdmission.WhenOn(NotificationRows.NotificationsEnable.id),
     )
 
+    val NotificationNewEpisodes = SettingsRow(
+        id = "notification_new_episodes",
+        icon = Tabler.Outline.DeviceTv,
+        titleRes = Res.string.settings_new_episodes,
+        searchTitleRes = Res.string.ss_new_episodes_title,
+        searchSubtitleRes = Res.string.ss_new_episodes_subtitle,
+        keywords = listOf("new episodes", "episode", "episodes", "season", "series", "tv", "notification"),
+        route = Route.NotificationSettings(),
+        platforms = ANDROID_ONLY_PLATFORMS,
+        gate = RowAdmission.WhenOn(NotificationRows.NotificationsEnable.id),
+    )
+
     val MaxPerCheck = SettingsRow(
         id = "max_per_check",
         icon = Tabler.Outline.LetterCase,
@@ -251,6 +266,7 @@ internal val NotificationRowsList: List<SettingsRow> = listOf(
     NotificationRows.NotificationSound,
     NotificationRows.NotificationVibrate,
     NotificationRows.NotificationLights,
+    NotificationRows.NotificationNewEpisodes,
     NotificationRows.MaxPerCheck,
     NotificationRows.NotificationLibraries,
 )

@@ -193,6 +193,7 @@ fun GroupedLibraryContent(
                 // own artwork 404s (shared with the ungrouped list path).
                 val fallbackUrls = item.rememberSeriesImageFallback(getImageUrl)
                 LibraryListItem(
+                    item = item,
                     title = item.displayTitle(),
                     subtitle = subtitle,
                     imageUrl = remember(item.id) { getImageUrl(item.id) },

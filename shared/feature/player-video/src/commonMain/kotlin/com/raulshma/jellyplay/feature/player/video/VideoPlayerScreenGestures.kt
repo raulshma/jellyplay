@@ -7,7 +7,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -27,6 +27,11 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.AwaitPointerEventScope
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.PointerInputChange
+import androidx.compose.ui.input.pointer.changedToDown
+import androidx.compose.ui.input.pointer.isShiftPressed
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -36,8 +41,17 @@ import com.raulshma.jellyplay.core.designsystem.theme.playerScrimColor
 import com.raulshma.jellyplay.core.model.GestureIndicatorSide
 import com.raulshma.jellyplay.core.ui.tv.components.DpadSeekState
 import com.raulshma.jellyplay.core.ui.tv.input.onDpadKeyEvent
+import com.raulshma.jellyplay.feature.player.video.chrome.shouldSummonControlsOnPause
 import com.raulshma.jellyplay.feature.player.video.components.GestureOverlay
+import com.raulshma.jellyplay.feature.player.video.state.DoubleTapHoldSeekPolicy
 import com.raulshma.jellyplay.feature.player.video.state.GestureSeekController
+import com.raulshma.jellyplay.feature.player.video.state.PlayerWheelPolicy
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.math.abs
 
 // ── Section host: input / gesture tier ───────────────────────────────────
 // Owns everything that turns raw input into player intent at the surface Box:
@@ -57,6 +71,8 @@ internal fun playerBoxKeyInputModifier(
     hasHardwareKeyboard: Boolean,
     isSheetOpen: Boolean,
     showControls: Boolean,
+    isPlaying: Boolean,
+    hideOsdOnPause: Boolean,
     onShowControlsChange: (Boolean) -> Unit,
     tvPlayerFocusRequester: FocusRequester,
     keyboardFocusRequester: FocusRequester,
@@ -80,7 +96,17 @@ internal fun playerBoxKeyInputModifier(
                 ) {
                     doTogglePlayPause()
                     performConfirmHaptic()
-                    onShowControlsChange(true)
+                    // the summon follows the toggle's DIRECTION — pausing
+                    // with the hide-OSD pref on leaves the overlay hidden
+                    // (playing keeps today's summon; an already-visible
+                    // overlay is never force-hidden, the auto-hide owns it).
+                    if (shouldSummonControlsOnPause(
+                            isPause = isPlaying,
+                            hideOsdOnPause = hideOsdOnPause,
+                        )
+                    ) {
+                        onShowControlsChange(true)
+                    }
                     true
                 } else {
                     false
@@ -136,6 +162,17 @@ internal fun playerBoxKeyInputModifier(
                 onPlayPause = {
                     doTogglePlayPause()
                     performConfirmHaptic()
+                    // TV remotes' media play/pause lands here — the
+                    // summon follows the toggle's direction exactly like the
+                    // SPACE arm above (pausing with the hide-OSD pref on
+                    // leaves the overlay hidden).
+                    if (shouldSummonControlsOnPause(
+                            isPause = isPlaying,
+                            hideOsdOnPause = hideOsdOnPause,
+                        )
+                    ) {
+                        onShowControlsChange(true)
+                    }
                     true
                 },
                 onFastForward = {
@@ -213,10 +250,83 @@ internal fun playerBoxKeyInputModifier(
             }
     } else Modifier
 
-/** The surface Box's tap / double-tap / pinch-zoom gesture tier (the two pointerInput modifiers verbatim). */
+/** Outcome of one watched press: a completed tap, a long-press, or a moved/consumed stream that belongs to another gesture tier. */
+private enum class PressOutcome { Tapped, LongPressed, Moved }
+
+/**
+ * Watches [down] until it resolves: all pointers up within the long-press
+ * window ([PressOutcome.Tapped]), the long-press window elapsing while still
+ * held and within slop ([PressOutcome.LongPressed]), or the stream leaving tap
+ * candidacy — movement past [touchSlopPx], a second finger (the pinch tier's
+ * cue), a consumed change (the swipe overlay's cue), or the tracked pointer
+ * vanishing ([PressOutcome.Moved]). Mirrors the tap candidacy
+ * `detectTapGestures` enforced before this modifier took over the tier.
+ *
+ * The long-press arm is a coroutine timeout, not an event-uptime comparison: a
+ * stationary finger produces NO pointer events, so a deadline that only fires
+ * on event arrival would never resolve a still hold (foundation's own
+ * long-press arm is timeout-shaped for the same reason).
+ */
+private suspend fun AwaitPointerEventScope.awaitPressOutcome(
+    down: PointerInputChange,
+    touchSlopPx: Float,
+    longPressTimeoutMs: Long,
+): PressOutcome =
+    withTimeoutOrNull(longPressTimeoutMs) { awaitTapOrMove(down, touchSlopPx) }
+        ?: PressOutcome.LongPressed
+
+/**
+ * Tap candidacy inside the long-press window: resolves
+ * [PressOutcome.Tapped] on up, [PressOutcome.Moved] on slop overrun,
+ * multi-touch, a consumed change, or pointer loss.
+ */
+private suspend fun AwaitPointerEventScope.awaitTapOrMove(
+    down: PointerInputChange,
+    touchSlopPx: Float,
+): PressOutcome {
+    while (true) {
+        val event = awaitPointerEvent()
+        if (event.changes.count { it.pressed } > 1) return PressOutcome.Moved
+        val change = event.changes.firstOrNull { it.id == down.id } ?: return PressOutcome.Moved
+        if (change.isConsumed) return PressOutcome.Moved
+        if (!change.pressed) return PressOutcome.Tapped
+        val dx = change.position.x - down.position.x
+        val dy = change.position.y - down.position.y
+        if (abs(dx) > touchSlopPx || abs(dy) > touchSlopPx) return PressOutcome.Moved
+    }
+}
+
+/**
+ * The surface Box's tap / double-tap / double-tap-hold / pinch-zoom gesture
+ * tier. The tap half is a hand-written `awaitEachGesture` detector (NOT
+ * `detectTapGestures`): the double-tap-and-hold continuous seek needs
+ * to keep watching the second press of a double-tap after its long-press
+ * window elapses and then repeat seeks until release — a shape
+ * `detectTapGestures` cannot express (its double-tap arm ends at the second
+ * up/long-press with no way to attach a repeat loop to one zone).
+ *
+ * Preserved behaviors (each previously owned by the `detectTapGestures` call):
+ *  - single tap (no second down within the double-tap window) → center
+ *    toggle, or hold-speed stop when hold-speed is active;
+ *  - long-press on a FIRST press → hold-speed (unchanged);
+ *  - double-tap → zone split at 35%/65% of the width: seek back / seek
+ *    forward / center (zoom reset or play-pause), fired on the second UP;
+ *  - a second press held past the long-press window → hold-speed, as
+ *    `detectTapGestures` fires `onLongPress` for a double-tap's second press
+ *    too — EXCEPT in a seek zone with the double-tap-hold toggle on, where the
+ *    hold becomes continuous seek instead (the resolution: hold-speed stays
+ *    available in the zones only when the hold is not a double-tap's
+ *    follow-through, i.e. on a first press).
+ *
+ * The modifier does not consume press/move/up events (only the pinch block
+ * below consumes, and only mid-pinch), so the swipe overlay tier above and
+ * the engine surface keep seeing whatever this tier declines.
+ */
 internal fun Modifier.playerTapAndZoomGestures(
     tapGesturesEnabled: Boolean,
     isScreenLocked: Boolean,
+    doubleTapHoldSeekEnabled: Boolean,
+    holdRepeatScope: CoroutineScope,
     onUserInteraction: () -> Unit,
     isHoldSpeedActive: () -> Boolean,
     holdSpeedEnabled: () -> Boolean,
@@ -233,33 +343,117 @@ internal fun Modifier.playerTapAndZoomGestures(
     // the rememberUpdatedState seek delegates) must arrive as a
     // reader/setter LAMBDA invoked at event time — a captured VALUE would
     // freeze until the next key change (the staleness the inline lambdas
-    // avoided by reading through the parent's state delegates).
-    pointerInput(tapGesturesEnabled, isScreenLocked) {
+    // avoided by reading through the parent's state delegates). The
+    // double-tap-hold toggle is a pref like [tapGesturesEnabled]: a VALUE
+    // key, so flipping it re-arms the detector instead of needing a live
+    // read (no gesture can be mid-flight across a settings change that
+    // matters here).
+    pointerInput(tapGesturesEnabled, isScreenLocked, doubleTapHoldSeekEnabled) {
         if (isScreenLocked) return@pointerInput
         if (!tapGesturesEnabled) return@pointerInput
-        detectTapGestures(
-            onTap = {
-                onUserInteraction()
-                if (isHoldSpeedActive()) {
-                    stopHoldSpeed()
-                } else {
-                    toggleControls()
+        awaitEachGesture {
+            val touchSlopPx = viewConfiguration.touchSlop
+            val longPressTimeoutMs = viewConfiguration.longPressTimeoutMillis
+            val doubleTapTimeoutMs = viewConfiguration.doubleTapTimeoutMillis
+            // This Compose version exposes no public double-tap distance slop
+            // (the retired `doubleTapMinSlopMillis`) — the touch slop is the
+            // standard stand-in for "roughly the same spot" in hand-rolled
+            // double-tap detectors.
+            val doubleTapSlopPx = touchSlopPx
+            var press = awaitFirstDown(requireUnconsumed = false)
+            while (true) {
+                // ── Phase A: resolve this press — tap, long-press, or moved. ──
+                when (awaitPressOutcome(press, touchSlopPx, longPressTimeoutMs)) {
+                    PressOutcome.Moved -> return@awaitEachGesture
+                    PressOutcome.LongPressed -> {
+                        onUserInteraction()
+                        if (holdSpeedEnabled()) startHoldSpeed()
+                        return@awaitEachGesture
+                    }
+                    PressOutcome.Tapped -> {}
                 }
-            },
-            onLongPress = {
-                onUserInteraction()
-                if (holdSpeedEnabled()) startHoldSpeed()
-            },
-            onDoubleTap = { offset ->
-                onUserInteraction()
-                val width = size.width
-                when {
-                    offset.x < width * 0.35 -> onDoubleTapSeekBack()
-                    offset.x > width * 0.65 -> onDoubleTapSeekForward()
-                    else -> onDoubleTapCenter()
+                // ── Phase B: the double-tap window. Same pointer id, within the
+                // window and the double-tap slop of the first press — a second
+                // down outside the slop is a NEW first press (two slow,
+                // far-apart taps are two single taps), so loop around with it.
+                val second = withTimeoutOrNull(doubleTapTimeoutMs) {
+                    var down: PointerInputChange?
+                    do {
+                        down = awaitPointerEvent()
+                            .changes
+                            .firstOrNull { it.id == press.id && it.changedToDown() }
+                    } while (down == null)
+                    down
                 }
-            },
-        )
+                if (second == null) {
+                    // Single tap confirmed: center toggle / hold-speed stop.
+                    onUserInteraction()
+                    if (isHoldSpeedActive()) stopHoldSpeed() else toggleControls()
+                    return@awaitEachGesture
+                }
+                val secondIsNearFirst =
+                    abs(second.position.x - press.position.x) <= doubleTapSlopPx &&
+                        abs(second.position.y - press.position.y) <= doubleTapSlopPx
+                if (!secondIsNearFirst) {
+                    press = second
+                    continue
+                }
+                // ── Phase C: the double tap. Zone from the second press's down
+                // position (the same 35%/65% split the inline handler used).
+                val zone = DoubleTapHoldSeekPolicy.seekZone(second.position.x, size.width)
+                when (awaitPressOutcome(second, touchSlopPx, longPressTimeoutMs)) {
+                    PressOutcome.Moved -> return@awaitEachGesture
+                    PressOutcome.LongPressed -> {
+                        if (doubleTapHoldSeekEnabled && zone != 0) {
+                            // Double-tap-and-hold continuous seek.
+                            // The hold IS the double-tap's follow-through, so the
+                            // first step fires NOW (same addOffset + immediate
+                            // commit the quick double-tap performs), then the
+                            // policy cadence repeats it until release while the
+                            // "+Ns" chip keeps accumulating. The repeat runs on a
+                            // sibling coroutine; this event loop only watches for
+                            // full release (the RepeatableButton hold-repeat
+                            // shape).
+                            onUserInteraction()
+                            val stepSeek = if (zone < 0) onDoubleTapSeekBack else onDoubleTapSeekForward
+                            stepSeek()
+                            val repeatJob = holdRepeatScope.launch {
+                                var repeats = 0
+                                while (isActive) {
+                                    delay(DoubleTapHoldSeekPolicy.repeatIntervalMs(repeats))
+                                    repeats++
+                                    stepSeek()
+                                }
+                            }
+                            try {
+                                while (true) {
+                                    val event = awaitPointerEvent()
+                                    if (event.changes.none { it.pressed }) break
+                                }
+                            } finally {
+                                repeatJob.cancel()
+                            }
+                        } else {
+                            // Toggle off (or the center zone): the legacy shape —
+                            // a long-press on the second press starts hold-speed,
+                            // exactly what `detectTapGestures` did here.
+                            onUserInteraction()
+                            if (holdSpeedEnabled()) startHoldSpeed()
+                        }
+                        return@awaitEachGesture
+                    }
+                    PressOutcome.Tapped -> {
+                        onUserInteraction()
+                        when (zone) {
+                            -1 -> onDoubleTapSeekBack()
+                            1 -> onDoubleTapSeekForward()
+                            else -> onDoubleTapCenter()
+                        }
+                        return@awaitEachGesture
+                    }
+                }
+            }
+        }
     }
         .pointerInput(tapGesturesEnabled, isScreenLocked) {
             if (isScreenLocked) return@pointerInput
@@ -289,6 +483,58 @@ internal fun Modifier.playerTapAndZoomGestures(
                 } while (event.changes.any { it.pressed })
             }
         }
+
+/**
+ * The surface Box's mouse-wheel tier: plain wheel = volume,
+ * Shift+wheel or a horizontally-dominant wheel delta = seek — the
+ * jellyfin-media-player pattern, wheel direction matching mpv
+ * (`WHEEL_UP` = up/forward, `WHEEL_DOWN` = down/back). Scroll events are the
+ * ONLY thing this handler consumes, and only after it acts on them, so the
+ * tap-and-zoom modifier later in the chain and the home rows (which run
+ * their own scrollable surfaces, outside this Box) are untouched. All gate
+ * state arrives as reader lambdas — a pointerInput block must never read
+ * captured values (they freeze until the next key change).
+ */
+internal fun Modifier.playerWheelGestures(
+    isWheelEnabled: () -> Boolean,
+    onVolumeNotch: (Int) -> Unit,
+    onSeekNotch: (Int) -> Unit,
+): Modifier =
+    pointerInput(Unit) {
+        awaitPointerEventScope {
+            var seekAccumulator = 0f
+            while (true) {
+                val event = awaitPointerEvent()
+                if (event.type != PointerEventType.Scroll) continue
+                if (!isWheelEnabled()) continue
+                // This Compose version carries the scroll delta on the CHANGE
+                // (the PointerEvent-level extension is gone); on a Scroll event
+                // the change's scrollDelta is the wheel movement.
+                val change = event.changes.firstOrNull() ?: continue
+                val scroll = change.scrollDelta
+                if (PlayerWheelPolicy.isSeekScroll(
+                        isShiftPressed = event.keyboardModifiers.isShiftPressed,
+                        scrollX = scroll.x,
+                        scrollY = scroll.y,
+                    )
+                ) {
+                    val axisDelta = PlayerWheelPolicy.seekAxisDelta(scroll.x, scroll.y)
+                    val (notches, remainder) = PlayerWheelPolicy.accumulateSeekNotches(
+                        previousAccumulator = seekAccumulator,
+                        rawDelta = axisDelta,
+                    )
+                    seekAccumulator = remainder
+                    if (notches != 0) {
+                        val direction = PlayerWheelPolicy.seekDirection(notches.toFloat())
+                        repeat(abs(notches)) { onSeekNotch(direction) }
+                    }
+                } else {
+                    onVolumeNotch(PlayerWheelPolicy.volumeDirection(scroll.y))
+                }
+                event.changes.forEach { it.consume() }
+            }
+        }
+    }
 
 /** Overlays tier 1: the gesture indicator layer (swipe seek/volume/brightness) + the hold-speed pill. */
 @Composable

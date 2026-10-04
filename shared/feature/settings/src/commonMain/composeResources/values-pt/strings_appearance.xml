@@ -26,6 +26,8 @@
     <string name="settings_library_view_mode">Modo de vista da biblioteca</string>
     <string name="settings_layout_mode">Esquema</string>
     <string name="settings_layout_mode_subtitle">Escolher esquema automático, telefone ou tablet</string>
+    <string name="settings_screen_fit">Ajuste da tela</string>
+    <string name="settings_screen_fit_subtitle">Encaixa a imagem dentro da área segura da TV para que nada seja cortado nas bordas</string>
     <string name="settings_library_view_grid">Mostrar itens em disposição de grelha</string>
     <string name="settings_library_view_list">Mostrar itens em disposição de lista</string>
     <string name="settings_library_view_thumb">Mostrar itens como miniaturas horizontais</string>

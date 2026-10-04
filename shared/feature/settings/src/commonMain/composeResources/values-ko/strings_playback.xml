@@ -35,6 +35,8 @@
     <string name="settings_auto_play_countdown_subtitle">다음 에피소드 자동 재생 전 카운트다운 시간</string>
     <string name="settings_controls_timeout">컨트롤 시간 제한</string>
     <string name="settings_controls_timeout_subtitle">재생기 컨트롤 자동 숨기기</string>
+    <string name="settings_hide_osd_on_pause">일시정지 시 OSD 숨기기</string>
+    <string name="settings_hide_osd_on_pause_subtitle">일시정지해도 컨트롤을 표시하지 않음</string>
     <string name="settings_streaming_quality_auto_adaptive">자동 (적응형)</string>
     <string name="settings_streaming_quality_auto">자동</string>
     <string name="settings_b_frames_none_best">없음 (최고 품질)</string>
@@ -84,6 +86,8 @@
     <string name="settings_preferred_player">선호 플레이어</string>
     <string name="settings_double_tap_seek_duration">두 번 탭하여 탐색 기간</string>
     <string name="settings_gesture_indicator_side">제스처 표시기 측면</string>
+    <string name="settings_double_tap_hold_seek">두 번 탭 후 길게 눌러 탐색</string>
+    <string name="settings_double_tap_hold_seek_subtitle">두 번 탭 후 길게 누르면 탐색을 반복합니다</string>
     <string name="settings_gesture_indicator_opposite">밝기/볼륨 바를 제스처 반대쪽에 표시</string>
     <string name="settings_gesture_indicator_same">바를 제스처와 같은 쪽에 표시</string>
     <string name="settings_countdown_immediate">다음 항목을 즉시 재생</string>
@@ -132,6 +136,8 @@
     <string name="settings_pause_on_focus_loss">포커스 상실 시 일시 정지</string>
     <string name="settings_pause_on_focus_loss_on">시스템이 포커스 상실을 보고할 때 재생 일시 정지</string>
     <string name="settings_pause_on_focus_loss_off">포커스 상실 시 재생 계속</string>
+    <string name="settings_resume_headset_plug">헤드폰 다시 연결 시 재생 재개</string>
+    <string name="settings_resume_headset_plug_subtitle">분리 시 자동 일시 정지 후 헤드폰을 다시 연결하면 재생을 재개합니다</string>
     <string name="settings_decoder_summary">디코더: %1$s</string>
     <string name="settings_decoder">디코더</string>
     <string name="settings_refresh_rate_match">주사율 일치</string>

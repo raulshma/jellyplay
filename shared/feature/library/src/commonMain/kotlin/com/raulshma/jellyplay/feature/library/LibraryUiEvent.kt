@@ -66,6 +66,13 @@ sealed interface LibraryUiEvent {
     data class MarkItemPlayed(val item: MediaItem, val played: Boolean) : LibraryUiEvent
 
     /**
+     * Quick-action favorite/unfavorite toggle — same silent grid contract as
+     * [MarkItemPlayed]: the write routes through the user-data mutator, the
+     * paged grid is left untouched so the user keeps their scroll position.
+     */
+    data class ToggleFavorite(val item: MediaItem) : LibraryUiEvent
+
+    /**
      * Long-press Download from a browse card. Single-stream items start
      * inline; series and other non-inline types open the detail screen via
      * [onOpenDetail] (`openDownloadSheet` pre-presents the series download

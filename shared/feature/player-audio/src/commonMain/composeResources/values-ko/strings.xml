@@ -72,6 +72,11 @@
     <string name="audio_sleep_timer_title">슬립 타이머</string>
     <string name="audio_sleep_timer_end_of_episode">에피소드 끝</string>
     <string name="audio_sleep_timer_duration">재생 시간</string>
+    <string name="audio_sleep_timer_stops_at">%1$s에 정지</string>
+    <string name="audio_sleep_timer_cancel_title">수면 타이머를 취소할까요?</string>
+    <string name="audio_sleep_timer_cancel_message">타이머에 아직 %1$s 남았어요. 취소할까요?</string>
+    <string name="audio_cancel_timer">타이머 취소</string>
+    <string name="audio_sleep_timer_keep">타이머 유지</string>
 
     <!-- Equalizer -->
     <string name="audio_equalizer_title">이퀄라이저</string>
@@ -97,6 +102,11 @@
     <string name="audio_queue_title">대기열</string>
     <string name="audio_queue_remove">대기열에서 제거</string>
     <string name="audio_queue_position">%1$d / %2$d</string>
+
+    <!-- Queue drag-reorder -->
+    <string name="audio_queue_reorder_handle">길게 눌러 순서 변경</string>
+    <string name="audio_queue_move_up">위로 이동</string>
+    <string name="audio_queue_move_down">아래로 이동</string>
 
     <!-- Add to playlist picker -->
     <string name="audio_playlist_picker_title">재생목록에 추가</string>

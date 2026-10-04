@@ -31,7 +31,7 @@ import kotlin.test.assertTrue
  * Pins the [PlayerPrefsSeed] aggregate → uiState mapping: which pref feeds
  * which seeded uiState leaf at session-load time. Extracted from
  * [SessionLoadPipeline]'s inline `onPrefsProjected { copy(...) }`; these tests
- * make the 30-leaf inventory explicit so a leaf cannot silently move, drop, or
+ * make the 32-leaf inventory explicit so a leaf cannot silently move, drop, or
  * change default without this file noticing (the change-time counterpart of
  * the same vocabulary lives in [SettingsProjector]).
  *
@@ -77,6 +77,7 @@ class PlayerPrefsSeedTest {
             defaultSpeed = 0.5f,
             swipeSeekMaxMs = 90_000L,
             seekDurationMs = 5_000L,
+            doubleTapHoldSeekEnabled = true,
             rememberBrightness = true,
             brightnessLevel = 0.1f,
             gestureIndicatorSide = GestureIndicatorSide.OPPOSITE,
@@ -136,6 +137,7 @@ class PlayerPrefsSeedTest {
         videoPlayer = VideoPlayerSlice(
             videoDefaultOrientation = OrientationMode.LOCKED_PORTRAIT,
             videoControlsTimeoutMs = 7_500L,
+            videoHideOsdOnPause = true,
             videoPassOutProtectionHours = 6,
             trickplayEnabled = false,
             trickplayOnSeekGesture = false,
@@ -143,6 +145,7 @@ class PlayerPrefsSeedTest {
             showClockInPlayer = true,
             showTimeRemaining = true,
             videoGestureMode = GestureMode.NONE,
+            videoDoubleTapHoldSeekEnabled = false,
             videoHoldSpeedEnabled = false,
             videoHoldSpeedMultiplier = 3.0f,
             videoDefaultSpeed = 1.25f,
@@ -174,16 +177,17 @@ class PlayerPrefsSeedTest {
     // ── Full-leaf inventory ──────────────────────────────────────────────────
 
     @Test
-    fun representativeAggregate_seedsAllThirtyLeaves_exactly() {
+    fun representativeAggregate_seedsAllThirtyTwoLeaves_exactly() {
         val base = baseState()
         val seeded = seed(representativeAgg())(base)
 
         // root (1)
         assertEquals(PlayerType.MPV, seeded.preferredPlayerType)
 
-        // uiPrefs (12)
+        // uiPrefs (13)
         assertEquals(OrientationMode.LOCKED_PORTRAIT, seeded.uiPrefs.defaultOrientation)
         assertEquals(7_500L, seeded.uiPrefs.controlsTimeoutMs)
+        assertTrue(seeded.uiPrefs.hideOsdOnPause)
         assertEquals(6, seeded.uiPrefs.passOutProtectionHours)
         assertFalse(seeded.uiPrefs.trickplayEnabled)
         assertFalse(seeded.uiPrefs.trickplayOnSeekGesture)
@@ -195,11 +199,12 @@ class PlayerPrefsSeedTest {
         assertTrue(seeded.uiPrefs.adaptiveBitrateEnabled)
         assertEquals(PlaybackMode.FORCE_DIRECT_PLAY, seeded.uiPrefs.playbackMode)
 
-        // gestures (12)
+        // gestures (13)
         val g = seeded.gestures
         assertFalse(g.tapGesturesEnabled)
         assertFalse(g.swipeGesturesEnabled)
         assertFalse(g.holdSpeedEnabled)
+        assertFalse(g.doubleTapHoldSeekEnabled)
         assertEquals(3.0f, g.holdSpeedMultiplier, 0.0001f)
         assertEquals(1.25f, g.defaultSpeed, 0.0001f)
         assertEquals(60_000L, g.swipeSeekMaxMs)

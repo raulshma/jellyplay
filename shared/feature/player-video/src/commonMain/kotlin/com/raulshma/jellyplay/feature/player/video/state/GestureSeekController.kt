@@ -159,6 +159,47 @@ internal class GestureSeekController(
     }
 
     /**
+     * One mouse-wheel volume notch: [direction] +1 = up, −1 = down.
+     *
+     * Dispatch order mirrors the swipe tier so wheel and swipe agree:
+     *  - cast connected → the cast-volume path of [onVolumeGesture];
+     *  - a system music stream exists (Android) → the STREAM_MUSIC path of
+     *    [onVolumeGesture] (the swipe behavior — wheel keeps it);
+     *  - otherwise (desktop: the window-ops seam reports no stream) → the
+     *    engine's own volume via the `RemotePlayableEngine.increase/decrease`
+     *    seam, and the OSD bar mirrors the engine's normalized level.
+     *
+     * Unlike a swipe there is no gesture-release event, so each notch
+     * (re)schedules the overlay's delayed hide itself.
+     */
+    fun onVolumeWheelNotch(direction: Int) {
+        if (direction == 0) return
+        val (streamCurrent, streamMax) = cachedStreamVolume
+            ?: readStreamVolume().also { cachedStreamVolume = it }
+        if (isCastConnected() || streamMax > 0) {
+            onVolumeGesture(PlayerWheelPolicy.VOLUME_NOTCH_DELTA * direction)
+        } else {
+            val eng = getEngine() ?: return
+            if (direction > 0) {
+                eng.increaseVolume(PlayerWheelPolicy.ENGINE_VOLUME_NOTCH_DELTA)
+            } else {
+                eng.decreaseVolume(PlayerWheelPolicy.ENGINE_VOLUME_NOTCH_DELTA)
+            }
+            _volumeOverlay.value = eng.volume.coerceIn(0f, 1f)
+        }
+        scheduleVolumeOverlayDismiss()
+    }
+
+    /** Delayed hide of the volume bar (the [onClearOverlays] dismissal, wheel-shaped). */
+    private fun scheduleVolumeOverlayDismiss() {
+        overlayDismissJob?.cancel()
+        overlayDismissJob = scope.launch {
+            delay(dismissDelayMs)
+            _volumeOverlay.value = -1f
+        }
+    }
+
+    /**
      * Commit path (normal gesture release). Seeks to the clamped target, persists
      * brightness/volume, then schedules a delayed hide of the visual indicators.
      */

@@ -13,16 +13,17 @@ import com.raulshma.jellyplay.feature.player.video.engine.AspectRatio
  * store-free) into the extension-lambda shape [SessionLoadOutputs.onPrefsProjected]
  * applies to the residual uiState.
  *
- * Leaf inventory (30, grouped by destination slice):
+ * Leaf inventory (32, grouped by destination slice):
  *  - root: `preferredPlayerType`
- *  - `uiPrefs`: defaultOrientation, controlsTimeoutMs, passOutProtectionHours,
- *    trickplayEnabled, trickplayOnSeekGesture, showPlaybackMetadata, showClock,
- *    showTimeRemaining, keepScreenOnDuringVideo, streamingQuality,
- *    adaptiveBitrateEnabled, playbackMode
+ *  - `uiPrefs`: defaultOrientation, controlsTimeoutMs, hideOsdOnPause,
+ *    passOutProtectionHours, trickplayEnabled, trickplayOnSeekGesture,
+ *    showPlaybackMetadata, showClock, showTimeRemaining,
+ *    keepScreenOnDuringVideo, streamingQuality, adaptiveBitrateEnabled,
+ *    playbackMode
  *  - `gestures`: gestureMode (tap/swipe tier flags are derived views),
  *    holdSpeedEnabled, holdSpeedMultiplier, defaultSpeed, swipeSeekMaxMs,
- *    seekDurationMs, rememberBrightness, brightnessLevel, gestureIndicatorSide,
- *    frameRateMatching, refreshRateMode
+ *    seekDurationMs, doubleTapHoldSeekEnabled, rememberBrightness,
+ *    brightnessLevel, gestureIndicatorSide, frameRateMatching, refreshRateMode
  *  - `videoFx`: aspectRatio (parsed from `videoDefaultAspectRatio`), tvZoomModePercent
  *  - `segmentState`: segmentBehaviors (with the INTRO/OUTRO auto-skip flags OR-ed in)
  *  - `episodes`: videoEpisodeBrowserEnabled
@@ -71,6 +72,7 @@ internal object PlayerPrefsSeed {
                 uiPrefs = uiPrefs.copy(
                     defaultOrientation = agg.videoPlayer.videoDefaultOrientation,
                     controlsTimeoutMs = agg.videoPlayer.videoControlsTimeoutMs,
+                    hideOsdOnPause = agg.videoPlayer.videoHideOsdOnPause,
                     passOutProtectionHours = agg.videoPlayer.videoPassOutProtectionHours,
                     trickplayEnabled = agg.videoPlayer.trickplayEnabled,
                     trickplayOnSeekGesture = agg.videoPlayer.trickplayOnSeekGesture,
@@ -89,6 +91,7 @@ internal object PlayerPrefsSeed {
                     defaultSpeed = agg.videoPlayer.videoDefaultSpeed,
                     swipeSeekMaxMs = agg.videoPlayer.videoSwipeSeekMaxMs,
                     seekDurationMs = agg.videoPlayer.videoSeekDurationMs,
+                    doubleTapHoldSeekEnabled = agg.videoPlayer.videoDoubleTapHoldSeekEnabled,
                     rememberBrightness = agg.videoPlayer.videoRememberBrightness,
                     brightnessLevel = agg.videoPlayer.videoBrightnessLevel,
                     gestureIndicatorSide = agg.videoPlayer.videoGestureIndicatorSide,

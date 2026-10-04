@@ -20,4 +20,8 @@
     <!-- Summary notification channel -->
     <string name="notification_channel_summary">새 미디어</string>
     <string name="notification_channel_summary_desc">새 미디어 알림 요약</string>
+
+    <!-- New-episodes channel (opt-in routing for episode items) -->
+    <string name="notification_channel_new_episodes">새 에피소드</string>
+    <string name="notification_channel_new_episodes_desc">새로 추가된 에피소드 알림</string>
 </resources>

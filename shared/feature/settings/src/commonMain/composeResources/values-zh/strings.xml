@@ -132,6 +132,8 @@
     <string name="settings_vibrate_subtitle">收到通知时振动</string>
     <string name="settings_notification_lights">通知指示灯</string>
     <string name="settings_notification_lights_subtitle">在支持的设备上闪烁通知指示灯</string>
+    <string name="settings_new_episodes">新剧集通知</string>
+    <string name="settings_new_episodes_subtitle">将新发现的剧集发布到专用的“新剧集”通知渠道。需要为媒体库启用新媒体监控。</string>
     <string name="settings_max_per_check">单次上限</string>
     <string name="settings_max_per_check_subtitle">每批通知的最大条目数</string>
     <string name="settings_libraries">媒体库</string>
@@ -552,6 +554,7 @@
     <string name="diff_lyrics_visible">歌词可见</string>
     <string name="diff_subtitle_preview">设置中的字幕预览</string>
     <string name="diff_subtitle_style">字幕样式</string>
+    <string name="diff_subtitle_style_presets">字幕样式预设</string>
     <string name="diff_hdr_subtitle_style">HDR 字幕样式</string>
     <string name="diff_enabled_home_sections">已启用的主页版块</string>
     <string name="diff_home_section_order">主页版块顺序</string>

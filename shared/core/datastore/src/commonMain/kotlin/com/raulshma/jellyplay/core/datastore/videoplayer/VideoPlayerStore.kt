@@ -77,10 +77,13 @@ class VideoPlayerStore constructor(
     internal object Keys {
         val VIDEO_SEEK_DURATION_MS = longPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_SEEK_DURATION_MS.keyName)
         val VIDEO_CONTROLS_TIMEOUT_MS = longPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_CONTROLS_TIMEOUT_MS.keyName)
+        val VIDEO_HIDE_OSD_ON_PAUSE = booleanPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_HIDE_OSD_ON_PAUSE.keyName)
+        val VIDEO_RESUME_ON_HEADSET_PLUG = booleanPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_RESUME_ON_HEADSET_PLUG.keyName)
         val VIDEO_DEFAULT_ORIENTATION = stringPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_DEFAULT_ORIENTATION.keyName)
         val VIDEO_DEFAULT_ASPECT_RATIO = stringPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_DEFAULT_ASPECT_RATIO.keyName)
         val VIDEO_GESTURES_ENABLED = booleanPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_GESTURES_ENABLED.keyName)
         val VIDEO_GESTURE_MODE = stringPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_GESTURE_MODE.keyName)
+        val VIDEO_DOUBLE_TAP_HOLD_SEEK_ENABLED = booleanPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_DOUBLE_TAP_HOLD_SEEK_ENABLED.keyName)
         val VIDEO_PASS_OUT_PROTECTION_HOURS = intPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_PASS_OUT_PROTECTION_HOURS.keyName)
         val VIDEO_SKIP_BACK_ON_RESUME_MS = longPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_SKIP_BACK_ON_RESUME_MS.keyName)
         val VIDEO_HOLD_SPEED_ENABLED = booleanPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_HOLD_SPEED_ENABLED.keyName)
@@ -136,9 +139,12 @@ class VideoPlayerStore constructor(
     internal fun read(prefs: Preferences): VideoPlayerSlice = VideoPlayerSlice(
         videoSeekDurationMs = VideoPlayerPreferenceSpecs.VIDEO_SEEK_DURATION_MS.readFrom(prefs),
         videoControlsTimeoutMs = VideoPlayerPreferenceSpecs.VIDEO_CONTROLS_TIMEOUT_MS.readFrom(prefs),
+        videoHideOsdOnPause = VideoPlayerPreferenceSpecs.VIDEO_HIDE_OSD_ON_PAUSE.readFrom(prefs),
+        videoResumeOnHeadsetPlug = VideoPlayerPreferenceSpecs.VIDEO_RESUME_ON_HEADSET_PLUG.readFrom(prefs),
         videoDefaultOrientation = VideoPlayerPreferenceSpecs.VIDEO_DEFAULT_ORIENTATION.readFrom(prefs),
         videoDefaultAspectRatio = VideoPlayerPreferenceSpecs.VIDEO_DEFAULT_ASPECT_RATIO.readFrom(prefs),
         videoGestureMode = VideoPlayerPreferenceSpecs.VIDEO_GESTURE_MODE.readFrom(prefs),
+        videoDoubleTapHoldSeekEnabled = VideoPlayerPreferenceSpecs.VIDEO_DOUBLE_TAP_HOLD_SEEK_ENABLED.readFrom(prefs),
         videoPassOutProtectionHours = VideoPlayerPreferenceSpecs.VIDEO_PASS_OUT_PROTECTION_HOURS.readFrom(prefs),
         videoSkipBackOnResumeMs = VideoPlayerPreferenceSpecs.VIDEO_SKIP_BACK_ON_RESUME_MS.readFrom(prefs),
         videoHoldSpeedEnabled = VideoPlayerPreferenceSpecs.VIDEO_HOLD_SPEED_ENABLED.readFrom(prefs),
@@ -186,12 +192,31 @@ class VideoPlayerStore constructor(
         dataStore.edit { VideoPlayerPreferenceSpecs.VIDEO_CONTROLS_TIMEOUT_MS.writeTo(it, ms) }
     }
 
+    /** Pausing must not summon the control overlay (default off). */
+    suspend fun setVideoHideOsdOnPause(enabled: Boolean) {
+        dataStore.edit { VideoPlayerPreferenceSpecs.VIDEO_HIDE_OSD_ON_PAUSE.writeTo(it, enabled) }
+    }
+
+    /**
+     * Resume when headphones reconnect after the becoming-noisy
+     * auto-pause (opt-in, default off; the pause-marker + freshness decision
+     * lives in core:data's `HeadsetResumePolicy`).
+     */
+    suspend fun setVideoResumeOnHeadsetPlug(enabled: Boolean) {
+        dataStore.edit { VideoPlayerPreferenceSpecs.VIDEO_RESUME_ON_HEADSET_PLUG.writeTo(it, enabled) }
+    }
+
     suspend fun setVideoDefaultOrientation(mode: OrientationMode) {
         dataStore.edit { VideoPlayerPreferenceSpecs.VIDEO_DEFAULT_ORIENTATION.writeTo(it, mode) }
     }
 
     suspend fun setVideoGestureMode(mode: GestureMode) {
         dataStore.edit { VideoPlayerPreferenceSpecs.VIDEO_GESTURE_MODE.writeTo(it, mode) }
+    }
+
+    /** Double-tap-and-hold continuous seek in the seek zones. */
+    suspend fun setVideoDoubleTapHoldSeekEnabled(enabled: Boolean) {
+        dataStore.edit { VideoPlayerPreferenceSpecs.VIDEO_DOUBLE_TAP_HOLD_SEEK_ENABLED.writeTo(it, enabled) }
     }
 
     suspend fun setVideoPassOutProtectionHours(hours: Int) {
@@ -379,9 +404,12 @@ class VideoPlayerStore constructor(
         dataStore.edit { prefs ->
             VideoPlayerPreferenceSpecs.VIDEO_SEEK_DURATION_MS.writeTo(prefs, slice.videoSeekDurationMs)
             VideoPlayerPreferenceSpecs.VIDEO_CONTROLS_TIMEOUT_MS.writeTo(prefs, slice.videoControlsTimeoutMs)
+            VideoPlayerPreferenceSpecs.VIDEO_HIDE_OSD_ON_PAUSE.writeTo(prefs, slice.videoHideOsdOnPause)
+            VideoPlayerPreferenceSpecs.VIDEO_RESUME_ON_HEADSET_PLUG.writeTo(prefs, slice.videoResumeOnHeadsetPlug)
             VideoPlayerPreferenceSpecs.VIDEO_DEFAULT_ORIENTATION.writeTo(prefs, slice.videoDefaultOrientation)
             VideoPlayerPreferenceSpecs.VIDEO_DEFAULT_ASPECT_RATIO.writeTo(prefs, slice.videoDefaultAspectRatio)
             VideoPlayerPreferenceSpecs.VIDEO_GESTURE_MODE.writeTo(prefs, slice.videoGestureMode)
+            VideoPlayerPreferenceSpecs.VIDEO_DOUBLE_TAP_HOLD_SEEK_ENABLED.writeTo(prefs, slice.videoDoubleTapHoldSeekEnabled)
             // The legacy boolean is superseded by the mode key; clear it so a
             // restored snapshot cannot disagree with what the VIDEO_GESTURE_MODE
             // row's read would fall back to if the mode key were ever lost.
@@ -431,9 +459,26 @@ class VideoPlayerStore constructor(
 data class VideoPlayerSlice(
     val videoSeekDurationMs: Long = 10_000L,
     val videoControlsTimeoutMs: Long = 5_000L,
+    /**
+     * (jellyfin-androidtv #3924): pausing must not summon the control
+     * overlay. Default **off** — today's show-on-pause behavior; on, only the
+     * SUMMONS is suppressed (an already-visible overlay keeps its auto-hide).
+     */
+    val videoHideOsdOnPause: Boolean = false,
+    /**
+     * Resume when headphones reconnect after the becoming-noisy
+     * auto-pause. Default **off** — opt-in; the decision (paused-by-the-event
+     * marker + freshness window) lives in core:data's `HeadsetResumePolicy`.
+     */
+    val videoResumeOnHeadsetPlug: Boolean = false,
     val videoDefaultOrientation: OrientationMode = OrientationMode.SENSOR_LANDSCAPE,
     val videoDefaultAspectRatio: String = "AUTO",
     val videoGestureMode: GestureMode = GestureMode.ALL,
+    /**
+     * double-tap-and-hold continuous seek in the seek zones.
+     * Default ON; off restores long-press = hold-speed everywhere.
+     */
+    val videoDoubleTapHoldSeekEnabled: Boolean = true,
     val videoPassOutProtectionHours: Int = 0,
     val videoSkipBackOnResumeMs: Long = 0L,
     val videoHoldSpeedEnabled: Boolean = true,

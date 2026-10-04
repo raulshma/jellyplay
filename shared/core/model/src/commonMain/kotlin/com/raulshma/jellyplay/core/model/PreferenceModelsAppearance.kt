@@ -86,3 +86,20 @@ enum class HandMode(val displayName: String) {
     RIGHT("Right-handed (default)"),
     LEFT("Left-handed"),
 }
+
+/**
+ * The TV overscan safe-area calibration: the percentage padding the
+ * TV shell applies on every edge so rows/rails/text never clip at panels that
+ * cut into the picture (the Android TV "overscan" guidance —
+ * developer.android.com/design/tv). Each edge insets by [percent] of its
+ * screen dimension (width for the horizontal pair, height for the vertical
+ * one — see core:ui's `TvOverscan.overscanSafeAreaPadding`). Only ever
+ * consumed on the TV form factor; the default is the guideline 5%.
+ */
+@Immutable
+@Serializable
+enum class TvOverscan(val displayName: String, val percent: Int) {
+    OFF("Off", 0),
+    FIVE("5%", 5),
+    TEN("10%", 10),
+}

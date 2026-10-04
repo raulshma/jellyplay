@@ -33,6 +33,7 @@ import com.composables.icons.tabler.outline.Subtitles
 import com.raulshma.jellyplay.core.model.CultureInfo
 import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
 import com.raulshma.jellyplay.core.model.SubtitleStyle
+import com.raulshma.jellyplay.core.model.SubtitleStylePreset
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleSearchResult
 import com.raulshma.jellyplay.core.ui.components.PlayerModalBottomSheet
@@ -116,6 +117,11 @@ internal fun SubtitleHubSheet(
     onPickFont: () -> Unit,
     onOpenTester: () -> Unit,
     capabilities: EngineCapabilities,
+    // Style tab — named presets (built-ins are code; user presets ride the
+    // subtitle slice via the host).
+    userStylePresets: List<SubtitleStylePreset> = emptyList(),
+    onSaveStylePreset: (String) -> Unit = {},
+    onDeleteStylePreset: (String) -> Unit = {},
     // Get tab
     downloadSubtitles: List<RemoteSubtitleInfo>,
     isDownloading: Boolean,
@@ -255,6 +261,23 @@ internal fun SubtitleHubSheet(
                         },
                     )
                     Spacer(Modifier.height(16.dp))
+                    // named presets above the manual controls; applying
+                    // folds through SubtitleStylePresetPolicy.appliedStyle
+                    // (look forced authoritative, per-item delay carried) and
+                    // then the same onStyleChange path a manual edit takes.
+                    SubtitleStylePresetsRow(
+                        userPresets = userStylePresets,
+                        onApplyPreset = { preset ->
+                            onStyleChange(
+                                com.raulshma.jellyplay.feature.player.video.SubtitleStylePresetPolicy
+                                    .appliedStyle(preset, subtitleStyle)
+                            )
+                        },
+                        onSavePreset = onSaveStylePreset,
+                        onDeletePreset = onDeleteStylePreset,
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                    )
+                    Spacer(Modifier.height(12.dp))
                     SubtitleStyleControls(
                         currentStyle = subtitleStyle,
                         onStyleChange = onStyleChange,

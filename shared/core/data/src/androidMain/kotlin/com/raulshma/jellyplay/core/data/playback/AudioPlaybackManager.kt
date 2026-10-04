@@ -48,7 +48,7 @@ import kotlinx.coroutines.launch
 import com.raulshma.jellyplay.feature.player.video.engine.EnginePositionTicker
 import kotlin.math.pow
 
-// C4 part 2: AudioQueueItem moved verbatim to
+// AudioQueueItem moved verbatim to
 // :shared:core:data commonMain playback/AudioQueueItem.kt (same package).
 
 @Stable
@@ -672,6 +672,7 @@ class AudioPlaybackManager(
             repeatMode = state._repeatMode,
             shuffleEnabled = state._shuffleMode,
             playbackSpeed = state._speed,
+            shuffleSeed = state._shuffleSeed,
         )
     }
 
@@ -1242,6 +1243,27 @@ class AudioPlaybackManager(
         exoPlayer?.volume = pct
         crossfader.setVolume(pct)
         MediaStreamVolume.setNormalized(context, pct)
+    }
+
+    /**
+     * [AudioPlayerEngine.volume] — the sleep-timer fade's capture source
+     * Software gain only (the primary ExoPlayer); the system stream
+     * is deliberately not read.
+     */
+    override val volume: Float
+        get() = exoPlayer?.volume ?: 1f
+
+    /**
+     * [AudioPlayerEngine.setVolume] — the sleep-timer fade/restore path.
+     * Software-only write on the primary player: unlike the user
+     * [setVolume] overload above it never touches the crossfader (the
+     * crossfade owns both players' volumes while in flight) nor the system
+     * stream, and `isUserChange = false` keeps the ramp out of any
+     * user-level memory. The 1-arg overload remains the USER volume path.
+     */
+    override fun setVolume(volume: Float, isUserChange: Boolean) {
+        assertMainThread("setVolume")
+        exoPlayer?.volume = volume.coerceIn(0f, 1f)
     }
 
     /**

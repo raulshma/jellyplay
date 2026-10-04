@@ -79,6 +79,11 @@
     <string name="player_video_sleep_timer">スリープタイマー</string>
     <string name="player_video_sleep_timer_on">スリープタイマー \u00B7 %1$s</string>
     <string name="player_video_cancel_sleep_timer">スリープタイマーをキャンセル (残り %1$s)</string>
+    <string name="player_video_sleep_timer_stops_at">%1$s に停止</string>
+    <string name="player_video_cancel_sleep_timer_confirm_title">スリープタイマーをキャンセルしますか？</string>
+    <string name="player_video_cancel_sleep_timer_confirm_message">タイマーの残りはまだ %1$s です。キャンセルしますか？</string>
+    <string name="player_video_cancel_timer">タイマーをキャンセル</string>
+    <string name="player_video_keep_sleep_timer">タイマーを継続</string>
     <string name="player_video_custom_duration">カスタム時間</string>
     <string name="player_video_custom_ellipsis">カスタム…</string>
     <string name="player_video_end_of_episode">エピソードの終わり</string>
@@ -342,4 +347,15 @@
     <string name="player_video_source_label">ソース</string>
     <string name="player_video_version">バージョン</string>
     <string name="player_video_remember_version">このバージョンを記憶</string>
+
+    <!-- Subtitle style presets -->
+    <string name="player_video_presets_title">プリセット</string>
+    <string name="player_video_preset_subtle">控えめ</string>
+    <string name="player_video_preset_big_bold">大きめ太字</string>
+    <string name="player_video_preset_classic_yellow">クラシックイエロー</string>
+    <string name="player_video_preset_netflixish">Netflix風</string>
+    <string name="player_video_preset_save">現在の設定を保存</string>
+    <string name="player_video_preset_save_dialog_title">プリセットを保存</string>
+    <string name="player_video_preset_name_label">プリセット名</string>
+    <string name="player_video_preset_delete_a11y">プリセット %1$s を削除</string>
 </resources>

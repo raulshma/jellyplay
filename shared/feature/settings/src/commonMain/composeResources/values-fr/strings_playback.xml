@@ -35,6 +35,8 @@
     <string name="settings_auto_play_countdown_subtitle">Durée du compte à rebours avant la lecture automatique de l'épisode suivant</string>
     <string name="settings_controls_timeout">Délai d'affichage des contrôles</string>
     <string name="settings_controls_timeout_subtitle">Masquer automatiquement les contrôles du lecteur</string>
+    <string name="settings_hide_osd_on_pause">Masquer l'OSD en pause</string>
+    <string name="settings_hide_osd_on_pause_subtitle">Garder les commandes masquées en pause</string>
     <string name="settings_streaming_quality_auto_adaptive">Auto (adaptatif)</string>
     <string name="settings_streaming_quality_auto">Auto</string>
     <string name="settings_b_frames_none_best">Aucune (meilleure qualité)</string>
@@ -84,6 +86,8 @@
     <string name="settings_preferred_player">Lecteur préféré</string>
     <string name="settings_double_tap_seek_duration">Durée de saut double-tap</string>
     <string name="settings_gesture_indicator_side">Côté de l'indicateur de geste</string>
+    <string name="settings_double_tap_hold_seek">Double-tap maintenu pour avancer</string>
+    <string name="settings_double_tap_hold_seek_subtitle">Continue la lecture tant que le doigt reste pose apres un double-tap</string>
     <string name="settings_gesture_indicator_opposite">Afficher la barre luminosité/volume du côté opposé au geste</string>
     <string name="settings_gesture_indicator_same">Afficher la barre du même côté que le geste</string>
     <string name="settings_countdown_immediate">Lire l'élément suivant immédiatement</string>
@@ -132,6 +136,8 @@
     <string name="settings_pause_on_focus_loss">Pause en cas de perte de focus</string>
     <string name="settings_pause_on_focus_loss_on">Mettre en pause quand le système signale une perte de focus</string>
     <string name="settings_pause_on_focus_loss_off">Continuer la lecture en cas de perte de focus</string>
+    <string name="settings_resume_headset_plug">Reprendre au rebranchement du casque</string>
+    <string name="settings_resume_headset_plug_subtitle">Reprendre la lecture quand le casque est rebranché après la pause automatique</string>
     <string name="settings_decoder_summary">Décodeur : %1$s</string>
     <string name="settings_decoder">Décodeur</string>
     <string name="settings_refresh_rate_match">Correspondance de fréquence</string>

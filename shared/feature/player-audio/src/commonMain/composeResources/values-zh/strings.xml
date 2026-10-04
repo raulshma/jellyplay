@@ -72,6 +72,11 @@
     <string name="audio_sleep_timer_title">睡眠定时器</string>
     <string name="audio_sleep_timer_end_of_episode">本集结束时</string>
     <string name="audio_sleep_timer_duration">时长</string>
+    <string name="audio_sleep_timer_stops_at">%1$s 停止</string>
+    <string name="audio_sleep_timer_cancel_title">取消睡眠定时器？</string>
+    <string name="audio_sleep_timer_cancel_message">定时器还剩 %1$s，要取消吗？</string>
+    <string name="audio_cancel_timer">取消定时器</string>
+    <string name="audio_sleep_timer_keep">保留定时器</string>
 
     <!-- Equalizer -->
     <string name="audio_equalizer_title">均衡器</string>
@@ -97,6 +102,11 @@
     <string name="audio_queue_title">队列</string>
     <string name="audio_queue_remove">从队列中移除</string>
     <string name="audio_queue_position">%1$d / %2$d</string>
+
+    <!-- Queue drag-reorder -->
+    <string name="audio_queue_reorder_handle">长按拖动排序</string>
+    <string name="audio_queue_move_up">上移</string>
+    <string name="audio_queue_move_down">下移</string>
 
     <!-- Add to playlist picker -->
     <string name="audio_playlist_picker_title">添加到播放列表</string>

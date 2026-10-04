@@ -312,6 +312,7 @@ internal class DesktopVideoPlayerPlatform(
 
     override fun createBecomingNoisy(
         getEngine: () -> MediaEngine?,
+        isResumeOnPlugEnabled: () -> Boolean,
     ): VideoPlayerAudio = NoOpVideoPlayerAudio
 }
 

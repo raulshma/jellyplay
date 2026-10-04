@@ -60,6 +60,8 @@
     <string name="ss_library_view_mode_subtitle">Mediathekseinträge als Raster oder Liste anzeigen</string>
     <string name="ss_layout_mode_title">Layout</string>
     <string name="ss_layout_mode_subtitle">Telefon- oder Tablet-Layout erzwingen statt der Fenstergröße zu folgen</string>
+    <string name="ss_screen_fit_title">Bildschirmanpassung</string>
+    <string name="ss_screen_fit_subtitle">Overscan-Sicherheitsbereich für den TV (Aus / 5 % / 10 %)</string>
     <string name="ss_home_mode_title">Startseiten-Modus</string>
     <string name="ss_home_mode_subtitle">Standard-Startseitenlayout festlegen: Video oder Musik</string>
     <string name="ss_hero_section_title">Hero-Bereich anzeigen</string>
@@ -128,6 +130,8 @@
     <string name="ss_gestures_subtitle">Wischgesten für Helligkeit, Lautstärke und Spulen umschalten</string>
     <string name="ss_gesture_indicator_side_title">Gestenindikator-Seite</string>
     <string name="ss_gesture_indicator_side_subtitle">Helligkeits-/Lautstärke-Leiste auf der gegenüberliegenden oder gleichen Seite wie die Geste anzeigen</string>
+    <string name="ss_double_tap_hold_seek_title">Doppeltipp und halten zum Spulen</string>
+    <string name="ss_double_tap_hold_seek_subtitle">Wiederholt das Spulen, solange nach dem Doppeltipp gehalten wird</string>
     <string name="ss_default_speed_title">Standard-Wiedergabegeschwindigkeit</string>
     <string name="ss_default_speed_subtitle">Anfängliche Standard-Wiedergabegeschwindigkeit für Videos</string>
     <string name="ss_default_aspect_title">Standard-Seitenverhältnis</string>
@@ -138,6 +142,8 @@
     <string name="ss_autoplay_countdown_subtitle">Countdown-Dauer vor dem automatischen Abspielen der nächsten Episode</string>
     <string name="ss_controls_timeout_title">Steuerungs-Timeout</string>
     <string name="ss_controls_timeout_subtitle">Player-Steuerelemente auf dem Bildschirm nach Verzögerung automatisch ausblenden</string>
+    <string name="ss_hide_osd_on_pause_title">OSD beim Pausieren ausblenden</string>
+    <string name="ss_hide_osd_on_pause_subtitle">Steuerungs-Overlay beim Pausieren nicht einblenden</string>
     <string name="ss_skip_back_on_resume_title">Beim Fortsetzen zurückspulen</string>
     <string name="ss_skip_back_on_resume_subtitle">Beim Fortsetzen der Wiedergabe ein paar Sekunden zurückspringen</string>
     <string name="ss_show_clock_player_title">Uhr im Player anzeigen</string>
@@ -200,6 +206,8 @@
     <string name="ss_show_time_remaining_subtitle">Verbleibende statt vergangene Zeit anzeigen</string>
     <string name="ss_pause_on_focus_loss_title">Bei Fokusverlust pausieren</string>
     <string name="ss_pause_on_focus_loss_subtitle">Wiedergabe pausieren, wenn das System Audio-Fokusverlust meldet</string>
+    <string name="ss_resume_headset_plug_title">Fortsetzen bei erneut angeschlossenen Kopfhörern</string>
+    <string name="ss_resume_headset_plug_subtitle">Fortsetzen, wenn Kopfhörer nach der Automatischen Pause beim Abziehen wieder angeschlossen werden</string>
     <string name="ss_mpv_video_output_title">MPV-Videoausgabe</string>
     <string name="ss_mpv_video_output_subtitle">MPV-Videoausgabetreiber</string>
     <string name="ss_mpv_scaler_title">MPV-Scaler</string>
@@ -383,6 +391,8 @@
     <string name="ss_notification_vibrate_subtitle">Bei Benachrichtigung vibrieren</string>
     <string name="ss_notification_lights_title">Benachrichtigungs-LED</string>
     <string name="ss_notification_lights_subtitle">Benachrichtigungs-LED auf unterstützten Geräten blinken lassen</string>
+    <string name="ss_new_episodes_title">Benachrichtigungen über neue Folgen</string>
+    <string name="ss_new_episodes_subtitle">Eigener Benachrichtigungskanal für neue Folgen</string>
     <string name="ss_max_per_check_title">Max. Benachrichtigungen pro Prüfung</string>
     <string name="ss_max_per_check_subtitle">Maximale Einträge pro Benachrichtigungs-Charge</string>
     <string name="ss_notification_libraries_title">Benachrichtigungs-Mediatheken</string>

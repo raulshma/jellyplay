@@ -507,6 +507,7 @@ internal fun MainContent(
                     tvDrawerState = tvDrawerState,
                     tvDrawerListState = tvDrawerListState,
                     libraryFolders = libraryFolders,
+                    tvOverscan = preferences.tvOverscan,
                     hiddenNavItems = preferences.hiddenNavItems,
                     navItemOrder = preferences.navItemOrder,
                     nowPlayingEnabled = audioItemId != null,

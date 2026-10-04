@@ -818,8 +818,8 @@ fun SettingsScreen(
     // (SettingsSearchCatalog.recentItems owns the Default hop).
     val recentIds by viewModel.recentSettingIds.collectAsStateWithLifecycle()
     // Re-seed the holder's recents mirror whenever the store emits — the
-    // ReorderState re-sync shape (the store owns persistence; the mirror is
-    // display state).
+    // core.ui.reorder.ReorderState re-sync shape (the store owns persistence;
+    // the mirror is display state).
     LaunchedEffect(recentIds) { searchPanel.submitRecents(recentIds) }
     val recentItems by produceState(
         initialValue = emptyList<ResolvedSettingsItem>(),

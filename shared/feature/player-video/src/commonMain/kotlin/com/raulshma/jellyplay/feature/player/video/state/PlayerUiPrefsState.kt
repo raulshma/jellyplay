@@ -15,6 +15,14 @@ import com.raulshma.jellyplay.core.model.TrickplayInfo
 @Immutable
 data class PlayerUiPrefsState(
     val controlsTimeoutMs: Long = 5_000L,
+    /**
+     * (jellyfin-androidtv #3924): when on, PAUSING must not summon the
+     * control overlay. Default **off** — today's show-on-pause behavior.
+     * Only the summons is gated: an already-visible overlay is never
+     * force-hidden (the [controlsTimeoutMs] auto-hide owns dismissal), and
+     * resuming still summons as before.
+     */
+    val hideOsdOnPause: Boolean = false,
     val defaultOrientation: OrientationMode = OrientationMode.SENSOR_LANDSCAPE,
     val passOutProtectionHours: Int = 0,
     val showVideoStats: Boolean = false,

@@ -297,12 +297,21 @@ internal actual object PlayerKeyCodes {
     actual val KEYCODE_MEDIA_PLAY: Int = android.view.KeyEvent.KEYCODE_MEDIA_PLAY
     actual val KEYCODE_MEDIA_PAUSE: Int = android.view.KeyEvent.KEYCODE_MEDIA_PAUSE
     actual val KEYCODE_MEDIA_PLAY_PAUSE: Int = android.view.KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE
+    actual val KEYCODE_K: Int = android.view.KeyEvent.KEYCODE_K
     actual val KEYCODE_DPAD_RIGHT: Int = android.view.KeyEvent.KEYCODE_DPAD_RIGHT
     actual val KEYCODE_MEDIA_FAST_FORWARD: Int = android.view.KeyEvent.KEYCODE_MEDIA_FAST_FORWARD
     actual val KEYCODE_L: Int = android.view.KeyEvent.KEYCODE_L
     actual val KEYCODE_DPAD_LEFT: Int = android.view.KeyEvent.KEYCODE_DPAD_LEFT
     actual val KEYCODE_MEDIA_REWIND: Int = android.view.KeyEvent.KEYCODE_MEDIA_REWIND
     actual val KEYCODE_J: Int = android.view.KeyEvent.KEYCODE_J
+    actual val KEYCODE_G: Int = android.view.KeyEvent.KEYCODE_G
+    actual val KEYCODE_H: Int = android.view.KeyEvent.KEYCODE_H
+    actual val KEYCODE_LEFT_BRACKET: Int = android.view.KeyEvent.KEYCODE_LEFT_BRACKET
+    actual val KEYCODE_RIGHT_BRACKET: Int = android.view.KeyEvent.KEYCODE_RIGHT_BRACKET
+    actual val KEYCODE_PAGE_UP: Int = android.view.KeyEvent.KEYCODE_PAGE_UP
+    actual val KEYCODE_PAGE_DOWN: Int = android.view.KeyEvent.KEYCODE_PAGE_DOWN
+    actual val KEYCODE_MOVE_HOME: Int = android.view.KeyEvent.KEYCODE_MOVE_HOME
+    actual val KEYCODE_MOVE_END: Int = android.view.KeyEvent.KEYCODE_MOVE_END
     actual val KEYCODE_DPAD_UP: Int = android.view.KeyEvent.KEYCODE_DPAD_UP
     actual val KEYCODE_VOLUME_UP: Int = android.view.KeyEvent.KEYCODE_VOLUME_UP
     actual val KEYCODE_DPAD_DOWN: Int = android.view.KeyEvent.KEYCODE_DPAD_DOWN
@@ -313,6 +322,7 @@ internal actual object PlayerKeyCodes {
     actual val KEYCODE_F3: Int = android.view.KeyEvent.KEYCODE_F3
     actual val KEYCODE_F4: Int = android.view.KeyEvent.KEYCODE_F4
     actual val KEYCODE_M: Int = android.view.KeyEvent.KEYCODE_M
+    actual val KEYCODE_V: Int = android.view.KeyEvent.KEYCODE_V
     actual val KEYCODE_ESCAPE: Int = android.view.KeyEvent.KEYCODE_ESCAPE
     actual val KEYCODE_BACK: Int = android.view.KeyEvent.KEYCODE_BACK
 }

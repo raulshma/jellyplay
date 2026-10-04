@@ -24,7 +24,8 @@ import com.raulshma.jellyplay.core.model.NotificationPreferences
  * [ensureNowPlayingChannel]) with each channel's EXACT former importance,
  * badge, name and description values — this is a fold, not a redesign; the
  * notification BUILDERS stay in their subsystems, where their locality is
- * good. Only channel creation moved.
+ * good. Only channel creation moved. The opt-in new-episodes channel
+ * ([ensureNewEpisodesChannel]) follows the same fixed-declaration pattern.
  */
 class NotificationChannelManager(
     private val context: Context,
@@ -76,6 +77,23 @@ class NotificationChannelManager(
             description = "Media playback controls",
             showBadge = false,
             lockscreenVisibility = Notification.VISIBILITY_PUBLIC,
+        ),
+    )
+
+    /**
+     * The opt-in new-episodes channel — the fixed routing target the
+     * dispatcher sends episode items to when the new-episodes preference is
+     * on. Same importance/badge family as the other new-media channels
+     * ([ensureSummaryChannel], the per-library channels), not the progress
+     * channels' LOW: this is notification content, not progress.
+     */
+    fun ensureNewEpisodesChannel() = ensureDeclaredChannel(
+        ChannelDeclaration(
+            id = CHANNEL_NEW_EPISODES,
+            name = context.getString(R.string.notification_channel_new_episodes),
+            importance = NotificationManager.IMPORTANCE_DEFAULT,
+            description = context.getString(R.string.notification_channel_new_episodes_desc),
+            showBadge = true,
         ),
     )
 
@@ -144,6 +162,14 @@ class NotificationChannelManager(
     companion object {
         const val CHANNEL_PREFIX = "new_media_"
         const val CHANNEL_SUMMARY = "new_media_summary"
+
+        /**
+         * The fixed new-episodes channel. Deliberately NOT [CHANNEL_PREFIX]-
+         * namespaced so [deleteStaleChannels] (which sweeps the per-library
+         * prefix) can never remove it — same protection the other fixed
+         * subsystem channels have.
+         */
+        const val CHANNEL_NEW_EPISODES = "new_episodes"
 
         fun channelIdFor(libraryId: String): String = "${CHANNEL_PREFIX}${libraryId.take(20)}"
     }

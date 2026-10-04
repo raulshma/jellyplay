@@ -60,6 +60,8 @@
     <string name="ss_library_view_mode_subtitle">Afficher les éléments de la bibliothèque en grille ou en liste</string>
     <string name="ss_layout_mode_title">Disposition</string>
     <string name="ss_layout_mode_subtitle">Forcer la disposition téléphone ou tablette au lieu de suivre la taille de la fenêtre</string>
+    <string name="ss_screen_fit_title">Ajustement de l'écran</string>
+    <string name="ss_screen_fit_subtitle">Marge de sécurité overscan du téléviseur (désactivé / 5 % / 10 %)</string>
     <string name="ss_home_mode_title">Mode d'accueil</string>
     <string name="ss_home_mode_subtitle">Définir la mise en page par défaut de l'écran d'accueil : vidéo ou musique</string>
     <string name="ss_hero_section_title">Afficher la section Hero</string>
@@ -128,6 +130,8 @@
     <string name="ss_gestures_subtitle">Activer les gestes de balayage pour la luminosité, le volume et la recherche</string>
     <string name="ss_gesture_indicator_side_title">Côté de l'indicateur de geste</string>
     <string name="ss_gesture_indicator_side_subtitle">Afficher la barre de luminosité/volume du côté opposé ou identique au geste</string>
+    <string name="ss_double_tap_hold_seek_title">Double-tap maintenu pour avancer</string>
+    <string name="ss_double_tap_hold_seek_subtitle">Repete le deplacement tant que le doigt reste pose apres un double-tap</string>
     <string name="ss_default_speed_title">Vitesse de lecture par défaut</string>
     <string name="ss_default_speed_subtitle">Vitesse de lecture initiale par défaut pour les vidéos</string>
     <string name="ss_default_aspect_title">Format d'image par défaut</string>
@@ -138,6 +142,8 @@
     <string name="ss_autoplay_countdown_subtitle">Durée du compte à rebours avant la lecture automatique de l'épisode suivant</string>
     <string name="ss_controls_timeout_title">Délai d'affichage des contrôles</string>
     <string name="ss_controls_timeout_subtitle">Masquer automatiquement les contrôles du lecteur après un délai</string>
+    <string name="ss_hide_osd_on_pause_title">Masquer l'OSD en pause</string>
+    <string name="ss_hide_osd_on_pause_subtitle">Ne pas afficher la superposition des commandes en pause</string>
     <string name="ss_skip_back_on_resume_title">Reculer à la reprise</string>
     <string name="ss_skip_back_on_resume_subtitle">Revenir de quelques secondes en arrière en reprenant la lecture</string>
     <string name="ss_show_clock_player_title">Afficher l'horloge dans le lecteur</string>
@@ -200,6 +206,8 @@
     <string name="ss_show_time_remaining_subtitle">Afficher le temps restant au lieu du temps écoulé</string>
     <string name="ss_pause_on_focus_loss_title">Pause en cas de perte de focus</string>
     <string name="ss_pause_on_focus_loss_subtitle">Mettre en pause la lecture quand le système signale une perte de focus audio</string>
+    <string name="ss_resume_headset_plug_title">Reprendre au rebranchement du casque</string>
+    <string name="ss_resume_headset_plug_subtitle">Reprend la lecture quand le casque est rebranché après la pause automatique</string>
     <string name="ss_mpv_video_output_title">Sortie vidéo MPV</string>
     <string name="ss_mpv_video_output_subtitle">Pilote de sortie vidéo MPV</string>
     <string name="ss_mpv_scaler_title">Scaling MPV</string>
@@ -383,6 +391,8 @@
     <string name="ss_notification_vibrate_subtitle">Vibrer à la notification</string>
     <string name="ss_notification_lights_title">Lumière de notification</string>
     <string name="ss_notification_lights_subtitle">Faire clignoter la lumière de notification sur les appareils compatibles</string>
+    <string name="ss_new_episodes_title">Notifications des nouveaux épisodes</string>
+    <string name="ss_new_episodes_subtitle">Canal dédié pour les nouveaux épisodes</string>
     <string name="ss_max_per_check_title">Notifications max. par vérification</string>
     <string name="ss_max_per_check_subtitle">Nombre maximum d'éléments par lot de notifications</string>
     <string name="ss_notification_libraries_title">Bibliothèques de notification</string>

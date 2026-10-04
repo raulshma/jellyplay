@@ -16,7 +16,7 @@ import kotlin.test.assertTrue
 
 /**
  * The catalog ↔ screen contract (the drift ratchet), rerolled for the
- * single-sourced row ids (candidate C2 "rows own their identity"): every
+ * single-sourced row ids ("rows own their identity"): every
  * settings row id is declared ONCE — as the `val id` of its fused
  * [SettingsRow] beside the `*Rows` declarations (every domain but the
  * experimental screen), or (the one hold-out) as a `const val` in the
@@ -456,12 +456,13 @@ class SettingsCatalogScreenContractTest {
         val admissions = SettingsScreenGroups.notifications.admissions
         // The master toggle states its unconditional gate explicitly…
         assertIs<RowAdmission.Always>(admissions[NotificationRows.NotificationsEnable.id])
-        // …the four toggle rows ride it…
+        // …the five toggle rows ride it…
         listOf(
             NotificationRows.NotificationCheckFrequency.id,
             NotificationRows.NotificationSound.id,
             NotificationRows.NotificationVibrate.id,
             NotificationRows.NotificationLights.id,
+            NotificationRows.NotificationNewEpisodes.id,
         ).forEach { id ->
             val gate = assertIs<RowAdmission.WhenOn>(admissions[id])
             assertEquals(NotificationRows.NotificationsEnable.id, gate.parentId)
@@ -891,7 +892,7 @@ class SettingsCatalogScreenContractTest {
             ),
         )
         assertEquals(
-            10,
+            11,
             rowTotalFor(
                 SettingsScreenGroups.playbackPlayer,
                 RowAdmissionFlags(
@@ -932,7 +933,7 @@ class SettingsCatalogScreenContractTest {
             ),
         )
         assertEquals(
-            34,
+            37, // +1: the advanced resume-on-headset-plug row admits under advanced everywhere
             rowTotalFor(
                 SettingsScreenGroups.playbackPlayer,
                 RowAdmissionFlags(
@@ -1019,14 +1020,14 @@ class SettingsCatalogScreenContractTest {
         )
         assertEquals(1, rowTotalFor(SettingsScreenGroups.notifications, masterOff)) // master toggle off: only itself
         assertEquals(
-            5,
+            6,
             rowTotalFor(
                 SettingsScreenGroups.notifications,
                 RowAdmissionFlags(parentsOn = rowParentsOn(NotificationRows.NotificationsEnable.id to true, NotificationRows.QuietHours.id to true)),
             ),
-        ) // + frequency/sound/vibrate/lights
+        ) // + frequency/sound/vibrate/lights/new-episodes
         assertEquals(
-            9,
+            10,
             rowTotalFor(
                 SettingsScreenGroups.notifications,
                 RowAdmissionFlags(
@@ -1036,7 +1037,7 @@ class SettingsCatalogScreenContractTest {
             ),
         ) // + quiet hours/dnd/max-per-check/libraries
         assertEquals(
-            11,
+            12,
             rowTotalFor(
                 SettingsScreenGroups.notifications,
                 RowAdmissionFlags(
@@ -1048,7 +1049,7 @@ class SettingsCatalogScreenContractTest {
                 ),
             ),
         ) // + quiet start/end
-        assertEquals(12, allOn) // + the platform's system-notification-settings row
+        assertEquals(13, allOn) // + the platform's system-notification-settings row
     }
 
     @Test
@@ -1217,9 +1218,12 @@ class SettingsCatalogScreenContractTest {
                 themeMode = ThemeMode.SYSTEM,
             ),
         )
-        // The layout fork is touch/desktop-only: on TV exactly that row drops.
+        // The form-factor fork swaps the rows: layout_mode is
+        // touch/desktop-only, and the TV-only "Screen fit" overscan picker
+        // (always visible on TV — no advanced gate) appears in its
+        // place, so the TV count nets +1 over the touch/desktop one.
         assertEquals(
-            4 + 8,
+            4 + 8 + 1,
             appearanceThemeScreenRowTotal(
                 variant = standard,
                 isDarkActive = false,
@@ -1244,16 +1248,26 @@ class SettingsCatalogScreenContractTest {
         // The declared half is exactly the advanced-flag base minus the
         // content-gated exceptions and the theme_scheduler highlight-alias —
         // the strict ratchet keeps them in sync. (Fused conversion: the
-        // exception set is 7 ContentGated rows + the alias, and layout_mode's
-        // All(Advanced, NotTv) gate derives with the base, so the declared
-        // half is 19 - 7 - 1 = 11 under advanced.)
+        // exception set is 7 ContentGated rows + the alias. The form-factor
+        // fork is a SWAP: under the default (non-TV) flags layout_mode's
+        // All(Advanced, NotTv) admits and screen_fit's Tv drops; on TV it
+        // swaps — either way exactly one of the pair drops, so the declared
+        // half is 20 - 7 - 1 - 1 = 11 under advanced.)
         val declared = rowTotalFor(
             SettingsScreenGroups.appearanceTheme,
             RowAdmissionFlags(showAdvanced = true),
         )
         assertEquals(
-            SettingsScreenGroups.appearanceTheme.items.size - 7 - 1,
+            SettingsScreenGroups.appearanceTheme.items.size - 7 - 1 - 1,
             declared,
+        )
+        // On TV the same count: screen_fit admits and layout_mode drops.
+        assertEquals(
+            declared,
+            rowTotalFor(
+                SettingsScreenGroups.appearanceTheme,
+                RowAdmissionFlags(showAdvanced = true, isTv = true),
+            ),
         )
     }
 

@@ -79,6 +79,11 @@
     <string name="player_video_sleep_timer">睡眠定时器</string>
     <string name="player_video_sleep_timer_on">睡眠定时器 \u00B7 %1$s</string>
     <string name="player_video_cancel_sleep_timer">取消睡眠定时器 (剩余 %1$s)</string>
+    <string name="player_video_sleep_timer_stops_at">%1$s 停止</string>
+    <string name="player_video_cancel_sleep_timer_confirm_title">取消睡眠定时器？</string>
+    <string name="player_video_cancel_sleep_timer_confirm_message">定时器还剩 %1$s，要取消吗？</string>
+    <string name="player_video_cancel_timer">取消定时器</string>
+    <string name="player_video_keep_sleep_timer">保留定时器</string>
     <string name="player_video_custom_duration">自定义时长</string>
     <string name="player_video_custom_ellipsis">自定义…</string>
     <string name="player_video_end_of_episode">剧集结尾</string>
@@ -342,4 +347,15 @@
     <string name="player_video_source_label">来源</string>
     <string name="player_video_version">版本</string>
     <string name="player_video_remember_version">记住此版本</string>
+
+    <!-- Subtitle style presets -->
+    <string name="player_video_presets_title">预设</string>
+    <string name="player_video_preset_subtle">简约</string>
+    <string name="player_video_preset_big_bold">大号加粗</string>
+    <string name="player_video_preset_classic_yellow">经典黄色</string>
+    <string name="player_video_preset_netflixish">奈飞风格</string>
+    <string name="player_video_preset_save">保存当前</string>
+    <string name="player_video_preset_save_dialog_title">保存预设</string>
+    <string name="player_video_preset_name_label">预设名称</string>
+    <string name="player_video_preset_delete_a11y">删除预设 %1$s</string>
 </resources>

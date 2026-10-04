@@ -37,6 +37,7 @@ import com.raulshma.jellyplay.core.model.OrientationMode
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import com.raulshma.jellyplay.core.model.SegmentBehavior
 import com.raulshma.jellyplay.core.model.SubtitleStyle
+import com.raulshma.jellyplay.core.model.SubtitleStylePreset
 import com.raulshma.jellyplay.core.ui.components.formatOneDecimal
 import com.raulshma.jellyplay.core.ui.model.labelResource
 import com.raulshma.jellyplay.core.ui.model.preferenceEnumLabelResources
@@ -207,6 +208,10 @@ private fun SubtitleStyle.summary(): String =
         if (italic) "Italic" else null,
     ).joinToString(", ")
 
+/** Short, stable summary of the user-named subtitle style preset list. */
+private fun List<SubtitleStylePreset>.presetsSummary(): String =
+    if (isEmpty()) "None" else joinToString(", ") { it.name }
+
 private fun EqualizerSettings.summary(): String =
     "Preset bands: ${bandLevels.joinToString(",") { formatSignedInt(it) }}"
 
@@ -332,6 +337,7 @@ private val subtitlesLanguageDiffFields: List<DiffField<*>> = listOf(
     DiffField(Res.string.ss_subtitle_forced_only_title, { it.subtitle.subtitlesForcedOnly }, Boolean::onOff),
     DiffField(Res.string.diff_subtitle_preview, { it.subtitle.subtitlePreviewInSettings }, Boolean::onOff),
     DiffField(Res.string.diff_subtitle_style, { it.subtitle.subtitleStyle }, SubtitleStyle::summary),
+    DiffField(Res.string.diff_subtitle_style_presets, { it.subtitle.userStylePresets }, List<SubtitleStylePreset>::presetsSummary),
     DiffField(Res.string.ss_high_contrast_subtitles_title, { it.subtitle.highContrastSubtitles }, Boolean::onOff),
     DiffField(Res.string.ss_pgs_direct_play_title, { it.playback.pgsSubtitleDirectPlay }, Boolean::onOff),
     DiffField(Res.string.ss_hdr_subtitle_style_title, { it.subtitle.hdrSubtitleStyleEnabled }, Boolean::onOff),

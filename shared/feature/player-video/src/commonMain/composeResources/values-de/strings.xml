@@ -79,6 +79,11 @@
     <string name="player_video_sleep_timer">Sleeptimer</string>
     <string name="player_video_sleep_timer_on">Sleeptimer \u00B7 %1$s</string>
     <string name="player_video_cancel_sleep_timer">Sleeptimer abbrechen (%1$s verbleibend)</string>
+    <string name="player_video_sleep_timer_stops_at">Stoppt um %1$s</string>
+    <string name="player_video_cancel_sleep_timer_confirm_title">Sleeptimer abbrechen?</string>
+    <string name="player_video_cancel_sleep_timer_confirm_message">Der Timer hat noch %1$s. Abbrechen?</string>
+    <string name="player_video_cancel_timer">Timer abbrechen</string>
+    <string name="player_video_keep_sleep_timer">Timer behalten</string>
     <string name="player_video_custom_duration">Eigene Dauer</string>
     <string name="player_video_custom_ellipsis">Eigen…</string>
     <string name="player_video_end_of_episode">Ende der Episode</string>
@@ -343,4 +348,15 @@
     <string name="player_video_source_label">Quelle</string>
     <string name="player_video_version">Version</string>
     <string name="player_video_remember_version">Diese Version merken</string>
+
+    <!-- Subtitle style presets -->
+    <string name="player_video_presets_title">Vorlagen</string>
+    <string name="player_video_preset_subtle">Dezent</string>
+    <string name="player_video_preset_big_bold">Groß &amp; fett</string>
+    <string name="player_video_preset_classic_yellow">Klassisches Gelb</string>
+    <string name="player_video_preset_netflixish">Netflix-artig</string>
+    <string name="player_video_preset_save">Aktuelle speichern</string>
+    <string name="player_video_preset_save_dialog_title">Vorlage speichern</string>
+    <string name="player_video_preset_name_label">Name der Vorlage</string>
+    <string name="player_video_preset_delete_a11y">Vorlage %1$s löschen</string>
 </resources>

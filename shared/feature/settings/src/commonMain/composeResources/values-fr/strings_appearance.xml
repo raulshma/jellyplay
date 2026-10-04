@@ -26,6 +26,8 @@
     <string name="settings_library_view_mode">Mode d'affichage de la bibliothèque</string>
     <string name="settings_layout_mode">Disposition</string>
     <string name="settings_layout_mode_subtitle">Choisir la disposition auto, téléphone ou tablette</string>
+    <string name="settings_screen_fit">Ajustement de l'écran</string>
+    <string name="settings_screen_fit_subtitle">Ajuste l'image dans la zone sécurisée du téléviseur pour que rien ne soit coupé aux bords</string>
     <string name="settings_library_view_grid">Afficher les éléments en grille</string>
     <string name="settings_library_view_list">Afficher les éléments en liste</string>
     <string name="settings_library_view_thumb">Afficher les éléments en miniatures paysage</string>

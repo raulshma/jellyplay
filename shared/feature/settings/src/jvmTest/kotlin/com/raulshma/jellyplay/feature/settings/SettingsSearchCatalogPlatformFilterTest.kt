@@ -23,6 +23,10 @@ class SettingsSearchCatalogPlatformFilterTest {
         "gesture_indicator_side",
         "android_tv_watch_next",
         "tv_zoom_mode",
+        // The TV-only overscan calibration: form factor is the
+        // runtime LocalTvMode axis, so the row is tagged ANDROID-only like
+        // every other TV row — it must not surface as a desktop search hit.
+        "screen_fit",
         "biometric_lock",
         // The PIN rows: desktop persists PIN state through the shared
         // SecurityStore but the lock gate (AppLockState/PinGateController/

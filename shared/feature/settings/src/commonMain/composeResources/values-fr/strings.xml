@@ -132,6 +132,8 @@
     <string name="settings_vibrate_subtitle">Vibrer lors d'une notification</string>
     <string name="settings_notification_lights">Lumière de notification</string>
     <string name="settings_notification_lights_subtitle">Faire clignoter la lumière de notification sur les appareils compatibles</string>
+    <string name="settings_new_episodes">Notifier les nouveaux épisodes</string>
+    <string name="settings_new_episodes_subtitle">Publie les nouveaux épisodes dans un canal dédié. Nécessite que la surveillance des nouveaux médias soit activée pour la bibliothèque.</string>
     <string name="settings_max_per_check">Maximum par vérification</string>
     <string name="settings_max_per_check_subtitle">Nombre maximum d'éléments par lot de notifications</string>
     <string name="settings_libraries">Bibliothèques</string>
@@ -552,6 +554,7 @@
     <string name="diff_lyrics_visible">Paroles visibles</string>
     <string name="diff_subtitle_preview">Aperçu des sous-titres dans les réglages</string>
     <string name="diff_subtitle_style">Style de sous-titres</string>
+    <string name="diff_subtitle_style_presets">Préréglages de style de sous-titres</string>
     <string name="diff_hdr_subtitle_style">Style de sous-titres HDR</string>
     <string name="diff_enabled_home_sections">Sections d'accueil activées</string>
     <string name="diff_home_section_order">Ordre des sections d'accueil</string>

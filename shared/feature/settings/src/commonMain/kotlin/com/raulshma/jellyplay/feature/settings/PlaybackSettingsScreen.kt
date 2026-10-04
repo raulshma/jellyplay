@@ -142,6 +142,7 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_coun
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_custom
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_custom_options
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_decoder
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_double_tap_hold_seek_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_decoder_fallback
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_decoder_fallback_off
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_decoder_fallback_on
@@ -195,6 +196,7 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_epis
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_external_player_app_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_controls_timeout
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_controls_timeout_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hide_osd_on_pause_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_frame_drop
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_frame_rate_strategy
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_gesture_indicator_opposite
@@ -272,6 +274,7 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_pref
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_preferred_renderer_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_preload_buffer
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_preload_buffer_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_resume_headset_plug_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_video_cache_size
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_video_cache_size_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_quality_1080p
@@ -718,9 +721,23 @@ private fun PlaybackPlayerGroup(
                                     title = gestureIndicatorTitle,
                                     items = GestureIndicatorSide.entries,
                                     label = { gestureIndicatorLabels.getValue(it) },
-                                    isSelected = { it == preferences.videoGestureIndicatorSide },
-                                    onSelect = { viewModel.edit { scope -> scope.videoPlayer.setVideoGestureIndicatorSide(it) } },
-                                )
+                                isSelected = { it == preferences.videoGestureIndicatorSide },
+                                onSelect = { viewModel.edit { scope -> scope.videoPlayer.setVideoGestureIndicatorSide(it) } },
+                            )
+                        },
+                        )
+                        // double-tap-and-hold continuous seek.
+                        // Shares the Gestures row's touch-gesture admission (the
+                        // same gate [GestureIndicatorSide] rides), so no separate
+                        // rowAdmitted check — mirroring the local pattern above.
+                        SettingToggleItem(
+                            icon = rowIcon(PlaybackRows.DoubleTapHoldSeek),
+                            title = rowTitle(PlaybackRows.DoubleTapHoldSeek),
+                            subtitle = stringResource(Res.string.settings_double_tap_hold_seek_subtitle),
+                            checked = preferences.videoDoubleTapHoldSeekEnabled,
+                            highlighted = highlightSettingId == PlaybackRows.DoubleTapHoldSeek.id,
+                            onCheckedChange = { enabled ->
+                                viewModel.edit { scope -> scope.videoPlayer.setVideoDoubleTapHoldSeekEnabled(enabled) }
                             },
                         )
                     }
@@ -928,6 +945,18 @@ private fun PlaybackPlayerAdvancedRows(
                             },
                         )
                         val skipBackLabel = if (preferences.videoSkipBackOnResumeMs == 0L) offLabel else "${preferences.videoSkipBackOnResumeMs / 1000}s"
+                        // pausing must not summon the control overlay
+                        // (opt-in; off = today's show-on-pause behavior).
+                        SettingToggleItem(
+                            icon = rowIcon(PlaybackRows.HideOsdOnPause),
+                            title = rowTitle(PlaybackRows.HideOsdOnPause),
+                            subtitle = stringResource(Res.string.settings_hide_osd_on_pause_subtitle),
+                            checked = preferences.videoHideOsdOnPause,
+                            highlighted = highlightSettingId == PlaybackRows.HideOsdOnPause.id,
+                            onCheckedChange = { enabled ->
+                                viewModel.edit { scope -> scope.videoPlayer.setVideoHideOsdOnPause(enabled) }
+                            },
+                        )
                         val skipBackOnResumeTitle = rowTitle(PlaybackRows.SkipBackOnResume)
                         SettingListItem(
                             icon = rowIcon(PlaybackRows.SkipBackOnResume),
@@ -1200,6 +1229,18 @@ private fun PlaybackPlayerAdvancedRows(
                             checked = preferences.duckOnTransientFocusLoss,
                             highlighted = highlightSettingId == PlaybackRows.DuckOnTransientFocusLoss.id,
                             onCheckedChange = { viewModel.edit { scope -> scope.playback.setDuckOnTransientFocusLoss(it) } },
+                        )
+                        // opt-in resume when headphones
+                        // reconnect after the becoming-noisy auto-pause.
+                        SettingToggleItem(
+                            icon = rowIcon(PlaybackRows.ResumeHeadsetPlug),
+                            title = rowTitle(PlaybackRows.ResumeHeadsetPlug),
+                            subtitle = stringResource(Res.string.settings_resume_headset_plug_subtitle),
+                            checked = preferences.videoResumeOnHeadsetPlug,
+                            highlighted = highlightSettingId == PlaybackRows.ResumeHeadsetPlug.id,
+                            onCheckedChange = { enabled ->
+                                viewModel.edit { scope -> scope.videoPlayer.setVideoResumeOnHeadsetPlug(enabled) }
+                            },
                         )
 }
 

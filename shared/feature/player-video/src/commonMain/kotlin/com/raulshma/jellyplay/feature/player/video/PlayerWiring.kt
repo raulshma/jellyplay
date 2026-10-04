@@ -391,7 +391,7 @@ internal class PlayerWiring(
     )
 
     /**
-     * The `media` slice's single writer (A8, the EpisodeNavigator
+     * The `media` slice's single writer (the EpisodeNavigator
      * `updateEpisodes` seam shape): every MediaContentState write routes
      * through it, and the refreshed-detail choreography ORDER (session
      * manager first, streams write, track rebuild last) lives there,
@@ -500,12 +500,16 @@ internal class PlayerWiring(
     /**
      * The becoming-noisy auto-pause owner (headphone unplug → pause; the
      * focus half of the former audio-lifecycle moved into the PlaybackFocus
-     * module at the video slice). Registered in [arm], released in
+     * module at the video slice) plus its opt-in resume-on-headset-insert
+     * twin. Registered in [arm], released in
      * [performRelease]. [getEngine] is re-read on every broadcast so engine
-     * swaps (retry/fallback) and teardown stay correct.
+     * swaps (retry/fallback) and teardown stay correct; the resume pref is
+     * re-read at every plug event (the store's StateFlow `value`), so a
+     * mid-session settings flip is observed live.
      */
     private val becomingNoisy = platform.createBecomingNoisy(
         getEngine = { playerSessionManager.engine },
+        isResumeOnPlugEnabled = { stores.videoPlayer.videoPlayer.value.videoResumeOnHeadsetPlug },
     )
 
     // ── Cross-player exclusivity (the video focus slice, ADR-0004) ──────────
@@ -652,7 +656,7 @@ internal class PlayerWiring(
         reconcileSyncPlayQueue = { itemId, mediaSourceId, startPositionTicks ->
             syncPlay.reconcileQueueForItem(itemId, mediaSourceId, startPositionTicks)
         },
-        // Cycle 3's cinema handoff: the sequencing is session-owned (B4); the
+        // Cycle 3's cinema handoff: the sequencing is session-owned; the
         // late-bound slot breaks the bundle-before-session construction edge.
         beginCinemaMode = { intros, request -> playbackSessionRef.beginCinemaMode(intros, request) },
         resolveOfflineResumeTicks = { itemId, startPositionTicks ->
@@ -875,7 +879,10 @@ internal class PlayerWiring(
         scope = scope,
     )
 
-    internal val trackSelectionHelper = TrackSelectionHelper(
+    // Explicit type: the toggle hook below forwards to subtitlePreview
+    // (declared after this), and the forward lambda reference makes the
+    // pair's initializers mutually recursive for the inference engine.
+    internal val trackSelectionHelper: TrackSelectionHelper = TrackSelectionHelper(
         engineStore = stores.engine,
         subtitleStore = stores.subtitleLanguage,
         getEngine = { playerSessionManager.engine },
@@ -905,6 +912,10 @@ internal class PlayerWiring(
             val item = playerSessionManager.sessionState.value.mediaDetail?.item
             listOfNotNull(item?.seriesName?.takeIf { it.isNotBlank() }, item?.name?.takeIf { it.isNotBlank() })
         },
+        // Toggle: the cue preview (declared below — the lambda defers every
+        // read, so the forward reference is init-order safe) refreshes like a
+        // sheet pick when the toggle flips the active subtitle.
+        onSubtitleSelectionChanged = { subtitlePreview.onTrackSelectionChanged() },
         scope = scope,
     )
 
@@ -964,7 +975,7 @@ internal class PlayerWiring(
 
     /**
      * Owns the subtitle-style + dialogue-boost + subtitle-delay choreography
-     * (A7): style edits, per-item delay writes and their debounced engine
+     * Style edits, per-item delay writes and their debounced engine
      * re-sync, the per-item dialogue-boost persist, and — folded back from
      * SubtitleFontController (the style edit it performed WAS a
      * [SubtitleStyleController.setStyle] call; no init-order coupling, so the
@@ -996,6 +1007,12 @@ internal class PlayerWiring(
         syncEngineConfigDebounced = { engineConfigSyncRef.markDirtyDebounced() },
         fontProvider = subtitleSources.fontProvider,
         getEngine = { playerSessionManager.engine },
+        // named style presets: pure data over the controller — the live
+        // list (the sheet's preset row) plus the synchronous read and the
+        // persist lambda behind savePreset/deletePreset.
+        userStylePresets = stores.subtitleLanguage.subtitle.map { it.userStylePresets },
+        getUserStylePresets = { stores.subtitleLanguage.subtitle.value.userStylePresets },
+        saveStylePresets = { presets -> stores.subtitleLanguage.setSubtitleStylePresets(presets) },
     )
 
     /**
@@ -1371,7 +1388,7 @@ internal class PlayerWiring(
      * session's rearm callback when a disposed coordinator is re-created —
      * the VM is Activity-scoped and survives release() across media, so the
      * mirrors must be re-armed alongside it. Decision *execution* lives in
-     * [PlaybackSession] (B2); its outcomes arrive as [SessionEvent]s.
+     * [PlaybackSession]; its outcomes arrive as [SessionEvent]s.
      */
     private fun startEngineEventCoordinatorOutputs() {
         engineEventOutputsJob?.cancel()
@@ -1455,7 +1472,7 @@ internal class PlayerWiring(
     }
 
     override fun onPlayheadSeeded(startPositionTicks: Long) {
-        // Playhead display pre-seed is session-owned since B4; the write
+        // Playhead display pre-seed is session-owned; the write
         // itself flows through the session's seedDisplayedPositionMs seam.
         playbackSessionRef.preSeedPlayhead(startPositionTicks)
         // Surface a one-shot "Resumed — Restart" reminder when opening at a
@@ -1475,7 +1492,7 @@ internal class PlayerWiring(
 
     override fun rearmTransports() {
         // The engine-event coordinator re-arm that used to run here is
-        // session-owned as of B2 — PlaybackSession.initialize performs it
+        // session-owned — PlaybackSession.initialize performs it
         // directly after this hook.
         pipTransport.registerPipTransport()
     }
@@ -1507,7 +1524,7 @@ internal class PlayerWiring(
     override fun onMiniPlayerReclaimed() {
         // Reclaim promotes an already-playing mini-player engine to
         // fullscreen — playback is continuous, so no load screen. The
-        // reclaim BODY is session-side since B4; this is the veil write,
+        // reclaim BODY is session-side; this is the veil write,
         // at exactly its old position (before the body launch).
         uiState.update { it.copy(isInitializing = false) }
     }
@@ -1538,7 +1555,7 @@ internal class PlayerWiring(
     }
 
     override fun wasInSyncPlay(): Boolean {
-        // Pure flag read since B3 — the outgoing session's stop-report
+        // Pure flag read — the outgoing session's stop-report
         // moved session-side and fires directly after this read inside
         // PlaybackSession.initialize, at exactly its old position.
         return syncPlayManager.isInSyncPlaySession
@@ -1589,7 +1606,7 @@ internal class PlayerWiring(
         videoFocusSurface?.unbind()
         becomingNoisy.release()
         sleepTimer.onRelease()
-        // Full teardown (B3): the session owns the tail — snapshot of the
+        // Full teardown: the session owns the tail — snapshot of the
         // stop-report inputs, the releaseInternals split (session half, then
         // the VM's releaseInternalsVmPart half, back-to-back), the VM's
         // post-internals release steps passed as the callback, then the
