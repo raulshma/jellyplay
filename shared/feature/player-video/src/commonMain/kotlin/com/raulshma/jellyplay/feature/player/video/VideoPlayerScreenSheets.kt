@@ -29,9 +29,11 @@ import com.raulshma.jellyplay.feature.player.video.components.RenderSheet
 import com.raulshma.jellyplay.feature.player.video.components.SleepTimerSheet
 import com.raulshma.jellyplay.feature.player.video.components.SpeedPickerSheet
 import com.raulshma.jellyplay.feature.player.video.components.SubtitleHubSheet
+import com.raulshma.jellyplay.feature.player.video.components.SubtitleHubTab
 import com.raulshma.jellyplay.feature.player.video.components.SyncPlayPlayerSheet
 import com.raulshma.jellyplay.feature.player.video.components.TrackPickerSheet
 import com.raulshma.jellyplay.feature.player.video.components.VideoFilterSheet
+import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvSubtitleOwnership
 import com.raulshma.jellyplay.feature.player.video.generated.resources.Res
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_audio
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_remember_audio_language
@@ -72,6 +74,8 @@ internal fun PlayerSheetRouter(
     subtitleHubResetFirst: Boolean,
     /** Clears the consumed [subtitleHubResetFirst] flag so it stays single-shot. */
     onSubtitleHubResetConsumed: () -> Unit,
+    /** The tab this SubtitleHub open lands on (set by the entry that opened it). */
+    subtitleHubInitialTab: SubtitleHubTab,
 ) {
     // the Render sheet's "save for this series" toggle — sheet-local
     // UI state, defaults off (session-only edits).
@@ -142,8 +146,13 @@ internal fun PlayerSheetRouter(
             // controller-handle carve-out); the list rides the subtitle slice.
             val userStylePresets by viewModel.subtitleStyleController.userStylePresets
                 .collectAsStateWithLifecycle(initialValue = emptyList())
+            // Custom-mpv-config ownership: which sub-* styling keys the engine
+            // yields to Advanced MPV Configuration / mpv.conf this session.
+            // The Style tab renders its case-by-case notice (owned keys, ASS
+            // force requirement, quoting trap) from this snapshot.
+            val sessionEngine by viewModel.playerEngineFlow.collectAsStateWithLifecycle()
             SubtitleHubSheet(
-                initialTab = com.raulshma.jellyplay.feature.player.video.components.SubtitleHubTab.TRACKS,
+                initialTab = subtitleHubInitialTab,
                 onDismiss = dismissSheet,
                 // Tracks tab
                 subtitleTracks = trackState.subtitleTracks,
@@ -194,6 +203,8 @@ internal fun PlayerSheetRouter(
                 onPickFont = onPickFont,
                 onOpenTester = onOpenSubtitleTester,
                 capabilities = uiState.engineCapabilities,
+                subtitleOwnership = sessionEngine?.subtitleStyleOwnership
+                    ?: MpvSubtitleOwnership.NONE,
                 userStylePresets = userStylePresets,
                 onSaveStylePreset = { name ->
                     viewModel.subtitleStyleController.savePreset(name, uiState.subtitleStyle)

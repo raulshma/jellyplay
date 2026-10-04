@@ -69,6 +69,7 @@ import com.raulshma.jellyplay.feature.player.video.generated.resources.player_vi
 
 import com.raulshma.jellyplay.feature.player.video.SubtitleDownloadStatus
 import com.raulshma.jellyplay.feature.player.video.engine.EngineCapabilities
+import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvSubtitleOwnership
 
 /**
  * The hub tabs. Order is fixed: Tracks is always first (the primary use case —
@@ -97,8 +98,9 @@ internal enum class SubtitleHubTab {
  *
  * The hub owns its own tab state (saveably restored across config changes) and
  * focus requesters. [initialTab] lets the caller land on a specific tab — the
- * primary Subtitles button opens Tracks, while the overflow "Subtitles" entry
- * opens Get (the former "Get Subtitles" entry point).
+ * primary Subtitles button and the overflow "Subtitles" entry open Tracks,
+ * while the metadata row's mpv-config chip opens Style (the full ownership
+ * notice lives there).
  */
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -117,6 +119,9 @@ internal fun SubtitleHubSheet(
     onPickFont: () -> Unit,
     onOpenTester: () -> Unit,
     capabilities: EngineCapabilities,
+    // Custom-mpv-config ownership snapshot (notice card in SubtitleStyleControls):
+    // which sub-* keys the engine yields to the user's config this session.
+    subtitleOwnership: MpvSubtitleOwnership = MpvSubtitleOwnership.NONE,
     // Style tab — named presets (built-ins are code; user presets ride the
     // subtitle slice via the host).
     userStylePresets: List<SubtitleStylePreset> = emptyList(),
@@ -282,6 +287,7 @@ internal fun SubtitleHubSheet(
                         currentStyle = subtitleStyle,
                         onStyleChange = onStyleChange,
                         capabilities = capabilities,
+                        subtitleOwnership = subtitleOwnership,
                         onPickFont = onPickFont,
                         showOverrideToggle = true,
                         onReset = { onStyleChange(SubtitleStyle(applyCustomStyle = true)) },

@@ -35,10 +35,8 @@
     <string name="player_video_open_tester">打开测试器</string>
     <string name="player_video_reset">重置</string>
     <string name="player_video_reset_all">全部重置</string>
-    <string name="player_video_pick_color">选择颜色</string>
     <string name="player_video_hue">色相</string>
     <string name="player_video_saturation">饱和度</string>
-    <string name="player_video_value">明度</string>
     <string name="player_video_apply">应用</string>
     <string name="player_video_cancel">取消</string>
     <string name="player_video_override_subtitle_styles">覆盖字幕样式</string>
@@ -56,6 +54,14 @@
     <string name="player_video_ass_force">强制</string>
     <string name="player_video_ass_scale_hint">保留嵌入样式；仅应用您的大小和位置</string>
     <string name="player_video_ass_force_hint">使用您的颜色、字体和边框覆盖嵌入样式</string>
+    <string name="player_video_mpv_config_notice_title">您的 mpv 配置覆盖部分字幕设置</string>
+    <string name="player_video_mpv_config_owned_keys_intro">您的配置对以下键优先 — 此处对应的控件不会更改它们：</string>
+    <string name="player_video_mpv_config_case_srt">普通（SRT）字幕始终使用配置中的颜色、边框和字体。</string>
+    <string name="player_video_mpv_config_case_ass">ASS/SSA 字幕会保留嵌入样式 — 如需应用您的样式，请使用下方的“ASS 样式”选择。</string>
+    <string name="player_video_mpv_config_ass_override_owned">您的配置设置了 sub-ass-override——此处的“保留/强制”选择无效。</string>
+    <string name="player_video_mpv_config_app_owned_keys">字幕开关和字幕延迟始终由应用控制 — 您的配置无法更改这些。</string>
+    <string name="player_video_mpv_config_dropped_keys">mpv 无法从其 mpv.conf 文件读取 %1$s——未加引号的 # 会被视为注释开始。在该文件中请为值加引号（sub-color="#FF0000"）。应用的高级 MPV 配置输入框中规则相反：直接写 sub-color=#FF0000 即可——加引号反而会成为值的一部分。</string>
+    <string name="player_video_mpv_config_chip">自定义 mpv 配置</string>
     <string name="player_video_font_color">字体颜色</string>
     <string name="player_video_background_color">背景色</string>
     <string name="player_video_background_opacity">背景不透明度：%1$d%</string>

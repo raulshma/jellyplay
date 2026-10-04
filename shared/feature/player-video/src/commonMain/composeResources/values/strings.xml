@@ -36,10 +36,8 @@
     <string name="player_video_open_tester">Open tester</string>
     <string name="player_video_reset">Reset</string>
     <string name="player_video_reset_all">Reset All</string>
-    <string name="player_video_pick_color">Pick a color</string>
     <string name="player_video_hue">Hue</string>
     <string name="player_video_saturation">Saturation</string>
-    <string name="player_video_value">Value</string>
     <string name="player_video_apply">Apply</string>
     <string name="player_video_cancel">Cancel</string>
     <string name="player_video_override_subtitle_styles">Override Subtitle Styles</string>
@@ -57,6 +55,20 @@
     <string name="player_video_ass_force">Force</string>
     <string name="player_video_ass_scale_hint">Keep embedded styling; apply only your size &amp; position</string>
     <string name="player_video_ass_force_hint">Override embedded styling with your colors, font &amp; borders</string>
+    <!-- Custom mpv config (Advanced MPV Configuration / Android mpv.conf) owns
+         sub-* styling keys: the engine skips those keys so the config value
+         wins, and the matching controls here are no-ops. The notice card
+         spells out every interaction case instead of failing silently. -->
+    <string name="player_video_mpv_config_notice_title">Your mpv config overrides some subtitle settings</string>
+    <string name="player_video_mpv_config_owned_keys_intro">Your config takes priority for these keys — the matching controls here do not change them:</string>
+    <string name="player_video_mpv_config_case_srt">Plain text (SRT) subtitles always use the colors, borders and fonts from your config.</string>
+    <string name="player_video_mpv_config_case_ass">ASS/SSA subtitles keep their embedded styling — to apply your style, use the ASS Styling choice below.</string>
+    <string name="player_video_mpv_config_ass_override_owned">Your config sets sub-ass-override — the Respect/Force choice here has no effect.</string>
+    <string name="player_video_mpv_config_app_owned_keys">Subtitle on/off and subtitle delay always follow the app — your config cannot change those.</string>
+    <string name="player_video_mpv_config_dropped_keys">mpv cannot read %1$s from its mpv.conf file — an unquoted # starts a comment there. In that file, quote the value: sub-color="#FF0000". In the app\'s Advanced MPV Configuration the opposite applies: write sub-color=#FF0000 — quotes there break the value.</string>
+    <!-- Short label for the metadata-row chip (above the seekbar) that flags
+         an active custom mpv config and clicks through to the full notice. -->
+    <string name="player_video_mpv_config_chip">Custom mpv config</string>
     <string name="player_video_font_color">Font Color</string>
     <string name="player_video_background_color">Background Color</string>
     <string name="player_video_background_opacity">Background Opacity: %1$d%</string>

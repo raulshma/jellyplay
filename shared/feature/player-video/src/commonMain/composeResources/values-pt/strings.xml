@@ -35,10 +35,8 @@
     <string name="player_video_open_tester">Abrir testador</string>
     <string name="player_video_reset">Repor</string>
     <string name="player_video_reset_all">Repor tudo</string>
-    <string name="player_video_pick_color">Escolher uma cor</string>
     <string name="player_video_hue">Matiz</string>
     <string name="player_video_saturation">Saturação</string>
-    <string name="player_video_value">Valor</string>
     <string name="player_video_apply">Aplicar</string>
     <string name="player_video_cancel">Cancelar</string>
     <string name="player_video_override_subtitle_styles">Substituir estilos de legendas</string>
@@ -56,6 +54,14 @@
     <string name="player_video_ass_force">Forçar</string>
     <string name="player_video_ass_scale_hint">Manter o estilo incorporado; aplicar apenas o seu tamanho e posição</string>
     <string name="player_video_ass_force_hint">Substituir o estilo incorporado pelas suas cores, letra e bordas</string>
+    <string name="player_video_mpv_config_notice_title">A sua configuração do mpv substitui algumas definições de legendas</string>
+    <string name="player_video_mpv_config_owned_keys_intro">A sua configuração tem prioridade para estas chaves — os controlos correspondentes aqui não as alteram:</string>
+    <string name="player_video_mpv_config_case_srt">As legendas simples (SRT) usam sempre as cores, bordas e letras da sua configuração.</string>
+    <string name="player_video_mpv_config_case_ass">As legendas ASS/SSA mantêm o estilo incorporado — para aplicar o seu estilo, use a escolha Estilo ASS abaixo.</string>
+    <string name="player_video_mpv_config_ass_override_owned">A sua configuração define sub-ass-override — a escolha Respeitar/Forçar aqui não tem efeito.</string>
+    <string name="player_video_mpv_config_app_owned_keys">Ligar/desligar legendas e o atraso das legendas seguem sempre a app — a sua configuração não as pode alterar.</string>
+    <string name="player_video_mpv_config_dropped_keys">O mpv não consegue ler %1$s do arquivo mpv.conf — um # sem aspas inicia um comentário. Nesse arquivo, coloque o valor entre aspas: sub-color="#FF0000". Na configuração mpv avançada do app vale o contrário: escreva sub-color=#FF0000 sem aspas — aspas virariam parte do valor.</string>
+    <string name="player_video_mpv_config_chip">Config. mpv personalizada</string>
     <string name="player_video_font_color">Cor da letra</string>
     <string name="player_video_background_color">Cor de fundo</string>
     <string name="player_video_background_opacity">Opacidade do fundo: %1$d%</string>

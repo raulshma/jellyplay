@@ -86,4 +86,6 @@
     <string name="settings_track_rule_subtitle_mode">Mode des sous-titres</string>
     <string name="settings_track_rule_edit">Modifier la règle</string>
     <string name="settings_track_rule_delete">Supprimer la règle</string>
+
+    <string name="settings_subtitle_custom_color">Personnalisée…</string>
 </resources>

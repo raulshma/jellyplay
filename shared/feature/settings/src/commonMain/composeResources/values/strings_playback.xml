@@ -199,7 +199,8 @@
     <string name="settings_skip_loop_filter">Skip Loop Filter</string>
     <string name="settings_frame_drop">Frame Drop</string>
     <string name="settings_raw_mpv_options">Raw mpv options (mpv.conf style)</string>
-    <string name="settings_mpv_helper_text">One option per line (key=value). Applied after the settings above, so a value here overrides its structured counterpart. Blank lines and # comments are ignored. Subtitle styling keys (sub-color, sub-pos, …) also take priority over the app subtitle settings.</string>
+    <string name="settings_mpv_helper_text">One mpv option per line (key=value). These apply after the settings above and override them.\n\n• Blank lines and lines starting with # are ignored; a lone key (e.g. hr-seek) means yes.\n• Subtitle keys (sub-color, sub-pos, …) also override the app\'s subtitle settings.\n• Do not quote values — they reach mpv as-is, so quotes become part of the value (sub-color=#FF0000 works; sub-color="#FF0000" does not). A # inside a value is fine here.</string>
+    <string name="settings_mpv_config_placeholder">scale=ewa_lanczossharp\ncache-secs=120</string>
     <string name="settings_reset_mpv">Restore all MPV settings</string>
     <string name="settings_network_caching">Network Caching</string>
     <string name="settings_skip_frames">Skip Frames</string>

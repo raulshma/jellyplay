@@ -78,6 +78,7 @@ import com.raulshma.jellyplay.feature.player.video.components.TrackControls
 import com.raulshma.jellyplay.feature.player.video.components.TransportControls
 import com.raulshma.jellyplay.feature.player.video.components.GestureControls
 import com.raulshma.jellyplay.feature.player.video.components.SheetControls
+import com.raulshma.jellyplay.feature.player.video.components.SubtitleHubTab
 
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -202,6 +203,14 @@ fun VideoPlayerScreen(
     // restore of the sheet re-opens with resetFirst = false, the same
     // no-reset re-load the former router effect performed.
     var subtitleHubResetFirst by remember { mutableStateOf(false) }
+    // Which tab the NEXT SubtitleHub open lands on. Every entry sets it
+    // explicitly (no stale value leaks from the previous entry): the primary
+    // Subtitles button and the overflow entry land on Tracks, while the
+    // metadata row's mpv-config chip lands on Style — the tab that carries
+    // the full ownership notice the chip is the shortcut to. Not saveable:
+    // a config-change restore re-opens on Tracks, the same class of
+    // behavior the reset-first flag above has.
+    var subtitleHubInitialTab by remember { mutableStateOf(SubtitleHubTab.TRACKS) }
     // Transparent subtitle-delay overlay (VLC-style). Not saveable: dismissed on
     // recreation, same as the gesture-driven seek/brightness pills.
     var showDelayOverlay by remember { mutableStateOf(false) }
@@ -1191,16 +1200,28 @@ fun VideoPlayerScreen(
             // already covers the in-flight window).
             val onSubtitleClick by remember { mutableStateOf({
                 subtitleHubResetFirst = false
+                subtitleHubInitialTab = SubtitleHubTab.TRACKS
                 currentSheet = PlayerSheet.SubtitleHub
             }) }
-            // Overflow "Subtitles" entry opens the hub on the Get tab (the
-            // former "Get Subtitles" entry point's most useful landing spot).
+            // Overflow "Subtitles" entry: opens the hub with a cleared search /
+            // cultures slice (the former "Get Subtitles" entry point), landing
+            // on the same Tracks tab as the primary button — only the reset
+            // intent differs.
             val onSubtitleHubClick by remember { mutableStateOf({
                 // Reset search/cultures state from any previous item before
                 // loading fresh data, so stale results don't leak across
                 // items. The reset rides to the router's single load trigger
                 // as the flag below — no loads at click (see onSubtitleClick).
                 subtitleHubResetFirst = true
+                subtitleHubInitialTab = SubtitleHubTab.TRACKS
+                currentSheet = PlayerSheet.SubtitleHub
+            }) }
+            // Metadata row's mpv-config chip: the ownership snapshot is live
+            // (user-owned sub-* keys), and the hub's Style tab carries the
+            // full case-by-case notice — land there directly.
+            val onMpvConfigNoticeClick by remember { mutableStateOf({
+                subtitleHubResetFirst = false
+                subtitleHubInitialTab = SubtitleHubTab.STYLE
                 currentSheet = PlayerSheet.SubtitleHub
             }) }
             // ONE effects bundle replaces the nine remembered effect lambdas
@@ -1352,6 +1373,7 @@ fun VideoPlayerScreen(
                     openSheet = openSheet,
                     onSubtitleClick = onSubtitleClick,
                     onSubtitleHubClick = onSubtitleHubClick,
+                    onMpvConfigNoticeClick = onMpvConfigNoticeClick,
                     onSubtitleToggle = { viewModel.onEvent(VideoPlayerUiEvent.ToggleSubtitles) },
                     onSubtitleDelayClick = { showDelayOverlay = true },
                     hasEpisodes = hasEpisodes,
@@ -1395,6 +1417,7 @@ fun VideoPlayerScreen(
                     subtitleDelayMs = uiState.subtitleStyle.offsetMs,
                     showPlaybackMetadata = uiState.uiPrefs.showPlaybackMetadata,
                     hasMultipleVersions = uiState.media.mediaSources.size > 1,
+                    mpvConfigNoticeActive = engine?.subtitleStyleOwnership?.isActive == true,
                 ),
                 currentAspectRatio = aspectRatio,
                 detectedAspectRatio = detectedAspectRatio,
@@ -1616,6 +1639,7 @@ fun VideoPlayerScreen(
         },
         subtitleHubResetFirst = subtitleHubResetFirst,
         onSubtitleHubResetConsumed = { subtitleHubResetFirst = false },
+        subtitleHubInitialTab = subtitleHubInitialTab,
     )
 
     val playerError = uiState.playerError

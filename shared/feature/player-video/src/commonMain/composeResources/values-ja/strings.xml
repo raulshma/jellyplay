@@ -35,10 +35,8 @@
     <string name="player_video_open_tester">テスターを開く</string>
     <string name="player_video_reset">リセット</string>
     <string name="player_video_reset_all">すべてリセット</string>
-    <string name="player_video_pick_color">色を選択</string>
     <string name="player_video_hue">色相</string>
     <string name="player_video_saturation">彩度</string>
-    <string name="player_video_value">明度</string>
     <string name="player_video_apply">適用</string>
     <string name="player_video_cancel">キャンセル</string>
     <string name="player_video_override_subtitle_styles">字幕スタイルを上書き</string>
@@ -56,6 +54,14 @@
     <string name="player_video_ass_force">強制</string>
     <string name="player_video_ass_scale_hint">埋め込みスタイルを保持、サイズと位置のみ適用</string>
     <string name="player_video_ass_force_hint">埋め込みスタイルを独自の色、フォント、縁取りで上書き</string>
+    <string name="player_video_mpv_config_notice_title">mpv 設定が一部の字幕設定を上書きしています</string>
+    <string name="player_video_mpv_config_owned_keys_intro">設定が優先されるキー — ここにある該当するコントロールでは変更できません:</string>
+    <string name="player_video_mpv_config_case_srt">通常の字幕(SRT)は常に設定の色・縁取り・フォントを使用します。</string>
+    <string name="player_video_mpv_config_case_ass">ASS/SSA 字幕は埋め込みスタイルを保持します — 自分のスタイルを適用するには、下の「ASS スタイル」の選択を使用してください。</string>
+    <string name="player_video_mpv_config_ass_override_owned">設定が sub-ass-override を指定しているため、ここでの「尊重/強制」の選択は無効です。</string>
+    <string name="player_video_mpv_config_app_owned_keys">字幕のオン/オフと字幕の遅延は常にアプリに従います — 設定では変更できません。</string>
+    <string name="player_video_mpv_config_dropped_keys">mpv は mpv.conf ファイル内の %1$s を読み取れません。引用符のない # はコメントの開始とみなされます。ファイル内では値を引用符で囲んでください (sub-color="#FF0000")。アプリの高度な MPV 設定では逆で、引用符を付けずにそのまま入力します (sub-color=#FF0000)。引用符は値の一部になります。</string>
+    <string name="player_video_mpv_config_chip">カスタム mpv 設定</string>
     <string name="player_video_font_color">フォントの色</string>
     <string name="player_video_background_color">背景色</string>
     <string name="player_video_background_opacity">背景の不透明度: %1$d%</string>

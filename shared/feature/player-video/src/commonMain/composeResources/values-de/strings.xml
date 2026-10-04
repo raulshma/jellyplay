@@ -35,10 +35,8 @@
     <string name="player_video_open_tester">Tester öffnen</string>
     <string name="player_video_reset">Zurücksetzen</string>
     <string name="player_video_reset_all">Alle zurücksetzen</string>
-    <string name="player_video_pick_color">Farbe wählen</string>
     <string name="player_video_hue">Farbton</string>
     <string name="player_video_saturation">Sättigung</string>
-    <string name="player_video_value">Wert</string>
     <string name="player_video_apply">Anwenden</string>
     <string name="player_video_cancel">Abbrechen</string>
     <string name="player_video_override_subtitle_styles">Untertitelstile überschreiben</string>
@@ -56,6 +54,14 @@
     <string name="player_video_ass_force">Erzwingen</string>
     <string name="player_video_ass_scale_hint">Eingebetteten Stil beibehalten; nur Größe &amp; Position anwenden</string>
     <string name="player_video_ass_force_hint">Eingebetteten Stil mit Ihren Farben, Schriftart &amp; Rahmen überschreiben</string>
+    <string name="player_video_mpv_config_notice_title">Ihre mpv-Konfiguration überschreibt einige Untertitel-Einstellungen</string>
+    <string name="player_video_mpv_config_owned_keys_intro">Ihre Konfiguration hat Vorrang für diese Schlüssel — die entsprechenden Steuerelemente hier ändern sie nicht:</string>
+    <string name="player_video_mpv_config_case_srt">Einfache Untertitel (SRT) verwenden immer Farben, Rahmen und Schriftarten aus Ihrer Konfiguration.</string>
+    <string name="player_video_mpv_config_case_ass">ASS/SSA-Untertitel behalten ihren eingebetteten Stil — um Ihren Stil anzuwenden, wählen Sie unten die Option unter ASS-Stil.</string>
+    <string name="player_video_mpv_config_ass_override_owned">Ihre Konfiguration setzt sub-ass-override — die Auswahl Beibehalten/Erzwingen hier hat keine Wirkung.</string>
+    <string name="player_video_mpv_config_app_owned_keys">Untertitel an/aus und Untertitel-Verzögerung folgen immer der App — Ihre Konfiguration kann sie nicht ändern.</string>
+    <string name="player_video_mpv_config_dropped_keys">mpv kann %1$s aus seiner mpv.conf-Datei nicht lesen — ein nicht in Anführungszeichen gesetztes # beginnt dort einen Kommentar. Setzen Sie in dieser Datei den Wert in Anführungszeichen: sub-color="#FF0000". Im Feld für erweiterte MPV-Konfiguration der App gilt das Gegenteil: sub-color=#FF0000 funktioniert direkt — Anführungszeichen würden dort Teil des Werts.</string>
+    <string name="player_video_mpv_config_chip">Eigene mpv-Konfiguration</string>
     <string name="player_video_font_color">Schriftfarbe</string>
     <string name="player_video_background_color">Hintergrundfarbe</string>
     <string name="player_video_background_opacity">Hintergrunddeckkraft: %1$d%</string>

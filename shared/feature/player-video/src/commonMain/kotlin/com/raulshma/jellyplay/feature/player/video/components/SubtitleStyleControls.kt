@@ -15,12 +15,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -40,26 +39,30 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.vector.ImageVector
 import org.jetbrains.compose.resources.stringResource
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.composables.icons.tabler.Tabler
+import com.composables.icons.tabler.outline.AlertTriangle
+import com.composables.icons.tabler.outline.FileText
+import com.composables.icons.tabler.outline.InfoCircle
+import com.composables.icons.tabler.outline.Subtitles
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.AssOverrideMode
 import com.raulshma.jellyplay.core.model.SubtitleBorderStyle
 import com.raulshma.jellyplay.core.model.SubtitleColor
 import com.raulshma.jellyplay.core.model.SubtitleEdgeType
 import com.raulshma.jellyplay.core.model.SubtitleStyle
+import com.raulshma.jellyplay.core.ui.components.SubtitleFreeFormColorPickerDialog
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.components.DpadSlider
 import com.raulshma.jellyplay.core.ui.tv.components.TvOrTouchSlider
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
-import com.raulshma.jellyplay.feature.player.video.subtitleColorToHsv
-import com.raulshma.jellyplay.feature.player.video.subtitleHsvToColor
 import com.raulshma.jellyplay.feature.player.video.generated.resources.Res
-import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_apply
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_ass_basic_notice
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_ass_embedded_notice
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_ass_force
@@ -76,7 +79,6 @@ import com.raulshma.jellyplay.feature.player.video.generated.resources.player_vi
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_border_style
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_border_width
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_bundled_default
-import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_cancel
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_edge_color
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_edge_depressed
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_edge_none
@@ -87,59 +89,25 @@ import com.raulshma.jellyplay.feature.player.video.generated.resources.player_vi
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_font
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_font_color
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_font_size
-import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_hue
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_italic
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_mpv_config_app_owned_keys
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_mpv_config_ass_override_owned
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_mpv_config_case_ass
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_mpv_config_case_srt
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_mpv_config_dropped_keys
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_mpv_config_notice_title
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_mpv_config_owned_keys_intro
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_override_subtitle_styles
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_override_subtitle_styles_hint
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_pick
-import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_pick_color
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_reset
-import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_saturation
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_shadow_offset
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_subtitle_offset
-import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_value
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_vertical_position
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 import com.raulshma.jellyplay.feature.player.video.engine.EngineCapabilities
+import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvSubtitleOwnership
+import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvUserSubtitleKeys
 import kotlin.math.roundToLong
 
 /**
@@ -161,6 +129,13 @@ import kotlin.math.roundToLong
  * @param currentStyle  Hoisted source of truth. Reads are controlled by this.
  * @param onStyleChange Emits the next style on every user action.
  * @param capabilities  Per-engine gates (hides unsupported controls).
+ * @param subtitleOwnership Per-session snapshot of the user's custom mpv
+ *  config (Advanced MPV Configuration / Android mpv.conf): when active, the
+ *  engine skips the owned `sub-*` keys so the matching controls here are
+ *  no-ops — the notice card spells out every interaction case (owned keys,
+ *  the ASS-override requirement, the quoting trap) instead of letting edits
+ *  silently do nothing. [MpvSubtitleOwnership.NONE] on engines without a
+ *  user-config surface hides the card.
  * @param onPickFont    Invoked when the user taps the font row.
  * @param onReset       When non-null, renders a reset chip that calls it.
  * @param onSubtitleDelayChange When non-null, the subtitle-offset slider routes
@@ -175,6 +150,7 @@ fun SubtitleStyleControls(
     onStyleChange: (SubtitleStyle) -> Unit,
     modifier: Modifier = Modifier,
     capabilities: EngineCapabilities = EngineCapabilities(),
+    subtitleOwnership: MpvSubtitleOwnership = MpvSubtitleOwnership.NONE,
     onPickFont: () -> Unit = {},
     showOverrideToggle: Boolean = true,
     onReset: (() -> Unit)? = null,
@@ -215,6 +191,20 @@ fun SubtitleStyleControls(
     }
 
     Column(modifier = modifier.fillMaxWidth()) {
+        // Custom mpv config (Advanced MPV Configuration / Android's
+        // <filesDir>/mpv/mpv.conf) owns one or more sub-* styling keys: the
+        // engine skips exactly those keys (init AND runtime), so the config
+        // value wins and the matching controls in this form are no-ops.
+        // Spell out every interaction case instead of letting an edit
+        // silently do nothing.
+        if (subtitleOwnership.isActive) {
+            Spacer(Modifier.height(8.dp))
+            MpvConfigOwnershipNotice(
+                ownership = subtitleOwnership,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+
         // Engine renders subtitles but not full ASS (libVLC). Inform the user.
         if (!capabilities.supportsAssOverride && capabilities.supportsSubtitleStyle) {
             Spacer(Modifier.height(8.dp))
@@ -420,7 +410,7 @@ fun SubtitleStyleControls(
                 )
             }
             // Free-form color picker swatch (capability-gated).
-            if (capabilities.supportsFreeFormColors && capabilities.supportsAssStyleOverride && applyCustomStyle) {
+            if (capabilities.supportsCustomSubtitleColors && applyCustomStyle) {
                 ColorChip(
                     color = if (currentStyle.fontColorArgb != null) Color(currentStyle.fontColorArgb!!) else Color.Transparent,
                     isSelected = currentStyle.fontColorArgb != null,
@@ -452,7 +442,7 @@ fun SubtitleStyleControls(
                     },
                 )
             }
-            if (capabilities.supportsFreeFormColors && capabilities.supportsAssStyleOverride && applyCustomStyle) {
+            if (capabilities.supportsCustomSubtitleColors && applyCustomStyle) {
                 ColorChip(
                     color = if (currentStyle.backgroundColorArgb != null) Color(currentStyle.backgroundColorArgb!!) else Color.Transparent,
                     isSelected = currentStyle.backgroundColorArgb != null,
@@ -536,7 +526,7 @@ fun SubtitleStyleControls(
                         },
                     )
                 }
-                if (capabilities.supportsFreeFormColors && capabilities.supportsAssStyleOverride && applyCustomStyle) {
+                if (capabilities.supportsCustomSubtitleColors && applyCustomStyle) {
                     ColorChip(
                         color = if (currentStyle.edgeColorArgb != null) Color(currentStyle.edgeColorArgb!!) else Color.Transparent,
                         isSelected = currentStyle.edgeColorArgb != null,
@@ -688,33 +678,204 @@ fun SubtitleStyleControls(
     }
 
     // --- Free-form color picker dialogs (capability-gated entry points above) ---
-    if (showFontColorPicker) {
-        FreeFormColorPickerDialog(
-            initialColor = if (currentStyle.fontColorArgb != null) Color(currentStyle.fontColorArgb!!) else Color(currentStyle.fontColor.value),
-            onDismiss = { showFontColorPicker = false },
-            onColorSelected = { picked ->
-                onStyleChange(currentStyle.copy(fontColorArgb = picked))
-            },
+    SubtitleFreeFormColorPickerHost(
+        show = showFontColorPicker,
+        initialColor = currentStyle.fontColorArgb?.let(::Color) ?: Color(currentStyle.fontColor.value),
+        onDismiss = { showFontColorPicker = false },
+        onColorSelected = { picked -> onStyleChange(currentStyle.copy(fontColorArgb = picked)) },
+    )
+    SubtitleFreeFormColorPickerHost(
+        show = showBackgroundColorPicker,
+        initialColor = currentStyle.backgroundColorArgb?.let(::Color) ?: Color(currentStyle.backgroundColor.value),
+        onDismiss = { showBackgroundColorPicker = false },
+        onColorSelected = { picked -> onStyleChange(currentStyle.copy(backgroundColorArgb = picked)) },
+    )
+    SubtitleFreeFormColorPickerHost(
+        show = showEdgeColorPicker,
+        initialColor = currentStyle.edgeColorArgb?.let(::Color) ?: Color(currentStyle.edgeColor.value),
+        onDismiss = { showEdgeColorPicker = false },
+        onColorSelected = { picked -> onStyleChange(currentStyle.copy(edgeColorArgb = picked)) },
+    )
+}
+
+/**
+ * Renders [SubtitleFreeFormColorPickerDialog] while [show] is set — the shared
+ * gate for the font/background/edge picker entry points, which differ only in
+ * the style field they read and write.
+ */
+@Composable
+private fun SubtitleFreeFormColorPickerHost(
+    show: Boolean,
+    initialColor: Color,
+    onDismiss: () -> Unit,
+    onColorSelected: (Int) -> Unit,
+) {
+    if (!show) return
+    SubtitleFreeFormColorPickerDialog(
+        initialColor = initialColor,
+        onDismiss = onDismiss,
+        onColorSelected = onColorSelected,
+    )
+}
+
+/**
+ * The custom-mpv-config ownership notice: a warning-tinted card that spells
+ * out, case by case, what the user's config wins versus what stays app-driven
+ * (issue #165, UI half).
+ *
+ * Structure, top to bottom:
+ *  - Title row (warning icon) — the card's reason to exist at a glance.
+ *  - Owned keys as monospace pills — the exact `sub-*` keys the engine yields,
+ *    so the no-op controls are identifiable without decoding a joined string.
+ *  - Two scannable case rows: plain (SRT) subtitles always take the config's
+ *    colors/borders/fonts; ASS/SSA subtitles keep embedded styling unless the
+ *    ASS Styling choice below forces the app style. Shown only when style
+ *    keys are actually owned — with a purely-broken config (dropped-keys only)
+ *    nothing is owned and no control is a no-op.
+ *  - Respect/Force dead-choice row when the config owns `sub-ass-override`.
+ *  - App-owned reassurance row: on/off and delay always follow the app.
+ *  - Error callout for owned keys whose mpv.conf value the parser destroys
+ *    (unquoted `#`), with the quoting fix inline.
+ *
+ * Informational only — never focusable, so TV D-pad navigation skips past it.
+ */
+@Composable
+private fun MpvConfigOwnershipNotice(
+    ownership: MpvSubtitleOwnership,
+    modifier: Modifier = Modifier,
+) {
+    val warningColor = MaterialTheme.colorScheme.tertiary
+    val errorColor = MaterialTheme.colorScheme.error
+    val onSurface = MaterialTheme.colorScheme.onSurface
+    val onSurfaceVariant = MaterialTheme.colorScheme.onSurfaceVariant
+    val hasOwnedStyleKeys = ownership.ownedStyleKeys.isNotEmpty()
+
+    Column(
+        modifier = modifier
+            .clip(ShapeCache.smooth8)
+            .background(warningColor.copy(alpha = 0.10f))
+            .border(1.dp, warningColor.copy(alpha = 0.28f), ShapeCache.smooth8)
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Icon(
+                imageVector = Tabler.Outline.AlertTriangle,
+                contentDescription = null,
+                tint = warningColor,
+                modifier = Modifier.size(18.dp),
+            )
+            Text(
+                stringResource(Res.string.player_video_mpv_config_notice_title),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = onSurface,
+            )
+        }
+
+        if (hasOwnedStyleKeys) {
+            Text(
+                stringResource(Res.string.player_video_mpv_config_owned_keys_intro),
+                style = MaterialTheme.typography.bodySmall,
+                color = onSurfaceVariant,
+            )
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                ownership.ownedStyleKeys.sorted().forEach { key ->
+                    MpvConfigKeyPill(
+                        key = key,
+                        contentColor = onSurface,
+                        borderColor = onSurfaceVariant.copy(alpha = 0.35f),
+                    )
+                }
+            }
+            MpvConfigCaseRow(
+                icon = Tabler.Outline.FileText,
+                text = stringResource(Res.string.player_video_mpv_config_case_srt),
+                tint = onSurfaceVariant,
+            )
+            MpvConfigCaseRow(
+                icon = Tabler.Outline.Subtitles,
+                text = stringResource(Res.string.player_video_mpv_config_case_ass),
+                tint = onSurfaceVariant,
+            )
+            if (MpvUserSubtitleKeys.ASS_OVERRIDE_KEY in ownership.ownedStyleKeys) {
+                MpvConfigCaseRow(
+                    icon = Tabler.Outline.AlertTriangle,
+                    text = stringResource(Res.string.player_video_mpv_config_ass_override_owned),
+                    tint = warningColor,
+                )
+            }
+            MpvConfigCaseRow(
+                icon = Tabler.Outline.InfoCircle,
+                text = stringResource(Res.string.player_video_mpv_config_app_owned_keys),
+                tint = onSurfaceVariant,
+            )
+        }
+
+        if (ownership.confKeysDroppedByParser.isNotEmpty()) {
+            MpvConfigCaseRow(
+                icon = Tabler.Outline.AlertTriangle,
+                text = stringResource(
+                    Res.string.player_video_mpv_config_dropped_keys,
+                    ownership.confKeysDroppedByParser.sorted().joinToString(),
+                ),
+                tint = errorColor,
+            )
+        }
+    }
+}
+
+/**
+ * One icon + text case row inside [MpvConfigOwnershipNotice]; [tint] drives
+ * both so severity reads at a glance (variant = informational, tertiary =
+ * config-conflict warning, error = broken config).
+ */
+@Composable
+private fun MpvConfigCaseRow(
+    icon: ImageVector,
+    text: String,
+    tint: Color,
+) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = tint,
+            modifier = Modifier.size(16.dp),
+        )
+        Text(
+            text,
+            style = MaterialTheme.typography.bodySmall,
+            color = tint,
         )
     }
-    if (showBackgroundColorPicker) {
-        FreeFormColorPickerDialog(
-            initialColor = if (currentStyle.backgroundColorArgb != null) Color(currentStyle.backgroundColorArgb!!) else Color(currentStyle.backgroundColor.value),
-            onDismiss = { showBackgroundColorPicker = false },
-            onColorSelected = { picked ->
-                onStyleChange(currentStyle.copy(backgroundColorArgb = picked))
-            },
-        )
-    }
-    if (showEdgeColorPicker) {
-        FreeFormColorPickerDialog(
-            initialColor = if (currentStyle.edgeColorArgb != null) Color(currentStyle.edgeColorArgb!!) else Color(currentStyle.edgeColor.value),
-            onDismiss = { showEdgeColorPicker = false },
-            onColorSelected = { picked ->
-                onStyleChange(currentStyle.copy(edgeColorArgb = picked))
-            },
-        )
-    }
+}
+
+/** Monospace pill for one user-owned `sub-*` key — config-literal styling. */
+@Composable
+private fun MpvConfigKeyPill(
+    key: String,
+    contentColor: Color,
+    borderColor: Color,
+) {
+    Text(
+        key,
+        style = MaterialTheme.typography.labelSmall.copy(
+            fontFamily = FontFamily.Monospace,
+        ),
+        color = contentColor,
+        modifier = Modifier
+            .clip(ShapeCache.smoothPill)
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.6f))
+            .border(1.dp, borderColor, ShapeCache.smoothPill)
+            .padding(horizontal = 8.dp, vertical = 3.dp),
+    )
 }
 
 @Composable
@@ -810,73 +971,3 @@ internal fun SubtitleStyleChip(
     )
 }
 
-/**
- * Minimal HSV color picker dialog for free-form subtitle colors (v1).
- * Three sliders drive hue (0..360), saturation (0..1), value (0..1); the resulting
- * ARGB int is returned via [onColorSelected]. Closes itself on confirm or dismiss.
- */
-@Composable
-private fun FreeFormColorPickerDialog(
-    initialColor: Color,
-    onDismiss: () -> Unit,
-    onColorSelected: (Int) -> Unit,
-) {
-    val hsv = remember {
-        floatArrayOf(0f, 1f, 1f).apply {
-            subtitleColorToHsv(initialColor.toArgb()).copyInto(this)
-        }
-    }
-    var hue by remember { mutableFloatStateOf(hsv[0]) }
-    var saturation by remember { mutableFloatStateOf(hsv[1]) }
-    var value by remember { mutableFloatStateOf(hsv[2]) }
-    val previewColor = remember(hue, saturation, value) {
-        Color(subtitleHsvToColor(floatArrayOf(hue, saturation, value)))
-    }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(Res.string.player_video_pick_color)) },
-        text = {
-            Column {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(48.dp)
-                        .clip(ShapeCache.smooth8)
-                        .background(previewColor),
-                )
-                Spacer(Modifier.height(12.dp))
-                Text(stringResource(Res.string.player_video_hue), style = MaterialTheme.typography.labelSmall)
-                Slider(
-                    value = hue,
-                    onValueChange = { hue = it },
-                    valueRange = 0f..360f,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                Text(stringResource(Res.string.player_video_saturation), style = MaterialTheme.typography.labelSmall)
-                Slider(
-                    value = saturation,
-                    onValueChange = { saturation = it },
-                    valueRange = 0f..1f,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                Text(stringResource(Res.string.player_video_value), style = MaterialTheme.typography.labelSmall)
-                Slider(
-                    value = value,
-                    onValueChange = { value = it },
-                    valueRange = 0f..1f,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = {
-                onColorSelected(previewColor.toArgb())
-                onDismiss()
-            }) { Text(stringResource(Res.string.player_video_apply)) }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(Res.string.player_video_cancel)) }
-        },
-    )
-}

@@ -35,10 +35,8 @@
     <string name="player_video_open_tester">Apri tester</string>
     <string name="player_video_reset">Ripristina</string>
     <string name="player_video_reset_all">Ripristina tutto</string>
-    <string name="player_video_pick_color">Scegli un colore</string>
     <string name="player_video_hue">Tonalità</string>
     <string name="player_video_saturation">Saturazione</string>
-    <string name="player_video_value">Valore</string>
     <string name="player_video_apply">Applica</string>
     <string name="player_video_cancel">Annulla</string>
     <string name="player_video_override_subtitle_styles">Sostituisci stili sottotitoli</string>
@@ -56,6 +54,14 @@
     <string name="player_video_ass_force">Forza</string>
     <string name="player_video_ass_scale_hint">Mantieni lo stile incorporato; applica solo dimensione e posizione</string>
     <string name="player_video_ass_force_hint">Sostituisci lo stile incorporato con i tuoi colori, carattere e bordi</string>
+    <string name="player_video_mpv_config_notice_title">La tua configurazione mpv sostituisce alcune impostazioni dei sottotitoli</string>
+    <string name="player_video_mpv_config_owned_keys_intro">La tua configurazione ha priorità per queste chiavi — i controlli corrispondenti qui non le modificano:</string>
+    <string name="player_video_mpv_config_case_srt">I sottotitoli semplici (SRT) usano sempre i colori, i bordi e i caratteri della tua configurazione.</string>
+    <string name="player_video_mpv_config_case_ass">I sottotitoli ASS/SSA mantengono lo stile incorporato — per applicare il tuo stile, usa la scelta Stile ASS qui sotto.</string>
+    <string name="player_video_mpv_config_ass_override_owned">La tua configurazione imposta sub-ass-override: la scelta Rispetta/Forza qui non ha effetto.</string>
+    <string name="player_video_mpv_config_app_owned_keys">Attivazione/disattivazione dei sottotitoli e ritardo dei sottotitoli seguono sempre l\'app — la configurazione non può cambiarli.</string>
+    <string name="player_video_mpv_config_dropped_keys">mpv non riesce a leggere %1$s dal suo file mpv.conf: un # senza virgolette avvia un commento. In quel file, metti il valore tra virgolette: sub-color="#FF0000". Nella configurazione mpv avanzata dell\'app vale il contrario: scrivi sub-color=#FF0000 senza virgolette — le virgolette farebbero parte del valore.</string>
+    <string name="player_video_mpv_config_chip">Config. mpv personalizzata</string>
     <string name="player_video_font_color">Colore carattere</string>
     <string name="player_video_background_color">Colore sfondo</string>
     <string name="player_video_background_opacity">Opacità sfondo: %1$d%</string>

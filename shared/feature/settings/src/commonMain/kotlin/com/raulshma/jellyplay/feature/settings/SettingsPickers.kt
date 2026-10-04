@@ -26,6 +26,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -364,12 +365,21 @@ internal fun SettingsTextPickerSheet(
     title: String,
     initialText: String,
     helperText: String,
+    placeholder: String = "",
     onDismiss: () -> Unit,
     onSave: (String) -> Unit,
 ) {
     var text by remember(initialText) { mutableStateOf(initialText) }
 
-    TvSafeSheet(onDismissRequest = onDismiss) {
+    // A text-input sheet must open fully expanded: a partially-expanded sheet
+    // cannot grow when the IME appears, so the keyboard would just cover the
+    // field. TvSafeSheet's imePadding lifts content only in the expanded state.
+    val textSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    TvSafeSheet(
+        onDismissRequest = onDismiss,
+        sheetState = textSheetState,
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -390,10 +400,27 @@ internal fun SettingsTextPickerSheet(
                 onValueChange = { text = it },
                 modifier = Modifier
                     .fillMaxWidth()
+                    // fill=false keeps the field wrap-height, but lets it
+                    // compress when the open IME leaves the sheet short on
+                    // room instead of pushing the save button under it.
+                    .weight(1f, fill = false)
                     .heightIn(min = 200.dp),
                 textStyle = MaterialTheme.typography.bodyMedium.copy(
                     fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
                 ),
+                placeholder = if (placeholder.isNotEmpty()) {
+                    @Composable {
+                        Text(
+                            placeholder,
+                            style = MaterialTheme.typography.bodyMedium.copy(
+                                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                            ),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                } else {
+                    null
+                },
                 keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
                     autoCorrectEnabled = false,
                     capitalization = androidx.compose.ui.text.input.KeyboardCapitalization.None,

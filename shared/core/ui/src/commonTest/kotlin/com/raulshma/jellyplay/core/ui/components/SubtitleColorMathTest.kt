@@ -1,17 +1,74 @@
-package com.raulshma.jellyplay.feature.player.video
+package com.raulshma.jellyplay.core.ui.components
 
 import kotlin.math.abs
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-/**
- * Pins the pure HSV pair relocated out of SubtitleStyleControls' composable
- * file (android.graphics.Color's math, commonMain twin): exact anchors, the
- * hue wraparound (h < 0 → +360), the S=0/V=0 guards, the 255-alpha contract,
- * and channel-tolerant (±1, float truncation) round-trips.
- */
 class SubtitleColorMathTest {
+
+    // ── parseHexColorOrNull ─────────────────────────────────────────────────
+
+    @Test
+    fun `parses six digit hex as opaque`() {
+        assertEquals(0xFFFF0000.toInt(), parseHexColorOrNull("#FF0000"))
+        assertEquals(0xFF00FF00.toInt(), parseHexColorOrNull("00FF00"))
+        assertEquals(0xFF0000FF.toInt(), parseHexColorOrNull("0x0000FF"))
+    }
+
+    @Test
+    fun `parses eight digit hex preserving alpha`() {
+        assertEquals(0x80FF0000.toInt(), parseHexColorOrNull("#80FF0000"))
+        assertEquals(0x00123456, parseHexColorOrNull("00123456"))
+    }
+
+    @Test
+    fun `expands three digit shorthand like css`() {
+        assertEquals(0xFFFF0000.toInt(), parseHexColorOrNull("#F00"))
+        assertEquals(0xFF00FF00.toInt(), parseHexColorOrNull("0f0"))
+    }
+
+    @Test
+    fun `tolerates surrounding whitespace`() {
+        assertEquals(0xFFFFFFFF.toInt(), parseHexColorOrNull("  #FFFFFF  "))
+    }
+
+    @Test
+    fun `rejects malformed input`() {
+        assertNull(parseHexColorOrNull(null))
+        assertNull(parseHexColorOrNull(""))
+        assertNull(parseHexColorOrNull("#"))
+        assertNull(parseHexColorOrNull("#FF00"))
+        assertNull(parseHexColorOrNull("#GGGGGG"))
+        assertNull(parseHexColorOrNull("#FF00000"))
+        assertNull(parseHexColorOrNull("red"))
+    }
+
+    // ── formatHexColor ──────────────────────────────────────────────────────
+
+    @Test
+    fun `formats opaque colors as six digits`() {
+        assertEquals("#FF0000", formatHexColor(0xFFFF0000.toInt()))
+        assertEquals("#00FF00", formatHexColor(0xFF00FF00.toInt()))
+    }
+
+    @Test
+    fun `formats translucent colors as eight digits alpha first`() {
+        assertEquals("#80FF0000", formatHexColor(0x80FF0000.toInt()))
+        assertEquals("#00123456", formatHexColor(0x00123456))
+    }
+
+    // ── round trips ─────────────────────────────────────────────────────────
+
+    @Test
+    fun `format then parse round trips`() {
+        for (color in intArrayOf(0xFFFF0000.toInt(), 0x80FF0000.toInt(), 0xFF123456.toInt(), 0x00000000)) {
+            assertEquals(color, parseHexColorOrNull(formatHexColor(color)))
+        }
+    }
+
+    // ── HSV pair (relocated from player-video's SubtitleColorMathTest) ──────
 
     @Test
     fun `colorToHsv primaries are exact`() {

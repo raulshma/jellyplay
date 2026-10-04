@@ -235,6 +235,12 @@ internal data class SheetControls(
     val onSubtitleClick: () -> Unit = {},
     val onSubtitleHubClick: () -> Unit = {},
     /**
+     * The playback-metadata row's mpv-config chip: the hub must land on its
+     * Style tab (the full ownership notice), so the screen sets the
+     * initial-tab intent before opening — beyond what [openSheet] carries.
+     */
+    val onMpvConfigNoticeClick: () -> Unit = {},
+    /**
      * The subtitle-visibility toggle (CC button's long-press): off
      * remembers the last non-Off track in-session, on silently restores it.
      * Short-press keeps opening the hub.
@@ -286,6 +292,12 @@ internal data class TrackControls(
     val showPlaybackMetadata: Boolean = true,
     /** The playing item exposes more than one version (media source). */
     val hasMultipleVersions: Boolean = false,
+    /**
+     * The engine's custom-mpv-config subtitle ownership is active (user-owned
+     * `sub-*` keys): the metadata row renders its warning chip, clicking
+     * through to the subtitle hub's full notice.
+     */
+    val mpvConfigNoticeActive: Boolean = false,
 )
 
 @Composable
@@ -630,6 +642,8 @@ internal fun PlayerControls(
                         subtitleDelayMs = tracks.subtitleDelayMs,
                         onSubtitleDelayClick = sheets.onSubtitleDelayClick,
                         onPlayMethodClick = { sheets.openSheet(PlayerSheet.PlaybackMode) },
+                        mpvConfigNoticeActive = tracks.mpvConfigNoticeActive,
+                        onMpvConfigNoticeClick = sheets.onMpvConfigNoticeClick,
                         modifier = Modifier.padding(bottom = 4.dp)
                     )
                 }

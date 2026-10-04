@@ -326,4 +326,14 @@
     <string name="core_check_frequency_every_6_hours">Every 6 hours</string>
     <string name="core_check_frequency_every_12_hours">Every 12 hours</string>
     <string name="core_check_frequency_every_24_hours">Every day</string>
+
+    <!-- SubtitleFreeFormColorPickerDialog -->
+    <string name="core_ui_color_picker_title">Pick a color</string>
+    <string name="core_ui_color_hex">Hex</string>
+    <string name="core_ui_color_hue">Hue</string>
+    <string name="core_ui_color_saturation">Saturation</string>
+    <string name="core_ui_color_value">Brightness</string>
+    <string name="core_ui_color_invalid_hex">Invalid hex color</string>
+    <string name="core_ui_color_apply">Apply</string>
+    <string name="core_ui_color_cancel">Cancel</string>
 </resources>

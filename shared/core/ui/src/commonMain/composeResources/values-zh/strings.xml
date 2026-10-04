@@ -280,4 +280,14 @@
          for PosterCard/WideMediaCard). -->
     <string name="core_ui_card_percent_complete">已完成 %1$d%</string>
     <string name="core_ui_card_time_left">剩余 %1$s</string>
+
+    <!-- SubtitleFreeFormColorPickerDialog (matches the default-locale grouping) -->
+    <string name="core_ui_color_picker_title">选择颜色</string>
+    <string name="core_ui_color_hex">十六进制</string>
+    <string name="core_ui_color_hue">色相</string>
+    <string name="core_ui_color_saturation">饱和度</string>
+    <string name="core_ui_color_value">亮度</string>
+    <string name="core_ui_color_invalid_hex">无效的十六进制颜色</string>
+    <string name="core_ui_color_apply">应用</string>
+    <string name="core_ui_color_cancel">取消</string>
 </resources>

@@ -64,12 +64,35 @@ Deprez.
   - **Subtitle precedence:** any `sub-*` styling key you set in the
     *Advanced MPV Configuration* (or, on Android, in `mpv.conf`) wins —
     the app skips writing that key, at startup and on live subtitle-style
-    changes alike. Example: `sub-color=#FF00FF00` in your conf keeps your
+    changes alike. Example: `sub-color="#FF00FF00"` in your conf keeps your
     green captions even with custom subtitle styling enabled in-app.
+    **Quoting:** in a hand-written `mpv.conf`, mpv treats everything after
+    an unquoted `#` as a comment — color values like `sub-color=#FF0000`
+    parse as empty and are silently dropped, so wrap them in quotes
+    (`sub-color="#FF0000"`). Values in the in-app *Advanced MPV
+    Configuration* go straight to mpv's option API, where `#` is not
+    special — but quotes are **not** stripped there: they become part of
+    the value, so write values unquoted (`sub-color=#FF0000`).
+    **ASS/SSA subtitles:** style keys like `sub-color` only
+    affect ASS subs when your config also sets `sub-ass-override=force`
+    (which also stops the app's default `sub-ass-override=scale` write);
+    with `scale` or `yes`, ASS subs keep their embedded styling.
     Functional keys the player drives at runtime (`sub-visibility`,
     `sub-delay`, `secondary-sub-delay`, `sub-use-margins`,
     `sub-ass-force-margins`, and the font-provider options) stay app-owned
     so in-app subtitle toggle/sync keep working.
+    **In-app notice:** when a custom config participates, the subtitle
+    hub's *Style* tab (and the standalone subtitle tester) show a notice
+    card listing the owned keys, the ASS-track case (ASS subs keep their
+    embedded styling; the card points at the *ASS Styling* choice, and
+    calls out when the config itself owns `sub-ass-override`), the
+    app-owned keys it names (subtitle on/off and subtitle delay — the
+    rest of the always-app-owned functional set is enforced without being
+    listed), and — when
+    mpv.conf values were dropped by the parser — the quoting fix. The card
+    reads the same ownership snapshot the engines gate their writes with
+    (`MediaEngine.subtitleStyleOwnership`), so it can never disagree with
+    what is actually skipped.
   - **Platform note:** the desktop builds run mpv with `config=no`, so
     `~/.config/mpv/mpv.conf` is not read there — only the in-app
     *Advanced MPV Configuration* participates in the precedence above.
@@ -145,7 +168,7 @@ setting simply won't appear in the player UI).
 | ASS/SSA *user style override* | ✗ | ✅ | ✗ | ✗ |
 | Image subtitles (PGS/VobSub sidecars) | ✗ | ✅ | ✗ | ✗ |
 | Font family | ✅ | ✅ | ✅ | ✗ |
-| Free-form subtitle colors | ✅ | ✅ | ✗ | ✗ |
+| Free-form subtitle colors | ✗ | ✅ | ✗ | ✗ |
 | Border styles | ✅ | ✅ | ✗ | ✗ |
 | Dialogue boost | ✅ | ✅ | ✗ | ✗ |
 | Night mode | ✅ | ✅ | ✗ | ✗ |
@@ -159,7 +182,10 @@ setting simply won't appear in the player UI).
 Only **mpv** also applies *your* style overrides (colors, borders,
 Force) on top of ASS/SSA tracks (`--ass-override=force`). ExoPlayer
 renders ASS as-authored — your style overrides take effect on SRT/VTT
-only. LibVLC does not render ASS at all.
+only. LibVLC does not render ASS at all. For the same reason, the
+free-form (hex) color picker is offered on **libmpv only**: it requires
+ASS user style override so the picked color also holds on ASS tracks,
+not just SRT/VTT.
 
 Image subtitles delivered as files (bitmap PGS `.sup`, VobSub) play on
 mpv only, via its libav decoders — this gates offline side-loading:

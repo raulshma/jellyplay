@@ -86,4 +86,6 @@
     <string name="settings_track_rule_subtitle_mode">Modo das legendas</string>
     <string name="settings_track_rule_edit">Editar regra</string>
     <string name="settings_track_rule_delete">Eliminar regra</string>
+
+    <string name="settings_subtitle_custom_color">Personalizada…</string>
 </resources>

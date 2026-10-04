@@ -241,6 +241,7 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_skip
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_skip_segments_on_seek_off
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_skip_segments_on_seek_on
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_mpv_helper_text
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_mpv_config_placeholder
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_network_caching
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_no_audio_delay
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_no_delay
@@ -1998,6 +1999,7 @@ private fun PlaybackMpvEngineRows(
                             val customOptionsSuffix = stringResource(Res.string.settings_custom_options)
                             val advancedMpvConfigTitle = stringResource(Res.string.settings_advanced_mpv_config)
                             val mpvHelperText = stringResource(Res.string.settings_mpv_helper_text)
+                            val mpvConfigPlaceholder = stringResource(Res.string.settings_mpv_config_placeholder)
                             SettingListItem(
                                 icon = rowIcon(PlaybackRows.MpvExtraConfig),
                                 title = rowTitle(PlaybackRows.MpvExtraConfig),
@@ -2013,6 +2015,7 @@ private fun PlaybackMpvEngineRows(
                                         title = advancedMpvConfigTitle,
                                         initialText = mpvCfg.mpvExtraConfig,
                                         helperText = mpvHelperText,
+                                        placeholder = mpvConfigPlaceholder,
                                         onSave = { viewModel.edit { scope -> scope.engine.setMpvConfig(mpvCfg.copy(mpvExtraConfig = it)) } },
                                     )
                                 },

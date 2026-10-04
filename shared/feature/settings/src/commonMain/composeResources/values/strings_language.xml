@@ -86,4 +86,5 @@
     <string name="settings_hdr_passthrough">HDR Passthrough</string>
     <string name="settings_hdr_passthrough_on">On — HDR-capable displays switch to HDR output (applies on next playback)</string>
     <string name="settings_hdr_passthrough_off">Off — HDR content is tone mapped to SDR</string>
+    <string name="settings_subtitle_custom_color">Custom…</string>
 </resources>

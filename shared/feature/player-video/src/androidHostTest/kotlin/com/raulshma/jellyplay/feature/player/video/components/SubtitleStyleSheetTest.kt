@@ -15,6 +15,7 @@ import com.raulshma.jellyplay.core.model.SubtitleEdgeType
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.SubtitleStylePreset
 import com.raulshma.jellyplay.feature.player.video.engine.EngineCapabilities
+import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvSubtitleOwnership
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -455,5 +456,102 @@ class SubtitleStyleSheetTest {
         confirm.assertIsEnabled().performClick()
 
         assertEquals("Mine", saved)
+    }
+
+    // ─── custom mpv config ownership notice (issue #165, UI half) ───────────
+    // The card spells out every custom-config/sub-style interaction case;
+    // these pin each case's visibility so an edit can't silently no-op.
+
+    @Test
+    fun subtitleStyleSheet_mpvOwnedKeys_showConfigNotice() {
+        composeTestRule.setContent {
+            MaterialTheme {
+                SubtitleStyleSheet(
+                    currentStyle = SubtitleStyle(),
+                    onStyleChange = {},
+                    onDismiss = {},
+                    subtitleOwnership = MpvSubtitleOwnership(
+                        ownedStyleKeys = setOf("sub-color", "sub-pos"),
+                    ),
+                )
+            }
+        }
+        composeTestRule.onNodeWithText("Your mpv config overrides some subtitle settings")
+            .assertIsDisplayed()
+        // Owned keys render as monospace pills — one node per key, exactly the
+        // keys the engine yields.
+        composeTestRule.onNodeWithText("sub-color").assertIsDisplayed()
+        composeTestRule.onNodeWithText("sub-pos").assertIsDisplayed()
+        // SRT/ASS case rows + app-owned functional keys are part of the same card.
+        composeTestRule
+            .onNodeWithText("Plain text (SRT) subtitles always use the colors", substring = true)
+            .assertIsDisplayed()
+        composeTestRule
+            .onNodeWithText("ASS/SSA subtitles keep their embedded styling", substring = true)
+            .assertIsDisplayed()
+        composeTestRule
+            .onNodeWithText("Subtitle on/off and subtitle delay always follow the app", substring = true)
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun subtitleStyleSheet_noMpvOwnership_hidesConfigNotice() {
+        composeTestRule.setContent {
+            MaterialTheme {
+                SubtitleStyleSheet(
+                    currentStyle = SubtitleStyle(),
+                    onStyleChange = {},
+                    onDismiss = {},
+                )
+            }
+        }
+        composeTestRule.onNodeWithText("Your mpv config overrides some subtitle settings")
+            .assertDoesNotExist()
+    }
+
+    @Test
+    fun subtitleStyleSheet_ownedAssOverride_showsChipsDeadNotice() {
+        composeTestRule.setContent {
+            MaterialTheme {
+                SubtitleStyleSheet(
+                    currentStyle = SubtitleStyle(),
+                    onStyleChange = {},
+                    onDismiss = {},
+                    subtitleOwnership = MpvSubtitleOwnership(
+                        ownedStyleKeys = setOf("sub-ass-override"),
+                    ),
+                )
+            }
+        }
+        composeTestRule
+            .onNodeWithText("the Respect/Force choice here has no effect", substring = true)
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun subtitleStyleSheet_droppedConfKeys_showQuotingHint() {
+        composeTestRule.setContent {
+            MaterialTheme {
+                SubtitleStyleSheet(
+                    currentStyle = SubtitleStyle(),
+                    onStyleChange = {},
+                    onDismiss = {},
+                    subtitleOwnership = MpvSubtitleOwnership(
+                        confKeysDroppedByParser = setOf("sub-color"),
+                    ),
+                )
+            }
+        }
+        composeTestRule
+            .onNodeWithText("mpv cannot read sub-color from its mpv.conf file", substring = true)
+            .assertIsDisplayed()
+        // The hint must spell out both surfaces: quoting fixes the conf FILE,
+        // while the in-app config box takes the value plain.
+        composeTestRule
+            .onNodeWithText("In that file, quote the value", substring = true)
+            .assertIsDisplayed()
+        composeTestRule
+            .onNodeWithText("the opposite applies", substring = true)
+            .assertIsDisplayed()
     }
 }

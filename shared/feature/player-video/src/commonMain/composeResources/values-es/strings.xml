@@ -35,10 +35,8 @@
     <string name="player_video_open_tester">Abrir probador</string>
     <string name="player_video_reset">Restablecer</string>
     <string name="player_video_reset_all">Restablecer todo</string>
-    <string name="player_video_pick_color">Elegir un color</string>
     <string name="player_video_hue">Matiz</string>
     <string name="player_video_saturation">Saturación</string>
-    <string name="player_video_value">Valor</string>
     <string name="player_video_apply">Aplicar</string>
     <string name="player_video_cancel">Cancelar</string>
     <string name="player_video_override_subtitle_styles">Sobrescribir estilos de subtítulos</string>
@@ -56,6 +54,14 @@
     <string name="player_video_ass_force">Forzar</string>
     <string name="player_video_ass_scale_hint">Mantener el estilo incrustado; aplicar solo tu tamaño y posición</string>
     <string name="player_video_ass_force_hint">Sobrescribir el estilo incrustado con tus colores, fuente y bordes</string>
+    <string name="player_video_mpv_config_notice_title">Tu configuración de mpv anula algunas opciones de subtítulos</string>
+    <string name="player_video_mpv_config_owned_keys_intro">Tu configuración tiene prioridad para estas claves — los controles correspondientes aquí no las cambian:</string>
+    <string name="player_video_mpv_config_case_srt">Los subtítulos simples (SRT) siempre usan los colores, bordes y fuentes de tu configuración.</string>
+    <string name="player_video_mpv_config_case_ass">Los subtítulos ASS/SSA conservan su estilo incrustado — para aplicar tu estilo, usa la opción de Estilo ASS de abajo.</string>
+    <string name="player_video_mpv_config_ass_override_owned">Tu configuración define sub-ass-override: la elección Respetar/Forzar aquí no tiene efecto.</string>
+    <string name="player_video_mpv_config_app_owned_keys">Activar/desactivar subtítulos y el retardo de subtítulos siempre dependen de la app — tu configuración no puede cambiarlos.</string>
+    <string name="player_video_mpv_config_dropped_keys">mpv no puede leer %1$s de su archivo mpv.conf: una # sin comillas inicia un comentario. En ese archivo, entrecomilla el valor: sub-color="#FF0000". En la configuración mpv avanzada de la app rige lo contrario: escribe sub-color=#FF0000 sin comillas — las comillas pasarían a formar parte del valor.</string>
+    <string name="player_video_mpv_config_chip">Configuración mpv personalizada</string>
     <string name="player_video_font_color">Color de fuente</string>
     <string name="player_video_background_color">Color de fondo</string>
     <string name="player_video_background_opacity">Opacidad de fondo: %1$d%</string>

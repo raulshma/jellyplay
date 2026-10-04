@@ -167,7 +167,12 @@
     <string name="settings_skip_loop_filter">Skip Loop Filter</string>
     <string name="settings_frame_drop">Frame Drop</string>
     <string name="settings_raw_mpv_options">Options mpv brutes (style mpv.conf)</string>
-    <string name="settings_mpv_helper_text">Une option par ligne (clé=valeur). Appliquée après les réglages ci-dessus, une valeur ici remplace sa contrepartie structurée. Les lignes vides et les commentaires # sont ignorés.</string>
+    <string name="settings_mpv_helper_text">Une option mpv par ligne (clé=valeur). Elles s'appliquent après les réglages ci-dessus et les remplacent.
+
+• Les lignes vides et les lignes commençant par # sont ignorées ; une clé seule (ex. hr-seek) vaut yes.
+• Les clés de sous-titres (sub-color, sub-pos, …) remplacent aussi les réglages de sous-titres de l'app.
+• Ne mettez pas de guillemets autour des valeurs — elles sont transmises à mpv telles quelles et les guillemets feraient partie de la valeur (sub-color=#FF0000 fonctionne ; sub-color="#FF0000" non). Un # dans une valeur est accepté ici.</string>
+    <string name="settings_mpv_config_placeholder">scale=ewa_lanczossharp\ncache-secs=120</string>
     <string name="settings_reset_mpv">Restaurer tous les réglages MPV</string>
     <string name="settings_network_caching">Cache réseau</string>
     <string name="settings_skip_frames">Sauter des images</string>

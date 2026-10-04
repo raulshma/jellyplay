@@ -86,4 +86,6 @@
     <string name="settings_track_rule_subtitle_mode">자막 모드</string>
     <string name="settings_track_rule_edit">규칙 편집</string>
     <string name="settings_track_rule_delete">규칙 삭제</string>
+
+    <string name="settings_subtitle_custom_color">사용자 지정…</string>
 </resources>

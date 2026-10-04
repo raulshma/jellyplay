@@ -51,6 +51,7 @@ import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvPropertyIntakeR
 import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvPropertySurface
 import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvStatsProjection
 import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvStatsReads
+import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvSubtitleOwnership
 import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvSubtitleSideLoadPlan
 import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvSubtitleStyleApplier
 import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvSubtitleStylePhase
@@ -90,6 +91,13 @@ class MpvPlayerEngine(
     override val capabilities = EngineCapabilityMatrix.MPV
     override val zoomSafeSubtitleStrategy = ZoomSafeSubtitleStrategy.COMPOSE_CUE
     override val displayName: String = PlayerType.MPV.displayName
+
+    // Read side of the ownership gate below ([subtitleOwnershipSnapshot]):
+    // the subtitle-style UI renders its custom-config notice (owned keys,
+    // ASS case, quoting trap) from this snapshot, so the explanation always
+    // matches what the writes skip.
+    override val subtitleStyleOwnership: MpvSubtitleOwnership
+        get() = subtitleOwnershipSnapshot
 
     // The currently-displayed subtitle line, exposed to the screen for the
     // zoom-safe Compose overlay (zoomSafeSubtitleStrategy = COMPOSE_CUE).
@@ -384,7 +392,7 @@ class MpvPlayerEngine(
             mpv.safeSetOptionUnlessUserOwned("sub-scale-with-window", "no")
             mpv.safeSetOptionUnlessUserOwned("sub-auto", "fuzzy")
             mpv.setOptionString("sub-visibility", "yes")
-            mpv.safeSetOptionUnlessUserOwned("sub-ass-override", "scale")
+            mpv.safeSetOptionUnlessUserOwned(MpvUserSubtitleKeys.ASS_OVERRIDE_KEY, "scale")
             mpv.setOptionString("keep-open", "yes")
             // The init-time half of the shared subtitle-style choreography:
             // option-string writes (the handle takes no runtime properties
@@ -394,7 +402,7 @@ class MpvPlayerEngine(
                 surface = MpvSurface(mpv),
                 style = currentConfig.subtitleStyle,
                 phase = MpvSubtitleStylePhase.INIT,
-                ownedKeys = userOwnedSubtitleKeys,
+                ownedKeys = subtitleOwnershipSnapshot.ownedStyleKeys,
                 fallbackFontFamily = fontProvider.bundledFallbackFamilyName(),
                 subtitleDelayMs = currentConfig.subtitleDelayMs,
             )
@@ -795,14 +803,18 @@ class MpvPlayerEngine(
     private val mpvConfigDir: java.io.File get() = java.io.File(context.filesDir, "mpv")
 
     /**
-     * The `sub-*` styling keys the user explicitly owns via `<filesDir>/mpv/mpv.conf`
-     * or the in-app Advanced MPV Configuration — see [MpvUserSubtitleKeys].
-     * Refreshed at surface-create (before initOptions runs, since init writes
-     * must already respect conf ownership) and on every config change; every
-     * subtitle-style write site consults it and skips owned keys so the
-     * user's value wins for the whole session (issue #165).
+     * The user's custom-config subtitle ownership — the `sub-*` styling keys
+     * they explicitly own via `<filesDir>/mpv/mpv.conf` or the in-app Advanced
+     * MPV Configuration, plus the owned keys whose conf value mpv's parser
+     * drops (unquoted `#`). See [MpvUserSubtitleKeys] /
+     * [MpvUserSubtitleKeys.unsalvageableConfKeys]. Refreshed at surface-create
+     * (before initOptions runs, since init writes must already respect conf
+     * ownership) and on every config change; every subtitle-style write site
+     * consults it and skips owned keys so the user's value wins for the whole
+     * session (issue #165). One snapshot field, not one per set, so readers
+     * can never see a half-refreshed pair.
      */
-    @Volatile private var userOwnedSubtitleKeys: Set<String> = emptySet()
+    @Volatile private var subtitleOwnershipSnapshot: MpvSubtitleOwnership = MpvSubtitleOwnership.NONE
 
     private fun refreshUserOwnedSubtitleKeys() {
         val confFile = java.io.File(mpvConfigDir, "mpv.conf")
@@ -810,7 +822,21 @@ class MpvPlayerEngine(
             try { confFile.readText() } catch (_: Exception) { null }
         } else null
         val mpvCfg = (currentConfig.engineSpecific as? MpvEngineConfig) ?: MpvEngineConfig()
-        userOwnedSubtitleKeys = MpvUserSubtitleKeys.ownedKeys(confText, mpvCfg.mpvExtraConfig)
+        val ownedKeys = MpvUserSubtitleKeys.ownedKeys(confText, mpvCfg.mpvExtraConfig)
+        // Conf-only trap: mpv's conf parser cuts unquoted values at '#', so
+        // `sub-color=#FF0000` parses as empty and the key ends up owned but
+        // valueless — the app stays silent and mpv shows its default (white).
+        // The extra-config path passes values through the option API, where
+        // '#' is not special, so only the conf file can produce this.
+        val droppedConfKeys = MpvUserSubtitleKeys.unsalvageableConfKeys(confText)
+        if (droppedConfKeys.isNotEmpty()) {
+            Log.w(
+                TAG,
+                "mpv.conf: values dropped by mpv's conf parser (unquoted # starts a comment; " +
+                    "quote values like sub-color=\"#FF0000\"): $droppedConfKeys",
+            )
+        }
+        subtitleOwnershipSnapshot = MpvSubtitleOwnership(ownedKeys, droppedConfKeys)
     }
 
     /**
@@ -1121,7 +1147,7 @@ class MpvPlayerEngine(
                 surface = MpvSurface(m),
                 style = style,
                 phase = MpvSubtitleStylePhase.RUNTIME,
-                ownedKeys = userOwnedSubtitleKeys,
+                ownedKeys = subtitleOwnershipSnapshot.ownedStyleKeys,
                 fallbackFontFamily = fontProvider.bundledFallbackFamilyName(),
                 subtitleDelayMs = currentConfig.subtitleDelayMs,
             )
@@ -1457,7 +1483,7 @@ class MpvPlayerEngine(
                 surface = MpvSurface(view.mpv),
                 style = currentConfig.subtitleStyle,
                 phase = MpvSubtitleStylePhase.RUNTIME,
-                ownedKeys = userOwnedSubtitleKeys,
+                ownedKeys = subtitleOwnershipSnapshot.ownedStyleKeys,
                 fallbackFontFamily = fontProvider.bundledFallbackFamilyName(),
                 subtitleDelayMs = currentConfig.subtitleDelayMs,
             )
@@ -1734,7 +1760,7 @@ class MpvPlayerEngine(
     // app functionally drives at runtime (sub-visibility, sub-delay) never
     // route through this.
     private fun MPV.safeSetOptionUnlessUserOwned(name: String, value: String) {
-        if (name in userOwnedSubtitleKeys) return
+        if (name in subtitleOwnershipSnapshot.ownedStyleKeys) return
         safeSetOption(name, value)
     }
 }

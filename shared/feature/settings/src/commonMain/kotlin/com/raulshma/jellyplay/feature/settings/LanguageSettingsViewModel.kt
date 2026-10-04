@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.settings
 
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
 import com.raulshma.jellyplay.core.model.LanguagePreferences
+import com.raulshma.jellyplay.core.model.PlaybackPreferences
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import kotlinx.coroutines.flow.StateFlow
 
@@ -14,6 +15,15 @@ class LanguageSettingsViewModel(
 
     /** Language/subtitle-screen slice — recomposes this screen only on its field writes. */
     val preferences: StateFlow<LanguagePreferences> = projections.languagePreferences
+
+    /**
+     * The engine slice, read only for the subtitle custom-color gate: the
+     * free-form ARGB swatch exists only for engines whose capability matrix
+     * reports [com.raulshma.jellyplay.feature.player.video.engine.EngineCapabilities.supportsCustomSubtitleColors]
+     * (mpv today), so the selected [PlaybackPreferences.preferredPlayer]
+     * decides its admission.
+     */
+    val playback: StateFlow<PlaybackPreferences> = projections.playbackPreferences
 
     fun setAppLanguage(language: String?) {
         launch {

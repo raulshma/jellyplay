@@ -7,15 +7,18 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
@@ -29,21 +32,26 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import org.koin.compose.viewmodel.koinViewModel
 import com.raulshma.jellyplay.core.model.SubtitleColor
 import com.raulshma.jellyplay.core.model.SubtitleEdgeType
+import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.TrackSelectionPreset
 import com.raulshma.jellyplay.core.ui.components.SettingListItem
 import com.raulshma.jellyplay.core.ui.components.SettingToggleItem
 import com.raulshma.jellyplay.core.ui.components.SettingsItemList
 import com.raulshma.jellyplay.core.ui.components.SheetHeader
+import com.raulshma.jellyplay.core.ui.components.SubtitleFreeFormColorPickerDialog
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
+import com.raulshma.jellyplay.core.ui.components.formatHexColor
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.designsystem.theme.expressiveListShape
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.feature.player.video.engine.EngineCapabilityMatrix
 import androidx.compose.ui.draw.clip
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
@@ -78,6 +86,7 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_pgs_
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_pgs_direct_play_on
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_subtitle_background
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_subtitle_background_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_subtitle_custom_color
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_subtitle_edge_style
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_subtitle_edge_style_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_subtitle_font_size
@@ -112,14 +121,18 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_ui_l
 
 /**
  * Residual custom dialog tag. Most language/subtitle pickers flow through the
- * shared `PickerState` dispatcher; only the subtitle-background sheet stays
- * here because it mixes a colour list with an opacity slider — a shape
- * `PickerState` has no variant for.
+ * shared `PickerState` dispatcher; the subtitle-background sheet (colour list
+ * + opacity slider) and the subtitle-text-color sheet (colour list + custom
+ * hex entry) stay here because neither fits a `PickerState` variant.
  */
 sealed class LanguageSettingsDialog {
     object None : LanguageSettingsDialog()
     object SubtitleBgColorPicker : LanguageSettingsDialog()
+    object SubtitleTextColorPicker : LanguageSettingsDialog()
 }
+
+/** Which subtitle row's free-form hex dialog the sheet handed off to. */
+private enum class SubtitleColorTarget { TEXT, BACKGROUND }
 
 // App display languages. MUST stay in lockstep with `resourceConfigurations` in
 // app/build.gradle.kts — that list is the source of truth for which locales have
@@ -175,6 +188,12 @@ fun LanguageSettingsScreen(
         parentsOn = rowParentsOn(LanguageRows.HdrSubtitleStyle.id to preferences.hdrSubtitleStyleEnabled),
     )
     var activeDialog by remember { mutableStateOf<LanguageSettingsDialog>(LanguageSettingsDialog.None) }
+    // Which row's free-form hex dialog is open (the sheets hand off to it) —
+    // null when closed. Gated per row below by the selected engine's matrix.
+    var hexPickerTarget by remember { mutableStateOf<SubtitleColorTarget?>(null) }
+    val playback by viewModel.playback.collectAsStateWithLifecycle()
+    val supportsCustomSubtitleColors =
+        EngineCapabilityMatrix.forType(playback.preferredPlayer).supportsCustomSubtitleColors
 
     val langs = languages
 
@@ -518,21 +537,27 @@ fun LanguageSettingsScreen(
                             icon = Tabler.Outline.Palette,
                             title = rowTitle(LanguageRows.SubtitleColor),
                             subtitle = stringResource(Res.string.settings_subtitle_text_color_subtitle),
-                            trailingText = preferences.subtitleStyle.fontColor.name,
+                            trailingText = preferences.subtitleStyle.fontColorArgb
+                                ?.let { formatHexColor(it) }
+                                ?: preferences.subtitleStyle.fontColor.name,
                             highlighted = highlightSettingId == LanguageRows.SubtitleColor.id,
                             onClick = {
-                                activePicker.value = PickerState.List(
-                                    title = textColorTitle,
-                                    items = SubtitleColor.entries,
-                                    label = { it.name },
-                                    isSelected = { it == preferences.subtitleStyle.fontColor },
-                                    onSelect = { color ->
-                                        val current = preferences.subtitleStyle
-                                        viewModel.edit { scope ->
-                                            scope.subtitle.setSubtitleStyle(current.copy(fontColor = color))
-                                        }
-                                    },
-                                )
+                                if (supportsCustomSubtitleColors) {
+                                    activeDialog = LanguageSettingsDialog.SubtitleTextColorPicker
+                                } else {
+                                    activePicker.value = PickerState.List(
+                                        title = textColorTitle,
+                                        items = SubtitleColor.entries,
+                                        label = { it.name },
+                                        isSelected = { it == preferences.subtitleStyle.fontColor },
+                                        onSelect = { color ->
+                                            val current = preferences.subtitleStyle
+                                            viewModel.edit { scope ->
+                                                scope.subtitle.setSubtitleStyle(current.copy(fontColor = color))
+                                            }
+                                        },
+                                    )
+                                }
                             },
                         )
                         SettingListItem(
@@ -631,6 +656,41 @@ fun LanguageSettingsScreen(
             }
     }
 
+    if (activeDialog is LanguageSettingsDialog.SubtitleTextColorPicker) {
+        TvSafeSheet(onDismissRequest = { activeDialog = LanguageSettingsDialog.None }) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp)
+                    .padding(bottom = 32.dp),
+            ) {
+                SheetHeader(title = rowTitle(LanguageRows.SubtitleColor), icon = Tabler.Outline.Palette)
+                if (supportsCustomSubtitleColors) {
+                    SubtitleCustomColorRow(
+                        customArgb = preferences.subtitleStyle.fontColorArgb,
+                        fallbackColor = preferences.subtitleStyle.fontColor,
+                        onClick = {
+                            activeDialog = LanguageSettingsDialog.None
+                            hexPickerTarget = SubtitleColorTarget.TEXT
+                        },
+                    )
+                }
+                SubtitleColorSheetList(
+                    selectedColor = preferences.subtitleStyle.fontColor,
+                    customArgb = preferences.subtitleStyle.fontColorArgb,
+                    onSelect = { color ->
+                        val current = preferences.subtitleStyle
+                        viewModel.edit { scope ->
+                            scope.subtitle.setSubtitleStyle(
+                                current.copy(fontColor = color, fontColorArgb = null),
+                            )
+                        }
+                    },
+                )
+            }
+        }
+    }
+
     if (activeDialog is LanguageSettingsDialog.SubtitleBgColorPicker) {
         var bgOpacity by remember { mutableStateOf(preferences.subtitleStyle.backgroundOpacity) }
         TvSafeSheet(onDismissRequest = { activeDialog = LanguageSettingsDialog.None }) {
@@ -640,53 +700,29 @@ fun LanguageSettingsScreen(
                     .padding(horizontal = 24.dp)
                     .padding(bottom = 32.dp),
             ) {
-                SheetHeader(title = rowTitle(LanguageRows.SubtitleBackground), icon = Tabler.Outline.Palette)
-                LazyColumn(
-                    // KMP replacement for the Android-only LocalConfiguration.screenHeightDp:
-                    // the window container height in dp (shared/core/ui WindowSizeClass pattern).
-                    modifier = Modifier.heightIn(
-                        max = with(LocalDensity.current) {
-                            LocalWindowInfo.current.containerSize.height.toDp() * 0.35f
+                SheetHeader(title = rowTitle(LanguageRows.SubtitleBackground), icon = Tabler.Outline.Background)
+                if (supportsCustomSubtitleColors) {
+                    SubtitleCustomColorRow(
+                        customArgb = preferences.subtitleStyle.backgroundColorArgb,
+                        fallbackColor = preferences.subtitleStyle.backgroundColor,
+                        onClick = {
+                            activeDialog = LanguageSettingsDialog.None
+                            hexPickerTarget = SubtitleColorTarget.BACKGROUND
                         },
-                    ),
-                ) {
-                    itemsIndexed(SubtitleColor.entries, key = { _, color -> color.name }, contentType = { _, _ -> "color" }) { index, color ->
-                        val selected = color == preferences.subtitleStyle.backgroundColor
-                        val shape = expressiveListShape(
-                            index, SubtitleColor.entries.size,
-                        )
-                        val tvFocusState = rememberTvFocusState(focusedScale = 1.01f)
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 2.dp)
-                                .clip(shape)
-                                .background(
-                                    if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
-                                    else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-                                )
-                                .then(tvFocusState.focusModifier)
-                                .tvFocusIndicator(tvFocusState, shape)
-                                .clickable {
-                                    val current = preferences.subtitleStyle
-                                    viewModel.edit { scope ->
-                                        scope.subtitle.setSubtitleStyle(
-                                            current.copy(backgroundColor = color),
-                                        )
-                                    }
-                                }
-                                .padding(horizontal = 20.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(
-                                color.name,
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = if (selected) MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.onSurface,
+                    )
+                }
+                SubtitleColorSheetList(
+                    selectedColor = preferences.subtitleStyle.backgroundColor,
+                    customArgb = preferences.subtitleStyle.backgroundColorArgb,
+                    onSelect = { color ->
+                        val current = preferences.subtitleStyle
+                        viewModel.edit { scope ->
+                            scope.subtitle.setSubtitleStyle(
+                                current.copy(backgroundColor = color, backgroundColorArgb = null),
                             )
                         }
-                    }
-                }
+                    },
+                )
                 Spacer(Modifier.height(12.dp))
                 Text(
                     "Opacity: ${(bgOpacity * 100).toInt()}%",
@@ -698,6 +734,134 @@ fun LanguageSettingsScreen(
                     onValueChange = { bgOpacity = it },
                     valueRange = 0f..1f,
                     steps = 9,
+                )
+            }
+        }
+    }
+
+    hexPickerTarget?.let { target ->
+        val initialColor: Color
+        val applyArgb: (Int) -> SubtitleStyle
+        when (target) {
+            SubtitleColorTarget.TEXT -> {
+                initialColor = Color(
+                    preferences.subtitleStyle.fontColorArgb ?: preferences.subtitleStyle.fontColor.value,
+                )
+                applyArgb = { argb -> preferences.subtitleStyle.copy(fontColorArgb = argb) }
+            }
+            SubtitleColorTarget.BACKGROUND -> {
+                initialColor = Color(
+                    preferences.subtitleStyle.backgroundColorArgb ?: preferences.subtitleStyle.backgroundColor.value,
+                )
+                applyArgb = { argb -> preferences.subtitleStyle.copy(backgroundColorArgb = argb) }
+            }
+        }
+        SubtitleFreeFormColorPickerDialog(
+            initialColor = initialColor,
+            onDismiss = { hexPickerTarget = null },
+            onColorSelected = { argb ->
+                viewModel.edit { scope ->
+                    scope.subtitle.setSubtitleStyle(applyArgb(argb))
+                }
+                hexPickerTarget = null
+            },
+        )
+    }
+}
+
+/**
+ * The "Custom…" row atop the subtitle color sheets — a swatch of the current
+ * free-form color (the enum fallback when unset) plus its hex when one is
+ * stored. Admission is the caller's engine-capability gate; composing it
+ * unguarded would show a picker libVLC silently ignores.
+ */
+@Composable
+private fun SubtitleCustomColorRow(
+    customArgb: Int?,
+    fallbackColor: SubtitleColor,
+    onClick: () -> Unit,
+) {
+    val shape = ShapeCache.smooth8
+    val tvFocusState = rememberTvFocusState(focusedScale = 1.01f)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 2.dp)
+            .clip(shape)
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+            .then(tvFocusState.focusModifier)
+            .tvFocusIndicator(tvFocusState, shape)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 20.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(18.dp)
+                .clip(CircleShape)
+                .background(Color(customArgb ?: fallbackColor.value)),
+        )
+        Spacer(Modifier.width(10.dp))
+        Text(
+            stringResource(Res.string.settings_subtitle_custom_color),
+            style = MaterialTheme.typography.bodyLarge,
+        )
+        Spacer(Modifier.weight(1f))
+        if (customArgb != null) {
+            Text(
+                formatHexColor(customArgb),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+/**
+ * The preset color list shared by the subtitle text/background color sheets.
+ * An entry highlights only while no free-form ARGB override is set — the
+ * "Custom…" row above is the live selection then, matching the in-player
+ * sheet's behavior for both targets.
+ */
+@Composable
+private fun SubtitleColorSheetList(
+    selectedColor: SubtitleColor,
+    customArgb: Int?,
+    onSelect: (SubtitleColor) -> Unit,
+) {
+    LazyColumn(
+        // KMP replacement for the Android-only LocalConfiguration.screenHeightDp:
+        // the window container height in dp (shared/core/ui WindowSizeClass pattern).
+        modifier = Modifier.heightIn(
+            max = with(LocalDensity.current) {
+                LocalWindowInfo.current.containerSize.height.toDp() * 0.35f
+            },
+        ),
+    ) {
+        itemsIndexed(SubtitleColor.entries, key = { _, color -> color.name }, contentType = { _, _ -> "color" }) { index, color ->
+            val selected = color == selectedColor && customArgb == null
+            val shape = expressiveListShape(index, SubtitleColor.entries.size)
+            val tvFocusState = rememberTvFocusState(focusedScale = 1.01f)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 2.dp)
+                    .clip(shape)
+                    .background(
+                        if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                        else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                    )
+                    .then(tvFocusState.focusModifier)
+                    .tvFocusIndicator(tvFocusState, shape)
+                    .clickable { onSelect(color) }
+                    .padding(horizontal = 20.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    color.name,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = if (selected) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurface,
                 )
             }
         }

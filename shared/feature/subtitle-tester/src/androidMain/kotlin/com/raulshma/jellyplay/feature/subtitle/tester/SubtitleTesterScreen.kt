@@ -40,6 +40,7 @@ import com.raulshma.jellyplay.core.ui.components.JellyPlayBackHandler
 import com.raulshma.jellyplay.core.ui.tv.RequestOrRestoreFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.feature.player.video.components.SubtitleStyleControls
+import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvSubtitleOwnership
 import com.raulshma.jellyplay.feature.subtitle.tester.components.PreviewTile
 import com.raulshma.jellyplay.feature.subtitle.tester.generated.resources.Res
 import com.raulshma.jellyplay.feature.subtitle.tester.generated.resources.subtitle_tester_apply
@@ -165,6 +166,12 @@ fun SubtitleTesterScreen(
                     currentStyle = state.activeWorkingStyle,
                     onStyleChange = { viewModel.updateStyle(it) },
                     capabilities = state.engineCapabilities,
+                    // Same custom-config notice as the player's Style tab: the
+                    // preview engine yields owned sub-* keys too, so a config-
+                    // owned key must show why the matching control here does
+                    // nothing.
+                    subtitleOwnership = activeEngine?.subtitleStyleOwnership
+                        ?: MpvSubtitleOwnership.NONE,
                     onPickFont = { fontPickerLauncher.launch(arrayOf("*/*")) },
                     // The tester always edits the resolved style; the player owns the
                     // override toggle. Reset lives in the top-app-bar, so no chip here.

@@ -17,6 +17,7 @@ import com.raulshma.jellyplay.core.model.PlaybackTls
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.TrackType
 import com.raulshma.jellyplay.core.model.VideoEffectsConfig
+import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvSubtitleOwnership
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 
@@ -280,7 +281,18 @@ data class EngineCapabilities(
      * so the menu item is hidden rather than a dead control.
      */
     val supportsDeinterlace: Boolean = false,
-)
+) {
+    /**
+     * Admission for the free-form (hex/HSV) subtitle color pickers: the
+     * engine must honor free-form ARGB colors *and* apply user styling to
+     * ASS tracks, so the picked color holds on every track type. mpv only
+     * today — ExoPlayer honors free-form colors on SRT/VTT but renders ASS
+     * as-authored, so the picker would look broken on half the tracks.
+     * Derived, not a matrix field: keep the two source flags explicit there.
+     */
+    val supportsCustomSubtitleColors: Boolean
+        get() = supportsFreeFormColors && supportsAssStyleOverride
+}
 
 enum class EnginePlaybackState {
     IDLE, BUFFERING, READY, ENDED, ERROR
@@ -587,6 +599,20 @@ interface MediaEngine :
      * triggering a media reload for libVLC). Callers just hand the [style].
      */
     fun applySubtitleStyle(style: SubtitleStyle)
+
+    /**
+     * Which `sub-*` styling keys the user's custom mpv config (the in-app
+     * Advanced MPV Configuration, plus Android's `<config-dir>/mpv.conf`)
+     * owns for this session — the engine skips writing those keys, so the
+     * matching in-app subtitle-style controls are no-ops for them. The
+     * subtitle-style UI reads this snapshot to explain that interaction
+     * (owned keys, the ASS-override requirement, the mpv.conf quoting trap)
+     * instead of letting edits silently do nothing. Defaults to
+     * [MpvSubtitleOwnership.NONE] on every engine without a user-config
+     * surface, so the notice never renders for them.
+     */
+    val subtitleStyleOwnership: MpvSubtitleOwnership
+        get() = MpvSubtitleOwnership.NONE
 
     /**
      * Toggles the engine's native subtitle rendering at runtime. Used to hide

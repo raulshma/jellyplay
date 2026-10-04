@@ -167,7 +167,12 @@
     <string name="settings_skip_loop_filter">Skip Loop Filter</string>
     <string name="settings_frame_drop">Frame Drop</string>
     <string name="settings_raw_mpv_options">Raw mpv-Optionen (mpv.conf-Stil)</string>
-    <string name="settings_mpv_helper_text">Eine Option pro Zeile (Schlüssel=Wert). Wird nach den obigen Einstellungen angewendet, sodass ein Wert hier sein strukturiertes Gegenstück überschreibt. Leerzeilen und #-Kommentare werden ignoriert.</string>
+    <string name="settings_mpv_helper_text">Eine mpv-Option pro Zeile (Schlüssel=Wert). Diese werden nach den Einstellungen oben angewendet und überschreiben sie.
+
+• Leerzeilen und Zeilen, die mit # beginnen, werden ignoriert; ein Schlüssel ohne Wert (z. B. hr-seek) steht für yes.
+• Untertitel-Schlüssel (sub-color, sub-pos, …) überschreiben auch die Untertiteleinstellungen der App.
+• Werte nicht in Anführungszeichen setzen — sie werden unverändert an mpv übergeben, Anführungszeichen würden Teil des Werts (sub-color=#FF0000 funktioniert; sub-color="#FF0000" nicht). Ein # innerhalb eines Werts ist hier in Ordnung.</string>
+    <string name="settings_mpv_config_placeholder">scale=ewa_lanczossharp\ncache-secs=120</string>
     <string name="settings_reset_mpv">Alle MPV-Einstellungen wiederherstellen</string>
     <string name="settings_network_caching">Netzwerk-Caching</string>
     <string name="settings_skip_frames">Frames überspringen</string>

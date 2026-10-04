@@ -86,4 +86,6 @@
     <string name="settings_track_rule_subtitle_mode">字幕模式</string>
     <string name="settings_track_rule_edit">编辑规则</string>
     <string name="settings_track_rule_delete">删除规则</string>
+
+    <string name="settings_subtitle_custom_color">自定义…</string>
 </resources>

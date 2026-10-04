@@ -23,7 +23,8 @@ import org.koin.dsl.module
  *    shared/feature/player-video's androidPlayerVideoModule (moved there with
  *    the migration; Koin single laziness keeps media3 + font caches
  *    out of startup);
- *  - SubtitleLanguageStore is Koin-native (datastoreCommonModule);
+ *  - SubtitleLanguageStore and PlayerEngineStore are Koin-native
+ *    (datastoreCommonModule);
  *  - PlaybackRequestFactory is built here with the application context handed
  *    in by the app composition root — the ViewModel no longer touches
  *    Context itself.
@@ -38,6 +39,7 @@ fun androidSubtitleTesterModule(context: Context): Module = module {
         SubtitleTesterViewModel(
             engineFactory = get(),
             subtitleLanguageStore = get(),
+            playerEngineStore = get(),
             fontProvider = get(),
             playbackRequestFactory = get(),
         )

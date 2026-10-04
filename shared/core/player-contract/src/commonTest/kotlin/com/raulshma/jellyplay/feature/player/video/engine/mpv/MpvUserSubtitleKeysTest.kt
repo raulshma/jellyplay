@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.player.video.engine.mpv
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
@@ -100,5 +101,93 @@ class MpvUserSubtitleKeysTest {
             extraConfigText = "[profile]\nsub-pos=95",
         )
         assertEquals(setOf("sub-color"), owned)
+    }
+
+    @Test
+    fun `utf8 bom on the first line does not hide the key`() {
+        val owned = MpvUserSubtitleKeys.ownedKeys("\uFEFFsub-color=#FFFF0000\nsub-bold=yes", null)
+        assertEquals(setOf("sub-color", "sub-bold"), owned)
+    }
+
+    // ── unsalvageableConfKeys: mpv conf parser drops unquoted # values ──────
+
+    @Test
+    fun `unquoted hash-only values are flagged`() {
+        val flagged = MpvUserSubtitleKeys.unsalvageableConfKeys(
+            "sub-color=#FF0000\nsub-back-color=#80FF0000\nsub-font-size=80",
+        )
+        // Everything from the first unquoted # is a comment for mpv's conf
+        // parser, so these parse as empty values → mpv default (white).
+        assertEquals(setOf("sub-color", "sub-back-color"), flagged)
+    }
+
+    @Test
+    fun `quoted hash values are not flagged`() {
+        val flagged = MpvUserSubtitleKeys.unsalvageableConfKeys(
+            """
+                sub-color="#FF0000"
+                sub-back-color='#80FF0000'
+                sub-border-color=%9%#FFFF0000
+            """.trimIndent(),
+        )
+        assertTrue(flagged.isEmpty())
+    }
+
+    @Test
+    fun `unterminated quotes are not flagged`() {
+        // A stray opening quote/percent prefix suppresses flagging even though
+        // the value never closes — pinned deliberately: the check is a cheap
+        // starts-with guard, not a full mpv conf parser.
+        val flagged = MpvUserSubtitleKeys.unsalvageableConfKeys(
+            """
+                sub-color="#FF0000
+                sub-back-color='#80FF0000
+            """.trimIndent(),
+        )
+        assertTrue(flagged.isEmpty())
+    }
+
+    @Test
+    fun `value keeping a non-empty prefix before hash is not flagged`() {
+        val flagged = MpvUserSubtitleKeys.unsalvageableConfKeys(
+            "sub-font-size=80 # big\nsub-color=green # fallback\nsub-bold=yes",
+        )
+        assertTrue(flagged.isEmpty())
+    }
+
+    @Test
+    fun `non styling keys and profile sections are never flagged`() {
+        val flagged = MpvUserSubtitleKeys.unsalvageableConfKeys(
+            """
+                vo=#gpu-next
+                sub-visibility=#always-app-owned
+                [profile]
+                sub-color=#FF0000
+            """.trimIndent(),
+        )
+        assertTrue(flagged.isEmpty())
+    }
+
+    @Test
+    fun `unsalvageable detection ignores null and handles blank input`() {
+        assertTrue(MpvUserSubtitleKeys.unsalvageableConfKeys(null).isEmpty())
+        assertTrue(MpvUserSubtitleKeys.unsalvageableConfKeys("").isEmpty())
+    }
+
+    // ── MpvSubtitleOwnership: the UI read-side snapshot ─────────────────────
+
+    @Test
+    fun `NONE is inactive so the UI notice stays hidden`() {
+        assertFalse(MpvSubtitleOwnership.NONE.isActive)
+    }
+
+    @Test
+    fun `dropped-only conf keys still activate the notice`() {
+        // Owned AND valueless (unquoted `#`) is the case that looks like a
+        // broken control from outside — it must render its own notice line
+        // even when no other styling key is owned.
+        assertTrue(
+            MpvSubtitleOwnership(confKeysDroppedByParser = setOf("sub-color")).isActive,
+        )
     }
 }

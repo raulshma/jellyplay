@@ -167,7 +167,12 @@
     <string name="settings_skip_loop_filter">跳过循环过滤器</string>
     <string name="settings_frame_drop">丢帧</string>
     <string name="settings_raw_mpv_options">原始 mpv 选项（mpv.conf 样式）</string>
-    <string name="settings_mpv_helper_text">每行一个选项（键=值）。在上面的设置之后应用，因此此处的值会覆盖其结构化对应项。空行和 # 注释会被忽略。</string>
+    <string name="settings_mpv_helper_text">每行一个 mpv 选项（键=值）。这些选项在上面的设置之后应用，并覆盖它们。
+
+• 空行和以 # 开头的行会被忽略；不带值的键（如 hr-seek）表示 yes。
+• 字幕键（sub-color、sub-pos 等）也会覆盖应用的字幕设置。
+• 不要给值加引号——它们会原样传给 mpv，引号会成为值的一部分（sub-color=#FF0000 有效，sub-color="#FF0000" 无效）。值中包含 # 在这里没有问题。</string>
+    <string name="settings_mpv_config_placeholder">scale=ewa_lanczossharp\ncache-secs=120</string>
     <string name="settings_reset_mpv">还原所有 MPV 设置</string>
     <string name="settings_network_caching">网络缓存</string>
     <string name="settings_skip_frames">跳过帧</string>

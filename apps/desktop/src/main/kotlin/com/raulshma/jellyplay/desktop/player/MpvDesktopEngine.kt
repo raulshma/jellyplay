@@ -44,6 +44,7 @@ import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvPropertyIntakeR
 import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvPropertySurface
 import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvStatsProjection
 import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvStatsReads
+import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvSubtitleOwnership
 import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvSubtitleSideLoadPlan
 import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvSubtitleStyleApplier
 import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvSubtitleStylePhase
@@ -178,6 +179,14 @@ open class MpvDesktopEngine(
 
     override val zoomSafeSubtitleStrategy: ZoomSafeSubtitleStrategy =
         ZoomSafeSubtitleStrategy.COMPOSE_CUE
+
+    // Read side of the ownership gate below ([userOwnedSubtitleKeys]): the
+    // subtitle-style UI renders its custom-config notice from this snapshot.
+    // No dropped-keys half — the desktop runs config=no, so there is no
+    // on-disk mpv.conf whose values mpv's parser could destroy; ownership
+    // comes from the in-app extra-config text alone (option API, `#`-safe).
+    override val subtitleStyleOwnership: MpvSubtitleOwnership
+        get() = MpvSubtitleOwnership(userOwnedSubtitleKeys)
 
     // ── State surface (player-contract EngineStateChassis) ──────────────────
     //

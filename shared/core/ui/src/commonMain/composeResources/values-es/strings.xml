@@ -280,4 +280,14 @@
          for PosterCard/WideMediaCard). -->
     <string name="core_ui_card_percent_complete">%1$d% completado</string>
     <string name="core_ui_card_time_left">%1$s restantes</string>
+
+    <!-- SubtitleFreeFormColorPickerDialog (matches the default-locale grouping) -->
+    <string name="core_ui_color_picker_title">Elegir un color</string>
+    <string name="core_ui_color_hex">Hex</string>
+    <string name="core_ui_color_hue">Matiz</string>
+    <string name="core_ui_color_saturation">Saturación</string>
+    <string name="core_ui_color_value">Brillo</string>
+    <string name="core_ui_color_invalid_hex">Color hexadecimal no válido</string>
+    <string name="core_ui_color_apply">Aplicar</string>
+    <string name="core_ui_color_cancel">Cancelar</string>
 </resources>

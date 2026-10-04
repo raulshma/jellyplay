@@ -167,7 +167,12 @@
     <string name="settings_skip_loop_filter">Skip Loop Filter</string>
     <string name="settings_frame_drop">Frame Drop</string>
     <string name="settings_raw_mpv_options">生 mpv オプション（mpv.conf 形式）</string>
-    <string name="settings_mpv_helper_text">1 行 1 オプション（キー=値）。上の設定の後に適用され、ここの値は対応する構造設定を上書きします。空行と # コメントは無視されます。</string>
+    <string name="settings_mpv_helper_text">mpv のオプションを 1 行に 1 つ（キー=値）入力します。上の設定より後に適用され、上の設定を上書きします。
+
+• 空行と # で始まる行は無視されます。値なしのキー（例: hr-seek）は yes になります。
+• 字幕のキー（sub-color、sub-pos など）はアプリの字幕設定も上書きします。
+• 値は引用符で囲まないでください。mpv にはそのまま渡されるため、引用符も値の一部になります（sub-color=#FF0000 は有効、sub-color="#FF0000" は無効）。値に # を含めることはここでは問題ありません。</string>
+    <string name="settings_mpv_config_placeholder">scale=ewa_lanczossharp\ncache-secs=120</string>
     <string name="settings_reset_mpv">すべての MPV 設定を復元</string>
     <string name="settings_network_caching">ネットワークキャッシュ</string>
     <string name="settings_skip_frames">フレームスキップ</string>

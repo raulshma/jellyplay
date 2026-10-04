@@ -28,6 +28,7 @@ import com.raulshma.jellyplay.feature.player.video.generated.resources.player_vi
 
 
 import com.raulshma.jellyplay.feature.player.video.engine.EngineCapabilities
+import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvSubtitleOwnership
 
 /**
  * Subtitle settings bottom sheet for the video player. The editable controls
@@ -46,6 +47,8 @@ fun SubtitleStyleSheet(
     onStyleChange: (SubtitleStyle) -> Unit,
     onDismiss: () -> Unit,
     capabilities: EngineCapabilities = EngineCapabilities(),
+    // Custom-mpv-config ownership snapshot (notice card in SubtitleStyleControls).
+    subtitleOwnership: MpvSubtitleOwnership = MpvSubtitleOwnership.NONE,
     onPickFont: () -> Unit = {},
     onOpenTester: () -> Unit = {},
     userPresets: List<SubtitleStylePreset> = emptyList(),
@@ -88,6 +91,7 @@ fun SubtitleStyleSheet(
                 currentStyle = currentStyle,
                 onStyleChange = onStyleChange,
                 capabilities = capabilities,
+                subtitleOwnership = subtitleOwnership,
                 onPickFont = onPickFont,
                 showOverrideToggle = true,
                 onReset = { onStyleChange(SubtitleStyle(applyCustomStyle = true)) },
