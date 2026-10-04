@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.player.video
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
+import androidx.compose.animation.scaleIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -214,13 +215,20 @@ internal fun BoxScope.PlayerCenterOverlayTier(
             .padding(top = 16.dp, end = 16.dp),
     )
 
-    if (uiState.isBuffering && uiState.playerError == null && !isPlaying && playbackIntended) {
-        Box(
-            modifier = Modifier.align(Alignment.Center),
-            contentAlignment = Alignment.Center,
-        ) {
-            JellyPlayLoadingIndicator(color = playerOnScrim())
-        }
+    // Buffering spinner fades/scales in and out — an abrupt pop mid-playback
+    // reads as a glitch, especially at seek boundaries where it toggles fast.
+    val bufferingVisible = uiState.isBuffering && uiState.playerError == null && !isPlaying && playbackIntended
+    val bufferingFade = MaterialTheme.motionScheme.fastEffectsSpec<Float>()
+    val bufferingScaleSpec = MaterialTheme.motionScheme.fastSpatialSpec<Float>()
+    AnimatedVisibility(
+        visible = bufferingVisible,
+        enter = fadeIn(animationSpec = bufferingFade) +
+            scaleIn(initialScale = 0.8f, animationSpec = bufferingScaleSpec),
+        exit = fadeOut(animationSpec = bufferingFade),
+        modifier = Modifier.align(Alignment.Center),
+        label = "bufferingIndicator",
+    ) {
+        JellyPlayLoadingIndicator(color = playerOnScrim())
     }
 }
 

@@ -59,6 +59,8 @@ import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.AlertCircle
 import com.composables.icons.tabler.outline.Movie
 import com.composables.icons.tabler.outline.PlayerPlay
+import com.raulshma.jellyplay.core.designsystem.theme.detailEntrance
+import com.raulshma.jellyplay.core.designsystem.theme.rememberDetailEntrance
 import com.raulshma.jellyplay.core.model.ContinueWatchingClickBehavior
 import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionType
@@ -369,6 +371,11 @@ internal fun HomeContentList(
         // SectionHeader.
         val headerModifier = if (state.homeBackdropEnabled) Modifier else Modifier.background(state.backgroundColor)
 
+        // One shared-scalar reveal for the whole feed on first data arrival
+        // (this branch only composes once sections exist). Cells composed
+        // later during scroll just read the settled 1f and render instantly.
+        val feedEntrance = rememberDetailEntrance()
+
         CompositionLocalProvider(
             com.raulshma.jellyplay.core.ui.components.LocalScrollIdle provides
                 remember(listState) { { !listState.isScrollInProgress } }
@@ -377,6 +384,7 @@ internal fun HomeContentList(
             state = listState,
             modifier = Modifier
                 .fillMaxSize()
+                .detailEntrance(progress = { feedEntrance.value })
                 // Desktop: mouse drag scrolls the page (the wheel already does
                 // via the built-in scrollable; drag is touch-only there).
                 .mouseScroll(listState, Orientation.Vertical),

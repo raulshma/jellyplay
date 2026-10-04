@@ -63,6 +63,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.Dimensions
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
+import com.raulshma.jellyplay.core.ui.feedback.rememberSelectionTickHaptic
 import com.raulshma.jellyplay.core.ui.components.AddListRow
 import com.raulshma.jellyplay.core.ui.components.CircleBgBackButton
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
@@ -245,13 +246,16 @@ private fun UserCard(
     // variant is active (SynthwaveDynamicShape), so only soothing's larger
     // radius needs a branch here.
     val shape = if (isSoothing) ShapeCache.smooth16 else ShapeCache.smooth12
+    // Pick-account = discrete selection among peers — the tick, not the
+    // heavier confirm (gated by LocalHapticsEnabled).
+    val selectionTick = rememberSelectionTickHaptic()
 
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .then(firstFocusModifier)
             .focusIndicator(shape)
-            .clickable(onClick = onClick),
+            .clickable { selectionTick(); onClick() },
         shape = shape,
         border = border,
     ) {

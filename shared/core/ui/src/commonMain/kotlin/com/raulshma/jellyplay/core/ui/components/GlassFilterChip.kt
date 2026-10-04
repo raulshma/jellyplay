@@ -12,12 +12,14 @@ import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Check
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsLightTheme
+import com.raulshma.jellyplay.core.ui.feedback.rememberSelectionTickHaptic
 
 /**
  * Reusable expressive filter chip used by Library and Search filter sheets.
  * Provides consistent press animations and full D-pad focus support (border +
  * breathing glow) via [ExpressiveChipContainer]; highlights with the primary
- * color when [selected].
+ * color when [selected]. Fires the selection-tick haptic on click (gated by
+ * the haptics preference).
  */
 @Composable
 fun GlassFilterChip(
@@ -27,6 +29,7 @@ fun GlassFilterChip(
     modifier: Modifier = Modifier,
 ) {
     val isLight = LocalIsLightTheme.current
+    val selectionTick = rememberSelectionTickHaptic()
     val bgColor = when {
         selected -> MaterialTheme.colorScheme.primary
         else -> if (isLight) Color.Black.copy(alpha = 0.06f) else Color.White.copy(alpha = 0.12f)
@@ -37,7 +40,7 @@ fun GlassFilterChip(
     }
 
     ExpressiveChipContainer(
-        onClick = onClick,
+        onClick = { selectionTick(); onClick() },
         modifier = modifier,
         containerColor = bgColor,
         forceActive = selected,

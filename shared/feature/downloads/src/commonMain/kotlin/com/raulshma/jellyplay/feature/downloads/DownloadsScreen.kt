@@ -38,6 +38,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.TriStateCheckbox
+import com.raulshma.jellyplay.core.ui.animation.SwipeActionBox
 import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
 import com.raulshma.jellyplay.core.ui.components.ConfirmTone
 import com.raulshma.jellyplay.core.ui.components.SelectionActionBar
@@ -422,47 +423,67 @@ fun DownloadsScreen(
                         } else {
                             null
                         }
-                        DownloadItemRow(
-                            // Deferred draw-phase read of the shared entrance
-                            // progress: alpha + a slide of 1/10 of the row
-                            // height reproduce the old fadeIn +
-                            // slideInVertically(it / 10) entrance with zero
-                            // per-row state, coroutine, or animation node.
-                            modifier = Modifier.detailEntrance(
-                                progress = { entrance.value },
-                                slideDivisor = 10f,
-                            ),
-                            item = download,
-                            liveProgress = liveProgress,
-                            formatBytes = formatBytes,
-                            formatSpeed = formatSpeed,
-                            formatEta = formatEta,
-                            selected = download.id in selectedIds,
-                            selectionMode = selectionMode,
-                            hasUpdate = download.status == DownloadStatus.COMPLETED &&
-                                download.mediaItemId in updateIds,
-                            // Completed downloads open their detail page on tap
-                            // (matching the online experience) rather than auto-playing.
-                            // A distinct Play action is still available in the row.
-                            onOpenDetail = {
-                                if (download.status == DownloadStatus.COMPLETED) {
-                                    onItemClick(download.mediaItemId)
-                                }
-                            },
-                            onPlay = {
-                                if (download.status == DownloadStatus.COMPLETED) {
-                                    onPlayOffline(download.mediaItemId, download.mediaType)
-                                }
-                            },
-                            onCancel = { viewModel.applyBulkAction(DownloadBulkAction.CANCEL, DownloadActionScope.Item(download.id)) },
-                            onPause = { viewModel.applyBulkAction(DownloadBulkAction.PAUSE, DownloadActionScope.Item(download.id)) },
-                            onResume = { viewModel.applyBulkAction(DownloadBulkAction.RESUME, DownloadActionScope.Item(download.id)) },
-                            onDelete = { viewModel.pendingDelete.show(download) },
-                            onRetry = { viewModel.applyBulkAction(DownloadBulkAction.RETRY_FAILED, DownloadActionScope.Item(download.id)) },
-                            onMoveToFront = { viewModel.moveToFront(download) },
-                            onLowerPriority = { viewModel.lowerPriority(download) },
-                            onToggleSelection = { viewModel.toggleSelection(download) },
+                        val row: @Composable (Modifier) -> Unit = { rowModifier ->
+                            DownloadItemRow(
+                                // Deferred draw-phase read of the shared entrance
+                                // progress: alpha + a slide of 1/10 of the row
+                                // height reproduce the old fadeIn +
+                                // slideInVertically(it / 10) entrance with zero
+                                // per-row state, coroutine, or animation node.
+                                modifier = rowModifier,
+                                item = download,
+                                liveProgress = liveProgress,
+                                formatBytes = formatBytes,
+                                formatSpeed = formatSpeed,
+                                formatEta = formatEta,
+                                selected = download.id in selectedIds,
+                                selectionMode = selectionMode,
+                                hasUpdate = download.status == DownloadStatus.COMPLETED &&
+                                    download.mediaItemId in updateIds,
+                                // Completed downloads open their detail page on tap
+                                // (matching the online experience) rather than auto-playing.
+                                // A distinct Play action is still available in the row.
+                                onOpenDetail = {
+                                    if (download.status == DownloadStatus.COMPLETED) {
+                                        onItemClick(download.mediaItemId)
+                                    }
+                                },
+                                onPlay = {
+                                    if (download.status == DownloadStatus.COMPLETED) {
+                                        onPlayOffline(download.mediaItemId, download.mediaType)
+                                    }
+                                },
+                                onCancel = { viewModel.applyBulkAction(DownloadBulkAction.CANCEL, DownloadActionScope.Item(download.id)) },
+                                onPause = { viewModel.applyBulkAction(DownloadBulkAction.PAUSE, DownloadActionScope.Item(download.id)) },
+                                onResume = { viewModel.applyBulkAction(DownloadBulkAction.RESUME, DownloadActionScope.Item(download.id)) },
+                                onDelete = { viewModel.pendingDelete.show(download) },
+                                onRetry = { viewModel.applyBulkAction(DownloadBulkAction.RETRY_FAILED, DownloadActionScope.Item(download.id)) },
+                                onMoveToFront = { viewModel.moveToFront(download) },
+                                onLowerPriority = { viewModel.lowerPriority(download) },
+                                onToggleSelection = { viewModel.toggleSelection(download) },
+                            )
+                        }
+                        // Swipe-to-delete shortcut (touch, outside selection
+                        // mode): reveals the trash background and opens the
+                        // SAME confirm dialog the row's delete action uses —
+                        // the destructive step keeps its confirmation. TV rows
+                        // skip the wrapper (D-pad focus, no touch).
+                        val entranceModifier = Modifier.detailEntrance(
+                            progress = { entrance.value },
+                            slideDivisor = 10f,
                         )
+                        if (!selectionMode && !isTv) {
+                            SwipeActionBox(
+                                onAction = { viewModel.pendingDelete.show(download) },
+                                actionContentDescription = stringResource(Res.string.downloads_delete),
+                                modifier = entranceModifier,
+                                shape = ShapeCache.smooth12,
+                            ) {
+                                row(Modifier)
+                            }
+                        } else {
+                            row(entranceModifier)
+                        }
                     }
                 }
 

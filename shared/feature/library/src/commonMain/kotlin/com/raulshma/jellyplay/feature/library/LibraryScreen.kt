@@ -7,6 +7,7 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.expandVertically
@@ -117,6 +118,8 @@ import com.raulshma.jellyplay.core.ui.components.CircleBgBackButton
 import com.raulshma.jellyplay.core.ui.components.ActiveFiltersBar
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.DelayedLoadingScreen
+import com.raulshma.jellyplay.core.designsystem.theme.detailEntrance
+import com.raulshma.jellyplay.core.designsystem.theme.rememberDetailEntrance
 import com.raulshma.jellyplay.core.ui.components.LoadingScreen
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.PagedAppendRung
@@ -850,6 +853,15 @@ internal fun LibraryScreen(
                         }
 
                         PagedCollectionRung.Content -> {
+                            // Shared-scalar reveal for the first content arrival
+                            // (loading/empty rungs compose above until data
+                            // exists, so this branch is fresh exactly then).
+                            val gridEntrance = rememberDetailEntrance()
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .detailEntrance(progress = { gridEntrance.value }),
+                            ) {
                             // Deliberately NOT core:ui's PagedCollectionGrid (the
                             // renderer — the rung DECISIONS above already ride the
                             // shared chassis, pagedCollectionRung/PagedCollectionLadder):
@@ -956,6 +968,7 @@ internal fun LibraryScreen(
                                     }
 } // close CompositionLocalProvider
                                 } // close AnimatedContent content lambda
+                            } // close gridEntrance Box
                         }
                     }
 
@@ -1672,6 +1685,13 @@ private fun LetterItem(
 ) {
     val focusState = rememberTvFocusState(focusedScale = 1.15f)
     val interactionSource = remember { MutableInteractionSource() }
+    // Soft handoff when the active letter moves (scroll) or the drag bubble
+    // passes through — the fisheye already glides, the color shouldn't snap.
+    val letterColor by animateColorAsState(
+        targetValue = if (isActive) activeColor else contentColor,
+        animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
+        label = "letterActiveColor",
+    )
     Box(
         modifier = Modifier
             .height(LETTER_ROW_HEIGHT)
@@ -1696,7 +1716,7 @@ private fun LetterItem(
         Text(
             text = letter.uppercaseChar().toString(),
             style = MaterialTheme.typography.labelSmall,
-            color = if (isActive) activeColor else contentColor,
+            color = letterColor,
             fontWeight = FontWeight.SemiBold,
         )
     }

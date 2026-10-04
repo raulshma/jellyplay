@@ -26,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
@@ -34,6 +35,7 @@ import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Check
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.expressiveListShape
+import com.raulshma.jellyplay.core.designsystem.theme.rememberDetailEntrance
 import com.raulshma.jellyplay.core.ui.components.PlayerModalBottomSheet
 import com.raulshma.jellyplay.core.ui.components.SheetHeader
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
@@ -93,6 +95,11 @@ internal fun PickerSheetScaffold(
 ) {
     val isTv = LocalTvMode.current
     val focusRequester = remember { FocusRequester() }
+    // Content alpha-in: the sheet chassis slides via PlayerModalBottomSheet,
+    // but the list contents otherwise pop in after it settles. One shared
+    // Animatable drives a draw-phase-only fade (no slide — that would compound
+    // with the sheet's own motion).
+    val contentEntrance = rememberDetailEntrance()
 
     LaunchedEffect(isTv, *focusEffectKeys.toTypedArray()) {
         if (isTv && canGrabFocus()) {
@@ -107,6 +114,7 @@ internal fun PickerSheetScaffold(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .graphicsLayer { alpha = contentEntrance.value }
                 .ifElse(scrollable, Modifier.verticalScroll(rememberScrollState()))
                 .padding(bottom = 32.dp),
         ) {

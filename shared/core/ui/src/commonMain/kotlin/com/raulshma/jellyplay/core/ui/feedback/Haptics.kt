@@ -16,21 +16,35 @@ val LocalHapticsEnabled: ProvidableCompositionLocal<Boolean> =
     compositionLocalOf { true }
 
 /**
- * Returns a lambda that fires a single confirmation haptic via Compose's
- * [androidx.compose.ui.hapticfeedback.HapticFeedback], gated by [LocalHapticsEnabled].
- * Uses the pure-Compose haptic API (rather than the platform `View` path used in
- * the player screens) so it resolves from `core:ui`, which has no `android.view`
- * symbol access. Toggles, favorite, and mark-watched all share one preference.
+ * Shared implementation for the haptic accessors: a lambda that fires [type]
+ * via Compose's pure-Compose haptic API (rather than the platform `View` path
+ * used in the player screens) so it resolves from `core:ui`, gated by
+ * [LocalHapticsEnabled].
  */
 @Composable
-fun rememberConfirmHaptic(): () -> Unit {
+private fun rememberHaptic(type: HapticFeedbackType): () -> Unit {
     val hapticFeedback = LocalHapticFeedback.current
     val enabled = LocalHapticsEnabled.current
-    return remember(hapticFeedback, enabled) {
+    return remember(hapticFeedback, enabled, type) {
         {
             if (enabled) {
-                hapticFeedback.performHapticFeedback(HapticFeedbackType.Confirm)
+                hapticFeedback.performHapticFeedback(type)
             }
         }
     }
 }
+
+/**
+ * Confirmation haptic for consequential actions: toggles, favorite,
+ * mark-watched, play, account pick.
+ */
+@Composable
+fun rememberConfirmHaptic(): () -> Unit = rememberHaptic(HapticFeedbackType.Confirm)
+
+/**
+ * Lighter-than-[rememberConfirmHaptic] tick for discrete selection changes:
+ * filter chips, tab picks, swipe-action commits. Same gating and the same
+ * pure-Compose path; sparse by contract — never on every press.
+ */
+@Composable
+fun rememberSelectionTickHaptic(): () -> Unit = rememberHaptic(HapticFeedbackType.SegmentTick)

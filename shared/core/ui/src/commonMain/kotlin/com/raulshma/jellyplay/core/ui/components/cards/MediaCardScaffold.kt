@@ -40,6 +40,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.cardBorder
 import com.raulshma.jellyplay.core.designsystem.theme.rememberThemeCardBorder
 import com.raulshma.jellyplay.core.ui.adaptive.LocalJellyPlayUi
+import com.raulshma.jellyplay.core.ui.animation.hoverScale
 import com.raulshma.jellyplay.core.ui.preview.MediaPreview
 import com.raulshma.jellyplay.core.ui.tv.enableMarqueeOnFocus
 
@@ -201,6 +202,10 @@ fun MediaCardScaffold(
                 .then(chrome.focus.modifier)
                 .then(chrome.peek?.boundsModifier ?: Modifier)
                 .then(chrome.pressScale)
+                // Desktop hover affordance — the mouse-first counterpart to
+                // pressScale (touch never produces hover, so phones are
+                // unaffected; reduced motion flattens it to 1f).
+                .hoverScale(interactionSource = chrome.interactionSource)
                 .graphicsLayer {
                     scaleX = focusScale
                     scaleY = focusScale
