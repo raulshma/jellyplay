@@ -636,4 +636,30 @@
     <string name="core_ui_whatsnew_category_improvement">Melhorado</string>
     <string name="core_ui_whatsnew_category_fix">Corrigido</string>
     <string name="core_ui_whatsnew_take_me_there">Levar-me lá</string>
+    <!-- Input bindings (customize controls) -->
+    <string name="settings_input_bindings">Personalizar controlos</string>
+    <string name="settings_input_bindings_subtitle">Ações para gestos, rato, teclado e comando</string>
+    <string name="settings_input_bindings_title">Controlos</string>
+    <string name="settings_input_bindings_section_touch">Toque</string>
+    <string name="settings_input_bindings_section_mouse">Rato e deslocamento</string>
+    <string name="settings_input_bindings_section_keyboard">Teclado</string>
+    <string name="settings_input_bindings_section_tv">Comando de TV</string>
+    <string name="settings_input_bindings_reset">Repor predefinições dos controlos</string>
+    <string name="settings_input_bindings_reset_title">Repor todos os controlos?</string>
+    <string name="settings_input_bindings_reset_message">Todos os controlos voltam à atribuição predefinida. Os atalhos de teclado personalizados são removidos.</string>
+    <string name="settings_input_bindings_search_hint">Pesquisar controlos</string>
+    <string name="settings_input_bindings_search_empty">Nenhum controlo corresponde</string>
+    <string name="settings_input_bindings_preset_label">Predefinição de toque</string>
+    <string name="settings_input_bindings_count">%1$d atribuições</string>
+    <string name="settings_input_bindings_modified_suffix">· %1$d alteradas</string>
+    <string name="settings_input_bindings_add_shortcut">Adicionar atalho de teclado</string>
+    <string name="settings_input_bindings_add_shortcut_subtitle">Capturar qualquer combinação de teclas</string>
+    <string name="settings_input_bindings_capture_instruction">Prima qualquer tecla ou combinação de teclas</string>
+    <string name="settings_input_bindings_capture_press">Prima uma tecla…</string>
+    <string name="settings_input_bindings_capture_pending">%1$s + …</string>
+    <string name="settings_input_bindings_capture_unsupported">Tecla não suportada — experimente outra</string>
+    <string name="settings_input_bindings_capture_seek_family">As teclas de avanço/recuo não aceitam modificadores — os passos Shift/Ctrl são integrados. Prima apenas a tecla</string>
+    <string name="settings_input_bindings_capture_escape_hint">Escape cancela</string>
+    <string name="settings_input_bindings_row_reset">Repor predefinição</string>
+    <string name="settings_input_bindings_row_delete">Eliminar atalho</string>
 </resources>

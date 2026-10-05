@@ -580,4 +580,6 @@
     <string name="ss_hooks_ended_cmd_subtitle">Befehl, der ausgeführt wird, wenn die Wiedergabe endet</string>
     <string name="ss_hooks_idle_cmd_subtitle">Befehl, der ausgeführt wird, wenn die App in den Leerlauf wechselt</string>
     <string name="ss_hooks_idle_ended_cmd_subtitle">Befehl, der ausgeführt wird, wenn die App den Leerlauf verlässt</string>
+    <string name="ss_input_bindings_title">Steuerung anpassen</string>
+    <string name="ss_input_bindings_subtitle">Aktionen für Gesten, Maus, Tastatur und Fernbedienung</string>
 </resources>

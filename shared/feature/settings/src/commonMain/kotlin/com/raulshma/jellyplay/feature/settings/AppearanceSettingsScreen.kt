@@ -45,14 +45,10 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_back
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_backdrop_theme_music_on
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_blue_light_filter
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_blue_light_filter_strength
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_blue_light_filter_strength_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_blue_light_filter_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_blue_light_filter_summary
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_color_blind_mode
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_color_blind_mode_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_comfort_eye_care
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_compact_episode_list
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_compact_episode_list_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_confirm_library_reset
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_confirm_library_reset_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_contrast
@@ -60,7 +56,6 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_cont
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_contrast_medium
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_contrast_standard
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_date_format
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_date_format_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_day_friday
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_day_monday
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_day_saturday
@@ -70,19 +65,12 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_day_
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_day_wednesday
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_disabled
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dynamic_theming
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dynamic_theming_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_enable_newsletter
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_enable_newsletter_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_font_size_app
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_font_size_app_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_handedness
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_handedness_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_haptic_feedback
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_haptic_feedback_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hide_episode_thumbnails
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hide_episode_thumbnails_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hide_search_history
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hide_search_history_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hide_watched_items
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_library_cards
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_library_view_grid
@@ -90,10 +78,8 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_libr
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_library_view_masonry
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_library_view_mode
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_layout_mode
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_layout_mode_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_library_view_thumb
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_morning_starts_at
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_morning_starts_at_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_nav_labels_off
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_nav_labels_on
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_newsletter_activity_log
@@ -104,7 +90,6 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_news
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_newsletter_curated_picks
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_newsletter_curated_picks_desc
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_newsletter_delivery_day
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_newsletter_delivery_day_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_newsletter_library_stats
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_newsletter_library_stats_desc
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_newsletter_next_up
@@ -113,32 +98,23 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_news
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_newsletter_recently_added_desc
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_newsletter_sections_enabled
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_night_starts_at
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_night_starts_at_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_off
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_oled_mode
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_oled_mode_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_overridden_variant
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_performance
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_performance_mode
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_performance_mode_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_prefer_logos_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_reduce_motion
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_reduce_motion_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_reset_appearance_message
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_reset_appearance_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_reset_defaults_cd
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_screen_fit_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_reduced_motion
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_external_ratings
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_nav_labels
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_missing_episodes
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_missing_episodes_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_share_media
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_share_media_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_unwatched_badge
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_watched_checkmark
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_skip_special_episodes
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_skip_special_episodes_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_standard_experience
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_style_summary
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_summary_all_hidden
@@ -152,7 +128,6 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_them
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_theme_mode
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_theme_scheduled
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_theme_style
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_theme_style_subtitle
 import kotlin.time.Clock
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
@@ -519,11 +494,10 @@ private fun AppearanceThemeGroup(
                 },
             )
             val styleTitle = rowTitle(AppearanceRows.ThemeStyle)
-            val styleSubtitle = stringResource(Res.string.settings_theme_style_subtitle)
             SettingListItem(
                 icon = rowIcon(AppearanceRows.ThemeStyle),
                 title = styleTitle,
-                subtitle = styleSubtitle,
+                subtitle = rowSubtitle(AppearanceRows.ThemeStyle),
                 trailingText = themeVariant.displayName,
                 highlighted = highlightSettingId == AppearanceRows.ThemeStyle.id,
                 onClick = {
@@ -565,7 +539,7 @@ private fun AppearanceThemeGroup(
                     SettingToggleItem(
                         icon = rowIcon(AppearanceRows.DynamicTheming),
                         title = rowTitle(AppearanceRows.DynamicTheming),
-                        subtitle = stringResource(Res.string.settings_dynamic_theming_subtitle),
+                        subtitle = rowSubtitle(AppearanceRows.DynamicTheming),
                         checked = preferences.dynamicTheming,
                         highlighted = highlightSettingId == AppearanceRows.DynamicTheming.id,
                         onCheckedChange = { viewModel.edit { scope -> scope.appearance.setDynamicTheming(it) } },
@@ -576,7 +550,7 @@ private fun AppearanceThemeGroup(
                 SettingToggleItem(
                     icon = rowIcon(AppearanceRows.OledMode),
                     title = rowTitle(AppearanceRows.OledMode),
-                    subtitle = stringResource(Res.string.settings_oled_mode_subtitle),
+                    subtitle = rowSubtitle(AppearanceRows.OledMode),
                     checked = preferences.oledMode,
                     highlighted = highlightSettingId == AppearanceRows.OledMode.id,
                     onCheckedChange = { viewModel.edit { scope -> scope.appearance.setOledMode(it) } },
@@ -591,7 +565,7 @@ private fun AppearanceThemeGroup(
                 SettingListItem(
                     icon = rowIcon(AppearanceRows.ScreenFit),
                     title = screenFitTitle,
-                    subtitle = stringResource(Res.string.settings_screen_fit_subtitle),
+                    subtitle = rowSubtitle(AppearanceRows.ScreenFit),
                     trailingText = preferences.tvOverscan.displayName,
                     highlighted = highlightSettingId == AppearanceRows.ScreenFit.id,
                     onClick = {
@@ -647,7 +621,7 @@ private fun AppearanceThemeGroup(
                     SettingListItem(
                         icon = rowIcon(AppearanceRows.LayoutMode),
                         title = layoutTitle,
-                        subtitle = stringResource(Res.string.settings_layout_mode_subtitle),
+                        subtitle = rowSubtitle(AppearanceRows.LayoutMode),
                         trailingText = preferences.layoutMode.displayName,
                         highlighted = highlightSettingId == AppearanceRows.LayoutMode.id,
                         onClick = {
@@ -681,7 +655,7 @@ private fun AppearanceThemeGroup(
                 SettingListItem(
                     icon = rowIcon(AppearanceRows.DateFormat),
                     title = dateFormatTitle,
-                    subtitle = stringResource(Res.string.settings_date_format_subtitle),
+                    subtitle = rowSubtitle(AppearanceRows.DateFormat),
                     trailingText = preferences.dateFormatPreference.displayName,
                     highlighted = highlightSettingId == AppearanceRows.DateFormat.id,
                     onClick = {
@@ -698,7 +672,7 @@ private fun AppearanceThemeGroup(
                 SettingListItem(
                     icon = rowIcon(AppearanceRows.FontScale),
                     title = fontSizeTitle,
-                    subtitle = stringResource(Res.string.settings_font_size_app_subtitle),
+                    subtitle = rowSubtitle(AppearanceRows.FontScale),
                     trailingText = preferences.appFontScale.displayName,
                     highlighted = highlightSettingId == AppearanceRows.FontScale.id,
                     onClick = {
@@ -715,7 +689,7 @@ private fun AppearanceThemeGroup(
                 SettingListItem(
                     icon = rowIcon(AppearanceRows.ColorBlindMode),
                     title = colorBlindTitle,
-                    subtitle = stringResource(Res.string.settings_color_blind_mode_subtitle),
+                    subtitle = rowSubtitle(AppearanceRows.ColorBlindMode),
                     trailingText = preferences.colorBlindMode.displayName,
                     highlighted = highlightSettingId == AppearanceRows.ColorBlindMode.id,
                     onClick = {
@@ -732,7 +706,7 @@ private fun AppearanceThemeGroup(
                 SettingListItem(
                     icon = rowIcon(AppearanceRows.HandMode),
                     title = handednessTitle,
-                    subtitle = stringResource(Res.string.settings_handedness_subtitle),
+                    subtitle = rowSubtitle(AppearanceRows.HandMode),
                     trailingText = preferences.handMode.displayName,
                     highlighted = highlightSettingId == AppearanceRows.HandMode.id,
                     onClick = {
@@ -750,7 +724,7 @@ private fun AppearanceThemeGroup(
                     SettingListItem(
                         icon = Tabler.Outline.Sun,
                         title = nightStartsTitle,
-                        subtitle = stringResource(Res.string.settings_night_starts_at_subtitle),
+                        subtitle = rowSubtitle(AppearanceRows.ScheduledStart),
                         trailingText = "${preferences.scheduledThemeStartHour}:00",
                         highlighted = highlightSettingId == AppearanceRows.ScheduledStart.id,
                         onClick = {
@@ -767,7 +741,7 @@ private fun AppearanceThemeGroup(
                     SettingListItem(
                         icon = Tabler.Outline.Moon,
                         title = morningStartsTitle,
-                        subtitle = stringResource(Res.string.settings_morning_starts_at_subtitle),
+                        subtitle = rowSubtitle(AppearanceRows.ScheduledEnd),
                         trailingText = "${preferences.scheduledThemeEndHour}:00",
                         highlighted = highlightSettingId == AppearanceRows.ScheduledEnd.id,
                         onClick = {
@@ -808,7 +782,7 @@ private fun AppearanceLibraryGroup(
         SettingToggleItem(
             icon = Tabler.Outline.PhotoOff,
             title = rowTitle(AppearanceRows.HideEpisodeThumbnails),
-            subtitle = stringResource(Res.string.settings_hide_episode_thumbnails_subtitle),
+            subtitle = rowSubtitle(AppearanceRows.HideEpisodeThumbnails),
             checked = preferences.hideEpisodeThumbnails,
             highlighted = highlightSettingId == AppearanceRows.HideEpisodeThumbnails.id,
             onCheckedChange = { viewModel.edit { scope -> scope.library.setHideEpisodeThumbnails(it) } },
@@ -817,7 +791,7 @@ private fun AppearanceLibraryGroup(
         SettingToggleItem(
             icon = Tabler.Outline.List,
             title = rowTitle(AppearanceRows.CompactEpisodeList),
-            subtitle = stringResource(Res.string.settings_compact_episode_list_subtitle),
+            subtitle = rowSubtitle(AppearanceRows.CompactEpisodeList),
             checked = preferences.compactEpisodeList,
             highlighted = highlightSettingId == AppearanceRows.CompactEpisodeList.id,
             onCheckedChange = { viewModel.edit { scope -> scope.library.setCompactEpisodeList(it) } },
@@ -835,7 +809,7 @@ private fun AppearanceLibraryGroup(
         SettingToggleItem(
             icon = Tabler.Outline.PlayerSkipForward,
             title = rowTitle(AppearanceRows.SkipSpecials),
-            subtitle = stringResource(Res.string.settings_skip_special_episodes_subtitle),
+            subtitle = rowSubtitle(AppearanceRows.SkipSpecials),
             checked = preferences.skipSpecials,
             highlighted = highlightSettingId == AppearanceRows.SkipSpecials.id,
             onCheckedChange = { viewModel.edit { scope -> scope.library.setSkipSpecials(it) } },
@@ -844,7 +818,7 @@ private fun AppearanceLibraryGroup(
         SettingToggleItem(
             icon = Tabler.Outline.Eye,
             title = rowTitle(AppearanceRows.ShowMissingEpisodes),
-            subtitle = stringResource(Res.string.settings_show_missing_episodes_subtitle),
+            subtitle = rowSubtitle(AppearanceRows.ShowMissingEpisodes),
             checked = preferences.showMissingEpisodes,
             highlighted = highlightSettingId == AppearanceRows.ShowMissingEpisodes.id,
             onCheckedChange = { viewModel.edit { scope -> scope.library.setShowMissingEpisodes(it) } },
@@ -853,7 +827,7 @@ private fun AppearanceLibraryGroup(
         SettingToggleItem(
             icon = Tabler.Outline.Photo,
             title = rowTitle(AppearanceRows.PreferLogos),
-            subtitle = stringResource(Res.string.settings_prefer_logos_subtitle),
+            subtitle = rowSubtitle(AppearanceRows.PreferLogos),
             checked = preferences.preferLogos,
             highlighted = highlightSettingId == AppearanceRows.PreferLogos.id,
             onCheckedChange = { viewModel.edit { scope -> scope.library.setPreferLogos(it) } },
@@ -862,7 +836,7 @@ private fun AppearanceLibraryGroup(
         SettingToggleItem(
             icon = Tabler.Outline.DeviceMobileVibration,
             title = rowTitle(AppearanceRows.HapticsEnabled),
-            subtitle = stringResource(Res.string.settings_haptic_feedback_subtitle),
+            subtitle = rowSubtitle(AppearanceRows.HapticsEnabled),
             checked = preferences.hapticsEnabled,
             highlighted = highlightSettingId == AppearanceRows.HapticsEnabled.id,
             onCheckedChange = { viewModel.edit { scope -> scope.appearance.setHapticsEnabled(it) } },
@@ -871,7 +845,7 @@ private fun AppearanceLibraryGroup(
         SettingToggleItem(
             icon = Tabler.Outline.Share,
             title = rowTitle(AppearanceRows.ShowShareMedia),
-            subtitle = stringResource(Res.string.settings_show_share_media_subtitle),
+            subtitle = rowSubtitle(AppearanceRows.ShowShareMedia),
             checked = preferences.showShareMediaOption,
             highlighted = highlightSettingId == AppearanceRows.ShowShareMedia.id,
             onCheckedChange = { viewModel.edit { scope -> scope.experimental.setShowShareMediaOption(it) } },
@@ -880,7 +854,7 @@ private fun AppearanceLibraryGroup(
         SettingToggleItem(
             icon = Tabler.Outline.EyeOff,
             title = rowTitle(AppearanceRows.HideSearchHistory),
-            subtitle = stringResource(Res.string.settings_hide_search_history_subtitle),
+            subtitle = rowSubtitle(AppearanceRows.HideSearchHistory),
             checked = preferences.hideSearchHistory,
             highlighted = highlightSettingId == AppearanceRows.HideSearchHistory.id,
             onCheckedChange = { viewModel.edit { scope -> scope.experimental.setHideSearchHistory(it) } },
@@ -909,7 +883,7 @@ private fun AppearancePerformanceGroup(
         SettingToggleItem(
             icon = Tabler.Outline.Gauge,
             title = rowTitle(AppearanceRows.PerformanceMode),
-            subtitle = stringResource(Res.string.settings_performance_mode_subtitle),
+            subtitle = rowSubtitle(AppearanceRows.PerformanceMode),
             checked = preferences.performanceMode,
             highlighted = highlightSettingId == AppearanceRows.PerformanceMode.id,
             index = 0, count = perfTotal,
@@ -918,7 +892,7 @@ private fun AppearancePerformanceGroup(
         SettingToggleItem(
             icon = Tabler.Outline.Activity,
             title = rowTitle(AppearanceRows.ReduceMotion),
-            subtitle = stringResource(Res.string.settings_reduce_motion_subtitle),
+            subtitle = rowSubtitle(AppearanceRows.ReduceMotion),
             checked = preferences.reduceMotionEnabled,
             highlighted = highlightSettingId == AppearanceRows.ReduceMotion.id,
             index = 1, count = perfTotal,
@@ -948,7 +922,7 @@ private fun AppearanceEyeCareGroup(
         SettingToggleItem(
             icon = Tabler.Outline.Moon,
             title = rowTitle(AppearanceRows.BlueLightFilter),
-            subtitle = stringResource(Res.string.settings_blue_light_filter_subtitle),
+            subtitle = rowSubtitle(AppearanceRows.BlueLightFilter),
             checked = preferences.blueLightFilterEnabled,
             highlighted = highlightSettingId == AppearanceRows.BlueLightFilter.id,
             index = 0, count = eyeCareTotal,
@@ -957,7 +931,7 @@ private fun AppearanceEyeCareGroup(
         SettingListItem(
             icon = Tabler.Outline.Adjustments,
             title = rowTitle(AppearanceRows.BlueLightStrength),
-            subtitle = stringResource(Res.string.settings_blue_light_filter_strength_subtitle),
+            subtitle = rowSubtitle(AppearanceRows.BlueLightStrength),
             trailingText = "${(preferences.blueLightFilterStrength * 100).toInt()}%",
             highlighted = highlightSettingId == AppearanceRows.BlueLightStrength.id,
             index = 1, count = eyeCareTotal,
@@ -997,7 +971,7 @@ private fun AppearanceNewsletterGroup(
         SettingToggleItem(
             icon = Tabler.Outline.Mail,
             title = rowTitle(AppearanceRows.NewsletterEnabled),
-            subtitle = stringResource(Res.string.settings_enable_newsletter_subtitle),
+            subtitle = rowSubtitle(AppearanceRows.NewsletterEnabled),
             checked = preferences.newsletterEnabled,
                         highlighted = highlightSettingId == AppearanceRows.NewsletterEnabled.id,
                         onCheckedChange = { viewModel.edit { scope -> scope.notification.setNewsletterEnabled(it) } }
@@ -1021,7 +995,7 @@ private fun AppearanceNewsletterGroup(
         SettingListItem(
             icon = Tabler.Outline.Calendar,
             title = rowTitle(AppearanceRows.NewsletterDeliveryDay),
-            subtitle = stringResource(Res.string.settings_newsletter_delivery_day_subtitle),
+            subtitle = rowSubtitle(AppearanceRows.NewsletterDeliveryDay),
             trailingText = dayLabel,
             highlighted = highlightSettingId == AppearanceRows.NewsletterDeliveryDay.id,
             onClick = {

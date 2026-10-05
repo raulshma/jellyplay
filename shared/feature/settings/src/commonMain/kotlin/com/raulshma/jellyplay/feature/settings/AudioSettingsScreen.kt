@@ -33,10 +33,8 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audi
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_auto_play_off
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_auto_play_on
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_cache_clear
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_cache_clear_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_cache_network_policy
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_cache_size
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_cache_size_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_caching_enable
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_caching_off
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_caching_on
@@ -48,10 +46,7 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audi
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_description_off
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_description_on
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_player_title
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_prefetch_backfill
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_prefetch_backfill_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_prefetch_lookahead
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_prefetch_lookahead_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_visualizer
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_visualizer_off
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_visualizer_on
@@ -85,10 +80,8 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_gapl
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_lr_balance
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_night_mode
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_night_mode_gain
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_night_mode_gain_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_night_mode_strength
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_night_mode_volume
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_night_mode_volume_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_norm_album
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_norm_album_short
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_norm_dynamic
@@ -99,13 +92,9 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_norm
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_off
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_pitch_normal
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_pitch_shift
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_preload_buffer
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_preload_buffer_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_replaygain_preamp
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_replaygain_preamp_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_reverb
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_skip_prev_threshold
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_skip_prev_threshold_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_sleep_timer
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_sleep_timer_15_min
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_sleep_timer_1_hour
@@ -120,7 +109,6 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_virt
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_virtualizer_strength
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_volume_boost
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_volume_boost_gain
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_volume_boost_gain_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_volume_normalization
 
 /**
@@ -290,7 +278,7 @@ fun AudioSettingsScreen(
                         SettingListItem(
                             icon = Tabler.Outline.Music,
                             title = rowTitle(AudioRows.NightModeVolume),
-                            subtitle = stringResource(Res.string.settings_night_mode_volume_subtitle),
+                            subtitle = rowSubtitle(AudioRows.NightModeVolume),
                             trailingText = "${(preferences.audioNightModeVolume * 100).toInt()}%",
                             highlighted = highlightSettingId == AudioRows.NightModeVolume.id,
                             onClick = {
@@ -310,7 +298,7 @@ fun AudioSettingsScreen(
                         SettingListItem(
                             icon = Tabler.Outline.Adjustments,
                             title = rowTitle(AudioRows.NightModeGain),
-                            subtitle = stringResource(Res.string.settings_night_mode_gain_subtitle),
+                            subtitle = rowSubtitle(AudioRows.NightModeGain),
                             trailingText = "${preferences.audioNightModeGain}",
                             highlighted = highlightSettingId == AudioRows.NightModeGain.id,
                             onClick = {
@@ -330,7 +318,7 @@ fun AudioSettingsScreen(
                         SettingListItem(
                             icon = Tabler.Outline.PlayerSkipForward,
                             title = rowTitle(AudioRows.AudioSkipPrevThreshold),
-                            subtitle = stringResource(Res.string.settings_skip_prev_threshold_subtitle),
+                            subtitle = rowSubtitle(AudioRows.AudioSkipPrevThreshold),
                             trailingText = "${preferences.audioSkipPreviousThresholdMs / 1000}s",
                             highlighted = highlightSettingId == AudioRows.AudioSkipPrevThreshold.id,
                             onClick = {
@@ -375,7 +363,7 @@ fun AudioSettingsScreen(
                         SettingListItem(
                             icon = Tabler.Outline.Refresh,
                             title = rowTitle(AudioRows.AudioPreloadBuffer),
-                            subtitle = stringResource(Res.string.settings_preload_buffer_subtitle),
+                            subtitle = rowSubtitle(AudioRows.AudioPreloadBuffer),
                             trailingText = preferences.audioPreloadBufferSize.displayName,
                             highlighted = highlightSettingId == AudioRows.AudioPreloadBuffer.id,
                             onClick = {
@@ -422,7 +410,7 @@ fun AudioSettingsScreen(
                             SettingListItem(
                                 icon = Tabler.Outline.Adjustments,
                                 title = rowTitle(AudioRows.ReplaygainPreamp),
-                                subtitle = stringResource(Res.string.settings_replaygain_preamp_subtitle),
+                                subtitle = rowSubtitle(AudioRows.ReplaygainPreamp),
                                 trailingText = "${if (preferences.replayGainPreAmpDb >= 0) "+" else ""}${formatOneDecimal(preferences.replayGainPreAmpDb.toDouble())} dB",
                                 highlighted = highlightSettingId == AudioRows.ReplaygainPreamp.id,
                                 onClick = {
@@ -593,7 +581,7 @@ fun AudioSettingsScreen(
                             SettingListItem(
                                 icon = Tabler.Outline.Speakerphone,
                                 title = rowTitle(AudioRows.VolumeBoostGain),
-                                subtitle = stringResource(Res.string.settings_volume_boost_gain_subtitle),
+                                subtitle = rowSubtitle(AudioRows.VolumeBoostGain),
                                 trailingText = "+${formatOneDecimal(preferences.volumeBoostGain / 100.0)} dB",
                                 highlighted = highlightSettingId == AudioRows.VolumeBoostGain.id,
                                 onClick = {
@@ -748,7 +736,7 @@ fun AudioSettingsScreen(
                             SettingListItem(
                                 icon = Tabler.Outline.DeviceFloppy,
                                 title = cacheSizeTitle,
-                                subtitle = stringResource(Res.string.settings_audio_cache_size_subtitle),
+                                subtitle = rowSubtitle(AudioRows.AudioCacheSize),
                                 trailingText = "${preferences.audioCacheSizeMb} MB",
                                 highlighted = highlightSettingId == AudioRows.AudioCacheSize.id,
                                 onClick = {
@@ -767,7 +755,7 @@ fun AudioSettingsScreen(
                             SettingListItem(
                                 icon = Tabler.Outline.ListNumbers,
                                 title = lookaheadTitle,
-                                subtitle = stringResource(Res.string.settings_audio_prefetch_lookahead_subtitle),
+                                subtitle = rowSubtitle(AudioRows.AudioPrefetchLookahead),
                                 trailingText = "${preferences.audioPrefetchLookahead}",
                                 highlighted = highlightSettingId == AudioRows.AudioPrefetchLookahead.id,
                                 onClick = {
@@ -786,7 +774,7 @@ fun AudioSettingsScreen(
                             SettingListItem(
                                 icon = Tabler.Outline.History,
                                 title = backfillTitle,
-                                subtitle = stringResource(Res.string.settings_audio_prefetch_backfill_subtitle),
+                                subtitle = rowSubtitle(AudioRows.AudioPrefetchBackfill),
                                 trailingText = "${preferences.audioPrefetchBackfill}",
                                 highlighted = highlightSettingId == AudioRows.AudioPrefetchBackfill.id,
                                 onClick = {
@@ -821,7 +809,7 @@ fun AudioSettingsScreen(
                             SettingListItem(
                                 icon = Tabler.Outline.Trash,
                                 title = rowTitle(AudioRows.AudioCacheClear),
-                                subtitle = stringResource(Res.string.settings_audio_cache_clear_subtitle),
+                                subtitle = rowSubtitle(AudioRows.AudioCacheClear),
                                 trailingText = "",
                                 highlighted = highlightSettingId == AudioRows.AudioCacheClear.id,
                                 onClick = { viewModel.clearAudioCache() },

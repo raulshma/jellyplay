@@ -32,10 +32,8 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.Res
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_integrations_arr
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_integrations_arr_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_integrations_subtitles
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_integrations_subtitles_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_integrations_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_seerr_integration
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_seerr_integration_subtitle
 
 /**
  * Top-level integrations hub. Lists every third-party service JellyPlay talks
@@ -122,7 +120,7 @@ fun IntegrationsScreen(
                     SettingListItem(
                         icon = Tabler.Outline.Puzzle,
                         title = rowTitle(IntegrationsRows.SeerrSettings),
-                        subtitle = stringResource(Res.string.settings_seerr_integration_subtitle),
+                        subtitle = rowSubtitle(IntegrationsRows.SeerrSettings),
                         index = 0,
                         count = count,
                         highlighted = highlightSettingId == IntegrationsRows.SeerrSettings.id,
@@ -140,7 +138,7 @@ fun IntegrationsScreen(
                     SettingListItem(
                         icon = Tabler.Outline.Subtitles,
                         title = rowTitle(IntegrationsRows.SubtitleProviderSettings),
-                        subtitle = stringResource(Res.string.settings_integrations_subtitles_subtitle),
+                        subtitle = rowSubtitle(IntegrationsRows.SubtitleProviderSettings),
                         index = 2,
                         count = count,
                         highlighted = highlightSettingId == IntegrationsRows.SubtitleProviderSettings.id,

@@ -627,7 +627,7 @@ private fun PlaybackPlayerGroup(
                     SettingListItem(
                         icon = rowIcon(PlaybackRows.PlayerEngine),
                         title = rowTitle(PlaybackRows.PlayerEngine),
-                        subtitle = stringResource(Res.string.settings_player_engine_subtitle),
+                        subtitle = rowSubtitle(PlaybackRows.PlayerEngine),
                         trailingText = preferences.preferredPlayer.displayName,
                         highlighted = highlightSettingId == PlaybackRows.PlayerEngine.id,
                         onClick = {
@@ -646,7 +646,7 @@ private fun PlaybackPlayerGroup(
                         SettingListItem(
                             icon = rowIcon(PlaybackRows.SeekDuration),
                             title = rowTitle(PlaybackRows.SeekDuration),
-                            subtitle = stringResource(Res.string.settings_seek_duration_subtitle),
+                            subtitle = rowSubtitle(PlaybackRows.SeekDuration),
                             trailingText = "${preferences.videoSeekDurationMs / 1000}s",
                             highlighted = highlightSettingId == PlaybackRows.SeekDuration.id,
                             onClick = {
@@ -673,7 +673,7 @@ private fun PlaybackPlayerGroup(
                         SettingListItem(
                             icon = rowIcon(PlaybackRows.Orientation),
                             title = rowTitle(PlaybackRows.Orientation),
-                            subtitle = stringResource(Res.string.settings_orientation_subtitle),
+                            subtitle = rowSubtitle(PlaybackRows.Orientation),
                             trailingText = preferences.videoDefaultOrientation.localizedDisplayName(),
                             highlighted = highlightSettingId == PlaybackRows.Orientation.id,
                             onClick = {
@@ -741,7 +741,7 @@ private fun PlaybackPlayerGroup(
                         SettingToggleItem(
                             icon = rowIcon(PlaybackRows.DoubleTapHoldSeek),
                             title = rowTitle(PlaybackRows.DoubleTapHoldSeek),
-                            subtitle = stringResource(Res.string.settings_double_tap_hold_seek_subtitle),
+                            subtitle = rowSubtitle(PlaybackRows.DoubleTapHoldSeek),
                             checked = preferences.videoDoubleTapHoldSeekEnabled,
                             highlighted = highlightSettingId == PlaybackRows.DoubleTapHoldSeek.id,
                             onCheckedChange = { enabled ->
@@ -752,7 +752,7 @@ private fun PlaybackPlayerGroup(
                             SettingListItem(
                                 icon = rowIcon(PlaybackRows.InputBindings),
                                 title = rowTitle(PlaybackRows.InputBindings),
-                                subtitle = stringResource(Res.string.settings_input_bindings_subtitle),
+                                subtitle = rowSubtitle(PlaybackRows.InputBindings),
                                 highlighted = highlightSettingId == PlaybackRows.InputBindings.id,
                                 onClick = { navActions.onNavigate(Route.InputBindings) },
                             )
@@ -762,7 +762,7 @@ private fun PlaybackPlayerGroup(
                     SettingListItem(
                         icon = rowIcon(PlaybackRows.DefaultSpeed),
                         title = rowTitle(PlaybackRows.DefaultSpeed),
-                        subtitle = stringResource(Res.string.settings_default_speed_subtitle),
+                        subtitle = rowSubtitle(PlaybackRows.DefaultSpeed),
                         trailingText = if (preferences.videoDefaultSpeed == 1.0f) "1x" else "${preferences.videoDefaultSpeed}x",
                         highlighted = highlightSettingId == PlaybackRows.DefaultSpeed.id,
                         onClick = {
@@ -782,7 +782,7 @@ private fun PlaybackPlayerGroup(
                     SettingListItem(
                         icon = rowIcon(PlaybackRows.HoldSpeedMultiplier),
                         title = holdSpeedTitle,
-                        subtitle = stringResource(Res.string.settings_hold_to_seek_speed_subtitle),
+                        subtitle = rowSubtitle(PlaybackRows.HoldSpeedMultiplier),
                         trailingText = if (preferences.videoHoldSpeedEnabled) "${preferences.videoHoldSpeedMultiplier}x" else holdSpeedOffLabel,
                         highlighted = highlightSettingId == PlaybackRows.HoldSpeedMultiplier.id,
                         onClick = {
@@ -811,7 +811,7 @@ private fun PlaybackPlayerGroup(
                     SettingListItem(
                         icon = rowIcon(PlaybackRows.DefaultAspect),
                         title = rowTitle(PlaybackRows.DefaultAspect),
-                        subtitle = stringResource(Res.string.settings_default_aspect_subtitle),
+                        subtitle = rowSubtitle(PlaybackRows.DefaultAspect),
                         trailingText = preferences.videoDefaultAspectRatio,
                         highlighted = highlightSettingId == PlaybackRows.DefaultAspect.id,
                         onClick = {
@@ -841,7 +841,7 @@ private fun PlaybackPlayerGroup(
                     SettingListItem(
                         icon = rowIcon(PlaybackRows.AutoplayCountdown),
                         title = rowTitle(PlaybackRows.AutoplayCountdown),
-                        subtitle = stringResource(Res.string.settings_auto_play_countdown_subtitle),
+                        subtitle = rowSubtitle(PlaybackRows.AutoplayCountdown),
                         trailingText = countdownLabel,
                         highlighted = highlightSettingId == PlaybackRows.AutoplayCountdown.id,
                         onClick = {
@@ -864,7 +864,7 @@ private fun PlaybackPlayerGroup(
                         SettingListItem(
                             icon = rowIcon(PlaybackRows.StillWatchingMode),
                             title = rowTitle(PlaybackRows.StillWatchingMode),
-                            subtitle = stringResource(Res.string.settings_still_watching_mode_subtitle),
+                            subtitle = rowSubtitle(PlaybackRows.StillWatchingMode),
                             trailingText = preferences.stillWatchingMode.displayName,
                             highlighted = highlightSettingId == PlaybackRows.StillWatchingMode.id,
                             onClick = {
@@ -884,7 +884,7 @@ private fun PlaybackPlayerGroup(
                         SettingListItem(
                             icon = rowIcon(PlaybackRows.StillWatchingEpisodes),
                             title = rowTitle(PlaybackRows.StillWatchingEpisodes),
-                            subtitle = stringResource(Res.string.settings_still_watching_episodes_subtitle),
+                            subtitle = rowSubtitle(PlaybackRows.StillWatchingEpisodes),
                             trailingText = if (preferences.stillWatchingEpisodeThreshold == 0) offLabel else formatIntPattern(episodesFormat, preferences.stillWatchingEpisodeThreshold),
                             highlighted = highlightSettingId == PlaybackRows.StillWatchingEpisodes.id,
                             onClick = {
@@ -910,7 +910,7 @@ private fun PlaybackPlayerGroup(
                         SettingToggleItem(
                             icon = rowIcon(PlaybackRows.RememberVolumePerContentType),
                             title = rowTitle(PlaybackRows.RememberVolumePerContentType),
-                            subtitle = stringResource(Res.string.ss_remember_volume_subtitle),
+                            subtitle = rowSubtitle(PlaybackRows.RememberVolumePerContentType),
                             checked = preferences.rememberVolumePerContentType,
                             highlighted = highlightSettingId == PlaybackRows.RememberVolumePerContentType.id,
                             onCheckedChange = { enabled ->
@@ -947,7 +947,7 @@ private fun PlaybackPlayerAdvancedRows(
                         SettingListItem(
                             icon = rowIcon(PlaybackRows.ControlsTimeout),
                             title = rowTitle(PlaybackRows.ControlsTimeout),
-                            subtitle = stringResource(Res.string.settings_controls_timeout_subtitle),
+                            subtitle = rowSubtitle(PlaybackRows.ControlsTimeout),
                             trailingText = "${preferences.videoControlsTimeoutMs / 1000}s",
                             highlighted = highlightSettingId == PlaybackRows.ControlsTimeout.id,
                             onClick = {
@@ -967,7 +967,7 @@ private fun PlaybackPlayerAdvancedRows(
                         SettingToggleItem(
                             icon = rowIcon(PlaybackRows.HideOsdOnPause),
                             title = rowTitle(PlaybackRows.HideOsdOnPause),
-                            subtitle = stringResource(Res.string.settings_hide_osd_on_pause_subtitle),
+                            subtitle = rowSubtitle(PlaybackRows.HideOsdOnPause),
                             checked = preferences.videoHideOsdOnPause,
                             highlighted = highlightSettingId == PlaybackRows.HideOsdOnPause.id,
                             onCheckedChange = { enabled ->
@@ -978,7 +978,7 @@ private fun PlaybackPlayerAdvancedRows(
                         SettingListItem(
                             icon = rowIcon(PlaybackRows.SkipBackOnResume),
                             title = rowTitle(PlaybackRows.SkipBackOnResume),
-                            subtitle = stringResource(Res.string.settings_skip_back_on_resume_subtitle),
+                            subtitle = rowSubtitle(PlaybackRows.SkipBackOnResume),
                             trailingText = skipBackLabel,
                             highlighted = highlightSettingId == PlaybackRows.SkipBackOnResume.id,
                             onClick = {
@@ -997,7 +997,7 @@ private fun PlaybackPlayerAdvancedRows(
                         SettingListItem(
                             icon = rowIcon(PlaybackRows.PassOutProtection),
                             title = rowTitle(PlaybackRows.PassOutProtection),
-                            subtitle = stringResource(Res.string.settings_pass_out_protection_subtitle),
+                            subtitle = rowSubtitle(PlaybackRows.PassOutProtection),
                             trailingText = passOutLabel,
                             highlighted = highlightSettingId == PlaybackRows.PassOutProtection.id,
                             onClick = {
@@ -1044,7 +1044,7 @@ private fun PlaybackPlayerAdvancedRows(
                             SettingListItem(
                                 icon = rowIcon(PlaybackRows.TvZoomMode),
                                 title = tvZoomTitle,
-                                subtitle = stringResource(Res.string.settings_tv_zoom_mode_subtitle),
+                                subtitle = rowSubtitle(PlaybackRows.TvZoomMode),
                                 trailingText = if (preferences.tvZoomModePercent == 0f) offLabel else "${preferences.tvZoomModePercent.toInt()}%",
                                 highlighted = highlightSettingId == PlaybackRows.TvZoomMode.id,
                                 onClick = {
@@ -1080,7 +1080,7 @@ private fun PlaybackPlayerAdvancedRows(
                         SettingListItem(
                             icon = rowIcon(PlaybackRows.SwipeSeekRange),
                             title = rowTitle(PlaybackRows.SwipeSeekRange),
-                            subtitle = stringResource(Res.string.settings_swipe_seek_range_subtitle),
+                            subtitle = rowSubtitle(PlaybackRows.SwipeSeekRange),
                             trailingText = "${preferences.videoSwipeSeekMaxMs / 1000}s",
                             highlighted = highlightSettingId == PlaybackRows.SwipeSeekRange.id,
                             onClick = {
@@ -1108,7 +1108,7 @@ private fun PlaybackPlayerAdvancedRows(
                         SettingListItem(
                             icon = rowIcon(PlaybackRows.DefaultBrightnessLevel),
                             title = rowTitle(PlaybackRows.DefaultBrightnessLevel),
-                            subtitle = stringResource(Res.string.settings_default_brightness_level_subtitle),
+                            subtitle = rowSubtitle(PlaybackRows.DefaultBrightnessLevel),
                             trailingText = "${(preferences.videoBrightnessLevel * 100).toInt()}%",
                             highlighted = highlightSettingId == PlaybackRows.DefaultBrightnessLevel.id,
                             onClick = {
@@ -1144,7 +1144,7 @@ private fun PlaybackPlayerAdvancedRows(
                         SettingListItem(
                             icon = rowIcon(PlaybackRows.PreloadBuffer),
                             title = rowTitle(PlaybackRows.PreloadBuffer),
-                            subtitle = stringResource(Res.string.settings_preload_buffer_subtitle),
+                            subtitle = rowSubtitle(PlaybackRows.PreloadBuffer),
                             trailingText = preferences.videoPreloadBufferSize.displayName,
                             highlighted = highlightSettingId == PlaybackRows.PreloadBuffer.id,
                             onClick = {
@@ -1163,7 +1163,7 @@ private fun PlaybackPlayerAdvancedRows(
                         SettingListItem(
                             icon = rowIcon(PlaybackRows.VideoCacheSize),
                             title = videoCacheSizeTitle,
-                            subtitle = stringResource(Res.string.settings_video_cache_size_subtitle),
+                            subtitle = rowSubtitle(PlaybackRows.VideoCacheSize),
                             trailingText = "${preferences.videoCacheSizeMb} MB",
                             highlighted = highlightSettingId == PlaybackRows.VideoCacheSize.id,
                             onClick = {
@@ -1179,7 +1179,7 @@ private fun PlaybackPlayerAdvancedRows(
                         SettingToggleItem(
                             icon = rowIcon(PlaybackRows.BackgroundAudio),
                             title = rowTitle(PlaybackRows.BackgroundAudio),
-                            subtitle = stringResource(Res.string.settings_background_audio_subtitle),
+                            subtitle = rowSubtitle(PlaybackRows.BackgroundAudio),
                             checked = preferences.backgroundVideoAudioEnabled,
                             highlighted = highlightSettingId == PlaybackRows.BackgroundAudio.id,
                             onCheckedChange = { viewModel.edit { scope -> scope.playback.setBackgroundVideoAudioEnabled(it) } },
@@ -1202,7 +1202,7 @@ private fun PlaybackPlayerAdvancedRows(
                         SettingToggleItem(
                             icon = rowIcon(PlaybackRows.KeepScreenOn),
                             title = rowTitle(PlaybackRows.KeepScreenOn),
-                            subtitle = stringResource(Res.string.settings_keep_screen_on_subtitle),
+                            subtitle = rowSubtitle(PlaybackRows.KeepScreenOn),
                             checked = preferences.keepScreenOnDuringVideo,
                             highlighted = highlightSettingId == PlaybackRows.KeepScreenOn.id,
                             onCheckedChange = { viewModel.edit { scope -> scope.playback.setKeepScreenOnDuringVideo(it) } },
@@ -1252,7 +1252,7 @@ private fun PlaybackPlayerAdvancedRows(
                         SettingToggleItem(
                             icon = rowIcon(PlaybackRows.ResumeHeadsetPlug),
                             title = rowTitle(PlaybackRows.ResumeHeadsetPlug),
-                            subtitle = stringResource(Res.string.settings_resume_headset_plug_subtitle),
+                            subtitle = rowSubtitle(PlaybackRows.ResumeHeadsetPlug),
                             checked = preferences.videoResumeOnHeadsetPlug,
                             highlighted = highlightSettingId == PlaybackRows.ResumeHeadsetPlug.id,
                             onCheckedChange = { enabled ->
@@ -1619,7 +1619,7 @@ private fun PlaybackExternalEngineRows(
                             SettingListItem(
                                 icon = rowIcon(PlaybackRows.ExternalPlayerApp),
                                 title = rowTitle(PlaybackRows.ExternalPlayerApp),
-                                subtitle = stringResource(Res.string.settings_external_player_app_subtitle),
+                                subtitle = rowSubtitle(PlaybackRows.ExternalPlayerApp),
                                 trailingText = preferences.preferredExternalPlayer.displayName,
                                 highlighted = highlightSettingId == PlaybackRows.ExternalPlayerApp.id,
                                 onClick = {
@@ -2445,7 +2445,7 @@ private fun PlaybackSyncPlayGroup(
                     SettingListItem(
                         icon = rowIcon(PlaybackRows.SyncplayJoinBehavior),
                         title = joinBehaviorTitle,
-                        subtitle = stringResource(Res.string.settings_join_behavior_subtitle),
+                        subtitle = rowSubtitle(PlaybackRows.SyncplayJoinBehavior),
                         trailingText = preferences.syncPlayJoinBehavior.displayName,
                         highlighted = highlightSettingId == PlaybackRows.SyncplayJoinBehavior.id,
                         onClick = {
@@ -2470,7 +2470,7 @@ private fun PlaybackSyncPlayGroup(
                     SettingListItem(
                         icon = rowIcon(PlaybackRows.SyncplayTolerance),
                         title = syncToleranceTitle,
-                        subtitle = stringResource(Res.string.settings_sync_tolerance_subtitle),
+                        subtitle = rowSubtitle(PlaybackRows.SyncplayTolerance),
                         trailingText = "${preferences.syncPlayToleranceMs}ms",
                         highlighted = highlightSettingId == PlaybackRows.SyncplayTolerance.id,
                         onClick = {
@@ -2489,7 +2489,7 @@ private fun PlaybackSyncPlayGroup(
                     SettingToggleItem(
                         icon = rowIcon(PlaybackRows.SyncplayAutoAcceptInvites),
                         title = rowTitle(PlaybackRows.SyncplayAutoAcceptInvites),
-                        subtitle = stringResource(Res.string.settings_auto_accept_invites_subtitle),
+                        subtitle = rowSubtitle(PlaybackRows.SyncplayAutoAcceptInvites),
                         checked = preferences.syncPlayAutoAcceptInvites,
                         highlighted = highlightSettingId == PlaybackRows.SyncplayAutoAcceptInvites.id,
                         onCheckedChange = { viewModel.edit { scope -> scope.syncPlayCast.setSyncPlayAutoAcceptInvites(it) } },
@@ -2528,7 +2528,7 @@ private fun PlaybackCastingGroup(
                     SettingListItem(
                         icon = rowIcon(PlaybackRows.CastingStrategy),
                         title = castingStrategyTitle,
-                        subtitle = stringResource(Res.string.settings_casting_strategy_subtitle),
+                        subtitle = rowSubtitle(PlaybackRows.CastingStrategy),
                         trailingText = preferences.defaultCastingStrategy.displayName,
                         highlighted = highlightSettingId == PlaybackRows.CastingStrategy.id,
                         onClick = {
@@ -2546,7 +2546,7 @@ private fun PlaybackCastingGroup(
                     SettingToggleItem(
                         icon = rowIcon(PlaybackRows.BackgroundCasting),
                         title = rowTitle(PlaybackRows.BackgroundCasting),
-                        subtitle = stringResource(Res.string.settings_background_casting_subtitle),
+                        subtitle = rowSubtitle(PlaybackRows.BackgroundCasting),
                         checked = preferences.backgroundCastingEnabled,
                         highlighted = highlightSettingId == PlaybackRows.BackgroundCasting.id,
                         onCheckedChange = { viewModel.edit { scope -> scope.syncPlayCast.setBackgroundCastingEnabled(it) } },
@@ -2558,7 +2558,7 @@ private fun PlaybackCastingGroup(
                     SettingListItem(
                         icon = rowIcon(PlaybackRows.PreferredRenderer),
                         title = rowTitle(PlaybackRows.PreferredRenderer),
-                        subtitle = stringResource(Res.string.settings_preferred_renderer_subtitle),
+                        subtitle = rowSubtitle(PlaybackRows.PreferredRenderer),
                         trailingText = rendererText,
                         highlighted = highlightSettingId == PlaybackRows.PreferredRenderer.id,
                         onClick = {
@@ -2600,7 +2600,7 @@ private fun PlaybackDvrGroup(
                     SettingListItem(
                         icon = rowIcon(PlaybackRows.DvrPrePadding),
                         title = dvrPrePaddingTitle,
-                        subtitle = stringResource(Res.string.settings_dvr_pre_padding_subtitle),
+                        subtitle = rowSubtitle(PlaybackRows.DvrPrePadding),
                         trailingText = stringResource(Res.string.settings_x_minutes, preferences.dvrPrePaddingMinutes),
                         highlighted = highlightSettingId == PlaybackRows.DvrPrePadding.id,
                         onClick = {
@@ -2622,7 +2622,7 @@ private fun PlaybackDvrGroup(
                     SettingListItem(
                         icon = rowIcon(PlaybackRows.DvrPostPadding),
                         title = dvrPostPaddingTitle,
-                        subtitle = stringResource(Res.string.settings_dvr_post_padding_subtitle),
+                        subtitle = rowSubtitle(PlaybackRows.DvrPostPadding),
                         trailingText = stringResource(Res.string.settings_x_minutes, preferences.dvrPostPaddingMinutes),
                         highlighted = highlightSettingId == PlaybackRows.DvrPostPadding.id,
                         onClick = {
@@ -2648,7 +2648,7 @@ private fun PlaybackDvrGroup(
                     SettingListItem(
                         icon = rowIcon(PlaybackRows.DvrRecordingQuality),
                         title = dvrRecordingQualityTitle,
-                        subtitle = stringResource(Res.string.settings_dvr_recording_quality_subtitle),
+                        subtitle = rowSubtitle(PlaybackRows.DvrRecordingQuality),
                         trailingText = preferences.dvrRecordingQuality,
                         highlighted = highlightSettingId == PlaybackRows.DvrRecordingQuality.id,
                         onClick = {

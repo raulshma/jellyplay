@@ -580,4 +580,6 @@
     <string name="ss_hooks_ended_cmd_subtitle">Commande à exécuter à la fin de la lecture</string>
     <string name="ss_hooks_idle_cmd_subtitle">Commande à exécuter quand l'app devient inactive</string>
     <string name="ss_hooks_idle_ended_cmd_subtitle">Commande à exécuter quand l'app quitte l'inactivité</string>
+    <string name="ss_input_bindings_title">Personnaliser les commandes</string>
+    <string name="ss_input_bindings_subtitle">Actions pour les gestes, la souris, le clavier et la télécommande</string>
 </resources>

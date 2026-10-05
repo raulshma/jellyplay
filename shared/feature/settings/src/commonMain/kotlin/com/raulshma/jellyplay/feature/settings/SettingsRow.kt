@@ -64,6 +64,14 @@ internal data class SettingsRow(
      */
     val titleRes: StringResource? = null,
     /**
+     * The settings-screen row's STATIC subtitle resource, or null when the
+     * subtitle is a dynamic value read (preference current-value, an on/off
+     * resource pair chosen by state, a `displayName` enum) or absent. The row
+     * is the ONE place a static subtitle is declared — emission sites read
+     * [rowSubtitle] instead of hand-picking the resource.
+     */
+    val subtitleRes: StringResource? = null,
+    /**
      * The search hit's title resource, or null where the hit restates the
      * row's screen title (the default-title fold resolves it to [titleRes]).
      */
@@ -250,6 +258,16 @@ internal fun rowTitle(row: SettingsRow): String =
             "settings row \"${row.id}\" declares no screen title resource (documented no-screen-title exception)"
         },
     )
+
+/**
+ * The screen-side consumer of a fused row's STATIC subtitle: null when the
+ * row declares none (dynamic value reads stay at their emission sites). The
+ * static `settings_*` subtitle resource is referenced from exactly one place
+ * in code: the row.
+ */
+@Composable
+internal fun rowSubtitle(row: SettingsRow): String? =
+    row.subtitleRes?.let { stringResource(it) }
 
 /**
  * [rowTitle]'s icon twin for fused rows: the icon IS the row's field, so this

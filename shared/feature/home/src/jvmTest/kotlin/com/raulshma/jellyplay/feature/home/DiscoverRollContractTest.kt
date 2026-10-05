@@ -98,6 +98,10 @@ import kotlin.test.assertTrue
  * owners of each layer's implementation details (including the one-token
  * consolidation itself — the parameter threading is pinned by
  * `MediaRepositoryHomeSectionsCacheTest` and `HomeSectionsFetcherTest`).
+ * (ADR-0008 update: the repo + fetcher layers now have their real-stack
+ * contract suite — `HomeFeedRealStackContractTest` in core:data's jvmTest,
+ * unblocked by the fetcher's visibility widening; this double remains for
+ * the FEATURE-layer roll protocol, which is what it actually doubles.)
  *
  * PINS (one user action — the dice re-roll — through refresh cycles on
  * virtual time):

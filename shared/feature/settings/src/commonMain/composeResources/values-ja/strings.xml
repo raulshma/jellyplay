@@ -634,4 +634,30 @@
     <string name="core_ui_whatsnew_category_improvement">改善</string>
     <string name="core_ui_whatsnew_category_fix">修正</string>
     <string name="core_ui_whatsnew_take_me_there">そこへ移動</string>
+    <!-- Input bindings (customize controls) -->
+    <string name="settings_input_bindings">コントロールをカスタマイズ</string>
+    <string name="settings_input_bindings_subtitle">ジェスチャー、マウス、キーボード、リモコンの操作</string>
+    <string name="settings_input_bindings_title">コントロール</string>
+    <string name="settings_input_bindings_section_touch">タッチ</string>
+    <string name="settings_input_bindings_section_mouse">マウスとスクロール</string>
+    <string name="settings_input_bindings_section_keyboard">キーボード</string>
+    <string name="settings_input_bindings_section_tv">TV リモコン</string>
+    <string name="settings_input_bindings_reset">コントロールをデフォルトに戻す</string>
+    <string name="settings_input_bindings_reset_title">すべてのコントロールをデフォルトに戻しますか？</string>
+    <string name="settings_input_bindings_reset_message">すべてのコントロールがデフォルトの割り当てに戻ります。カスタムキーボードショートカットは削除されます。</string>
+    <string name="settings_input_bindings_search_hint">コントロールを検索</string>
+    <string name="settings_input_bindings_search_empty">一致するコントロールがありません</string>
+    <string name="settings_input_bindings_preset_label">タッチプリセット</string>
+    <string name="settings_input_bindings_count">%1$d 個の割り当て</string>
+    <string name="settings_input_bindings_modified_suffix">· 変更 %1$d 件</string>
+    <string name="settings_input_bindings_add_shortcut">キーボードショートカットを追加</string>
+    <string name="settings_input_bindings_add_shortcut_subtitle">任意のキーの組み合わせを記録</string>
+    <string name="settings_input_bindings_capture_instruction">任意のキーまたはキーの組み合わせを押してください</string>
+    <string name="settings_input_bindings_capture_press">キーを押してください…</string>
+    <string name="settings_input_bindings_capture_pending">%1$s + …</string>
+    <string name="settings_input_bindings_capture_unsupported">このキーはサポートされていません — 別のキーをお試しください</string>
+    <string name="settings_input_bindings_capture_seek_family">シークキーは修飾キーに対応していません — Shift/Ctrl でのステップは組み込みです。キーを単独で押してください</string>
+    <string name="settings_input_bindings_capture_escape_hint">Esc でキャンセル</string>
+    <string name="settings_input_bindings_row_reset">デフォルトに戻す</string>
+    <string name="settings_input_bindings_row_delete">ショートカットを削除</string>
 </resources>

@@ -437,6 +437,9 @@
     <string name="detail_download_advanced_hint_quality_subtitles">%1$s · %2$s</string>
     <string name="detail_download_subtitles_all">모든 자막</string>
     <string name="detail_download_subtitles_none">자막 없음</string>
+    <plurals name="detail_download_subtitles_count">
+        <item quantity="other">자막 %1$d개</item>
+    </plurals>
     <string name="detail_option_refresh_metadata">메타데이터 새로 고침</string>
     <string name="detail_msg_refresh_started">메타데이터 새로 고침이 서버에 요청되었습니다</string>
     <string name="detail_msg_refresh_failed">메타데이터를 새로 고침할 수 없습니다</string>
@@ -473,4 +476,7 @@
     <string name="detail_msg_merge_failed">버전을 병합하지 못했습니다</string>
     <string name="detail_msg_split_started">버전 분할 중…</string>
     <string name="detail_msg_split_failed">버전을 분할하지 못했습니다</string>
+    <plurals name="detail_merge_count_selected">
+        <item quantity="other">항목 %1$d개 선택됨</item>
+    </plurals>
 </resources>

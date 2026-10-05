@@ -8,10 +8,15 @@ import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchItem
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_activity_queue
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_activity_queue_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_browse_favorites
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_browse_favorites_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_requests
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_requests_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_upcoming
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_upcoming_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_watch_history_heatmap
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_watch_history_heatmap_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_activity_queue_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_activity_queue_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_favorites_subtitle
@@ -44,6 +49,7 @@ internal object ActivityInsightsRows {
         id = "favorites",
         icon = Tabler.Outline.Heart,
         titleRes = Res.string.settings_browse_favorites,
+        subtitleRes = Res.string.settings_browse_favorites_subtitle,
         searchTitleRes = Res.string.ss_favorites_title,
         searchSubtitleRes = Res.string.ss_favorites_subtitle,
         keywords = listOf("favorites", "favourite", "liked", "collection", "heart"),
@@ -54,6 +60,7 @@ internal object ActivityInsightsRows {
         id = "watch_progress_heatmap",
         icon = Tabler.Outline.ChartBar,
         titleRes = Res.string.settings_watch_history_heatmap,
+        subtitleRes = Res.string.settings_watch_history_heatmap_subtitle,
         searchTitleRes = Res.string.ss_watch_progress_heatmap_title,
         searchSubtitleRes = Res.string.ss_watch_progress_heatmap_subtitle,
         keywords = listOf("watch", "history", "heatmap", "progress", "activity", "stats"),
@@ -64,6 +71,7 @@ internal object ActivityInsightsRows {
         id = "activity_queue",
         icon = Tabler.Outline.Database,
         titleRes = Res.string.settings_activity_queue,
+        subtitleRes = Res.string.settings_activity_queue_subtitle,
         searchTitleRes = Res.string.ss_activity_queue_title,
         searchSubtitleRes = Res.string.ss_activity_queue_subtitle,
         keywords = listOf("activity", "queue", "download", "radarr", "sonarr", "arr", "import"),
@@ -74,6 +82,7 @@ internal object ActivityInsightsRows {
         id = "upcoming",
         icon = Tabler.Outline.CalendarEvent,
         titleRes = Res.string.settings_upcoming,
+        subtitleRes = Res.string.settings_upcoming_subtitle,
         searchTitleRes = Res.string.ss_upcoming_title,
         searchSubtitleRes = Res.string.ss_upcoming_subtitle,
         keywords = listOf("upcoming", "calendar", "schedule", "new", "episodes", "soon"),
@@ -84,6 +93,7 @@ internal object ActivityInsightsRows {
         id = "requests",
         icon = Tabler.Outline.Inbox,
         titleRes = Res.string.settings_requests,
+        subtitleRes = Res.string.settings_requests_subtitle,
         searchTitleRes = Res.string.ss_requests_title,
         searchSubtitleRes = Res.string.ss_requests_subtitle,
         keywords = listOf("requests", "seerr", "jellyseerr", "pending", "approve"),

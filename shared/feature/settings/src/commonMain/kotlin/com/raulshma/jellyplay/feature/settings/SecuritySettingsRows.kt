@@ -8,12 +8,16 @@ import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchItem
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_allow_remote_control
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_allow_remote_control_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_authorize_device
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_authorize_device_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_lock_timer
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_lock_timer_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_biometric_unlock
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_pin_for_player_lock
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_pin_lock
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_remote_display_content
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_remote_display_content_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_security
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_auto_lock_timer_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_auto_lock_timer_title
@@ -94,6 +98,7 @@ internal object SecurityRows {
         id = "quick_connect_authorize",
         icon = Tabler.Outline.Bolt,
         titleRes = Res.string.settings_authorize_device,
+        subtitleRes = Res.string.settings_authorize_device_subtitle,
         searchTitleRes = Res.string.ss_quick_connect_authorize_title,
         searchSubtitleRes = Res.string.ss_quick_connect_authorize_subtitle,
         keywords = listOf("quick connect", "authorize", "approve", "code", "device", "pair"),
@@ -105,6 +110,7 @@ internal object SecurityRows {
         id = "remote_control_enabled",
         icon = Tabler.Outline.Cast,
         titleRes = Res.string.settings_allow_remote_control,
+        subtitleRes = Res.string.settings_allow_remote_control_subtitle,
         searchTitleRes = Res.string.ss_remote_control_enabled_title,
         searchSubtitleRes = Res.string.ss_remote_control_enabled_subtitle,
         keywords = listOf("remote", "control", "cast", "play to", "external control", "receive commands"),
@@ -116,6 +122,7 @@ internal object SecurityRows {
         id = "remote_display_content_enabled",
         icon = Tabler.Outline.DeviceTv,
         titleRes = Res.string.settings_remote_display_content,
+        subtitleRes = Res.string.settings_remote_display_content_subtitle,
         searchTitleRes = Res.string.ss_remote_display_content_title,
         searchSubtitleRes = Res.string.ss_remote_display_content_subtitle,
         keywords = listOf("remote", "display content", "browse", "remote browse", "cast", "details"),
@@ -127,6 +134,7 @@ internal object SecurityRows {
         id = "auto_lock_timer",
         icon = Tabler.Outline.Clock,
         titleRes = Res.string.settings_auto_lock_timer,
+        subtitleRes = Res.string.settings_auto_lock_timer_subtitle,
         searchTitleRes = Res.string.ss_auto_lock_timer_title,
         searchSubtitleRes = Res.string.ss_auto_lock_timer_subtitle,
         keywords = listOf("auto lock", "timer", "lock", "timeout", "delay", "security"),

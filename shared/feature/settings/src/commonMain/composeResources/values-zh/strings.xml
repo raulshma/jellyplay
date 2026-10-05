@@ -636,4 +636,30 @@
     <string name="core_ui_whatsnew_category_improvement">改进</string>
     <string name="core_ui_whatsnew_category_fix">修复</string>
     <string name="core_ui_whatsnew_take_me_there">带我去</string>
+    <!-- Input bindings (customize controls) -->
+    <string name="settings_input_bindings">自定义控制</string>
+    <string name="settings_input_bindings_subtitle">手势、鼠标、键盘和遥控器的操作</string>
+    <string name="settings_input_bindings_title">控制</string>
+    <string name="settings_input_bindings_section_touch">触摸</string>
+    <string name="settings_input_bindings_section_mouse">鼠标和滚动</string>
+    <string name="settings_input_bindings_section_keyboard">键盘</string>
+    <string name="settings_input_bindings_section_tv">电视遥控器</string>
+    <string name="settings_input_bindings_reset">将控制重置为默认</string>
+    <string name="settings_input_bindings_reset_title">重置所有控制？</string>
+    <string name="settings_input_bindings_reset_message">所有控制将恢复为默认绑定。自定义键盘快捷键将被移除。</string>
+    <string name="settings_input_bindings_search_hint">搜索控制</string>
+    <string name="settings_input_bindings_search_empty">没有匹配的控制</string>
+    <string name="settings_input_bindings_preset_label">触摸预设</string>
+    <string name="settings_input_bindings_count">%1$d 个绑定</string>
+    <string name="settings_input_bindings_modified_suffix">· %1$d 个已修改</string>
+    <string name="settings_input_bindings_add_shortcut">添加键盘快捷键</string>
+    <string name="settings_input_bindings_add_shortcut_subtitle">捕获任意按键组合</string>
+    <string name="settings_input_bindings_capture_instruction">请按任意键或按键组合</string>
+    <string name="settings_input_bindings_capture_press">请按键…</string>
+    <string name="settings_input_bindings_capture_pending">%1$s + …</string>
+    <string name="settings_input_bindings_capture_unsupported">不支持该按键 — 请尝试其他按键</string>
+    <string name="settings_input_bindings_capture_seek_family">快进/快退键不接受修饰键 — Shift/Ctrl 步长已内置。请仅按该键</string>
+    <string name="settings_input_bindings_capture_escape_hint">按 Esc 取消</string>
+    <string name="settings_input_bindings_row_reset">重置为默认</string>
+    <string name="settings_input_bindings_row_delete">删除快捷键</string>
 </resources>

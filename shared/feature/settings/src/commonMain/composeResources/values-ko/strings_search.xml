@@ -580,4 +580,6 @@
     <string name="ss_hooks_ended_cmd_subtitle">미디어 재생이 끝날 때 실행할 명령</string>
     <string name="ss_hooks_idle_cmd_subtitle">앱이 유휴 상태가 될 때 실행할 명령</string>
     <string name="ss_hooks_idle_ended_cmd_subtitle">앱이 유휴 상태를 벗어날 때 실행할 명령</string>
+    <string name="ss_input_bindings_title">컨트롤 사용자 지정</string>
+    <string name="ss_input_bindings_subtitle">제스처, 마우스, 키보드, 리모컨 동작</string>
 </resources>

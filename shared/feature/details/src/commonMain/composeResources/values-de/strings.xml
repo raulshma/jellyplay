@@ -446,6 +446,10 @@
     <string name="detail_download_advanced_hint_quality_subtitles">%1$s · %2$s</string>
     <string name="detail_download_subtitles_all">Alle Untertitel</string>
     <string name="detail_download_subtitles_none">Keine Untertitel</string>
+    <plurals name="detail_download_subtitles_count">
+        <item quantity="one">%1$d Untertitel</item>
+        <item quantity="other">%1$d Untertitel</item>
+    </plurals>
     <string name="detail_option_refresh_metadata">Metadaten aktualisieren</string>
     <string name="detail_msg_refresh_started">Aktualisierung der Metadaten auf dem Server gestartet</string>
     <string name="detail_msg_refresh_failed">Metadaten konnten nicht aktualisiert werden</string>
@@ -482,4 +486,8 @@
     <string name="detail_msg_merge_failed">Versionen konnten nicht zusammengeführt werden</string>
     <string name="detail_msg_split_started">Versionen werden getrennt…</string>
     <string name="detail_msg_split_failed">Versionen konnten nicht getrennt werden</string>
+    <plurals name="detail_merge_count_selected">
+        <item quantity="one">%1$d Eintrag ausgewählt</item>
+        <item quantity="other">%1$d Einträge ausgewählt</item>
+    </plurals>
 </resources>

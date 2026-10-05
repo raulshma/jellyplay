@@ -634,4 +634,30 @@
     <string name="core_ui_whatsnew_category_improvement">개선</string>
     <string name="core_ui_whatsnew_category_fix">수정</string>
     <string name="core_ui_whatsnew_take_me_there">바로 이동</string>
+    <!-- Input bindings (customize controls) -->
+    <string name="settings_input_bindings">컨트롤 사용자 지정</string>
+    <string name="settings_input_bindings_subtitle">제스처, 마우스, 키보드, 리모컨 동작</string>
+    <string name="settings_input_bindings_title">컨트롤</string>
+    <string name="settings_input_bindings_section_touch">터치</string>
+    <string name="settings_input_bindings_section_mouse">마우스 및 스크롤</string>
+    <string name="settings_input_bindings_section_keyboard">키보드</string>
+    <string name="settings_input_bindings_section_tv">TV 리모컨</string>
+    <string name="settings_input_bindings_reset">컨트롤을 기본값으로 재설정</string>
+    <string name="settings_input_bindings_reset_title">모든 컨트롤을 재설정할까요?</string>
+    <string name="settings_input_bindings_reset_message">모든 컨트롤이 기본 바인딩으로 돌아갑니다. 사용자 지정 키보드 단축키는 삭제됩니다.</string>
+    <string name="settings_input_bindings_search_hint">컨트롤 검색</string>
+    <string name="settings_input_bindings_search_empty">일치하는 컨트롤 없음</string>
+    <string name="settings_input_bindings_preset_label">터치 프리셋</string>
+    <string name="settings_input_bindings_count">바인딩 %1$d개</string>
+    <string name="settings_input_bindings_modified_suffix">· %1$d개 변경됨</string>
+    <string name="settings_input_bindings_add_shortcut">키보드 단축키 추가</string>
+    <string name="settings_input_bindings_add_shortcut_subtitle">원하는 키 조합을 등록</string>
+    <string name="settings_input_bindings_capture_instruction">아무 키나 키 조합을 누르세요</string>
+    <string name="settings_input_bindings_capture_press">키를 누르는 중…</string>
+    <string name="settings_input_bindings_capture_pending">%1$s + …</string>
+    <string name="settings_input_bindings_capture_unsupported">지원되지 않는 키입니다 — 다른 키를 눌러 보세요</string>
+    <string name="settings_input_bindings_capture_seek_family">탐색 키는 보조 키를 지원하지 않습니다 — Shift/Ctrl 단계는 기본 내장되어 있습니다. 키를 단독으로 누르세요</string>
+    <string name="settings_input_bindings_capture_escape_hint">Esc로 취소</string>
+    <string name="settings_input_bindings_row_reset">기본값으로 재설정</string>
+    <string name="settings_input_bindings_row_delete">단축키 삭제</string>
 </resources>

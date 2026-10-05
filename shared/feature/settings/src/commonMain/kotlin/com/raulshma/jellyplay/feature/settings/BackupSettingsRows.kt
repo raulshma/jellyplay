@@ -9,8 +9,11 @@ import com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchItem
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_backup_restore
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_export_settings
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_export_settings_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_factory_reset
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_factory_reset_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_import_settings
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_import_settings_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_backup_export_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_backup_export_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_backup_import_subtitle
@@ -38,6 +41,7 @@ internal object BackupRows {
         id = "backup_export",
         icon = Tabler.Outline.DatabaseExport,
         titleRes = Res.string.settings_export_settings,
+        subtitleRes = Res.string.settings_export_settings_subtitle,
         searchTitleRes = Res.string.ss_backup_export_title,
         searchSubtitleRes = Res.string.ss_backup_export_subtitle,
         keywords = listOf("backup", "export", "save config", "migration"),
@@ -48,6 +52,7 @@ internal object BackupRows {
         id = "backup_import",
         icon = Tabler.Outline.DatabaseImport,
         titleRes = Res.string.settings_import_settings,
+        subtitleRes = Res.string.settings_import_settings_subtitle,
         searchTitleRes = Res.string.ss_backup_import_title,
         searchSubtitleRes = Res.string.ss_backup_import_subtitle,
         keywords = listOf("import", "restore", "load config", "backup restore"),
@@ -58,6 +63,7 @@ internal object BackupRows {
         id = "factory_reset",
         icon = Tabler.Outline.AlertTriangle,
         titleRes = Res.string.settings_factory_reset,
+        subtitleRes = Res.string.settings_factory_reset_subtitle,
         searchTitleRes = Res.string.ss_factory_reset_title,
         searchSubtitleRes = Res.string.ss_factory_reset_subtitle,
         keywords = listOf("factory", "reset", "defaults", "clear", "wipe"),

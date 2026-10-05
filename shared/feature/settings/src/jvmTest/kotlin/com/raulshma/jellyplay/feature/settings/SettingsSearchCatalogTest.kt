@@ -51,71 +51,14 @@ class SettingsSearchCatalogTest {
         }
     }
 
+    /**
+     * The catalog-wide size pin: it exists to catch silent catalog-wide item
+     * additions/removals — a bump here is a deliberate, reviewed change, and
+     * the per-item history lives in the VCS, not in this file.
+     */
     @Test
-    fun `aggregation preserves the verbatim move - all 276 items in flat order`() {
+    fun `aggregation preserves the verbatim move - the full catalog in flat order`() {
         val items = SettingsSearchCatalog.items
-        // The old core/ui registry held 259 items; the aggregation must have
-        // kept every one (the 260th is the video-cache-size row).
-        // v0.10.6 then consolidated the 5 synthwave/soothing/monochrome mode
-        // + accent entries into theme_style + style_accent (257); the
-        // missing auto_delete_after_watch declaration followed its existing
-        // storage row (258).
-        // Added the media-segment group's skip-on-seek toggle (259).
-        // Added the track-selection group: preset + two ordered
-        // language editors + advanced rules (263).
-        // Added the desktop-gated mpv audio-device trio: device picker
-        // + exclusive toggle + output mode (266).
-        // Added the desktop-gated mpv render rows: shader pack +
-        // tone mapping + quality profile + HDR passthrough + tscale (271).
-        // Added the desktop-gated volume-memory toggle (272).
-        // Added the security group's remote display-content toggle and
-        // the desktop-gated idle-ambient pair (toggle + timeout): 275.
-        // The home config hub moved its rows off Appearance into the three
-        // home groups (same ids) and indexed the previously-unsearchable
-        // Discover Rows row (+1): 276.
-        // Added the home display group's "Hidden from Next Up" drill-in
-        // row (the Route.NextUpExcluded management screen): 277.
-        // Added the appearance library group's "Show Missing Episodes"
-        // toggle (season-view missing/unaired placeholders): 278.
-        // Added the advanced-video group's "Offline Playback" picker
-        // (prefer the downloaded copy vs stream while online) and the
-        // playback group's external-player row: 280.
-        // Added the appearance library group's "Prefer Logo Images" toggle
-        // (clear-logo detail title): 281.
-        // Added the screensaver group's policy trio: max parental rating
-        // picker + dim-after picker + dim-percent slider: 284.
-        // Added the playback player group's "Still Watching" pair — mode
-        // picker + episode-threshold picker (both ride the autoplay toggle): 286.
-        // Added the advanced-video group's audio-capability rows: five
-        // per-codec passthrough toggles (riding the master toggle) + the
-        // max-audio-channels picker + the downmix-boost slider: 293.
-        // Added the storage downloads group's auto-download retention
-        // cluster: lookahead / max-per-pass / keep-days / server allow-list
-        // pickers (riding the auto-download toggle) + the "Clean up now"
-        // action (riding the keep-days picker): 298.
-        // Added the desktop-gated Discord Rich Presence toggle (feature 4.2)
-        // and the shell-hook rows: master toggle + five mpv-shim-named
-        // commands (feature 4.3): 305.
-        // Added the appearance theme group's "Layout" override picker
-        // (manual phone/tablet layout, issue #166): 306.
-        // Added the playback player group's Android-only "Auto
-        // Picture-in-Picture" toggle (issue #167): 307.
-        // Added the home display group's "Classic Row Behavior" toggle
-        // (issue #168): 308.
-        // Added the playback player group's "Double-Tap-and-Hold Seek"
-        // toggle and the notification group's "New episodes" toggle: 310.
-        // The appearance library group's home-discovery card-display quartet
-        // moved into a new home.cards group (same ids, PS-4): count unchanged.
-        // Added the playback player group's advanced "Hide OSD on Pause"
-        // toggle (jellyfin-androidtv #3924 — pausing must not summon the
-        // control overlay): 311.
-        // Added the appearance theme group's TV-only "Screen fit" overscan
-        // calibration picker: 312.
-        // Added the playback player group's advanced "Resume When Headphones
-        // Reconnect" toggle (opt-in resume after the
-        // becoming-noisy auto-pause), plus the input-bindings editor row's
-        // spec search entry (+1): 314.
-        // Bump this count when you deliberately add items.
         assertEquals(314, items.size)
         // Curated flat order starts with the account/session pair that used to
         // open the old registry, and the aggregation is a pure concatenation

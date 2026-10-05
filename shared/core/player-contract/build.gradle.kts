@@ -34,8 +34,17 @@ kotlin {
             implementation(libs.compose.runtime)
             // The PlayerKeyCodes seam types the common Compose KeyEvent (its
             // jvmMain actual maps androidx Key enums) — the settings binding
-            // editor's key-capture dialog consumes the same seam.
-            implementation(libs.compose.ui)
+            // editor's key-capture dialog consumes the same seam. This MUST
+            // be the JB artifact (org.jetbrains.compose.ui:ui, the stack the
+            // kmp.library.compose convention modules compile against), not the
+            // androidx coordinate: on the JVM the two give the value class a
+            // DIFFERENT underlying storage type (JB ui-desktop boxes Any;
+            // androidx resolves ui-jvmstubs, which boxes a real
+            // NativeKeyEvent), so the mangled extension descriptor the
+            // consumers compile (`playerKeyCode`/`isCtrlPressed` over
+            // KeyEvent) would not link against the actuals compiled here —
+            // NoSuchMethodError at the first key press on desktop.
+            implementation(libs.jb.compose.ui)
         }
         getByName("commonTest").dependencies {
             implementation(libs.coroutines.test)

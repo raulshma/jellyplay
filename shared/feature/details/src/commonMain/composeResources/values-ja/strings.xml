@@ -437,6 +437,9 @@
     <string name="detail_download_advanced_hint_quality_subtitles">%1$s · %2$s</string>
     <string name="detail_download_subtitles_all">すべての字幕</string>
     <string name="detail_download_subtitles_none">字幕なし</string>
+    <plurals name="detail_download_subtitles_count">
+        <item quantity="other">%1$d 件の字幕</item>
+    </plurals>
     <string name="detail_option_refresh_metadata">メタデータを更新</string>
     <string name="detail_msg_refresh_started">メタデータ更新をサーバーに投入しました</string>
     <string name="detail_msg_refresh_failed">メタデータを更新できませんでした</string>
@@ -473,4 +476,7 @@
     <string name="detail_msg_merge_failed">バージョンを結合できませんでした</string>
     <string name="detail_msg_split_started">バージョンを分割しています…</string>
     <string name="detail_msg_split_failed">バージョンを分割できませんでした</string>
+    <plurals name="detail_merge_count_selected">
+        <item quantity="other">%1$d 件のアイテムを選択中</item>
+    </plurals>
 </resources>

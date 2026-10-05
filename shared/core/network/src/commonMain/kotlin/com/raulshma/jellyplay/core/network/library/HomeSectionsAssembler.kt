@@ -84,9 +84,9 @@ internal fun assembleHomeSections(input: HomeSectionsAssemblyInputs): HomeSectio
     if (HomeSectionType.CONTINUE_WATCHING in enabledSections) {
         input.continueWatchingResult
             .onSuccess { list ->
-                val filtered = list.filter { it.id !in query.hiddenCwItemIds }
+                val filtered = list.excludingHiddenItemIds(query.hiddenCwItemIds)
                 if (filtered.isNotEmpty()) {
-                    continueWatchingIds = filtered.map { it.id }.toSet()
+                    continueWatchingIds = continueWatchingFilterIds(list, query.hiddenCwItemIds)
                     sections.add(HomeSectionType.CONTINUE_WATCHING.descriptor.section(filtered))
                 }
             }
@@ -102,7 +102,7 @@ internal fun assembleHomeSections(input: HomeSectionsAssemblyInputs): HomeSectio
                 // Books ride the same per-item "hide from resume rows"
                 // affordance as Continue Watching — one hiddenCwItemIds set
                 // covers both rows.
-                val filtered = list.filter { it.id !in query.hiddenCwItemIds }
+                val filtered = list.excludingHiddenItemIds(query.hiddenCwItemIds)
                 if (filtered.isNotEmpty()) {
                     sections.add(HomeSectionType.CONTINUE_READING.descriptor.section(filtered))
                 }
@@ -185,9 +185,7 @@ internal fun assembleHomeSections(input: HomeSectionsAssemblyInputs): HomeSectio
     }
 
     if (HomeSectionType.RECENTLY_ADDED in enabledSections) {
-        val recentlyAddedItems = allLatestItems
-            .distinctBy { it.id }
-            .filter { it.id !in continueWatchingIds }
+        val recentlyAddedItems = allLatestItems.distinctByIdExcluding(continueWatchingIds)
         if (recentlyAddedItems.isNotEmpty()) {
             val recentlyAddedSection = HomeSectionType.RECENTLY_ADDED.descriptor.section(recentlyAddedItems)
             val latestMediaLastIndex = sections.indexOfLast { it.type == HomeSectionType.LATEST_MEDIA }

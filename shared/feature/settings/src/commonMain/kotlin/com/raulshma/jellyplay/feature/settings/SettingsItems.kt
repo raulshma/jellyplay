@@ -86,7 +86,7 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show
 internal fun SettingReorderableToggleItem(
     icon: ImageVector,
     title: String,
-    subtitle: String,
+    subtitle: String?,
     checked: Boolean,
     index: Int = 0,
     count: Int = 1,
@@ -122,7 +122,7 @@ internal fun SettingReorderableToggleItem(
             )
         },
         supportingContent = {
-            if (subtitle.isNotBlank()) {
+            if (!subtitle.isNullOrBlank()) {
                 Text(
                     text = subtitle,
                     style = MaterialTheme.typography.bodySmall,
@@ -211,7 +211,7 @@ internal fun SettingReorderableToggleItem(
 internal fun SettingInfoItem(
     icon: ImageVector,
     title: String,
-    subtitle: String,
+    subtitle: String?,
     index: Int = 0,
     count: Int = 1,
     copyableValue: String? = null,
@@ -232,8 +232,12 @@ internal fun SettingInfoItem(
             )
         },
         supportingContent = {
+            // Nullable for parity with core-ui's SettingListItem/SettingToggleItem
+            // (a future rowSubtitle feed renders nothing rather than forcing a
+            // `?: ""` artifact); existing callers all pass real or empty text,
+            // which renders exactly as before.
             Text(
-                text = subtitle,
+                text = subtitle.orEmpty(),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

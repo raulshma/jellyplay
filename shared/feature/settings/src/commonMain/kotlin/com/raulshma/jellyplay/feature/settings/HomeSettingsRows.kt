@@ -11,25 +11,36 @@ import com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchItem
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_classic_rows
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_configure_libraries
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_configure_libraries_desc
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_continue_watching_tap
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_continue_watching_tap_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discover_rows
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discover_rows_helper
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hide_top_header_on_scroll
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hide_watched_items
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hide_watched_items_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_backdrop
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_layout_presets
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_layout_presets_brief
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_mode
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_merge_continue_next_up
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_next_up_hidden
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_next_up_hidden_brief
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_next_up_time_window
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_next_up_time_window_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_pinned_home_sections
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_pinned_home_sections_brief
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_rewatching_next_up
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_clock_home
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_external_ratings
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_external_ratings_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_hero_section
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_settings_in_home_search
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_unwatched_badge
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_unwatched_badge_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_watched_checkmark
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_watched_checkmark_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_unhide_continue_watching
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_classic_rows_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_classic_rows_title
@@ -149,6 +160,7 @@ internal object HomeRows {
         id = "continue_watching_click",
         icon = Tabler.Outline.PlayerPlay,
         titleRes = Res.string.settings_continue_watching_tap,
+        subtitleRes = Res.string.settings_continue_watching_tap_subtitle,
         searchTitleRes = Res.string.ss_continue_watching_click_title,
         searchSubtitleRes = Res.string.ss_continue_watching_click_subtitle,
     )
@@ -165,6 +177,7 @@ internal object HomeRows {
         id = "next_up_hidden",
         icon = Tabler.Outline.EyeOff,
         titleRes = Res.string.settings_next_up_hidden,
+        subtitleRes = Res.string.settings_next_up_hidden_brief,
         searchTitleRes = Res.string.ss_next_up_hidden_title,
         searchSubtitleRes = Res.string.ss_next_up_hidden_subtitle,
     )
@@ -192,6 +205,7 @@ internal object HomeRows {
         id = "next_up_max_days",
         icon = Tabler.Outline.CalendarTime,
         titleRes = Res.string.settings_next_up_time_window,
+        subtitleRes = Res.string.settings_next_up_time_window_subtitle,
         searchTitleRes = Res.string.ss_next_up_max_days_title,
         searchSubtitleRes = Res.string.ss_next_up_max_days_subtitle,
     )
@@ -210,6 +224,7 @@ internal object HomeRows {
         id = "pinned_home_sections",
         icon = Tabler.Outline.Pinned,
         titleRes = Res.string.settings_pinned_home_sections,
+        subtitleRes = Res.string.settings_pinned_home_sections_brief,
         searchTitleRes = Res.string.ss_pinned_home_sections_title,
         searchSubtitleRes = Res.string.ss_pinned_home_sections_subtitle,
     )
@@ -218,6 +233,7 @@ internal object HomeRows {
         id = "home_layout_presets",
         icon = Tabler.Outline.Bookmarks,
         titleRes = Res.string.settings_home_layout_presets,
+        subtitleRes = Res.string.settings_home_layout_presets_brief,
         searchTitleRes = Res.string.ss_home_layout_presets_title,
         searchSubtitleRes = Res.string.ss_home_layout_presets_subtitle,
     )
@@ -226,6 +242,7 @@ internal object HomeRows {
         id = "configure_libraries",
         icon = Tabler.Outline.Folders,
         titleRes = Res.string.settings_configure_libraries,
+        subtitleRes = Res.string.settings_configure_libraries_desc,
         searchTitleRes = Res.string.ss_configure_libraries_title,
         searchSubtitleRes = Res.string.ss_configure_libraries_subtitle,
     )
@@ -234,6 +251,7 @@ internal object HomeRows {
         id = "discover_rows",
         icon = Tabler.Outline.Compass,
         titleRes = Res.string.settings_discover_rows,
+        subtitleRes = Res.string.settings_discover_rows_helper,
         searchTitleRes = Res.string.ss_discover_rows_title,
         searchSubtitleRes = Res.string.ss_discover_rows_subtitle,
     )
@@ -244,6 +262,7 @@ internal object HomeRows {
         id = "show_unwatched_badge",
         icon = Tabler.Outline.Folder,
         titleRes = Res.string.settings_show_unwatched_badge,
+        subtitleRes = Res.string.settings_show_unwatched_badge_subtitle,
         searchTitleRes = Res.string.ss_show_unwatched_badge_title,
         searchSubtitleRes = Res.string.ss_show_unwatched_badge_subtitle,
     )
@@ -252,6 +271,7 @@ internal object HomeRows {
         id = "show_watched_checkmark",
         icon = Tabler.Outline.CircleCheck,
         titleRes = Res.string.settings_show_watched_checkmark,
+        subtitleRes = Res.string.settings_show_watched_checkmark_subtitle,
         searchTitleRes = Res.string.ss_show_watched_checkmark_title,
         searchSubtitleRes = Res.string.ss_show_watched_checkmark_subtitle,
     )
@@ -260,6 +280,7 @@ internal object HomeRows {
         id = "hide_watched_items",
         icon = Tabler.Outline.EyeOff,
         titleRes = Res.string.settings_hide_watched_items,
+        subtitleRes = Res.string.settings_hide_watched_items_subtitle,
         searchTitleRes = Res.string.ss_hide_watched_items_title,
         searchSubtitleRes = Res.string.ss_hide_watched_items_subtitle,
     )
@@ -268,6 +289,7 @@ internal object HomeRows {
         id = "show_external_ratings",
         icon = Tabler.Outline.Star,
         titleRes = Res.string.settings_show_external_ratings,
+        subtitleRes = Res.string.settings_show_external_ratings_subtitle,
         searchTitleRes = Res.string.ss_show_external_ratings_title,
         searchSubtitleRes = Res.string.ss_show_external_ratings_subtitle,
     )

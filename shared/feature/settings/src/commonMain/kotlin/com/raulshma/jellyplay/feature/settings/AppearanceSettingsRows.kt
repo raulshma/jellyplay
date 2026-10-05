@@ -18,33 +18,57 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_appe
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_backdrop_theme_music
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_blue_light_filter
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_blue_light_filter_strength
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_blue_light_filter_strength_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_blue_light_filter_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_color_blind_mode
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_color_blind_mode_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_compact_episode_list
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_compact_episode_list_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_contrast
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_date_format
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_date_format_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dynamic_theming
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dynamic_theming_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_enable_newsletter
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_enable_newsletter_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_font_size_app
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_font_size_app_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_handedness
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_handedness_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_haptic_feedback
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_haptic_feedback_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hide_episode_thumbnails
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hide_episode_thumbnails_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hide_search_history
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hide_search_history_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_library_view_mode
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_layout_mode
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_layout_mode_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_morning_starts_at
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_morning_starts_at_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_nav_bar_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_nav_hide_on_scroll
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_newsletter_delivery_day
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_newsletter_delivery_day_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_night_starts_at
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_night_starts_at_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_oled_mode
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_oled_mode_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_performance_mode
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_performance_mode_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_prefer_logos
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_prefer_logos_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_reduce_motion
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_reduce_motion_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_screen_fit
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_screen_fit_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_missing_episodes
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_missing_episodes_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_nav_labels
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_share_media
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_share_media_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_skip_special_episodes
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_skip_special_episodes_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_blue_light_filter_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_blue_light_filter_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_blue_light_strength_subtitle
@@ -107,6 +131,7 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_style_acce
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_style_accent_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_theme_mode
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_theme_style
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_theme_style_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_theme_mode_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_theme_mode_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_theme_music_subtitle
@@ -151,6 +176,7 @@ internal object AppearanceRows {
         id = "date_format",
         icon = Tabler.Outline.Calendar,
         titleRes = Res.string.settings_date_format,
+        subtitleRes = Res.string.settings_date_format_subtitle,
         searchTitleRes = Res.string.ss_date_format_title,
         searchSubtitleRes = Res.string.ss_date_format_subtitle,
     )
@@ -159,6 +185,7 @@ internal object AppearanceRows {
         id = "font_scale",
         icon = Tabler.Outline.TextSize,
         titleRes = Res.string.settings_font_size_app,
+        subtitleRes = Res.string.settings_font_size_app_subtitle,
         searchTitleRes = Res.string.ss_font_scale_title,
         searchSubtitleRes = Res.string.ss_font_scale_subtitle,
     )
@@ -167,6 +194,7 @@ internal object AppearanceRows {
         id = "color_blind_mode",
         icon = Tabler.Outline.Eye,
         titleRes = Res.string.settings_color_blind_mode,
+        subtitleRes = Res.string.settings_color_blind_mode_subtitle,
         searchTitleRes = Res.string.ss_color_blind_mode_title,
         searchSubtitleRes = Res.string.ss_color_blind_mode_subtitle,
     )
@@ -175,6 +203,7 @@ internal object AppearanceRows {
         id = "hand_mode",
         icon = Tabler.Outline.HandClick,
         titleRes = Res.string.settings_handedness,
+        subtitleRes = Res.string.settings_handedness_subtitle,
         searchTitleRes = Res.string.ss_hand_mode_title,
         searchSubtitleRes = Res.string.ss_hand_mode_subtitle,
     )
@@ -209,6 +238,7 @@ internal object AppearanceRows {
         id = "theme_style",
         icon = Tabler.Outline.Palette,
         titleRes = Res.string.settings_theme_style,
+        subtitleRes = Res.string.settings_theme_style_subtitle,
         searchSubtitleRes = Res.string.ss_theme_style_subtitle,
     )
 
@@ -235,6 +265,7 @@ internal object AppearanceRows {
         id = "dynamic_theming",
         icon = Tabler.Outline.Video,
         titleRes = Res.string.settings_dynamic_theming,
+        subtitleRes = Res.string.settings_dynamic_theming_subtitle,
         searchTitleRes = Res.string.ss_dynamic_theming_title,
         searchSubtitleRes = Res.string.ss_dynamic_theming_subtitle,
         platforms = platformsForCapability(settingsCapabilities.supportsDynamicColor),
@@ -246,6 +277,7 @@ internal object AppearanceRows {
         id = "oled_mode",
         icon = Tabler.Outline.BrightnessHalf,
         titleRes = Res.string.settings_oled_mode,
+        subtitleRes = Res.string.settings_oled_mode_subtitle,
         searchTitleRes = Res.string.ss_oled_mode_title,
         searchSubtitleRes = Res.string.ss_oled_mode_subtitle,
         gate = RowAdmission.ContentGated,
@@ -282,6 +314,7 @@ internal object AppearanceRows {
         id = "layout_mode",
         icon = Tabler.Outline.Devices,
         titleRes = Res.string.settings_layout_mode,
+        subtitleRes = Res.string.settings_layout_mode_subtitle,
         searchTitleRes = Res.string.ss_layout_mode_title,
         searchSubtitleRes = Res.string.ss_layout_mode_subtitle,
         gate = RowAdmission.All(RowAdmission.Advanced, RowAdmission.NotTv),
@@ -298,6 +331,7 @@ internal object AppearanceRows {
         id = "screen_fit",
         icon = Tabler.Outline.DeviceTv,
         titleRes = Res.string.settings_screen_fit,
+        subtitleRes = Res.string.settings_screen_fit_subtitle,
         searchTitleRes = Res.string.ss_screen_fit_title,
         searchSubtitleRes = Res.string.ss_screen_fit_subtitle,
         gate = RowAdmission.Tv,
@@ -347,6 +381,7 @@ internal object AppearanceRows {
         id = "scheduled_start",
         icon = Tabler.Outline.Sunrise,
         titleRes = Res.string.settings_night_starts_at,
+        subtitleRes = Res.string.settings_night_starts_at_subtitle,
         searchTitleRes = Res.string.ss_scheduled_start_title,
         searchSubtitleRes = Res.string.ss_scheduled_start_subtitle,
         gate = RowAdmission.ContentGated,
@@ -357,6 +392,7 @@ internal object AppearanceRows {
         id = "scheduled_end",
         icon = Tabler.Outline.Sunset,
         titleRes = Res.string.settings_morning_starts_at,
+        subtitleRes = Res.string.settings_morning_starts_at_subtitle,
         searchTitleRes = Res.string.ss_scheduled_end_title,
         searchSubtitleRes = Res.string.ss_scheduled_end_subtitle,
         gate = RowAdmission.ContentGated,
@@ -395,6 +431,7 @@ internal object AppearanceRows {
         id = "hide_episode_thumbnails",
         icon = Tabler.Outline.PhotoOff,
         titleRes = Res.string.settings_hide_episode_thumbnails,
+        subtitleRes = Res.string.settings_hide_episode_thumbnails_subtitle,
         searchTitleRes = Res.string.ss_hide_episode_thumbnails_title,
         searchSubtitleRes = Res.string.ss_hide_episode_thumbnails_subtitle,
         keywords = listOf("hide", "episode", "thumbnail", "spoiler", "preview"),
@@ -409,6 +446,7 @@ internal object AppearanceRows {
         id = "compact_episode_list",
         icon = Tabler.Outline.List,
         titleRes = Res.string.settings_compact_episode_list,
+        subtitleRes = Res.string.settings_compact_episode_list_subtitle,
         searchSubtitleRes = Res.string.ss_compact_episode_list_subtitle,
         keywords = listOf("episode", "list", "compact", "vertical", "layout", "rows", "dense"),
         route = Route.AppearanceSettings(),
@@ -421,6 +459,7 @@ internal object AppearanceRows {
         id = "skip_specials",
         icon = Tabler.Outline.PlayerSkipForward,
         titleRes = Res.string.settings_skip_special_episodes,
+        subtitleRes = Res.string.settings_skip_special_episodes_subtitle,
         searchTitleRes = Res.string.ss_skip_specials_title,
         searchSubtitleRes = Res.string.ss_skip_specials_subtitle,
         keywords = listOf("skip", "special", "episode", "bonus", "exclude"),
@@ -435,6 +474,7 @@ internal object AppearanceRows {
         id = "show_missing_episodes",
         icon = Tabler.Outline.Eye,
         titleRes = Res.string.settings_show_missing_episodes,
+        subtitleRes = Res.string.settings_show_missing_episodes_subtitle,
         searchTitleRes = Res.string.ss_show_missing_episodes_title,
         searchSubtitleRes = Res.string.ss_show_missing_episodes_subtitle,
         keywords = listOf("missing", "episode", "unaired", "virtual", "placeholder", "season", "show"),
@@ -449,6 +489,7 @@ internal object AppearanceRows {
         id = "prefer_logos",
         icon = Tabler.Outline.Photo,
         titleRes = Res.string.settings_prefer_logos,
+        subtitleRes = Res.string.settings_prefer_logos_subtitle,
         searchTitleRes = Res.string.ss_prefer_logos_title,
         searchSubtitleRes = Res.string.ss_prefer_logos_subtitle,
         keywords = listOf("logo", "clear logo", "title", "artwork", "image", "banner", "details", "prefer"),
@@ -466,6 +507,7 @@ internal object AppearanceRows {
         id = "haptics_enabled",
         icon = Tabler.Outline.DeviceMobileVibration,
         titleRes = Res.string.settings_haptic_feedback,
+        subtitleRes = Res.string.settings_haptic_feedback_subtitle,
         searchTitleRes = Res.string.ss_haptics_enabled_title,
         searchSubtitleRes = Res.string.ss_haptics_enabled_subtitle,
         gate = RowAdmission.Always,
@@ -476,6 +518,7 @@ internal object AppearanceRows {
         id = "show_share_media",
         icon = Tabler.Outline.Share,
         titleRes = Res.string.settings_show_share_media,
+        subtitleRes = Res.string.settings_show_share_media_subtitle,
         searchTitleRes = Res.string.ss_show_share_media_title,
         searchSubtitleRes = Res.string.ss_show_share_media_subtitle,
         gate = RowAdmission.Always,
@@ -486,6 +529,7 @@ internal object AppearanceRows {
         id = "hide_search_history",
         icon = Tabler.Outline.EyeOff,
         titleRes = Res.string.settings_hide_search_history,
+        subtitleRes = Res.string.settings_hide_search_history_subtitle,
         searchTitleRes = Res.string.ss_hide_search_history_title,
         searchSubtitleRes = Res.string.ss_hide_search_history_subtitle,
         gate = RowAdmission.Always,
@@ -497,6 +541,7 @@ internal object AppearanceRows {
         id = "performance_mode",
         icon = Tabler.Outline.Gauge,
         titleRes = Res.string.settings_performance_mode,
+        subtitleRes = Res.string.settings_performance_mode_subtitle,
         searchTitleRes = Res.string.ss_performance_mode_title,
         searchSubtitleRes = Res.string.ss_performance_mode_subtitle,
     )
@@ -505,6 +550,7 @@ internal object AppearanceRows {
         id = "reduce_motion",
         icon = Tabler.Outline.Activity,
         titleRes = Res.string.settings_reduce_motion,
+        subtitleRes = Res.string.settings_reduce_motion_subtitle,
         searchTitleRes = Res.string.ss_reduce_motion_title,
         searchSubtitleRes = Res.string.ss_reduce_motion_subtitle,
     )
@@ -515,6 +561,7 @@ internal object AppearanceRows {
         id = "blue_light_filter",
         icon = Tabler.Outline.Moon,
         titleRes = Res.string.settings_blue_light_filter,
+        subtitleRes = Res.string.settings_blue_light_filter_subtitle,
         searchTitleRes = Res.string.ss_blue_light_filter_title,
         searchSubtitleRes = Res.string.ss_blue_light_filter_subtitle,
     )
@@ -523,6 +570,7 @@ internal object AppearanceRows {
         id = "blue_light_strength",
         icon = Tabler.Outline.Adjustments,
         titleRes = Res.string.settings_blue_light_filter_strength,
+        subtitleRes = Res.string.settings_blue_light_filter_strength_subtitle,
         searchTitleRes = Res.string.ss_blue_light_strength_title,
         searchSubtitleRes = Res.string.ss_blue_light_strength_subtitle,
     )
@@ -533,6 +581,7 @@ internal object AppearanceRows {
         id = "newsletter_enabled",
         icon = Tabler.Outline.Mail,
         titleRes = Res.string.settings_enable_newsletter,
+        subtitleRes = Res.string.settings_enable_newsletter_subtitle,
         searchTitleRes = Res.string.ss_newsletter_enabled_title,
         searchSubtitleRes = Res.string.ss_newsletter_enabled_subtitle,
         keywords = listOf("newsletter", "digest", "email", "periodic", "report"),
@@ -544,6 +593,7 @@ internal object AppearanceRows {
         id = "newsletter_delivery_day",
         icon = Tabler.Outline.Calendar,
         titleRes = Res.string.settings_newsletter_delivery_day,
+        subtitleRes = Res.string.settings_newsletter_delivery_day_subtitle,
         searchTitleRes = Res.string.ss_newsletter_delivery_day_title,
         searchSubtitleRes = Res.string.ss_newsletter_delivery_day_subtitle,
         keywords = listOf("newsletter", "delivery", "day", "schedule", "weekday", "send"),

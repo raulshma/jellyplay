@@ -18,11 +18,8 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.Res
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_backup_restore
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_backup_restore_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_export_settings
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_export_settings_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_factory_reset
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_factory_reset_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_import_settings
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_import_settings_subtitle
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
@@ -86,7 +83,7 @@ fun BackupSettingsScreen(
                     SettingListItem(
                         icon = Tabler.Outline.FileExport,
                         title = rowTitle(BackupRows.BackupExport),
-                        subtitle = stringResource(Res.string.settings_export_settings_subtitle),
+                        subtitle = rowSubtitle(BackupRows.BackupExport),
                         index = 0, count = 3,
                         highlighted = highlightSettingId == BackupRows.BackupExport.id,
                         onClick = {
@@ -96,7 +93,7 @@ fun BackupSettingsScreen(
                     SettingListItem(
                         icon = Tabler.Outline.FileImport,
                         title = rowTitle(BackupRows.BackupImport),
-                        subtitle = stringResource(Res.string.settings_import_settings_subtitle),
+                        subtitle = rowSubtitle(BackupRows.BackupImport),
                         index = 1, count = 3,
                         highlighted = highlightSettingId == BackupRows.BackupImport.id,
                         onClick = {
@@ -106,7 +103,7 @@ fun BackupSettingsScreen(
                     SettingListItem(
                         icon = Tabler.Outline.AlertTriangle,
                         title = rowTitle(BackupRows.FactoryReset),
-                        subtitle = stringResource(Res.string.settings_factory_reset_subtitle),
+                        subtitle = rowSubtitle(BackupRows.FactoryReset),
                         index = 2, count = 3,
                         isDestructive = true,
                         highlighted = highlightSettingId == BackupRows.FactoryReset.id,

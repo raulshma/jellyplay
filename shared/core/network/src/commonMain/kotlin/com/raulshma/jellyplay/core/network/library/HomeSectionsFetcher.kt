@@ -45,8 +45,16 @@ import kotlinx.coroutines.sync.Semaphore
  * compiler cannot verify they agree), so [LibraryApiClient]'s defaults stay
  * canonical and this file's call sites pass the port's literal defaults
  * explicitly.
+ *
+ * Construction scope (ADR-0008): implemented by `LibraryApiClientImpl` in
+ * production (for free — the signatures above are borrowed verbatim from its
+ * [LibraryApiClient] supertype, so the same overrides serve both interfaces)
+ * and by test fakes — the real-stack contract suite in core:data's jvmTest
+ * (`HomeFeedRealStackContractTest`) builds the fetcher on a module-local
+ * fake of this interface. Public only because the fetcher's constructor
+ * exposes it; direct implementations elsewhere are not supported.
  */
-internal interface HomeSectionSources {
+public interface HomeSectionSources {
     suspend fun getContinueWatching(limit: Int, classicRows: Boolean): Result<List<MediaItem>>
     suspend fun getContinueReading(limit: Int): Result<List<MediaItem>>
     suspend fun getNextUp(limit: Int, enableRewatching: Boolean, maxDays: Int): Result<List<MediaItem>>
@@ -142,8 +150,16 @@ public interface SeerrHomeSectionSources {
  * transport (unit fakes, platforms that wire none) must keep compiling; a
  * null source behaves exactly like [SeerrHomeSectionSources.seerrAvailable]
  * == false — zero Seerr port calls, zero Seerr rows.
+ *
+ * Construction scope (ADR-0008): the production constructor caller is
+ * `LibraryApiClientImpl` (which also satisfies [HomeSectionSources] for free
+ * and adapts the [HomeSectionsCachePort] verbs onto this class); the other
+ * sanctioned caller is the real-stack contract suite in core:data's jvmTest
+ * (`HomeFeedRealStackContractTest`) — the one suite executing this fetcher
+ * and the data layer's repository together. Direct construction elsewhere is
+ * not supported — go through the client.
  */
-internal class HomeSectionsFetcher(
+public class HomeSectionsFetcher(
     private val sources: HomeSectionSources,
     private val seerrSources: SeerrHomeSectionSources?,
     private val cacheIdentity: () -> CacheIdentity?,
@@ -477,7 +493,7 @@ internal class HomeSectionsFetcher(
             HomeSectionType.CONTINUE_WATCHING -> {
                 val cw = sources.getContinueWatching(limit = 20, classicRows = query.classicRows)
                     .getOrThrow()
-                    .filter { it.id !in query.hiddenCwItemIds }
+                    .excludingHiddenItemIds(query.hiddenCwItemIds)
                 if (!mergeNextUpIntoContinueWatching) {
                     cw.takeIf { it.isNotEmpty() }
                         ?.let { HomeSectionType.CONTINUE_WATCHING.descriptor.section(it) }
@@ -506,7 +522,7 @@ internal class HomeSectionsFetcher(
             HomeSectionType.CONTINUE_READING ->
                 sources.getContinueReading(limit = 20)
                     .getOrThrow()
-                    .filter { it.id !in query.hiddenCwItemIds }
+                    .excludingHiddenItemIds(query.hiddenCwItemIds)
                     .takeIf { it.isNotEmpty() }
                     ?.let { HomeSectionType.CONTINUE_READING.descriptor.section(it) }
 
@@ -555,7 +571,7 @@ internal class HomeSectionsFetcher(
                     }
                 }.flatten()
                 val cwIds = continueWatchingIdsForFilters(query)
-                refreshedOrNull(section, allLatest.distinctBy { it.id }.filter { it.id !in cwIds })
+                refreshedOrNull(section, allLatest.distinctByIdExcluding(cwIds))
             }
 
             HomeSectionType.DISCOVER -> {
@@ -603,11 +619,11 @@ internal class HomeSectionsFetcher(
      */
     private suspend fun continueWatchingIdsForFilters(query: HomeSectionQuery): Set<String> =
         if (HomeSectionType.CONTINUE_WATCHING in query.enabledSections) {
-            sources.getContinueWatching(limit = 20, classicRows = query.classicRows)
-                .getOrDefault(emptyList())
-                .filter { it.id !in query.hiddenCwItemIds }
-                .map { it.id }
-                .toSet()
+            continueWatchingFilterIds(
+                continueWatchingItems = sources.getContinueWatching(limit = 20, classicRows = query.classicRows)
+                    .getOrDefault(emptyList()),
+                hiddenItemIds = query.hiddenCwItemIds,
+            )
         } else {
             emptySet()
         }

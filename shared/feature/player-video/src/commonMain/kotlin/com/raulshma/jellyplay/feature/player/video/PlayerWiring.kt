@@ -937,12 +937,18 @@ internal class PlayerWiring(
     /**
      * The in-player input-binding quick toggle (issue #171): flips one
      * binding's enabled flag — the uiState write moves the gate immediately
-     * (the detectors resolve through the mapping), the whole map persists.
+     * (the detectors resolve through the mapping), the flip persists through
+     * the store's read-modify-write verb (a settings-editor write is never
+     * clobbered by a stale whole-map write).
      */
     internal val inputBindingToggle = InputBindingToggleController(
         getMap = { uiState.value.gestures.inputMap },
         updateMap = { map -> uiState.update { it.copy(gestures = it.gestures.copy(inputMap = map)) } },
-        persist = { map -> scope.launch { stores.videoPlayer.setVideoInputBindings(map) } },
+        requestPersist = { bindingId, enabled ->
+            scope.launch {
+                stores.videoPlayer.updateVideoInputBindings { it.withBindingEnabled(bindingId, enabled) }
+            }
+        },
     )
 
     /**

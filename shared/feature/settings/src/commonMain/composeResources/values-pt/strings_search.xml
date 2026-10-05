@@ -580,4 +580,6 @@
     <string name="ss_hooks_ended_cmd_subtitle">Comando a executar quando a mídia termina de reproduzir</string>
     <string name="ss_hooks_idle_cmd_subtitle">Comando a executar quando o app fica inativo</string>
     <string name="ss_hooks_idle_ended_cmd_subtitle">Comando a executar quando o app sai da inatividade</string>
+    <string name="ss_input_bindings_title">Personalizar controlos</string>
+    <string name="ss_input_bindings_subtitle">Ações para gestos, rato, teclado e comando</string>
 </resources>

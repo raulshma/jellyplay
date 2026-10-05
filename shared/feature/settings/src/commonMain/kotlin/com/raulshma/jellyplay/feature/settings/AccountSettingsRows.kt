@@ -8,9 +8,13 @@ import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchItem
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_server_management
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_server_management_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_sign_out
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_sign_out_from_server
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_sign_out_from_server_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_sign_out_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_switch_user
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_switch_user_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_logout_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_logout_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_server_management_subtitle
@@ -41,6 +45,7 @@ internal object AccountRows {
         id = "logout",
         icon = Tabler.Outline.Logout,
         titleRes = Res.string.settings_sign_out,
+        subtitleRes = Res.string.settings_sign_out_subtitle,
         searchTitleRes = Res.string.ss_logout_title,
         searchSubtitleRes = Res.string.ss_logout_subtitle,
         keywords = listOf("sign out", "logout", "exit", "disconnect"),
@@ -51,6 +56,7 @@ internal object AccountRows {
         id = "sign_out_from_server",
         icon = Tabler.Outline.Logout,
         titleRes = Res.string.settings_sign_out_from_server,
+        subtitleRes = Res.string.settings_sign_out_from_server_subtitle,
         searchTitleRes = Res.string.ss_sign_out_from_server_title,
         searchSubtitleRes = Res.string.ss_sign_out_from_server_subtitle,
         keywords = listOf("sign out", "server", "remove device", "revoke", "session", "remote", "disconnect"),
@@ -61,6 +67,7 @@ internal object AccountRows {
         id = "server_management",
         icon = Tabler.Outline.Server,
         titleRes = Res.string.settings_server_management,
+        subtitleRes = Res.string.settings_server_management_subtitle,
         searchTitleRes = Res.string.ss_server_management_title,
         searchSubtitleRes = Res.string.ss_server_management_subtitle,
         keywords = listOf("server", "connection", "jellyfin", "address", "switch"),
@@ -71,6 +78,7 @@ internal object AccountRows {
         id = "user_management",
         icon = Tabler.Outline.Users,
         titleRes = Res.string.settings_switch_user,
+        subtitleRes = Res.string.settings_switch_user_subtitle,
         searchTitleRes = Res.string.ss_user_management_title,
         searchSubtitleRes = Res.string.ss_user_management_subtitle,
         keywords = listOf("user", "accounts", "profile", "switch user", "admin"),

@@ -59,16 +59,12 @@ import org.jetbrains.compose.resources.stringResource
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_label
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_language
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_language_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_display_language
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_display_language_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_font_size
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_font_size_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_forced_subtitles
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_forced_subtitles_off
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_forced_subtitles_on
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hdr_font_size
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hdr_font_size_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hdr_subtitle_off
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hdr_subtitle_on
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hdr_subtitle_style
@@ -80,29 +76,22 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_lang
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_lang_system_default
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_language_subs_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_open_subtitle_tester
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_open_subtitle_tester_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_pgs_direct_play
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_pgs_direct_play_off
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_pgs_direct_play_on
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_subtitle_background
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_subtitle_background_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_subtitle_custom_color
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_subtitle_edge_style
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_subtitle_edge_style_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_subtitle_font_size
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_subtitle_language
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_subtitle_language_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_subtitle_no_offset
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_subtitle_position_bottom
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_subtitle_sync_offset
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_subtitle_text_color
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_subtitle_text_color_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_subtitle_vertical_position
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_subtitle_vertical_position_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_subtitles
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_subtitles_summary
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_track_audio_order
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_track_audio_order_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_track_preset_custom_desc
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_track_preset_dubbed_all_desc
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_track_preset_dubbed_shows_desc
@@ -111,12 +100,10 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_trac
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_track_preset_subbed_shows_desc
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_track_rules
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_track_rules_count
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_track_rules_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_track_selection
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_track_selection_preset
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_track_selection_summary
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_track_subtitle_order
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_track_subtitle_order_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_ui_label
 
 /**
@@ -245,7 +232,7 @@ fun LanguageSettingsScreen(
                         SettingListItem(
                             icon = Tabler.Outline.Language,
                             title = rowTitle(LanguageRows.AppLanguage),
-                            subtitle = stringResource(Res.string.settings_display_language_subtitle),
+                            subtitle = rowSubtitle(LanguageRows.AppLanguage),
                             trailingText = appLangLabel,
                             highlighted = highlightSettingId == LanguageRows.AppLanguage.id,
                             onClick = {
@@ -262,7 +249,7 @@ fun LanguageSettingsScreen(
                     SettingListItem(
                         icon = Tabler.Outline.Language,
                         title = audioLangTitle,
-                        subtitle = stringResource(Res.string.settings_audio_language_subtitle),
+                        subtitle = rowSubtitle(LanguageRows.AudioLanguage),
                         trailingText = preferences.preferredAudioLanguage ?: stringResource(Res.string.settings_lang_default),
                         highlighted = highlightSettingId == LanguageRows.AudioLanguage.id,
                         onClick = {
@@ -280,7 +267,7 @@ fun LanguageSettingsScreen(
                     SettingListItem(
                         icon = Tabler.Outline.Subtitles,
                         title = subtitleLangTitle,
-                        subtitle = stringResource(Res.string.settings_subtitle_language_subtitle),
+                        subtitle = rowSubtitle(LanguageRows.SubtitleLanguage),
                         trailingText = preferences.preferredSubtitleLanguage ?: stringResource(Res.string.settings_lang_default),
                         highlighted = highlightSettingId == LanguageRows.SubtitleLanguage.id,
                         onClick = {
@@ -355,7 +342,7 @@ fun LanguageSettingsScreen(
                         SettingListItem(
                             icon = Tabler.Outline.ListNumbers,
                             title = rowTitle(TrackSelectionRows.TrackAudioLanguages),
-                            subtitle = stringResource(Res.string.settings_track_audio_order_subtitle),
+                            subtitle = rowSubtitle(TrackSelectionRows.TrackAudioLanguages),
                             trailingText = rules.audioLanguages.joinToString(", ") { languageNameByCode[it] ?: it }
                                 .ifEmpty { langDefaultFallback },
                             highlighted = highlightSettingId == TrackSelectionRows.TrackAudioLanguages.id,
@@ -364,7 +351,7 @@ fun LanguageSettingsScreen(
                         SettingListItem(
                             icon = Tabler.Outline.ArrowsHorizontal,
                             title = rowTitle(TrackSelectionRows.TrackSubtitleLanguages),
-                            subtitle = stringResource(Res.string.settings_track_subtitle_order_subtitle),
+                            subtitle = rowSubtitle(TrackSelectionRows.TrackSubtitleLanguages),
                             trailingText = rules.subtitleLanguages.joinToString(", ") { languageNameByCode[it] ?: it }
                                 .ifEmpty { langDefaultFallback },
                             highlighted = highlightSettingId == TrackSelectionRows.TrackSubtitleLanguages.id,
@@ -375,7 +362,7 @@ fun LanguageSettingsScreen(
                         SettingListItem(
                             icon = Tabler.Outline.Filter,
                             title = rowTitle(TrackSelectionRows.TrackRules),
-                            subtitle = stringResource(Res.string.settings_track_rules_subtitle),
+                            subtitle = rowSubtitle(TrackSelectionRows.TrackRules),
                             trailingText = stringResource(Res.string.settings_track_rules_count, rules.rules.size),
                             highlighted = highlightSettingId == TrackSelectionRows.TrackRules.id,
                             onClick = { showRulesEditor = true },
@@ -447,7 +434,7 @@ fun LanguageSettingsScreen(
                     SettingListItem(
                         icon = Tabler.Outline.Eye,
                         title = rowTitle(LanguageRows.SubtitleTester),
-                        subtitle = stringResource(Res.string.settings_open_subtitle_tester_subtitle),
+                        subtitle = rowSubtitle(LanguageRows.SubtitleTester),
                         highlighted = highlightSettingId == LanguageRows.SubtitleTester.id,
                         onClick = onOpenSubtitleTester,
                     )
@@ -455,7 +442,7 @@ fun LanguageSettingsScreen(
                     SettingListItem(
                         icon = Tabler.Outline.Typography,
                         title = rowTitle(LanguageRows.SubtitleFontSize),
-                        subtitle = stringResource(Res.string.settings_font_size_subtitle),
+                        subtitle = rowSubtitle(LanguageRows.SubtitleFontSize),
                         trailingText = "${preferences.subtitleStyle.fontSize}sp",
                         highlighted = highlightSettingId == LanguageRows.SubtitleFontSize.id,
                         onClick = {
@@ -519,7 +506,7 @@ fun LanguageSettingsScreen(
                             SettingListItem(
                                 icon = Tabler.Outline.Typography,
                                 title = rowTitle(LanguageRows.HdrSubtitleFontSize),
-                                subtitle = stringResource(Res.string.settings_hdr_font_size_subtitle),
+                                subtitle = rowSubtitle(LanguageRows.HdrSubtitleFontSize),
                                 trailingText = "${preferences.hdrSubtitleStyle.fontSize}sp",
                                 highlighted = highlightSettingId == LanguageRows.HdrSubtitleFontSize.id,
                                 onClick = {
@@ -536,7 +523,7 @@ fun LanguageSettingsScreen(
                         SettingListItem(
                             icon = Tabler.Outline.Palette,
                             title = rowTitle(LanguageRows.SubtitleColor),
-                            subtitle = stringResource(Res.string.settings_subtitle_text_color_subtitle),
+                            subtitle = rowSubtitle(LanguageRows.SubtitleColor),
                             trailingText = preferences.subtitleStyle.fontColorArgb
                                 ?.let { formatHexColor(it) }
                                 ?: preferences.subtitleStyle.fontColor.name,
@@ -563,7 +550,7 @@ fun LanguageSettingsScreen(
                         SettingListItem(
                             icon = Tabler.Outline.Background,
                             title = rowTitle(LanguageRows.SubtitleBackground),
-                            subtitle = stringResource(Res.string.settings_subtitle_background_subtitle),
+                            subtitle = rowSubtitle(LanguageRows.SubtitleBackground),
                             trailingText = preferences.subtitleStyle.backgroundColor.name,
                             highlighted = highlightSettingId == LanguageRows.SubtitleBackground.id,
                             onClick = { activeDialog = LanguageSettingsDialog.SubtitleBgColorPicker },
@@ -572,7 +559,7 @@ fun LanguageSettingsScreen(
                         SettingListItem(
                             icon = Tabler.Outline.BorderAll,
                             title = rowTitle(LanguageRows.SubtitleEdgeStyle),
-                            subtitle = stringResource(Res.string.settings_subtitle_edge_style_subtitle),
+                            subtitle = rowSubtitle(LanguageRows.SubtitleEdgeStyle),
                             trailingText = preferences.subtitleStyle.edgeType.name,
                             highlighted = highlightSettingId == LanguageRows.SubtitleEdgeStyle.id,
                             onClick = {
@@ -620,7 +607,7 @@ fun LanguageSettingsScreen(
                         SettingListItem(
                             icon = Tabler.Outline.ArrowBarDown,
                             title = rowTitle(LanguageRows.SubtitleVerticalPosition),
-                            subtitle = stringResource(Res.string.settings_subtitle_vertical_position_subtitle),
+                            subtitle = rowSubtitle(LanguageRows.SubtitleVerticalPosition),
                             trailingText = "${(preferences.subtitleStyle.verticalPosition * 100).toInt()}%",
                             highlighted = highlightSettingId == LanguageRows.SubtitleVerticalPosition.id,
                             onClick = {

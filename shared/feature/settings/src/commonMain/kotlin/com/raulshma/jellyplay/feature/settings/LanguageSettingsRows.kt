@@ -8,21 +8,31 @@ import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchItem
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_language
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_language_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_display_language
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_display_language_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_font_size
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_font_size_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_forced_subtitles
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hdr_font_size
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hdr_font_size_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hdr_subtitle_style
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_high_contrast_subtitles
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_language_subtitles
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_open_subtitle_tester
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_open_subtitle_tester_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_pgs_direct_play
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_subtitle_background
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_subtitle_background_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_subtitle_edge_style
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_subtitle_edge_style_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_subtitle_language
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_subtitle_language_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_subtitle_sync_offset
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_subtitle_text_color
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_subtitle_text_color_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_subtitle_vertical_position
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_subtitle_vertical_position_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_app_language_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_app_language_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_audio_language_subtitle
@@ -81,6 +91,7 @@ internal object LanguageRows {
         id = "app_language",
         icon = Tabler.Outline.Language,
         titleRes = Res.string.settings_display_language,
+        subtitleRes = Res.string.settings_display_language_subtitle,
         searchTitleRes = Res.string.ss_app_language_title,
         searchSubtitleRes = Res.string.ss_app_language_subtitle,
         keywords = listOf("language", "display", "interface", "locale", "ui language", "app language"),
@@ -93,6 +104,7 @@ internal object LanguageRows {
         id = "audio_language",
         icon = Tabler.Outline.Language,
         titleRes = Res.string.settings_audio_language,
+        subtitleRes = Res.string.settings_audio_language_subtitle,
         searchTitleRes = Res.string.ss_audio_language_title,
         searchSubtitleRes = Res.string.ss_audio_language_subtitle,
         keywords = listOf("language", "audio track", "speech", "default language"),
@@ -103,6 +115,7 @@ internal object LanguageRows {
         id = "subtitle_language",
         icon = Tabler.Outline.Subtitles,
         titleRes = Res.string.settings_subtitle_language,
+        subtitleRes = Res.string.settings_subtitle_language_subtitle,
         searchTitleRes = Res.string.ss_subtitle_language_title,
         searchSubtitleRes = Res.string.ss_subtitle_language_subtitle,
         keywords = listOf("subtitles", "language", "cc", "captions"),
@@ -115,6 +128,7 @@ internal object LanguageRows {
         id = "subtitle_font_size",
         icon = Tabler.Outline.Typography,
         titleRes = Res.string.settings_font_size,
+        subtitleRes = Res.string.settings_font_size_subtitle,
         searchTitleRes = Res.string.ss_subtitle_font_size_title,
         searchSubtitleRes = Res.string.ss_subtitle_font_size_subtitle,
         keywords = listOf("subtitle size", "font size", "text size", "bigger"),
@@ -161,6 +175,7 @@ internal object LanguageRows {
         id = "subtitle_color",
         icon = Tabler.Outline.Palette,
         titleRes = Res.string.settings_subtitle_text_color,
+        subtitleRes = Res.string.settings_subtitle_text_color_subtitle,
         searchTitleRes = Res.string.ss_subtitle_color_title,
         searchSubtitleRes = Res.string.ss_subtitle_color_subtitle,
         keywords = listOf("subtitle color", "text color", "yellow subtitles", "white"),
@@ -173,6 +188,7 @@ internal object LanguageRows {
         id = "subtitle_background",
         icon = Tabler.Outline.Background,
         titleRes = Res.string.settings_subtitle_background,
+        subtitleRes = Res.string.settings_subtitle_background_subtitle,
         searchTitleRes = Res.string.ss_subtitle_background_title,
         searchSubtitleRes = Res.string.ss_subtitle_background_subtitle,
         keywords = listOf("subtitle background", "opacity", "transparency", "box"),
@@ -185,6 +201,7 @@ internal object LanguageRows {
         id = "subtitle_edge_style",
         icon = Tabler.Outline.BorderAll,
         titleRes = Res.string.settings_subtitle_edge_style,
+        subtitleRes = Res.string.settings_subtitle_edge_style_subtitle,
         searchTitleRes = Res.string.ss_subtitle_edge_style_title,
         searchSubtitleRes = Res.string.ss_subtitle_edge_style_subtitle,
         keywords = listOf("edge style", "shadow", "outline", "border"),
@@ -209,6 +226,7 @@ internal object LanguageRows {
         id = "subtitle_vertical_position",
         icon = Tabler.Outline.ArrowBarDown,
         titleRes = Res.string.settings_subtitle_vertical_position,
+        subtitleRes = Res.string.settings_subtitle_vertical_position_subtitle,
         searchTitleRes = Res.string.ss_subtitle_vertical_position_title,
         searchSubtitleRes = Res.string.ss_subtitle_vertical_position_subtitle,
         keywords = listOf("position", "height", "vertical", "bottom", "margin"),
@@ -233,6 +251,7 @@ internal object LanguageRows {
         id = "subtitle_tester",
         icon = Tabler.Outline.EyeCheck,
         titleRes = Res.string.settings_open_subtitle_tester,
+        subtitleRes = Res.string.settings_open_subtitle_tester_subtitle,
         searchTitleRes = Res.string.ss_subtitle_tester_title,
         searchSubtitleRes = Res.string.ss_subtitle_tester_subtitle,
         keywords = listOf("subtitle", "tester", "preview", "sample", "test", "style"),
@@ -244,6 +263,7 @@ internal object LanguageRows {
         id = "hdr_subtitle_font_size",
         icon = Tabler.Outline.Typography,
         titleRes = Res.string.settings_hdr_font_size,
+        subtitleRes = Res.string.settings_hdr_font_size_subtitle,
         searchTitleRes = Res.string.ss_hdr_subtitle_font_size_title,
         searchSubtitleRes = Res.string.ss_hdr_subtitle_font_size_subtitle,
         keywords = listOf("hdr", "subtitle", "font size", "text", "dolby vision"),

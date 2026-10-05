@@ -580,4 +580,6 @@
     <string name="ss_hooks_ended_cmd_subtitle">媒体播放结束时运行的命令</string>
     <string name="ss_hooks_idle_cmd_subtitle">应用进入空闲时运行的命令</string>
     <string name="ss_hooks_idle_ended_cmd_subtitle">应用退出空闲时运行的命令</string>
+    <string name="ss_input_bindings_title">自定义控制</string>
+    <string name="ss_input_bindings_subtitle">手势、鼠标、键盘和遥控器的操作</string>
 </resources>

@@ -10,23 +10,34 @@ import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchItem
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_admin_dashboard
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_admin_dashboard_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_categories
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_categories_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discord_presence_enabled
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discord_presence_enabled_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dream_dim_after
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dream_dim_after_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dream_dim_percent
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dream_dim_percent_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dream_max_parental_rating
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dream_max_parental_rating_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hooks_enabled
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hooks_enabled_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hooks_ended_cmd
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hooks_idle_cmd
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hooks_idle_ended_cmd
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hooks_play_cmd
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hooks_stop_cmd
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_idle_ambient_enabled
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_idle_ambient_enabled_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_idle_ambient_timeout
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_idle_ambient_timeout_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_ken_burns
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_setup_wizard
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_setup_wizard_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_slideshow_interval
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_slideshow_interval_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_transition_style
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_admin_dashboard_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_admin_dashboard_title
@@ -85,6 +96,7 @@ internal object SystemRows {
         id = "admin_dashboard",
         icon = Tabler.Outline.Shield,
         titleRes = Res.string.settings_admin_dashboard,
+        subtitleRes = Res.string.settings_admin_dashboard_subtitle,
         searchTitleRes = Res.string.ss_admin_dashboard_title,
         searchSubtitleRes = Res.string.ss_admin_dashboard_subtitle,
         keywords = listOf("admin", "dashboard", "sessions", "server", "management"),
@@ -95,6 +107,7 @@ internal object SystemRows {
         id = "setup_wizard",
         icon = Tabler.Outline.Wand,
         titleRes = Res.string.settings_setup_wizard,
+        subtitleRes = Res.string.settings_setup_wizard_subtitle,
         searchTitleRes = Res.string.ss_setup_wizard_title,
         searchSubtitleRes = Res.string.ss_setup_wizard_subtitle,
         keywords = listOf("setup", "wizard", "onboarding", "configure", "initial"),
@@ -115,6 +128,7 @@ internal object SystemRows {
         id = "screensaver_categories",
         icon = Tabler.Outline.Folders,
         titleRes = Res.string.settings_categories,
+        subtitleRes = Res.string.settings_categories_subtitle,
         searchTitleRes = Res.string.ss_screensaver_categories_title,
         searchSubtitleRes = Res.string.ss_screensaver_categories_subtitle,
     )
@@ -123,6 +137,7 @@ internal object SystemRows {
         id = "screensaver_slideshow_interval",
         icon = Tabler.Outline.Clock,
         titleRes = Res.string.settings_slideshow_interval,
+        subtitleRes = Res.string.settings_slideshow_interval_subtitle,
         searchTitleRes = Res.string.ss_screensaver_slideshow_interval_title,
         searchSubtitleRes = Res.string.ss_screensaver_slideshow_interval_subtitle,
     )
@@ -147,6 +162,7 @@ internal object SystemRows {
         id = "screensaver_max_parental_rating",
         icon = Tabler.Outline.Shield,
         titleRes = Res.string.settings_dream_max_parental_rating,
+        subtitleRes = Res.string.settings_dream_max_parental_rating_subtitle,
         searchSubtitleRes = Res.string.ss_screensaver_max_parental_rating_subtitle,
     )
 
@@ -154,6 +170,7 @@ internal object SystemRows {
         id = "screensaver_dim_after",
         icon = Tabler.Outline.Hourglass,
         titleRes = Res.string.settings_dream_dim_after,
+        subtitleRes = Res.string.settings_dream_dim_after_subtitle,
         searchSubtitleRes = Res.string.ss_screensaver_dim_after_subtitle,
     )
 
@@ -161,6 +178,7 @@ internal object SystemRows {
         id = "screensaver_dim_percent",
         icon = Tabler.Outline.Sun,
         titleRes = Res.string.settings_dream_dim_percent,
+        subtitleRes = Res.string.settings_dream_dim_percent_subtitle,
         searchSubtitleRes = Res.string.ss_screensaver_dim_percent_subtitle,
     )
 
@@ -170,6 +188,7 @@ internal object SystemRows {
         id = "idle_ambient_enabled",
         icon = Tabler.Outline.Moon,
         titleRes = Res.string.settings_idle_ambient_enabled,
+        subtitleRes = Res.string.settings_idle_ambient_enabled_subtitle,
         searchTitleRes = Res.string.ss_idle_ambient_enabled_title,
         searchSubtitleRes = Res.string.ss_idle_ambient_enabled_subtitle,
         platforms = platformsForCapability(settingsCapabilities.supportsIdleAmbientScreen),
@@ -179,6 +198,7 @@ internal object SystemRows {
         id = "idle_ambient_timeout",
         icon = Tabler.Outline.Stopwatch,
         titleRes = Res.string.settings_idle_ambient_timeout,
+        subtitleRes = Res.string.settings_idle_ambient_timeout_subtitle,
         searchTitleRes = Res.string.ss_idle_ambient_timeout_title,
         searchSubtitleRes = Res.string.ss_idle_ambient_timeout_subtitle,
         platforms = platformsForCapability(settingsCapabilities.supportsIdleAmbientScreen),
@@ -190,6 +210,7 @@ internal object SystemRows {
         id = "discord_presence_enabled",
         icon = Tabler.Outline.BrandDiscord,
         titleRes = Res.string.settings_discord_presence_enabled,
+        subtitleRes = Res.string.settings_discord_presence_enabled_subtitle,
         searchSubtitleRes = Res.string.ss_discord_presence_enabled_subtitle,
     )
 
@@ -199,6 +220,7 @@ internal object SystemRows {
         id = "hooks_enabled",
         icon = Tabler.Outline.Terminal2,
         titleRes = Res.string.settings_hooks_enabled,
+        subtitleRes = Res.string.settings_hooks_enabled_subtitle,
         searchSubtitleRes = Res.string.ss_hooks_enabled_subtitle,
     )
 

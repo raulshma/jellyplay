@@ -10,7 +10,9 @@ import com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchItem
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_integrations
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_integrations_subtitles
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_integrations_subtitles_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_seerr_integration
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_seerr_integration_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_integrations_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_integrations_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_seerr_settings_subtitle
@@ -39,6 +41,7 @@ internal object IntegrationsRows {
         id = "seerr_settings",
         icon = Tabler.Outline.Puzzle,
         titleRes = Res.string.settings_seerr_integration,
+        subtitleRes = Res.string.settings_seerr_integration_subtitle,
         searchTitleRes = Res.string.ss_seerr_settings_title,
         searchSubtitleRes = Res.string.ss_seerr_settings_subtitle,
         keywords = listOf("seerr", "jellyseerr", "request", "movies", "shows", "approve", "integration"),
@@ -59,6 +62,7 @@ internal object IntegrationsRows {
         id = "subtitle_provider_settings",
         icon = Tabler.Outline.Language,
         titleRes = Res.string.settings_integrations_subtitles,
+        subtitleRes = Res.string.settings_integrations_subtitles_subtitle,
         searchTitleRes = Res.string.ss_subtitle_provider_settings_title,
         searchSubtitleRes = Res.string.ss_subtitle_provider_settings_subtitle,
         keywords = listOf("subtitle", "provider", "opensubtitles", "opensubtitles.com", "tvsubs", "manager", "extensions"),

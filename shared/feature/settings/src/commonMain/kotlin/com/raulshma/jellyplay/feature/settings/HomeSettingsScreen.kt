@@ -27,22 +27,17 @@ import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_configure_libraries
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_configure_libraries_desc
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_continue_next_up
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_continue_watching_tap_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discover_rows
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discover_rows_helper
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hide_top_header_on_scroll
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hide_top_header_on_scroll_off
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hide_top_header_on_scroll_on
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hide_watched_items_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_backdrop
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_backdrop_off
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_backdrop_on
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_cards
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_display
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_layout_presets
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_layout_presets_brief
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_mode
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_mode_music
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_mode_video
@@ -53,11 +48,8 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_merg
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_merge_continue_next_up_off
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_merge_continue_next_up_on
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_next_up_time_window
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_next_up_time_window_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_next_up_hidden_brief
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_off
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_pinned_home_sections
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_pinned_home_sections_brief
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_reset_defaults_cd
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_reset_home_message
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_reset_home_title
@@ -70,15 +62,12 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_rewa
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_clock_home
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_clock_off
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_clock_on
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_external_ratings_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_hero_off
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_hero_on
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_hero_section
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_settings_in_home_search
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_settings_in_home_search_off
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_settings_in_home_search_on
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_unwatched_badge_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_watched_checkmark_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_unhide_continue_watching
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_unhide_continue_watching_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_unlimited
@@ -247,7 +236,7 @@ fun HomeSettingsScreen(
                                 SettingListItem(
                                     icon = Tabler.Outline.PlayerPlay,
                                     title = cwTitle,
-                                    subtitle = stringResource(Res.string.settings_continue_watching_tap_subtitle),
+                                    subtitle = rowSubtitle(HomeRows.ContinueWatchingClick),
                                     trailingText = preferences.continueWatchingClickBehavior.displayName,
                                     highlighted = highlightSettingId == HomeRows.ContinueWatchingClick.id,
                                     onClick = {
@@ -275,7 +264,7 @@ fun HomeSettingsScreen(
                                 SettingListItem(
                                     icon = Tabler.Outline.EyeOff,
                                     title = rowTitle(HomeRows.NextUpHidden),
-                                    subtitle = stringResource(Res.string.settings_next_up_hidden_brief),
+                                    subtitle = rowSubtitle(HomeRows.NextUpHidden),
                                     trailingText = if (preferences.nextUpExcludedSeriesIds.isEmpty()) "" else "${preferences.nextUpExcludedSeriesIds.size}",
                                     highlighted = highlightSettingId == HomeRows.NextUpHidden.id,
                                     onClick = { navActions.onNavigate(Route.NextUpExcluded) },
@@ -310,7 +299,7 @@ fun HomeSettingsScreen(
                     modifier = Modifier.padding(vertical = 8.dp),
                     initiallyExpanded = highlightSettingId in SettingsScreenGroups.homeNextUp.itemIdSet,
                 ) {
-                    val nextUpTotal = SettingsScreenGroups.homeNextUp.items.size
+                    val nextUpTotal = rowTotalFor(SettingsScreenGroups.homeNextUp, RowAdmissionFlags())
                     SettingToggleItem(
                         icon = Tabler.Outline.LayersLinked,
                         title = rowTitle(HomeRows.MergeContinueNextUp),
@@ -335,7 +324,7 @@ fun HomeSettingsScreen(
                     SettingListItem(
                         icon = Tabler.Outline.CalendarTime,
                         title = nextUpTitle,
-                        subtitle = stringResource(Res.string.settings_next_up_time_window_subtitle),
+                        subtitle = rowSubtitle(HomeRows.NextUpMaxDays),
                         trailingText = dayLabels[preferences.nextUpMaxDays] ?: formatIntPattern(xDaysFormat, preferences.nextUpMaxDays),
                         highlighted = highlightSettingId == HomeRows.NextUpMaxDays.id,
                         index = 1, count = nextUpTotal,
@@ -376,7 +365,7 @@ fun HomeSettingsScreen(
                     SettingListItem(
                         icon = Tabler.Outline.Pinned,
                         title = rowTitle(HomeRows.PinnedHomeSections),
-                        subtitle = stringResource(Res.string.settings_pinned_home_sections_brief),
+                        subtitle = rowSubtitle(HomeRows.PinnedHomeSections),
                         trailingText = if (preferences.pinnedHomeSections.isEmpty()) "" else "${preferences.pinnedHomeSections.size}",
                         highlighted = highlightSettingId == HomeRows.PinnedHomeSections.id,
                         index = 0, count = 1,
@@ -386,7 +375,7 @@ fun HomeSettingsScreen(
                     SettingListItem(
                         icon = Tabler.Outline.Bookmarks,
                         title = rowTitle(HomeRows.HomeLayoutPresets),
-                        subtitle = stringResource(Res.string.settings_home_layout_presets_brief),
+                        subtitle = rowSubtitle(HomeRows.HomeLayoutPresets),
                         trailingText = if (preferences.homeLayoutPresets.isEmpty()) "" else "${preferences.homeLayoutPresets.size}",
                         highlighted = highlightSettingId == HomeRows.HomeLayoutPresets.id,
                         index = 0, count = 1,
@@ -396,7 +385,7 @@ fun HomeSettingsScreen(
                     SettingListItem(
                         icon = Tabler.Outline.Folders,
                         title = rowTitle(HomeRows.ConfigureLibraries),
-                        subtitle = stringResource(Res.string.settings_configure_libraries_desc),
+                        subtitle = rowSubtitle(HomeRows.ConfigureLibraries),
                         trailingText = "",
                         highlighted = highlightSettingId == HomeRows.ConfigureLibraries.id,
                         index = 0, count = 1,
@@ -406,7 +395,7 @@ fun HomeSettingsScreen(
                     SettingListItem(
                         icon = Tabler.Outline.Compass,
                         title = rowTitle(HomeRows.DiscoverRows),
-                        subtitle = stringResource(Res.string.settings_discover_rows_helper),
+                        subtitle = rowSubtitle(HomeRows.DiscoverRows),
                         trailingText = if (preferences.discoverRows.isEmpty()) "" else "${preferences.discoverRows.size}",
                         highlighted = highlightSettingId == HomeRows.DiscoverRows.id,
                         index = 0, count = 1,
@@ -463,7 +452,7 @@ fun HomeSettingsScreen(
                         SettingToggleItem(
                             icon = rowIcon(HomeRows.ShowUnwatchedBadge),
                             title = rowTitle(HomeRows.ShowUnwatchedBadge),
-                            subtitle = stringResource(Res.string.settings_show_unwatched_badge_subtitle),
+                            subtitle = rowSubtitle(HomeRows.ShowUnwatchedBadge),
                             checked = preferences.showUnwatchedBadge,
                             highlighted = highlightSettingId == HomeRows.ShowUnwatchedBadge.id,
                             onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setShowUnwatchedBadge(it) } },
@@ -472,7 +461,7 @@ fun HomeSettingsScreen(
                         SettingToggleItem(
                             icon = rowIcon(HomeRows.ShowWatchedCheckmark),
                             title = rowTitle(HomeRows.ShowWatchedCheckmark),
-                            subtitle = stringResource(Res.string.settings_show_watched_checkmark_subtitle),
+                            subtitle = rowSubtitle(HomeRows.ShowWatchedCheckmark),
                             checked = preferences.showWatchedCheckmark,
                             highlighted = highlightSettingId == HomeRows.ShowWatchedCheckmark.id,
                             onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setShowWatchedCheckmark(it) } },
@@ -481,7 +470,7 @@ fun HomeSettingsScreen(
                         SettingToggleItem(
                             icon = rowIcon(HomeRows.HideWatchedItems),
                             title = rowTitle(HomeRows.HideWatchedItems),
-                            subtitle = stringResource(Res.string.settings_hide_watched_items_subtitle),
+                            subtitle = rowSubtitle(HomeRows.HideWatchedItems),
                             checked = preferences.hideWatchedItems,
                             highlighted = highlightSettingId == HomeRows.HideWatchedItems.id,
                             onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setHideWatchedItems(it) } },
@@ -490,7 +479,7 @@ fun HomeSettingsScreen(
                         SettingToggleItem(
                             icon = rowIcon(HomeRows.ShowExternalRatings),
                             title = rowTitle(HomeRows.ShowExternalRatings),
-                            subtitle = stringResource(Res.string.settings_show_external_ratings_subtitle),
+                            subtitle = rowSubtitle(HomeRows.ShowExternalRatings),
                             checked = preferences.showExternalRatings,
                             highlighted = highlightSettingId == HomeRows.ShowExternalRatings.id,
                             onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setShowExternalRatings(it) } },

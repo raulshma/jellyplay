@@ -11,9 +11,12 @@ import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchItem
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_track_audio_order
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_track_audio_order_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_track_rules
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_track_rules_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_track_selection_preset
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_track_subtitle_order
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_track_subtitle_order_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_track_audio_order_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_track_audio_order_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_track_rules_subtitle
@@ -57,6 +60,7 @@ internal object TrackSelectionRows {
         id = "track_audio_languages_ordered",
         icon = Tabler.Outline.ListNumbers,
         titleRes = Res.string.settings_track_audio_order,
+        subtitleRes = Res.string.settings_track_audio_order_subtitle,
         searchTitleRes = Res.string.ss_track_audio_order_title,
         searchSubtitleRes = Res.string.ss_track_audio_order_subtitle,
         keywords = listOf("audio", "language", "order", "priority", "fallback"),
@@ -68,6 +72,7 @@ internal object TrackSelectionRows {
         id = "track_subtitle_languages_ordered",
         icon = Tabler.Outline.ArrowsHorizontal,
         titleRes = Res.string.settings_track_subtitle_order,
+        subtitleRes = Res.string.settings_track_subtitle_order_subtitle,
         searchTitleRes = Res.string.ss_track_subtitle_order_title,
         searchSubtitleRes = Res.string.ss_track_subtitle_order_subtitle,
         keywords = listOf("subtitle", "language", "order", "priority", "fallback"),
@@ -79,6 +84,7 @@ internal object TrackSelectionRows {
         id = "track_selection_rules",
         icon = Tabler.Outline.Filter,
         titleRes = Res.string.settings_track_rules,
+        subtitleRes = Res.string.settings_track_rules_subtitle,
         searchTitleRes = Res.string.ss_track_rules_title,
         searchSubtitleRes = Res.string.ss_track_rules_subtitle,
         keywords = listOf("rule", "regex", "anime", "signs", "songs", "per series", "advanced"),

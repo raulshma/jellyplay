@@ -23,6 +23,7 @@ import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchItem
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_input_bindings
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_input_bindings_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_input_bindings_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_input_bindings_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_advanced_config
@@ -36,54 +37,74 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audi
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_passthrough
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_time_stretch
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_accept_invites
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_accept_invites_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_pip
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_play_countdown
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_play_countdown_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_play_next
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_autoplay_trailers
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_back_buffer
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_background_audio
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_background_audio_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_background_casting
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_background_casting_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_buffer_size
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_casting_strategy
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_casting_strategy_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_cinema_mode
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_controls_timeout
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_controls_timeout_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_debanding
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_double_tap_hold_seek
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_double_tap_hold_seek_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_decoder
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_decoder_fallback
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_decoder_threads
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_default_aspect
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_default_aspect_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_default_brightness_level
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_default_brightness_level_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_default_speed
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_default_speed_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dialogue_boost
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dialogue_boost_strength
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_downmix_boost
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_drop_late_frames
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_duck_on_phone_call
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dvr_post_padding
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dvr_post_padding_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dvr_pre_padding
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dvr_pre_padding_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dvr_recording_quality
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dvr_recording_quality_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_episode_browser
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_external_player_app
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_external_player_app_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_frame_drop
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_frame_rate_strategy
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_gesture_indicator_side
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_gestures
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hdr_passthrough
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hide_osd_on_pause
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hide_osd_on_pause_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hold_to_seek_speed
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hold_to_seek_speed_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hwdec_override
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_incognito_mode
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_interpolation
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_interpolation_tscale
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_join_behavior
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_join_behavior_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_keep_screen_on
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_keep_screen_on_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_live_tv_stream
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_max_audio_channels
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_network_caching
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_offline_playback
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_orientation
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_orientation_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_pass_out_protection
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_pass_out_protection_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_passthrough_codec_ac3
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_passthrough_codec_dts
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_passthrough_codec_dtshd
@@ -93,35 +114,46 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_paus
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_playback
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_playback_metadata
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_player_engine
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_player_engine_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_resume_headset_plug
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_resume_headset_plug_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_preferred_codecs
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_preferred_renderer
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_preferred_renderer_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_preload_buffer
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_preload_buffer_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_refresh_rate_match
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_remember_brightness
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_render_quality
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_reset_to_defaults
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_scaler
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_seek_duration
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_seek_duration_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_shader_pack
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_clock_player
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_time_remaining
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_skip_back_on_resume
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_skip_back_on_resume_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_skip_frames
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_skip_loop_filter
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_skip_segments_on_seek
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_skip_silence
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_still_watching_episodes
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_still_watching_episodes_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_still_watching_mode
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_still_watching_mode_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_streaming_quality
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_swipe_seek_range
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_swipe_seek_range_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_sync_tolerance
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_sync_tolerance_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_tone_mapping
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_trickplay_on_gestures
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_trickplay_preview
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_tv_zoom_mode
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_tv_zoom_mode_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_video_cache_size
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_video_cache_size_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_video_output
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_video_scaling
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_watch_next_row
@@ -344,6 +376,7 @@ internal object PlaybackRows {
         id = "player_engine",
         icon = Tabler.Outline.PlayerPlay,
         titleRes = Res.string.settings_player_engine,
+        subtitleRes = Res.string.settings_player_engine_subtitle,
         searchTitleRes = Res.string.ss_player_engine_title,
         searchSubtitleRes = Res.string.ss_player_engine_subtitle,
     )
@@ -352,6 +385,7 @@ internal object PlaybackRows {
         id = "seek_duration",
         icon = Tabler.Outline.PlayerTrackNext,
         titleRes = Res.string.settings_seek_duration,
+        subtitleRes = Res.string.settings_seek_duration_subtitle,
         searchTitleRes = Res.string.ss_seek_duration_title,
         searchSubtitleRes = Res.string.ss_seek_duration_subtitle,
         gate = RowAdmission.Platform(RowAdmissionCapability.TouchGestures),
@@ -361,6 +395,7 @@ internal object PlaybackRows {
         id = "orientation",
         icon = Tabler.Outline.DeviceMobileRotated,
         titleRes = Res.string.settings_orientation,
+        subtitleRes = Res.string.settings_orientation_subtitle,
         searchTitleRes = Res.string.ss_orientation_title,
         searchSubtitleRes = Res.string.ss_orientation_subtitle,
         platforms = platformsForCapability(settingsCapabilities.supportsScreenOrientation),
@@ -394,6 +429,7 @@ internal object PlaybackRows {
         id = "double_tap_hold_seek",
         icon = Tabler.Outline.PlayerTrackNext,
         titleRes = Res.string.settings_double_tap_hold_seek,
+        subtitleRes = Res.string.settings_double_tap_hold_seek_subtitle,
         searchTitleRes = Res.string.ss_double_tap_hold_seek_title,
         searchSubtitleRes = Res.string.ss_double_tap_hold_seek_subtitle,
         platforms = platformsForCapability(settingsCapabilities.supportsTouchGestures),
@@ -410,6 +446,7 @@ internal object PlaybackRows {
         id = "input_bindings",
         icon = Tabler.Outline.Settings,
         titleRes = Res.string.settings_input_bindings,
+        subtitleRes = Res.string.settings_input_bindings_subtitle,
         searchTitleRes = Res.string.ss_input_bindings_title,
         searchSubtitleRes = Res.string.ss_input_bindings_subtitle,
         gate = RowAdmission.Always,
@@ -419,6 +456,7 @@ internal object PlaybackRows {
         id = "default_speed",
         icon = Tabler.Outline.Gauge,
         titleRes = Res.string.settings_default_speed,
+        subtitleRes = Res.string.settings_default_speed_subtitle,
         searchTitleRes = Res.string.ss_default_speed_title,
         searchSubtitleRes = Res.string.ss_default_speed_subtitle,
     )
@@ -427,6 +465,7 @@ internal object PlaybackRows {
         id = "default_aspect",
         icon = Tabler.Outline.ArrowAutofitHeight,
         titleRes = Res.string.settings_default_aspect,
+        subtitleRes = Res.string.settings_default_aspect_subtitle,
         searchTitleRes = Res.string.ss_default_aspect_title,
         searchSubtitleRes = Res.string.ss_default_aspect_subtitle,
     )
@@ -443,6 +482,7 @@ internal object PlaybackRows {
         id = "autoplay_countdown",
         icon = Tabler.Outline.Clock,
         titleRes = Res.string.settings_auto_play_countdown,
+        subtitleRes = Res.string.settings_auto_play_countdown_subtitle,
         searchTitleRes = Res.string.ss_autoplay_countdown_title,
         searchSubtitleRes = Res.string.ss_autoplay_countdown_subtitle,
     )
@@ -451,6 +491,7 @@ internal object PlaybackRows {
         id = "still_watching_mode",
         icon = Tabler.Outline.EyeCheck,
         titleRes = Res.string.settings_still_watching_mode,
+        subtitleRes = Res.string.settings_still_watching_mode_subtitle,
         searchTitleRes = Res.string.ss_still_watching_mode_title,
         searchSubtitleRes = Res.string.ss_still_watching_mode_subtitle,
         gate = RowAdmission.WhenOn(PlaybackRows.VideoAutoplayNext.id),
@@ -460,6 +501,7 @@ internal object PlaybackRows {
         id = "still_watching_episodes",
         icon = Tabler.Outline.Clock,
         titleRes = Res.string.settings_still_watching_episodes,
+        subtitleRes = Res.string.settings_still_watching_episodes_subtitle,
         searchTitleRes = Res.string.ss_still_watching_episodes_title,
         searchSubtitleRes = Res.string.ss_still_watching_episodes_subtitle,
         gate = RowAdmission.WhenOn(PlaybackRows.VideoAutoplayNext.id),
@@ -469,6 +511,7 @@ internal object PlaybackRows {
         id = "controls_timeout",
         icon = Tabler.Outline.Clock,
         titleRes = Res.string.settings_controls_timeout,
+        subtitleRes = Res.string.settings_controls_timeout_subtitle,
         searchTitleRes = Res.string.ss_controls_timeout_title,
         searchSubtitleRes = Res.string.ss_controls_timeout_subtitle,
     )
@@ -480,6 +523,7 @@ internal object PlaybackRows {
         id = "hide_osd_on_pause",
         icon = Tabler.Outline.EyeOff,
         titleRes = Res.string.settings_hide_osd_on_pause,
+        subtitleRes = Res.string.settings_hide_osd_on_pause_subtitle,
         searchTitleRes = Res.string.ss_hide_osd_on_pause_title,
         searchSubtitleRes = Res.string.ss_hide_osd_on_pause_subtitle,
     )
@@ -488,6 +532,7 @@ internal object PlaybackRows {
         id = "skip_back_on_resume",
         icon = Tabler.Outline.History,
         titleRes = Res.string.settings_skip_back_on_resume,
+        subtitleRes = Res.string.settings_skip_back_on_resume_subtitle,
         searchTitleRes = Res.string.ss_skip_back_on_resume_title,
         searchSubtitleRes = Res.string.ss_skip_back_on_resume_subtitle,
     )
@@ -504,6 +549,7 @@ internal object PlaybackRows {
         id = "pass_out_protection",
         icon = Tabler.Outline.Moon,
         titleRes = Res.string.settings_pass_out_protection,
+        subtitleRes = Res.string.settings_pass_out_protection_subtitle,
         searchTitleRes = Res.string.ss_pass_out_protection_title,
         searchSubtitleRes = Res.string.ss_pass_out_protection_subtitle,
     )
@@ -524,6 +570,7 @@ internal object PlaybackRows {
         id = "resume_on_headset_plug",
         icon = Tabler.Outline.Headphones,
         titleRes = Res.string.settings_resume_headset_plug,
+        subtitleRes = Res.string.settings_resume_headset_plug_subtitle,
         searchTitleRes = Res.string.ss_resume_headset_plug_title,
         searchSubtitleRes = Res.string.ss_resume_headset_plug_subtitle,
     )
@@ -564,6 +611,7 @@ internal object PlaybackRows {
         id = "swipe_seek_range",
         icon = Tabler.Outline.ArrowBarRight,
         titleRes = Res.string.settings_swipe_seek_range,
+        subtitleRes = Res.string.settings_swipe_seek_range_subtitle,
         searchTitleRes = Res.string.ss_swipe_seek_range_title,
         searchSubtitleRes = Res.string.ss_swipe_seek_range_subtitle,
     )
@@ -588,6 +636,7 @@ internal object PlaybackRows {
         id = "preload_buffer",
         icon = Tabler.Outline.Refresh,
         titleRes = Res.string.settings_preload_buffer,
+        subtitleRes = Res.string.settings_preload_buffer_subtitle,
         searchTitleRes = Res.string.ss_preload_buffer_title,
         searchSubtitleRes = Res.string.ss_preload_buffer_subtitle,
     )
@@ -596,6 +645,7 @@ internal object PlaybackRows {
         id = "video_cache_size",
         icon = Tabler.Outline.Database,
         titleRes = Res.string.settings_video_cache_size,
+        subtitleRes = Res.string.settings_video_cache_size_subtitle,
         searchSubtitleRes = Res.string.ss_video_cache_size_subtitle,
     )
 
@@ -603,6 +653,7 @@ internal object PlaybackRows {
         id = "background_audio",
         icon = Tabler.Outline.Music,
         titleRes = Res.string.settings_background_audio,
+        subtitleRes = Res.string.settings_background_audio_subtitle,
         searchTitleRes = Res.string.ss_background_audio_title,
         searchSubtitleRes = Res.string.ss_background_audio_subtitle,
     )
@@ -623,6 +674,7 @@ internal object PlaybackRows {
         id = "keep_screen_on",
         icon = Tabler.Outline.Eye,
         titleRes = Res.string.settings_keep_screen_on,
+        subtitleRes = Res.string.settings_keep_screen_on_subtitle,
         searchTitleRes = Res.string.ss_keep_screen_on_title,
         searchSubtitleRes = Res.string.ss_keep_screen_on_subtitle,
     )
@@ -639,6 +691,7 @@ internal object PlaybackRows {
         id = "hold_speed_multiplier",
         icon = Tabler.Outline.Rocket,
         titleRes = Res.string.settings_hold_to_seek_speed,
+        subtitleRes = Res.string.settings_hold_to_seek_speed_subtitle,
         searchTitleRes = Res.string.ss_hold_speed_multiplier_title,
         searchSubtitleRes = Res.string.ss_hold_speed_multiplier_subtitle,
     )
@@ -656,6 +709,7 @@ internal object PlaybackRows {
         id = "tv_zoom_mode",
         icon = Tabler.Outline.Crop,
         titleRes = Res.string.settings_tv_zoom_mode,
+        subtitleRes = Res.string.settings_tv_zoom_mode_subtitle,
         searchTitleRes = Res.string.ss_tv_zoom_mode_title,
         searchSubtitleRes = Res.string.ss_tv_zoom_mode_subtitle,
         gate = RowAdmission.Tv,
@@ -665,6 +719,7 @@ internal object PlaybackRows {
         id = "default_brightness_level",
         icon = Tabler.Outline.Sun,
         titleRes = Res.string.settings_default_brightness_level,
+        subtitleRes = Res.string.settings_default_brightness_level_subtitle,
         searchTitleRes = Res.string.ss_default_brightness_level_title,
         searchSubtitleRes = Res.string.ss_default_brightness_level_subtitle,
     )
@@ -703,6 +758,7 @@ internal object PlaybackRows {
         id = "remember_volume_per_content_type",
         icon = Tabler.Outline.Volume,
         titleRes = Res.string.ss_remember_volume_title,
+        subtitleRes = Res.string.ss_remember_volume_subtitle,
         searchSubtitleRes = Res.string.ss_remember_volume_subtitle,
         keywords = listOf("volume", "remember", "memory", "per content", "content type", "loudness", "level", "movies", "audiobooks"),
         route = Route.PlaybackSettings(),
@@ -1280,6 +1336,7 @@ internal object PlaybackRows {
         id = "external_player_app",
         icon = Tabler.Outline.Devices,
         titleRes = Res.string.settings_external_player_app,
+        subtitleRes = Res.string.settings_external_player_app_subtitle,
         searchTitleRes = Res.string.ss_external_player_app_title,
         searchSubtitleRes = Res.string.ss_external_player_app_subtitle,
     )
@@ -1290,6 +1347,7 @@ internal object PlaybackRows {
         id = "syncplay_join_behavior",
         icon = Tabler.Outline.MessageQuestion,
         titleRes = Res.string.settings_join_behavior,
+        subtitleRes = Res.string.settings_join_behavior_subtitle,
         searchTitleRes = Res.string.ss_syncplay_join_behavior_title,
         searchSubtitleRes = Res.string.ss_syncplay_join_behavior_subtitle,
         keywords = listOf("syncplay", "join", "behavior", "group", "watch party"),
@@ -1300,6 +1358,7 @@ internal object PlaybackRows {
         id = "syncplay_tolerance",
         icon = Tabler.Outline.WaveSine,
         titleRes = Res.string.settings_sync_tolerance,
+        subtitleRes = Res.string.settings_sync_tolerance_subtitle,
         searchTitleRes = Res.string.ss_syncplay_tolerance_title,
         searchSubtitleRes = Res.string.ss_syncplay_tolerance_subtitle,
         keywords = listOf("syncplay", "tolerance", "drift", "sync", "correction"),
@@ -1310,6 +1369,7 @@ internal object PlaybackRows {
         id = "syncplay_auto_accept_invites",
         icon = Tabler.Outline.CircleCheck,
         titleRes = Res.string.settings_auto_accept_invites,
+        subtitleRes = Res.string.settings_auto_accept_invites_subtitle,
         searchTitleRes = Res.string.ss_syncplay_auto_accept_invites_title,
         searchSubtitleRes = Res.string.ss_syncplay_auto_accept_invites_subtitle,
         keywords = listOf("syncplay", "auto", "accept", "invites", "friends"),
@@ -1322,6 +1382,7 @@ internal object PlaybackRows {
         id = "casting_strategy",
         icon = Tabler.Outline.Cast,
         titleRes = Res.string.settings_casting_strategy,
+        subtitleRes = Res.string.settings_casting_strategy_subtitle,
         searchTitleRes = Res.string.ss_casting_strategy_title,
         searchSubtitleRes = Res.string.ss_casting_strategy_subtitle,
         keywords = listOf("casting", "strategy", "dlna", "cast", "chromecast", "tv"),
@@ -1332,6 +1393,7 @@ internal object PlaybackRows {
         id = "background_casting",
         icon = Tabler.Outline.Settings,
         titleRes = Res.string.settings_background_casting,
+        subtitleRes = Res.string.settings_background_casting_subtitle,
         searchTitleRes = Res.string.ss_background_casting_title,
         searchSubtitleRes = Res.string.ss_background_casting_subtitle,
         keywords = listOf("casting", "background", "keep alive", "dlna", "cast"),
@@ -1342,6 +1404,7 @@ internal object PlaybackRows {
         id = "preferred_renderer",
         icon = Tabler.Outline.Devices,
         titleRes = Res.string.settings_preferred_renderer,
+        subtitleRes = Res.string.settings_preferred_renderer_subtitle,
         searchTitleRes = Res.string.ss_preferred_renderer_title,
         searchSubtitleRes = Res.string.ss_preferred_renderer_subtitle,
         keywords = listOf("renderer", "preferred", "cast", "device", "target", "tv"),
@@ -1355,6 +1418,7 @@ internal object PlaybackRows {
         id = "dvr_pre_padding",
         icon = Tabler.Outline.Clock,
         titleRes = Res.string.settings_dvr_pre_padding,
+        subtitleRes = Res.string.settings_dvr_pre_padding_subtitle,
         searchTitleRes = Res.string.ss_dvr_pre_padding_title,
         searchSubtitleRes = Res.string.ss_dvr_pre_padding_subtitle,
         keywords = listOf("dvr", "pre padding", "recording", "live tv", "start", "early"),
@@ -1365,6 +1429,7 @@ internal object PlaybackRows {
         id = "dvr_post_padding",
         icon = Tabler.Outline.Clock,
         titleRes = Res.string.settings_dvr_post_padding,
+        subtitleRes = Res.string.settings_dvr_post_padding_subtitle,
         searchTitleRes = Res.string.ss_dvr_post_padding_title,
         searchSubtitleRes = Res.string.ss_dvr_post_padding_subtitle,
         keywords = listOf("dvr", "post padding", "recording", "live tv", "end", "extend"),
@@ -1379,6 +1444,7 @@ internal object PlaybackRows {
         id = "dvr_recording_quality",
         icon = Tabler.Outline.BadgeHd,
         titleRes = Res.string.settings_dvr_recording_quality,
+        subtitleRes = Res.string.settings_dvr_recording_quality_subtitle,
         searchTitleRes = Res.string.ss_dvr_recording_quality_title,
         searchSubtitleRes = Res.string.ss_dvr_recording_quality_subtitle,
         keywords = listOf("dvr", "recording", "quality", "live tv", "resolution"),

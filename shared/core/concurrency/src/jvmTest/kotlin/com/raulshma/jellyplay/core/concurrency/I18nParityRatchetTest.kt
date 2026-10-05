@@ -9,8 +9,10 @@ import java.io.File
  * every module ships `composeResources/values/strings.xml` (the default
  * locale) beside `values-<lang>/strings.xml` translations, and a key added
  * to the default file without its locale entries silently falls back to
- * English for that locale's users — no build error, no lint gate. This test
- * walks every module's resource tree and asserts each locale's MISSING-key
+ * English for that locale's users — no build error, no lint gate. Counted
+ * keys are the `<string name="…">` AND `<plurals name="…">` elements (a
+ * plurals key counts once, whatever its quantity items); this test walks
+ * every module's resource tree and asserts each locale's MISSING-key
  * count never rises above the per-module+locale baseline in
  * [baselineMissingKeys]. Modules may split their strings across several
  * `strings_*.xml` family files per qualifier dir (CMP merges them) — the
@@ -52,27 +54,26 @@ import java.io.File
 class I18nParityRatchetTest {
 
     /**
-     * Allowed MISSING-key count per module+locale. Empty: keys are
+     * Allowed MISSING-key count per module+locale. Keys are
      * `"module/dir:locale"`, e.g. `"shared/feature/settings:de"`. Absent key
      * means 0 — no missing keys allowed.
      *
-     * Accepted gaps: `shared/core/ui` ×8 — the PreferenceEnumNames label
-     * seam's 15 enum-value labels (gesture modes, orientation values,
-     * indicator sides, check frequencies) shipped default-locale-only as a
-     * deliberate translation follow-up; until translated, the 9 non-default
-     * locales fall back to the English default (exactly what the pre-seam
-     * English `displayName` renderings did). Translation follow-up lowers
-     * these back to zero.
+     * Zero-tolerance: the core/ui PreferenceEnumNames 15-key translation
+     * follow-up landed 2026-10-05, so every entry below reads 0 and the map
+     * is kept only as documentation of the accepted-gap mechanism. A new
+     * untranslated key must be translated (preferred) or added here as a
+     * deliberate baseline entry — never raise an existing number, and keep
+     * the entry's KDoc pointed at the tracking issue.
      */
     private val baselineMissingKeys: Map<String, Int> = mapOf(
-        "shared/core/ui:de" to 15,
-        "shared/core/ui:es" to 15,
-        "shared/core/ui:fr" to 15,
-        "shared/core/ui:it" to 15,
-        "shared/core/ui:ja" to 15,
-        "shared/core/ui:ko" to 15,
-        "shared/core/ui:pt" to 15,
-        "shared/core/ui:zh" to 15,
+        "shared/core/ui:de" to 0,
+        "shared/core/ui:es" to 0,
+        "shared/core/ui:fr" to 0,
+        "shared/core/ui:it" to 0,
+        "shared/core/ui:ja" to 0,
+        "shared/core/ui:ko" to 0,
+        "shared/core/ui:pt" to 0,
+        "shared/core/ui:zh" to 0,
     )
 
     /**
@@ -114,10 +115,15 @@ class I18nParityRatchetTest {
     }
 
     /**
-     * One `<string name="…">` entry: its key and whether it is
-     * `translatable="false"`.
+     * Regexes matching every counted resource entry: `<string name="…">`
+     * and `<plurals name="…">`, each captured as (name, attributes). A
+     * plurals element counts as one key regardless of how many quantity
+     * items it carries — parity is judged on key existence per locale.
      */
-    private val stringRegex = Regex("""<string\s+name="([^"]+)"([^>]*)>""")
+    private val keyRegexes = listOf(
+        Regex("""<string\s+name="([^"]+)"([^>]*)>"""),
+        Regex("""<plurals\s+name="([^"]+)"([^>]*)>"""),
+    )
 
     private fun isExempt(name: String, attributes: String): Boolean =
         name.startsWith("diff_") ||
@@ -136,18 +142,21 @@ class I18nParityRatchetTest {
             .sortedBy { it.name }
 
     /**
-     * The default-locale keys that COUNT for the ratchet: everything except
-     * the exempt classes documented on the class KDoc.
+     * The default-locale keys that COUNT for the ratchet: every `<string>`
+     * and `<plurals>` key except the exempt classes documented on the class
+     * KDoc.
      */
     private fun countedDefaultKeys(valuesDir: File): Set<String> {
         val keys = mutableSetOf<String>()
         for (file in stringFiles(valuesDir)) {
             val text = file.readText(Charsets.UTF_8)
-            stringRegex.findAll(text)
-                .map { it.groupValues[1] to it.groupValues[2] }
-                .filter { (name, attrs) -> !isExempt(name, attrs) }
-                .map { it.first }
-                .forEach { keys += it }
+            for (regex in keyRegexes) {
+                regex.findAll(text)
+                    .map { it.groupValues[1] to it.groupValues[2] }
+                    .filter { (name, attrs) -> !isExempt(name, attrs) }
+                    .map { it.first }
+                    .forEach { keys += it }
+            }
         }
         return keys
     }
@@ -156,7 +165,9 @@ class I18nParityRatchetTest {
         val keys = mutableSetOf<String>()
         for (file in stringFiles(localeValuesDir)) {
             val text = file.readText(Charsets.UTF_8)
-            stringRegex.findAll(text).mapTo(keys) { it.groupValues[1] }
+            for (regex in keyRegexes) {
+                regex.findAll(text).mapTo(keys) { it.groupValues[1] }
+            }
         }
         return keys
     }

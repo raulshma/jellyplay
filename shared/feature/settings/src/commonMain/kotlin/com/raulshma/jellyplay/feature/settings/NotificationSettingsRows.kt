@@ -8,19 +8,31 @@ import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchItem
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_check_frequency
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_check_frequency_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_enable_notifications
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_enable_notifications_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_libraries
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_max_per_check
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_max_per_check_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_new_episodes
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_new_episodes_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_notification_lights
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_notification_lights_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_notifications
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_quiet_end
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_quiet_end_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_quiet_hours
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_quiet_hours_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_quiet_start
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_quiet_start_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_respect_system_dnd
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_respect_system_dnd_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_sound
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_sound_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_system_notification_settings
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_system_notification_settings_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_vibrate
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_vibrate_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_max_per_check_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_max_per_check_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_notification_check_frequency_subtitle
@@ -76,6 +88,7 @@ internal object NotificationRows {
         id = "notifications_enable",
         icon = Tabler.Outline.Bell,
         titleRes = Res.string.settings_enable_notifications,
+        subtitleRes = Res.string.settings_enable_notifications_subtitle,
         searchTitleRes = Res.string.ss_notifications_enable_title,
         searchSubtitleRes = Res.string.ss_notifications_enable_subtitle,
         keywords = listOf("notifications", "frequency", "bell", "check frequency", "alerts"),
@@ -88,6 +101,7 @@ internal object NotificationRows {
         id = "respect_system_dnd",
         icon = Tabler.Outline.BellOff,
         titleRes = Res.string.settings_respect_system_dnd,
+        subtitleRes = Res.string.settings_respect_system_dnd_subtitle,
         searchTitleRes = Res.string.ss_respect_system_dnd_title,
         searchSubtitleRes = Res.string.ss_respect_system_dnd_subtitle,
         keywords = listOf("dnd", "do not disturb", "quiet", "silent", "notification policy"),
@@ -101,6 +115,7 @@ internal object NotificationRows {
         id = "system_notification_settings",
         icon = Tabler.Outline.Settings,
         titleRes = Res.string.settings_system_notification_settings,
+        subtitleRes = Res.string.settings_system_notification_settings_subtitle,
         searchTitleRes = Res.string.ss_system_notification_settings_title,
         searchSubtitleRes = Res.string.ss_system_notification_settings_subtitle,
         keywords = listOf("system", "notification", "channel", "settings", "customize"),
@@ -114,6 +129,7 @@ internal object NotificationRows {
         id = "notification_check_frequency",
         icon = Tabler.Outline.Clock,
         titleRes = Res.string.settings_check_frequency,
+        subtitleRes = Res.string.settings_check_frequency_subtitle,
         searchTitleRes = Res.string.ss_notification_check_frequency_title,
         searchSubtitleRes = Res.string.ss_notification_check_frequency_subtitle,
         keywords = listOf("notification", "check", "frequency", "interval", "polling", "new media"),
@@ -126,6 +142,7 @@ internal object NotificationRows {
         id = "quiet_hours",
         icon = Tabler.Outline.Moon,
         titleRes = Res.string.settings_quiet_hours,
+        subtitleRes = Res.string.settings_quiet_hours_subtitle,
         searchTitleRes = Res.string.ss_quiet_hours_title,
         searchSubtitleRes = Res.string.ss_quiet_hours_subtitle,
         keywords = listOf("quiet hours", "suppress", "silent", "night", "do not disturb"),
@@ -139,6 +156,7 @@ internal object NotificationRows {
         id = "quiet_start",
         icon = Tabler.Outline.Sunset,
         titleRes = Res.string.settings_quiet_start,
+        subtitleRes = Res.string.settings_quiet_start_subtitle,
         searchTitleRes = Res.string.ss_quiet_start_title,
         searchSubtitleRes = Res.string.ss_quiet_start_subtitle,
         keywords = listOf("quiet hours", "start", "begin", "night", "silent"),
@@ -152,6 +170,7 @@ internal object NotificationRows {
         id = "quiet_end",
         icon = Tabler.Outline.Sunrise,
         titleRes = Res.string.settings_quiet_end,
+        subtitleRes = Res.string.settings_quiet_end_subtitle,
         searchTitleRes = Res.string.ss_quiet_end_title,
         searchSubtitleRes = Res.string.ss_quiet_end_subtitle,
         keywords = listOf("quiet hours", "end", "morning", "silent"),
@@ -165,6 +184,7 @@ internal object NotificationRows {
         id = "notification_sound",
         icon = Tabler.Outline.Volume,
         titleRes = Res.string.settings_sound,
+        subtitleRes = Res.string.settings_sound_subtitle,
         searchTitleRes = Res.string.ss_notification_sound_title,
         searchSubtitleRes = Res.string.ss_notification_sound_subtitle,
         keywords = listOf("notification", "sound", "audio", "alert", "tone"),
@@ -177,6 +197,7 @@ internal object NotificationRows {
         id = "notification_vibrate",
         icon = Tabler.Outline.PhoneCall,
         titleRes = Res.string.settings_vibrate,
+        subtitleRes = Res.string.settings_vibrate_subtitle,
         searchTitleRes = Res.string.ss_notification_vibrate_title,
         searchSubtitleRes = Res.string.ss_notification_vibrate_subtitle,
         keywords = listOf("notification", "vibrate", "vibration", "haptic", "buzz"),
@@ -189,6 +210,7 @@ internal object NotificationRows {
         id = "notification_lights",
         icon = Tabler.Outline.Bulb,
         titleRes = Res.string.settings_notification_lights,
+        subtitleRes = Res.string.settings_notification_lights_subtitle,
         searchTitleRes = Res.string.ss_notification_lights_title,
         searchSubtitleRes = Res.string.ss_notification_lights_subtitle,
         keywords = listOf("notification", "lights", "led", "pulse", "blink"),
@@ -201,6 +223,7 @@ internal object NotificationRows {
         id = "notification_new_episodes",
         icon = Tabler.Outline.DeviceTv,
         titleRes = Res.string.settings_new_episodes,
+        subtitleRes = Res.string.settings_new_episodes_subtitle,
         searchTitleRes = Res.string.ss_new_episodes_title,
         searchSubtitleRes = Res.string.ss_new_episodes_subtitle,
         keywords = listOf("new episodes", "episode", "episodes", "season", "series", "tv", "notification"),
@@ -213,6 +236,7 @@ internal object NotificationRows {
         id = "max_per_check",
         icon = Tabler.Outline.LetterCase,
         titleRes = Res.string.settings_max_per_check,
+        subtitleRes = Res.string.settings_max_per_check_subtitle,
         searchTitleRes = Res.string.ss_max_per_check_title,
         searchSubtitleRes = Res.string.ss_max_per_check_subtitle,
         keywords = listOf("max", "per check", "batch", "items", "limit", "notification"),

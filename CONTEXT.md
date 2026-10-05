@@ -3731,7 +3731,7 @@ both the row-total derivation and the screens' emission `if`s consult it),
 `id/titleRes/subtitleRes/categoryRes/keywords/route/icon/isAdvanced/platforms`,
 locale resolved lazily — survives as the projected item), and
 `SettingsSearchCatalog.items` stays the flat concatenation of the aggregation
-decoration (`SettingsScreenGroups.all`) in the curated order (258 items — the
+decoration (`SettingsScreenGroups.all`) in the curated order (314 items — the
 matcher's stable sort uses that order as the tiebreaker, so keep additions
 deliberate). Search faces: `searchTitleRes` is optional and folds to the
 row's `titleRes` where the hit restates the screen title (the ~19 restating
@@ -3856,16 +3856,16 @@ field.
 `SettingsSearchCatalogTest` (feature/settings `jvmTest`,
 kotlin.test — resource resolvability is compile-time-guaranteed by the
 generated `StringResource` accessors, so the suite pins id uniqueness,
-resource/category cardinality, keywords and the 258-item aggregation);
+resource/category cardinality, keywords and the 314-item aggregation);
 `SettingsSearchMatcherTest` (shared/core/ui `jvmTest`) is synthetic and pins
 matching only.
 
 The settings **icon prewarmer** derives its workload from the same catalog:
-the 258 catalog rows × 3 resource slots (title/subtitle/category
-`StringResource` accessors) = 774 reads over 530 distinct resources — the
-dedup happens at the generated-accessor level, so the prewarmer warms the
-530 distinct entries; the catalog test pins the 258-item aggregation, and
-the distinct count is derivable from it (14 shared category strings).
+every catalog row's 3 resource slots (title/subtitle/category
+`StringResource` accessors) — the dedup happens at the generated-accessor
+level, so the prewarmer warms the distinct entries only; the catalog test
+pins the 314-item aggregation, and the workload derives from it (the
+category strings are shared across rows).
 
 ## Settings platform visibility
 
@@ -3938,7 +3938,7 @@ preferences)` counting the `audio` group through a per-id visibility
 predicate, and `SettingsScreen` consumes core/ui's shared
 `settingsSearchResults` pipeline instead of its inline copy (the
 blank-query short-circuit now applies there too — the copy resolved
-all 258 items on every blank query). `ACTION_ONLY_IDS` stays a hand
+all 314 items on every blank query). `ACTION_ONLY_IDS` stays a hand
 set: "action" is dialog semantics, not structure.
 
 **`ConnectionProbe`** (settings commonMain, generic over

@@ -138,16 +138,13 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_abou
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_whatsnew_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_whatsnew_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_server_management
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_server_management_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_about_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_account
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_activity_insights
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_activity_insights_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_activity_queue
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_activity_queue_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_admin_badge
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_admin_dashboard
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_admin_dashboard_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_advanced_badge
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_advanced_enabled
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_appearance
@@ -158,11 +155,9 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_back
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_backup_restore_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_biometric_on
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_browse_favorites
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_browse_favorites_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_cache_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_cancel
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_categories
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_categories_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_category_movies
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_category_music
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_category_photos
@@ -179,9 +174,6 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_drea
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dream_dim_after_30_seconds
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dream_dim_after_5_minutes
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dream_dim_after_off
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dream_dim_after_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dream_dim_percent_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dream_max_parental_rating_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dream_rating_none
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dynamic_token
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_early_access_features
@@ -222,34 +214,28 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_priv
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_privacy_data_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_recents_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_requests
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_requests_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_search_back_cd
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_search_hint
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_search_placeholder
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_security
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_setup_wizard
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_setup_wizard_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_screensaver
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discord_presence
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discord_presence_enabled_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discord_presence_off
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discord_presence_on
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hooks
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hooks_cmd_not_set
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hooks_enabled_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hooks_off
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hooks_on
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hooks_placeholder_hint
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_idle_ambient
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_idle_ambient_enabled
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_idle_ambient_enabled_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_idle_ambient_off
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_idle_ambient_on
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_idle_ambient_timeout
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_idle_ambient_timeout_minutes
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_idle_ambient_timeout_off
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_idle_ambient_timeout_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_signed_in_as_name
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_sign_out
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_sign_out_confirm_message
@@ -257,12 +243,8 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_sign
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_sign_out_confirm_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_sign_out_confirm_title_server
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_sign_out_from_server
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_sign_out_from_server_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_sign_out_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_slideshow_interval
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_slideshow_interval_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_switch_user
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_switch_user_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_system
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_system_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_title
@@ -271,9 +253,7 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_tran
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_transition_slide
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_transition_style
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_upcoming
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_upcoming_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_watch_history_heatmap
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_watch_history_heatmap_subtitle
 
 private val LocalAnimateSettingsEntrance = staticCompositionLocalOf { false }
 
@@ -2266,27 +2246,27 @@ private fun SettingsAccountSection(
                                 initiallyExpanded = false,
                             ) {
                                 // Row count derived from the account group
-                                // declaration — the four declared ids are
-                                // exactly the rows rendered here.
-                                val accountCount = SettingsScreenGroups.account.itemIds.size
+                                // declaration's row gates — the four declared
+                                // rows are exactly the rows rendered here.
+                                val accountCount = rowTotalFor(SettingsScreenGroups.account, RowAdmissionFlags())
                                 SettingListItem(
                                     icon = rowIcon(AccountRows.ServerManagement),
                                     title = rowTitle(AccountRows.ServerManagement),
-                                    subtitle = stringResource(Res.string.settings_server_management_subtitle),
+                                    subtitle = rowSubtitle(AccountRows.ServerManagement),
                                     index = 0, count = accountCount,
                                     onClick = { openSetting(AccountRows.ServerManagement.id) { Route.ServerManagement(it) } },
                                 )
                                 SettingListItem(
                                     icon = rowIcon(AccountRows.UserManagement),
                                     title = rowTitle(AccountRows.UserManagement),
-                                    subtitle = stringResource(Res.string.settings_switch_user_subtitle),
+                                    subtitle = rowSubtitle(AccountRows.UserManagement),
                                     index = 1, count = accountCount,
                                     onClick = { openSetting(AccountRows.UserManagement.id) { Route.UserManagement(it) } },
                                 )
                                 SettingListItem(
                                     icon = rowIcon(AccountRows.Logout),
                                     title = rowTitle(AccountRows.Logout),
-                                    subtitle = stringResource(Res.string.settings_sign_out_subtitle),
+                                    subtitle = rowSubtitle(AccountRows.Logout),
                                     index = 2, count = accountCount,
                                     isDestructive = true,
                                     onClick = { onSignOut(false) },
@@ -2294,7 +2274,7 @@ private fun SettingsAccountSection(
                                 SettingListItem(
                                     icon = rowIcon(AccountRows.SignOutFromServer),
                                     title = rowTitle(AccountRows.SignOutFromServer),
-                                    subtitle = stringResource(Res.string.settings_sign_out_from_server_subtitle),
+                                    subtitle = rowSubtitle(AccountRows.SignOutFromServer),
                                     index = 3, count = accountCount,
                                     isDestructive = true,
                                     onClick = { onSignOut(true) },
@@ -2333,40 +2313,40 @@ private fun SettingsActivitySection(
                                 initiallyExpanded = false,
                             ) {
                                 // Row count derived from the activity-insights
-                                // group declaration.
-                                val insightsCount = SettingsScreenGroups.activityInsights.itemIds.size
+                                // group declaration's row gates.
+                                val insightsCount = rowTotalFor(SettingsScreenGroups.activityInsights, RowAdmissionFlags())
                                 SettingListItem(
                                     icon = rowIcon(ActivityInsightsRows.Favorites),
                                     title = rowTitle(ActivityInsightsRows.Favorites),
-                                    subtitle = stringResource(Res.string.settings_browse_favorites_subtitle),
+                                    subtitle = rowSubtitle(ActivityInsightsRows.Favorites),
                                     index = 0, count = insightsCount,
                                     onClick = { openSetting(ActivityInsightsRows.Favorites.id) { Route.Favorites } },
                                 )
                                 SettingListItem(
                                     icon = rowIcon(ActivityInsightsRows.WatchProgressHeatmap),
                                     title = rowTitle(ActivityInsightsRows.WatchProgressHeatmap),
-                                    subtitle = stringResource(Res.string.settings_watch_history_heatmap_subtitle),
+                                    subtitle = rowSubtitle(ActivityInsightsRows.WatchProgressHeatmap),
                                     index = 1, count = insightsCount,
                                     onClick = { openSetting(ActivityInsightsRows.WatchProgressHeatmap.id) { Route.WatchProgressHeatmap } },
                                 )
                                 SettingListItem(
                                     icon = rowIcon(ActivityInsightsRows.ActivityQueue),
                                     title = rowTitle(ActivityInsightsRows.ActivityQueue),
-                                    subtitle = stringResource(Res.string.settings_activity_queue_subtitle),
+                                    subtitle = rowSubtitle(ActivityInsightsRows.ActivityQueue),
                                     index = 2, count = insightsCount,
                                     onClick = { openSetting(ActivityInsightsRows.ActivityQueue.id) { Route.ArrQueue } },
                                 )
                                 SettingListItem(
                                     icon = rowIcon(ActivityInsightsRows.Upcoming),
                                     title = rowTitle(ActivityInsightsRows.Upcoming),
-                                    subtitle = stringResource(Res.string.settings_upcoming_subtitle),
+                                    subtitle = rowSubtitle(ActivityInsightsRows.Upcoming),
                                     index = 3, count = insightsCount,
                                     onClick = { openSetting(ActivityInsightsRows.Upcoming.id) { Route.UpcomingCalendar } },
                                 )
                                 SettingListItem(
                                     icon = rowIcon(ActivityInsightsRows.Requests),
                                     title = rowTitle(ActivityInsightsRows.Requests),
-                                    subtitle = stringResource(Res.string.settings_requests_subtitle),
+                                    subtitle = rowSubtitle(ActivityInsightsRows.Requests),
                                     index = 4, count = insightsCount,
                                     trailingText = pendingCount.takeIf { it > 0 }?.toString(),
                                     onClick = { openSetting(ActivityInsightsRows.Requests.id) { Route.Requests } },
@@ -2416,7 +2396,7 @@ private fun SettingsSystemSection(
                                     SettingListItem(
                                         icon = rowIcon(SystemRows.AdminDashboard),
                                         title = rowTitle(SystemRows.AdminDashboard),
-                                        subtitle = stringResource(Res.string.settings_admin_dashboard_subtitle),
+                                        subtitle = rowSubtitle(SystemRows.AdminDashboard),
                                         index = systemIndex++, count = systemCount,
                                         onClick = { openSetting(SystemRows.AdminDashboard.id) { Route.AdminDashboard } },
                                     )
@@ -2424,7 +2404,7 @@ private fun SettingsSystemSection(
                                 SettingListItem(
                                     icon = rowIcon(SystemRows.SetupWizard),
                                     title = rowTitle(SystemRows.SetupWizard),
-                                    subtitle = stringResource(Res.string.settings_setup_wizard_subtitle),
+                                    subtitle = rowSubtitle(SystemRows.SetupWizard),
                                     index = systemIndex++, count = systemCount,
                                     onClick = { onSetupWizardClick() },
                                 )
@@ -2451,9 +2431,9 @@ private fun SettingsScreensaverSection(
                                     initiallyExpanded = lastClickedSettingId in SettingsScreenGroups.systemScreensaver.itemIdSet,
                                 ) {
                                     // Row count derived from the screensaver group
-                                    // declaration — the eight declared dream rows are
-                                    // exactly the rows rendered here.
-                                    val dreamTotal = SettingsScreenGroups.systemScreensaver.itemIds.size
+                                    // declaration's row gates — the eight declared
+                                    // dream rows are exactly the rows rendered here.
+                                    val dreamTotal = rowTotalFor(SettingsScreenGroups.systemScreensaver, RowAdmissionFlags())
                                     val slideshowIntervalTitle = rowTitle(SystemRows.ScreensaverSlideshowInterval)
                                     val transitionStyleTitle = rowTitle(SystemRows.ScreensaverTransitionStyle)
                                     val transitionCrossfadeLabel = stringResource(Res.string.settings_transition_crossfade)
@@ -2475,7 +2455,7 @@ private fun SettingsScreensaverSection(
                                     SettingListItem(
                                         icon = rowIcon(SystemRows.ScreensaverCategories),
                                         title = rowTitle(SystemRows.ScreensaverCategories),
-                                        subtitle = stringResource(Res.string.settings_categories_subtitle),
+                                        subtitle = rowSubtitle(SystemRows.ScreensaverCategories),
                                         trailingText = remember(preferences.dreamImageCategories, categoryMovies, categoryTv, categoryMusic, categoryPhotos) {
                                             preferences.dreamImageCategories.joinToString(", ") {
                                                 when (it) {
@@ -2504,7 +2484,7 @@ private fun SettingsScreensaverSection(
                                     SettingListItem(
                                         icon = rowIcon(SystemRows.ScreensaverSlideshowInterval),
                                         title = rowTitle(SystemRows.ScreensaverSlideshowInterval),
-                                        subtitle = stringResource(Res.string.settings_slideshow_interval_subtitle),
+                                        subtitle = rowSubtitle(SystemRows.ScreensaverSlideshowInterval),
                                         trailingText = "${preferences.dreamSlideshowIntervalMs / 1000}s",
                                         index = 2, count = dreamTotal,
                                         highlighted = lastClickedSettingId == SystemRows.ScreensaverSlideshowInterval.id,
@@ -2566,7 +2546,7 @@ private fun SettingsScreensaverSection(
                                     SettingListItem(
                                         icon = rowIcon(SystemRows.ScreensaverMaxParentalRating),
                                         title = rowTitle(SystemRows.ScreensaverMaxParentalRating),
-                                        subtitle = stringResource(Res.string.settings_dream_max_parental_rating_subtitle),
+                                        subtitle = rowSubtitle(SystemRows.ScreensaverMaxParentalRating),
                                         trailingText = maxRatingItems
                                             .firstOrNull { it.first == preferences.dreamMaxParentalRating }
                                             ?.second ?: maxRatingNoneLabel,
@@ -2604,7 +2584,7 @@ private fun SettingsScreensaverSection(
                                     SettingListItem(
                                         icon = rowIcon(SystemRows.ScreensaverDimAfter),
                                         title = rowTitle(SystemRows.ScreensaverDimAfter),
-                                        subtitle = stringResource(Res.string.settings_dream_dim_after_subtitle),
+                                        subtitle = rowSubtitle(SystemRows.ScreensaverDimAfter),
                                         trailingText = dimAfterLabel(preferences.dreamDimAfterMs),
                                         index = 6, count = dreamTotal,
                                         highlighted = lastClickedSettingId == SystemRows.ScreensaverDimAfter.id,
@@ -2622,7 +2602,7 @@ private fun SettingsScreensaverSection(
                                     SettingListItem(
                                         icon = rowIcon(SystemRows.ScreensaverDimPercent),
                                         title = rowTitle(SystemRows.ScreensaverDimPercent),
-                                        subtitle = stringResource(Res.string.settings_dream_dim_percent_subtitle),
+                                        subtitle = rowSubtitle(SystemRows.ScreensaverDimPercent),
                                         trailingText = "${preferences.dreamDimPercent}%",
                                         index = 7, count = dreamTotal,
                                         highlighted = lastClickedSettingId == SystemRows.ScreensaverDimPercent.id,
@@ -2659,7 +2639,7 @@ private fun SettingsIdleAmbientSection(
                                     },
                                     initiallyExpanded = lastClickedSettingId in SettingsScreenGroups.systemIdleAmbient.itemIdSet,
                                 ) {
-                                    val idleTotal = SettingsScreenGroups.systemIdleAmbient.itemIds.size
+                                    val idleTotal = rowTotalFor(SettingsScreenGroups.systemIdleAmbient, RowAdmissionFlags())
                                     val idleTimeoutTitle = rowTitle(SystemRows.IdleAmbientTimeout)
                                     val idleTimeoutOffLabel = stringResource(Res.string.settings_idle_ambient_timeout_off)
                                     val idleTimeoutOptions = listOf(0L, 1L, 5L, 10L, 15L, 30L)
@@ -2673,7 +2653,7 @@ private fun SettingsIdleAmbientSection(
                                     SettingToggleItem(
                                         icon = rowIcon(SystemRows.IdleAmbientEnabled),
                                         title = rowTitle(SystemRows.IdleAmbientEnabled),
-                                        subtitle = stringResource(Res.string.settings_idle_ambient_enabled_subtitle),
+                                        subtitle = rowSubtitle(SystemRows.IdleAmbientEnabled),
                                         checked = preferences.idleAmbientEnabled,
                                         index = 0, count = idleTotal,
                                         highlighted = lastClickedSettingId == SystemRows.IdleAmbientEnabled.id,
@@ -2684,7 +2664,7 @@ private fun SettingsIdleAmbientSection(
                                     SettingListItem(
                                         icon = rowIcon(SystemRows.IdleAmbientTimeout),
                                         title = rowTitle(SystemRows.IdleAmbientTimeout),
-                                        subtitle = stringResource(Res.string.settings_idle_ambient_timeout_subtitle),
+                                        subtitle = rowSubtitle(SystemRows.IdleAmbientTimeout),
                                         trailingText = idleTimeoutLabels[
                                             idleTimeoutOptions.indexOf(preferences.idleAmbientTimeoutMin)
                                                 .coerceAtMost(idleTimeoutLabels.lastIndex),
@@ -2725,11 +2705,11 @@ private fun SettingsDiscordPresenceSection(
                                     },
                                     initiallyExpanded = lastClickedSettingId in SettingsScreenGroups.systemDiscordPresence.itemIdSet,
                                 ) {
-                                    val discordTotal = SettingsScreenGroups.systemDiscordPresence.itemIds.size
+                                    val discordTotal = rowTotalFor(SettingsScreenGroups.systemDiscordPresence, RowAdmissionFlags())
                                     SettingToggleItem(
                                         icon = rowIcon(SystemRows.DiscordPresenceEnabled),
                                         title = rowTitle(SystemRows.DiscordPresenceEnabled),
-                                        subtitle = stringResource(Res.string.settings_discord_presence_enabled_subtitle),
+                                        subtitle = rowSubtitle(SystemRows.DiscordPresenceEnabled),
                                         checked = preferences.discordPresenceEnabled,
                                         index = 0, count = discordTotal,
                                         highlighted = lastClickedSettingId == SystemRows.DiscordPresenceEnabled.id,
@@ -2765,12 +2745,12 @@ private fun SettingsShellHooksSection(
                                     },
                                     initiallyExpanded = lastClickedSettingId in SettingsScreenGroups.systemHooks.itemIdSet,
                                 ) {
-                                    val hooksTotal = SettingsScreenGroups.systemHooks.itemIds.size
+                                    val hooksTotal = rowTotalFor(SettingsScreenGroups.systemHooks, RowAdmissionFlags())
                                     val placeholderHint = stringResource(Res.string.settings_hooks_placeholder_hint)
                                     SettingToggleItem(
                                         icon = rowIcon(SystemRows.HooksEnabled),
                                         title = rowTitle(SystemRows.HooksEnabled),
-                                        subtitle = stringResource(Res.string.settings_hooks_enabled_subtitle),
+                                        subtitle = rowSubtitle(SystemRows.HooksEnabled),
                                         checked = preferences.hooksEnabled,
                                         index = 0, count = hooksTotal,
                                         highlighted = lastClickedSettingId == SystemRows.HooksEnabled.id,

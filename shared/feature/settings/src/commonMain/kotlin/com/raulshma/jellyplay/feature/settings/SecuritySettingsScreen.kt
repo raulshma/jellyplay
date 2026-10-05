@@ -39,16 +39,13 @@ import com.composables.icons.tabler.outline.*
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_4_digit_pin
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_allow_remote_control
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_allow_remote_control_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_authorization_failed
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_authorize
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_authorize_device
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_authorize_device_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_authorize_quick_connect
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_authorize_quick_connect_message
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_authorizing
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_lock_timer
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_lock_timer_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_biometric_on
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_biometric_unlock
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_biometric_unlock_subtitle
@@ -83,7 +80,6 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_remo
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_remote_control_off
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_remote_control_on
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_remote_display_content
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_remote_display_content_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_require_pin_player
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_security
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_set_pin
@@ -276,7 +272,7 @@ val biometricGate = rememberBiometricGate()
                         SettingListItem(
                             icon = Tabler.Outline.Clock,
                             title = rowTitle(SecurityRows.AutoLockTimer),
-                            subtitle = stringResource(Res.string.settings_auto_lock_timer_subtitle),
+                            subtitle = rowSubtitle(SecurityRows.AutoLockTimer),
                             trailingText = lockTimerLabel(preferences.autoLockTimerMs),
                             highlighted = highlightSettingId == SecurityRows.AutoLockTimer.id,
                             onClick = {
@@ -307,7 +303,7 @@ val biometricGate = rememberBiometricGate()
                     SettingListItem(
                         icon = Tabler.Outline.DeviceDesktop,
                         title = rowTitle(SecurityRows.QuickConnectAuthorize),
-                        subtitle = stringResource(Res.string.settings_authorize_device_subtitle),
+                        subtitle = rowSubtitle(SecurityRows.QuickConnectAuthorize),
                         trailingText = "",
                         highlighted = highlightSettingId == SecurityRows.QuickConnectAuthorize.id,
                         index = 0, count = 1,
@@ -334,7 +330,7 @@ val biometricGate = rememberBiometricGate()
                     SettingToggleItem(
                         icon = Tabler.Outline.Cast,
                         title = rowTitle(SecurityRows.RemoteControlEnabled),
-                        subtitle = stringResource(Res.string.settings_allow_remote_control_subtitle),
+                        subtitle = rowSubtitle(SecurityRows.RemoteControlEnabled),
                         checked = preferences.remoteControlEnabled,
                         highlighted = highlightSettingId == SecurityRows.RemoteControlEnabled.id,
                         index = 0, count = 2,
@@ -349,7 +345,7 @@ val biometricGate = rememberBiometricGate()
                     SettingToggleItem(
                         icon = Tabler.Outline.DeviceTv,
                         title = rowTitle(SecurityRows.RemoteDisplayContentEnabled),
-                        subtitle = stringResource(Res.string.settings_remote_display_content_subtitle),
+                        subtitle = rowSubtitle(SecurityRows.RemoteDisplayContentEnabled),
                         checked = preferences.remoteDisplayContentEnabled,
                         highlighted = highlightSettingId == SecurityRows.RemoteDisplayContentEnabled.id,
                         index = 1, count = 2,

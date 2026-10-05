@@ -580,4 +580,6 @@
     <string name="ss_hooks_ended_cmd_subtitle">メディアの再生終了時に実行するコマンド</string>
     <string name="ss_hooks_idle_cmd_subtitle">アプリがアイドル状態になったときに実行するコマンド</string>
     <string name="ss_hooks_idle_ended_cmd_subtitle">アプリがアイドル状態を終了したときに実行するコマンド</string>
+    <string name="ss_input_bindings_title">コントロールをカスタマイズ</string>
+    <string name="ss_input_bindings_subtitle">ジェスチャー、マウス、キーボード、リモコンの操作</string>
 </resources>

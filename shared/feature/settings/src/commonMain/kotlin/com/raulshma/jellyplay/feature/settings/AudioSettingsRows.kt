@@ -9,14 +9,18 @@ import com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchItem
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_auto_play_next
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_cache_clear
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_cache_clear_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_cache_network_policy
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_cache_size
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_cache_size_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_caching_enable
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_default_speed
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_description
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_player
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_prefetch_backfill
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_prefetch_backfill_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_prefetch_lookahead
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_prefetch_lookahead_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_visualizer
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_eq_genre
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_bass_boost
@@ -30,18 +34,24 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_gapl
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_lr_balance
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_night_mode
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_night_mode_gain
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_night_mode_gain_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_night_mode_strength
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_night_mode_volume
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_night_mode_volume_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_pitch_shift
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_preload_buffer
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_preload_buffer_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_replaygain_preamp
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_replaygain_preamp_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_reverb
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_skip_prev_threshold
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_skip_prev_threshold_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_sleep_timer
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_virtualizer
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_virtualizer_strength
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_volume_boost
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_volume_boost_gain
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_volume_boost_gain_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_volume_normalization
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_audio_autoplay_next_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_audio_autoplay_next_title
@@ -299,6 +309,7 @@ internal object AudioRows {
         id = "night_mode_volume",
         icon = Tabler.Outline.Music,
         titleRes = Res.string.settings_night_mode_volume,
+        subtitleRes = Res.string.settings_night_mode_volume_subtitle,
         searchTitleRes = Res.string.ss_night_mode_volume_title,
         searchSubtitleRes = Res.string.ss_night_mode_volume_subtitle,
         keywords = listOf("night mode", "volume", "max", "limit", "quiet"),
@@ -310,6 +321,7 @@ internal object AudioRows {
         id = "night_mode_gain",
         icon = Tabler.Outline.Adjustments,
         titleRes = Res.string.settings_night_mode_gain,
+        subtitleRes = Res.string.settings_night_mode_gain_subtitle,
         searchTitleRes = Res.string.ss_night_mode_gain_title,
         searchSubtitleRes = Res.string.ss_night_mode_gain_subtitle,
         keywords = listOf("night mode", "gain", "loudness", "compensation", "boost"),
@@ -321,6 +333,7 @@ internal object AudioRows {
         id = "audio_skip_prev_threshold",
         icon = Tabler.Outline.PlayerSkipForward,
         titleRes = Res.string.settings_skip_prev_threshold,
+        subtitleRes = Res.string.settings_skip_prev_threshold_subtitle,
         searchTitleRes = Res.string.ss_audio_skip_prev_threshold_title,
         searchSubtitleRes = Res.string.ss_audio_skip_prev_threshold_subtitle,
         keywords = listOf("skip", "previous", "threshold", "restart", "song", "rewind"),
@@ -332,6 +345,7 @@ internal object AudioRows {
         id = "audio_preload_buffer",
         icon = Tabler.Outline.Refresh,
         titleRes = Res.string.settings_preload_buffer,
+        subtitleRes = Res.string.settings_preload_buffer_subtitle,
         searchTitleRes = Res.string.ss_audio_preload_buffer_title,
         searchSubtitleRes = Res.string.ss_audio_preload_buffer_subtitle,
         keywords = listOf("audio", "preload", "buffer", "cache", "ahead"),
@@ -343,6 +357,7 @@ internal object AudioRows {
         id = "replaygain_preamp",
         icon = Tabler.Outline.Adjustments,
         titleRes = Res.string.settings_replaygain_preamp,
+        subtitleRes = Res.string.settings_replaygain_preamp_subtitle,
         searchTitleRes = Res.string.ss_replaygain_preamp_title,
         searchSubtitleRes = Res.string.ss_replaygain_preamp_subtitle,
         keywords = listOf("replaygain", "preamp", "pre-amp", "loudness", "gain", "target"),
@@ -414,6 +429,7 @@ internal object AudioRows {
         id = "volume_boost_gain",
         icon = Tabler.Outline.Speakerphone,
         titleRes = Res.string.settings_volume_boost_gain,
+        subtitleRes = Res.string.settings_volume_boost_gain_subtitle,
         searchTitleRes = Res.string.ss_volume_boost_gain_title,
         searchSubtitleRes = Res.string.ss_volume_boost_gain_subtitle,
         keywords = listOf("volume boost", "gain", "loudness", "preamp", "level"),
@@ -473,6 +489,7 @@ internal object AudioRows {
         id = "audio_cache_size",
         icon = Tabler.Outline.DeviceFloppy,
         titleRes = Res.string.settings_audio_cache_size,
+        subtitleRes = Res.string.settings_audio_cache_size_subtitle,
         searchTitleRes = Res.string.ss_audio_cache_size_title,
         searchSubtitleRes = Res.string.ss_audio_cache_size_subtitle,
         keywords = listOf("audio", "cache", "size", "disk", "storage"),
@@ -484,6 +501,7 @@ internal object AudioRows {
         id = "audio_prefetch_lookahead",
         icon = Tabler.Outline.Music,
         titleRes = Res.string.settings_audio_prefetch_lookahead,
+        subtitleRes = Res.string.settings_audio_prefetch_lookahead_subtitle,
         searchTitleRes = Res.string.ss_audio_prefetch_lookahead_title,
         searchSubtitleRes = Res.string.ss_audio_prefetch_lookahead_subtitle,
         keywords = listOf("audio", "prefetch", "lookahead", "buffering", "music", "queue"),
@@ -496,6 +514,7 @@ internal object AudioRows {
         id = "audio_prefetch_backfill",
         icon = Tabler.Outline.Music,
         titleRes = Res.string.settings_audio_prefetch_backfill,
+        subtitleRes = Res.string.settings_audio_prefetch_backfill_subtitle,
         searchSubtitleRes = Res.string.ss_audio_prefetch_backfill_subtitle,
         keywords = listOf("audio", "prefetch", "backfill", "buffering", "music", "previous"),
         route = Route.AudioSettings(),
@@ -507,6 +526,7 @@ internal object AudioRows {
         id = "audio_cache_clear",
         icon = Tabler.Outline.Trash,
         titleRes = Res.string.settings_audio_cache_clear,
+        subtitleRes = Res.string.settings_audio_cache_clear_subtitle,
         searchSubtitleRes = Res.string.ss_audio_cache_clear_subtitle,
         keywords = listOf("audio", "cache", "clear", "music", "storage", "wipe"),
         route = Route.AudioSettings(),
