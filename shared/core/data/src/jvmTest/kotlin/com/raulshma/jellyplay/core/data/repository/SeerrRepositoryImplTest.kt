@@ -143,19 +143,9 @@ class SeerrRepositoryImplTest {
     }
 
     @Test
-    fun `isConnected delegates to preferences store`() = runTest {
-        every { seerrPreferencesStore.isConnected } returns MutableStateFlow(true)
-
-        val result = repository.isConnected().firstOrNull()
-        assertEquals(true, result)
-    }
-
-    @Test
-    fun `isEnabled reflects preferences`() = runTest {
-        every { seerrPreferencesStore.preferences } returns MutableStateFlow(validPrefs.copy(enabled = true))
-
-        val result = repository.isEnabled().firstOrNull()
-        assertEquals(true, result)
+    fun `preferences delegates to the store flow`() = runTest {
+        val result = repository.preferences.firstOrNull()
+        assertEquals(validPrefs, result)
     }
 
     @Test

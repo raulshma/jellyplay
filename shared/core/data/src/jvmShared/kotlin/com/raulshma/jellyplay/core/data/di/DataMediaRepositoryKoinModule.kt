@@ -101,6 +101,11 @@ internal val dataMediaRepositoryModule: Module = module {
         MediaRepositoryInternals(
             apiClient = get(),
             homeSession = get(),
+            // The detail cluster's four member caches each register their
+            // identity action (epoch bump + wholesale clear) through their
+            // SessionScopedCache chassis — the registry reaches the group
+            // here, at construction.
+            sessionCacheRegistry = get(),
         )
     }
     // The home-sections snapshot store: the deep owner of the PERSISTED half

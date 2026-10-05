@@ -368,7 +368,7 @@ class PlaybackSessionReportingTest {
         session.reloadForMode(PlaybackMode.AUTO, StreamingQuality.AUTO)
 
         val expected: List<SessionEvent> =
-            listOf(SessionEvent.InformUser("Switched to transcoded stream — re-buffering"))
+            listOf(SessionEvent.InformUserKey(PlayerVideoMessage.TranscodeSwitched))
         assertEquals(expected, events)
         // The outgoing server session was stop-reported BEFORE the swap, at the
         // engine's current position (no seek latch).
@@ -391,8 +391,8 @@ class PlaybackSessionReportingTest {
         // Both notices fire, in order: the transcode re-buffer notice and the
         // forced-direct-play fallback notice.
         val expected: List<SessionEvent> = listOf(
-            SessionEvent.InformUser("Switched to transcoded stream — re-buffering"),
-            SessionEvent.InformUser("Direct Play unavailable for this item — falling back to transcode"),
+            SessionEvent.InformUserKey(PlayerVideoMessage.TranscodeSwitched),
+            SessionEvent.InformUserKey(PlayerVideoMessage.DirectPlayUnavailable),
         )
         assertEquals(expected, events)
         // The fallback path re-runs reportCurrentPlaybackStopped, but the

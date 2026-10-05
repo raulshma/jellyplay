@@ -19,6 +19,13 @@ package com.raulshma.jellyplay.feature.player.video.engine
  * `nativeVolumeRestore` returns [NativeVolumeRestore] — a protected member
  * cannot expose an internal type. Consumers stay the engine adapters and
  * the policy test; this is not a stable API surface.
+ *
+ * Home (volume-policy conveyor): moved wholesale from player-video to
+ * player-contract — the recorded home for engine-shared machinery — so the
+ * live player (player-live, which may not depend on player-video) can host
+ * the same mute template. The `feature.player.video.engine` package is kept
+ * by recorded decision, so every existing consumer and test compiles with no
+ * import changes.
  */
 object PlaybackVolumePolicy {
 
@@ -97,15 +104,21 @@ object PlaybackVolumePolicy {
     /** Decision for unmuting. */
     data class UnmutePlan(
         val nativeVolume: Float?,
-        /** Remembered level coerced into the audible-floor..1 window. */
+        /** Remembered level coerced into the restore-floor..1 window. */
         val systemStream: Float,
     )
 
+    /**
+     * [unmuteFloor] is the host's declared divergence data: VOD's audible
+     * floor is the default (a remembered 0.02 unmutes to an audible 0.05),
+     * while live passes `0f` to restore the EXACT pre-mute level.
+     */
     fun planUnmute(
         rememberedUnmuteVolume: Float,
         nativeRestore: NativeVolumeRestore,
+        unmuteFloor: Float = UNMUTE_FLOOR,
     ): UnmutePlan {
-        val target = rememberedUnmuteVolume.coerceIn(UNMUTE_FLOOR, 1f)
+        val target = rememberedUnmuteVolume.coerceIn(unmuteFloor, 1f)
         return UnmutePlan(
             nativeVolume = resolveNativeVolume(nativeRestore, rememberedLevel = target),
             systemStream = target,
@@ -120,5 +133,9 @@ object PlaybackVolumePolicy {
             NativeVolumeRestore.LEAVE_UNCHANGED -> null
         }
 
-    private const val UNMUTE_FLOOR = 0.05f
+    /**
+     * VOD's audible unmute floor (the default for [planUnmute]); live's
+     * exact-restore divergence overrides it with `0f` via the surface.
+     */
+    const val UNMUTE_FLOOR = 0.05f
 }

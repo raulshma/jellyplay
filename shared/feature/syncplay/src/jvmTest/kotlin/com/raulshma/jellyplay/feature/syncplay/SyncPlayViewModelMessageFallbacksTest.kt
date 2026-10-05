@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.syncplay
 
 import com.raulshma.jellyplay.core.data.repository.SyncPlayRepository
+import com.raulshma.jellyplay.core.data.syncplay.SyncPlayEvent
 import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastSlice
 import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastStore
 import com.raulshma.jellyplay.core.model.SyncPlayGroup
@@ -55,7 +56,7 @@ class SyncPlayViewModelMessageFallbacksTest {
     private lateinit var mediaRepository: SyncPlayRepository
     private lateinit var syncPlaySession: SyncPlaySession
     private lateinit var syncPlayCastStore: SyncPlayCastStore
-    private lateinit var eventsFlow: MutableSharedFlow<SyncPlaySessionEvent>
+    private lateinit var eventsFlow: MutableSharedFlow<SyncPlayEvent>
     private lateinit var castPrefs: MutableStateFlow<SyncPlayCastSlice>
 
     @BeforeTest
@@ -150,7 +151,7 @@ class SyncPlayViewModelMessageFallbacksTest {
             // The event listener is live: the first PlayQueueUpdate synthesizes
             // the placeholder header.
             eventsFlow.tryEmit(
-                SyncPlaySessionEvent.PlayQueueUpdate(
+                SyncPlayEvent.PlayQueueUpdate(
                     com.raulshma.jellyplay.core.model.SyncPlayQueueUpdateData(
                         playlistItemIds = emptyList(),
                         itemIds = emptyList(),

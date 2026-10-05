@@ -102,6 +102,7 @@ internal val dataDownloadsConveyorModule: Module = module {
             storagePolicy = get(),
             downloadEnqueuer = get<DownloadEnqueueCoordinator>(),
             progressNotifier = get<DownloadProgressNotifier>(),
+            timeSource = get(),
             writer = get(),
             downloadDelegate = get(),
         )

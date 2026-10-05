@@ -161,8 +161,8 @@ class StudioDetailViewModelTest {
         // The relaxed mock swallows downloadAndReport without ever invoking the
         // callback. Mirror the real cascade (NeedsDetailScreen → onOpenDetail
         // with the plain item id) so the routing actually happens.
-        coEvery { quickDownloadActions.downloadAndReport(any(), any()) } coAnswers {
-            secondArg<(String) -> Unit>()(firstArg<MediaItem>().id)
+        coEvery { quickDownloadActions.downloadAndReport(any(), any(), any(), any()) } coAnswers {
+            secondArg<(String, Boolean) -> Unit>()(firstArg<MediaItem>().id, false)
         }
 
         viewModel.downloadItem(item) { routedTo = it }
@@ -170,7 +170,7 @@ class StudioDetailViewModelTest {
 
         // This host has no pre-presented series sheet: the callback passes the
         // item id straight through to the shared report-and-route cascade.
-        coVerify(exactly = 1) { quickDownloadActions.downloadAndReport(item, any()) }
+        coVerify(exactly = 1) { quickDownloadActions.downloadAndReport(item, any(), any(), any()) }
         assertEquals("m1", routedTo)
     }
 

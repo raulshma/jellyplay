@@ -509,6 +509,18 @@ class OfflineSyncManagerResyncTest {
         override fun enqueueDownload(downloadId: String) {
             calls += "enqueueDownload"
         }
+
+        // The port's read side — resync writes never read back here, so these
+        // are surface-completing no-ops.
+        override suspend fun loadLocalSubtitleManifest(
+            downloadPath: String,
+            itemId: String?,
+        ): com.raulshma.jellyplay.core.model.OfflineSubtitleManifest? = null
+
+        override suspend fun loadLocalSegments(itemId: String): List<com.raulshma.jellyplay.core.model.MediaSegment>? = null
+
+        override suspend fun getDownloadFileInventory(itemId: String): com.raulshma.jellyplay.core.model.DownloadFileInventory =
+            com.raulshma.jellyplay.core.model.DownloadFileInventory.EMPTY
     }
 
     private fun detail(): MediaDetail {

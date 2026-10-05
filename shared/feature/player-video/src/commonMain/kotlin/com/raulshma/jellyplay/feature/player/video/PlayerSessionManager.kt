@@ -19,6 +19,8 @@ import com.raulshma.jellyplay.core.model.MediaStreamSelection
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.PlayMethod
 import com.raulshma.jellyplay.core.model.PlaybackRequestSpecific
+import com.raulshma.jellyplay.core.model.PlaybackResolution
+import com.raulshma.jellyplay.core.model.PlaybackResolveRequest
 import com.raulshma.jellyplay.core.model.preferredMediaSource
 import com.raulshma.jellyplay.core.model.mediaRuleContentType
 import com.raulshma.jellyplay.core.model.toMediaDetail
@@ -549,22 +551,30 @@ internal class PlayerSessionManager(
 
         // Consult the PlaybackInfo endpoint so the server decides Direct
         // Play / Direct Stream / Transcode based on the device profile and
-        // the user's PlaybackMode. Falls back to a static direct URL when
-        // the server cannot resolve a playable method (preserving the
-        // historical behaviour for non-conforming sources).
+        // the user's PlaybackMode. One repository member owns the whole
+        // ladder now: when the server cannot resolve a playable method, the
+        // request falls through to the static direct URL with the
+        // DIRECT_PLAY default (preserving the historical behaviour for
+        // non-conforming sources).
         val maxBitrate = adaptiveBitrateManager.resolveEffectiveMaxBitrate()
-        val resolved = playbackRepository.resolvePlayback(
-            itemId = itemId,
-            mediaSourceId = sourceId,
-            startTimeTicks = startPositionTicks,
-            audioStreamIndex = null,
-            subtitleStreamIndex = null,
-            maxStreamingBitrateBits = maxBitrate,
-            mode = agg.playback.playbackMode,
-            playerType = playerType,
+        val resolution = playbackRepository.resolvePlayable(
+            PlaybackResolveRequest(
+                itemId = itemId,
+                mediaSourceId = sourceId,
+                startTimeTicks = startPositionTicks,
+                maxStreamingBitrateBits = maxBitrate,
+                mode = agg.playback.playbackMode,
+                playerType = playerType,
+                staticFallbackLiveStreamId = source?.liveStreamId,
+            ),
         )
+        // Resolved rides as-is; StaticFallback is the fold above; Unplayable
+        // is a live-only miss and cannot reach a request without a
+        // liveStreamOption — the empty sentinel keeps the type exhaustive.
+        val resolved = (resolution as? PlaybackResolution.Resolved)?.playback
         val url = resolved?.streamUrl
-            ?: playbackRepository.getStreamUrl(itemId, sourceId, startPositionTicks, source?.liveStreamId)
+            ?: (resolution as? PlaybackResolution.StaticFallback)?.streamUrl
+            ?: ""
         val playMethod = resolved?.playMethod ?: PlayMethod.DIRECT_PLAY
 
         _sessionState.update {
@@ -722,10 +732,7 @@ internal class PlayerSessionManager(
         if (playerType != PlayerType.LIBVLC || vlcClientCertNoticeShown) return
         if (playbackIdentity.clientTls() == null) return
         vlcClientCertNoticeShown = true
-        userMessageBus.info(
-            "Client certificate not supported by the VLC engine — " +
-                "switch to ExoPlayer or mpv for mTLS servers",
-        )
+        userMessageBus.info(PlayerVideoMessage.VlcClientCertUnsupported)
     }
 
     /** See [maybeNotifyVlcClientCertificateUnsupported]. */
@@ -932,18 +939,25 @@ internal class PlayerSessionManager(
         val agg = aggregateStore.aggregate.value
         val playerType = lastPlayerType ?: agg.playback.preferredPlayer
 
-        val resolved = playbackRepository.resolvePlayback(
-            itemId = itemId,
-            mediaSourceId = sourceId,
-            startTimeTicks = startPositionMs * 10_000,
-            audioStreamIndex = selection?.audioStreamIndex,
-            subtitleStreamIndex = selection?.subtitleStreamIndex,
-            maxStreamingBitrateBits = maxBitrate,
-            mode = mode,
-            playerType = playerType,
+        // The same one-member ladder as loadOnline: PlaybackInfo re-POST,
+        // with the repository's static fold (static URL + DIRECT_PLAY
+        // default) taking over when the server offers nothing playable.
+        val resolution = playbackRepository.resolvePlayable(
+            PlaybackResolveRequest(
+                itemId = itemId,
+                mediaSourceId = sourceId,
+                startTimeTicks = startPositionMs * 10_000,
+                audioStreamIndex = selection?.audioStreamIndex,
+                subtitleStreamIndex = selection?.subtitleStreamIndex,
+                maxStreamingBitrateBits = maxBitrate,
+                mode = mode,
+                playerType = playerType,
+            ),
         )
+        val resolved = (resolution as? PlaybackResolution.Resolved)?.playback
         val url = resolved?.streamUrl
-            ?: playbackRepository.getStreamUrl(itemId, sourceId, startPositionMs * 10_000)
+            ?: (resolution as? PlaybackResolution.StaticFallback)?.streamUrl
+            ?: ""
         val playMethod = resolved?.playMethod ?: PlayMethod.DIRECT_PLAY
 
         _sessionState.update {

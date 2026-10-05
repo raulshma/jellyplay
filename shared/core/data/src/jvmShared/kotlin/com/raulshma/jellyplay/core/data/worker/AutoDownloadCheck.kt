@@ -9,6 +9,7 @@ import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.model.MediaItem
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
 
 /**
@@ -103,7 +104,9 @@ class AutoDownloadCheck(
         runCatchingRethrowingCancellation { downloadRepository.sweepExpiredAutoDownloads() }
             .onFailure { Log.w(TAG, "Retention sweep failed", it) }
 
-        val seriesIds = downloadRepository.getDownloadedSeriesIds()
+        // The coverage union's series half (the folded getDownloadedSeriesIds
+        // read — same DAO query, snapped off the shared coverage flow).
+        val seriesIds = downloadRepository.downloadCoverage().first().seriesIds
         if (seriesIds.isEmpty()) return Outcome.Complete
 
         // Fetch every series' downloaded episode ids in a single 2-column query

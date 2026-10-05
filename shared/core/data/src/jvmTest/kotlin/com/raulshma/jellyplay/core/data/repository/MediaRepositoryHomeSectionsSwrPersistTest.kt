@@ -133,7 +133,7 @@ class MediaRepositoryHomeSectionsSwrPersistTest {
             sessionCacheRegistry = sessionCacheRegistry,
             // Facade split: the detail cluster now lives on the shared
             // internals holder (construction-only ctor re-point).
-            internals = MediaRepositoryInternals(apiClient, homeSession),
+            internals = MediaRepositoryInternals(apiClient, homeSession, sessionCacheRegistry),
         )
     }
 

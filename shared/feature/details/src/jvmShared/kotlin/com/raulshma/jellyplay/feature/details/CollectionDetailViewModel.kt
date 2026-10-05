@@ -154,7 +154,7 @@ class CollectionDetailViewModel constructor(
      * sheet (unlike the library grid).
      */
     fun downloadItem(item: MediaItem, onOpenDetail: (itemId: String) -> Unit) {
-        launch { mediaDownloadActions.downloadAndReport(item, onOpenDetail) }
+        launch { mediaDownloadActions.downloadAndReport(item, { id, _ -> onOpenDetail(id) }) }
     }
 
     /** Long-press Remove download — deletes the local copy only. */

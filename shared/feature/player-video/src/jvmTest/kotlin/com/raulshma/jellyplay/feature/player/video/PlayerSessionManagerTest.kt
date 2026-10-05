@@ -22,6 +22,7 @@ import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.model.OfflinePlaybackPreference
 import com.raulshma.jellyplay.core.model.PlaybackMode
+import com.raulshma.jellyplay.core.model.PlaybackResolution
 import com.raulshma.jellyplay.core.model.PlayMethod
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.ResolvedPlayback
@@ -69,6 +70,7 @@ class PlayerSessionManagerTest {
     private class RecordingMessageBus : PlayerVideoMessageBus {
         val errors = mutableListOf<String>()
         val infos = mutableListOf<String>()
+        val typedInfos = mutableListOf<PlayerVideoMessage>()
 
         override fun info(message: String) {
             infos += message
@@ -79,7 +81,7 @@ class PlayerSessionManagerTest {
         }
 
         override fun info(message: PlayerVideoMessage) {
-            infos += message.toString()
+            typedInfos += message
         }
     }
 
@@ -124,12 +126,11 @@ class PlayerSessionManagerTest {
         )
 
         // Default: PlaybackInfo resolution yields nothing, so loadOnline
-        // falls back to the static direct-stream URL (PlayMethod.DIRECT_PLAY).
+        // falls through the repository's static fold (the static direct
+        // URL; PlayMethod.DIRECT_PLAY).
         coEvery {
-            playbackRepository.resolvePlayback(
-                any(), any(), any(), any(), any(), any(), any(), any(),
-            )
-        } returns null
+            playbackRepository.resolvePlayable(any())
+        } returns PlaybackResolution.StaticFallback("")
 
         sessionManager = PlayerSessionManager(
             scope = CoroutineScope(testDispatcher + SupervisorJob()),
@@ -294,15 +295,15 @@ class PlayerSessionManagerTest {
 
     private fun stubResolve(streamUrl: String, playSessionId: String) {
         coEvery {
-            playbackRepository.resolvePlayback(
-                any(), any(), any(), any(), any(), any(), any(), any(),
-            )
-        } returns ResolvedPlayback(
-            mediaSourceId = "ms-1",
-            streamUrl = streamUrl,
-            playMethod = PlayMethod.DIRECT_PLAY,
-            playSessionId = playSessionId,
-            maxStreamingBitrate = null,
+            playbackRepository.resolvePlayable(any())
+        } returns PlaybackResolution.Resolved(
+            ResolvedPlayback(
+                mediaSourceId = "ms-1",
+                streamUrl = streamUrl,
+                playMethod = PlayMethod.DIRECT_PLAY,
+                playSessionId = playSessionId,
+                maxStreamingBitrate = null,
+            ),
         )
     }
 
@@ -424,17 +425,17 @@ class PlayerSessionManagerTest {
 
         loadOneOnlineSession(manager)
 
-        // The documented-unsupported notice fires exactly once and names the
-        // alternatives; the load itself proceeds (not blocked — the server
-        // decides whether a certificate-less VLC connection lives).
-        assertEquals(1, messageBus.infos.count { it.contains("VLC") })
+        // The documented-unsupported notice fires exactly once (the typed
+        // resource-key message); the load itself proceeds (not blocked — the
+        // server decides whether a certificate-less VLC connection lives).
+        assertEquals(listOf(PlayerVideoMessage.VlcClientCertUnsupported), messageBus.typedInfos)
         assertEquals(1, loaded.size)
         assertEquals(activeTls, loaded.single().requestSpecific?.tls)
 
         // Second load of another item: still one notice (one-time per session
         // manager), still loading.
         loadOneOnlineSession(manager)
-        assertEquals(1, messageBus.infos.count { it.contains("VLC") })
+        assertEquals(1, messageBus.typedInfos.size)
         assertEquals(2, loaded.size)
     }
 

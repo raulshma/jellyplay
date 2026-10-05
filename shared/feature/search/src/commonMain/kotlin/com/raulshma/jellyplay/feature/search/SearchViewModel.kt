@@ -1,9 +1,6 @@
 package com.raulshma.jellyplay.feature.search
 
-import androidx.compose.runtime.getValue
-import androidx.lifecycle.viewModelScope
 import androidx.paging.PagingData
-import androidx.paging.cachedIn
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.download.QuickDownloadActions
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
@@ -22,9 +19,10 @@ import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.model.SearchResult
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.model.seerr.buildPosterUrl
+import com.raulshma.jellyplay.core.ui.components.DeferredRefreshHost
 import com.raulshma.jellyplay.core.ui.components.seerr.SeerrRequestDialogHolder
-import com.raulshma.jellyplay.core.ui.viewmodel.DeferredUserDataRefresher
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
+import com.raulshma.jellyplay.core.ui.viewmodel.PagedMediaGridHost
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.Flow
@@ -57,10 +55,14 @@ internal class SearchViewModel(
     private val quickDownloadActions: QuickDownloadActions,
 ) : JellyPlayViewModel() {
 
-    private val _query = composeState("")
-    var query: String
-        get() = _query.value
-        private set(value) { _query.value = value }
+    /**
+     * The single query holder (the [com.raulshma.jellyplay.feature.home.HomeSearchStateHolder]
+     * template): one StateFlow feeds the Compose field read (via the exposed
+     * [query]), the debounce chain and the Seerr-retry gate — there is no
+     * second composeState mirror to keep in step.
+     */
+    private val _query = stateFlow("")
+    val query: StateFlow<String> = _query.flow
 
     private val _filters = stateFlow(LibraryFilters())
     val filters: StateFlow<LibraryFilters> = _filters.flow
@@ -87,8 +89,7 @@ internal class SearchViewModel(
     private val _searchHistory = stateFlow<List<SearchHistoryItem>>(emptyList())
     val searchHistory: StateFlow<List<SearchHistoryItem>> = _searchHistory.flow
 
-    private val seerrPrefs: StateFlow<SeerrPreferences> =
-        seerrRepository.getPreferences().stateIn(scope, SharingStarted.WhileSubscribed(5_000), SeerrPreferences())
+    private val seerrPrefs: StateFlow<SeerrPreferences> = seerrRepository.preferences
 
     val isSeerrConnected: StateFlow<Boolean> = seerrPrefs.map {
         it.serverUrl.isNotBlank()
@@ -98,11 +99,10 @@ internal class SearchViewModel(
         it.searchEnabled
     }.stateIn(scope, SharingStarted.WhileSubscribed(5_000), false)
 
-    private val queryFlow = stateFlow("")
-
     // Shared by the paged search and the side-searches so both react to the
-    // same debounced, de-duplicated query emissions.
-    private val debouncedQuery = queryFlow.flow
+    // same debounced, de-duplicated query emissions — the SAME flow the
+    // Compose field reads ([query] is its asStateFlow view).
+    private val debouncedQuery = _query.flow
         .debounce(mediaSearchEngine.debounceMs)
         .distinctUntilChanged()
 
@@ -128,40 +128,47 @@ internal class SearchViewModel(
     val offlineResults: StateFlow<List<OfflineMediaItem>> = _offlineResults.flow
 
     /**
-     * Deferred-refresh generation counter for [pagedResults] — bumped by
-     * [deferredRefresher] on screen re-entry after a user-data change,
-     * restarting the paged query with a fresh generation (the same
-     * silent-refresh contract as the library grid).
+     * The paged results grid, wired through the shared [PagedMediaGridHost]:
+     * the host owns the deferred-refresh generation counter, the refresher
+     * pairing and the cachedIn sharing; this source splices the generation
+     * into the (debounced query, filters) combine and keeps the blank-query
+     * short-circuit.
      */
-    private val _refreshTrigger = stateFlow(0)
-
-    val pagedResults: Flow<PagingData<MediaItem>> = combine(
-        debouncedQuery,
-        _filters.flow,
-        _refreshTrigger.flow,
-    ) { q, f, refresh -> Triple(q, f, refresh) }
-        .flatMapLatest { (currentQuery, filters, _) ->
-            if (currentQuery.isBlank()) {
-                flowOf(PagingData.empty())
-            } else {
-                mediaRepository.searchPaged(
-                    query = currentQuery,
-                    filters = filters,
-                )
+    private val pagedGrid = PagedMediaGridHost(
+        scope = scope,
+        userDataChanges = mediaRepository.userDataChanges,
+        downloadedIds = quickDownloadActions.downloadedIds,
+        downloadSupported = quickDownloadActions.isSupported,
+        setPlayedSilently = { itemId, played -> userDataMutator.setPlayed(itemId, played) },
+        requestDownload = { item, onOpenDetail, seriesOpensSheet ->
+            quickDownloadActions.downloadAndReport(item, onOpenDetail, seriesOpensSheet)
+        },
+        removeDownloadItem = quickDownloadActions::removeDownload,
+        source = { trigger ->
+            combine(debouncedQuery, _filters.flow, trigger) { currentQuery, filters, _ ->
+                currentQuery to filters
+            }.flatMapLatest { (query, filters) ->
+                if (query.isBlank()) {
+                    flowOf(PagingData.empty())
+                } else {
+                    mediaRepository.searchPaged(
+                        query = query,
+                        filters = filters,
+                    )
+                }
             }
-        }
-        .cachedIn(scope)
+        },
+    )
+
+    val pagedResults: Flow<PagingData<MediaItem>> get() = pagedGrid.items
 
     /**
      * User-data changes while another screen is up only mark the results
      * stale; the single regeneration fires when the search screen is next
-     * entered (see [DeferredUserDataRefresher]) — never mid-scroll.
+     * entered (the [DeferredUserDataRefresher] the [PagedMediaGridHost]
+     * owns) — never mid-scroll.
      */
-    val deferredRefresher = DeferredUserDataRefresher(
-        userDataChanges = mediaRepository.userDataChanges,
-        scope = scope,
-        trigger = _refreshTrigger,
-    )
+    val deferredRefresher: DeferredRefreshHost get() = pagedGrid
 
     init {
         filterDimensions.load()
@@ -208,7 +215,7 @@ internal class SearchViewModel(
      */
     private fun loadSuggestions() {
         launch {
-            queryFlow.flow.collect { q ->
+            _query.flow.collect { q ->
                     if (q.isBlank()) {
                         // Reload discovery suggestions each time we return to the
                         // empty state so the random selection stays fresh.
@@ -267,8 +274,7 @@ internal class SearchViewModel(
     fun onEvent(event: SearchUiEvent) {
         when (event) {
             is SearchUiEvent.Search -> {
-                _query.value = event.query
-                queryFlow.set(event.query)
+                _query.set(event.query)
                 _suggestions.set(emptyList())
                 if (event.query.isBlank()) {
                     _seerrResults.set(emptyList())
@@ -315,18 +321,16 @@ internal class SearchViewModel(
                 // tick re-emits the unchanged query into the engine and its
                 // cancel-and-replace clears + re-fetches the Seerr row —
                 // identical visible behavior to the old manual relaunch.
-                if (query.isNotBlank()) _sideSearchRetryTick.update { it + 1 }
+                if (_query.value.isNotBlank()) _sideSearchRetryTick.update { it + 1 }
             }
-            is SearchUiEvent.MarkItemPlayed -> launch {
+            is SearchUiEvent.MarkItemPlayed ->
                 // Intentionally silent (the mutator's default): the paged
                 // results are left untouched so the user keeps their scroll
                 // position.
-                userDataMutator.setPlayed(event.item.id, event.played)
-            }
-            is SearchUiEvent.DownloadItem -> launch {
-                quickDownloadActions.downloadAndReport(event.item, event.onOpenDetail)
-            }
-            is SearchUiEvent.RemoveItemDownload -> quickDownloadActions.removeDownload(event.item)
+                pagedGrid.markPlayed(event.item, event.played)
+            is SearchUiEvent.DownloadItem ->
+                pagedGrid.download(event.item, { id, _ -> event.onOpenDetail(id) })
+            is SearchUiEvent.RemoveItemDownload -> pagedGrid.removeDownload(event.item)
             is SearchUiEvent.RequestSeerrMedia ->
                 seerrRequestState.requestMedia(
                     event.item, event.seasons, event.serverId, event.profileId, event.rootFolder, event.tags,
@@ -344,9 +348,9 @@ internal class SearchViewModel(
     /** Ids whose quick actions flip to "Remove download" — see [QuickDownloadActions.downloadedIds]. */
     // Whether this platform has a download pipeline — screens gate the
     // download CTA on it (hidden rather than Failed-toasting).
-    val downloadSupported = quickDownloadActions.isSupported
+    val downloadSupported get() = pagedGrid.downloadSupported
 
-    val downloadedIds = quickDownloadActions.downloadedIds
+    val downloadedIds get() = quickDownloadActions.downloadedIds
 
     fun getSeerrPosterUrl(posterPath: String?): String? =
         posterPath?.let { buildPosterUrl(it) }

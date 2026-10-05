@@ -357,7 +357,7 @@ class SeerrRepositoryImplExtendedTest {
     }
     // endregion
 
-    // region getCurrentUser / isAdmin
+    // region getCurrentUser
     @Test
     fun `getCurrentUser exposes currentUser flow and writes fetched user`() = runTest {
         val user = SeerrCurrentUser(id = 5, permissions = SeerrCurrentUser.PERMISSION_ADMIN)
@@ -366,16 +366,6 @@ class SeerrRepositoryImplExtendedTest {
         repository.getCurrentUser()
 
         assertEquals(5, repository.currentUser.value?.id)
-    }
-
-    @Test
-    fun `isAdmin derives from currentUser canManageRequests`() = runTest {
-        val user = SeerrCurrentUser(permissions = SeerrCurrentUser.PERMISSION_MANAGE_REQUESTS)
-        coEvery { seerrApiClient.getCurrentUser(any(), any()) } returns Result.success(user)
-
-        repository.getCurrentUser()
-
-        assertEquals(true, repository.isAdmin().first())
     }
     // endregion
 

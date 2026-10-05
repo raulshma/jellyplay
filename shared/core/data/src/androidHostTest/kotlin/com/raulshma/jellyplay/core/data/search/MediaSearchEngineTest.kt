@@ -14,6 +14,7 @@ import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.model.SearchResult
+import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -66,8 +67,9 @@ class MediaSearchEngineTest {
         every { experimentalStore.experimental } returns experimental
         every { offlineModeManager.networkStatus } returns networkStatus
         every { offlineModeManager.isOffline } returns false
-        every { seerrRepository.isConnected() } returns flowOf(true)
-        every { seerrRepository.isSearchEnabled() } returns flowOf(true)
+        every { seerrRepository.preferences } returns MutableStateFlow(
+            SeerrPreferences(serverUrl = "https://seerr.example.com", searchEnabled = true),
+        )
         every { searchHistoryRepository.getRecent(any(), any()) } returns flowOf(emptyList())
         stubJellyfinSearch(emptyList())
         engine = MediaSearchEngineImpl(
@@ -238,7 +240,7 @@ class MediaSearchEngineTest {
 
     @Test
     fun `seerr branch is skipped when disconnected`() = runTest {
-        every { seerrRepository.isConnected() } returns flowOf(false)
+        every { seerrRepository.preferences } returns MutableStateFlow(SeerrPreferences())
         collectOneRound("matrix")
 
         coVerify(exactly = 0) { seerrRepository.search(any(), any()) }
@@ -246,7 +248,9 @@ class MediaSearchEngineTest {
 
     @Test
     fun `seerr branch is skipped when search is disabled`() = runTest {
-        every { seerrRepository.isSearchEnabled() } returns flowOf(false)
+        every { seerrRepository.preferences } returns MutableStateFlow(
+            SeerrPreferences(serverUrl = "https://seerr.example.com"),
+        )
         collectOneRound("matrix")
 
         coVerify(exactly = 0) { seerrRepository.search(any(), any()) }

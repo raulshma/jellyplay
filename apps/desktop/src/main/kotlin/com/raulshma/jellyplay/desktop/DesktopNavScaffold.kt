@@ -62,7 +62,6 @@ import com.raulshma.jellyplay.feature.player.video.DesktopVideoSurfaceBridge
 import com.raulshma.jellyplay.feature.player.video.VideoPlayerScreen
 import com.raulshma.jellyplay.feature.shell.UserMessageDuration
 import com.raulshma.jellyplay.feature.shell.navigation.ShellAdminHooks
-import com.raulshma.jellyplay.feature.shell.navigation.ShellAudioSource
 import com.raulshma.jellyplay.feature.shell.navigation.ShellHomeHooks
 import com.raulshma.jellyplay.feature.shell.navigation.ShellSearchHooks
 import com.raulshma.jellyplay.feature.shell.navigation.ShellSettingsHooks
@@ -72,7 +71,6 @@ import com.raulshma.jellyplay.feature.shell.navigation.rememberShellAudioClicks
 import com.raulshma.jellyplay.feature.shell.navigation.rememberShellHost
 import com.raulshma.jellyplay.feature.shell.rememberShellUserMessages
 import java.util.concurrent.atomic.AtomicReference
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 
@@ -322,18 +320,15 @@ internal fun DesktopNavScaffold(
     // fresh per recomposition (the groups are data classes and compare
     // structurally) as long as its members are remembered/stable (the
     // discipline the factory's KDoc states): the audio bundle comes from the
-    // shared rememberShellAudioClicks over this shell's ShellAudioSource
-    // adapter (click-time reads of the desktop audio core —
-    // DesktopAudioQueueManager — never collected values), and the session
+    // shared rememberShellAudioClicks over the desktop audio core —
+    // DesktopAudioQueueManager, which IS the shared NowPlayingSurface
+    // (click-time reads, never collected values) — and the session
     // bundles wrap the shared ShellSessionController the holder constructed —
     // the same values, same lazy reads the old inline entryProvider captured.
     // The graph below rebuilds only when these identities change (the
     // guarded navigator, homeMode, a DesktopShellServices rebuild re-issuing
     // them).
-    val audioSource = remember(audioQueueManager) {
-        DesktopQueueShellAudioSource(audioQueueManager)
-    }
-    val audioClicks = rememberShellAudioClicks(guardedNavigator, audioSource)
+    val audioClicks = rememberShellAudioClicks(guardedNavigator, audioQueueManager)
     val onCheckForUpdates: () -> Unit = remember(services) {
         services.updateCheckController::checkForUpdate
     }
@@ -617,21 +612,4 @@ private fun DesktopRailItem(
         icon = { Icon(icon, contentDescription = label) },
         label = { Text(label) },
     )
-}
-
-/**
- * This shell's [ShellAudioSource] over [DesktopAudioQueueManager] — the
- * manager's four StateFlow members forwarded verbatim (the Android twin
- * adapts AudioPlaybackManager the same way beside MainContent). Remembered
- * on the manager at the call site: a fresh-per-recomposition adapter would
- * churn the rememberShellAudioClicks helper's remember keys (the discipline
- * its KDoc owns).
- */
-private class DesktopQueueShellAudioSource(
-    private val manager: DesktopAudioQueueManager,
-) : ShellAudioSource {
-    override val currentPlayingItemId: StateFlow<String?> get() = manager.currentPlayingItemId
-    override val albumArtUrl: StateFlow<String> get() = manager.albumArtUrl
-    override val title: StateFlow<String> get() = manager.title
-    override val artist: StateFlow<String> get() = manager.artist
 }

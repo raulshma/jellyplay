@@ -5,6 +5,7 @@ import com.raulshma.jellyplay.core.concurrency.mapConcurrent
 import com.raulshma.jellyplay.core.data.download.ActiveDownloadCount
 import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
+import com.raulshma.jellyplay.core.data.playback.TrackWithAlbumFallback
 import com.raulshma.jellyplay.core.data.repository.MediaCollectionReads
 import com.raulshma.jellyplay.core.data.repository.MusicCatalogue
 import com.raulshma.jellyplay.core.data.repository.UserDataChanges
@@ -21,7 +22,6 @@ import com.raulshma.jellyplay.core.ui.viewmodel.DeferredUserDataRefresher
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.feature.music.feedback.MusicMessageBus
 import com.raulshma.jellyplay.feature.music.MusicQueuePlayer
-import com.raulshma.jellyplay.feature.music.MusicTrackWithAlbumFallback
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -343,12 +343,12 @@ class MusicHomeViewModel(
      * its own album fallback (the source album's name) so the facade can map
      * per-album naming before concatenation — plan 04 risk 2.
      */
-    private suspend fun fetchAlbumTracksParallel(albums: List<MediaItem>): List<MusicTrackWithAlbumFallback> {
+    private suspend fun fetchAlbumTracksParallel(albums: List<MediaItem>): List<TrackWithAlbumFallback> {
         return fetchSemaphore.mapConcurrent(albums) { album ->
             musicCatalogue.getAlbumTracks(album.id, force = false)
                 .getOrNull()
                 .orEmpty()
-                .map { track -> MusicTrackWithAlbumFallback(track, album.name) }
+                .map { track -> TrackWithAlbumFallback(track, album.name) }
         }.flatten()
     }
 }

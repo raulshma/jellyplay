@@ -1,6 +1,5 @@
 package com.raulshma.jellyplay.core.data.repository
 
-import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.concurrency.SingleFlight
 import com.raulshma.jellyplay.core.data.session.PlaybackReportingStatusStore
 import com.raulshma.jellyplay.core.model.MediaItem
@@ -161,16 +160,21 @@ class WatchHistoryRepositoryImpl constructor(
             HeatmapFilter.ALL -> null
         }
 
-        val isPluginAvailable = playbackReportingStatus.value == PlaybackReportingStatus.AVAILABLE
-        val points = if (isPluginAvailable) {
+        // One capture for this read — see the store's gatedWith KDoc (the
+        // captured-local semantics the inline ladder had). An unavailable
+        // plugin folds to the same emptyList() an empty plugin payload does,
+        // so the fallback below keys off emptiness alone — exactly what the
+        // former `!isPluginAvailable || points.isEmpty()` read.
+        val pluginStatus = playbackReportingStatus.value
+        val points = statusStore.gatedWith(pluginStatus) {
             mediaInfoApiClient.getPlaybackReportingPlayActivity(
                 days = days,
                 dataType = "count",
                 filter = filterParam,
-            ).getOrDefault(emptyList())
-        } else emptyList()
+            )
+        }
 
-        if (!isPluginAvailable || points.isEmpty()) {
+        if (points.isEmpty()) {
             // Fallback to basic watch history
             val items = getPlayedItems(year, filter)
             val countsByDate = mutableMapOf<String, Long>()
@@ -197,16 +201,18 @@ class WatchHistoryRepositoryImpl constructor(
             HeatmapFilter.ALL -> null
         }
 
-        val isPluginAvailable = playbackReportingStatus.value == PlaybackReportingStatus.AVAILABLE
-        val details = if (isPluginAvailable) {
+        // One capture for this read — see the store's gatedWith KDoc. Same
+        // fold as getDailyActivity: unavailable plugin ≡ empty payload.
+        val pluginStatus = playbackReportingStatus.value
+        val details = statusStore.gatedWith(pluginStatus) {
             mediaInfoApiClient.getPlaybackReportingUserItems(
                 userId = user.id,
                 date = date,
                 filter = filterParam,
-            ).getOrDefault(emptyList())
-        } else emptyList()
+            )
+        }
 
-        if (!isPluginAvailable || details.isEmpty()) {
+        if (details.isEmpty()) {
             // Fallback to basic watch history; a malformed date string falls
             // back to the seam's current year (the old LocalDate.now().year).
             val year = date.take(4).toIntOrNull() ?: timeSource.today(java.time.ZoneId.systemDefault()).year
@@ -215,17 +221,7 @@ class WatchHistoryRepositoryImpl constructor(
                 item.lastPlayedDate?.startsWith(date) == true
             }
             return filteredItems.map { item ->
-                val timeStr = item.lastPlayedDate?.let { dateStr ->
-                    runCatchingRethrowingCancellation {
-                        val parsed = java.time.ZonedDateTime.parse(dateStr)
-                        parsed.format(TIME_OF_DAY_FORMATTER)
-                    }.getOrElse {
-                        runCatchingRethrowingCancellation {
-                            val parsed = java.time.LocalDateTime.parse(dateStr)
-                            parsed.format(TIME_OF_DAY_FORMATTER)
-                        }.getOrDefault("")
-                    }
-                } ?: ""
+                val timeStr = item.lastPlayedDate?.let { dateStr -> parseLastPlayedTime(dateStr) } ?: ""
 
                 PlaybackReportingDetail(
                     time = timeStr,
@@ -309,5 +305,21 @@ class WatchHistoryRepositoryImpl constructor(
 
     companion object {
         private val TIME_OF_DAY_FORMATTER = java.time.format.DateTimeFormatter.ofPattern("HH:mm")
+
+        /**
+         * One parse ladder for a played timestamp's time-of-day: an instant
+         * ([java.time.ZonedDateTime]) first, then a zone-less
+         * [java.time.LocalDateTime], else "" — the exact fallback chain
+         * getItemsForDay used to nest inline at each day-tap item. Pure
+         * parsing (no suspension), so plain [runCatching] suffices.
+         */
+        private fun parseLastPlayedTime(dateStr: String): String =
+            runCatching {
+                java.time.ZonedDateTime.parse(dateStr).format(TIME_OF_DAY_FORMATTER)
+            }.getOrElse {
+                runCatching {
+                    java.time.LocalDateTime.parse(dateStr).format(TIME_OF_DAY_FORMATTER)
+                }.getOrDefault("")
+            }
     }
 }

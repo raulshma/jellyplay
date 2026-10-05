@@ -76,6 +76,33 @@ class PlaybackReportingStatusStore(
             .getOrDefault(PlaybackReportingStatus.UNAVAILABLE)
     }
 
+    /**
+     * The plugin-gate fold shared by every plugin-derived list fetch —
+     * `if (status == AVAILABLE) call().getOrDefault(emptyList()) else
+     * emptyList()` — lifted here (the store owns the status) from
+     * `AdminStatisticsRepositoryImpl`'s `whenPlugin` (the documented ONE
+     * plugin-gate fold) and `WatchHistoryRepositoryImpl`'s two inline ladders
+     * (getDailyActivity / getItemsForDay), which hand-copied the same
+     * AVAILABLE check against this flow.
+     *
+     * Takes the CALLER-CAPTURED [captured] status, not a live read: a page's
+     * gates must stay internally consistent — a page's group gate and its
+     * member fetches see ONE status even if an admin refresh flips the
+     * status mid-load (the captured-local semantics the inline ladders had).
+     * Read it once per page (`statusStore.status.value`) and pass it to every
+     * gate. [call] is a plain (non-suspend) lambda parameter invoked from the
+     * inline body, so suspend api calls are legal at each call site.
+     */
+    suspend inline fun <T> gatedWith(
+        captured: PlaybackReportingStatus,
+        call: () -> Result<List<T>>,
+    ): List<T> =
+        if (captured == PlaybackReportingStatus.AVAILABLE) {
+            call().getOrDefault(emptyList())
+        } else {
+            emptyList()
+        }
+
     private companion object {
         /** [SessionCacheRegistry] owner name for this store's invalidation action. */
         const val OWNER = "playback-reporting-status"

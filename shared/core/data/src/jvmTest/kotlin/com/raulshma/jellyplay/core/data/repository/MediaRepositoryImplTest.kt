@@ -86,7 +86,7 @@ class MediaRepositoryImplTest {
             homeSession,
             sessionCacheRegistry,
         )
-        val internals = MediaRepositoryInternals(apiClient, homeSession)
+        val internals = MediaRepositoryInternals(apiClient, homeSession, sessionCacheRegistry)
         val timeSource = SystemTimeSource()
         // Snapshot-store extraction: the repo now ctor-injects the persisted
         // half of the home pipeline (the same store the Koin graph wires);

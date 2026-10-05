@@ -5,6 +5,17 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrRequestFilter
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestSort
 
 /**
+ * The two wire spellings of the Seerr requests sort direction (the
+ * [SeerrRequestSort.value] precedent) — the micro-typed replacement for the
+ * raw `"desc"`/`"asc"` strings the filter state carried; the fetch boundary
+ * maps through [value].
+ */
+enum class RequestsSortDirection(val value: String) {
+    ASC("asc"),
+    DESC("desc"),
+}
+
+/**
  * The six request-filter fields that travel together from
  * [RequestsUiState] into [RequestsFilterBar]. Kept as a value so the bar's
  * signature is one parameter (plus the callbacks) rather than six loose ones.
@@ -20,7 +31,7 @@ data class RequestsFilterState(
     val filter: SeerrRequestFilter = SeerrRequestFilter.PENDING,
     val mediaType: String? = null,
     val sort: SeerrRequestSort = SeerrRequestSort.ADDED,
-    val sortDirection: String = "desc",
+    val sortDirection: RequestsSortDirection = RequestsSortDirection.DESC,
     val showMyRequestsOnly: Boolean = false,
     val searchQuery: String = "",
 ) {
@@ -32,7 +43,7 @@ data class RequestsFilterState(
 
     /** Copy with the sort direction flipped (desc <-> asc). */
     fun withSortDirectionToggled(): RequestsFilterState =
-        copy(sortDirection = if (sortDirection == "desc") "asc" else "desc")
+        copy(sortDirection = if (sortDirection == RequestsSortDirection.DESC) RequestsSortDirection.ASC else RequestsSortDirection.DESC)
 
     /** Copy with the media-type restriction replaced ([null] = all types). */
     fun withMediaType(mediaType: String?): RequestsFilterState = copy(mediaType = mediaType)

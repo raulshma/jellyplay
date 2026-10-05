@@ -32,12 +32,12 @@ interface LivePlayerAudio {
 
     /**
      * Current raw player volume, or null while no platform player is
-     * attached (the mute toggle no-ops in that case, matching the legacy
-     * `engine?.media3Player ?: return` guard).
+     * attached. (Raw-volume access only — mute itself routes through the
+     * engine's real [LivePlayerEngine.setMuted].)
      */
     fun playerVolume(): Float?
 
-    /** Set the raw player volume (`0f` = mute). No-op without a player. */
+    /** Set the raw player volume. No-op without a player. */
     fun setPlayerVolume(volume: Float)
 
     /**

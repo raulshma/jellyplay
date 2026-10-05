@@ -58,7 +58,7 @@ class SearchViewModelHistoryTest {
         every { mediaSearchEngine.recentHistory() } returns flowOf(emptyList())
         every { mediaSearchEngine.sideSearch(any()) } returns flowOf()
         every { searchFiltersStore.searchFiltersJson } returns MutableStateFlow(null)
-        every { seerrRepository.getPreferences() } returns flowOf(
+        every { seerrRepository.preferences } returns MutableStateFlow(
             com.raulshma.jellyplay.core.model.seerr.SeerrPreferences()
         )
         // Stub the init-time repository calls so relaxed-mock defaults don't

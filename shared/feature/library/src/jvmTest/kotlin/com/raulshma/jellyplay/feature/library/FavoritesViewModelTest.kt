@@ -104,7 +104,7 @@ class FavoritesViewModelTest {
         viewModel.downloadItem(item, onOpenDetail = { })
         advanceUntilIdle()
 
-        coVerify { quickDownloadActions.downloadAndReport(item, any()) }
+        coVerify { quickDownloadActions.downloadAndReport(item, any(), any(), any()) }
     }
 
     @Test
@@ -256,7 +256,7 @@ class FavoritesViewModelTest {
         // Only the photo folder is fetched — regular items never hit the seam.
         coVerify(exactly = 1) { mediaRepository.getPhotoFolderChildImageUrls("pf-1") }
         coVerify(exactly = 0) { mediaRepository.getPhotoFolderChildImageUrls("m1") }
-        assertEquals(mapOf("pf-1" to listOf("u1", "u2")), viewModel.photoFolderChildUrls.value)
+        assertEquals(listOf("u1", "u2"), viewModel.photoFolderChildUrlsFor("pf-1").first())
     }
 
     @Test
@@ -272,7 +272,7 @@ class FavoritesViewModelTest {
         // Recomposition re-fires the prefetch; the already-fetched folder is
         // not re-fetched and the merged state keeps the original urls.
         coVerify(exactly = 1) { mediaRepository.getPhotoFolderChildImageUrls("pf-1") }
-        assertEquals(mapOf("pf-1" to listOf("u1")), viewModel.photoFolderChildUrls.value)
+        assertEquals(listOf("u1"), viewModel.photoFolderChildUrlsFor("pf-1").first())
     }
 
     @Test
@@ -283,7 +283,7 @@ class FavoritesViewModelTest {
         advanceUntilIdle()
 
         coVerify(exactly = 0) { mediaRepository.getPhotoFolderChildImageUrls(any()) }
-        assertEquals(emptyMap(), viewModel.photoFolderChildUrls.value)
+        assertEquals(emptyList(), viewModel.photoFolderChildUrlsFor("m1").first())
     }
 
     // ── Image url delegation ─────────────────────────────────────────────────

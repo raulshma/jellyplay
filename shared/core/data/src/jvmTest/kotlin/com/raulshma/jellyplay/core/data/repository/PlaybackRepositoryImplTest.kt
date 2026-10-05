@@ -4,16 +4,18 @@ import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.model.ActiveSession
 import com.raulshma.jellyplay.core.model.CreditTimestamps
 import com.raulshma.jellyplay.core.model.IntroTimestamps
+import com.raulshma.jellyplay.core.model.LiveStreamOption
 import com.raulshma.jellyplay.core.model.MediaSegment
 import com.raulshma.jellyplay.core.model.MediaSegmentType
 import com.raulshma.jellyplay.core.model.MediaSource
 import com.raulshma.jellyplay.core.model.PlaybackInfoResult
 import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.PlaybackProgress
+import com.raulshma.jellyplay.core.model.PlaybackResolution
+import com.raulshma.jellyplay.core.model.PlaybackResolveRequest
 import com.raulshma.jellyplay.core.model.PlaybackStartInfo
 import com.raulshma.jellyplay.core.model.PlayMethod
 import com.raulshma.jellyplay.core.model.PlayerType
-import com.raulshma.jellyplay.core.model.ResolvedPlayback
 import com.raulshma.jellyplay.core.model.ServerInfo
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.network.JellyfinApiClient
@@ -35,7 +37,6 @@ import kotlinx.coroutines.test.runTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -219,7 +220,7 @@ class PlaybackRepositoryImplTest {
 
     @Test
     fun `getStreamUrl delegates to apiClient`() {
-        every { apiClient.getStreamUrl("item-1", "source-1", 0L, liveStreamId = null) } returns "https://test/stream"
+        every { apiClient.getStreamUrl("item-1", "source-1", 0L, maxBitrate = null, liveStreamId = null) } returns "https://test/stream"
 
         val url = repository.getStreamUrl("item-1", "source-1", 0L)
 
@@ -421,17 +422,32 @@ class PlaybackRepositoryImplTest {
     // getServerUrl/getAccessToken delegate tests retired with the members: the
     // identity reads moved to PlaybackIdentity (DefaultPlaybackIdentityTest).
 
-    // ── resolvePlayback ───────────────────────────────────────────────
+    // ── resolvePlayable: the resolve→fallback→default ladder ─────────
 
     private fun stubServer() {
         every { apiClient.getServerUrl() } returns "https://test.example.com"
         every { apiClient.getAccessToken() } returns "token-123"
     }
 
+    private fun vodRequest(
+        mediaSourceId: String = "source-1",
+        maxStreamingBitrateBits: Long? = null,
+        mode: PlaybackMode = PlaybackMode.AUTO,
+    ) = PlaybackResolveRequest(
+        itemId = "item-1",
+        mediaSourceId = mediaSourceId,
+        startTimeTicks = 0L,
+        audioStreamIndex = null,
+        subtitleStreamIndex = null,
+        maxStreamingBitrateBits = maxStreamingBitrateBits,
+        mode = mode,
+        playerType = PlayerType.EXO_PLAYER,
+    )
+
     @Test
-    fun `resolvePlayback picks Direct Play when supported and uses static URL`() = runTest {
+    fun `resolvePlayable picks Direct Play when supported and uses static URL`() = runTest {
         stubServer()
-        every { apiClient.getStreamUrl("item-1", "source-1", 0L, liveStreamId = null) } returns "https://test/stream"
+        every { apiClient.getStreamUrl("item-1", "source-1", 0L, maxBitrate = null, liveStreamId = null) } returns "https://test/stream"
         coEvery {
             apiClient.fetchPlaybackInfo(any(), any(), any(), any(), any(), any(), any(), any(), any())
         } returns Result.success(
@@ -449,24 +465,18 @@ class PlaybackRepositoryImplTest {
             ),
         )
 
-        val resolved = repository.resolvePlayback(
-            itemId = "item-1",
-            mediaSourceId = "source-1",
-            startTimeTicks = 0L,
-            audioStreamIndex = null,
-            subtitleStreamIndex = null,
-            maxStreamingBitrateBits = null,
-            mode = PlaybackMode.AUTO,
-            playerType = PlayerType.EXO_PLAYER,
-        )
+        val resolution = repository.resolvePlayable(vodRequest())
 
-        assertEquals(PlayMethod.DIRECT_PLAY, resolved?.playMethod)
-        assertEquals("https://test/stream", resolved?.streamUrl)
-        assertEquals("session-xyz", resolved?.playSessionId)
+        val playback = (resolution as PlaybackResolution.Resolved).playback
+        assertEquals(PlayMethod.DIRECT_PLAY, playback.playMethod)
+        assertEquals("https://test/stream", playback.streamUrl)
+        assertEquals("session-xyz", playback.playSessionId)
+        // The resolve arm answered: no fallback round-trip may follow it.
+        coVerify(exactly = 1) { apiClient.fetchPlaybackInfo(any(), any(), any(), any(), any(), any(), any(), any(), any()) }
     }
 
     @Test
-    fun `resolvePlayback falls back to transcode URL when only transcoding is supported`() = runTest {
+    fun `resolvePlayable falls back to transcode URL when only transcoding is supported`() = runTest {
         stubServer()
         coEvery {
             apiClient.fetchPlaybackInfo(any(), any(), any(), any(), any(), any(), any(), any(), any())
@@ -486,25 +496,21 @@ class PlaybackRepositoryImplTest {
             ),
         )
 
-        val resolved = repository.resolvePlayback(
-            itemId = "item-1",
-            mediaSourceId = "source-1",
-            startTimeTicks = 0L,
-            audioStreamIndex = null,
-            subtitleStreamIndex = null,
-            maxStreamingBitrateBits = 3_000_000L,
-            mode = PlaybackMode.FORCE_TRANSCODE,
-            playerType = PlayerType.MPV,
+        val resolution = repository.resolvePlayable(
+            vodRequest(maxStreamingBitrateBits = 3_000_000L, mode = PlaybackMode.FORCE_TRANSCODE),
         )
 
-        assertEquals(PlayMethod.TRANSCODE, resolved?.playMethod)
-        assertTrue(resolved?.streamUrl?.startsWith("https://test.example.com/Videos/item-1/master.m3u8") == true)
-        assertTrue(resolved?.streamUrl?.contains("ApiKey=token-123") == true)
-        assertEquals(3_000_000L, resolved?.maxStreamingBitrate)
+        val playback = (resolution as PlaybackResolution.Resolved).playback
+        assertEquals(PlayMethod.TRANSCODE, playback.playMethod)
+        assertTrue(playback.streamUrl.startsWith("https://test.example.com/Videos/item-1/master.m3u8"))
+        assertTrue(playback.streamUrl.contains("ApiKey=token-123"))
+        assertEquals(3_000_000L, playback.maxStreamingBitrate)
     }
 
     @Test
-    fun `resolvePlayback returns null when server offers no playable method`() = runTest {
+    fun `resolvePlayable serves the static fallback when the server offers no playable method`() = runTest {
+        // The VOD fold (former `?: getStreamUrl`): the static direct URL
+        // with the DIRECT_PLAY default and no play session — never a miss.
         stubServer()
         coEvery {
             apiClient.fetchPlaybackInfo(any(), any(), any(), any(), any(), any(), any(), any(), any())
@@ -522,40 +528,151 @@ class PlaybackRepositoryImplTest {
                 ),
             ),
         )
+        every { apiClient.getStreamUrl("item-1", "source-1", 0L, maxBitrate = null, liveStreamId = null) } returns "https://test/stream"
 
-        val resolved = repository.resolvePlayback(
-            itemId = "item-1",
-            mediaSourceId = "source-1",
-            startTimeTicks = 0L,
-            audioStreamIndex = null,
-            subtitleStreamIndex = null,
-            maxStreamingBitrateBits = null,
-            mode = PlaybackMode.FORCE_DIRECT_PLAY,
-            playerType = PlayerType.EXO_PLAYER,
-        )
+        val resolution = repository.resolvePlayable(vodRequest(mode = PlaybackMode.FORCE_DIRECT_PLAY))
 
-        assertNull(resolved)
+        assertEquals(PlaybackResolution.StaticFallback("https://test/stream"), resolution)
+        // A non-live request never runs the live ladder — one fetch total.
+        coVerify(exactly = 1) { apiClient.fetchPlaybackInfo(any(), any(), any(), any(), any(), any(), any(), any(), any()) }
     }
 
     @Test
-    fun `resolvePlayback returns null when PlaybackInfo fetch fails`() = runTest {
+    fun `resolvePlayable serves the static fallback when the PlaybackInfo fetch fails`() = runTest {
         stubServer()
         coEvery {
             apiClient.fetchPlaybackInfo(any(), any(), any(), any(), any(), any(), any(), any(), any())
         } returns Result.failure(RuntimeException("network down"))
+        every { apiClient.getStreamUrl("item-1", "source-1", 0L, maxBitrate = null, liveStreamId = null) } returns "https://test/stream"
 
-        val resolved = repository.resolvePlayback(
-            itemId = "item-1",
-            mediaSourceId = "source-1",
-            startTimeTicks = 0L,
-            audioStreamIndex = null,
-            subtitleStreamIndex = null,
-            maxStreamingBitrateBits = null,
-            mode = PlaybackMode.AUTO,
-            playerType = PlayerType.EXO_PLAYER,
+        val resolution = repository.resolvePlayable(vodRequest())
+
+        assertEquals(PlaybackResolution.StaticFallback("https://test/stream"), resolution)
+    }
+
+    @Test
+    fun `resolvePlayable runs the live ladder only when the resolve arm offers nothing`() = runTest {
+        stubServer()
+        // All-false flags with a liveStreamId: the server-verdict arm finds
+        // no playable URL, so the ladder refetches and resolves via the
+        // liveStreamId (the tuner is already open server-side).
+        coEvery {
+            apiClient.fetchPlaybackInfo(any(), any(), any(), any(), any(), any(), any(), any(), any())
+        } returns Result.success(
+            PlaybackInfoResult(
+                playSessionId = "psid-1",
+                mediaSources = listOf(
+                    MediaSource(
+                        id = "src-1",
+                        name = "tuner",
+                        supportsDirectPlay = false,
+                        supportsDirectStream = false,
+                        supportsTranscoding = false,
+                        liveStreamId = "tuner-9",
+                        requiresOpening = true,
+                    ),
+                ),
+            ),
+        )
+        every {
+            apiClient.getStreamUrl("item-1", "src-1", 0L, maxBitrate = null, liveStreamId = "tuner-9")
+        } returns "https://test.example.com/Videos/src-1/stream?LiveStreamId=tuner-9"
+
+        val resolution = repository.resolvePlayable(
+            PlaybackResolveRequest(
+                itemId = "item-1",
+                mediaSourceId = "",
+                startTimeTicks = 0L,
+                audioStreamIndex = null,
+                subtitleStreamIndex = null,
+                maxStreamingBitrateBits = null,
+                mode = PlaybackMode.AUTO,
+                playerType = PlayerType.EXO_PLAYER,
+                liveStreamOption = LiveStreamOption.AUTO,
+            ),
         )
 
-        assertNull(resolved)
+        val playback = (resolution as PlaybackResolution.Resolved).playback
+        assertEquals("src-1", playback.mediaSourceId)
+        assertEquals("https://test.example.com/Videos/src-1/stream?LiveStreamId=tuner-9", playback.streamUrl)
+        assertEquals(PlayMethod.DIRECT_STREAM, playback.playMethod)
+        assertEquals("psid-1", playback.playSessionId)
+        // Resolve arm + ladder: exactly two PlaybackInfo fetches.
+        coVerify(exactly = 2) { apiClient.fetchPlaybackInfo(any(), any(), any(), any(), any(), any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `resolvePlayable forced live fallback skips the resolve arm and never rides the transcode URL`() = runTest {
+        stubServer()
+        coEvery {
+            apiClient.fetchPlaybackInfo(any(), any(), any(), any(), any(), any(), any(), any(), any())
+        } returns Result.success(
+            PlaybackInfoResult(
+                playSessionId = "psid-t",
+                mediaSources = listOf(
+                    MediaSource(
+                        id = "src-1",
+                        name = "tuner",
+                        supportsDirectPlay = false,
+                        supportsDirectStream = false,
+                        supportsTranscoding = true,
+                        transcodeUrl = "/Videos/item-1/master.m3u8?PlaySessionId=psid-t",
+                        liveStreamId = "live-1",
+                    ),
+                ),
+            ),
+        )
+        every {
+            apiClient.getStreamUrl("item-1", "src-1", 0L, maxBitrate = null, liveStreamId = "live-1")
+        } returns "https://test.example.com/Videos/src-1/stream?LiveStreamId=live-1"
+
+        val resolution = repository.resolvePlayable(
+            PlaybackResolveRequest(
+                itemId = "item-1",
+                mediaSourceId = "",
+                startTimeTicks = 0L,
+                audioStreamIndex = null,
+                subtitleStreamIndex = null,
+                maxStreamingBitrateBits = null,
+                mode = PlaybackMode.AUTO,
+                playerType = PlayerType.EXO_PLAYER,
+                liveStreamOption = LiveStreamOption.TRANSCODE,
+                forceLiveStreamFallback = true,
+            ),
+        )
+
+        // The ladder's pinned divergence: the built URL is the direct
+        // /stream URL (never the server's master.m3u8) and the method
+        // reflects the URL built, keeping the transcode fallback eligible.
+        val playback = (resolution as PlaybackResolution.Resolved).playback
+        assertEquals("https://test.example.com/Videos/src-1/stream?LiveStreamId=live-1", playback.streamUrl)
+        assertEquals(PlayMethod.DIRECT_STREAM, playback.playMethod)
+        // Skipping the resolve arm: exactly one fetch (the ladder's).
+        coVerify(exactly = 1) { apiClient.fetchPlaybackInfo(any(), any(), any(), any(), any(), any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `resolvePlayable live request with a failing fetch resolves to Unplayable`() = runTest {
+        stubServer()
+        coEvery {
+            apiClient.fetchPlaybackInfo(any(), any(), any(), any(), any(), any(), any(), any(), any())
+        } returns Result.failure(RuntimeException("server down"))
+
+        val resolution = repository.resolvePlayable(
+            PlaybackResolveRequest(
+                itemId = "item-1",
+                mediaSourceId = "",
+                startTimeTicks = 0L,
+                audioStreamIndex = null,
+                subtitleStreamIndex = null,
+                maxStreamingBitrateBits = null,
+                mode = PlaybackMode.AUTO,
+                playerType = PlayerType.EXO_PLAYER,
+                liveStreamOption = LiveStreamOption.AUTO,
+            ),
+        )
+
+        assertEquals(PlaybackResolution.Unplayable, resolution)
     }
 
     // ── Offline outbox ────────────────────────────────────────────────

@@ -13,7 +13,13 @@ import kotlin.test.assertTrue
  * matching the impl's override count), and pins that count so it can only
  * move DOWN.
  *
- * Baseline 22 is the count after the three pure image-URL builders
+ * Baseline 20 is the count after the playback-resolution ladder collapsed
+ * into the single `resolvePlayable(request)` member: the identical
+ * 9-parameter `fetchPlaybackInfo`/`resolvePlayback` pair and one of the two
+ * booby-trapped `getStreamUrl` overloads (their 4th parameters differed in
+ * type AND meaning) retired behind it — three members out, one in.
+ * Earlier baselines:
+ * 22 after the three pure image-URL builders
  * (`getImageUrl` / `getChapterImageUrl` / `getBackdropUrl`) were retired into the
  * narrow [com.raulshma.jellyplay.core.data.util.ImageUrlProvider] module (the
  * URL-only readers inject that instead; its impl builds the URLs through the
@@ -41,7 +47,7 @@ import kotlin.test.assertTrue
 class PlaybackRepositorySurfaceTest {
 
     /** The maximum allowed member count of [PlaybackRepository] (see class KDoc). */
-    private val maxInterfaceMembers = 22
+    private val maxInterfaceMembers = 20
 
     /** Members retired from the interface; their re-addition must fail this suite. */
     private val retiredMembers = listOf(
@@ -53,6 +59,8 @@ class PlaybackRepositorySurfaceTest {
         "getImageUrl",
         "getChapterImageUrl",
         "getBackdropUrl",
+        "fetchPlaybackInfo",
+        "resolvePlayback",
     )
 
     /** Walks up from the working dir to the module root that owns src/commonMain/kotlin. */

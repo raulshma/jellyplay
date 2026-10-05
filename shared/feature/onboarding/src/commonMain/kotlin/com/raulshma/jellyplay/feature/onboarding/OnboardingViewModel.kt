@@ -20,7 +20,7 @@ import kotlinx.coroutines.launch
  */
 class OnboardingViewModel(
     private val projections: PreferenceProjections,
-    val seerrPreferencesStore: SeerrPreferencesStore,
+    private val seerrPreferencesStore: SeerrPreferencesStore,
     private val seerrSecureCredentialsStore: SeerrSecureCredentialsStore,
     private val editor: PreferencesEditor,
 ) : JellyPlayViewModel() {

@@ -29,8 +29,8 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaSegment
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.OfflineSubtitleManifest
+import com.raulshma.jellyplay.core.model.TimeSource
 import com.raulshma.jellyplay.core.model.TrickplayInfo
-import com.raulshma.jellyplay.core.model.wallNowMillis
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -92,6 +92,12 @@ class DownloadRepositoryImpl(
     private val storagePolicy: StoragePolicy,
     private val downloadEnqueuer: DownloadEnqueueCoordinator,
     private val progressNotifier: DownloadProgressNotifier,
+    /**
+     * The one injected clock (the sibling repositories' seam): the retention
+     * sweep computes its keep-days cutoff from it instead of reading the
+     * process wall clock directly, so the boundary is fake-clock testable.
+     */
+    private val timeSource: TimeSource,
     /**
      * The extracted artifact-write cluster ([OfflineDownloadWriterCore]): row
      * creation, offline metadata + baseline seeding, parent hierarchy seeding,
@@ -366,7 +372,7 @@ class DownloadRepositoryImpl(
     override suspend fun saveOfflineMediaDetail(detail: MediaDetail, imageUrl: String?, backdropUrl: String?) =
         writer.saveOfflineMediaDetail(detail, imageUrl, backdropUrl)
 
-    override suspend fun getDownloadedEpisodeIdsForSeries(seriesId: String): Set<String> =
+    override suspend fun episodeIdsForSeries(seriesId: String): Set<String> =
         // Room suspend functions already switch to the Room query executor, so
         // the wrapping `withContext(Dispatchers.IO)` was an unnecessary thread-
         // pool handoff. (The withContext(Dispatchers.IO) calls that wrap actual
@@ -377,24 +383,21 @@ class DownloadRepositoryImpl(
 
     override suspend fun getDownloadedEpisodeIdsBySeries(): Map<String, Set<String>> =
         // Single 2-column query over the whole table; grouped in memory into a
-        // per-series index. Preferred over calling getDownloadedEpisodeIdsForSeries
+        // per-series index. Preferred over calling episodeIdsForSeries
         // per series from the periodic auto-download worker, which would issue N
         // full-row (23-col) queries when only mediaItemId is consumed.
         downloadDao.getDownloadedEpisodeIdsBySeries()
             .groupBy({ it.seriesId }, { it.mediaItemId })
             .mapValues { (_, ids) -> ids.toSet() }
 
-    override suspend fun getDownloadedSeriesIds(): List<String> =
-        downloadDao.getDownloadedSeriesIds()
-
-    override fun observeDownloadedSeriesIds(): Flow<Set<String>> =
-        downloadDao.observeDownloadedSeriesIds().map(List<String>::toSet).distinctUntilChanged()
-
-    override fun observeDownloadedIdsIncludingSeries(): Flow<Set<String>> =
+    override fun downloadCoverage(): Flow<DownloadCoverage> =
         combine(
             observeCompletedDownloadedIds(),
-            observeDownloadedSeriesIds(),
-        ) { itemIds, seriesIds -> itemIds + seriesIds }
+            // The series half — same DAO query the deleted
+            // getDownloadedSeriesIds/observeDownloadedSeriesIds members ran;
+            // folded into the coverage union (its only consumers).
+            downloadDao.observeDownloadedSeriesIds().map(List<String>::toSet).distinctUntilChanged(),
+        ) { itemIds, seriesIds -> DownloadCoverage(itemIds, seriesIds) }
             .distinctUntilChanged()
 
     override suspend fun downloadSeries(
@@ -610,7 +613,7 @@ class DownloadRepositoryImpl(
         // 0 = off — the sweep is a no-op unless the user opted into a window.
         if (keepDays <= 0) return AutoDownloadSweepResult.EMPTY
 
-        val cutoffMs = wallNowMillis() - keepDays.toLong() * MILLIS_PER_DAY
+        val cutoffMs = timeSource.nowEpochMillis() - keepDays.toLong() * MILLIS_PER_DAY
         val candidates = step("age query") {
             downloadDao.getCompletedOlderThan(cutoffMs)
         } ?: return AutoDownloadSweepResult.EMPTY

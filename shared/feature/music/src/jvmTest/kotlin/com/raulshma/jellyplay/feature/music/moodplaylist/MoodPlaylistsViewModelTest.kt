@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.feature.music.moodplaylist
 
-import com.raulshma.jellyplay.feature.music.MusicQueueOutcome
+import com.raulshma.jellyplay.core.data.playback.AudioQueueOutcome
 import com.raulshma.jellyplay.feature.music.MusicQueuePlayer
 import com.raulshma.jellyplay.core.data.repository.MediaCollectionReads
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
@@ -213,7 +213,7 @@ class MoodPlaylistsViewModelTest {
         coEvery { mediaCollectionReads.getMediaItems(any(), any(), any(), any(), any(), any()) } returns
             Result.success(SearchResult(listOf(kept), 1, 0))
         coEvery { audioQueueFacade.playTracks(any(), any(), any(), any(), any()) } returns
-            MusicQueueOutcome.Started(emptyList(), 0)
+            AudioQueueOutcome.Started(emptyList(), 0)
         viewModel.generatePlaylist(moodPlaylist())
         awaitGenerated { viewModel.generatedItems.isNotEmpty() }
 

@@ -280,7 +280,7 @@ class HomeFeedRealStackContractTest {
             timeSource = fakeTimeSource,
             homeSession = homeSession,
             sessionCacheRegistry = sessionCacheRegistry,
-            internals = MediaRepositoryInternals(client, homeSession),
+            internals = MediaRepositoryInternals(client, homeSession, sessionCacheRegistry),
         )
         return Stack(repository, client, port)
     }

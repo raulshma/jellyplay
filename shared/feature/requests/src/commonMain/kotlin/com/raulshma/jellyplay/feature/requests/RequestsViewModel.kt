@@ -17,16 +17,17 @@ import com.raulshma.jellyplay.core.model.seerr.SeerrRequestFilter
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestItem
 import com.raulshma.jellyplay.core.model.seerr.SeerrRequestSort
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
+import com.raulshma.jellyplay.core.ui.viewmodel.IdEnricher
 import com.raulshma.jellyplay.core.ui.viewmodel.PageAppender
 import com.raulshma.jellyplay.core.ui.viewmodel.loadInto
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.sync.Semaphore
-import kotlinx.coroutines.sync.withPermit
 
 data class RequestMediaInfo(
     val title: String?,
@@ -51,7 +52,7 @@ data class RequestsUiState(
     val pageSize: Int = 10,
     val filter: SeerrRequestFilter = SeerrRequestFilter.PENDING,
     val sort: SeerrRequestSort = SeerrRequestSort.ADDED,
-    val sortDirection: String = "desc",
+    val sortDirection: RequestsSortDirection = RequestsSortDirection.DESC,
     val mediaType: String? = null,
     val showMyRequestsOnly: Boolean = false,
     /** Free-text search term forwarded to the Seerr `search` query param. */
@@ -90,7 +91,60 @@ class RequestsViewModel(
     private val _state = composeState(RequestsUiState())
     val state: State<RequestsUiState> = _state.asState()
 
+    /** Shared permit bound for both enrichment fan-outs (the former enrichEach semaphore). */
     private val enrichSemaphore = Semaphore(4)
+
+    /** Media-details enrichment: one fetch per distinct (tmdbId, isMovie) pair. */
+    private val mediaEnricher = IdEnricher<Pair<Int, Boolean>, RequestMediaInfo>(
+        scope = scope,
+        semaphore = enrichSemaphore,
+        fetch = { (tmdbId, isMovie) ->
+            if (isMovie) {
+                seerrRepository.getMovieDetails(tmdbId).getOrNull()?.let {
+                    RequestMediaInfo(
+                        title = it.title,
+                        posterUrl = it.posterUrl,
+                        overview = it.overview,
+                        year = it.releaseDate?.take(4)?.toIntOrNull(),
+                    )
+                }
+            } else {
+                seerrRepository.getTvDetails(tmdbId).getOrNull()?.let {
+                    RequestMediaInfo(
+                        title = it.name,
+                        posterUrl = it.posterUrl,
+                        overview = it.overview,
+                        year = it.firstAirDate?.take(4)?.toIntOrNull(),
+                    )
+                }
+            }
+        },
+        merge = { (tmdbId, _), info ->
+            val current = _state.value
+            _state.value = current.copy(mediaInfo = current.mediaInfo + (tmdbId to info))
+        },
+    )
+
+    /** Direct *arr download-progress + queue-row enrichment, keyed by tmdbId. */
+    private val downloadEnricher = IdEnricher<Int, ArrQueueItem>(
+        scope = scope,
+        semaphore = enrichSemaphore,
+        fetch = { tmdbId -> arrRepository.getQueueForTmdb(tmdbId) },
+        merge = { tmdbId, item ->
+            val current = _state.value
+            _state.value = current.copy(
+                downloadProgress = current.downloadProgress + (
+                    tmdbId to ArrDownloadSummary(
+                        status = item.status,
+                        percent = item.percent,
+                        sizeLeft = item.sizeLeft,
+                        timeLeft = item.timeLeft,
+                    )
+                    ),
+                queueItems = current.queueItems + (tmdbId to item),
+            )
+        },
+    )
 
     // Eagerly shared (not `WhileSubscribed`): [loadRequests] reads it via
     // `.value` without holding a collector (the same trap that pins
@@ -100,7 +154,14 @@ class RequestsViewModel(
     val currentUser: StateFlow<SeerrCurrentUser?> = seerrRepository.currentUser
         .stateIn(scope, SharingStarted.Eagerly, null)
 
-    val isAdmin: StateFlow<Boolean> = seerrRepository.isAdmin()
+    /**
+     * The moderation gate, derived from the shared [currentUser] flow — the
+     * same `canManageRequests == true` map the repository's retired
+     * `isAdmin()` lens carried (folded onto `preferences`/`currentUser` with
+     * the rest of the preference lenses).
+     */
+    val isAdmin: StateFlow<Boolean> = seerrRepository.currentUser
+        .map { it?.canManageRequests == true }
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), false)
 
     val pendingRequestCount: StateFlow<Int> = seerrRepository.pendingRequestCount
@@ -152,7 +213,7 @@ class RequestsViewModel(
                         skip = skip,
                         filter = s.filter.value,
                         sort = s.sort.value,
-                        sortDirection = s.sortDirection,
+                        sortDirection = s.sortDirection.value,
                         requestedBy = requestedBy,
                         mediaType = s.mediaType,
                         search = s.searchQuery.takeIf { it.isNotBlank() },
@@ -179,7 +240,7 @@ class RequestsViewModel(
         }
     }
 
-    /** Per-request media-details enrichment; rides the shared [enrichEach] choreography. */
+    /** Per-request media-details enrichment; rides the shared [mediaEnricher]. */
     private fun enrichRequests(requests: List<SeerrRequestItem>) {
         // tmdb ids collide across the movie/tv namespaces (movie 603 ≠ tv 603),
         // so the fan-out key is the (tmdbId, isMovie) pair — one fetch per
@@ -190,58 +251,10 @@ class RequestsViewModel(
         val distinctPairs = requests
             .map { it.media.tmdbId to it.type.equals("movie", ignoreCase = true) }
             .distinct()
-        enrichEach(
+        mediaEnricher.enrich(
             ids = distinctPairs,
             skip = { (tmdbId, _) -> tmdbId in _state.value.mediaInfo },
-            fetch = { (tmdbId, isMovie) ->
-                if (isMovie) {
-                    seerrRepository.getMovieDetails(tmdbId).getOrNull()?.let {
-                        RequestMediaInfo(
-                            title = it.title,
-                            posterUrl = it.posterUrl,
-                            overview = it.overview,
-                            year = it.releaseDate?.take(4)?.toIntOrNull(),
-                        )
-                    }
-                } else {
-                    seerrRepository.getTvDetails(tmdbId).getOrNull()?.let {
-                        RequestMediaInfo(
-                            title = it.name,
-                            posterUrl = it.posterUrl,
-                            overview = it.overview,
-                            year = it.firstAirDate?.take(4)?.toIntOrNull(),
-                        )
-                    }
-                }
-            },
-            merge = { (tmdbId, _), info -> copy(mediaInfo = mediaInfo + (tmdbId to info)) },
         )
-    }
-
-    /**
-     * The one enrichment choreography, shared by [enrichRequests] and
-     * [enrichDownloadProgress]: one launch per id in [ids] ([skip] drops
-     * already-cached ones at fan-out time), bounded by [enrichSemaphore], with
-     * per-item failures swallowed — [fetch] maps them to null. Each completion
-     * folds its payload through [merge] inside [updateState]'s atomic
-     * snapshot, so completions landing concurrently accumulate instead of
-     * losing one another's map writes.
-     */
-    private fun <Id, T> enrichEach(
-        ids: List<Id>,
-        skip: (Id) -> Boolean = { false },
-        fetch: suspend (Id) -> T?,
-        merge: RequestsUiState.(Id, T) -> RequestsUiState,
-    ) {
-        ids.forEach { id ->
-            if (skip(id)) return@forEach
-            launch {
-                enrichSemaphore.withPermit {
-                    val payload = fetch(id) ?: return@withPermit
-                    updateState { it.merge(id, payload) }
-                }
-            }
-        }
     }
 
     /**
@@ -250,7 +263,8 @@ class RequestsViewModel(
      * another writer's read and write both land — the bare
      * `_state.value = _state.value.copy(...)` this replaces silently dropped
      * whichever completion lost that race. [removeQueueItem]'s two-key
-     * eviction rides the same path.
+     * eviction rides the same path. (The enrichment fan-outs' merges run
+     * through [IdEnricher]'s built-in snapshot instead of this helper.)
      */
     private fun updateState(transform: (RequestsUiState) -> RequestsUiState) {
         Snapshot.withMutableSnapshot { _state.value = transform(_state.value) }
@@ -268,23 +282,7 @@ class RequestsViewModel(
         if (!experimentalGate.directArrEnabled.value) return
         val distinctTmdbIds = requests.mapNotNull { it.media.tmdbId.takeIf { id -> id != 0 } }.distinct()
         if (distinctTmdbIds.isEmpty()) return
-        enrichEach(
-            ids = distinctTmdbIds,
-            fetch = { tmdbId -> arrRepository.getQueueForTmdb(tmdbId) },
-            merge = { tmdbId, item ->
-                copy(
-                    downloadProgress = downloadProgress + (
-                        tmdbId to ArrDownloadSummary(
-                            status = item.status,
-                            percent = item.percent,
-                            sizeLeft = item.sizeLeft,
-                            timeLeft = item.timeLeft,
-                        )
-                        ),
-                    queueItems = queueItems + (tmdbId to item),
-                )
-            },
-        )
+        downloadEnricher.enrich(ids = distinctTmdbIds)
     }
 
     /**

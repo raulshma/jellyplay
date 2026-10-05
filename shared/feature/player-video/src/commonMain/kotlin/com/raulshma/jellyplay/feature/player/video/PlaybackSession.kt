@@ -622,13 +622,13 @@ internal class PlaybackSession(
         rebindSessionTracking(playerSessionManager.sessionState.value.currentItemId ?: "")
 
         if (resolved.playMethod == PlayMethod.TRANSCODE) {
-            engineEventShell.emitEvent(SessionEvent.InformUser("Switched to transcoded stream — re-buffering"))
+            engineEventShell.emitEvent(SessionEvent.InformUserKey(PlayerVideoMessage.TranscodeSwitched))
         }
         if (mode == PlaybackMode.FORCE_DIRECT_PLAY &&
             resolved.playMethod != PlayMethod.DIRECT_PLAY
         ) {
             engineEventShell.emitEvent(
-                SessionEvent.InformUser("Direct Play unavailable for this item — falling back to transcode")
+                SessionEvent.InformUserKey(PlayerVideoMessage.DirectPlayUnavailable)
             )
             launchFallbackToTranscode(
                 fromPositionMs = playerSessionManager.engine?.currentPositionMs ?: pos,
@@ -1405,8 +1405,16 @@ sealed interface SessionEvent {
         val clearBuffering: Boolean = false,
     ) : SessionEvent
 
-    /** A transient informational message for the user. */
+    /** A transient informational message for the user (already-resolved text). */
     data class InformUser(val message: String) : SessionEvent
+
+    /**
+     * The resource-backed twin of [InformUser]: the notice resolves from a
+     * compose-resources key ([PlayerVideoMessage]) at the message seam, not
+     * from a hardcoded literal here — the coordinator's dynamic engine-error
+     * notices keep riding [InformUser].
+     */
+    data class InformUserKey(val message: PlayerVideoMessage) : SessionEvent
 
     /** Media playback reached its end (autoplay/close policy stays VM-side). */
     data object PlaybackEnded : SessionEvent

@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.feature.details
 
 import androidx.compose.runtime.Immutable
-import com.raulshma.jellyplay.core.data.download.DownloadRequestResult
+import com.raulshma.jellyplay.core.data.download.DownloadOutcomeMessenger
 import com.raulshma.jellyplay.core.data.download.MediaDownloadActions
 import com.raulshma.jellyplay.core.data.offline.OfflineDeleteActions
 import com.raulshma.jellyplay.core.data.repository.DetailLoadState
@@ -267,13 +267,16 @@ class DetailViewModel internal constructor(
         // sub-flows; snapshotIn gives the group its dedicated StateFlow so its
         // ticks don't re-run the outer combine.
         val seerrRequest = seerrRequestState.snapshotIn(scope)
-        // Group 3 — Seerr connection flags that only gate recommendation visibility.
-        val seerrFlags = combine(
-            remoteDiscovery.seerrRepository.isConnected(),
-            remoteDiscovery.seerrRepository.isRecommendationsEnabled(),
-        ) { isConnected, isRecommendationsEnabled ->
-            SeerrConnectionFlags(isConnected, isRecommendationsEnabled)
-        }.stateIn(scope, SharingStarted.WhileSubscribed(5_000), SeerrConnectionFlags())
+        // Group 3 — Seerr connection flags that only gate recommendation visibility
+        // (the two retired repository lenses, derived off the one preferences flow).
+        val seerrFlags = remoteDiscovery.seerrRepository.preferences
+            .map { prefs ->
+                SeerrConnectionFlags(
+                    isConnected = prefs.serverUrl.isNotBlank(),
+                    isRecommendationsEnabled = prefs.recommendationsEnabled,
+                )
+            }
+            .stateIn(scope, SharingStarted.WhileSubscribed(5_000), SeerrConnectionFlags())
 
         combine(core, seerrRequest, seerrFlags) { primary, request, flags ->
             primary.copy(
@@ -1333,18 +1336,30 @@ class DetailViewModel internal constructor(
     /**
      * Long-press Download from a detail row card (related/collection/episode,
      * #147): same routing as the library grid — inline start for single-stream
-     * items, detail screen for series (selection sheet) and other richer flows.
+     * items, detail screen for series (selection sheet) and other richer
+     * flows. The outcome cascade is the shared
+     * [MediaDownloadActions.downloadAndReport] fold; this host's messages ride
+     * [rowDownloadSink]'s DetailMessage queue and its strings.
      */
     private fun downloadRowItem(item: MediaItem, onOpenDetail: (itemId: String) -> Unit) {
         launch {
-            when (val result = mediaDownloadActions.download(item)) {
-                DownloadRequestResult.Started ->
-                    _messages.emit(DetailMessage.Text(strings.get(Res.string.detail_msg_download_started)))
-                is DownloadRequestResult.SeriesSelectionRequired -> onOpenDetail(result.seriesId)
-                is DownloadRequestResult.NeedsDetailScreen -> onOpenDetail(result.itemId)
-                is DownloadRequestResult.Failed ->
-                    _messages.emit(DetailMessage.Text(strings.get(Res.string.detail_msg_download_start_failed)))
-            }
+            mediaDownloadActions.downloadAndReport(
+                item = item,
+                onOpenDetail = { id, _ -> onOpenDetail(id) },
+                seriesOpensSheet = false,
+                messenger = rowDownloadSink,
+            )
+        }
+    }
+
+    /** The fold's message sink: this screen's DetailMessage queue + strings. */
+    private val rowDownloadSink = object : DownloadOutcomeMessenger {
+        override fun downloadStarted() {
+            launch { _messages.tryEmit(DetailMessage.Text(strings.get(Res.string.detail_msg_download_started))) }
+        }
+
+        override fun downloadStartFailed() {
+            launch { _messages.tryEmit(DetailMessage.Text(strings.get(Res.string.detail_msg_download_start_failed))) }
         }
     }
 

@@ -6,6 +6,8 @@ import com.raulshma.jellyplay.core.data.paging.pagedMediaPager
 import com.raulshma.jellyplay.core.data.paging.searchPagingSource
 import com.raulshma.jellyplay.core.data.session.HomeSession
 import com.raulshma.jellyplay.core.data.session.SessionCacheRegistry
+import com.raulshma.jellyplay.core.data.session.SessionScopedCache
+import com.raulshma.jellyplay.core.model.CacheIdentity
 import com.raulshma.jellyplay.core.model.CollectionSummary
 import com.raulshma.jellyplay.core.model.FreshnessCeilings
 import com.raulshma.jellyplay.core.model.DiscoverRowConfig
@@ -173,35 +175,48 @@ class MediaRepositoryImpl internal constructor(
     private val detailCaches get() = internals.detailCaches
 
     // ── The spec registry ──────────────────────────────────────────────────
-    // Every simple identity-keyed TtlCache this class serves, declared as a
-    // per-concept [MediaCacheSpec]: the cache, the named FreshnessCeilings
-    // policy it cites, and the [MediaCacheGroup]s whose ladders clear it.
-    // The three group ladders — the init block's identity registration,
+    // Every simple identity-keyed cache this class serves, declared as a
+    // per-concept [MediaCacheSpec]: the [SessionScopedCache] chassis (the
+    // TtlCache + epoch + single-flight + identity-registration ritual in one
+    // instance — each spec self-registers its "media-*" identity action), the
+    // named FreshnessCeilings policy it cites, and the [MediaCacheGroup]s
+    // whose ladders clear it. The two remaining group ladders —
     // [invalidateCaches]' wholesale drop and the whole-cache arm of the
     // composite user-data eviction ([invalidateUserDataCaches]) — iterate
-    // [cacheSpecs] by group instead of enumerating fields, so a concept
-    // joins every ladder its groups name by declaring one spec here. The
+    // [cacheSpecs] by group instead of enumerating fields, so a concept joins
+    // every ladder its groups name by declaring one spec here. (The identity
+    // ladder needs no membership: each spec's chassis registers itself.) The
     // BESPOKE caches stay outside the registry on purpose: the home-sections
     // cache (its drops ride the home write-generation funnel), the detail
-    // cluster ([detailCaches] — per-item evicts + epoch bumps, shared with
-    // the playlist surface through [internals]) and the episode catalogue
-    // (not a TtlCache — a snapshot store with its own epoch) each carry
-    // policy a group clear cannot express.
+    // cluster ([detailCaches] — per-item evicts + one shared epoch across
+    // members, keyed by the group's grammar, shared with the playlist surface
+    // through [internals]) and the episode catalogue (a snapshot store whose
+    // merge paths read/write the cache directly) each carry policy a group
+    // clear cannot express.
     private val libraryFoldersSpec = MediaCacheSpec<List<LibraryFolder>>(
+        owner = "media-folders",
         groups = setOf(MediaCacheGroup.WHOLESALE),
         ttlMs = FreshnessCeilings.FOLDERS_TTL_MS,
+        registry = sessionCacheRegistry,
+        identity = { homeSession.cacheIdentity() },
     )
     private val genresSpec = MediaCacheSpec<List<Genre>>(
+        owner = "media-genres",
         groups = setOf(MediaCacheGroup.WHOLESALE),
         maxSize = 64,
         // Genres and studios share the folders ceiling — both near-static
         // catalogue metadata.
         ttlMs = FreshnessCeilings.FOLDERS_TTL_MS,
+        registry = sessionCacheRegistry,
+        identity = { homeSession.cacheIdentity() },
     )
     private val studiosSpec = MediaCacheSpec<List<Studio>>(
+        owner = "media-studios",
         groups = setOf(MediaCacheGroup.WHOLESALE),
         maxSize = 64,
         ttlMs = FreshnessCeilings.FOLDERS_TTL_MS,
+        registry = sessionCacheRegistry,
+        identity = { homeSession.cacheIdentity() },
     )
 
     /**
@@ -213,9 +228,12 @@ class MediaRepositoryImpl internal constructor(
      * instead of serving stale badges until the TTL expires.
      */
     private val latestMediaSpec = MediaCacheSpec<List<MediaItem>>(
+        owner = "media-latest",
         groups = setOf(MediaCacheGroup.WHOLESALE, MediaCacheGroup.USER_DATA),
         maxSize = 64,
         ttlMs = FreshnessCeilings.LATEST_MEDIA_TTL_MS,
+        registry = sessionCacheRegistry,
+        identity = { homeSession.cacheIdentity() },
     )
 
     // Series-scoped seasons/episodes caches used to live here; they've moved
@@ -228,23 +246,28 @@ class MediaRepositoryImpl internal constructor(
     // read rides the [collectionItemsStale] gap group — both bespoke,
     // neither a group clear.
     private val collectionItemsSpec = MediaCacheSpec<SearchResult>(
+        owner = "media-collection-items",
         groups = setOf(MediaCacheGroup.WHOLESALE),
         ttlMs = FreshnessCeilings.DETAIL_TTL_MS,
+        registry = sessionCacheRegistry,
+        identity = { homeSession.cacheIdentity() },
     )
 
     // Child-photo URLs for a photo folder (player backdrop fan-out); declared
     // with the other specs so the identity registration in the init block
     // below can enumerate every cache in one place.
     private val photoFolderChildUrlSpec = MediaCacheSpec<List<String>>(
+        owner = "media-photo-urls",
         groups = setOf(MediaCacheGroup.WHOLESALE),
         maxSize = 200,
         ttlMs = FreshnessCeilings.PHOTO_URLS_TTL_MS,
+        registry = sessionCacheRegistry,
+        identity = { homeSession.cacheIdentity() },
     )
 
     /**
-     * The registry the group ladders iterate, in the identity-registration
-     * order the init block's `registerCaches` call spreads. Declared
-     * resequencing vs. the former field enumerations (unobservable, the
+     * The registry the group ladders iterate. Declared resequencing vs. the
+     * former field enumerations (unobservable, the
      * [DetailCacheGroup.clearAll] precedent): the member caches are
      * independent (no cross-cache read exists) and every ladder still clears
      * each member exactly once.
@@ -419,28 +442,23 @@ class MediaRepositoryImpl internal constructor(
         //                          identity's persisted home-section SWR rows.
         //  - SignedOut           : wholesale drop + clear the logged-out
         //                          identity's rows (privacy).
-        sessionCacheRegistry.registerCaches(
-            "media",
-            // The spec registry: every simple cache joins the identity-clear
-            // list through its WHOLESALE group membership — a new concept is
-            // registered by declaring its spec, not by editing this call.
-            *cacheSpecs.map { it.cache }.toTypedArray(),
-            // The group's registry contribution (today: the album-tracks
-            // cache — the only member whose plain wholesale clear IS the
-            // whole identity reaction; see DetailCacheGroup.registryCaches).
-            *detailCaches.registryCaches.toTypedArray(),
-            homeSectionsCache,
-        )
+        //
+        // The spec caches and the detail cluster need no line here: each
+        // [SessionScopedCache] chassis (one per [MediaCacheSpec], four in
+        // [DetailCacheGroup]) registered its own identity action — epoch bump
+        // + wholesale clear — at construction. Only the home-sections cache
+        // still rides a hand-rolled registration (its drops deliberately do
+        // NOT bump an epoch — see [bumpHomeWriteGeneration]'s KDoc: identity
+        // transitions void by identity, not by ordering).
+        sessionCacheRegistry.registerCaches("media", homeSectionsCache)
         // The action carries only the reactions a plain registry drop
-        // cannot express: the detail cache's epoch bump (an in-flight
-        // previous-identity fetch must not write back into the cleared
-        // cache) together with its similar/theme-songs companions, and the
-        // previous identity's persisted SWR rows. The episode catalogue's
-        // snapshot drop + epoch bump lives in its own registration —
+        // cannot express: the #157 staleness markers and the previous
+        // identity's persisted SWR rows. (The detail cache's epoch bump +
+        // wholesale clear lives in its members' chassis registrations; the
+        // episode catalogue's snapshot drop + epoch bump lives in its own —
         // routing through invalidateCaches() here would clear every cache
-        // twice and double-bump the catalogue's epoch on each transition.
+        // twice and double-bump the catalogue's epoch on each transition.)
         sessionCacheRegistry.registerAction("media-identity-clear") { transition ->
-            detailCaches.invalidateAll()
             // The #157 staleness markers are identity-scoped state in spirit
             // (they are armed by the PREVIOUS user's confirmed writes);
             // without this reset they survive the switch and force the next
@@ -589,7 +607,7 @@ class MediaRepositoryImpl internal constructor(
         homeSnapshotStore.offlineLayout()
 
     override suspend fun getLibraryFolders(force: Boolean): Result<List<LibraryFolder>> =
-        libraryFoldersSpec.cache.getOrFetch({ homeSession.cacheIdentity() }, "folders", force = force) {
+        libraryFoldersSpec.cache.getOrFetch("folders", force = force) {
             libraryApiClient.getLibraryFolders()
         }
 
@@ -597,7 +615,7 @@ class MediaRepositoryImpl internal constructor(
         parentId: String,
         limit: Int,
     ): Result<List<MediaItem>> =
-        latestMediaSpec.cache.getOrFetch({ homeSession.cacheIdentity() }, "latest_${parentId}_$limit") {
+        latestMediaSpec.cache.getOrFetch("latest_${parentId}_$limit") {
             libraryApiClient.getLatestMedia(parentId = parentId, limit = limit)
         }
 
@@ -667,14 +685,14 @@ class MediaRepositoryImpl internal constructor(
     }
 
     override suspend fun getGenres(parentId: String?, force: Boolean): Result<List<Genre>> =
-        genresSpec.cache.getOrFetch({ homeSession.cacheIdentity() }, "genres_${parentId ?: "root"}", force = force) {
+        genresSpec.cache.getOrFetch("genres_${parentId ?: "root"}", force = force) {
             libraryApiClient.getGenres(parentId)
         }
 
     // No force lever: unlike getGenres, getStudios never grew the freshness
     // parameter, and the plain shape keeps exactly that behaviour.
     override suspend fun getStudios(parentId: String?): Result<List<Studio>> =
-        studiosSpec.cache.getOrFetch({ homeSession.cacheIdentity() }, "studios_${parentId ?: "root"}") {
+        studiosSpec.cache.getOrFetch("studios_${parentId ?: "root"}") {
             libraryApiClient.getStudios(parentId)
         }
 
@@ -743,7 +761,6 @@ class MediaRepositoryImpl internal constructor(
         collectionItemsStale.staleAwareRead(force) { effectiveForce ->
             if (effectiveForce) invalidateCollectionItemsCache(collectionId)
             collectionItemsSpec.cache.getOrFetch(
-                { homeSession.cacheIdentity() },
                 collectionItemsKey(collectionId, startIndex, limit),
             ) {
                 collectionApiClient.getCollectionItems(collectionId, startIndex, limit)
@@ -940,7 +957,7 @@ class MediaRepositoryImpl internal constructor(
         // declared at the spec, so the eviction grows with the group instead
         // of with this ladder.
         cacheSpecs.forEach { spec ->
-            if (MediaCacheGroup.USER_DATA in spec.groups) spec.cache.clear()
+            if (MediaCacheGroup.USER_DATA in spec.groups) spec.cache.invalidateAll()
         }
         // The network layer's own home hot-path caches (per-folder latest +
         // per-seed similar) carry the same per-item UserData — drop them too,
@@ -997,12 +1014,9 @@ class MediaRepositoryImpl internal constructor(
         // photo folder child URLs) and are identity-keyed (a wrong identity
         // misses by construction), so this wholesale clear is the secondary
         // guard; the primary one is that a previous identity's key can never
-        // match the current identity's key. Declared resequencing
-        // (unobservable): the former body interleaved the catalogue's
-        // invalidateAll between them; the caches are independent (no
-        // cross-cache read exists) and each is cleared exactly once.
+        // match the current identity's key.
         cacheSpecs.forEach { spec ->
-            if (MediaCacheGroup.WHOLESALE in spec.groups) spec.cache.clear()
+            if (MediaCacheGroup.WHOLESALE in spec.groups) spec.cache.invalidateAll()
         }
         // Seasons/episodes caches now live in [episodeCatalogue]; drop the
         // whole catalogue (every series snapshot + the long epoch) so a
@@ -1053,7 +1067,7 @@ class MediaRepositoryImpl internal constructor(
         // pure shape: if the call throws, the lambda unwinds before any Result
         // exists (nothing is cached, the exception propagates), so the
         // trailing getOrThrow can only ever unwrap a stored success.
-        photoFolderChildUrlSpec.cache.getOrFetch({ homeSession.cacheIdentity() }, folderId) {
+        photoFolderChildUrlSpec.cache.getOrFetch(folderId) {
             Result.success(libraryApiClient.getChildItemImageUrls(folderId, limit))
         }.getOrThrow()
 }
@@ -1092,18 +1106,28 @@ private enum class MediaCacheGroup {
 }
 
 /**
- * One cacheable concept's spec: the [TtlCache] instance that serves it, the
- * named freshness policy it cites ([ttlMs] — every concept cites a
+ * One cacheable concept's spec: the [SessionScopedCache] instance that serves
+ * it (owner [owner] — the registry slot its identity action registers under),
+ * the named freshness policy it cites ([ttlMs] — every concept cites a
  * `FreshnessCeilings` constant, never an inline literal), and the
  * [MediaCacheGroup]s whose ladders clear it. Plain data plus one constructed
- * cache; the cache-or-forward reads themselves stay on the existing
- * `getOrFetch`/`cacheThrough` engines — the spec owns only where the cache
- * lives and who clears it, never how a read flows through it.
+ * chassis; the cache-or-forward reads themselves stay on the chassis's
+ * `getOrFetch` engine — the spec owns only where the cache lives and who
+ * clears it, never how a read flows through it.
  */
-private class MediaCacheSpec<V>(
+private class MediaCacheSpec<V : Any>(
+    owner: String,
     val groups: Set<MediaCacheGroup>,
     maxSize: Int = TtlCache.DEFAULT_MAX_SIZE,
     ttlMs: Long = TtlCache.DEFAULT_TTL_MS,
+    registry: SessionCacheRegistry,
+    identity: suspend () -> CacheIdentity,
 ) {
-    val cache = TtlCache<V>(maxSize = maxSize, ttlMs = ttlMs)
+    val cache = SessionScopedCache<V>(
+        owner = owner,
+        maxSize = maxSize,
+        ttlMs = ttlMs,
+        registry = registry,
+        identity = identity,
+    )
 }

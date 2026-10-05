@@ -1077,32 +1077,65 @@ fun VideoPlayerScreen(
                 executePlayerAction = { currentExecutePlayerAction(it) },
             )
 
+            // ONE input bundle per tier (the effectsControls idiom): each is
+            // remembered on exactly the values its tier reads, so the bundle
+            // instance stays equal across recompositions and the tier keeps
+            // skipping until a value it actually renders flips.
+            val centerOverlayInputs = remember(
+                uiState.uiPrefs.trickplayOnSeekGesture,
+                gestureTrickplayVisible,
+                gestureTrickplayBitmap,
+                gestureSeekPositionMs,
+                gestureDeltaMs,
+                duration,
+                isCinemaIntroVisible,
+                tvCinemaIntroFocusRequester,
+                activeSegment,
+                activeSegmentBehavior,
+                shouldShowUpNext,
+                isInPipMode,
+                tvSkipSegmentFocusRequester,
+                nextEpisode,
+                nextEpisodeImageUrl,
+                isNextEpisodeLoading,
+                tvNextEpisodeFocusRequester,
+                isPlaying,
+                currentSheet != PlayerSheet.None,
+                isScreenLocked,
+                playbackIntended,
+                stillWatchingPrompt,
+            ) {
+                CenterOverlayInputs(
+                    trickplayOnSeekGesture = uiState.uiPrefs.trickplayOnSeekGesture,
+                    gestureTrickplayVisible = gestureTrickplayVisible,
+                    gestureTrickplayBitmap = gestureTrickplayBitmap,
+                    gestureSeekPositionMs = gestureSeekPositionMs,
+                    gestureDeltaMs = gestureDeltaMs,
+                    durationMs = duration,
+                    isCinemaIntroVisible = isCinemaIntroVisible,
+                    tvCinemaIntroFocusRequester = tvCinemaIntroFocusRequester,
+                    activeSegment = activeSegment,
+                    activeSegmentBehavior = activeSegmentBehavior,
+                    shouldShowUpNext = shouldShowUpNext,
+                    isInPipMode = isInPipMode,
+                    tvSkipSegmentFocusRequester = tvSkipSegmentFocusRequester,
+                    nextEpisode = nextEpisode,
+                    nextEpisodeImageUrl = nextEpisodeImageUrl,
+                    isNextEpisodeLoading = isNextEpisodeLoading,
+                    tvNextEpisodeFocusRequester = tvNextEpisodeFocusRequester,
+                    isPlaying = isPlaying,
+                    isSheetOpen = currentSheet != PlayerSheet.None,
+                    isScreenLocked = isScreenLocked,
+                    playbackIntended = playbackIntended,
+                    stillWatchingPrompt = stillWatchingPrompt,
+                )
+            }
+
             PlayerCenterOverlayTier(
                 viewModel = viewModel,
                 uiState = uiState,
-                trickplayOnSeekGesture = uiState.uiPrefs.trickplayOnSeekGesture,
-                gestureTrickplayVisible = gestureTrickplayVisible,
-                gestureTrickplayBitmap = gestureTrickplayBitmap,
-                gestureSeekPositionMs = gestureSeekPositionMs,
-                gestureDeltaMs = gestureDeltaMs,
-                durationMs = duration,
-                isCinemaIntroVisible = isCinemaIntroVisible,
-                tvCinemaIntroFocusRequester = tvCinemaIntroFocusRequester,
+                inputs = centerOverlayInputs,
                 performConfirmHaptic = performConfirmHaptic,
-                activeSegment = activeSegment,
-                activeSegmentBehavior = activeSegmentBehavior,
-                shouldShowUpNext = shouldShowUpNext,
-                isInPipMode = isInPipMode,
-                tvSkipSegmentFocusRequester = tvSkipSegmentFocusRequester,
-                nextEpisode = nextEpisode,
-                nextEpisodeImageUrl = nextEpisodeImageUrl,
-                isNextEpisodeLoading = isNextEpisodeLoading,
-                tvNextEpisodeFocusRequester = tvNextEpisodeFocusRequester,
-                isPlaying = isPlaying,
-                isSheetOpen = currentSheet != PlayerSheet.None,
-                isScreenLocked = isScreenLocked,
-                playbackIntended = playbackIntended,
-                stillWatchingPrompt = stillWatchingPrompt,
             )
 
             if (isScreenLocked && !isInPipMode) {
@@ -1127,21 +1160,40 @@ fun VideoPlayerScreen(
             val abRepeat by viewModel.abRepeat.state.collectAsStateWithLifecycle()
             val syncPlay by viewModel.syncPlay.state.collectAsStateWithLifecycle()
 
+            val statusOverlayInputs = remember(
+                duration,
+                playbackSpeed,
+                isPlaying,
+                effectsState.decoderMode,
+                engine,
+                isCastConnected,
+                isCastConnecting,
+                snackbarHostState,
+                resumeChipHostState,
+                detectedAspectRatio,
+                aspectRatio,
+                videoZoom,
+            ) {
+                StatusOverlayInputs(
+                    durationMs = duration,
+                    playbackSpeed = playbackSpeed,
+                    isPlaying = isPlaying,
+                    decoderMode = effectsState.decoderMode,
+                    engine = engine,
+                    isCastConnected = isCastConnected,
+                    isCastConnecting = isCastConnecting,
+                    snackbarHostState = snackbarHostState,
+                    resumeChipHostState = resumeChipHostState,
+                    detectedAspectRatio = detectedAspectRatio,
+                    aspectRatio = aspectRatio,
+                    videoZoom = videoZoom,
+                )
+            }
+
             PlayerStatusOverlayTier(
                 viewModel = viewModel,
                 uiState = uiState,
-                durationMs = duration,
-                playbackSpeed = playbackSpeed,
-                isPlaying = isPlaying,
-                decoderMode = effectsState.decoderMode,
-                engine = engine,
-                isCastConnected = isCastConnected,
-                isCastConnecting = isCastConnecting,
-                snackbarHostState = snackbarHostState,
-                resumeChipHostState = resumeChipHostState,
-                detectedAspectRatio = detectedAspectRatio,
-                aspectRatio = aspectRatio,
-                videoZoom = videoZoom,
+                inputs = statusOverlayInputs,
             )
 
             val hasEpisodes = uiState.episodes.seriesSeasons.isNotEmpty() && uiState.episodes.seasonEpisodes.isNotEmpty()
@@ -1579,31 +1631,43 @@ fun VideoPlayerScreen(
         }
     }
 
+    val sheetRouterInputs = remember(
+        itemId,
+        syncPlayIgnoreWait,
+        onOpenSubtitleTester,
+        subtitleHubResetFirst,
+        subtitleHubInitialTab,
+    ) {
+        SheetRouterInputs(
+            onSheetChange = { sheet -> currentSheet = sheet },
+            dismissSheet = dismissSheet,
+            currentPositionFlow = viewModel.currentPositionMs,
+            sleepTimerRemainingFlow = viewModel.sleepTimer.remainingMs,
+            doSeekTo = doSeekTo,
+            itemId = itemId,
+            syncPlayIgnoreWait = syncPlayIgnoreWait,
+            onLoadLocalSubtitle = {
+                localSubtitlePicker()
+            },
+            onPickFont = {
+                fontPicker()
+            },
+            onOpenSubtitleTester = onOpenSubtitleTester,
+            onOpenSubtitleDelayOverlay = {
+                currentSheet = PlayerSheet.None
+                showDelayOverlay = true
+            },
+            subtitleHubResetFirst = subtitleHubResetFirst,
+            onSubtitleHubResetConsumed = { subtitleHubResetFirst = false },
+            subtitleHubInitialTab = subtitleHubInitialTab,
+        )
+    }
+
     PlayerSheetRouter(
         currentSheet = currentSheet,
-        onSheetChange = { sheet -> currentSheet = sheet },
-        dismissSheet = dismissSheet,
         uiState = uiState,
-        currentPositionFlow = viewModel.currentPositionMs,
-        sleepTimerRemainingFlow = viewModel.sleepTimer.remainingMs,
-        doSeekTo = doSeekTo,
+        inputs = sheetRouterInputs,
         viewModel = viewModel,
-        itemId = itemId,
-        syncPlayIgnoreWait = syncPlayIgnoreWait,
-        onLoadLocalSubtitle = {
-            localSubtitlePicker()
-        },
-        onPickFont = {
-            fontPicker()
-        },
-        onOpenSubtitleTester = onOpenSubtitleTester,
-        onOpenSubtitleDelayOverlay = {
-            currentSheet = PlayerSheet.None
-            showDelayOverlay = true
-        },
-        subtitleHubResetFirst = subtitleHubResetFirst,
-        onSubtitleHubResetConsumed = { subtitleHubResetFirst = false },
-        subtitleHubInitialTab = subtitleHubInitialTab,
     )
 
     val playerError = uiState.playerError

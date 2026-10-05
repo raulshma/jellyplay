@@ -2,20 +2,30 @@ package com.raulshma.jellyplay.feature.player.video.engine
 
 /**
  * The four [MediaEngine] volume/mute commands as FINAL templates over
- * [PlaybackVolumePolicy] — the shared COMMON half of the two adapters that
- * run this choreography: Android's `ReloadablePlayerEngine` finals and the
- * desktop `MpvDesktopEngine`, both of which delegate here so the plan →
- * remember → capture → native write ordering cannot drift again (the desktop
- * formerly hand-rolled this ordering in parallel with the Android templates).
+ * [PlaybackVolumePolicy] — the shared COMMON half of the adapters that
+ * run this choreography: Android's `ReloadablePlayerEngine` finals, the
+ * desktop `MpvDesktopEngine`, and (volume-policy conveyor) the live TV
+ * engine's mute controller — all of which delegate here so the
+ * plan → remember → capture → native write ordering cannot drift again (the
+ * desktop formerly hand-rolled this ordering in parallel with the Android
+ * templates).
+ *
+ * Home (volume-policy conveyor): moved wholesale from player-video to
+ * player-contract — the recorded home for engine-shared machinery — so the
+ * live player (player-live, which may not depend on player-video) can host
+ * the same mute template. The `feature.player.video.engine` package is kept
+ * by recorded decision, so every existing consumer and test compiles with no
+ * import changes.
  *
  * The decisions (clamp bound, remember target, snapshot ordering, native
  * restore vocabulary) live in [PlaybackVolumePolicy]; the per-adapter
  * divergences stay seams on [NativeVolumeSurface]: the native write
  * mechanism, the delta-base read, the boost ceiling, the mute flag and
- * mute-gate, the mute-restore vocabulary, the system music-stream sync
- * (Android-only — desktop has no system stream) and the user-change capture
- * (desktop per-content-type volume memory; Android video deliberately stays
- * on the system-stream model and never captures).
+ * mute-gate, the mute-restore vocabulary, the unmute restore floor, the
+ * system music-stream sync (Android-only — desktop and live have no system
+ * stream) and the user-change capture (desktop per-content-type volume
+ * memory; Android video deliberately stays on the system-stream model and
+ * never captures).
  */
 object VolumeCommandTemplates {
 
@@ -30,6 +40,14 @@ object VolumeCommandTemplates {
 
         /** The remembered unmute level — [PlaybackVolumePolicy.planUnmute]'s restore target. */
         val rememberedUnmuteLevel: Float
+
+        /**
+         * The unmute restore floor — the host's declared divergence data fed
+         * to [PlaybackVolumePolicy.planUnmute]. VOD floors a silenced memory
+         * at the policy's audible floor; live's controller declares `0f` so
+         * the EXACT pre-mute level is restored.
+         */
+        val unmuteRestoreFloor: Float get() = PlaybackVolumePolicy.UNMUTE_FLOOR
 
         /**
          * Whether the mute/unmute template may run at all (libVLC aborts
@@ -68,8 +86,8 @@ object VolumeCommandTemplates {
 
         /**
          * Post-plan system music-stream sync (Android); no-op where no system
-         * stream exists (desktop — the native handle is the only volume
-         * surface).
+         * stream exists (desktop and live — the native handle is the only
+         * volume surface).
          */
         fun syncSystemStream(normalized: Float) {}
 
@@ -108,7 +126,8 @@ object VolumeCommandTemplates {
     /**
      * The mute command: flag → gate → snapshot → (optional) native restore
      * write → sync. Unmute restores [NativeVolumeSurface.rememberedUnmuteLevel]
-     * whenever the adapter's vocabulary says REMEMBERED_LEVEL.
+     * whenever the adapter's vocabulary says REMEMBERED_LEVEL, floored at the
+     * adapter's declared [NativeVolumeSurface.unmuteRestoreFloor].
      */
     fun setMuted(surface: NativeVolumeSurface, muted: Boolean) {
         surface.applyNativeMuteFlag(muted)
@@ -122,6 +141,7 @@ object VolumeCommandTemplates {
             val plan = PlaybackVolumePolicy.planUnmute(
                 surface.rememberedUnmuteLevel,
                 surface.nativeVolumeRestore(muted = false),
+                surface.unmuteRestoreFloor,
             )
             plan.nativeVolume?.let { surface.applyNativeVolume(it) }
             surface.syncSystemStream(plan.systemStream)

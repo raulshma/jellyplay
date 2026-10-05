@@ -41,7 +41,7 @@ import com.raulshma.jellyplay.core.ui.navigation.Navigator
  * [navigator] is a KEY, not a field: no hook stores it directly — the
  * now-playing/ambient click lambdas close over it inside the shared
  * rememberShellAudioClicks helper (keyed on the navigator + the shell's
- * ShellAudioSource adapter), and keying here rebuilds the hooks —
+ * NowPlayingSurface), and keying here rebuilds the hooks —
  * refreshing those captures — exactly when the navigator identity
  * changes, and never otherwise.
  *
@@ -56,7 +56,7 @@ import com.raulshma.jellyplay.core.ui.navigation.Navigator
  *   Play-On redirect, Surprise Me flow.
  * @param audio the music home cards' push pair (ShellAudioClicks) — built
  *   by the shared rememberShellAudioClicks over each shell's
- *   ShellAudioSource adapter (each shell's audio core is read at CLICK
+ *   NowPlayingSurface (each shell's audio core is read at CLICK
  *   time — flows read lazily, never captured values; a blank art URL
  *   arrives as null, the helper's declared normalization).
  * @param settings settingsSection's bundle (ShellSettingsHooks) — logout

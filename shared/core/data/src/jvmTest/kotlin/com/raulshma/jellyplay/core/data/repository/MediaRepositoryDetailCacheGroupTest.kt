@@ -92,7 +92,7 @@ class MediaRepositoryDetailCacheGroupTest {
             sessionCacheRegistry = sessionCacheRegistry,
             // Facade split: the group under test now lives on the shared
             // internals holder (construction-only ctor re-point).
-            internals = MediaRepositoryInternals(apiClient, homeSession),
+            internals = MediaRepositoryInternals(apiClient, homeSession, sessionCacheRegistry),
         )
     }
 

@@ -56,6 +56,11 @@ kotlin {
         // the skiko JVM artifacts on main are code-only, natives (dll.sha256)
         // ride compose.desktop.currentOs. Host-OS only: jvmTest runs on it.
         // (kotlin("test") comes from the convention plugin.)
+        // runTest for the commonTest coroutine suites (IdEnricherTest — ADR-0006
+        // lane: pure commonMain subject).
+        getByName("commonTest").dependencies {
+            implementation(libs.coroutines.test)
+        }
         getByName("jvmTest").dependencies {
             implementation(compose.desktop.currentOs)
             // runTest/UnconfinedTestDispatcher for the Channel/StateFlow pure-logic tests.

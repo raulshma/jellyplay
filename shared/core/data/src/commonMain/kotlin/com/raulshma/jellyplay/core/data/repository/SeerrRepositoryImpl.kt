@@ -20,7 +20,6 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 /**
@@ -320,17 +319,7 @@ class SeerrRepositoryImpl(
             seerrApiClient.getServiceDetail(url, credentials, id, kind)
         }
 
-    override fun isConnected(): Flow<Boolean> = seerrPreferencesStore.isConnected
-
-    override fun isEnabled(): Flow<Boolean> = seerrPreferencesStore.preferences.map { it.enabled }
-
-    override fun isSearchEnabled(): Flow<Boolean> = seerrPreferencesStore.preferences.map { it.searchEnabled }
-
-    override fun isRecommendationsEnabled(): Flow<Boolean> = seerrPreferencesStore.preferences.map { it.recommendationsEnabled }
-
-    override fun isDiscoverEnabled(): Flow<Boolean> = seerrPreferencesStore.preferences.map { it.discoverEnabled }
-
-    override fun getPreferences(): Flow<SeerrPreferences> = seerrPreferencesStore.preferences
+    override val preferences: StateFlow<SeerrPreferences> get() = seerrPreferencesStore.preferences
 
     override suspend fun getTrending(page: Int): Result<List<SeerrSearchItem>> =
         withSeerrSession { url, credentials ->
@@ -339,21 +328,19 @@ class SeerrRepositoryImpl(
 
     override suspend fun getDiscoverMovies(
         page: Int,
-        primaryReleaseDateGte: String?,
         params: com.raulshma.jellyplay.core.model.seerr.SeerrDiscoverParams?,
     ): Result<List<SeerrSearchItem>> =
         withSeerrSession { url, credentials ->
-            seerrApiClient.getDiscoverMovies(url, credentials, page, primaryReleaseDateGte, params)
+            seerrApiClient.getDiscoverMovies(url, credentials, page, params?.releaseDateGte, params)
                 .map { items -> backfillMediaType(items, "movie") }
         }
 
     override suspend fun getDiscoverTv(
         page: Int,
-        firstAirDateGte: String?,
         params: com.raulshma.jellyplay.core.model.seerr.SeerrDiscoverParams?,
     ): Result<List<SeerrSearchItem>> =
         withSeerrSession { url, credentials ->
-            seerrApiClient.getDiscoverTv(url, credentials, page, firstAirDateGte, params)
+            seerrApiClient.getDiscoverTv(url, credentials, page, params?.releaseDateGte, params)
                 .map { items -> backfillMediaType(items, "tv") }
         }
 
@@ -432,10 +419,6 @@ class SeerrRepositoryImpl(
         }.also { result ->
             result.getOrNull()?.let { _currentUser.value = it }
         }
-
-    override fun isAdmin(): Flow<Boolean> = _currentUser.map { user ->
-        user?.canManageRequests == true
-    }
 
     private var pollingJob: kotlinx.coroutines.Job? = null
 

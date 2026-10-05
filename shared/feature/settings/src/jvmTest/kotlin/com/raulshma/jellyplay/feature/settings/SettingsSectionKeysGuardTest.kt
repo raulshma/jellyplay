@@ -46,6 +46,14 @@ class SettingsSectionKeysGuardTest {
     private val screenFile =
         "shared/feature/settings/src/commonMain/kotlin/com/raulshma/jellyplay/feature/settings/SettingsScreen.kt"
 
+    /**
+     * The settings package directory — the scan walks every .kt under it, so
+     * per-concern file splits (the literal call sites now live across
+     * SettingsSections.kt et al.) can't rot section-key discovery again.
+     */
+    private val screenPackageDir =
+        "shared/feature/settings/src/commonMain/kotlin/com/raulshma/jellyplay/feature/settings"
+
     /** `settingsSection("key"` — every entrance call site passes a literal key. */
     private val callSite = Regex("""settingsSection\s*\(\s*"([A-Za-z0-9_]+)"""")
 
@@ -78,12 +86,14 @@ class SettingsSectionKeysGuardTest {
     @Test
     fun everyScreenSectionCallSite_isDeclaredInTheEntranceList() {
         val root = repoRoot()
-        val source = root.resolve(screenFile)
-        assertTrue(source.isFile, "missing $screenFile — repo layout changed?")
+        val packageDir = root.resolve(screenPackageDir)
+        assertTrue(packageDir.isDirectory, "missing $screenPackageDir — repo layout changed?")
+        val sources = packageDir.walkTopDown().filter { it.extension == "kt" }.toList()
+        assertTrue(sources.isNotEmpty(), "no Kotlin sources under $screenPackageDir")
 
-        val screenKeys = callSite.findAll(stripComments(source.readText()))
-            .map { it.groupValues[1] }
-            .toList()
+        val screenKeys = sources.flatMap { source ->
+            callSite.findAll(stripComments(source.readText())).map { it.groupValues[1] }
+        }.toList()
         // The 13 remaining literal call sites: the sections with no fused row
         // domain (profile, power_user_mode, active_devices, account, activity,
         // system, item_privacy_data, group_screensaver, group_idle_ambient,
@@ -140,10 +150,11 @@ class SettingsSectionKeysGuardTest {
         // declaration AND a hand-typed key) — exactly the drift this wave's
         // shape exists to kill.
         val root = repoRoot()
-        val source = root.resolve(screenFile)
-        val screenKeys = callSite.findAll(stripComments(source.readText()))
-            .map { it.groupValues[1] }
-            .toSet()
+        val sources = root.resolve(screenPackageDir)
+            .walkTopDown().filter { it.extension == "kt" }.toList()
+        val screenKeys = sources.flatMap { source ->
+            callSite.findAll(stripComments(source.readText())).map { it.groupValues[1] }
+        }.toSet()
         val regressed = convertedKeys intersect screenKeys
         assertTrue(
             regressed.isEmpty(),

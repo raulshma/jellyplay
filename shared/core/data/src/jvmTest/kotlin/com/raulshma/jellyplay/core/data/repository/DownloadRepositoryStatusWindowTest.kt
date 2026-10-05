@@ -45,6 +45,7 @@ class DownloadRepositoryStatusWindowTest {
         storagePolicy = mockk(relaxed = true),
         downloadEnqueuer = mockk(relaxed = true),
         progressNotifier = mockk(relaxed = true),
+        timeSource = com.raulshma.jellyplay.core.model.SystemTimeSource(),
         // The D6 writer-core extraction narrowed the ctor: the artifact-write
         // half (and the sidecar surface) lives in the writer; the reads this
         // suite pins run straight off the DAO. Neither collaborator is

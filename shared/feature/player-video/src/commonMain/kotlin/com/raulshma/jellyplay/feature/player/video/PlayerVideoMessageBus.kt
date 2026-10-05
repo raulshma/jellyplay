@@ -26,14 +26,24 @@ interface PlayerVideoMessageBus {
 }
 
 /**
- * Resource-backed message seal for the one [PlayerVideoMessageBus] call whose
- * text lives in the legacy `core:ui` string table (the resource itself is not
- * duplicated into this module's compose-resources — strings stay
- * byte-identical). The androidMain adapter resolves the entry; the desktop
- * stub drops it.
+ * Resource-backed message seal for the [PlayerVideoMessageBus] calls whose
+ * text lives in a string table (the SmartDownloadDeleted entry reuses a
+ * same-name entry in the shared `core:ui` table; the session-notice entries
+ * live in this module's compose-resources — strings stay byte-identical to
+ * the former hardcoded literals). The androidMain adapter resolves the
+ * entries; the desktop stub drops them.
  */
 sealed interface PlayerVideoMessage {
 
     /** A finished download was auto-removed on the watched threshold. */
     data object SmartDownloadDeleted : PlayerVideoMessage
+
+    /** A playback-mode/quality reload resolved to a transcode (brief re-buffer). */
+    data object TranscodeSwitched : PlayerVideoMessage
+
+    /** A forced-direct-play reload found no playable direct method — falling back to transcode. */
+    data object DirectPlayUnavailable : PlayerVideoMessage
+
+    /** The VLC engine was selected while a TLS client certificate is active (documented-unsupported there). */
+    data object VlcClientCertUnsupported : PlayerVideoMessage
 }

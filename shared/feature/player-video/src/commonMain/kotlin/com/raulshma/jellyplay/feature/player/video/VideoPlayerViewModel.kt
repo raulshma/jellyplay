@@ -347,19 +347,20 @@ class VideoPlayerViewModel(
      * state holders, the [onEvent] funnel + its handlers and the
      * expose-only flows.
      *
-     * [PlayerWiring.Host] is the funnel's mirror — the VM-owned behaviors
+     * [WiringHostLambdas] is the funnel's mirror — the VM-owned behaviors
      * the wiring calls back into: the transport funnels
      * ([seekTo]/[seekByStep]/[routedPlay]/[resumePlayback]), the load funnel
      * ([initialize]), the session-policy dispatch
      * ([autoSkipSegment]/[onEndedWithNoNext]/[handlePlaybackEnded]) and the
      * lifecycle slices ([routeToRemotePlaySession] — the remote-play
      * strategy is VM-only, [releaseInternalsVmPart] with the
-     * keepAcrossItems rebuild, [onItemHydrated], [release]). Implemented as
-     * this private adapter object so the VM's public/internal member surface
-     * — and with it the ownership ratchet — is unchanged; every override is
-     * a one-line delegation to the private handler of the same name. The
-     * seam is STORED while this class is still under construction but only
-     * INVOKED from `arm()` onward, so no override can observe an
+     * keepAcrossItems rebuild, [onItemHydrated], [release]). Built as this
+     * constructor-lambda bundle over the private handlers of the same names
+     * so the VM's public/internal member surface — and with it the ownership
+     * ratchet — is unchanged (the wiring's existing callback-collaborator
+     * idiom, SubtitleManager/StillWatchingController precedent). The bundle
+     * is STORED while this class is still under construction but only
+     * INVOKED from `arm()` onward, so no lambda can observe an
      * uninitialized VM field — the same lazy-callback discipline the wiring
      * lambdas always applied.
      */
@@ -406,44 +407,21 @@ class VideoPlayerViewModel(
             uiState = _uiState, positionMs = _currentPositionMs, durationMs = _durationMs, videoStats = _videoStats,
             resumeReminder = _resumeReminder, closePlayer = _closePlayer, passOutEvents = _passOutEvents,
         ),
-        host = object : PlayerWiring.Host {
-            override fun initialize(itemId: String, mediaSourceId: String?, startPositionTicks: Long) {
+        host = WiringHostLambdas(
+            initialize = { itemId, mediaSourceId, startPositionTicks ->
                 this@VideoPlayerViewModel.initialize(itemId, mediaSourceId, startPositionTicks)
-            }
-
-            override fun seekTo(positionMs: Long, userInitiated: Boolean) {
+            },
+            seekTo = { positionMs, userInitiated ->
                 this@VideoPlayerViewModel.seekTo(positionMs, userInitiated)
-            }
-
-            override fun seekByStep(direction: Int) {
-                this@VideoPlayerViewModel.seekByStep(direction)
-            }
-
-            override fun routedPlay(play: Boolean) {
-                this@VideoPlayerViewModel.routedPlay(play)
-            }
-
-            override fun resumePlayback() {
-                this@VideoPlayerViewModel.resumePlayback()
-            }
-
-            override fun applyResumeSkip(engine: MediaEngine) {
-                this@VideoPlayerViewModel.applyResumeSkip(engine)
-            }
-
-            override fun autoSkipSegment(segment: MediaSegment) {
-                this@VideoPlayerViewModel.autoSkipSegment(segment)
-            }
-
-            override fun onEndedWithNoNext() {
-                this@VideoPlayerViewModel.onEndedWithNoNext()
-            }
-
-            override fun handlePlaybackEnded() {
-                this@VideoPlayerViewModel.handlePlaybackEnded()
-            }
-
-            override fun routeToRemotePlaySession(request: LoadRequest): Boolean =
+            },
+            seekByStep = { direction -> this@VideoPlayerViewModel.seekByStep(direction) },
+            routedPlay = { play -> this@VideoPlayerViewModel.routedPlay(play) },
+            resumePlayback = { this@VideoPlayerViewModel.resumePlayback() },
+            applyResumeSkip = { engine -> this@VideoPlayerViewModel.applyResumeSkip(engine) },
+            autoSkipSegment = { segment -> this@VideoPlayerViewModel.autoSkipSegment(segment) },
+            onEndedWithNoNext = { this@VideoPlayerViewModel.onEndedWithNoNext() },
+            handlePlaybackEnded = { this@VideoPlayerViewModel.handlePlaybackEnded() },
+            routeToRemotePlaySession = { request ->
                 this@VideoPlayerViewModel.routeToRemotePlaySession(
                     itemId = request.itemId,
                     mediaSourceId = request.mediaSourceId,
@@ -451,19 +429,13 @@ class VideoPlayerViewModel(
                     subtitleStreamIndex = request.subtitleStreamIndex,
                     audioStreamIndex = request.audioStreamIndex,
                 )
-
-            override fun releaseInternalsVmPart() {
-                this@VideoPlayerViewModel.releaseInternalsVmPart()
-            }
-
-            override fun onItemHydrated(itemId: String, hydratedAgg: VideoPlayerAggregate) {
+            },
+            releaseInternalsVmPart = { this@VideoPlayerViewModel.releaseInternalsVmPart() },
+            onItemHydrated = { itemId, hydratedAgg ->
                 this@VideoPlayerViewModel.onItemHydrated(itemId, hydratedAgg)
-            }
-
-            override fun release() {
-                this@VideoPlayerViewModel.release()
-            }
-        },
+            },
+            release = { this@VideoPlayerViewModel.release() },
+        ),
     )
 
     // Private aliases: the funnel handlers below read the collaborator graph
@@ -1027,7 +999,7 @@ class VideoPlayerViewModel(
      * `onItemHydrated` hook body, kept VM-side (the videoFx mirror write,
      * the engine-config rebuild nudge and the style controller are all VM
      * collaborators) and reached by [PlayerWiring]'s loadHooks bundle
-     * through its [PlayerWiring.Host] seam. Restores the per-item persisted video
+     * through its loadHooks bundle (via [WiringHostLambdas]). Restores the per-item persisted video
      * filters (if any) before playback kicks off, then routes the
      * subtitle-delay hydration through the style controller: resolve
      * the effective delay for this item (per-item correction, else the
@@ -1056,7 +1028,7 @@ class VideoPlayerViewModel(
      *
      * Stays VM-side (reached through [PlayerWiring]'s
      * routeToRemotePlaySession lifecycle hook, which the VM's
-     * [PlayerWiring.Host] adapter serves): it writes the ui state's
+     * [WiringHostLambdas] lambda serves): it writes the ui state's
      * initializing flag and reads the remote-play strategy — both VM-owned.
      */
     private fun routeToRemotePlaySession(

@@ -219,7 +219,7 @@ class MediaSearchEngineImpl(
             if (offlineModeManager.networkStatus.value == NetworkStatus.Local) {
                 false
             } else {
-                seerrRepository.isConnected().first() && seerrRepository.isSearchEnabled().first()
+                seerrRepository.preferences.first().let { it.serverUrl.isNotBlank() && it.searchEnabled }
             }
         } ?: false
 

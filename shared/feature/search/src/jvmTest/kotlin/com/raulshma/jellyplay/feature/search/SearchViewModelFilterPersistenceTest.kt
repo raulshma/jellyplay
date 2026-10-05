@@ -104,7 +104,7 @@ class SearchViewModelFilterPersistenceTest {
         every { mediaSearchEngine.sideSearch(any()) } returns flowOf()
         every { searchFiltersStore.searchFiltersJson } returns persistedJson
         every { quickDownloadActions.downloadedIds } returns downloadedIds
-        every { seerrRepository.getPreferences() } returns flowOf(SeerrPreferences())
+        every { seerrRepository.preferences } returns MutableStateFlow(SeerrPreferences())
         coEvery { mediaRepository.getGenres(any()) } returns Result.success(emptyList())
         coEvery { mediaBrowseReads.getTags(any(), any(), any()) } returns Result.success(emptyList())
         coEvery { mediaCollectionReads.getSearchSuggestions(any()) } returns Result.success(
@@ -271,14 +271,14 @@ class SearchViewModelFilterPersistenceTest {
             id = "series-9", name = "Show", mediaType = MediaType.SERIES,
         )
         var routedTo: String? = null
-        coEvery { quickDownloadActions.downloadAndReport(any(), any()) } coAnswers {
-            secondArg<(String) -> Unit>().invoke("series-9")
+        coEvery { quickDownloadActions.downloadAndReport(any(), any(), any(), any()) } coAnswers {
+            secondArg<(String, Boolean) -> Unit>().invoke("series-9", false)
         }
 
         viewModel.onEvent(SearchUiEvent.DownloadItem(item) { routedTo = it })
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { quickDownloadActions.downloadAndReport(item, any()) }
+        coVerify(exactly = 1) { quickDownloadActions.downloadAndReport(item, any(), any(), any()) }
         assertEquals("series-9", routedTo)
     }
 

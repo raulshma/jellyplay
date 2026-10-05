@@ -368,6 +368,13 @@
 
     <string name="player_direct_play_fallback">Direct Play failed — switching to transcode (%1$s)</string>
 
+    <!-- Session notices carried as typed PlayerVideoMessage keys (resolved by
+         the Android message-bus adapter; no translations yet — the i18n pass
+         fills them). Text is byte-identical to the former hardcoded literals. -->
+    <string name="player_video_transcode_switched">Switched to transcoded stream — re-buffering</string>
+    <string name="player_video_direct_play_unavailable">Direct Play unavailable for this item — falling back to transcode</string>
+    <string name="player_video_vlc_client_cert_unsupported">Client certificate not supported by the VLC engine — switch to ExoPlayer or mpv for mTLS servers</string>
+
     <!-- Multi-version selection (1.2) -->
     <string name="player_video_version">Version</string>
     <string name="player_video_remember_version">Remember this version</string>

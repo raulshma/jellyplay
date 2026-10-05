@@ -51,6 +51,13 @@ import kotlin.math.pow
 // AudioQueueItem moved verbatim to
 // :shared:core:data commonMain playback/AudioQueueItem.kt (same package).
 
+/**
+ * The Android audio core, and the app's [NowPlayingSurface] — the
+ * app-scoped Koin SINGLE, identity-stable for the app's lifetime (the
+ * remember-key contract the shells' audio-clicks helper reads; its four
+ * now-playing flows are the surface's members, satisfied by the
+ * [AudioQueueManager]/[AudioPlayerEngine] overrides below).
+ */
 @Stable
 class AudioPlaybackManager(
     private val context: Context,
@@ -102,7 +109,7 @@ class AudioPlaybackManager(
      * callers omit it and the media3 player is built as before.
      */
     playerFactory: (() -> ExoPlayer)? = null,
-) : AudioEffectsManager by effectsProcessor, AudioQueueManager, AudioPlayerEngine {
+) : AudioEffectsManager by effectsProcessor, AudioQueueManager, AudioPlayerEngine, NowPlayingSurface {
     private val scope = playbackScope ?: CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val testPlayerFactory = playerFactory
 

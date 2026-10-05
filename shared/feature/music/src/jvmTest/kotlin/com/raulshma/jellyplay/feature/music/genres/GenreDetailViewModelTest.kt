@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.feature.music.genres
 
-import com.raulshma.jellyplay.feature.music.MusicQueueOutcome
+import com.raulshma.jellyplay.core.data.playback.AudioQueueOutcome
 import com.raulshma.jellyplay.feature.music.MusicQueuePlayer
 import androidx.lifecycle.SavedStateHandle
 import androidx.paging.PagingData
@@ -116,7 +116,7 @@ class GenreDetailViewModelTest {
         val viewModel = createViewModel()
         val track = MediaItem(id = "t1", name = "Track 1", mediaType = MediaType.AUDIO)
         coEvery { audioQueueFacade.enqueueTrack(any(), any(), any()) } returns
-            MusicQueueOutcome.Started(emptyList(), -1)
+            AudioQueueOutcome.Started(emptyList(), -1)
 
         viewModel.addToQueue(track)
         advanceUntilIdle()
@@ -134,7 +134,7 @@ class GenreDetailViewModelTest {
             MediaItem(id = "t2", name = "Track 2", mediaType = MediaType.AUDIO),
         )
         coEvery { audioQueueFacade.playTracks(any(), any(), any(), any(), any()) } returns
-            MusicQueueOutcome.Started(emptyList(), 0)
+            AudioQueueOutcome.Started(emptyList(), 0)
 
         viewModel.playAll(tracks, startIndex = 2)
         advanceUntilIdle()

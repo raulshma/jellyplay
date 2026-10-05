@@ -1,16 +1,13 @@
 package com.raulshma.jellyplay.core.data.repository
 
 import com.raulshma.jellyplay.core.model.CultureInfo
-import com.raulshma.jellyplay.core.model.LiveStreamOption
 import com.raulshma.jellyplay.core.model.MediaSegment
 import com.raulshma.jellyplay.core.model.MediaStream
-import com.raulshma.jellyplay.core.model.PlaybackInfoResult
-import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.PlaybackProgress
+import com.raulshma.jellyplay.core.model.PlaybackResolution
+import com.raulshma.jellyplay.core.model.PlaybackResolveRequest
 import com.raulshma.jellyplay.core.model.PlaybackStartInfo
-import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
-import com.raulshma.jellyplay.core.model.ResolvedPlayback
 
 interface PlaybackRepository {
 
@@ -58,51 +55,13 @@ interface PlaybackRepository {
     /** Fetches an item's image bytes via the authenticated API (for offline storage). */
     suspend fun getItemImageBytes(itemId: String, imageType: String, maxWidth: Int): ByteArray?
 
-    fun getStreamUrl(
-        itemId: String,
-        mediaSourceId: String,
-        startTimeTicks: Long = 0,
-        liveStreamId: String? = null,
-    ): String
-
     /**
-     * Queries the server `PlaybackInfo` endpoint. See
-     * [PlaybackApiClient.fetchPlaybackInfo] for parameter semantics.
+     * The ONE stream-URL builder. The former two overloads are folded — their
+     * 4th parameters differed in type AND meaning (`liveStreamId: String?` vs
+     * `maxBitrate: Int?`), the exact positional-argument trap this merge
+     * removes. Pure string shaping against the active session; "" when
+     * there is none.
      */
-    suspend fun fetchPlaybackInfo(
-        itemId: String,
-        mediaSourceId: String,
-        startTimeTicks: Long,
-        audioStreamIndex: Int?,
-        subtitleStreamIndex: Int?,
-        maxStreamingBitrateBits: Long?,
-        mode: PlaybackMode,
-        playerType: PlayerType,
-        liveStreamOption: LiveStreamOption? = null,
-    ): Result<PlaybackInfoResult>
-
-    /**
-     * Resolves a playable [ResolvedPlayback] (URL + PlayMethod + server
-     * playSessionId) for [itemId] by consulting the `PlaybackInfo` endpoint
-     * under [mode] and then choosing Direct Play / Direct Stream / Transcode
-     * per the server's playability decision. Returns `null` when the server
-     * offers no playable method for the source.
-     *
-     * When [liveStreamOption] is non-null it overrides [mode] for live TV
-     * items (see [LiveStreamOption]).
-     */
-    suspend fun resolvePlayback(
-        itemId: String,
-        mediaSourceId: String,
-        startTimeTicks: Long,
-        audioStreamIndex: Int?,
-        subtitleStreamIndex: Int?,
-        maxStreamingBitrateBits: Long?,
-        mode: PlaybackMode,
-        playerType: PlayerType,
-        liveStreamOption: LiveStreamOption? = null,
-    ): ResolvedPlayback?
-
     fun getStreamUrl(
         itemId: String,
         mediaSourceId: String,
@@ -111,6 +70,28 @@ interface PlaybackRepository {
         useAudioEndpoint: Boolean = false,
         liveStreamId: String? = null,
     ): String
+
+    /**
+     * The ONE playback-resolution choreography — the resolve→fallback→default
+     * ladder both players used to inline behind it:
+     *
+     *  1. the server `PlaybackInfo` decision (Direct Play / Direct Stream /
+     *     Transcode, see [PlaybackResolveRequest.mode]) →
+     *     [PlaybackResolution.Resolved];
+     *  2. nothing playable there and no [PlaybackResolveRequest.liveStreamOption]
+     *     → the static direct URL with the DIRECT_PLAY default and no play
+     *     session → [PlaybackResolution.StaticFallback] (the VOD players'
+     *     former `?: getStreamUrl(...)` fold);
+     *  3. with a [PlaybackResolveRequest.liveStreamOption], the live ladder
+     *     (`PlaybackInfo` fetch → first source → liveStreamId URL) →
+     *     [PlaybackResolution.Resolved], or [PlaybackResolution.Unplayable]
+     *     when no playable method emerges.
+     *
+     * [PlaybackResolveRequest.forceLiveStreamFallback] skips arm 1 — the live
+     * caller's probe-override re-request after ITS policy rejected a
+     * Transcode verdict client-side.
+     */
+    suspend fun resolvePlayable(request: PlaybackResolveRequest): PlaybackResolution
 
     fun getSubtitleDeliveryUrl(deliveryUrl: String): String
 

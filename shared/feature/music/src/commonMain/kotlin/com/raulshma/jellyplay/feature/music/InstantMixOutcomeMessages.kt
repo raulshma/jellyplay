@@ -14,14 +14,12 @@ import com.raulshma.jellyplay.feature.music.generated.resources.music_mix_unavai
  * "no error".
  *
  * Vocabulary note (the instant-mix collapse): the outcome chain is
- * `AudioQueueOutcome` (core:data jvmShared) → [MusicQueueOutcome] (the
- * feature mirror, the promoted-interface pattern — kept) →
+ * `AudioQueueOutcome` (core:data commonMain) →
  * [com.raulshma.jellyplay.core.data.playback.InstantMixOutcome] (the holder's
- * pure commonMain input via `toInstantMixOutcome`) → THIS fold. The holder
- * cannot consume [MusicQueueOutcome] directly (core:data cannot see the
- * feature), so the surviving message fold is THIS one over
- * [InstantMixError]; the former duplicate `MusicQueueOutcome.toMixErrorMessage`
- * fold had zero production callers and is deleted.
+ * pure commonMain input via core:data's `toInstantMixOutcome`) → THIS fold.
+ * The surviving message fold is THIS one over [InstantMixError]; the former
+ * duplicate `MusicQueueOutcome.toMixErrorMessage` fold had zero production
+ * callers and is deleted.
  *
  * The message stays unresolved until render time (the commonMain VM seam has
  * no Context): [UiMessage.Resource] carries the localized

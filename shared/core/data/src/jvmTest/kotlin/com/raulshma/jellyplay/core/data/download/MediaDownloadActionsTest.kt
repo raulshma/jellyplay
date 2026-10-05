@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.data.download
 
+import com.raulshma.jellyplay.core.data.repository.DownloadCoverage
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.model.MediaItem
@@ -35,7 +36,7 @@ import kotlin.test.assertTrue
 class MediaDownloadActionsTest {
 
     private val downloadRepository: DownloadRepository = mockk {
-        every { observeDownloadedIdsIncludingSeries() } returns flowOf(emptySet())
+        every { downloadCoverage() } returns flowOf(DownloadCoverage.EMPTY)
     }
     private val downloadIntake: DownloadIntake = mockk()
     private val offlineRepository: OfflineRepository = mockk(relaxed = true)
@@ -44,7 +45,8 @@ class MediaDownloadActionsTest {
     private fun TestScope.actions(
         downloadedIds: Set<String> = emptySet(),
     ): MediaDownloadActions {
-        every { downloadRepository.observeDownloadedIdsIncludingSeries() } returns flowOf(downloadedIds)
+        every { downloadRepository.downloadCoverage() } returns
+            flowOf(DownloadCoverage(completedItemIds = downloadedIds, seriesIds = emptySet()))
         return MediaDownloadActions(
             scope = this,
             downloadRepository = downloadRepository,
@@ -105,7 +107,7 @@ class MediaDownloadActionsTest {
         val actions = actions()
         val opened = mutableListOf<String>()
 
-        actions.downloadAndReport(movie) { opened.add(it) }
+        actions.downloadAndReport(movie, onOpenDetail = { id, _ -> opened.add(id) })
 
         verify(exactly = 1) { messenger.downloadStarted() }
         verify(exactly = 0) { messenger.downloadStartFailed() }
@@ -120,7 +122,7 @@ class MediaDownloadActionsTest {
         val actions = actions()
         val opened = mutableListOf<String>()
 
-        actions.downloadAndReport(series) { opened.add(it) }
+        actions.downloadAndReport(series, onOpenDetail = { id, _ -> opened.add(id) })
 
         assertEquals(listOf("series-9"), opened)
         verify(exactly = 0) { messenger.downloadStarted() }
@@ -135,7 +137,7 @@ class MediaDownloadActionsTest {
         val actions = actions()
         val opened = mutableListOf<String>()
 
-        actions.downloadAndReport(season) { opened.add(it) }
+        actions.downloadAndReport(season, onOpenDetail = { id, _ -> opened.add(id) })
 
         assertEquals(listOf("season-9"), opened)
         verify(exactly = 0) { messenger.downloadStarted() }
@@ -150,7 +152,7 @@ class MediaDownloadActionsTest {
         val actions = actions()
         val opened = mutableListOf<String>()
 
-        actions.downloadAndReport(track) { opened.add(it) }
+        actions.downloadAndReport(track, onOpenDetail = { id, _ -> opened.add(id) })
 
         verify(exactly = 1) { messenger.downloadStartFailed() }
         verify(exactly = 0) { messenger.downloadStarted() }

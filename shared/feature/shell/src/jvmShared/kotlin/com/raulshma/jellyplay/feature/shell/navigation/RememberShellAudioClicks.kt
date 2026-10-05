@@ -2,39 +2,18 @@ package com.raulshma.jellyplay.feature.shell.navigation
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import com.raulshma.jellyplay.core.data.playback.NowPlayingSurface
 import com.raulshma.jellyplay.core.ui.navigation.Navigator
 import com.raulshma.jellyplay.core.ui.navigation.Route
-import kotlinx.coroutines.flow.StateFlow
 
 /**
- * Each shell's audio core narrowed to what the music home cards' click
- * lambdas read at CLICK time. A tiny adapter (the HomePlayOnRedirect
- * idiom): the shells' managers are platform-typed (Android's
- * AudioPlaybackManager vs desktop's DesktopAudioQueueManager — final
- * classes in :shared:core:data this module cannot name), but both expose
- * these same four StateFlow members, so each shell adapts its own with a
- * private forwarder.
- *
- * Implementations MUST be identity-stable per composition (remember the
- * adapter on its manager): the adapter is a remember key of
- * [rememberShellAudioClicks], and a fresh-per-recomposition instance would
- * rebuild the pair — and through it both shells' section graphs — on every
- * recomposition (the discipline the rememberShellHost factory's KDoc
- * states, owned here for this slot).
+ * The shells' audio sources ARE the shared [NowPlayingSurface] (core:data
+ * commonMain — AudioPlaybackManager on Android, DesktopAudioQueueManager on
+ * desktop): the former per-shell private adapters that forwarded the same
+ * four StateFlow members died with the surface, this module's core:data
+ * dependency (the RealtimeSessionController precedent) making the type
+ * nameable here directly.
  */
-interface ShellAudioSource {
-    /** The playing item's id, or null when nothing is playing. */
-    val currentPlayingItemId: StateFlow<String?>
-
-    /** The current track's album-art URL — "" when there is none. */
-    val albumArtUrl: StateFlow<String>
-
-    /** The current track's title. */
-    val title: StateFlow<String>
-
-    /** The current track's artist. */
-    val artist: StateFlow<String>
-}
 
 /**
  * The music home cards' push lambdas as one value — the audio bundle of
@@ -59,10 +38,10 @@ data class ShellAudioClicks(
  * REMEMBER-KEY DISCIPLINE (owned here, the same contract the rememberShellHost
  * factory's KDoc states): every parameter is a remember key, so the pair
  * rebuilds exactly when the navigator or the audio source's identity changes —
- * and never otherwise. Callers MUST pass a remembered/stable [ShellAudioSource]
- * (remember the adapter on its manager); a fresh-per-recomposition instance
- * compares unequal every time and would rebuild both shells' section graphs
- * on every recomposition.
+ * and never otherwise. Callers MUST pass an identity-stable [NowPlayingSurface]
+ * (the app-scoped manager — see the interface's stability contract); a
+ * fresh-per-recomposition instance compares unequal every time and would
+ * rebuild both shells' section graphs on every recomposition.
  *
  * Click-time reads, deliberately NOT captured values: the lambdas read the
  * source's StateFlows when clicked ("flows read lazily, never captured
@@ -78,13 +57,13 @@ data class ShellAudioClicks(
  *
  * @param navigator remember key only — the push target for both cards; keyed
  *   so a navigator identity change refreshes the pair's captures.
- * @param audioSource the shell's [ShellAudioSource] adapter (see the
+ * @param audioSource the shell's [NowPlayingSurface] — its manager (see the
  *   interface's stability contract).
  */
 @Composable
 fun rememberShellAudioClicks(
     navigator: Navigator,
-    audioSource: ShellAudioSource,
+    audioSource: NowPlayingSurface,
 ): ShellAudioClicks = remember(navigator, audioSource) {
     ShellAudioClicks(
         onNowPlayingClick = {

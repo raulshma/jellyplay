@@ -70,7 +70,7 @@ sealed interface LiveTvPlayerUiEvent {
     /** Polls the engine's live window (the screen's 500 ms seek-bar refresh). */
     data object RefreshPosition : LiveTvPlayerUiEvent
 
-    /** Toggles mute (pre-mute volume remembered on the [LiveMuteMemory] chip). */
+    /** Toggles real mute on the engine ([LivePlayerEngine.setMuted] — state, not volume-0). */
     data object ToggleMute : LiveTvPlayerUiEvent
 
     /** Re-tunes the current channel, optionally re-resolving with stream overrides. */

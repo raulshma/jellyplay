@@ -123,32 +123,18 @@ class AdminStatisticsRepositoryImpl constructor(
         scanCore.cleanupOldAuditLogs()
     }
 
-    /**
-     * The plugin-gate fold shared by every plugin-derived list fetch —
-     * `if (pluginAvailable) call().getOrDefault(emptyList()) else emptyList()`
-     * used to appear inline at each site, hand-syncing the AVAILABLE check
-     * against the plugin-status flow. Takes the CALLER-CAPTURED flag, not a live
-     * read: a page's gates must stay internally consistent — the detail
-     * page's group gate and its member fetches see ONE status even if an
-     * admin refresh flips the status mid-load (the captured-local
-     * semantics the inline ladders had). [call] is a plain (non-suspend)
-     * lambda parameter invoked from the inline body, so suspend api calls
-     * are legal at each call site.
-     */
-    private suspend inline fun <T> whenPlugin(available: Boolean, call: () -> Result<List<T>>): List<T> =
-        if (available) {
-            call().getOrDefault(emptyList())
-        } else {
-            emptyList()
-        }
+    // The plugin-gate fold itself lives on the shared store —
+    // [PlaybackReportingStatusStore.gatedWith] — which every
+    // plugin-derived list fetch below calls with the page's captured status
+    // snapshot (the captured-local semantics documented there).
 
     override suspend fun getAllUsersWithStatistics(): Result<List<UserStatistics>> = runCatchingRethrowingCancellation {
-        // One capture for the whole page — see [whenPlugin]'s KDoc.
-        val pluginAvailable = pluginStatus.value == PlaybackReportingStatus.AVAILABLE
+        // One capture for the whole page — see the store's gatedWith KDoc.
+        val pluginStatusSnapshot = pluginStatus.value
         coroutineScope {
             val usersDeferred = async { mediaInfoApiClient.getUsers().getOrThrow() }
             val sessionsDeferred = async { adminApiClient.getSessions().getOrDefault(emptyList()) }
-            val pluginDeferred = async { whenPlugin(pluginAvailable) { mediaInfoApiClient.getPlaybackReportingUserActivity(days = 30) } }
+            val pluginDeferred = async { playbackReportingStatusStore.gatedWith(pluginStatusSnapshot) { mediaInfoApiClient.getPlaybackReportingUserActivity(days = 30) } }
 
             val users = usersDeferred.await()
             val activeUserIds = sessionsDeferred.await().map { it.userId }.toSet()
@@ -238,8 +224,9 @@ class AdminStatisticsRepositoryImpl constructor(
     override suspend fun getUserDetailStatistics(userId: String, page: Int, pageSize: Int): Result<UserDetailPage> = runCatchingRethrowingCancellation {
         // One capture for the whole page (every gate below reads it — the
         // group gate's non-null deferred bundle IS itself the downstream
-        // gate, so the members must see the SAME flag; see [whenPlugin]).
-        val pluginAvailable = pluginStatus.value == PlaybackReportingStatus.AVAILABLE
+        // gate, so the members must see the SAME flag; see the store's
+        // gatedWith KDoc).
+        val pluginStatusSnapshot = pluginStatus.value
 
         // User lookup, played page, and plugin chart are independent round-trips
         // — run them concurrently (was: full getUsers() scan + sequential tail
@@ -262,7 +249,7 @@ class AdminStatisticsRepositoryImpl constructor(
                 ).getOrDefault(Pair(0, emptyList()))
             }
             val pluginChartDeferred = async {
-                whenPlugin(pluginAvailable) { mediaInfoApiClient.getPlaybackReportingPlayActivity(days = 30, dataType = "count", filter = userId) }
+                playbackReportingStatusStore.gatedWith(pluginStatusSnapshot) { mediaInfoApiClient.getPlaybackReportingPlayActivity(days = 30, dataType = "count", filter = userId) }
             }
             user = userDeferred.await()
             playedResult = playedDeferred.await()
@@ -335,12 +322,12 @@ class AdminStatisticsRepositoryImpl constructor(
         val breakdowns: BreakdownResults
         val enhancedDeferreds: EnhancedDeferreds?
         coroutineScope {
-            val genreDeferred = async { whenPlugin(pluginAvailable) { mediaInfoApiClient.getPlaybackReportingBreakdown("Genre", days = 30, filter = userId) } }
-            val methodDeferred = async { whenPlugin(pluginAvailable) { mediaInfoApiClient.getPlaybackReportingBreakdown("PlaybackMethod", days = 30, filter = userId) } }
-            val deviceDeferred = async { whenPlugin(pluginAvailable) { mediaInfoApiClient.getPlaybackReportingBreakdown("ClientName", days = 30, filter = userId) } }
-            val activityDeferred = async { whenPlugin(pluginAvailable) { mediaInfoApiClient.getPlaybackReportingUserActivity(days = 30) } }
+            val genreDeferred = async { playbackReportingStatusStore.gatedWith(pluginStatusSnapshot) { mediaInfoApiClient.getPlaybackReportingBreakdown("Genre", days = 30, filter = userId) } }
+            val methodDeferred = async { playbackReportingStatusStore.gatedWith(pluginStatusSnapshot) { mediaInfoApiClient.getPlaybackReportingBreakdown("PlaybackMethod", days = 30, filter = userId) } }
+            val deviceDeferred = async { playbackReportingStatusStore.gatedWith(pluginStatusSnapshot) { mediaInfoApiClient.getPlaybackReportingBreakdown("ClientName", days = 30, filter = userId) } }
+            val activityDeferred = async { playbackReportingStatusStore.gatedWith(pluginStatusSnapshot) { mediaInfoApiClient.getPlaybackReportingUserActivity(days = 30) } }
             val watchDeferred = async { computeWatchTimeBreakdown(userId) }
-            enhancedDeferreds = if (pluginAvailable) {
+            enhancedDeferreds = if (pluginStatusSnapshot == PlaybackReportingStatus.AVAILABLE) {
                 EnhancedDeferreds(
                     weeklyActivity = async {
                         mediaInfoApiClient.getPlaybackReportingUserActivity(days = 7).getOrDefault(emptyList())
@@ -395,7 +382,7 @@ class AdminStatisticsRepositoryImpl constructor(
         }
 
         // enhancedDeferreds is non-null exactly when the plugin batch launched
-        // (same pluginAvailable gate), so the null check is the plugin gate.
+        // (same pluginStatusSnapshot gate), so the null check is the plugin gate.
         val enhancedData = buildEnhancedStatistics(
             userId = userId,
             deferreds = enhancedDeferreds,

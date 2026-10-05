@@ -492,24 +492,19 @@ private class FakeSeerrRepository : SeerrRepository {
     override suspend fun deleteMedia(mediaId: Int, is4k: Boolean): Result<Unit> = unused()
     override suspend fun getRequestCount(): Result<SeerrRequestCount> = unused()
     override suspend fun getCurrentUser(): Result<SeerrCurrentUser> = unused()
-    override fun isConnected(): Flow<Boolean> = unused()
-    override fun isEnabled(): Flow<Boolean> = unused()
-    override fun isSearchEnabled(): Flow<Boolean> = unused()
-    override fun isRecommendationsEnabled(): Flow<Boolean> = unused()
-    override fun isDiscoverEnabled(): Flow<Boolean> = unused()
-    override fun getPreferences(): Flow<SeerrPreferences> = unused()
+    // (The preference lenses — isConnected / isEnabled / isSearchEnabled /
+    // isRecommendationsEnabled / isDiscoverEnabled / isAdmin — folded onto the
+    // single `preferences` flow below; this suite reads none of them.)
+    override val preferences: StateFlow<SeerrPreferences> get() = unused()
     override suspend fun getTrending(page: Int): Result<List<com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem>> = unused()
     override suspend fun getDiscoverMovies(
         page: Int,
-        primaryReleaseDateGte: String?,
         params: com.raulshma.jellyplay.core.model.seerr.SeerrDiscoverParams?,
     ): Result<List<com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem>> = unused()
     override suspend fun getDiscoverTv(
         page: Int,
-        firstAirDateGte: String?,
         params: com.raulshma.jellyplay.core.model.seerr.SeerrDiscoverParams?,
     ): Result<List<com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem>> = unused()
-    override fun isAdmin(): Flow<Boolean> = unused()
     override val currentUser: StateFlow<SeerrCurrentUser?> get() = unused()
     override val pendingRequestCount: StateFlow<Int> get() = unused()
     override fun startPolling() = unused()

@@ -109,15 +109,6 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_wifi
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_wifi_only_on
 import com.raulshma.jellyplay.feature.settings.generated.resources.storage_sd_card
 
-private fun streamingQualityLabelRes(quality: StreamingQuality): StringResource = when (quality) {
-    StreamingQuality.AUTO -> Res.string.settings_streaming_quality_auto_adaptive
-    StreamingQuality.LOW_360P -> Res.string.settings_quality_360p_low
-    StreamingQuality.SD_480P -> Res.string.settings_quality_480p_sd
-    StreamingQuality.HD_720P -> Res.string.settings_quality_720p_hd
-    StreamingQuality.FHD_1080P -> Res.string.settings_quality_1080p_full_hd
-    StreamingQuality.UHD_4K -> Res.string.settings_quality_4k_ultra_hd
-}
-
 /**
  * The declared storage screen groups in LazyColumn order — the derivation
  * source the deep-link scroll resolver consumes (see HighlightScroll.kt), so

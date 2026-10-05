@@ -317,7 +317,7 @@ internal class DownloadLifecycleActions(
     fun loadDownloadedEpisodeIds() {
         val seriesId = session.value?.seriesId ?: return
         scope.launch {
-            val ids = downloadRepository.getDownloadedEpisodeIdsForSeries(seriesId)
+            val ids = downloadRepository.episodeIdsForSeries(seriesId)
             _state.update { it.copy(downloadedEpisodeIds = ids) }
         }
     }

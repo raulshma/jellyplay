@@ -7,6 +7,7 @@ import androidx.paging.LoadStates
 import androidx.paging.PagingData
 import androidx.paging.PagingDataEvent
 import androidx.paging.PagingDataPresenter
+import com.raulshma.jellyplay.core.data.download.DownloadOutcomeMessenger
 import com.raulshma.jellyplay.core.data.download.DownloadRequestResult
 import com.raulshma.jellyplay.core.data.repository.MediaBrowseReads
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
@@ -97,6 +98,23 @@ class LibraryViewModelTest {
         every { offlineModeManager.offlineMode } returns offlineModeFlow
         // The VM re-exposes this for quick-action download gating.
         every { quickDownloadActions.downloadedIds } returns MutableStateFlow(emptySet())
+        // The VM folds download outcomes through downloadAndReport (the shared
+        // cascade, with this host's series-sheet-prepresented routing); mirror
+        // the real fold so the per-test download(item) stubs keep driving it.
+        coEvery {
+            quickDownloadActions.downloadAndReport(any(), any(), any(), any())
+        } coAnswers {
+            val onOpenDetail = secondArg<(String, Boolean) -> Unit>()
+            val seriesOpensSheet = thirdArg<Boolean?>()
+            val messenger = arg<DownloadOutcomeMessenger?>(3)
+            when (val result = quickDownloadActions.download(firstArg())) {
+                DownloadRequestResult.Started -> messenger?.downloadStarted()
+                is DownloadRequestResult.SeriesSelectionRequired ->
+                    if (seriesOpensSheet != null) onOpenDetail(result.seriesId, seriesOpensSheet)
+                is DownloadRequestResult.NeedsDetailScreen -> onOpenDetail(result.itemId, false)
+                is DownloadRequestResult.Failed -> messenger?.downloadStartFailed()
+            }
+        }
 
         // Stub the init-block repository calls with real Result/Flow values so
         // the relaxed mock's default Result mock doesn't ClassCast inside the
@@ -1071,7 +1089,7 @@ class LibraryViewModelTest {
         vm.onEvent(LibraryUiEvent.PrefetchPhotoFolderChildUrls(listOf(folder1, folder2, movie)))
         advanceUntilIdle()
 
-        assertEquals(mapOf("pf-1" to listOf("u1", "u2")), vm.photoFolderChildUrls.value)
+        assertEquals(listOf("u1", "u2"), vm.photoFolderChildUrlsFor("pf-1").first())
 
         // Recomposition re-fires with the same items: the already-fetched
         // folder is in alreadyFetched this time, and an empty result never
@@ -1084,7 +1102,7 @@ class LibraryViewModelTest {
         coVerify {
             photoFolderPrefetcher.prefetch(listOf(folder1, folder2, movie), alreadyFetched = setOf("pf-1"))
         }
-        assertEquals(mapOf("pf-1" to listOf("u1", "u2")), vm.photoFolderChildUrls.value)
+        assertEquals(listOf("u1", "u2"), vm.photoFolderChildUrlsFor("pf-1").first())
     }
 
     @Test

@@ -99,7 +99,7 @@ class SearchViewModelTest {
         every { mediaSearchEngine.recentHistory() } returns flowOf(emptyList())
         every { mediaSearchEngine.sideSearch(any()) } returns flowOf()
         every { searchFiltersStore.searchFiltersJson } returns MutableStateFlow(null)
-        every { seerrRepository.getPreferences() } returns flowOf(SeerrPreferences())
+        every { seerrRepository.preferences } returns MutableStateFlow(SeerrPreferences())
         coEvery { mediaRepository.getGenres(any()) } returns Result.success(emptyList())
         coEvery { mediaBrowseReads.getTags(any(), any(), any()) } returns Result.success(emptyList())
         coEvery { mediaCollectionReads.getSearchSuggestions(any()) } returns Result.success(
@@ -178,7 +178,7 @@ class SearchViewModelTest {
         assertTrue(viewModel.showFilters.value)
 
         viewModel.onEvent(SearchUiEvent.Search("matrix"))
-        assertEquals("matrix", viewModel.query)
+        assertEquals("matrix", viewModel.query.value)
 
         viewModel.onEvent(SearchUiEvent.SetSortBy(SortOption.RATING))
         advanceUntilIdle()
@@ -287,7 +287,7 @@ class SearchViewModelTest {
 
     @Test
     fun `isSeerrConnected reflects serverUrl presence`() = runTest(mainDispatcher) {
-        every { seerrRepository.getPreferences() } returns flowOf(
+        every { seerrRepository.preferences } returns MutableStateFlow(
             SeerrPreferences(serverUrl = "https://seerr.example")
         )
         viewModel = SearchViewModel(
@@ -302,7 +302,7 @@ class SearchViewModelTest {
 
     @Test
     fun `isSeerrSearchEnabled reflects searchEnabled preference`() = runTest(mainDispatcher) {
-        every { seerrRepository.getPreferences() } returns flowOf(
+        every { seerrRepository.preferences } returns MutableStateFlow(
             SeerrPreferences(serverUrl = "https://seerr.example", searchEnabled = true)
         )
         viewModel = SearchViewModel(

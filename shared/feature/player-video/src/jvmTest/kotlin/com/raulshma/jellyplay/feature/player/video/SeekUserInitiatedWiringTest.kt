@@ -101,10 +101,12 @@ class SeekUserInitiatedWiringTest {
     @Test
     fun `syncplay group position sync passes userInitiated = false`() {
         // The lambda lives on the builder's SyncPlayBridge wiring since the
-        // PlayerWiring move; it routes through the VM's seekTo funnel either way.
+        // PlayerWiring move; it routes through the VM's seekTo funnel either
+        // way. Positional second arg (the flag on WiringHostLambdas is a
+        // lambda parameter — named args are prohibited for function types).
         assertMatchesIn(
             wiringSource,
-            Regex("""host\.seekTo\(positionTicks / 10_000, userInitiated = false\)"""),
+            Regex("""host\.seekTo\(positionTicks / 10_000, false\)"""),
             "SyncPlay's group-driven position sync is not a user seek — never clamp it",
         )
     }

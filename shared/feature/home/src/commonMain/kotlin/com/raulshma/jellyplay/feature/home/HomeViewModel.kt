@@ -14,7 +14,7 @@ import com.raulshma.jellyplay.core.data.repository.HomeFeed
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.repository.SearchHistoryItem
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
-import com.raulshma.jellyplay.core.data.download.DownloadRequestResult
+import com.raulshma.jellyplay.core.data.download.DownloadOutcomeMessenger
 import com.raulshma.jellyplay.core.data.download.QuickDownloadActions
 import com.raulshma.jellyplay.core.ui.message.UiText
 import com.raulshma.jellyplay.feature.home.generated.resources.Res
@@ -57,7 +57,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onSubscription
 import kotlinx.coroutines.flow.onStart
@@ -128,7 +127,7 @@ internal class HomeViewModel(
      * downloads ∪ series ids (a series card flips once any episode of it is
      * downloaded; REMOVE_DOWNLOAD then opens the delete-episodes sheet). Read
      * from the shared [QuickDownloadActions.downloadedIds] flow (same union
-     * contract on [DownloadRepository.observeDownloadedIdsIncludingSeries])
+     * contract on [DownloadRepository.downloadCoverage])
      * that every quick-action host consumes — one eagerly-shared collector
      * serves all screens instead of a per-VM one. Collected unconditionally —
      * unlike [HomeUiState.offlineLibrary], which is gated to offline modes
@@ -288,19 +287,14 @@ internal class HomeViewModel(
     private val photoFolderChildUrlsStore = PhotoFolderChildUrlsStore(scope, photoFolderPrefetcher)
 
     /**
-     * Per-item slice of the store's cached folder-id → child-image-URLs map.
-     * Lets each photo-folder card
-     * collect only its own urls so a prefetch merge (which produces a new Map
-     * reference) doesn't invalidate the entire home body — only the one card
-     * whose urls changed.
+     * Per-item slice of the store's cached folder-id → child-image-URLs map
+     * ([PhotoFolderChildUrlsStore.childUrlsFor] — the fold lives on the store
+     * now). Lets each photo-folder card collect only its own urls so a
+     * prefetch merge (which produces a new Map reference) doesn't invalidate
+     * the entire home body — only the one card whose urls changed.
      */
     fun photoFolderChildUrlsFor(itemId: String): Flow<List<String>> =
-        photoFolderChildUrlsStore.childUrls
-            .map { it[itemId].orEmpty() }
-            .distinctUntilChanged()
-
-    private fun prefetchPhotoFolderChildUrls(items: List<MediaItem>) =
-        photoFolderChildUrlsStore.prefetch(items)
+        photoFolderChildUrlsStore.childUrlsFor(itemId)
 
     /**
      * All users persisted for the current server. Backs the home app-bar quick
@@ -671,7 +665,7 @@ internal class HomeViewModel(
             is HomeUiEvent.SetLibrarySectionVisible -> setLibrarySectionVisible(event.libraryId, event.type, event.visible)
             is HomeUiEvent.RollDiscoverRow -> rollDiscoverRow(event.rowId)
             is HomeUiEvent.RefreshSection -> refresher.refreshSectionRow(event.sectionId)
-            is HomeUiEvent.PrefetchPhotoFolderChildUrls -> prefetchPhotoFolderChildUrls(event.items)
+            is HomeUiEvent.PrefetchPhotoFolderChildUrls -> photoFolderChildUrlsStore.prefetch(event.items)
             is HomeUiEvent.EnsurePendingItemDetails -> ensurePendingItemDetails(event.itemIds)
             is HomeUiEvent.PlaySeries -> resolveSeriesPlay(event)
             is HomeUiEvent.DownloadItem -> downloadItem(event)
@@ -763,30 +757,32 @@ internal class HomeViewModel(
      * Long-press Download from an online home card — non-series items only.
      * Series cards never reach this method: [homeQuickActionEffect]
      * intercepts them and emits [HomeQuickActionEffect.OpenSeriesDownloadSheet]
-     * (the in-place series sheet) instead of StartDownload. Single-stream
-     * items (movie/episode/music track) start inline at the default quality;
-     * other non-inline types (season, album, ...) open the detail screen
-     * plainly via [HomeUiEvent.DownloadItem.onOpenDetail]. Failures surface
-     * on the message bus.
+     * (the in-place series sheet) instead of StartDownload. The outcome
+     * cascade is the shared [QuickDownloadActions.downloadAndReport] fold —
+     * Started/Failed ride [homeDownloadSink]'s home strings, the detail
+     * fallback routes plainly, and `seriesOpensSheet = null` keeps the
+     * unreachable series branch a silent no-op.
      */
     private fun downloadItem(event: HomeUiEvent.DownloadItem) {
         val (item, onOpenDetail) = event
         launch {
-            when (val result = downloadIntake.startFromItem(item)) {
-                DownloadRequestResult.Started ->
-                    userMessageBus.info(
-                        UiText.Resource(Res.string.home_download_started)
-                    )
-                is DownloadRequestResult.NeedsDetailScreen -> onOpenDetail(result.itemId, false)
-                is DownloadRequestResult.Failed ->
-                    userMessageBus.error(
-                        UiText.Resource(Res.string.home_download_start_failed)
-                    )
-                // Unreachable: [homeQuickActionEffect] never emits StartDownload
-                // for a series card. Listed only to keep the sealed `when`
-                // exhaustive — series downloads are handled by the series sheet.
-                is DownloadRequestResult.SeriesSelectionRequired -> Unit
-            }
+            quickDownloadActions.downloadAndReport(
+                item = item,
+                onOpenDetail = onOpenDetail,
+                seriesOpensSheet = null,
+                messenger = homeDownloadSink,
+            )
+        }
+    }
+
+    /** The fold's message sink: this host's exact home strings on the bus. */
+    private val homeDownloadSink = object : DownloadOutcomeMessenger {
+        override fun downloadStarted() {
+            userMessageBus.info(UiText.Resource(Res.string.home_download_started))
+        }
+
+        override fun downloadStartFailed() {
+            userMessageBus.error(UiText.Resource(Res.string.home_download_start_failed))
         }
     }
 

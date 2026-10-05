@@ -47,6 +47,7 @@ import com.raulshma.jellyplay.core.model.RemoteConnectivity
 import com.raulshma.jellyplay.core.model.SearchResult
 import com.raulshma.jellyplay.core.model.UserDataChange
 import com.raulshma.jellyplay.core.model.arr.ArrServiceSummary
+import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
 import com.raulshma.jellyplay.core.testfixtures.FakeUserDataMutator
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -126,8 +127,7 @@ class DetailViewModelEnrichmentsTest {
         arrRepository = mockk(relaxed = true)
         themeMusicPlayer = mockk(relaxed = true)
 
-        every { seerrRepository.isConnected() } returns flowOf(false)
-        every { seerrRepository.isRecommendationsEnabled() } returns flowOf(false)
+        every { seerrRepository.preferences } returns MutableStateFlow(SeerrPreferences())
         val offlineModeManager = mockk<OfflineModeManager>(relaxed = true)
         every { offlineModeManager.networkStatus } returns MutableStateFlow(NetworkStatus.Online)
         coEvery { mediaRepository.getSimilarItems(any(), any()) } returns Result.success(emptyList())

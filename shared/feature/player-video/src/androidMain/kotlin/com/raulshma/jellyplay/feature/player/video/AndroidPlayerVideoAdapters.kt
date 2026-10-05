@@ -10,6 +10,10 @@ import com.raulshma.jellyplay.core.ui.generated.resources.msg_smart_download_del
 import com.raulshma.jellyplay.core.ui.message.uiTextOf
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import com.raulshma.jellyplay.feature.player.video.engine.asMedia3Player
+import com.raulshma.jellyplay.feature.player.video.generated.resources.Res as PlayerVideoRes
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_direct_play_unavailable
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_transcode_switched
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_vlc_client_cert_unsupported
 import kotlinx.coroutines.flow.StateFlow
 
 /**
@@ -89,9 +93,10 @@ internal class AndroidMediaSessionFactory(
 /**
  * Android adapter bridging the module-local [PlayerVideoMessageBus] seam onto
  * the shared commonMain `core:ui` UserMessageBus (seam; MusicMessageBus
- * precedent): strings post as UiText.Raw, the [PlayerVideoMessage.SmartDownloadDeleted]
- * seal resolves its compose-resources string entry (same-name entry in the
- * shared table — no string files touched).
+ * precedent): strings post as UiText.Raw, the [PlayerVideoMessage] seal
+ * resolves its compose-resources string entries (SmartDownloadDeleted via a
+ * same-name entry in the shared table, the session-notice trio via this
+ * module's own compose-resources).
  */
 internal class AndroidUserMessageBridge(
     private val delegate: com.raulshma.jellyplay.core.ui.message.UserMessageBus,
@@ -105,6 +110,15 @@ internal class AndroidUserMessageBridge(
         when (message) {
             PlayerVideoMessage.SmartDownloadDeleted -> delegate.info(
                 uiTextOf(Res.string.msg_smart_download_deleted),
+            )
+            PlayerVideoMessage.TranscodeSwitched -> delegate.info(
+                uiTextOf(PlayerVideoRes.string.player_video_transcode_switched),
+            )
+            PlayerVideoMessage.DirectPlayUnavailable -> delegate.info(
+                uiTextOf(PlayerVideoRes.string.player_video_direct_play_unavailable),
+            )
+            PlayerVideoMessage.VlcClientCertUnsupported -> delegate.info(
+                uiTextOf(PlayerVideoRes.string.player_video_vlc_client_cert_unsupported),
             )
         }
     }

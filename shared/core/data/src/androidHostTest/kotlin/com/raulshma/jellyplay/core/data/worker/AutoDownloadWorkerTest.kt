@@ -13,6 +13,7 @@ import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueSnapshot
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.AutoDownloadSweepResult
+import com.raulshma.jellyplay.core.data.repository.DownloadCoverage
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsSlice
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
@@ -23,6 +24,7 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -66,7 +68,8 @@ class AutoDownloadWorkerTest {
             DownloadsSlice(autoDownloadNewEpisodes = true, autoDownloadLookahead = 0),
         )
         coEvery { downloadRepository.sweepExpiredAutoDownloads() } returns AutoDownloadSweepResult.EMPTY
-        coEvery { downloadRepository.getDownloadedSeriesIds() } returns listOf("s1")
+        coEvery { downloadRepository.downloadCoverage() } returns
+            flowOf(DownloadCoverage(completedItemIds = emptySet(), seriesIds = setOf("s1")))
         coEvery { downloadRepository.getDownloadedEpisodeIdsBySeries() } returns mapOf("s1" to setOf("ep-old"))
         coEvery { episodeCatalogue.loadSeriesEpisodes(any(), any()) } returns Result.success(snapshot())
         coEvery { downloadIntake.startSeries(any(), any()) } returns Result.success(emptyList())
@@ -126,12 +129,12 @@ class AutoDownloadWorkerTest {
         val result = buildWorker().doWork()
 
         assertTrue(result is ListenableWorker.Result.Success)
-        coVerify(exactly = 0) { downloadRepository.getDownloadedSeriesIds() }
+        coVerify(exactly = 0) { downloadRepository.downloadCoverage() }
     }
 
     @Test
     fun `no downloaded series short-circuits success without loading any catalogue`() = runTest {
-        coEvery { downloadRepository.getDownloadedSeriesIds() } returns emptyList()
+        coEvery { downloadRepository.downloadCoverage() } returns flowOf(DownloadCoverage.EMPTY)
 
         val result = buildWorker().doWork()
 

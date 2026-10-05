@@ -3,8 +3,7 @@ package com.raulshma.jellyplay.feature.library
 import androidx.paging.LoadState
 import androidx.paging.LoadStates
 import androidx.paging.PagingData
-import androidx.paging.cachedIn
-import com.raulshma.jellyplay.core.data.download.DownloadRequestResult
+import com.raulshma.jellyplay.core.data.download.DownloadOutcomeMessenger
 import com.raulshma.jellyplay.core.data.download.QuickDownloadActions
 import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
@@ -29,13 +28,14 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.OfflineMode
 import com.raulshma.jellyplay.core.model.SortOption
 import com.raulshma.jellyplay.core.model.toFilteredLibraryItems
+import com.raulshma.jellyplay.core.ui.components.DeferredRefreshHost
 import com.raulshma.jellyplay.core.ui.message.UiText
 import com.raulshma.jellyplay.core.ui.message.UserMessageBus
 import com.raulshma.jellyplay.feature.library.generated.resources.Res
 import com.raulshma.jellyplay.feature.library.generated.resources.data_download_start_failed
 import com.raulshma.jellyplay.feature.library.generated.resources.data_download_started
-import com.raulshma.jellyplay.core.ui.viewmodel.DeferredUserDataRefresher
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
+import com.raulshma.jellyplay.core.ui.viewmodel.PagedMediaGridHost
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -114,23 +114,22 @@ internal class LibraryViewModel(
      * Ids whose quick actions offer "Remove download" instead of "Download":
      * completed downloads ∪ series ids (a series card flips once any episode
      * of it is downloaded). Re-exposes the shared quick-action delegate's
-     * Eagerly-started flow — one collector serves every host surface.
+     * eagerly-started flow — the same instance the [PagedMediaGridHost] holds.
      */
     // Whether this platform has a download pipeline — screens gate the
     // download CTA on it (hidden rather than Failed-toasting).
-    val downloadSupported = quickDownloadActions.isSupported
+    val downloadSupported get() = pagedGrid.downloadSupported
 
-    val downloadedIds = quickDownloadActions.downloadedIds
+    val downloadedIds get() = quickDownloadActions.downloadedIds
 
     /**
      * The photo-folder child-URL cache (see [PhotoFolderChildUrlsStore]) —
      * adopted from the home feature's store instead of this class's former
      * cap-less inline map, so the cache is now bounded (oldest-first eviction
-     * beyond the store's cap) exactly like home's.
+     * beyond the store's cap) exactly like home's. Exposed only as the
+     * per-item slice [photoFolderChildUrlsFor].
      */
     private val photoFolderChildUrlsStore = PhotoFolderChildUrlsStore(scope, photoFolderPrefetcher)
-
-    val photoFolderChildUrls = photoFolderChildUrlsStore.childUrls
 
     /**
      * Whether the reset-all confirmation dialog is currently visible. Mirrors
@@ -160,15 +159,14 @@ internal class LibraryViewModel(
     private var userTouchedViewMode: Boolean = false
 
     /**
-     * Per-item slice of [photoFolderChildUrls]. Lets each photo-folder card
+     * Per-item slice of [photoFolderChildUrls] — the fold lives on the store
+     * ([PhotoFolderChildUrlsStore.childUrlsFor]). Lets each photo-folder card
      * collect only its own urls so a prefetch merge (which produces a new Map
      * reference) doesn't invalidate the entire [LibraryScreen] — only the one
      * card whose urls changed.
      */
     fun photoFolderChildUrlsFor(itemId: String): kotlinx.coroutines.flow.Flow<List<String>> =
-        photoFolderChildUrlsStore.childUrls
-            .map { it[itemId].orEmpty() }
-            .distinctUntilChanged()
+        photoFolderChildUrlsStore.childUrlsFor(itemId)
 
     /**
      * The single command funnel (the HomeViewModel `onEvent` precedent): every
@@ -213,11 +211,10 @@ internal class LibraryViewModel(
             is LibraryUiEvent.ResetClicked -> onResetClick()
             is LibraryUiEvent.ConfirmResetAll -> confirmResetAll(event.dontShowAgain)
             is LibraryUiEvent.DismissResetDialog -> _resetDialogVisible.set(false)
-            is LibraryUiEvent.MarkItemPlayed -> launch {
+            is LibraryUiEvent.MarkItemPlayed ->
                 // Intentionally silent (the mutator's default): the paged grid
                 // is left untouched so the user keeps their scroll position.
-                userDataMutator.setPlayed(event.item.id, event.played)
-            }
+                pagedGrid.markPlayed(event.item, event.played)
             is LibraryUiEvent.ToggleFavorite -> launch {
                 // Same silent contract as MarkItemPlayed: the mutator resolves
                 // the toggle target (server/local) and writes it; the paged
@@ -225,51 +222,117 @@ internal class LibraryViewModel(
                 userDataMutator.setFavorite(event.item.id)
             }
             is LibraryUiEvent.DownloadItem -> downloadItem(event)
-            is LibraryUiEvent.RemoveItemDownload -> quickDownloadActions.removeDownload(event.item)
+            is LibraryUiEvent.RemoveItemDownload -> pagedGrid.removeDownload(event.item)
             is LibraryUiEvent.PrefetchPhotoFolderChildUrls -> photoFolderChildUrlsStore.prefetch(event.items)
         }
     }
 
     /**
-     * Long-press Download from a browse card. Single-stream items
-     * (movie/episode/music track) start inline at the default quality; series
-     * route to the detail screen with the download sheet pre-presented via
-     * the event's `onOpenDetail` (their flow needs the user's season/episode
-     * selection), and other non-inline types (season, album, ...) open the
-     * detail screen plainly. Failures surface on the message bus.
+     * Long-press Download from a browse card. The outcome cascade is the
+     * shared [QuickDownloadActions.downloadAndReport] fold — inline start for
+     * single-stream items, failures via [downloadOutcomeSink]'s library
+     * strings on the bus, richer flows to the detail screen — and this host
+     * is the one whose navigation CAN pre-present the series selection sheet,
+     * hence `seriesOpensSheet = true`.
      */
     private fun downloadItem(event: LibraryUiEvent.DownloadItem) {
-        launch {
-            when (val result = quickDownloadActions.download(event.item)) {
-                DownloadRequestResult.Started ->
-                    userMessageBus.info(
-                        UiText.Resource(Res.string.data_download_started)
-                    )
-                is DownloadRequestResult.SeriesSelectionRequired -> event.onOpenDetail(result.seriesId, true)
-                is DownloadRequestResult.NeedsDetailScreen -> event.onOpenDetail(result.itemId, false)
-                is DownloadRequestResult.Failed ->
-                    userMessageBus.error(
-                        UiText.Resource(Res.string.data_download_start_failed)
-                    )
-            }
+        pagedGrid.download(
+            event.item,
+            event.onOpenDetail,
+            seriesOpensSheet = true,
+        )
+    }
+
+    /** The fold's message sink: this host's exact library strings on the bus. */
+    private val downloadOutcomeSink = object : DownloadOutcomeMessenger {
+        override fun downloadStarted() {
+            userMessageBus.info(UiText.Resource(Res.string.data_download_started))
+        }
+
+        override fun downloadStartFailed() {
+            userMessageBus.error(UiText.Resource(Res.string.data_download_start_failed))
         }
     }
 
-    private val _refreshTrigger = stateFlow(0)
+    /**
+     * The item grid, wired through the shared [PagedMediaGridHost]: the host
+     * owns the deferred-refresh generation counter + refresher pairing, the
+     * cachedIn sharing and the quick-action forwarding; this source splices
+     * the generation into the browser-state key (folder, filters, offline
+     * mode — the `PagedQueryKey` dedup) and keeps the offline/static-paging
+     * fork.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val pagedGrid = PagedMediaGridHost(
+        scope = scope,
+        userDataChanges = mediaRepository.userDataChanges,
+        downloadedIds = quickDownloadActions.downloadedIds,
+        downloadSupported = quickDownloadActions.isSupported,
+        setPlayedSilently = { itemId, played -> userDataMutator.setPlayed(itemId, played) },
+        requestDownload = { item, onOpenDetail, seriesOpensSheet ->
+            quickDownloadActions.downloadAndReport(item, onOpenDetail, seriesOpensSheet, downloadOutcomeSink)
+        },
+        removeDownloadItem = quickDownloadActions::removeDownload,
+        source = { trigger ->
+            combine(
+                _browserState.flow,
+                trigger,
+                offlineModeManager.offlineMode,
+            ) { browser, refreshTrigger, mode ->
+                PagedQueryKey(browser.folder, browser.filters, mode != OfflineMode.ONLINE, refreshTrigger)
+            }.distinctUntilChanged().flatMapLatest { (folder, filters, servingOffline) ->
+                if (filters.isDownloaded == true || servingOffline) {
+                    // "Downloaded" filter — or offline mode, which pins it on
+                    // automatically (#147): serve the grid from the local offline
+                    // store — instant, no server paging, and the same projection
+                    // offline playback uses. Folder membership matches the offline
+                    // row's parentId; with no folder selected ("All") the whole
+                    // offline library is shown. Filter dimensions and sort are
+                    // re-applied client-side over the stored fields (see
+                    // toFilteredLibraryItems).
+                    val items = if (folder != null) {
+                        offlineRepository.getOfflineLibraryInFolder(folder.id)
+                    } else {
+                        offlineRepository.getOfflineLibrary()
+                    }
+                    // Static paging only dispatches load states when explicit source
+                    // states are provided — without them a fresh LazyPagingItems keeps
+                    // its initial refresh = Loading forever, leaving the pull-to-refresh
+                    // spinner stuck on while offline content renders fine.
+                    val idleStates = LoadStates(
+                        refresh = LoadState.NotLoading(endOfPaginationReached = false),
+                        prepend = LoadState.NotLoading(endOfPaginationReached = false),
+                        append = LoadState.NotLoading(endOfPaginationReached = false),
+                    )
+                    items.map { PagingData.from(it.toFilteredLibraryItems(filters), idleStates) }
+                } else {
+                    mediaRepository.getMediaItemsPaged(
+                        parentId = folder?.id,
+                        filters = filters,
+                        // Section mode ("See All" from a home Latest row) shows the same
+                        // top-level items as the default library tab — series for a TV library,
+                        // movies for a movie library — just sorted by latest. (Previously this
+                        // returned leaf episodes for a TV library, which stacked flat episode
+                        // blocks; issue #113.) Filtering to a specific leaf type is still
+                        // possible via the Media Type filter.
+                        kindFilter = ItemKindFilter.TOP_LEVEL,
+                    )
+                }
+            }
+        },
+    )
+
+    val pagedItems: Flow<PagingData<MediaItem>> get() = pagedGrid.items
 
     /**
      * User-data changes while another screen is up only mark the grid stale;
      * the single regeneration fires when the library screen is next entered
-     * (see [DeferredUserDataRefresher]) — never mid-scroll. Only the item
-     * pager regenerates: watched/favorite flips never change folders, genres
-     * or tags, so the cache-bypassing refetches [refresh] does (the manual
-     * pull-to-refresh path) are skipped here.
+     * (the [DeferredUserDataRefresher] the [PagedMediaGridHost] owns) — never
+     * mid-scroll. Only the item pager regenerates: watched/favorite flips
+     * never change folders, genres or tags, so the cache-bypassing refetches
+     * [refresh] does (the manual pull-to-refresh path) are skipped here.
      */
-    val deferredRefresher = DeferredUserDataRefresher(
-        userDataChanges = mediaRepository.userDataChanges,
-        scope = scope,
-        trigger = _refreshTrigger,
-    )
+    val deferredRefresher: DeferredRefreshHost get() = pagedGrid
 
     /**
      * True while the app is offline (manual toggle or auto network loss): the
@@ -283,54 +346,6 @@ internal class LibraryViewModel(
         initial = false,
         flow = offlineModeManager.offlineMode.map { it != OfflineMode.ONLINE },
     )
-
-    @OptIn(ExperimentalCoroutinesApi::class)
-    val pagedItems: Flow<PagingData<MediaItem>> = combine(
-        _browserState.flow,
-        _refreshTrigger.flow,
-        offlineModeManager.offlineMode,
-    ) { browser, refreshTrigger, mode ->
-        PagedQueryKey(browser.folder, browser.filters, mode != OfflineMode.ONLINE, refreshTrigger)
-    }.distinctUntilChanged().flatMapLatest { (folder, filters, servingOffline) ->
-        if (filters.isDownloaded == true || servingOffline) {
-            // "Downloaded" filter — or offline mode, which pins it on
-            // automatically (#147): serve the grid from the local offline
-            // store — instant, no server paging, and the same projection
-            // offline playback uses. Folder membership matches the offline
-            // row's parentId; with no folder selected ("All") the whole
-            // offline library is shown. Filter dimensions and sort are
-            // re-applied client-side over the stored fields (see
-            // toFilteredLibraryItems).
-            val items = if (folder != null) {
-                offlineRepository.getOfflineLibraryInFolder(folder.id)
-            } else {
-                offlineRepository.getOfflineLibrary()
-            }
-            // Static paging only dispatches load states when explicit source
-            // states are provided — without them a fresh LazyPagingItems keeps
-            // its initial refresh = Loading forever, leaving the pull-to-refresh
-            // spinner stuck on while offline content renders fine.
-            val idleStates = LoadStates(
-                refresh = LoadState.NotLoading(endOfPaginationReached = false),
-                prepend = LoadState.NotLoading(endOfPaginationReached = false),
-                append = LoadState.NotLoading(endOfPaginationReached = false),
-            )
-            items.map { PagingData.from(it.toFilteredLibraryItems(filters), idleStates) }
-        } else {
-            mediaRepository.getMediaItemsPaged(
-                parentId = folder?.id,
-                filters = filters,
-                // Section mode ("See All" from a home Latest row) shows the same
-                // top-level items as the default library tab — series for a TV library,
-                // movies for a movie library — just sorted by latest. (Previously this
-                // returned leaf episodes for a TV library, which stacked flat episode
-                // blocks; issue #113.) Filtering to a specific leaf type is still
-                // possible via the Media Type filter.
-                kindFilter = ItemKindFilter.TOP_LEVEL,
-            )
-        }
-    }
-    .cachedIn(scope)
 
     init {
         loadFolders()
@@ -575,10 +590,11 @@ internal class LibraryViewModel(
             // shows (folders + genres); tags are an uncached passthrough.
             loadFolders(force = true)
             filterDimensions.load(force = true)
-            // Increment the trigger to force flatMapLatest to create a new Pager,
-            // which avoids the duplicate-key crash that occurs when pagedItems.refresh()
-            // is called concurrently on a cachedIn flow.
-            _refreshTrigger.update { it + 1 }
+            // Bump the pager generation (the host restarts the flatMapLatest
+            // pager fresh), which avoids the duplicate-key crash that occurs
+            // when pagedItems.refresh() is called concurrently on a cachedIn
+            // flow.
+            pagedGrid.refresh()
         }
     }
 

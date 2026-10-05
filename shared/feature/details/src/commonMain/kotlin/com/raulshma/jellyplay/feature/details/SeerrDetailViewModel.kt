@@ -31,6 +31,7 @@ import com.raulshma.jellyplay.core.model.seerr.buildBackdropUrl
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 
@@ -93,7 +94,8 @@ class SeerrDetailViewModel constructor(
     /** The item the request dialog is open for (null = closed) — the render gate. */
     val seerrDialogItem: StateFlow<SeerrSearchItem?> = seerrRequestDialog.item
 
-    val isSeerrConnected: StateFlow<Boolean> = seerrRepository.isConnected()
+    val isSeerrConnected: StateFlow<Boolean> = seerrRepository.preferences
+        .map { it.serverUrl.isNotBlank() }
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), false)
 
     fun loadDetails(tmdbId: Int, mediaType: String) {

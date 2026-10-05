@@ -91,7 +91,7 @@ class SearchViewModelQueryStateGapsTest {
         every { mediaSearchEngine.recentHistory() } returns flowOf(emptyList())
         every { mediaSearchEngine.sideSearch(any()) } returns flowOf()
         every { searchFiltersStore.searchFiltersJson } returns MutableStateFlow(null)
-        every { seerrRepository.getPreferences() } returns flowOf(SeerrPreferences())
+        every { seerrRepository.preferences } returns MutableStateFlow(SeerrPreferences())
         coEvery { mediaRepository.getGenres(any()) } returns Result.success(emptyList())
         coEvery { mediaBrowseReads.getTags(any(), any(), any()) } returns Result.success(emptyList())
         coEvery { mediaCollectionReads.getSearchSuggestions(any()) } returns Result.success(
@@ -122,10 +122,10 @@ class SearchViewModelQueryStateGapsTest {
     @Test
     fun `search mirrors the query into the public query property`() {
         viewModel.onEvent(SearchUiEvent.Search("matrix"))
-        assertEquals("matrix", viewModel.query)
+        assertEquals("matrix", viewModel.query.value)
 
         viewModel.onEvent(SearchUiEvent.Search("  "))
-        assertEquals("  ", viewModel.query)
+        assertEquals("  ", viewModel.query.value)
     }
 
     @Test

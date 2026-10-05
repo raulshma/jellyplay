@@ -6,6 +6,7 @@ import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.model.HomeFreshness
 import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.seerr.DiscoverSectionType
+import com.raulshma.jellyplay.core.model.seerr.SeerrDiscoverParams
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import kotlinx.coroutines.Deferred
@@ -120,10 +121,16 @@ internal class HomeDiscoverSources(
                 deferredResults.add(DiscoverSectionType.POPULAR_TV to async { seerrRepository.getDiscoverTv() })
             }
             if (prefs.discoverUpcomingMovies) {
-                deferredResults.add(DiscoverSectionType.UPCOMING_MOVIES to async { seerrRepository.getDiscoverMovies(primaryReleaseDateGte = today) })
+                deferredResults.add(
+                    DiscoverSectionType.UPCOMING_MOVIES to
+                        async { seerrRepository.getDiscoverMovies(params = SeerrDiscoverParams(releaseDateGte = today)) },
+                )
             }
             if (prefs.discoverUpcomingTv) {
-                deferredResults.add(DiscoverSectionType.UPCOMING_TV to async { seerrRepository.getDiscoverTv(firstAirDateGte = today) })
+                deferredResults.add(
+                    DiscoverSectionType.UPCOMING_TV to
+                        async { seerrRepository.getDiscoverTv(params = SeerrDiscoverParams(releaseDateGte = today)) },
+                )
             }
 
             val sections = mutableMapOf<DiscoverSectionType, List<SeerrSearchItem>>()

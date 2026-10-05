@@ -95,7 +95,6 @@ class RequestsViewModelTest {
         experimentalSlice = MutableStateFlow(ExperimentalSlice())
         every { experimentalStore.experimental } returns experimentalSlice
         every { seerrRepository.currentUser } returns MutableStateFlow(null)
-        every { seerrRepository.isAdmin() } returns MutableStateFlow(false)
         every { seerrRepository.pendingRequestCount } returns MutableStateFlow(0)
         every { seerrRepository.startPolling() } just Runs
         every { seerrRepository.stopPolling() } just Runs
@@ -278,7 +277,7 @@ class RequestsViewModelTest {
 
         viewModel.toggleSortDirection()
         advanceUntilIdle()
-        assertEquals("asc", viewModel.state.value.sortDirection)
+        assertEquals(RequestsSortDirection.ASC, viewModel.state.value.sortDirection)
         assertEquals("asc", requestCalls.last().sortDirection)
         assertEquals(1, viewModel.state.value.currentPage)
     }

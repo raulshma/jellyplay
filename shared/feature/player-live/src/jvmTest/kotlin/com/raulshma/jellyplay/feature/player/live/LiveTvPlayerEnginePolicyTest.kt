@@ -14,6 +14,8 @@ import com.raulshma.jellyplay.core.model.LiveStreamOption
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.LiveTvProgram
 import com.raulshma.jellyplay.core.model.PlayMethod
+import com.raulshma.jellyplay.core.model.PlaybackResolution
+import com.raulshma.jellyplay.core.model.PlaybackResolveRequest
 import com.raulshma.jellyplay.core.model.ResolvedPlayback
 import com.raulshma.jellyplay.feature.player.live.data.LastChannelStore
 import com.raulshma.jellyplay.feature.player.live.engine.LiveEngineFactory
@@ -87,7 +89,7 @@ class LiveTvPlayerEnginePolicyTest {
     private lateinit var imageUrlProvider: com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 
     private val capturedRequests = mutableListOf<LivePlaybackRequest>()
-    private val resolveOptions = mutableListOf<LiveStreamOption>()
+    private val resolveOptions = mutableListOf<LiveStreamOption?>()
     private val appRuntimeFlow = MutableStateFlow(AppRuntimeState())
     private val playbackFlow = MutableStateFlow(PlaybackSlice())
     private val engineStateFlow = MutableStateFlow(LiveEngineState.IDLE)
@@ -126,16 +128,18 @@ class LiveTvPlayerEnginePolicyTest {
         coEvery { liveTvRepo.getLiveTvPrograms(any(), any(), any()) } returns
             Result.success(emptyList<LiveTvProgram>())
         coEvery {
-            playbackRepo.resolvePlayback(any(), any(), any(), any(), any(), any(), any(), any(), any())
+            playbackRepo.resolvePlayable(any())
         } answers {
             // Record the live-stream option each resolve runs under.
-            resolveOptions += arg<LiveStreamOption>(8)
-            ResolvedPlayback(
-                mediaSourceId = "src",
-                streamUrl = "https://srv/Videos/x/stream",
-                playMethod = PlayMethod.DIRECT_STREAM,
-                playSessionId = "psid",
-                maxStreamingBitrate = null,
+            resolveOptions += arg<PlaybackResolveRequest>(0).liveStreamOption
+            PlaybackResolution.Resolved(
+                ResolvedPlayback(
+                    mediaSourceId = "src",
+                    streamUrl = "https://srv/Videos/x/stream",
+                    playMethod = PlayMethod.DIRECT_STREAM,
+                    playSessionId = "psid",
+                    maxStreamingBitrate = null,
+                ),
             )
         }
     }
@@ -264,7 +268,7 @@ class LiveTvPlayerEnginePolicyTest {
         scheduler.runCurrent()
 
         // The re-resolve ran under the TRANSCODE option…
-        assertEquals(listOf(LiveStreamOption.TRANSCODE), resolveOptions)
+        assertEquals(listOf<LiveStreamOption?>(LiveStreamOption.TRANSCODE), resolveOptions)
         // …and the engine reloaded the transcoded stream.
         assertEquals(2, capturedRequests.size)
         val reload = capturedRequests.last()
@@ -288,7 +292,7 @@ class LiveTvPlayerEnginePolicyTest {
         scheduler.runCurrent()
 
         assertEquals(
-            listOf(LiveStreamOption.TRANSCODE, LiveStreamOption.TRANSCODE),
+            listOf<LiveStreamOption?>(LiveStreamOption.TRANSCODE, LiveStreamOption.TRANSCODE),
             resolveOptions,
         )
         assertEquals(3, capturedRequests.size)

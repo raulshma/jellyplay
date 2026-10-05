@@ -66,9 +66,8 @@ class SeerrDetailViewModelResolutionTest {
 
         every { projections.seerrDetailPreferences } returns MutableStateFlow(SeerrDetailPreferences())
         every { seerrPreferencesStore.preferences } returns MutableStateFlow(SeerrPreferences())
-        every { seerrRepository.isConnected() } returns flowOf(false)
-        every { seerrRepository.getPreferences() } returns flowOf(SeerrPreferences())
-        coEvery { seerrRepository.getRatings(any(), any()) } returns Result.failure(NullPointerException())
+        every { seerrRepository.preferences } returns MutableStateFlow(SeerrPreferences())
+                coEvery { seerrRepository.getRatings(any(), any()) } returns Result.failure(NullPointerException())
         coEvery { seerrRepository.getRecommendations(any(), any()) } returns Result.success(
             emptyList<SeerrSearchItem>()
         )

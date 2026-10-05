@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.syncplay
 
 import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.data.repository.SyncPlayRepository
+import com.raulshma.jellyplay.core.data.syncplay.SyncPlayEvent
 import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastStore
 import com.raulshma.jellyplay.core.model.wallNowMillis
 import com.raulshma.jellyplay.core.model.PendingConfirmation
@@ -246,7 +247,7 @@ class SyncPlayViewModel(
         commandJob = launch {
             syncPlaySession.events.collect { event ->
                 when (event) {
-                    is SyncPlaySessionEvent.PlayQueueUpdate -> {
+                    is SyncPlayEvent.PlayQueueUpdate -> {
                         _uiState.update { state ->
                             val current = state.currentGroup ?: SyncPlayGroupInfo(
                                 groupId = "",
@@ -261,12 +262,12 @@ class SyncPlayViewModel(
                             )
                         }
                     }
-                    is SyncPlaySessionEvent.StateUpdate -> {
+                    is SyncPlayEvent.StateUpdate -> {
                         _uiState.update { state ->
                             state.copy(currentGroup = state.currentGroup?.copy(isPlaying = event.isPlaying))
                         }
                     }
-                    is SyncPlaySessionEvent.GroupUpdate -> {
+                    is SyncPlayEvent.GroupUpdate -> {
                         if (event.groupName.isBlank() && event.participantCount == 0) {
                             // An empty GroupUpdate normally means the server ejected us.
                             // But this arm is NOT pure mirror-masking: the session's
@@ -294,7 +295,7 @@ class SyncPlayViewModel(
                             loadCurrentGroup()
                         }
                     }
-                    is SyncPlaySessionEvent.Notification -> {
+                    is SyncPlayEvent.Notification -> {
                         _notifications.tryEmit(UiMessage.Raw(event.message))
                     }
                     else -> {}

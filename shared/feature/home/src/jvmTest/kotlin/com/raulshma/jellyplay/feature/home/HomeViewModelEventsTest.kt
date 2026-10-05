@@ -4,6 +4,7 @@ import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue
 import com.raulshma.jellyplay.feature.home.testutil.FakeTimeSource
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueSnapshot
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
+import com.raulshma.jellyplay.core.data.download.DownloadOutcomeMessenger
 import com.raulshma.jellyplay.core.data.download.DownloadRequestResult
 import com.raulshma.jellyplay.core.data.download.QuickDownloadActions
 import com.raulshma.jellyplay.core.data.download.SeriesEpisodeDownloads
@@ -212,6 +213,23 @@ class HomeViewModelEventsTest {
         downloadIntake = mockk(relaxed = true)
         quickDownloadActions = mockk(relaxed = true)
         every { quickDownloadActions.downloadedIds } returns MutableStateFlow(emptySet())
+        // The VM folds download outcomes through downloadAndReport (the shared
+        // cascade); mirror the real fold over the mocked intake so the
+        // per-test downloadIntake.startFromItem stubs keep driving it.
+        coEvery {
+            quickDownloadActions.downloadAndReport(any(), any(), any(), any())
+        } coAnswers {
+            val onOpenDetail = secondArg<(String, Boolean) -> Unit>()
+            val seriesOpensSheet = thirdArg<Boolean?>()
+            val messenger = arg<DownloadOutcomeMessenger?>(3)
+            when (val result = downloadIntake.startFromItem(firstArg())) {
+                DownloadRequestResult.Started -> messenger?.downloadStarted()
+                is DownloadRequestResult.SeriesSelectionRequired ->
+                    if (seriesOpensSheet != null) onOpenDetail(result.seriesId, seriesOpensSheet)
+                is DownloadRequestResult.NeedsDetailScreen -> onOpenDetail(result.itemId, false)
+                is DownloadRequestResult.Failed -> messenger?.downloadStartFailed()
+            }
+        }
         userMessageBus = mockk(relaxed = true)
         offlineRepository = mockk(relaxed = true)
         offlineModeManager = mockk(relaxed = true)

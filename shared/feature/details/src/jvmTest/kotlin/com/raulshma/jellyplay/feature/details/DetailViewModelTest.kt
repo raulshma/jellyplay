@@ -49,6 +49,7 @@ import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.RemoteConnectivity
 import com.raulshma.jellyplay.core.model.UserDataChange
+import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
 import com.raulshma.jellyplay.core.testfixtures.FakeUserDataMutator
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -62,7 +63,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -148,8 +148,7 @@ class DetailViewModelTest {
         audioQueueFacade = mockk()
         themeMusicPlayer = mockk(relaxed = true)
 
-        every { seerrRepository.isConnected() } returns flowOf(false)
-        every { seerrRepository.isRecommendationsEnabled() } returns flowOf(false)
+        every { seerrRepository.preferences } returns MutableStateFlow(SeerrPreferences())
         // Default: online. Prevents the Seerr Local-skip from falsely firing on
         // a relaxed-mock NetworkStatus when a REMOTE snapshot triggers discovery.
         every { offlineModeManager.networkStatus } returns MutableStateFlow(NetworkStatus.Online)
@@ -1188,11 +1187,11 @@ class DetailViewModelTest {
     fun loadSeerrData_whenConnectedAndEnabled_fetchesSeerrRecommendations() =
         runTest(mainDispatcher) {
             // Flip the connection-flag stubs BEFORE constructing the ViewModel:
-            // the uiState combine captures the flows returned by isConnected() /
-            // isRecommendationsEnabled() at construction time, so a stub flipped
-            // after construction has no effect.
-            every { seerrRepository.isConnected() } returns MutableStateFlow(true)
-            every { seerrRepository.isRecommendationsEnabled() } returns MutableStateFlow(true)
+            // the uiState combine captures the preferences flow at construction
+            // time, so a stub flipped after construction has no effect.
+            every { seerrRepository.preferences } returns MutableStateFlow(
+                SeerrPreferences(serverUrl = "https://seerr.example.com", recommendationsEnabled = true),
+            )
             every { offlineModeManager.networkStatus } returns MutableStateFlow(NetworkStatus.Online)
             buildViewModel()
 
@@ -1231,8 +1230,7 @@ class DetailViewModelTest {
     @Test
     fun loadSeerrData_fetchesTmdbReviews() =
         runTest(mainDispatcher) {
-            every { seerrRepository.isConnected() } returns MutableStateFlow(false)
-            every { seerrRepository.isRecommendationsEnabled() } returns MutableStateFlow(false)
+            every { seerrRepository.preferences } returns MutableStateFlow(SeerrPreferences())
             every { offlineModeManager.networkStatus } returns MutableStateFlow(NetworkStatus.Online)
             buildViewModel()
 

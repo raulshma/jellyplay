@@ -169,6 +169,12 @@ import kotlinx.coroutines.launch
  *    hand-rolled reset cleared all six). Harmless surface — the flow is only
  *    read while a now-playing row renders — and it keeps ONE clear shape
  *    shared by both managers.
+ *
+ * The manager also implements [NowPlayingSurface] (the four now-playing
+ * flows the shells' music home reads at click time — satisfied by the
+ * [AudioQueueManager]/[AudioPlayerEngine] overrides below): it is the
+ * app-scoped Koin SINGLE, identity-stable for the app's lifetime — the
+ * remember-key contract the shells' audio-clicks helper reads.
  */
 class DesktopAudioQueueManager(
     private val trackResolver: AudioTrackResolver,
@@ -231,7 +237,7 @@ class DesktopAudioQueueManager(
      * constructions (tests, other hosts) compile and behave unchanged.
      */
     private val nowPlayingReporter: NowPlayingReporter? = null,
-) : AudioQueueManager, AudioPlayerEngine {
+) : AudioQueueManager, AudioPlayerEngine, NowPlayingSurface {
 
     private companion object {
         // Same cadences as the Android manager/ticker pair.

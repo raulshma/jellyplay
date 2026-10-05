@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.feature.music.playlists
 
-import com.raulshma.jellyplay.feature.music.MusicQueueOutcome
+import com.raulshma.jellyplay.core.data.playback.AudioQueueOutcome
 import com.raulshma.jellyplay.feature.music.MusicQueuePlayer
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
@@ -66,7 +66,7 @@ class PlaylistDetailViewModelTest {
     @BeforeTest
     fun setUp() {
         Dispatchers.setMain(mainDispatcher)
-        coEvery { audioQueueFacade.playPlaylist(any(), any()) } returns MusicQueueOutcome.Started(emptyList(), 0)
+        coEvery { audioQueueFacade.playPlaylist(any(), any()) } returns AudioQueueOutcome.Started(emptyList(), 0)
         coEvery { audioQueueFacade.enqueuePlaylistItem(any()) } just Runs
         // The deferred refresher collects this for the whole VM lifetime.
         every { mediaRepository.userDataChanges } returns userDataEvents

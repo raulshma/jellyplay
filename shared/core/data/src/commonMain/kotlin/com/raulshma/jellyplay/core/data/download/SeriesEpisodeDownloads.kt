@@ -10,7 +10,7 @@ package com.raulshma.jellyplay.core.data.download
  * onto either seam when the download-actions seams were consolidated.
  *
  * The natural source — core:data's jvmShared `DownloadRepository`
- * ([`getDownloadedEpisodeIdsForSeries`][com.raulshma.jellyplay.core.data.repository.DownloadRepository.getDownloadedEpisodeIdsForSeries])
+ * ([`episodeIdsForSeries`][com.raulshma.jellyplay.core.data.repository.DownloadRepository.episodeIdsForSeries])
  * — is invisible to feature commonMain (its constructor closure is the JVM
  * download engine), which is exactly why this interface exists. Moved from
  * feature:home (where it shipped beside the now-deleted HomeDownloadActions
@@ -23,5 +23,5 @@ package com.raulshma.jellyplay.core.data.download
 interface SeriesEpisodeDownloads {
 
     /** The ids of [seriesId]'s episodes with a completed local download. */
-    suspend fun getDownloadedEpisodeIdsForSeries(seriesId: String): Set<String>
+    suspend fun episodeIdsForSeries(seriesId: String): Set<String>
 }

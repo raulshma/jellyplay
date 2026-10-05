@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -53,29 +54,45 @@ import com.raulshma.jellyplay.feature.player.video.generated.resources.player_vi
 // root file calls the symbol. See the section-host map on
 // VideoPlayerScreen.kt.
 
+/**
+ * Input bundle for [PlayerSheetRouter] (the
+ * [com.raulshma.jellyplay.feature.player.video.components.PlayerEffectsControls]
+ * idiom): the 14 non-state values the router reads — the sheet-change /
+ * dismiss funnels, the sheet-local flow subscriptions, the seek handoff and
+ * the SubtitleHub per-open intents (reset-first flag + landing tab) — riding
+ * one `@Immutable` carrier remembered on its value fields at the call wall;
+ * its lambdas capture only stable handles (the screen's rememberSaveable
+ * delegates, the document pickers), so the bundle instance stays equal across
+ * recompositions until an intent value actually flips.
+ */
+@Immutable
+internal data class SheetRouterInputs(
+    val onSheetChange: (PlayerSheet) -> Unit,
+    val dismissSheet: () -> Unit,
+    val currentPositionFlow: StateFlow<Long>,
+    val sleepTimerRemainingFlow: StateFlow<Long>,
+    val doSeekTo: (Long) -> Unit,
+    val itemId: String,
+    val syncPlayIgnoreWait: Boolean,
+    val onLoadLocalSubtitle: () -> Unit,
+    val onPickFont: () -> Unit,
+    val onOpenSubtitleTester: () -> Unit,
+    val onOpenSubtitleDelayOverlay: () -> Unit,
+    /** The pending reset-first intent for this SubtitleHub open — see [onSubtitleHubResetConsumed]. */
+    val subtitleHubResetFirst: Boolean,
+    /** Clears the consumed [subtitleHubResetFirst] flag so it stays single-shot. */
+    val onSubtitleHubResetConsumed: () -> Unit,
+    /** The tab this SubtitleHub open lands on (set by the entry that opened it). */
+    val subtitleHubInitialTab: SubtitleHubTab,
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun PlayerSheetRouter(
     currentSheet: PlayerSheet,
-    onSheetChange: (PlayerSheet) -> Unit,
-    dismissSheet: () -> Unit,
     uiState: VideoPlayerUiState,
-    currentPositionFlow: StateFlow<Long>,
-    sleepTimerRemainingFlow: StateFlow<Long>,
-    doSeekTo: (Long) -> Unit,
+    inputs: SheetRouterInputs,
     viewModel: VideoPlayerViewModel,
-    itemId: String,
-    syncPlayIgnoreWait: Boolean,
-    onLoadLocalSubtitle: () -> Unit,
-    onPickFont: () -> Unit,
-    onOpenSubtitleTester: () -> Unit,
-    onOpenSubtitleDelayOverlay: () -> Unit,
-    /** The pending reset-first intent for this SubtitleHub open — see [onSubtitleHubResetConsumed]. */
-    subtitleHubResetFirst: Boolean,
-    /** Clears the consumed [subtitleHubResetFirst] flag so it stays single-shot. */
-    onSubtitleHubResetConsumed: () -> Unit,
-    /** The tab this SubtitleHub open lands on (set by the entry that opened it). */
-    subtitleHubInitialTab: SubtitleHubTab,
 ) {
     // the Render sheet's "save for this series" toggle — sheet-local
     // UI state, defaults off (session-only edits).
@@ -85,7 +102,7 @@ internal fun PlayerSheetRouter(
             SpeedPickerSheet(
                 currentSpeed = uiState.playbackSpeed,
                 onSelect = { viewModel.onEvent(VideoPlayerUiEvent.SetPlaybackSpeed(it)) },
-                onDismiss = dismissSheet,
+                onDismiss = inputs.dismissSheet,
             )
         }
         is PlayerSheet.Audio -> {
@@ -97,7 +114,7 @@ internal fun PlayerSheetRouter(
                 tracks = trackState.audioTracks,
                 onSelect = { viewModel.onEvent(VideoPlayerUiEvent.SelectAudioTrack(it)) },
                 onReset = if (trackState.hasAudioOverride) { { viewModel.onEvent(VideoPlayerUiEvent.ResetAudioTrack) } } else null,
-                onDismiss = dismissSheet,
+                onDismiss = inputs.dismissSheet,
                 footer = if (uiState.media.seriesId != null) {
                     {
                         // Per-series audio-language preference toggle. Saving
@@ -133,8 +150,8 @@ internal fun PlayerSheetRouter(
             // config-change sheet restore re-enters with the flag reset to
             // false, i.e. the same no-reset re-load this effect always did.
             LaunchedEffect(Unit) {
-                viewModel.subtitles.openSubtitleHub(resetFirst = subtitleHubResetFirst)
-                onSubtitleHubResetConsumed()
+                viewModel.subtitles.openSubtitleHub(resetFirst = inputs.subtitleHubResetFirst)
+                inputs.onSubtitleHubResetConsumed()
             }
             // Track + subtitle-workflow slices: collected inside the
             // branch — only this hub consumes them while the sheet is open.
@@ -152,8 +169,8 @@ internal fun PlayerSheetRouter(
             // force requirement, quoting trap) from this snapshot.
             val sessionEngine by viewModel.playerEngineFlow.collectAsStateWithLifecycle()
             SubtitleHubSheet(
-                initialTab = subtitleHubInitialTab,
-                onDismiss = dismissSheet,
+                initialTab = inputs.subtitleHubInitialTab,
+                onDismiss = inputs.dismissSheet,
                 // Tracks tab
                 subtitleTracks = trackState.subtitleTracks,
                 onSelectSubtitleTrack = { viewModel.onEvent(VideoPlayerUiEvent.SelectSubtitleTrack(it)) },
@@ -200,8 +217,8 @@ internal fun PlayerSheetRouter(
                 subtitleStyle = uiState.subtitleStyle,
                 onStyleChange = { viewModel.onEvent(VideoPlayerUiEvent.SetSubtitleStyle(it)) },
                 onSubtitleDelayChange = { viewModel.onEvent(VideoPlayerUiEvent.SetSubtitleDelay(it)) },
-                onPickFont = onPickFont,
-                onOpenTester = onOpenSubtitleTester,
+                onPickFont = inputs.onPickFont,
+                onOpenTester = inputs.onOpenSubtitleTester,
                 capabilities = uiState.engineCapabilities,
                 subtitleOwnership = sessionEngine?.subtitleStyleOwnership
                     ?: MpvSubtitleOwnership.NONE,
@@ -217,7 +234,7 @@ internal fun PlayerSheetRouter(
                 isDownloading = subtitleState.isLoadingRemoteSubtitles,
                 remoteSubtitlesError = subtitleState.remoteSubtitlesError,
                 onDownload = { viewModel.subtitles.downloadSubtitle(it) },
-                onLoadLocalFile = onLoadLocalSubtitle,
+                onLoadLocalFile = inputs.onLoadLocalSubtitle,
                 searchResults = subtitleState.searchedSubtitles,
                 isSearching = subtitleState.isSearchingSubtitles,
                 hasSearched = subtitleState.hasSearchedSubtitles,
@@ -248,11 +265,11 @@ internal fun PlayerSheetRouter(
                         isForced,
                         isHearingImpaired,
                     )
-                    onSheetChange(PlayerSheet.None)
+                    inputs.onSheetChange(PlayerSheet.None)
                 },
                 // Delay tab
                 currentSubtitleDelayMs = uiState.subtitleStyle.offsetMs,
-                onOpenDelayOverlay = onOpenSubtitleDelayOverlay,
+                onOpenDelayOverlay = inputs.onOpenSubtitleDelayOverlay,
             )
         }
         is PlayerSheet.Chapter -> {
@@ -261,12 +278,12 @@ internal fun PlayerSheetRouter(
             // a non-chapter sheet) is shown.
             ChapterPickerBinder(
                 chapters = uiState.chapters,
-                currentPositionFlow = currentPositionFlow,
+                currentPositionFlow = inputs.currentPositionFlow,
                 onSelect = { positionTicks ->
-                    doSeekTo(positionTicks / 10_000)
-                    onSheetChange(PlayerSheet.None)
+                    inputs.doSeekTo(positionTicks / 10_000)
+                    inputs.onSheetChange(PlayerSheet.None)
                 },
-                onDismiss = dismissSheet,
+                onDismiss = inputs.dismissSheet,
             )
         }
         is PlayerSheet.PlaybackInfo -> {
@@ -274,7 +291,7 @@ internal fun PlayerSheetRouter(
             val trackState by viewModel.trackState.collectAsStateWithLifecycle()
             val effectsState by viewModel.effects.state.collectAsStateWithLifecycle()
             PlayerModalBottomSheet(
-                onDismissRequest = dismissSheet,
+                onDismissRequest = inputs.dismissSheet,
                 sheetState = rememberModalBottomSheetState(),
             ) {
                 PlaybackInfoOverlay(
@@ -310,7 +327,7 @@ internal fun PlayerSheetRouter(
                 currentRatio = uiState.videoFx.aspectRatio,
                 detectedRatio = uiState.videoFx.detectedAspectRatio,
                 onSelect = { viewModel.onEvent(VideoPlayerUiEvent.SetAspectRatio(it)) },
-                onDismiss = dismissSheet,
+                onDismiss = inputs.dismissSheet,
             )
         }
         is PlayerSheet.AVSync -> {
@@ -319,7 +336,7 @@ internal fun PlayerSheetRouter(
             AVSyncSheet(
                 currentAudioDelayMs = effectsState.audioDelayMs,
                 onAudioDelayChange = { viewModel.effects.setAudioDelay(it) },
-                onDismiss = dismissSheet,
+                onDismiss = inputs.dismissSheet,
                 audioDelaySupported = uiState.engineCapabilities.supportsAudioDelay,
             )
         }
@@ -329,7 +346,7 @@ internal fun PlayerSheetRouter(
             DecoderPickerSheet(
                 currentMode = effectsState.decoderMode,
                 onSelect = { viewModel.effects.setDecoderMode(it) },
-                onDismiss = dismissSheet,
+                onDismiss = inputs.dismissSheet,
             )
         }
         is PlayerSheet.Episodes -> {
@@ -337,14 +354,14 @@ internal fun PlayerSheetRouter(
                 seasons = uiState.episodes.seriesSeasons,
                 episodes = uiState.episodes.seasonEpisodes,
                 currentSeasonId = uiState.episodes.currentSeasonId,
-                currentEpisodeId = itemId,
+                currentEpisodeId = inputs.itemId,
                 isLoading = uiState.episodes.isLoadingEpisodes,
                 onSeasonSelect = { viewModel.onEvent(VideoPlayerUiEvent.LoadSeasonEpisodes(it)) },
                 onEpisodeSelect = { episode ->
                     viewModel.onEvent(VideoPlayerUiEvent.PlayEpisode(episode.id, episode.playbackPositionTicks ?: 0L))
-                    onSheetChange(PlayerSheet.None)
+                    inputs.onSheetChange(PlayerSheet.None)
                 },
-                onDismiss = dismissSheet,
+                onDismiss = inputs.dismissSheet,
                 getImageUrl = { id -> viewModel.getImageUrl(id, 300) },
             )
         }
@@ -356,7 +373,7 @@ internal fun PlayerSheetRouter(
                 participantCount = syncPlayState.syncPlayParticipantCount,
                 isSynced = syncPlayState.isSyncPlaySynced,
                 isPlaying = uiState.isPlaying,
-                ignoreWait = syncPlayIgnoreWait,
+                ignoreWait = inputs.syncPlayIgnoreWait,
                 repeatMode = syncPlayState.syncPlayRepeatMode,
                 shuffleMode = syncPlayState.syncPlayShuffleMode,
                 onRepeatModeChange = { viewModel.onEvent(VideoPlayerUiEvent.SetSyncPlayRepeatMode(it)) },
@@ -365,10 +382,10 @@ internal fun PlayerSheetRouter(
                 onStop = { viewModel.syncPlay.sendStop() },
                 onLeave = {
                     viewModel.syncPlay.leaveGroup()
-                    onSheetChange(PlayerSheet.None)
+                    inputs.onSheetChange(PlayerSheet.None)
                 },
                 onIgnoreWaitChange = { viewModel.syncPlay.setIgnoreWait(it) },
-                 onDismiss = dismissSheet,
+                 onDismiss = inputs.dismissSheet,
              )
          }
         is PlayerSheet.Version -> {
@@ -384,7 +401,7 @@ internal fun PlayerSheetRouter(
                 onSelect = { option ->
                     option.id?.let { viewModel.onEvent(VideoPlayerUiEvent.SelectMediaSource(it)) }
                 },
-                onDismiss = dismissSheet,
+                onDismiss = inputs.dismissSheet,
                 footer = {
                     // Per-item/series version memory (the audio sheet's
                     // "remember language" pattern): on = the CURRENT version
@@ -406,14 +423,14 @@ internal fun PlayerSheetRouter(
                 adaptiveBitrateEnabled = uiState.uiPrefs.adaptiveBitrateEnabled,
                 onToggleAdaptiveBitrate = { viewModel.onEvent(VideoPlayerUiEvent.SetAdaptiveBitrateEnabled(it)) },
                 onSelect = { viewModel.onEvent(VideoPlayerUiEvent.SetStreamingQuality(it)) },
-                onDismiss = dismissSheet,
+                onDismiss = inputs.dismissSheet,
             )
         }
         is PlayerSheet.PlaybackMode -> {
             PlaybackModeSheet(
                 currentMode = uiState.uiPrefs.playbackMode,
                 onSelect = { viewModel.onEvent(VideoPlayerUiEvent.SetPlaybackMode(it)) },
-                onDismiss = dismissSheet,
+                onDismiss = inputs.dismissSheet,
             )
         }
         is PlayerSheet.SleepTimer -> {
@@ -423,18 +440,18 @@ internal fun PlayerSheetRouter(
                 isActive = sleepTimerState.sleepTimerActive,
                 isEndOfEpisodeMode = sleepTimerState.sleepTimerEndOfEpisode,
                 lastUsedDurationMs = sleepTimerState.sleepTimerLastUsedDurationMs,
-                sleepTimerRemainingFlow = sleepTimerRemainingFlow,
+                sleepTimerRemainingFlow = inputs.sleepTimerRemainingFlow,
                 onSelectDuration = { viewModel.sleepTimer.startSleepTimer(it) },
                 onSelectEndOfEpisode = { viewModel.sleepTimer.startSleepTimerEndOfEpisode() },
                 onCancel = { viewModel.sleepTimer.cancelSleepTimer() },
-                onDismiss = dismissSheet,
+                onDismiss = inputs.dismissSheet,
             )
         }
         is PlayerSheet.VideoFilter -> {
             VideoFilterSheet(
                 currentEffects = uiState.videoFx.videoEffects,
                 onEffectsChange = { viewModel.onEvent(VideoPlayerUiEvent.SetVideoEffects(it)) },
-                onDismiss = dismissSheet,
+                onDismiss = inputs.dismissSheet,
             )
         }
         is PlayerSheet.Render -> {
@@ -452,7 +469,7 @@ internal fun PlayerSheetRouter(
                 // DataStore round-trip hasn't mirrored into the aggregate yet).
                 renderQuality = effective.renderQuality,
                 hasStoredOverride = active != null,
-                canSaveForSeries = uiState.media.seriesId != null || itemId != null,
+                canSaveForSeries = uiState.media.seriesId != null || inputs.itemId != null,
                 saveForSeries = saveRenderForSeries,
                 onShaderPackSelect = { viewModel.onEvent(VideoPlayerUiEvent.SetRenderShaderPack(it, saveRenderForSeries)) },
                 onToneMappingSelect = { viewModel.onEvent(VideoPlayerUiEvent.SetRenderToneMapping(it, saveRenderForSeries)) },
@@ -460,9 +477,9 @@ internal fun PlayerSheetRouter(
                 onSaveForSeriesChange = { saveRenderForSeries = it },
                 onInherit = {
                     viewModel.onEvent(VideoPlayerUiEvent.ClearRenderOverride)
-                    onSheetChange(PlayerSheet.None)
+                    inputs.onSheetChange(PlayerSheet.None)
                 },
-                onDismiss = dismissSheet,
+                onDismiss = inputs.dismissSheet,
             )
         }
         PlayerSheet.None -> { }

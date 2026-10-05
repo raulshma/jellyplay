@@ -118,11 +118,12 @@ import org.jetbrains.compose.resources.getString
  * The builder owns the collaborator graph and the uiState-write lambdas;
  * the ViewModel keeps the user-intent funnel (`onEvent` + its handlers),
  * the state-holder construction, and the expose-only flows. Everything the
- * wiring needs FROM the ViewModel's funnel arrives through [Host] — a
- * narrow call-back seam the VM implements (as a private adapter object, so
- * the VM's public/internal member surface — and with it the ownership
- * ratchet — is unchanged). `Host` is STORED in phase 1 but only INVOKED
- * from `arm` onward; no phase-1 initializer may call through it.
+ * wiring needs FROM the ViewModel's funnel arrives through [WiringHostLambdas]
+ * — a constructor-lambda bundle built at the VM from its private handlers
+ * (the wiring's existing idiom for callback collaborators, so the VM's
+ * public/internal member surface — and with it the ownership ratchet — is
+ * unchanged). It is STORED in phase 1 but only INVOKED from `arm` onward;
+ * no phase-1 initializer may call through it.
  *
  * The VM-bound members of the former [VideoSessionHost] landed here as the
  * [SessionLifecycleHooks] / [SessionLoadOutputs] implementations below; the
@@ -176,7 +177,7 @@ internal class PlayerWiring(
     private val itemContent: PlayerItemContentSources,
     private val handles: PlayerStateHandles,
     /** The ViewModel funnel seam — stored in phase 1, invoked from [arm] onward. */
-    private val host: Host,
+    private val host: WiringHostLambdas,
 ) : SessionLoadOutputs, SessionLifecycleHooks {
 
     // ── The state-holder bundle, unpacked ────────────────────────────────────
@@ -194,34 +195,6 @@ internal class PlayerWiring(
     private val resumeReminder: MutableSharedFlow<Long> get() = handles.resumeReminder
     private val closePlayer: Channel<Unit> get() = handles.closePlayer
     private val passOutEvents: Channel<String> get() = handles.passOutEvents
-
-    /**
-     * The ViewModel-owned behaviors the wiring calls back into: the transport
-     * funnels ([seekTo]/[seekByStep]/[routedPlay]/[resumePlayback]), the load
-     * funnel ([initialize]), the session-policy dispatch
-     * ([autoSkipSegment]/[onEndedWithNoNext]/[handlePlaybackEnded]) and the
-     * VM-owned lifecycle slices ([routeToRemotePlaySession] — the remote-play
-     * strategy is a VM-only dependency — [releaseInternalsVmPart] with the
-     * keepAcrossItems uiState rebuild, [onItemHydrated] and [release]).
-     * Implementations are one-line delegations to the VM's private handlers;
-     * the indirection exists so the VM's public/internal member surface (the
-     * ownership ratchet) does not grow by the fourteen seam members.
-     */
-    internal interface Host {
-        fun initialize(itemId: String, mediaSourceId: String?, startPositionTicks: Long)
-        fun seekTo(positionMs: Long, userInitiated: Boolean)
-        fun seekByStep(direction: Int)
-        fun routedPlay(play: Boolean)
-        fun resumePlayback()
-        fun applyResumeSkip(engine: MediaEngine)
-        fun autoSkipSegment(segment: MediaSegment)
-        fun onEndedWithNoNext()
-        fun handlePlaybackEnded()
-        fun routeToRemotePlaySession(request: LoadRequest): Boolean
-        fun releaseInternalsVmPart()
-        fun onItemHydrated(itemId: String, hydratedAgg: VideoPlayerAggregate)
-        fun release()
-    }
 
     // ── Late-bound back-references (the broken construction cycles) ──────────
     //
@@ -532,7 +505,7 @@ internal class PlayerWiring(
      * aspect/source-rect pushes. Re-armed from [arm] AND from the
      * `rearmTransports` session hook — see PipTransportController's KDoc for
      * why the re-arm must ride the load lifecycle. The dispatch lambdas route
-     * through [Host] (the VM's transport funnels) or read
+     * through [host] (the VM's transport funnels) or read
      * later-declared collaborators lazily (invoked long after construction).
      */
     internal val pipTransport = PipTransportController(
@@ -632,7 +605,8 @@ internal class PlayerWiring(
                 host.initialize(itemId, null, positionTicks)
             } else {
                 // Group-driven position sync, not a user seek — never clamped.
-                host.seekTo(positionTicks / 10_000, userInitiated = false)
+                // (positional: seekTo is a lambda on WiringHostLambdas, named args not allowed)
+                host.seekTo(positionTicks / 10_000, false)
             }
         },
         // Session-state write seam: the bridge no longer holds the UiState
@@ -1247,6 +1221,7 @@ internal class PlayerWiring(
                         }
                     }
                     is SessionEvent.InformUser -> userMessageBus.info(event.message)
+                    is SessionEvent.InformUserKey -> userMessageBus.info(event.message)
                     SessionEvent.PlaybackEnded -> host.handlePlaybackEnded()
                     SessionEvent.ClosePlayerRequested -> closePlayer.trySend(Unit)
                     SessionEvent.PassOutPause ->
@@ -1693,4 +1668,38 @@ internal data class PlayerStateHandles(
     val resumeReminder: MutableSharedFlow<Long>,
     val closePlayer: Channel<Unit>,
     val passOutEvents: Channel<String>,
+)
+
+/**
+ * The ViewModel-funnel lambda bundle (the [PlayerStateHandles] construction-
+ * bundle pattern): the VM-owned behaviors the wiring calls back into — the
+ * transport funnels ([seekTo]/[seekByStep]/[routedPlay]/[resumePlayback]),
+ * the load funnel ([initialize]), the session-policy dispatch
+ * ([autoSkipSegment]/[onEndedWithNoNext]/[handlePlaybackEnded]) and the
+ * VM-owned lifecycle slices ([routeToRemotePlaySession] — the remote-play
+ * strategy is a VM-only dependency — [releaseInternalsVmPart] with the
+ * keepAcrossItems uiState rebuild, [onItemHydrated], [release]) — as
+ * constructor lambdas built at the VM from its private handlers. The former
+ * `Host` interface's only implementation was thirteen one-line delegations;
+ * the bundle is the wiring's existing idiom for callback collaborators
+ * (SubtitleManager / StillWatchingController / EpisodeContinuationController)
+ * and keeps the VM's public/internal member surface — the ownership ratchet —
+ * unchanged. Stored in phase 1, invoked from [PlayerWiring.arm] onward: the
+ * lambdas read VM state only from session/engine call chains, so the
+ * under-construction window is never observed.
+ */
+internal data class WiringHostLambdas(
+    val initialize: (itemId: String, mediaSourceId: String?, startPositionTicks: Long) -> Unit,
+    val seekTo: (positionMs: Long, userInitiated: Boolean) -> Unit,
+    val seekByStep: (direction: Int) -> Unit,
+    val routedPlay: (play: Boolean) -> Unit,
+    val resumePlayback: () -> Unit,
+    val applyResumeSkip: (engine: MediaEngine) -> Unit,
+    val autoSkipSegment: (segment: MediaSegment) -> Unit,
+    val onEndedWithNoNext: () -> Unit,
+    val handlePlaybackEnded: () -> Unit,
+    val routeToRemotePlaySession: (request: LoadRequest) -> Boolean,
+    val releaseInternalsVmPart: () -> Unit,
+    val onItemHydrated: (itemId: String, hydratedAgg: VideoPlayerAggregate) -> Unit,
+    val release: () -> Unit,
 )
