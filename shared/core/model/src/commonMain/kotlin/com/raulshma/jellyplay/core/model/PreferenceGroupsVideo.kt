@@ -118,6 +118,12 @@ data class PlaybackPreferences(
     val videoHideOsdOnPause: Boolean = false,
     val videoGestureMode: GestureMode = GestureMode.ALL,
     /**
+     * The whole player input mapping (touch / wheel / keyboard / D-pad rows)
+     * — the binding editor reads it here; the demoted [videoGestureMode] is
+     * the mass-preset record beside it.
+     */
+    val videoInputBindings: PlayerInputMap = PlayerInputDefaults.defaultMap(),
+    /**
      * double-tap-and-hold continuous seek in the seek zones
      * (default ON; off = legacy long-press hold-speed everywhere).
      */

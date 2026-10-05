@@ -651,4 +651,14 @@
     <string name="core_ui_whatsnew_category_improvement">Improved</string>
     <string name="core_ui_whatsnew_category_fix">Fixed</string>
     <string name="core_ui_whatsnew_take_me_there">Take me there</string>
+    <string name="settings_input_bindings">Customize controls</string>
+    <string name="settings_input_bindings_subtitle">Actions for gestures, mouse, keyboard, and remote</string>
+    <string name="settings_input_bindings_title">Controls</string>
+    <string name="settings_input_bindings_section_touch">Touch</string>
+    <string name="settings_input_bindings_section_mouse">Mouse &amp; scroll</string>
+    <string name="settings_input_bindings_section_keyboard">Keyboard</string>
+    <string name="settings_input_bindings_section_tv">TV remote</string>
+    <string name="settings_input_bindings_subtitle_on">On</string>
+    <string name="settings_input_bindings_subtitle_off">Off</string>
+    <string name="settings_input_bindings_reset">Reset controls to defaults</string>
 </resources>

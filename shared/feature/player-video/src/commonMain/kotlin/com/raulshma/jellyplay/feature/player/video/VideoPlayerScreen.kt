@@ -6,6 +6,7 @@ import androidx.compose.foundation.background
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import com.raulshma.jellyplay.core.ui.model.inputQuickToggleLabels
 import com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -54,6 +55,8 @@ import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.components.rememberDpadSeekState
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.feature.player.video.generated.resources.Res
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_capturing_frame
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_not_ready
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_audio_only_on
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_resumed_message
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_font_invalid_format
@@ -62,21 +65,31 @@ import com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleFormatCatalo
 
 
 import com.raulshma.jellyplay.feature.player.video.state.GestureSeekController
+import com.raulshma.jellyplay.feature.player.video.state.PlayerInputPolicy
+import com.raulshma.jellyplay.feature.player.video.state.PlayerInputGates
+import com.raulshma.jellyplay.core.model.InputPattern
+import com.raulshma.jellyplay.core.model.PlayerAction
+import com.raulshma.jellyplay.core.model.PlayerInputKey
+import com.raulshma.jellyplay.core.model.WheelAxis
 import com.raulshma.jellyplay.feature.player.video.engine.styleChangedExcludingDelay
 import com.raulshma.jellyplay.feature.player.video.chrome.controlsAutoHideTimeoutMs
 import com.raulshma.jellyplay.feature.player.video.chrome.KEYBOARD_SEEK_COMMIT_DELAY_MS
+import com.raulshma.jellyplay.feature.player.video.chrome.keyboardSeekStepMs
 import com.raulshma.jellyplay.feature.player.video.chrome.shouldScheduleControlsAutoHide
-import com.raulshma.jellyplay.feature.player.video.chrome.shouldSummonControlsOnPause
 import com.raulshma.jellyplay.feature.player.video.engine.ZoomSafeSubtitleStrategy
 import com.raulshma.jellyplay.feature.player.video.components.PlaybackErrorDialog
 import com.raulshma.jellyplay.feature.player.video.components.CompanionDashboard
 import com.raulshma.jellyplay.feature.player.video.components.PlayerControls
+import com.raulshma.jellyplay.feature.player.video.components.PlayerOverflowMenuInputToggle
+import com.raulshma.jellyplay.feature.player.video.components.SPEED_OPTIONS
+import com.raulshma.jellyplay.core.model.PlayerInputDefaults
 import com.raulshma.jellyplay.feature.player.video.components.PlayerEffectsControls
 import com.raulshma.jellyplay.feature.player.video.components.SleepTimerControls
 import com.raulshma.jellyplay.feature.player.video.components.SyncPlayIndicator
 import com.raulshma.jellyplay.feature.player.video.components.TrackControls
 import com.raulshma.jellyplay.feature.player.video.components.TransportControls
 import com.raulshma.jellyplay.feature.player.video.components.GestureControls
+import com.raulshma.jellyplay.feature.player.video.components.A11Y_STEP_DELTA
 import com.raulshma.jellyplay.feature.player.video.components.SheetControls
 import com.raulshma.jellyplay.feature.player.video.components.SubtitleHubTab
 
@@ -616,8 +629,104 @@ fun VideoPlayerScreen(
         }
     }
 
+    // ── Input mapping resolution (issue #171 generalized) ──────────────────
+    // Every input tier — touch arms, tap zones, wheel rows, keyboard keys,
+    // TV D-pad controls — resolves through the ONE persisted mapping
+    // (uiState.gestures.inputMap). [inputGates] snapshots the per-arm
+    // booleans for the pointerInput keys; [currentInputMap] is the live read
+    // the event-time lambdas consult (the reader-lambda rule above).
+    val inputGates = remember(uiState.gestures.inputMap) { PlayerInputGates.of(uiState.gestures.inputMap) }
+    val currentInputMap by rememberUpdatedState(uiState.gestures.inputMap)
+    // The overflow menu's quick toggles (issue #171): the six high-frequency
+    // gesture gates (both edge-swipe halves included), tap-to-flip
+    // mid-playback. Labels resolve through the core:ui input-label seam
+    // against the CURRENT map — a swapped side pairing relabels in place.
+    val quickLabels = inputQuickToggleLabels(uiState.gestures.inputMap)
+    val inputQuickToggles = listOf(
+        PlayerOverflowMenuInputToggle(
+            bindingId = PlayerInputDefaults.ID_SWIPE_BRIGHTNESS,
+            labelText = quickLabels.leftSwipe,
+            enabled = inputGates.swipeBrightness,
+        ),
+        PlayerOverflowMenuInputToggle(
+            bindingId = PlayerInputDefaults.ID_SWIPE_VOLUME,
+            labelText = quickLabels.rightSwipe,
+            enabled = inputGates.swipeVolume,
+        ),
+        PlayerOverflowMenuInputToggle(
+            bindingId = PlayerInputDefaults.ID_SWIPE_SEEK,
+            labelText = quickLabels.seekSwipe,
+            enabled = inputGates.swipeSeek,
+        ),
+        PlayerOverflowMenuInputToggle(
+            bindingId = PlayerInputDefaults.ID_EDGE_SWIPE_LEFT,
+            labelText = quickLabels.edgeSwipeLeft,
+            enabled = inputGates.edgeLeft,
+        ),
+        PlayerOverflowMenuInputToggle(
+            bindingId = PlayerInputDefaults.ID_EDGE_SWIPE_RIGHT,
+            labelText = quickLabels.edgeSwipeRight,
+            enabled = inputGates.edgeRight,
+        ),
+        PlayerOverflowMenuInputToggle(
+            bindingId = PlayerInputDefaults.ID_PINCH,
+            labelText = quickLabels.pinch,
+            enabled = inputGates.pinch,
+        ),
+    )
+    val onInputQuickToggle: (String, Boolean) -> Unit = remember {
+        { bindingId, enabled -> viewModel.onEvent(VideoPlayerUiEvent.SetInputBindingEnabled(bindingId, enabled)) }
+    }
+    val resolvePatternAction: (InputPattern) -> PlayerAction? = remember {
+        { pattern -> PlayerInputPolicy.resolveAction(currentInputMap, pattern) }
+    }
+    // Raw platform code → catalog key. Built once; the mapping persists
+    // NAMES, this is the only place codes meet them.
+    val keyCodeToInputKey: Map<Int, PlayerInputKey> = remember {
+        PlayerInputKey.entries.associate { key -> playerKeyCodeOf(key) to key }
+    }
+
+    // Screenshot capture path, hoisted above [executePlayerAction] so the
+    // SCREENSHOT arm rides the SAME funnel the overflow-menu button and the
+    // remote "TakeScreenshot" receiver drive (no separate code path to
+    // drift). Platform seam: PixelCopy on Android's SurfaceView surfaces
+    // (only PixelCopy, not View.drawToBitmap, can read them); mpv's
+    // screenshot command on desktop, routed through the engine. titleHint
+    // seeds the MediaStore / save filename. Result surfaces
+    // as a snackbar with the saved path. The guard passes when EITHER a
+    // platform surface or an engine exists — the desktop software-render
+    // surface publishes no view object at all, so the engine alone carries
+    // the desktop capture (the Android actual still requires the view and
+    // fails gracefully in the surface-less window). `engine` is a
+    // collectAsState delegate read at invocation time, like the
+    // effectsState lambdas above.
+    val capturingFrameMessage = stringResource(Res.string.player_capturing_frame)
+    val playerNotReadyMessage = stringResource(Res.string.player_not_ready)
+    val onScreenshotClick: () -> Unit = remember(capturingFrameMessage, playerNotReadyMessage) {
+        {
+            val view = playerViewRef
+            if (view != null || engine != null) {
+                scope.launch { snackbarHostState.showSnackbar(capturingFrameMessage, duration = SnackbarDuration.Short) }
+                requestVideoFrameCapture(
+                    surfaceView = view,
+                    engine = engine,
+                    titleHint = uiState.title,
+                ) { message ->
+                    scope.launch {
+                        snackbarHostState.showSnackbar(message, duration = SnackbarDuration.Long)
+                    }
+                }
+            } else {
+                scope.launch {
+                    snackbarHostState.showSnackbar(playerNotReadyMessage, duration = SnackbarDuration.Short)
+                }
+            }
+            Unit
+        }
+    }
+
     // The hardware-keyboard layer's media-key interpretation, so
-    // both delivery paths run the same table: (a) the normal focused dispatch
+    // both delivery paths run the same logic: (a) the normal focused dispatch
     // chain (the Box's onKeyEvent, when the layer or a descendant holds Compose
     // focus) and (b) the desktop shell's deterministic forward (the sink
     // installed below, called from DesktopNavScaffold.onPreviewKeyEvent when
@@ -625,160 +734,264 @@ fun VideoPlayerScreen(
     // focus flap leaves focus-less gaps in which the null-focus fallback
     // dispatch dies at the shell's Row). The screen stays the single
     // interpreter of media-key semantics; the shell forwards raw events.
-    // The key→action decision tables themselves live in PlayerKeyPolicy —
-    // mediaKeySeek first (the seek keys, pure and JVM-tested, carrying the
-    // modifier steps), then mediaKeyAction for the rest; this shell keeps
-    // only the effects — the lambdas, haptics, controls visibility — plus the
-    // interaction bookkeeping, which fires for every KeyDown before the policy
-    // lookup (matched or not), exactly as the pre-extraction closure did.
+    //
+    // Resolution: the event's code maps to the catalog key, candidates go
+    // through [PlayerInputPolicy.keyCandidates] (exact modifiers first, then
+    // the canonical plain row — seek-family keys skip the exact arm because
+    // their modifier steps are event-time semantics), and the bound action
+    // executes through [executePlayerAction]. A disabled/absent binding
+    // returns false (unmapped key); an explicit NONE row consumes as a no-op.
+    val executePlayerAction: (PlayerAction) -> Boolean = { action ->
+        when (action) {
+            PlayerAction.TOGGLE_PLAY_PAUSE -> {
+                togglePlayPauseWithSummon(
+                    isPlaying = isPlaying,
+                    hideOsdOnPause = uiState.uiPrefs.hideOsdOnPause,
+                    doTogglePlayPause = doTogglePlayPause,
+                    performConfirmHaptic = performConfirmHaptic,
+                    summonControls = { showControls = true },
+                )
+                true
+            }
+            PlayerAction.PLAY -> {
+                doPlay()
+                true
+            }
+            PlayerAction.PAUSE -> {
+                doPause()
+                true
+            }
+            PlayerAction.VOLUME_UP -> {
+                streamVolumeAdjuster(true)
+                showControls = true
+                true
+            }
+            PlayerAction.VOLUME_DOWN -> {
+                streamVolumeAdjuster(false)
+                showControls = true
+                true
+            }
+            PlayerAction.TOGGLE_MUTE -> {
+                viewModel.onEvent(VideoPlayerUiEvent.ToggleMute)
+                showControls = true
+                true
+            }
+            PlayerAction.TOGGLE_ORIENTATION -> {
+                toggleOrientation()
+                showControls = true
+                true
+            }
+            PlayerAction.TOGGLE_SUBTITLES -> {
+                // mpv's subtitle-visibility key: off remembers the
+                // last track, on silently restores it — same funnel the
+                // hub's Off/track rows and the CC button's long-press
+                // drive. No controls change, mirroring the delay arms:
+                // the effect is on the video, not the chrome.
+                viewModel.onEvent(VideoPlayerUiEvent.ToggleSubtitles)
+                true
+            }
+            PlayerAction.SUBTITLE_DELAY_DECREASE -> {
+                // Feedback rides the existing subtitle-delay overlay (the
+                // mount below reads the live uiState value, so each press
+                // steps the shown number). Same event the overlay's own
+                // steppers emit.
+                showDelayOverlay = true
+                viewModel.onEvent(
+                    VideoPlayerUiEvent.SetSubtitleDelay(
+                        delayAdjustMs(
+                            currentMs = uiState.subtitleStyle.offsetMs,
+                            sign = -1,
+                            stepMs = KEY_SUBTITLE_DELAY_STEP_MS,
+                        ),
+                    ),
+                )
+                true
+            }
+            PlayerAction.SUBTITLE_DELAY_INCREASE -> {
+                showDelayOverlay = true
+                viewModel.onEvent(
+                    VideoPlayerUiEvent.SetSubtitleDelay(
+                        delayAdjustMs(
+                            currentMs = uiState.subtitleStyle.offsetMs,
+                            sign = 1,
+                            stepMs = KEY_SUBTITLE_DELAY_STEP_MS,
+                        ),
+                    ),
+                )
+                true
+            }
+            PlayerAction.AUDIO_DELAY_DECREASE -> {
+                // Same funnel the AVSync sheet uses
+                // (viewModel.effects.setAudioDelay), same 100ms step and
+                // clamp; gated on the sheet's capability row. No audio
+                // overlay exists and the sheet is a modal, so there is no
+                // OSD feedback — the change applies directly.
+                if (uiState.engineCapabilities.supportsAudioDelay) {
+                    viewModel.effects.setAudioDelay(
+                        delayAdjustMs(
+                            currentMs = viewModel.effects.state.value.audioDelayMs,
+                            sign = -1,
+                            stepMs = KEY_AUDIO_DELAY_STEP_MS,
+                        ),
+                    )
+                }
+                true
+            }
+            PlayerAction.AUDIO_DELAY_INCREASE -> {
+                if (uiState.engineCapabilities.supportsAudioDelay) {
+                    viewModel.effects.setAudioDelay(
+                        delayAdjustMs(
+                            currentMs = viewModel.effects.state.value.audioDelayMs,
+                            sign = 1,
+                            stepMs = KEY_AUDIO_DELAY_STEP_MS,
+                        ),
+                    )
+                }
+                true
+            }
+            PlayerAction.SEEK_FORWARD,
+            PlayerAction.SEEK_BACK,
+            -> {
+                // One configured jump per invocation (the keyboard pipeline's
+                // modifier-ladder seek keeps its own arm above; this is the
+                // D-pad/touch rebound site — the FF/RW legacy arm's shape).
+                if (action == PlayerAction.SEEK_FORWARD) {
+                    currentDoSeekForward()
+                } else {
+                    currentDoSeekBack()
+                }
+                showControls = true
+                performConfirmHaptic()
+                true
+            }
+            PlayerAction.TOGGLE_CONTROLS -> {
+                showControls = !showControls
+                true
+            }
+            PlayerAction.BACK_OR_HIDE -> {
+                // The ESC/BACK split the retired PlayerKeyAction carried,
+                // resolved at execution time by the controls visibility.
+                if (showControls) showControls = false else onBack()
+                true
+            }
+            PlayerAction.EXIT_PLAYER -> {
+                onBack()
+                true
+            }
+            PlayerAction.BRIGHTNESS_UP,
+            PlayerAction.BRIGHTNESS_DOWN,
+            -> {
+                // One discrete step through the swipe controller (the sole
+                // brightness writer): the edge-bar overlay flashes feedback
+                // and onClearOverlays commits the level + schedules the bar's
+                // dismiss, exactly like a short drag.
+                val sign = if (action == PlayerAction.BRIGHTNESS_UP) 1 else -1
+                gestureController.onStartGesture()
+                gestureController.onBrightnessGesture(sign * A11Y_STEP_DELTA)
+                gestureController.onClearOverlays()
+                true
+            }
+            PlayerAction.CYCLE_SPEED -> {
+                // The SpeedPickerSheet ladder: next rung above the current
+                // speed, wrapping to 1x past the top (an off-ladder speed
+                // snaps to the first rung).
+                val current = uiState.playbackSpeed
+                val next = SPEED_OPTIONS.firstOrNull { it > current + 0.01f } ?: 1.0f
+                viewModel.onEvent(VideoPlayerUiEvent.SetPlaybackSpeed(next))
+                showControls = true
+                true
+            }
+            PlayerAction.LOCK_CONTROLS -> {
+                // Same funnel the controls' lock button drives; the input
+                // surface dies with the lock, so this is lock-only.
+                viewModel.onEvent(VideoPlayerUiEvent.SetScreenLocked(true))
+                showControls = false
+                true
+            }
+            PlayerAction.SCREENSHOT -> {
+                onScreenshotClick()
+                true
+            }
+            PlayerAction.NEXT_EPISODE -> {
+                viewModel.onEvent(VideoPlayerUiEvent.PlayNextEpisode)
+                true
+            }
+            PlayerAction.PREVIOUS_EPISODE -> {
+                viewModel.onEvent(VideoPlayerUiEvent.PlayPreviousEpisode)
+                true
+            }
+            // The continuous-class behaviors keep their own sites: the
+            // swipe-class drags (SWIPE_*) belong to the drag detector, ZOOM
+            // to the pinch tier, HOLD_SPEED to the long-press press/release
+            // pair — none of them can run from a discrete executor, so
+            // binding them to a key is a no-op the editor's picker allows
+            // but nothing executes.
+            else -> false
+        }
+    }
     val handleMediaKeyDown: (KeyEvent) -> Boolean = { keyEvent ->
         userInteractionCount++
         viewModel.onEvent(VideoPlayerUiEvent.UserInteraction)
-        // Seek keys first: arrows take the VLC modifier steps over the
-        // user's configured jump, J/L and the media FF/RW keys the same plain
-        // configured jump they always had, Home/End/PgUp/PgDn their fixed
-        // small/big rows. Each key-down — repeats included — accumulates into
-        // the shared D-pad seek chip (the same "+Ns" indicator the D-pad
-        // and double-tap feeds, rendered by the existing gesture tier) and
-        // re-arms the debounced commit below; the haptic rides the commit,
-        // mirroring the D-pad's commit-on-key-up arm.
-        val seek = mediaKeySeek(
-            keyCode = keyEvent.playerKeyCode,
-            configuredStepMs = currentSeekDurationMs,
-            isShiftPressed = keyEvent.isShiftPressed,
-            isCtrlPressed = keyEvent.isCtrlPressed,
-            isAltPressed = keyEvent.isAltPressed,
-        )
-        if (seek != null) {
-            seekState.addOffset(targetDirection = seek.direction, amountMs = seek.stepMs)
-            lastKeyboardSeekChipTimestamp = seekState.timestamp
-            keyboardSeekStamp++
-            showControls = true
-            true
+        val inputKey = keyCodeToInputKey[keyEvent.playerKeyCode]
+        if (inputKey == null) {
+            false
         } else {
-            when (
-                mediaKeyAction(
-                    keyCode = keyEvent.playerKeyCode,
-                    controlsVisible = showControls,
+            val binding = PlayerInputPolicy.resolve(
+                currentInputMap,
+                PlayerInputPolicy.keyCandidates(
+                    key = inputKey,
                     isCtrlPressed = keyEvent.isCtrlPressed,
-                )
-            ) {
-                PlayerKeyAction.TogglePlayPause -> {
-                    doTogglePlayPause()
-                    performConfirmHaptic()
-                    // the summon follows the toggle's DIRECTION — pausing
-                    // with the hide-OSD pref on leaves the overlay hidden
-                    // (playing keeps today's summon; an already-visible
-                    // overlay is never force-hidden, the auto-hide owns it).
-                    if (shouldSummonControlsOnPause(
-                            isPause = isPlaying,
-                            hideOsdOnPause = uiState.uiPrefs.hideOsdOnPause,
+                    isShiftPressed = keyEvent.isShiftPressed,
+                    isAltPressed = keyEvent.isAltPressed,
+                ),
+            )
+            when {
+                binding == null -> false
+                binding.action == PlayerAction.NONE -> true
+                // Seek actions: the step comes from the retired mediaKeySeek
+                // table's per-key rows (modifier ladder over the configured
+                // jump for arrows/J/L/FF/RW, the fixed page/home magnitudes
+                // for PgUp/PgDn/Home/End), the DIRECTION from the bound
+                // action — so rebinding L to seek-back works with the same
+                // step ladder. Each key-down — repeats included —
+                // accumulates into the shared D-pad seek chip and re-arms
+                // the debounced commit below (unchanged).
+                binding.action == PlayerAction.SEEK_FORWARD || binding.action == PlayerAction.SEEK_BACK -> {
+                    val legacyStep = mediaKeySeek(
+                        keyCode = keyEvent.playerKeyCode,
+                        configuredStepMs = currentSeekDurationMs,
+                        isShiftPressed = keyEvent.isShiftPressed,
+                        isCtrlPressed = keyEvent.isCtrlPressed,
+                        isAltPressed = keyEvent.isAltPressed,
+                    )?.stepMs
+                        ?: keyboardSeekStepMs(
+                            isShiftPressed = keyEvent.isShiftPressed,
+                            isCtrlPressed = keyEvent.isCtrlPressed,
+                            isAltPressed = keyEvent.isAltPressed,
+                            configuredStepMs = currentSeekDurationMs,
                         )
-                    ) {
-                        showControls = true
-                    }
-                    true
-                }
-                PlayerKeyAction.VolumeUp -> {
-                    streamVolumeAdjuster(true)
-                    showControls = true
-                    true
-                }
-                PlayerKeyAction.VolumeDown -> {
-                    streamVolumeAdjuster(false)
-                    showControls = true
-                    true
-                }
-                PlayerKeyAction.ToggleOrientation -> {
-                    toggleOrientation()
-                    showControls = true
-                    true
-                }
-                PlayerKeyAction.ToggleMute -> {
-                    viewModel.onEvent(VideoPlayerUiEvent.ToggleMute)
-                    showControls = true
-                    true
-                }
-                PlayerKeyAction.ToggleSubtitles -> {
-                    // mpv's subtitle-visibility key: off remembers the
-                    // last track, on silently restores it — same funnel the
-                    // hub's Off/track rows and the CC button's long-press
-                    // drive. No controls change, mirroring the delay arms:
-                    // the effect is on the video, not the chrome.
-                    viewModel.onEvent(VideoPlayerUiEvent.ToggleSubtitles)
-                    true
-                }
-                PlayerKeyAction.SubtitleDelayDecrease -> {
-                    // Feedback rides the existing subtitle-delay overlay (the
-                    // mount below reads the live uiState value, so each press
-                    // steps the shown number). Same event the overlay's own
-                    // steppers emit.
-                    showDelayOverlay = true
-                    viewModel.onEvent(
-                        VideoPlayerUiEvent.SetSubtitleDelay(
-                            delayAdjustMs(
-                                currentMs = uiState.subtitleStyle.offsetMs,
-                                sign = -1,
-                                stepMs = KEY_SUBTITLE_DELAY_STEP_MS,
-                            ),
-                        ),
+                    seekState.addOffset(
+                        targetDirection = if (binding.action == PlayerAction.SEEK_FORWARD) 1 else -1,
+                        amountMs = legacyStep,
                     )
+                    lastKeyboardSeekChipTimestamp = seekState.timestamp
+                    keyboardSeekStamp++
+                    showControls = true
                     true
                 }
-                PlayerKeyAction.SubtitleDelayIncrease -> {
-                    showDelayOverlay = true
-                    viewModel.onEvent(
-                        VideoPlayerUiEvent.SetSubtitleDelay(
-                            delayAdjustMs(
-                                currentMs = uiState.subtitleStyle.offsetMs,
-                                sign = 1,
-                                stepMs = KEY_SUBTITLE_DELAY_STEP_MS,
-                            ),
-                        ),
-                    )
-                    true
-                }
-                PlayerKeyAction.AudioDelayDecrease -> {
-                    // Same funnel the AVSync sheet uses
-                    // (viewModel.effects.setAudioDelay), same 100ms step and
-                    // clamp; gated on the sheet's capability row. No audio
-                    // overlay exists and the sheet is a modal, so there is no
-                    // OSD feedback — the change applies directly.
-                    if (uiState.engineCapabilities.supportsAudioDelay) {
-                        viewModel.effects.setAudioDelay(
-                            delayAdjustMs(
-                                currentMs = viewModel.effects.state.value.audioDelayMs,
-                                sign = -1,
-                                stepMs = KEY_AUDIO_DELAY_STEP_MS,
-                            ),
-                        )
-                    }
-                    true
-                }
-                PlayerKeyAction.AudioDelayIncrease -> {
-                    if (uiState.engineCapabilities.supportsAudioDelay) {
-                        viewModel.effects.setAudioDelay(
-                            delayAdjustMs(
-                                currentMs = viewModel.effects.state.value.audioDelayMs,
-                                sign = 1,
-                                stepMs = KEY_AUDIO_DELAY_STEP_MS,
-                            ),
-                        )
-                    }
-                    true
-                }
-                PlayerKeyAction.HideControls -> {
-                    showControls = false
-                    true
-                }
-                PlayerKeyAction.Exit -> {
-                    onBack()
-                    true
-                }
-                null -> false
+                else -> executePlayerAction(binding.action)
             }
         }
     }
+
+    // Live-read wrappers for the pointerInput tiers (tap-and-zoom, gesture
+    // overlay): a pointerInput block freezes whatever lambda it captured at
+    // launch until one of its keys changes, so the tiers must read the
+    // executor/resolver THROUGH these delegates (the file's reader-lambda
+    // rule) — the captured values inside them (isPlaying, uiState fields)
+    // would otherwise go stale mid-session.
+    val currentResolvePatternAction by rememberUpdatedState(resolvePatternAction)
+    val currentExecutePlayerAction by rememberUpdatedState(executePlayerAction)
 
     //  deterministic desktop delivery (desktop only — the seam is
     // Android-inert, see [grabsKeyboardFocusWithControlsVisible]): publish the
@@ -865,16 +1078,24 @@ fun VideoPlayerScreen(
                         doSeekForward = doSeekForward,
                         performConfirmHaptic = performConfirmHaptic,
                         handleMediaKeyDown = handleMediaKeyDown,
+                        resolveAction = resolvePatternAction,
+                        executePlayerAction = executePlayerAction,
                     )
                 )
-                // Wheel tier: plain wheel = volume, Shift+wheel / horizontal
-                // wheel = seek. Placed BEFORE the tap-and-zoom modifier so it
-                // never re-orders ahead of it — the wheel handler consumes
-                // Scroll events only, so drag/tap/pinch streams pass through
-                // untouched.
+                // Wheel tier: the vertical-wheel row = volume, the Shift+wheel
+                // / horizontal row = seek, resolved through the input mapping.
+                // Placed BEFORE the tap-and-zoom modifier so it never re-orders
+                // ahead of it — the wheel handler consumes Scroll events only,
+                // so drag/tap/pinch streams pass through untouched.
                 .then(
                     Modifier.playerWheelGestures(
                         isWheelEnabled = { !isScreenLocked && currentSheet == PlayerSheet.None },
+                        resolveWheelAction = { axis, isShiftPressed ->
+                            PlayerInputPolicy.resolveAction(
+                                currentInputMap,
+                                PlayerInputPolicy.wheelCandidates(axis, isShiftPressed),
+                            )
+                        },
                         onVolumeNotch = { direction ->
                             gestureController.onVolumeWheelNotch(direction)
                         },
@@ -896,9 +1117,11 @@ fun VideoPlayerScreen(
                 )
                 .then(
                     Modifier.playerTapAndZoomGestures(
-                        tapGesturesEnabled = uiState.gestures.tapGesturesEnabled,
+                        gates = inputGates,
                         isScreenLocked = isScreenLocked,
                         doubleTapHoldSeekEnabled = uiState.gestures.doubleTapHoldSeekEnabled,
+                        resolveAction = { currentResolvePatternAction(it) },
+                        executePlayerAction = { currentExecutePlayerAction(it) },
                         holdRepeatScope = scope,
                         onUserInteraction = { viewModel.onEvent(VideoPlayerUiEvent.UserInteraction) },
                         isHoldSpeedActive = { uiState.gestures.isHoldSpeedActive },
@@ -1074,7 +1297,8 @@ fun VideoPlayerScreen(
                 seekState = seekState,
                 gestureController = gestureController,
                 gestureIndicatorSide = uiState.gestures.gestureIndicatorSide,
-                swipeGesturesEnabled = uiState.gestures.swipeGesturesEnabled && !isScreenLocked,
+                gates = inputGates,
+                isScreenLocked = isScreenLocked,
                 swipeSeekMaxMs = uiState.gestures.swipeSeekMaxMs,
                 showControls = showControls,
                 onShowControlsChange = { showControls = it },
@@ -1083,6 +1307,8 @@ fun VideoPlayerScreen(
                 onBack = onBack,
                 isHoldSpeedActive = uiState.gestures.isHoldSpeedActive,
                 playbackSpeed = uiState.playbackSpeed,
+                resolveAction = { currentResolvePatternAction(it) },
+                executePlayerAction = { currentExecutePlayerAction(it) },
             )
 
             PlayerCenterOverlayTier(
@@ -1266,40 +1492,9 @@ fun VideoPlayerScreen(
             val onPipClick by remember(onEnterPip) { mutableStateOf({ onEnterPip() }) }
             val onMuteClick by remember { mutableStateOf({ viewModel.onEvent(VideoPlayerUiEvent.ToggleMute) }) }
             val onVideoStatsClick by remember { mutableStateOf({ viewModel.onEvent(VideoPlayerUiEvent.ToggleVideoStats) }) }
-            // Capture the current video frame from the engine's surface
-            // (platform seam: PixelCopy on Android's SurfaceView surfaces —
-            // only PixelCopy, not View.drawToBitmap, can read them; mpv's
-            // screenshot command on desktop, routed through the engine). The
-            // titleHint seeds the MediaStore / save filename. Result surfaces
-            // as a snackbar with the saved path. The guard passes when EITHER
-            // a platform surface or an engine exists — the desktop software-
-            // render surface publishes no view object at all, so the engine
-            // alone carries the desktop capture (the Android actual still
-            // requires the view and fails gracefully in the surface-less
-            // window). `engine` is a collectAsState delegate read at
-            // invocation time, like the effectsState lambdas above.
-            val onScreenshotClick: () -> Unit = remember {
-                {
-                    val view = playerViewRef
-                    if (view != null || engine != null) {
-                        scope.launch { snackbarHostState.showSnackbar("Capturing frame…", duration = SnackbarDuration.Short) }
-                        requestVideoFrameCapture(
-                            surfaceView = view,
-                            engine = engine,
-                            titleHint = uiState.title,
-                        ) { message ->
-                            scope.launch {
-                                snackbarHostState.showSnackbar(message, duration = SnackbarDuration.Long)
-                            }
-                        }
-                    } else {
-                        scope.launch {
-                            snackbarHostState.showSnackbar("Player not ready", duration = SnackbarDuration.Short)
-                        }
-                    }
-                    Unit
-                }
-            }
+            // The capture lambda itself lives above [executePlayerAction] —
+            // the SCREENSHOT arm rides the same funnel (see the hoisted
+            // onScreenshotClick).
             val onLockClick by remember { mutableStateOf({
                 viewModel.onEvent(VideoPlayerUiEvent.SetScreenLocked(true))
                 showControls = false
@@ -1437,6 +1632,8 @@ fun VideoPlayerScreen(
                 ),
                 abRepeat = abRepeat,
                 castManager = viewModel.platformCastManager,
+                inputQuickToggles = inputQuickToggles,
+                onInputQuickToggle = onInputQuickToggle,
                 showClock = uiState.uiPrefs.showClock,
                 showTimeRemaining = uiState.uiPrefs.showTimeRemaining,
                 tvSkipSegmentFocusRequester = tvSkipSegmentFocusRequester,

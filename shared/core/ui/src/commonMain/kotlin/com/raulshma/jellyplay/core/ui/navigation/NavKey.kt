@@ -311,6 +311,13 @@ sealed class Route : NavKey {
         override fun withHighlightSettingId(id: String) = copy(highlightSettingId = id)
     }
 
+    /**
+     * The player input-binding editor (issue #171 generalized): per-input
+     * action assignment + enable switches over touch / wheel / keyboard /
+     * D-pad. Reached from Playback settings' "Customize controls" row.
+     */
+    @Serializable data object InputBindings : Route()
+
     @Serializable data class AudioSettings(val highlightSettingId: String? = null) : Route(),
         HighlightableRoute {
         override fun withHighlightSettingId(id: String) = copy(highlightSettingId = id)

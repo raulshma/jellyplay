@@ -22,6 +22,9 @@ import com.raulshma.jellyplay.core.ui.generated.resources.ss_cat_playback
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchItem
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_input_bindings
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_input_bindings_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_input_bindings_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_advanced_config
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_delay
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_device
@@ -395,6 +398,21 @@ internal object PlaybackRows {
         searchSubtitleRes = Res.string.ss_double_tap_hold_seek_subtitle,
         platforms = platformsForCapability(settingsCapabilities.supportsTouchGestures),
         gate = RowAdmission.Platform(RowAdmissionCapability.TouchGestures),
+    )
+
+    /**
+     * The player input-binding editor entry (issue #171 generalized):
+     * per-input action assignment + enable switches. Every platform has some
+     * input surface (touch, wheel/keyboard on desktop, D-pad on TV), so the
+     * row is Always-admitted — unlike the touch-gesture rows beside it.
+     */
+    val InputBindings = SettingsRow(
+        id = "input_bindings",
+        icon = Tabler.Outline.Settings,
+        titleRes = Res.string.settings_input_bindings,
+        searchTitleRes = Res.string.ss_input_bindings_title,
+        searchSubtitleRes = Res.string.ss_input_bindings_subtitle,
+        gate = RowAdmission.Always,
     )
 
     val DefaultSpeed = SettingsRow(
@@ -1452,6 +1470,7 @@ internal val PlaybackPlayerRows: List<SettingsRow> = listOf(
     PlaybackRows.Gestures,
     PlaybackRows.GestureIndicatorSide,
     PlaybackRows.DoubleTapHoldSeek,
+    PlaybackRows.InputBindings,
     PlaybackRows.DefaultSpeed,
     PlaybackRows.DefaultAspect,
     PlaybackRows.VideoAutoplayNext,

@@ -55,6 +55,7 @@ import com.raulshma.jellyplay.core.model.SyncPlayJoinBehavior
 import com.raulshma.jellyplay.core.model.CastingStrategy
 import com.raulshma.jellyplay.core.model.platformEngineSupport
 import com.raulshma.jellyplay.core.ui.components.SettingListItem
+import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.components.SettingsItemList
 import com.raulshma.jellyplay.core.ui.components.formatIntPattern
 import com.raulshma.jellyplay.core.ui.components.SettingToggleItem
@@ -168,6 +169,8 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dial
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dialogue_boost_strength
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_disabled
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_double_tap_seek_duration
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_input_bindings
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_input_bindings_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_drop_late_frames
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_drop_late_frames_off
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_drop_late_frames_on
@@ -464,6 +467,8 @@ internal fun playbackRowAdmissionFlags(
 fun PlaybackSettingsScreen(
     onBack: () -> Unit,
     highlightSettingId: String? = null,
+    /** Drill-ins (the "Customize controls" row) ride the shared nav facade. */
+    navActions: SettingsNavActions,
     viewModel: PlaybackSettingsViewModel = koinViewModel(),
 ) {
     val preferences by viewModel.preferences.collectAsStateWithLifecycle()
@@ -502,6 +507,7 @@ fun PlaybackSettingsScreen(
                     viewModel = viewModel,
                     scope = scope,
                     activePicker = activePickerState,
+                    navActions = navActions,
                 )
             }
 
@@ -599,7 +605,8 @@ private fun PlaybackPlayerGroup(
     highlightSettingId: String?,
     viewModel: PlaybackSettingsViewModel,
     scope: CoroutineScope,
-    activePicker: MutableState<PickerState<*>?>
+    activePicker: MutableState<PickerState<*>?>,
+    navActions: SettingsNavActions,
 ) {
                 SettingsGroup(
                     icon = Tabler.Outline.PlayerPlay,
@@ -741,6 +748,15 @@ private fun PlaybackPlayerGroup(
                                 viewModel.edit { scope -> scope.videoPlayer.setVideoDoubleTapHoldSeekEnabled(enabled) }
                             },
                         )
+                        if (SettingsScreenGroups.playbackPlayer.rowAdmitted(PlaybackRows.InputBindings.id, rowFlags)) {
+                            SettingListItem(
+                                icon = rowIcon(PlaybackRows.InputBindings),
+                                title = rowTitle(PlaybackRows.InputBindings),
+                                subtitle = stringResource(Res.string.settings_input_bindings_subtitle),
+                                highlighted = highlightSettingId == PlaybackRows.InputBindings.id,
+                                onClick = { navActions.onNavigate(Route.InputBindings) },
+                            )
+                        }
                     }
                     val defaultSpeedTitle = rowTitle(PlaybackRows.DefaultSpeed)
                     SettingListItem(

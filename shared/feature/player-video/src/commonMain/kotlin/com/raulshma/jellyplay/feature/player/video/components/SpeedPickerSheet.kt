@@ -26,7 +26,12 @@ import com.raulshma.jellyplay.core.ui.tv.verticalWrapAround
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Gauge
 
-private val SPEED_OPTIONS = floatArrayOf(0.25f, 0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f)
+/**
+ * The playback-speed rungs this sheet's chips offer — also the CYCLE_SPEED
+ * input action's ladder (next rung up, wrapping to 1x), so a rebound key
+ * steps the same speeds the sheet shows.
+ */
+internal val SPEED_OPTIONS = floatArrayOf(0.25f, 0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

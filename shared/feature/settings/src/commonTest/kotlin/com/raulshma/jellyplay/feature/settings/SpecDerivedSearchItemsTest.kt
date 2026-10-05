@@ -28,9 +28,9 @@ class SpecDerivedSearchItemsTest {
     // ── Playback ────────────────────────────────────────────────────────
 
     @Test
-    fun `playback player list keeps its 40-row order and projects the spec faces`() {
+    fun `playback player list keeps its 41-row order and projects the spec faces`() {
         val items = PlaybackSettingsSearchItems
-        assertEquals(40, items.size)
+        assertEquals(41, items.size)
         assertEquals(PlaybackRows.PlayerEngine.id, items.first().id)
         assertEquals(PlaybackRows.RememberVolumePerContentType.id, items.last().id)
 

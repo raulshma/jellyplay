@@ -8,6 +8,7 @@ import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.feature.settings.AboutScreen
 import com.raulshma.jellyplay.feature.settings.ArrSettingsScreen
 import com.raulshma.jellyplay.feature.settings.ImportPreviewScreen
+import com.raulshma.jellyplay.feature.settings.InputBindingsScreen
 import com.raulshma.jellyplay.feature.settings.SubtitleProviderSettingsScreen
 import com.raulshma.jellyplay.feature.settings.AppearanceSettingsScreen
 import com.raulshma.jellyplay.feature.settings.AudioSettingsScreen
@@ -146,9 +147,22 @@ fun EntryProviderScope<NavKey>.settingsSection(
     }
 
     entry<Route.PlaybackSettings> { entry ->
+        // Same navigator-backed facade as the Settings/Home entries, so the
+        // playback screen's drill-ins (the input-binding editor) navigate
+        // through the one onNavigate seam instead of a per-callback field.
+        val navActions = remember(navigator) {
+            SettingsNavActions(onNavigate = { route -> navigator.navigate(route) })
+        }
         PlaybackSettingsScreen(
             onBack = { navigator.goBack() },
             highlightSettingId = entry.highlightSettingId,
+            navActions = navActions,
+        )
+    }
+
+    entry<Route.InputBindings> {
+        InputBindingsScreen(
+            onBack = { navigator.goBack() },
         )
     }
 

@@ -159,6 +159,15 @@ sealed interface VideoPlayerUiEvent {
     /** Saves the brightness level (persisted when remember-brightness is on). */
     data class SaveBrightness(val level: Float) : VideoPlayerUiEvent
 
+    /**
+     * In-player quick toggle (the input-mapping sheet): flips one binding's
+     * enabled flag — [bindingId] is the stable row id from the persisted
+     * [com.raulshma.jellyplay.core.model.PlayerInputMap]. Updates the live
+     * uiState mapping immediately (the detectors resolve through it) and
+     * persists the whole map.
+     */
+    data class SetInputBindingEnabled(val bindingId: String, val enabled: Boolean) : VideoPlayerUiEvent
+
     /** Changes the playback speed. */
     data class SetPlaybackSpeed(val speed: Float) : VideoPlayerUiEvent
 

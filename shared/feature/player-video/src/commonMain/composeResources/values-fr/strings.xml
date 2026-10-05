@@ -6,6 +6,8 @@
     <string name="player_reset_to_auto">Réinitialiser sur Auto</string>
     <string name="player_track_default">Par défaut</string>
     <string name="player_track_none">Aucune</string>
+    <string name="player_capturing_frame">Capture de l’image…</string>
+    <string name="player_not_ready">Lecteur non prêt</string>
 
     <string name="track_badge_forced">Forcés</string>
     <string name="track_badge_sdh">SDH</string>
@@ -166,6 +168,8 @@
     <string name="player_video_normalization_on">Normalisation \u00B7 %1$s</string>
     <string name="player_video_channel_mixing">Mixage des canaux</string>
     <string name="player_video_channel_mix_on">Mixage \u00B7 %1$s</string>
+    <string name="player_video_gestures">Gestes</string>
+    <string name="player_video_gestures_on">Gestes \u00B7 %1$d/%2$d</string>
     <string name="player_video_av_sync">Sync A/V</string>
     <string name="player_video_playback_mode">Mode de lecture</string>
     <string name="player_video_playback_mode_on">%1$s \u00B7 Activé</string>

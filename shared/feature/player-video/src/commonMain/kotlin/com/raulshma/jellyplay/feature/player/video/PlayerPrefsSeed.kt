@@ -97,6 +97,7 @@ internal object PlayerPrefsSeed {
                     gestureIndicatorSide = agg.videoPlayer.videoGestureIndicatorSide,
                     frameRateMatching = agg.playback.frameRateMatching,
                     refreshRateMode = agg.playback.refreshRateMode,
+                    inputMap = agg.videoPlayer.videoInputBindings,
                 ),
                 videoFx = videoFx.copy(
                     aspectRatio = defaultAspectRatio,

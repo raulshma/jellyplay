@@ -113,9 +113,10 @@ class SettingsSearchCatalogTest {
         // calibration picker: 312.
         // Added the playback player group's advanced "Resume When Headphones
         // Reconnect" toggle (opt-in resume after the
-        // becoming-noisy auto-pause): 313.
+        // becoming-noisy auto-pause), plus the input-bindings editor row's
+        // spec search entry (+1): 314.
         // Bump this count when you deliberately add items.
-        assertEquals(313, items.size)
+        assertEquals(314, items.size)
         // Curated flat order starts with the account/session pair that used to
         // open the old registry, and the aggregation is a pure concatenation
         // of the decorated per-screen groups (no dedup, no reordering).

@@ -6,6 +6,8 @@
     <string name="player_reset_to_auto">자동으로 재설정</string>
     <string name="player_track_default">기본</string>
     <string name="player_track_none">없음</string>
+    <string name="player_capturing_frame">프레임을 캡처하는 중…</string>
+    <string name="player_not_ready">플레이어가 준비되지 않았습니다</string>
 
     <string name="track_badge_forced">강제</string>
     <string name="track_badge_sdh">SDH</string>
@@ -166,6 +168,8 @@
     <string name="player_video_normalization_on">정규화 \u00B7 %1$s</string>
     <string name="player_video_channel_mixing">채널 믹싱</string>
     <string name="player_video_channel_mix_on">채널 믹스 \u00B7 %1$s</string>
+    <string name="player_video_gestures">제스처</string>
+    <string name="player_video_gestures_on">제스처 \u00B7 %1$d/%2$d</string>
     <string name="player_video_av_sync">A/V 동기화</string>
     <string name="player_video_playback_mode">재생 모드</string>
     <string name="player_video_playback_mode_on">%1$s \u00B7 켜짐</string>

@@ -40,7 +40,6 @@ import org.jetbrains.compose.resources.getString
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_direct_play_fallback
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_error_next_episode_load
 
-
 import com.raulshma.jellyplay.feature.player.video.engine.AspectRatio
 import com.raulshma.jellyplay.feature.player.video.engine.EngineVideoStats
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
@@ -609,6 +608,7 @@ class VideoPlayerViewModel(
             is VideoPlayerUiEvent.StillWatchingStop -> stillWatching.onStop()
             is VideoPlayerUiEvent.StillWatchingTick -> stillWatching.onTick()
             is VideoPlayerUiEvent.SetVideoAutoplayNext -> setVideoAutoplayNext(event.enabled)
+            is VideoPlayerUiEvent.SetInputBindingEnabled -> wiring.inputBindingToggle.setEnabled(event.bindingId, event.enabled)
             is VideoPlayerUiEvent.SetSyncPlayRepeatMode -> setSyncPlayRepeatMode(event.mode)
             is VideoPlayerUiEvent.SetSyncPlayShuffleMode -> setSyncPlayShuffleMode(event.mode)
             is VideoPlayerUiEvent.LoadSeasonEpisodes -> episodeContinuation.loadSeason(event.seasonId)

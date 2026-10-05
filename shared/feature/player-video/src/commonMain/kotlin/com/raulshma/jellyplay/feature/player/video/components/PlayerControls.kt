@@ -324,6 +324,11 @@ internal fun PlayerControls(
     gestures: GestureControls = GestureControls(),
     sheets: SheetControls = SheetControls(),
     tracks: TrackControls = TrackControls(),
+    // Input-binding quick toggles (issue #171) — forwarded to the overflow
+    // menu's tap-to-flip section. Defaulted empty so previews/tests are
+    // unaffected.
+    inputQuickToggles: List<PlayerOverflowMenuInputToggle> = emptyList(),
+    onInputQuickToggle: (String, Boolean) -> Unit = { _, _ -> },
     currentAspectRatio: AspectRatio,
     detectedAspectRatio: AspectRatio?,
     isVisible: Boolean,
@@ -812,6 +817,8 @@ internal fun PlayerControls(
         PlayerOverflowMenu(
             expanded = showOverflow,
             onDismiss = { showOverflow = false },
+            inputQuickToggles = inputQuickToggles,
+            onInputQuickToggle = onInputQuickToggle,
             supportsSubtitleStyle = capabilities.supportsSubtitleStyle,
             supportsDialogueBoost = capabilities.supportsDialogueBoost,
             supportsNightMode = capabilities.supportsNightMode,

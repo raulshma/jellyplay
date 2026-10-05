@@ -6,6 +6,8 @@
     <string name="player_reset_to_auto">重置为自动</string>
     <string name="player_track_default">默认</string>
     <string name="player_track_none">无</string>
+    <string name="player_capturing_frame">正在捕获帧…</string>
+    <string name="player_not_ready">播放器未就绪</string>
 
     <string name="track_badge_forced">强制</string>
     <string name="track_badge_sdh">SDH</string>
@@ -166,6 +168,8 @@
     <string name="player_video_normalization_on">标准化 \u00B7 %1$s</string>
     <string name="player_video_channel_mixing">声道混音</string>
     <string name="player_video_channel_mix_on">混音 \u00B7 %1$s</string>
+    <string name="player_video_gestures">手势</string>
+    <string name="player_video_gestures_on">手势 \u00B7 %1$d/%2$d</string>
     <string name="player_video_av_sync">A/V 同步</string>
     <string name="player_video_playback_mode">播放模式</string>
     <string name="player_video_playback_mode_on">%1$s \u00B7 开启</string>

@@ -133,8 +133,12 @@ class PlayerStateSlicesDefaultsTest {
     @Test
     fun gesturePrefsState_defaults() {
         val state = GesturePrefsState()
-        assertTrue(state.tapGesturesEnabled)
-        assertTrue(state.swipeGesturesEnabled)
+        // The input mapping IS the gate now: the default map (ALL preset)
+        // carries every touch row enabled — tap tier and swipe tier both on.
+        val gates = PlayerInputGates.of(state.inputMap)
+        assertTrue(gates.tap)
+        assertTrue(gates.swipeBrightness && gates.swipeVolume && gates.swipeSeek)
+        assertTrue(state.gestureMode.tapsEnabled && state.gestureMode.swipesEnabled)
         assertTrue(state.holdSpeedEnabled)
         assertTrue(state.doubleTapHoldSeekEnabled)
         assertEquals(2.0f, state.holdSpeedMultiplier, 0.001f)

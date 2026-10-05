@@ -9,14 +9,15 @@ import java.io.File
 /**
  * Ratchet against reintroducing the god-state wiring pattern.
  *
- * 1. The eighteen migrated controllers (`SleepTimerController`,
+ * 1. The nineteen migrated controllers (`SleepTimerController`,
  *    `TrackSelectionHelper`, `SubtitleManager`, `VideoEffectsController`,
  *    `AbRepeatController`, `SyncPlayBridge`, `PlaybackSession`,
  *    `EpisodeNavigator`, `SubtitlePreviewController`,
  *    `SubtitleStyleController`, `MediaContentProjector`, `RenderControls`,
  *    `EpisodeContinuationController`, `PipTransportController`,
  *    `EngineAttachController`,
- *    `StillWatchingController`, `MediaDetailProjection`, `EngineConfigSync`)
+ *    `StillWatchingController`, `MediaDetailProjection`, `EngineConfigSync`,
+ *    `InputBindingToggleController`)
  *    must not reference [VideoPlayerUiState] at all — their interface is
  *    their state class plus commands, never the state bag or a state
  *    transformer. (SubtitleFontController and BackgroundCastController left
@@ -66,6 +67,7 @@ class ControllerOwnershipTest {
         "StillWatchingController.kt",
         "MediaDetailProjection.kt",
         "EngineConfigSync.kt",
+        "InputBindingToggleController.kt",
     )
 
     /** The maximum allowed god-state wirings in src/main (see class KDoc). */

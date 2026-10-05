@@ -31,6 +31,7 @@ import com.raulshma.jellyplay.core.ui.viewmodel.StateFlowHandle
 import com.raulshma.jellyplay.feature.player.video.engine.EngineVideoStats
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import com.raulshma.jellyplay.feature.player.video.chrome.mirrorPlaying
+import com.raulshma.jellyplay.feature.player.video.state.InputBindingToggleController
 import com.raulshma.jellyplay.feature.player.video.state.ReadySubtitleHint
 import com.raulshma.jellyplay.feature.player.video.subtitle.FontProvider
 import com.raulshma.jellyplay.feature.player.video.trickplay.TrickplayController
@@ -931,6 +932,17 @@ internal class PlayerWiring(
         getCurrentItemId = { playerSessionManager.sessionState.value.currentItemId },
         scope = scope,
         onPreferencesChanged = { trackSelectionHelper.refreshPlaybackPreferences() },
+    )
+
+    /**
+     * The in-player input-binding quick toggle (issue #171): flips one
+     * binding's enabled flag — the uiState write moves the gate immediately
+     * (the detectors resolve through the mapping), the whole map persists.
+     */
+    internal val inputBindingToggle = InputBindingToggleController(
+        getMap = { uiState.value.gestures.inputMap },
+        updateMap = { map -> uiState.update { it.copy(gestures = it.gestures.copy(inputMap = map)) } },
+        persist = { map -> scope.launch { stores.videoPlayer.setVideoInputBindings(map) } },
     )
 
     /**

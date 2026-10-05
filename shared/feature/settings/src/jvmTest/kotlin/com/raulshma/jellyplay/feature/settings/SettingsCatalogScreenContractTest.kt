@@ -878,9 +878,11 @@ class SettingsCatalogScreenContractTest {
                 supportsTouchGestures = false,
             ),
         )
-        assertEquals(7, allGatesOff)
+        // +1: the input-bindings editor row (Always-admitted — every
+        // platform has some input surface).
+        assertEquals(8, allGatesOff)
         assertEquals(
-            8,
+            9,
             rowTotalFor(
                 SettingsScreenGroups.playbackPlayer,
                 RowAdmissionFlags(
@@ -892,7 +894,7 @@ class SettingsCatalogScreenContractTest {
             ),
         )
         assertEquals(
-            11,
+            12,
             rowTotalFor(
                 SettingsScreenGroups.playbackPlayer,
                 RowAdmissionFlags(
@@ -933,7 +935,7 @@ class SettingsCatalogScreenContractTest {
             ),
         )
         assertEquals(
-            37, // +1: the advanced resume-on-headset-plug row admits under advanced everywhere
+            38, // +2: the advanced resume-on-headset-plug row admits under advanced everywhere, plus the Always-admitted input-bindings editor row
             rowTotalFor(
                 SettingsScreenGroups.playbackPlayer,
                 RowAdmissionFlags(

@@ -648,14 +648,46 @@ SKIP_FORWARD/BACKWARD no longer hand-computes `position ± seekDuration`
 Pinned in `PlayerScreenPoliciesTest` (0-floor, duration cap, no-duration
 pass-through via FakeMediaEngine).
 
-**`PlayerKeyPolicy`** (beside `PlayerScreenPolicies`) lifts the media-key
-decision table out of the `VideoPlayerScreen` composable:
-`mediaKeyAction(keyCode, controlsVisible): PlayerKeyAction?` (sealed arms
-TogglePlayPause…HideControls/Exit, media-key aliases, both ESC arms,
-unknown → null); the screen keeps a one-line effect shell, and both
-delivery paths (focused-chain `.onKeyEvent`, desktop key sink) are
-provably identical. The TV D-pad handler stays out (stateful by design).
-Pinned by `PlayerKeyPolicyTest`. `PlayerScreenPolicies.resumeSkipTargetMs`
+**`PlayerKeyPolicy`** (beside `PlayerScreenPolicies`) keeps the key-side
+decision tables: `mediaKeySeek` (the per-key seek step/direction rows) and
+the delay-shortcut steps (`delayAdjustMs` over the shared ±30s clamp), both
+consumed by the screen's `handleMediaKeyDown`. Discrete media-key actions
+are NOT a second table anymore — every key/D-pad/touch/wheel input resolves
+through the ONE persisted `PlayerInputMap` (`core:model`, the
+`input_bindings` blob) via `PlayerInputPolicy`'s candidate ladders. The
+screen's `executePlayerAction` is the single effect shell every DISCRETE
+rebound routes to; two shapes stay at their own sites by necessity, both
+DECLARED — keyboard seek rebounds accumulate into the seek chip (the step
+comes from `mediaKeySeek`, the direction from the bound action), and wheel
+notches fire the notched volume/seek callbacks (there is no discrete wheel
+effect). Two residual runtime AND gates also stay outside the map, carried
+by their own preference rows: hold-speed's row fires only when
+`holdSpeedEnabled` is on, double-tap-hold only when
+`doubleTapHoldSeekEnabled` is (the map's enabled flags AND the prefs, so a
+GestureMode preset flip can't silently override the per-behavior switches).
+The TV D-pad handler stays out of the pure policy (stateful by design).
+Defaults are `PlayerInputDefaults.defaultMap` — pinned by
+`PlayerInputDefaultsParityTest` (formerly `PlayerKeyPolicyTest`) as a
+verbatim reproduction of the retired tables across all four input surfaces
+(keyboard rows and their Ctrl-combo folds, the wheel Shift-seek fold, the
+D-pad branch, the touch arms); resolution semantics by
+`PlayerInputPolicyTest`. One delivery-shell divergence is DECLARED: the
+retired D-pad arms ran on KeyDown AND KeyUp (FF/RW seeked twice per press,
+play/pause toggled twice to a net no-op) — every arm now acts on KeyDown
+only, once per press (the two seek arms keep the accumulate-on-KeyDown /
+commit-on-KeyUp seek-chip shape), so the map rows are verbatim but the
+delivery fixed the double-fire. The map is also editable mid-playback: the
+overflow menu carries one quick-toggle row per binding
+(`PlayerOverflowMenuInputToggle`), dispatched as
+`VideoPlayerUiEvent.SetInputBindingEnabled` into
+`InputBindingToggleController` (wired in `PlayerWiring`: the uiState flip
+moves the gates immediately, the whole map persists through
+`setVideoInputBindings`), while a settings-side edit re-syncs into a live
+player the other direction through `SettingsProjector`'s
+`gestures.inputMap` `syncPref`; every label the menu and the editor show
+resolves in core:ui's `InputLabelSeam` (the `PreferenceEnumNames` twin for
+the input catalogs, keeping `core:model` string-free).
+`PlayerScreenPolicies.resumeSkipTargetMs`
 (skip ≤ 0 → unchanged; else 0-floor) is the one resume-skip-back math,
 with the `isPlaying` guard divergence DECLARED — `onRegain` applies it
 unguarded (focus regain follows a transient loss), `resumePlayback` keeps
@@ -6060,8 +6092,19 @@ pinned by `LibraryApiHandMappersTest` (+SDK-drift guards).
 
 **Settings.** The rows-own-their-whole-declaration state is recorded in the
 Settings search section above. Tier-B spec derivation exists for the
-videoPlayerStore slice (`VideoPlayerPreferenceSpecs`, 40 rows incl. legacy
-migrations; migration path KDoc'd for the remaining ~18 stores).
+videoPlayerStore slice (`VideoPlayerPreferenceSpecs`, 44 rows incl. legacy
+migrations — `input_bindings` joins `segment_behaviors` as the
+derived-JSON rows (a whole-object JSON blob over legacy keys);
+migration path KDoc'd for the remaining ~18 stores). The
+`input_bindings` blob's editor is `InputBindingsScreen`/
+`InputBindingsViewModel` (one row per binding: pattern title + on/off
+subtitle + the action picker, grouped touch / mouse & scroll / keyboard /
+TV; reached from the playback settings group via `Route.InputBindings`) —
+its writes are whole-map RMW through `updateVideoInputBindings` (the
+duplicate-pattern guard rejects only candidates that would PRESERVE a
+duplicate, unreachable from a clean blob), and its reset seeds
+`PlayerInputDefaults.defaultMap(mode)` — the same map the absent-blob
+legacy read produces.
 `ImportPreviewViewModel` takes the snapshot seam (4 deps, was 24 stores).
 
 **Shell.** `ShellNavParams` no longer duplicates hook fields (layout reads

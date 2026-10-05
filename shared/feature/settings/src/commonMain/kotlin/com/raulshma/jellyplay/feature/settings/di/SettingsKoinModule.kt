@@ -12,6 +12,7 @@ import com.raulshma.jellyplay.feature.settings.ImportPreviewViewModel
 import com.raulshma.jellyplay.feature.settings.LanguageSettingsViewModel
 import com.raulshma.jellyplay.feature.settings.LicensesViewModel
 import com.raulshma.jellyplay.feature.settings.DiscoverRowsViewModel
+import com.raulshma.jellyplay.feature.settings.InputBindingsViewModel
 import com.raulshma.jellyplay.feature.settings.LibraryLayoutViewModel
 import com.raulshma.jellyplay.feature.settings.NotificationSettingsViewModel
 import com.raulshma.jellyplay.feature.settings.PlaybackSettingsViewModel
@@ -131,6 +132,12 @@ val settingsModule: Module = module {
             // mpv audio-device enumeration: desktop-only — Android
             // binds no enumerator and the row is capability-hidden there.
             audioDeviceEnumerator = getOrNull(),
+        )
+    }
+    viewModel {
+        InputBindingsViewModel(
+            projections = get(),
+            editor = get(),
         )
     }
     viewModel {

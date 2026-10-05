@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -38,13 +39,23 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.playerScrimColor
+import com.raulshma.jellyplay.core.model.DpadControl
 import com.raulshma.jellyplay.core.model.GestureIndicatorSide
+import com.raulshma.jellyplay.core.model.InputPattern
+import com.raulshma.jellyplay.core.model.PlayerAction
+import com.raulshma.jellyplay.core.model.PlayerInputKey
+import com.raulshma.jellyplay.core.model.SwipeSide
+import com.raulshma.jellyplay.core.model.TouchZone
+import com.raulshma.jellyplay.core.model.WheelAxis
 import com.raulshma.jellyplay.core.ui.tv.components.DpadSeekState
+import com.raulshma.jellyplay.core.ui.tv.input.DpadKeyEvent
 import com.raulshma.jellyplay.core.ui.tv.input.onDpadKeyEvent
 import com.raulshma.jellyplay.feature.player.video.chrome.shouldSummonControlsOnPause
 import com.raulshma.jellyplay.feature.player.video.components.GestureOverlay
+import com.raulshma.jellyplay.feature.player.video.components.GestureSwipeGates
 import com.raulshma.jellyplay.feature.player.video.state.DoubleTapHoldSeekPolicy
 import com.raulshma.jellyplay.feature.player.video.state.GestureSeekController
+import com.raulshma.jellyplay.feature.player.video.state.PlayerInputGates
 import com.raulshma.jellyplay.feature.player.video.state.PlayerWheelPolicy
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
@@ -65,6 +76,31 @@ import kotlin.math.abs
 /** Hold-speed pill offset above the bottom controls. */
 private const val HOLD_SPEED_PILL_BOTTOM_CLEARANCE_DP = 180
 
+/**
+ * TOGGLE_PLAY_PAUSE's shared effect — toggle, confirm haptic, then the
+ * directional summon: pausing with the hide-OSD pref on leaves the overlay
+ * hidden (playing keeps today's summon; an already-visible overlay is never
+ * force-hidden, the auto-hide owns it). Shared by the keyboard executor's
+ * TOGGLE_PLAY_PAUSE arm and the TV handler's SPACE and media play/pause arms.
+ */
+internal fun togglePlayPauseWithSummon(
+    isPlaying: Boolean,
+    hideOsdOnPause: Boolean,
+    doTogglePlayPause: () -> Unit,
+    performConfirmHaptic: () -> Unit,
+    summonControls: () -> Unit,
+) {
+    doTogglePlayPause()
+    performConfirmHaptic()
+    if (shouldSummonControlsOnPause(
+            isPause = isPlaying,
+            hideOsdOnPause = hideOsdOnPause,
+        )
+    ) {
+        summonControls()
+    }
+}
+
 /** The surface Box's TV D-pad / hardware-key focus + input tier (the inline if/else modifier chain verbatim). */
 internal fun playerBoxKeyInputModifier(
     isTv: Boolean,
@@ -84,8 +120,39 @@ internal fun playerBoxKeyInputModifier(
     doSeekForward: () -> Unit,
     performConfirmHaptic: () -> Unit,
     handleMediaKeyDown: (KeyEvent) -> Boolean,
+    /** Input-mapping resolution: pattern → bound action, null = disabled/unbound/NONE. */
+    resolveAction: (InputPattern) -> PlayerAction?,
+    /** Shared discrete-action executor (the keyboard shell's when-block). */
+    executePlayerAction: (PlayerAction) -> Boolean,
 ): Modifier =
     if (isTv && !isSheetOpen) {
+        // Every D-pad arm resolves its control's binding first (hoisted once
+        // per arm): the default actions run the legacy arms verbatim; a
+        // rebound action routes to the shared executor; a disabled/unbound
+        // control returns false (the key falls through, exactly like an
+        // unmapped key).
+        fun actionOf(control: DpadControl): PlayerAction? =
+            resolveAction(InputPattern.DPad(control))
+
+        // One discrete D-pad arm — the shape every non-seek arm shares:
+        // KeyUp is always false (arms act on KeyDown only; the seek arms
+        // below own the accumulate-on-repeat / commit-on-KeyUp shape), the
+        // DEFAULT action runs the legacy arm verbatim, a rebound routes to
+        // the shared executor, unbound/disabled falls through.
+        fun discreteArm(
+            dpadKey: DpadKeyEvent,
+            control: DpadControl,
+            defaultAction: PlayerAction,
+            legacy: () -> Boolean,
+        ): Boolean {
+            if (!dpadKey.isKeyDown) return false
+            return when (val action = actionOf(control)) {
+                defaultAction -> legacy()
+                null -> false
+                else -> executePlayerAction(action)
+            }
+        }
+
         Modifier
             .focusRequester(tvPlayerFocusRequester)
             .focusable()
@@ -94,98 +161,134 @@ internal fun playerBoxKeyInputModifier(
                 if (keyEvent.type == KeyEventType.KeyDown &&
                     keyEvent.playerKeyCode == PlayerKeyCodes.KEYCODE_SPACE
                 ) {
-                    doTogglePlayPause()
-                    performConfirmHaptic()
-                    // the summon follows the toggle's DIRECTION — pausing
-                    // with the hide-OSD pref on leaves the overlay hidden
-                    // (playing keeps today's summon; an already-visible
-                    // overlay is never force-hidden, the auto-hide owns it).
-                    if (shouldSummonControlsOnPause(
-                            isPause = isPlaying,
-                            hideOsdOnPause = hideOsdOnPause,
-                        )
-                    ) {
-                        onShowControlsChange(true)
+                    // SPACE resolves through its own key row (the default map
+                    // binds TOGGLE_PLAY_PAUSE there; the D-pad SELECT row owns
+                    // the select key, not this one). Unbound SPACE falls
+                    // through like any unmapped key.
+                    when (val space = resolveAction(InputPattern.Key(PlayerInputKey.SPACE))) {
+                        PlayerAction.TOGGLE_PLAY_PAUSE -> {
+                            togglePlayPauseWithSummon(
+                                isPlaying = isPlaying,
+                                hideOsdOnPause = hideOsdOnPause,
+                                doTogglePlayPause = doTogglePlayPause,
+                                performConfirmHaptic = performConfirmHaptic,
+                                summonControls = { onShowControlsChange(true) },
+                            )
+                            true
+                        }
+                        null -> false
+                        else -> executePlayerAction(space)
                     }
-                    true
                 } else {
                     false
                 }
             }
             .onDpadKeyEvent(
+                // Every arm executes on KeyDown only (repeats included) — the
+                // handler is invoked for KeyUp too. The retired arms ran on
+                // BOTH edges (detailed handlers with no type guard): FF/RW
+                // seeked twice per press and play/pause toggled twice (a net
+                // no-op). Acting once per press is the deliberate divergence
+                // from that retired behavior — DECLARED, not verbatim parity;
+                // the mapping rows themselves stay verbatim. The seek arms
+                // are the exception shape: they accumulate on KeyDown repeats
+                // and commit on KeyUp.
                 onRight = { dpadKey ->
-                    if (!showControls) {
-                        if (dpadKey.isKeyDown) {
-                            seekState.seekForward(dpadKey.repeatCount)
-                        } else if (dpadKey.isKeyUp) {
-                            seekState.commitForward()
-                            performConfirmHaptic()
+                    when (val action = actionOf(DpadControl.RIGHT)) {
+                        PlayerAction.SEEK_FORWARD -> {
+                            if (!showControls) {
+                                if (dpadKey.isKeyDown) {
+                                    seekState.seekForward(dpadKey.repeatCount)
+                                } else if (dpadKey.isKeyUp) {
+                                    seekState.commitForward()
+                                    performConfirmHaptic()
+                                }
+                                true
+                            } else false
                         }
-                        true
-                    } else false
+                        null -> false
+                        else -> if (dpadKey.isKeyDown) executePlayerAction(action) else false
+                    }
                 },
                 onLeft = { dpadKey ->
-                    if (!showControls) {
-                        if (dpadKey.isKeyDown) {
-                            seekState.seekBackward(dpadKey.repeatCount)
-                        } else if (dpadKey.isKeyUp) {
-                            seekState.commitBackward()
-                            performConfirmHaptic()
+                    when (val action = actionOf(DpadControl.LEFT)) {
+                        PlayerAction.SEEK_BACK -> {
+                            if (!showControls) {
+                                if (dpadKey.isKeyDown) {
+                                    seekState.seekBackward(dpadKey.repeatCount)
+                                } else if (dpadKey.isKeyUp) {
+                                    seekState.commitBackward()
+                                    performConfirmHaptic()
+                                }
+                                true
+                            } else false
                         }
-                        true
-                    } else false
-                },
-                onSelect = {
-                    if (!showControls) {
-                        onShowControlsChange(true)
-                        true
-                    } else false
-                },
-                onUp = {
-                    if (!showControls) {
-                        onShowControlsChange(true)
-                        true
-                    } else false
-                },
-                onDown = {
-                    if (!showControls) {
-                        onShowControlsChange(true)
-                        true
-                    } else false
-                },
-                onBack = {
-                    if (showControls) {
-                        onShowControlsChange(false)
-                        true
-                    } else false
-                },
-                onPlayPause = {
-                    doTogglePlayPause()
-                    performConfirmHaptic()
-                    // TV remotes' media play/pause lands here — the
-                    // summon follows the toggle's direction exactly like the
-                    // SPACE arm above (pausing with the hide-OSD pref on
-                    // leaves the overlay hidden).
-                    if (shouldSummonControlsOnPause(
-                            isPause = isPlaying,
-                            hideOsdOnPause = hideOsdOnPause,
-                        )
-                    ) {
-                        onShowControlsChange(true)
+                        null -> false
+                        else -> if (dpadKey.isKeyDown) executePlayerAction(action) else false
                     }
-                    true
                 },
-                onFastForward = {
-                    doSeekForward()
-                    onShowControlsChange(true)
-                    performConfirmHaptic()
-                    true
+                onSelect = { dpadKey ->
+                    discreteArm(dpadKey, DpadControl.SELECT, PlayerAction.TOGGLE_CONTROLS) {
+                        if (!showControls) {
+                            onShowControlsChange(true)
+                            true
+                        } else false
+                    }
                 },
-                onRewind = {
-                    doSeekBack()
-                    onShowControlsChange(true)
-                    performConfirmHaptic()
-                    true
+                onUp = { dpadKey ->
+                    discreteArm(dpadKey, DpadControl.UP, PlayerAction.TOGGLE_CONTROLS) {
+                        if (!showControls) {
+                            onShowControlsChange(true)
+                            true
+                        } else false
+                    }
+                },
+                onDown = { dpadKey ->
+                    discreteArm(dpadKey, DpadControl.DOWN, PlayerAction.TOGGLE_CONTROLS) {
+                        if (!showControls) {
+                            onShowControlsChange(true)
+                            true
+                        } else false
+                    }
+                },
+                onBack = { dpadKey ->
+                    discreteArm(dpadKey, DpadControl.BACK, PlayerAction.BACK_OR_HIDE) {
+                        if (showControls) {
+                            onShowControlsChange(false)
+                            true
+                        } else false
+                    }
+                },
+                onPlayPause = { dpadKey ->
+                    discreteArm(dpadKey, DpadControl.PLAY_PAUSE, PlayerAction.TOGGLE_PLAY_PAUSE) {
+                        // TV remotes' media play/pause lands here — the
+                        // summon follows the toggle's direction exactly like
+                        // the SPACE arm above.
+                        togglePlayPauseWithSummon(
+                            isPlaying = isPlaying,
+                            hideOsdOnPause = hideOsdOnPause,
+                            doTogglePlayPause = doTogglePlayPause,
+                            performConfirmHaptic = performConfirmHaptic,
+                            summonControls = { onShowControlsChange(true) },
+                        )
+                        true
+                    }
+                },
+                onFastForward = { dpadKey ->
+                    discreteArm(dpadKey, DpadControl.FAST_FORWARD, PlayerAction.SEEK_FORWARD) {
+                        doSeekForward()
+                        onShowControlsChange(true)
+                        performConfirmHaptic()
+                        true
+                    }
+                },
+                onRewind = { dpadKey ->
+                    discreteArm(dpadKey, DpadControl.REWIND, PlayerAction.SEEK_BACK) {
+                        doSeekBack()
+                        onShowControlsChange(true)
+                        performConfirmHaptic()
+                        true
+                    }
                 },
             )
     } else if (!isTv && hasHardwareKeyboard && !isSheetOpen) {
@@ -318,14 +421,22 @@ private suspend fun AwaitPointerEventScope.awaitTapOrMove(
  *    available in the zones only when the hold is not a double-tap's
  *    follow-through, i.e. on a first press).
  *
+ * Each tap-class arm resolves its row's binding at fire time: the DEFAULT
+ * actions run the legacy arms above verbatim; a REBOUND action routes to the
+ * shared [executePlayerAction]; an unbound/disabled row (null) does nothing.
+ *
  * The modifier does not consume press/move/up events (only the pinch block
  * below consumes, and only mid-pinch), so the swipe overlay tier above and
  * the engine surface keep seeing whatever this tier declines.
  */
 internal fun Modifier.playerTapAndZoomGestures(
-    tapGesturesEnabled: Boolean,
+    gates: PlayerInputGates,
     isScreenLocked: Boolean,
     doubleTapHoldSeekEnabled: Boolean,
+    /** Input-mapping resolution: pattern → bound action, null = disabled/unbound/NONE. */
+    resolveAction: (InputPattern) -> PlayerAction?,
+    /** Shared discrete-action executor (the keyboard shell's when-block). */
+    executePlayerAction: (PlayerAction) -> Boolean,
     holdRepeatScope: CoroutineScope,
     onUserInteraction: () -> Unit,
     isHoldSpeedActive: () -> Boolean,
@@ -337,20 +448,30 @@ internal fun Modifier.playerTapAndZoomGestures(
     onDoubleTapSeekForward: () -> Unit,
     onDoubleTapCenter: () -> Unit,
     applyZoomDelta: (Float) -> Unit,
-): Modifier =
+): Modifier {
+    // One tap-class arm — the D-pad helper's discreteArm shape with
+    // "unbound/disabled does nothing" instead of fall-through: the DEFAULT
+    // action runs the legacy arm, a rebound routes to the shared executor,
+    // null (unbound/disabled) and explicit NONE both no-op.
+    fun touchArm(pattern: InputPattern, defaultAction: PlayerAction, legacy: () -> Unit) {
+        when (val action = resolveAction(pattern)) {
+            defaultAction -> legacy()
+            null -> {}
+            else -> executePlayerAction(action)
+        }
+    }
     // pointerInput only re-launches its block when a KEY changes, so every
     // callback reading live screen state (hold-speed flags, the zoom value,
     // the rememberUpdatedState seek delegates) must arrive as a
     // reader/setter LAMBDA invoked at event time — a captured VALUE would
     // freeze until the next key change (the staleness the inline lambdas
-    // avoided by reading through the parent's state delegates). The
-    // double-tap-hold toggle is a pref like [tapGesturesEnabled]: a VALUE
-    // key, so flipping it re-arms the detector instead of needing a live
-    // read (no gesture can be mid-flight across a settings change that
-    // matters here).
-    pointerInput(tapGesturesEnabled, isScreenLocked, doubleTapHoldSeekEnabled) {
+    // avoided by reading through the parent's state delegates). The gates
+    // bundle is a pref-like VALUE key ([PlayerInputGates] is an immutable
+    // data class rebuilt only when the mapping actually changes), so a
+    // binding flip re-arms the detector instead of needing a live read (no
+    // gesture can be mid-flight across a mapping change that matters here).
+    return pointerInput(gates, isScreenLocked, doubleTapHoldSeekEnabled) {
         if (isScreenLocked) return@pointerInput
-        if (!tapGesturesEnabled) return@pointerInput
         awaitEachGesture {
             val touchSlopPx = viewConfiguration.touchSlop
             val longPressTimeoutMs = viewConfiguration.longPressTimeoutMillis
@@ -366,8 +487,13 @@ internal fun Modifier.playerTapAndZoomGestures(
                 when (awaitPressOutcome(press, touchSlopPx, longPressTimeoutMs)) {
                     PressOutcome.Moved -> return@awaitEachGesture
                     PressOutcome.LongPressed -> {
+                        // A rebound long-press runs its discrete action at
+                        // press time; the default HOLD_SPEED keeps its
+                        // press-and-release semantics.
                         onUserInteraction()
-                        if (holdSpeedEnabled()) startHoldSpeed()
+                        touchArm(InputPattern.LongPress, PlayerAction.HOLD_SPEED) {
+                            if (holdSpeedEnabled()) startHoldSpeed()
+                        }
                         return@awaitEachGesture
                     }
                     PressOutcome.Tapped -> {}
@@ -386,9 +512,17 @@ internal fun Modifier.playerTapAndZoomGestures(
                     down
                 }
                 if (second == null) {
-                    // Single tap confirmed: center toggle / hold-speed stop.
+                    // Single tap confirmed: the hold-speed stop ALWAYS stays
+                    // available (it is the emergency exit from an active
+                    // hold); the row's resolved action runs otherwise — the
+                    // default TOGGLE_CONTROLS toggles, a rebound action hits
+                    // the shared executor, an unbound row does nothing.
                     onUserInteraction()
-                    if (isHoldSpeedActive()) stopHoldSpeed() else toggleControls()
+                    if (isHoldSpeedActive()) {
+                        stopHoldSpeed()
+                    } else {
+                        touchArm(InputPattern.Tap, PlayerAction.TOGGLE_CONTROLS) { toggleControls() }
+                    }
                     return@awaitEachGesture
                 }
                 val secondIsNearFirst =
@@ -404,50 +538,77 @@ internal fun Modifier.playerTapAndZoomGestures(
                 when (awaitPressOutcome(second, touchSlopPx, longPressTimeoutMs)) {
                     PressOutcome.Moved -> return@awaitEachGesture
                     PressOutcome.LongPressed -> {
-                        if (doubleTapHoldSeekEnabled && zone != 0) {
-                            // Double-tap-and-hold continuous seek.
-                            // The hold IS the double-tap's follow-through, so the
-                            // first step fires NOW (same addOffset + immediate
-                            // commit the quick double-tap performs), then the
-                            // policy cadence repeats it until release while the
-                            // "+Ns" chip keeps accumulating. The repeat runs on a
-                            // sibling coroutine; this event loop only watches for
-                            // full release (the RepeatableButton hold-repeat
-                            // shape).
-                            onUserInteraction()
-                            val stepSeek = if (zone < 0) onDoubleTapSeekBack else onDoubleTapSeekForward
-                            stepSeek()
-                            val repeatJob = holdRepeatScope.launch {
-                                var repeats = 0
-                                while (isActive) {
-                                    delay(DoubleTapHoldSeekPolicy.repeatIntervalMs(repeats))
-                                    repeats++
-                                    stepSeek()
+                        // The zone's DoubleTapHold row resolves first: the
+                        // default seek actions run the continuous hold-seek
+                        // (direction from the ACTION, so a rebound hold-left
+                        // to forward seeks forward); any other rebound fires
+                        // once at hold start; an unbound zone falls back to
+                        // the LongPress row exactly like a center hold. The
+                        // whole row sits behind the doubleTapHoldSeekEnabled
+                        // AND-gate (the map's enabled flag AND the pref): a
+                        // preset flip can't wake the zone while the switch
+                        // is off — pref-off falls back to hold-speed.
+                        onUserInteraction()
+                        val zoneAction = when {
+                            doubleTapHoldSeekEnabled && zone < 0 ->
+                                resolveAction(InputPattern.DoubleTapHold(TouchZone.LEFT))
+                            doubleTapHoldSeekEnabled && zone > 0 ->
+                                resolveAction(InputPattern.DoubleTapHold(TouchZone.RIGHT))
+                            else -> null
+                        }
+                        when {
+                            zoneAction == PlayerAction.SEEK_BACK || zoneAction == PlayerAction.SEEK_FORWARD -> {
+                                // Double-tap-and-hold continuous seek.
+                                // The hold IS the double-tap's follow-through, so the
+                                // first step fires NOW (same addOffset + immediate
+                                // commit the quick double-tap performs), then the
+                                // policy cadence repeats it until release while the
+                                // "+Ns" chip keeps accumulating. The repeat runs on a
+                                // sibling coroutine; this event loop only watches for
+                                // full release (the RepeatableButton hold-repeat
+                                // shape).
+                                val stepSeek = if (zoneAction == PlayerAction.SEEK_FORWARD) onDoubleTapSeekForward else onDoubleTapSeekBack
+                                stepSeek()
+                                val repeatJob = holdRepeatScope.launch {
+                                    var repeats = 0
+                                    while (isActive) {
+                                        delay(DoubleTapHoldSeekPolicy.repeatIntervalMs(repeats))
+                                        repeats++
+                                        stepSeek()
+                                    }
+                                }
+                                try {
+                                    while (true) {
+                                        val event = awaitPointerEvent()
+                                        if (event.changes.none { it.pressed }) break
+                                    }
+                                } finally {
+                                    repeatJob.cancel()
                                 }
                             }
-                            try {
-                                while (true) {
-                                    val event = awaitPointerEvent()
-                                    if (event.changes.none { it.pressed }) break
-                                }
-                            } finally {
-                                repeatJob.cancel()
+                            zoneAction != null -> executePlayerAction(zoneAction)
+                            else -> touchArm(InputPattern.LongPress, PlayerAction.HOLD_SPEED) {
+                                if (holdSpeedEnabled()) startHoldSpeed()
                             }
-                        } else {
-                            // Toggle off (or the center zone): the legacy shape —
-                            // a long-press on the second press starts hold-speed,
-                            // exactly what `detectTapGestures` did here.
-                            onUserInteraction()
-                            if (holdSpeedEnabled()) startHoldSpeed()
                         }
                         return@awaitEachGesture
                     }
                     PressOutcome.Tapped -> {
                         onUserInteraction()
+                        // The zone rows resolve their OWN bindings: the
+                        // default seek actions run the legacy chip arms, a
+                        // rebound action hits the shared executor, an unbound
+                        // zone does nothing.
                         when (zone) {
-                            -1 -> onDoubleTapSeekBack()
-                            1 -> onDoubleTapSeekForward()
-                            else -> onDoubleTapCenter()
+                            -1 -> touchArm(InputPattern.DoubleTap(TouchZone.LEFT), PlayerAction.SEEK_BACK) {
+                                onDoubleTapSeekBack()
+                            }
+                            1 -> touchArm(InputPattern.DoubleTap(TouchZone.RIGHT), PlayerAction.SEEK_FORWARD) {
+                                onDoubleTapSeekForward()
+                            }
+                            else -> touchArm(InputPattern.DoubleTap(TouchZone.CENTER), PlayerAction.TOGGLE_PLAY_PAUSE) {
+                                onDoubleTapCenter()
+                            }
                         }
                         return@awaitEachGesture
                     }
@@ -455,9 +616,9 @@ internal fun Modifier.playerTapAndZoomGestures(
             }
         }
     }
-        .pointerInput(tapGesturesEnabled, isScreenLocked) {
+        .pointerInput(gates, isScreenLocked) {
             if (isScreenLocked) return@pointerInput
-            if (!tapGesturesEnabled) return@pointerInput
+            if (!gates.pinch) return@pointerInput
             awaitEachGesture {
                 var prevDistance = 0f
                 do {
@@ -483,20 +644,26 @@ internal fun Modifier.playerTapAndZoomGestures(
                 } while (event.changes.any { it.pressed })
             }
         }
+    }
 
 /**
- * The surface Box's mouse-wheel tier: plain wheel = volume,
- * Shift+wheel or a horizontally-dominant wheel delta = seek — the
- * jellyfin-media-player pattern, wheel direction matching mpv
- * (`WHEEL_UP` = up/forward, `WHEEL_DOWN` = down/back). Scroll events are the
- * ONLY thing this handler consumes, and only after it acts on them, so the
- * tap-and-zoom modifier later in the chain and the home rows (which run
- * their own scrollable surfaces, outside this Box) are untouched. All gate
- * state arrives as reader lambdas — a pointerInput block must never read
- * captured values (they freeze until the next key change).
+ * The surface Box's mouse-wheel tier: the vertical-wheel row = volume,
+ * the Shift+wheel / horizontal row = seek (the jellyfin-media-player pattern,
+ * wheel direction matching mpv — `WHEEL_UP` = up/forward, `WHEEL_DOWN` =
+ * down/back). Each Scroll event resolves through the input mapping
+ * ([resolveWheelAction], most-specific candidate first): a row bound to a
+ * volume-family action notches volume, a seek-family action notches seek,
+ * anything else (disabled / NONE / rebound to a non-directional action) is
+ * left unconsumed. Scroll events are the ONLY thing this handler consumes,
+ * and only after it acts on them, so the tap-and-zoom modifier later in the
+ * chain and the home rows (which run their own scrollable surfaces, outside
+ * this Box) are untouched. All gate state arrives as reader lambdas — a
+ * pointerInput block must never read captured values (they freeze until the
+ * next key change).
  */
 internal fun Modifier.playerWheelGestures(
     isWheelEnabled: () -> Boolean,
+    resolveWheelAction: (axis: WheelAxis, isShiftPressed: Boolean) -> PlayerAction?,
     onVolumeNotch: (Int) -> Unit,
     onSeekNotch: (Int) -> Unit,
 ): Modifier =
@@ -512,26 +679,51 @@ internal fun Modifier.playerWheelGestures(
                 // the change's scrollDelta is the wheel movement.
                 val change = event.changes.firstOrNull() ?: continue
                 val scroll = change.scrollDelta
-                if (PlayerWheelPolicy.isSeekScroll(
-                        isShiftPressed = event.keyboardModifiers.isShiftPressed,
-                        scrollX = scroll.x,
-                        scrollY = scroll.y,
-                    )
-                ) {
-                    val axisDelta = PlayerWheelPolicy.seekAxisDelta(scroll.x, scroll.y)
-                    val (notches, remainder) = PlayerWheelPolicy.accumulateSeekNotches(
-                        previousAccumulator = seekAccumulator,
-                        rawDelta = axisDelta,
-                    )
-                    seekAccumulator = remainder
-                    if (notches != 0) {
-                        val direction = PlayerWheelPolicy.seekDirection(notches.toFloat())
-                        repeat(abs(notches)) { onSeekNotch(direction) }
+                val isSeekScroll = PlayerWheelPolicy.isSeekScroll(
+                    isShiftPressed = event.keyboardModifiers.isShiftPressed,
+                    scrollX = scroll.x,
+                    scrollY = scroll.y,
+                )
+                val axis = if (isSeekScroll) {
+                    if (abs(scroll.x) > abs(scroll.y)) {
+                        WheelAxis.HORIZONTAL
+                    } else {
+                        WheelAxis.VERTICAL
                     }
                 } else {
-                    onVolumeNotch(PlayerWheelPolicy.volumeDirection(scroll.y))
+                    WheelAxis.VERTICAL
                 }
-                event.changes.forEach { it.consume() }
+                when (resolveWheelAction(axis, event.keyboardModifiers.isShiftPressed)) {
+                    PlayerAction.SWIPE_VOLUME,
+                    PlayerAction.VOLUME_UP,
+                    PlayerAction.VOLUME_DOWN,
+                    -> {
+                        onVolumeNotch(PlayerWheelPolicy.volumeDirection(scroll.y))
+                        event.changes.forEach { it.consume() }
+                    }
+                    PlayerAction.SWIPE_SEEK,
+                    PlayerAction.SEEK_FORWARD,
+                    PlayerAction.SEEK_BACK,
+                    -> {
+                        val axisDelta = PlayerWheelPolicy.seekAxisDelta(scroll.x, scroll.y)
+                        val (notches, remainder) = PlayerWheelPolicy.accumulateSeekNotches(
+                            previousAccumulator = seekAccumulator,
+                            rawDelta = axisDelta,
+                        )
+                        seekAccumulator = remainder
+                        if (notches != 0) {
+                            val direction = PlayerWheelPolicy.seekDirection(notches.toFloat())
+                            repeat(abs(notches)) { onSeekNotch(direction) }
+                        }
+                        event.changes.forEach { it.consume() }
+                    }
+                    else -> {
+                        // Unbound / disabled / rebound elsewhere: leave the
+                        // scroll unconsumed (it does nothing on the video
+                        // surface, but the mapping must not swallow it).
+                        seekAccumulator = 0f
+                    }
+                }
             }
         }
     }
@@ -542,7 +734,8 @@ internal fun PlayerGestureOverlayTier(
     seekState: DpadSeekState,
     gestureController: GestureSeekController,
     gestureIndicatorSide: GestureIndicatorSide,
-    swipeGesturesEnabled: Boolean,
+    gates: PlayerInputGates,
+    isScreenLocked: Boolean,
     swipeSeekMaxMs: Long,
     showControls: Boolean,
     onShowControlsChange: (Boolean) -> Unit,
@@ -551,13 +744,27 @@ internal fun PlayerGestureOverlayTier(
     onBack: () -> Unit,
     isHoldSpeedActive: Boolean,
     playbackSpeed: Float,
+    /** Input-mapping resolution: pattern → bound action, null = disabled/unbound/NONE. */
+    resolveAction: (InputPattern) -> PlayerAction?,
+    /** Shared discrete-action executor (the keyboard shell's when-block). */
+    executePlayerAction: (PlayerAction) -> Boolean,
 ) {
+    // Live reads for the event-time edge-swipe callback — a captured value
+    // would freeze until this composable recomposes with a new lambda.
+    val currentShowControls by androidx.compose.runtime.rememberUpdatedState(showControls)
+    val currentOnBack by androidx.compose.runtime.rememberUpdatedState(onBack)
     GestureOverlay(
         seekState = seekState,
         brightnessFlow = gestureController.brightnessOverlay,
         volumeFlow = gestureController.volumeOverlay,
         indicatorSide = gestureIndicatorSide,
-        swipeGesturesEnabled = swipeGesturesEnabled,
+        gates = GestureSwipeGates(
+            brightnessSwipe = gates.swipeBrightness && !isScreenLocked,
+            volumeSwipe = gates.swipeVolume && !isScreenLocked,
+            seekSwipe = gates.swipeSeek && !isScreenLocked,
+            edgeSwipeLeft = gates.edgeLeft && !isScreenLocked,
+            edgeSwipeRight = gates.edgeRight && !isScreenLocked,
+        ),
         swipeSeekMaxMs = swipeSeekMaxMs,
         onSeekGesture = remember(gestureController) { { totalDeltaMs -> gestureController.onSeekGesture(totalDeltaMs) } },
         onBrightnessGesture = remember(gestureController) { { delta -> gestureController.onBrightnessGesture(delta) } },
@@ -569,12 +776,33 @@ internal fun PlayerGestureOverlayTier(
             }
         },
         showControls = showControls,
-        onEdgeSwipe = remember(onBack) {
-            {
-                if (!showControls) {
-                    onShowControlsChange(true)
-                } else {
-                    onBack()
+        onEdgeSwipe = remember(resolveAction, executePlayerAction) {
+            { edge ->
+                // The edge row resolves like every other arm: the default
+                // BACK_OR_HIDE keeps the summon-then-exit ladder; a rebound
+                // action hits the shared executor.
+                when (val action = resolveAction(InputPattern.EdgeSwipe(edge))) {
+                    PlayerAction.BACK_OR_HIDE -> {
+                        if (!currentShowControls) {
+                            onShowControlsChange(true)
+                        } else {
+                            currentOnBack()
+                        }
+                    }
+                    null -> {}
+                    else -> executePlayerAction(action)
+                }
+            }
+        },
+        resolveVerticalAction = remember(resolveAction) {
+            { side ->
+                // The half resolves like every other arm: only the continuous
+                // drag actions own a swipe arm here (a discrete rebind falls
+                // to the executor's unmatched arm — the picker blocks it);
+                // null = unbound/disabled/NONE, the half stays inert.
+                when (val action = resolveAction(InputPattern.VerticalSwipe(side))) {
+                    PlayerAction.SWIPE_BRIGHTNESS, PlayerAction.SWIPE_VOLUME -> action
+                    else -> null
                 }
             }
         },
