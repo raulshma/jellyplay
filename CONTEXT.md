@@ -655,6 +655,12 @@ consumed by the screen's `handleMediaKeyDown`. Discrete media-key actions
 are NOT a second table anymore — every key/D-pad/touch/wheel input resolves
 through the ONE persisted `PlayerInputMap` (`core:model`, the
 `input_bindings` blob) via `PlayerInputPolicy`'s candidate ladders. The
+pattern catalog is closed over the recognized input vocabulary; the editor
+can still mint user-captured `InputPattern.Key` rows over it (any modifier
+combo over a non-seek key — the ladders resolve a captured row exactly
+like a default one; seek-family keys' modifiers stay event-time step
+semantics, and the capture dialog refuses a modified capture over them,
+matching the ladder's fold). The
 screen's `executePlayerAction` is the single effect shell every DISCRETE
 rebound routes to; two shapes stay at their own sites by necessity, both
 DECLARED — keyboard seek rebounds accumulate into the seek chip (the step
@@ -6097,14 +6103,46 @@ migrations — `input_bindings` joins `segment_behaviors` as the
 derived-JSON rows (a whole-object JSON blob over legacy keys);
 migration path KDoc'd for the remaining ~18 stores). The
 `input_bindings` blob's editor is `InputBindingsScreen`/
-`InputBindingsViewModel` (one row per binding: pattern title + on/off
-subtitle + the action picker, grouped touch / mouse & scroll / keyboard /
-TV; reached from the playback settings group via `Route.InputBindings`) —
-its writes are whole-map RMW through `updateVideoInputBindings` (the
-duplicate-pattern guard rejects only candidates that would PRESERVE a
-duplicate, unreachable from a clean blob), and its reset seeds
-`PlayerInputDefaults.defaultMap(mode)` — the same map the absent-blob
-legacy read produces.
+`InputBindingsViewModel` (one row per binding: pattern-family icon +
+pattern title + action subtitle + the action picker, grouped touch /
+mouse & scroll / keyboard / TV — each section collapsible, its header
+summary (count · modified) staying unfiltered while the search field
+filters the rows over pre-resolved pattern/action labels; GestureMode
+preset chips write the same atomic `setVideoGestureMode`; reached from
+the playback settings group via `Route.InputBindings`) — its writes are
+whole-map RMW through `updateVideoInputBindings` (the duplicate-pattern
+guard rejects only candidates that would PRESERVE a duplicate,
+unreachable from a clean blob), and its reset seeds
+`PlayerInputDefaults.defaultMap(mode, holdSpeedEnabled,
+doubleTapHoldSeekEnabled)` — the same map the absent-blob legacy read
+produces, honoring all three stored flags.
+The editor mints user-captured keyboard rows: the capture dialog
+(`KeyCaptureDialog`) turns a live key press into any modifier combo over
+a catalog key through the player-contract `PlayerKeyCodes` seam
+(`playerKeyCode` + `playerInputKeyOf`, promoted public from
+player-video; the reverse bridge is parity-tested) — except modifier
+combos over seek-family keys (`PlayerInputKey.isSeekFamilyKey`, the
+core:model predicate `keyCandidates` folds with): their modifiers are
+the event-time step ladder, so such a row could never resolve; the
+dialog shows a hint and keeps listening. New rows append with
+`PlayerBindingIds.customKeyId` dotted ids (`key.ctrl_shift.m`; a plain
+capture lands on the default scheme — `key.m`). A capture over an
+ALREADY-OWNED pattern writes nothing — a blind replace would stamp Unbound
+over a rebound row's action — the screen lifts the owning section out of
+its collapse set, clears any query, and flashes the existing row instead;
+`withBindingAdded`'s replace-keep-id branch backs the per-row restore
+writes (a swipe-reset's candidate folds into the drifted row).
+A captured NEW row's action picker opens from a screen-scope effect —
+never from a lazy item, which is not composed while scrolled away.
+Custom rows swipe-delete; any row that drifted from the parameterized
+defaults (`defaultBindingsById` — the same flags a reset honors, so
+"unmodified" and "what reset restores" agree) swipe-resets. The derived
+display model (partition / modified / deletable / query filter) is the
+pure `InputBindingsFilter` (JVM-tested; `sectionOf` is the one partition
+the editor shares with the flash's un-collapse); the screen's item plan
+drives both the LazyColumn emission and the highlight-scroll groups, and
+row titles are per-BINDING (`verticalSwipeLabel` for the swipe halves), so
+a captured duplicate flashes the exact existing row.
 `ImportPreviewViewModel` takes the snapshot seam (4 deps, was 24 stores).
 
 **Shell.** `ShellNavParams` no longer duplicates hook fields (layout reads

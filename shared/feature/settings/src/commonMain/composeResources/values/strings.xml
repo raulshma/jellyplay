@@ -658,7 +658,22 @@
     <string name="settings_input_bindings_section_mouse">Mouse &amp; scroll</string>
     <string name="settings_input_bindings_section_keyboard">Keyboard</string>
     <string name="settings_input_bindings_section_tv">TV remote</string>
-    <string name="settings_input_bindings_subtitle_on">On</string>
-    <string name="settings_input_bindings_subtitle_off">Off</string>
     <string name="settings_input_bindings_reset">Reset controls to defaults</string>
+    <string name="settings_input_bindings_reset_title">Reset all controls?</string>
+    <string name="settings_input_bindings_reset_message">Every control returns to its default binding. Custom keyboard shortcuts are removed.</string>
+    <string name="settings_input_bindings_search_hint">Search controls</string>
+    <string name="settings_input_bindings_search_empty">No controls match</string>
+    <string name="settings_input_bindings_preset_label">Touch preset</string>
+    <string name="settings_input_bindings_count">%1$d bindings</string>
+    <string name="settings_input_bindings_modified_suffix">· %1$d modified</string>
+    <string name="settings_input_bindings_add_shortcut">Add keyboard shortcut</string>
+    <string name="settings_input_bindings_add_shortcut_subtitle">Capture any key combination</string>
+    <string name="settings_input_bindings_capture_instruction">Press any key or key combination</string>
+    <string name="settings_input_bindings_capture_press">Press a key…</string>
+    <string name="settings_input_bindings_capture_pending">%1$s + …</string>
+    <string name="settings_input_bindings_capture_unsupported">That key is not supported — try another</string>
+    <string name="settings_input_bindings_capture_seek_family">Seek keys take no modifiers — their Shift/Ctrl steps are built in. Press the key alone</string>
+    <string name="settings_input_bindings_capture_escape_hint">Escape cancels</string>
+    <string name="settings_input_bindings_row_reset">Reset to default</string>
+    <string name="settings_input_bindings_row_delete">Delete shortcut</string>
 </resources>

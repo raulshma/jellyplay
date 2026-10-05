@@ -32,6 +32,10 @@ kotlin {
             // data classes), same pattern as :shared:core:data and :model.
             implementation(project.dependencies.platform(libs.compose.bom))
             implementation(libs.compose.runtime)
+            // The PlayerKeyCodes seam types the common Compose KeyEvent (its
+            // jvmMain actual maps androidx Key enums) — the settings binding
+            // editor's key-capture dialog consumes the same seam.
+            implementation(libs.compose.ui)
         }
         getByName("commonTest").dependencies {
             implementation(libs.coroutines.test)

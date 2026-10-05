@@ -275,6 +275,23 @@ object PlayerInputDefaults {
     )
 
     /**
+     * The parameterized default map as an id → row lookup: the binding
+     * editor's baseline for "this row differs from what Reset-all would
+     * give it" and the per-row swipe-reset target. Parameterized by the
+     * SAME stored behavior flags a reset honors, so "unmodified" and "what
+     * reset restores" can never disagree. Ids absent here belong to
+     * user-captured rows (`PlayerBindingIds.customKeyId`) — those reset by
+     * removal, not by lookup.
+     */
+    fun defaultBindingsById(
+        gestureMode: GestureMode = GestureMode.ALL,
+        holdSpeedEnabled: Boolean = true,
+        doubleTapHoldSeekEnabled: Boolean = true,
+    ): Map<String, PlayerBinding> =
+        defaultMap(gestureMode, holdSpeedEnabled, doubleTapHoldSeekEnabled)
+            .bindings.associateBy { it.id }
+
+    /**
      * The default map for a fresh install: every row the detectors can fire,
      * touch rows gated by [gestureMode] (the user's existing tier choice —
      * the absent-blob legacy fallback seeds from it too).

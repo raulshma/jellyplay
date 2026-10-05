@@ -9,6 +9,7 @@ import com.raulshma.jellyplay.core.model.SwipeEdge
 import com.raulshma.jellyplay.core.model.SwipeSide
 import com.raulshma.jellyplay.core.model.TouchZone
 import com.raulshma.jellyplay.core.model.WheelAxis
+import com.raulshma.jellyplay.core.model.isSeekFamilyKey
 
 /**
  * Pure resolution + audit logic over a persisted [PlayerInputMap] (the
@@ -34,20 +35,6 @@ import com.raulshma.jellyplay.core.model.WheelAxis
  */
 internal object PlayerInputPolicy {
 
-    /** Seek-family keys: modifier combos fold into the event-time step. */
-    internal val SEEK_FAMILY_KEYS: Set<PlayerInputKey> = setOf(
-        PlayerInputKey.DPAD_LEFT,
-        PlayerInputKey.DPAD_RIGHT,
-        PlayerInputKey.J,
-        PlayerInputKey.L,
-        PlayerInputKey.MEDIA_FAST_FORWARD,
-        PlayerInputKey.MEDIA_REWIND,
-        PlayerInputKey.PAGE_UP,
-        PlayerInputKey.PAGE_DOWN,
-        PlayerInputKey.MOVE_HOME,
-        PlayerInputKey.MOVE_END,
-    )
-
     /** Candidate patterns for a keyboard press, most specific first. */
     fun keyCandidates(
         key: PlayerInputKey,
@@ -61,7 +48,10 @@ internal object PlayerInputPolicy {
             shift = isShiftPressed,
             alt = isAltPressed,
         )
-        if (key in SEEK_FAMILY_KEYS) return listOf(InputPattern.Key(key = key))
+        // The shared vocabulary predicate (core:model) — the capture dialog
+        // refuses modified captures over the same keys, so no persisted row
+        // can ever sit on the skipped exact arm.
+        if (key.isSeekFamilyKey) return listOf(InputPattern.Key(key = key))
         return if (exact == InputPattern.Key(key = key)) {
             listOf(exact)
         } else {

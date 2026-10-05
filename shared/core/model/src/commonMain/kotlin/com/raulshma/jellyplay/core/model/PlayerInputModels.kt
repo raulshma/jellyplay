@@ -12,14 +12,16 @@ import kotlinx.serialization.Serializable
  player-video module's pure `PlayerInputPolicy`.
 
  Scope guards kept from the design round:
-  - the pattern catalog is CLOSED (the gestures/keys/D-pad controls the
-    detectors already recognize) — custom drawn zones are a later pattern
-    arm, not a schema break;
+  - the pattern catalog is CLOSED over the input vocabulary (the
+    gestures/keys/D-pad controls the detectors already recognize); within it
+    the editor ADDS user-captured [InputPattern.Key] rows — any modifier
+    combo over a catalog key, ids from `PlayerBindingIds` — while custom
+    drawn zones stay a later pattern arm, not a schema break;
   - disabled = [PlayerBinding.enabled] `false`, never an action erasure, so
     the in-player quick toggles flip switches without destroying bindings;
-  - priority is list order (the resolver's tie-break) — the shipped editor
-    never reorders rows today (defaults carry the priority), so the order is
-    a persistence-level contract, not a UI one, yet.
+  - priority is list order (the resolver's tie-break) — with unique patterns
+    the order has no user-visible effect, so it stays a persistence-level
+    contract, not a UI one.
 
  Labels for these enums resolve through the `core:ui` `PreferenceEnumNames`
  seam — no hardcoded display strings here, matching [GestureMode].
@@ -149,6 +151,30 @@ enum class PlayerInputKey {
     MEDIA_FAST_FORWARD, MEDIA_REWIND,
 }
 
+/**
+ * Seek-family keys: modifier combos on them are NOT separate bindings —
+ * they are event-time step semantics (the VLC step ladder), so
+ * `PlayerInputPolicy.keyCandidates` folds any Ctrl/Shift/Alt press onto
+ * the one modifier-less row. The capture dialog consults the same
+ * predicate and refuses a modified capture over these keys: a persisted
+ * `InputPattern.Key` with modifiers here could never resolve.
+ */
+val PlayerInputKey.isSeekFamilyKey: Boolean
+    get() = this in SEEK_FAMILY_KEYS
+
+private val SEEK_FAMILY_KEYS: Set<PlayerInputKey> = setOf(
+    PlayerInputKey.DPAD_LEFT,
+    PlayerInputKey.DPAD_RIGHT,
+    PlayerInputKey.J,
+    PlayerInputKey.L,
+    PlayerInputKey.MEDIA_FAST_FORWARD,
+    PlayerInputKey.MEDIA_REWIND,
+    PlayerInputKey.PAGE_UP,
+    PlayerInputKey.PAGE_DOWN,
+    PlayerInputKey.MOVE_HOME,
+    PlayerInputKey.MOVE_END,
+)
+
 /** One D-pad control on the TV remote scheme. */
 @Serializable
 enum class DpadControl {
@@ -271,6 +297,39 @@ data class PlayerInputMap(
      */
     fun hasNoDuplicates(): Boolean =
         bindings.size == bindings.distinctBy { it.pattern }.size
+
+    /**
+     * Copy with [bindingId]'s row REMOVED. Unknown ids return `this`
+     * unchanged, matching [withBindingEnabled]. Only the binding editor's
+     * delete-custom-row flow calls this — a default row is never removed,
+     * it is disabled or unbound instead.
+     */
+    fun withoutBinding(bindingId: String): PlayerInputMap =
+        if (bindings.none { it.id == bindingId }) this
+        else PlayerInputMap(bindings.filterNot { it.id == bindingId })
+
+    /**
+     * Add or fold [binding] into the map. A pattern no row owns yet appends
+     * [binding] verbatim; a pattern an existing row already carries (default
+     * or previously captured) edits THAT row to [binding]'s action and
+     * enabled flag — keeping its own id — because appending would mint a
+     * duplicate pattern the write guard blocks. The editor's capture flow
+     * never reaches the replace branch (an already-owned pattern writes
+     * nothing and flashes the row instead); what exercises it is the
+     * per-row restore — a swipe-reset hands back the default row, whose
+     * pattern the drifted row owns, so replace keeps the row's id and its
+     * swipe affordances stay truthful. No-op when the owning row already
+     * matches, mirroring the other mutators.
+     */
+    fun withBindingAdded(binding: PlayerBinding): PlayerInputMap {
+        val index = bindings.indexOfFirst { it.pattern == binding.pattern }
+        if (index < 0) return PlayerInputMap(bindings + binding)
+        val replaced = bindings[index].copy(action = binding.action, enabled = binding.enabled)
+        if (replaced == bindings[index]) return this
+        return PlayerInputMap(
+            bindings.mapIndexed { i, current -> if (i == index) replaced else current },
+        )
+    }
 
     /**
      * Copy with [bindingId]'s enabled flag set. Unknown ids (and no-op

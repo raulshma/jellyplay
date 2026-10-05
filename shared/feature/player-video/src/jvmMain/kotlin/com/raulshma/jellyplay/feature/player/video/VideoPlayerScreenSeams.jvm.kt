@@ -5,9 +5,6 @@ import androidx.compose.runtime.remember
 import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.toComposeImageBitmap
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEvent
-import androidx.compose.ui.input.key.key
 import androidx.compose.ui.window.FrameWindowScope
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.ui.player.TranscodeReasonCatalog
@@ -96,79 +93,6 @@ internal actual fun rememberIs24HourFormat(): Boolean =
             .format(java.util.Date(13L * 60L * 60L * 1000L))
         !formatted.contains("PM") && !formatted.contains("AM")
     }
-
-// ── Key codes ──────────────────────────────────────────────────────────────
-
-internal actual val KeyEvent.playerKeyCode: Int
-    get() = when (key) {
-        Key.Spacebar -> PlayerKeyCodes.KEYCODE_SPACE
-        Key.MediaPlay -> PlayerKeyCodes.KEYCODE_MEDIA_PLAY
-        Key.MediaPause -> PlayerKeyCodes.KEYCODE_MEDIA_PAUSE
-        Key.MediaPlayPause -> PlayerKeyCodes.KEYCODE_MEDIA_PLAY_PAUSE
-        Key.K -> PlayerKeyCodes.KEYCODE_K
-        Key.DirectionRight -> PlayerKeyCodes.KEYCODE_DPAD_RIGHT
-        Key.MediaFastForward -> PlayerKeyCodes.KEYCODE_MEDIA_FAST_FORWARD
-        Key.L -> PlayerKeyCodes.KEYCODE_L
-        Key.DirectionLeft -> PlayerKeyCodes.KEYCODE_DPAD_LEFT
-        Key.MediaRewind -> PlayerKeyCodes.KEYCODE_MEDIA_REWIND
-        Key.J -> PlayerKeyCodes.KEYCODE_J
-        Key.G -> PlayerKeyCodes.KEYCODE_G
-        Key.H -> PlayerKeyCodes.KEYCODE_H
-        Key.LeftBracket -> PlayerKeyCodes.KEYCODE_LEFT_BRACKET
-        Key.RightBracket -> PlayerKeyCodes.KEYCODE_RIGHT_BRACKET
-        Key.PageUp -> PlayerKeyCodes.KEYCODE_PAGE_UP
-        Key.PageDown -> PlayerKeyCodes.KEYCODE_PAGE_DOWN
-        Key.MoveHome -> PlayerKeyCodes.KEYCODE_MOVE_HOME
-        Key.MoveEnd -> PlayerKeyCodes.KEYCODE_MOVE_END
-        Key.DirectionUp -> PlayerKeyCodes.KEYCODE_DPAD_UP
-        Key.VolumeUp -> PlayerKeyCodes.KEYCODE_VOLUME_UP
-        Key.DirectionDown -> PlayerKeyCodes.KEYCODE_DPAD_DOWN
-        Key.VolumeDown -> PlayerKeyCodes.KEYCODE_VOLUME_DOWN
-        Key.F -> PlayerKeyCodes.KEYCODE_F
-        Key.F1 -> PlayerKeyCodes.KEYCODE_F1
-        Key.F2 -> PlayerKeyCodes.KEYCODE_F2
-        Key.F3 -> PlayerKeyCodes.KEYCODE_F3
-        Key.F4 -> PlayerKeyCodes.KEYCODE_F4
-        Key.M -> PlayerKeyCodes.KEYCODE_M
-        Key.V -> PlayerKeyCodes.KEYCODE_V
-        Key.Escape -> PlayerKeyCodes.KEYCODE_ESCAPE
-        else -> 0 // KEYCODE_UNKNOWN: unmatched keys fall through every when-branch.
-    }
-
-internal actual object PlayerKeyCodes {
-    actual val KEYCODE_SPACE: Int = 1
-    actual val KEYCODE_MEDIA_PLAY: Int = 2
-    actual val KEYCODE_MEDIA_PAUSE: Int = 3
-    actual val KEYCODE_MEDIA_PLAY_PAUSE: Int = 4
-    actual val KEYCODE_K: Int = 23
-    actual val KEYCODE_DPAD_RIGHT: Int = 5
-    actual val KEYCODE_MEDIA_FAST_FORWARD: Int = 6
-    actual val KEYCODE_L: Int = 7
-    actual val KEYCODE_DPAD_LEFT: Int = 8
-    actual val KEYCODE_MEDIA_REWIND: Int = 9
-    actual val KEYCODE_J: Int = 10
-    actual val KEYCODE_G: Int = 24
-    actual val KEYCODE_H: Int = 25
-    actual val KEYCODE_LEFT_BRACKET: Int = 26
-    actual val KEYCODE_RIGHT_BRACKET: Int = 27
-    actual val KEYCODE_PAGE_UP: Int = 28
-    actual val KEYCODE_PAGE_DOWN: Int = 29
-    actual val KEYCODE_MOVE_HOME: Int = 30
-    actual val KEYCODE_MOVE_END: Int = 31
-    actual val KEYCODE_DPAD_UP: Int = 11
-    actual val KEYCODE_VOLUME_UP: Int = 12
-    actual val KEYCODE_DPAD_DOWN: Int = 13
-    actual val KEYCODE_VOLUME_DOWN: Int = 14
-    actual val KEYCODE_F: Int = 15
-    actual val KEYCODE_F1: Int = 16
-    actual val KEYCODE_F2: Int = 17
-    actual val KEYCODE_F3: Int = 18
-    actual val KEYCODE_F4: Int = 19
-    actual val KEYCODE_M: Int = 20
-    actual val KEYCODE_V: Int = 32
-    actual val KEYCODE_ESCAPE: Int = 21
-    actual val KEYCODE_BACK: Int = 22
-}
 
 // ── Document picker ────────────────────────────────────────────────────────
 

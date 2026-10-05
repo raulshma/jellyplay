@@ -87,11 +87,14 @@ internal data class PreferenceResetAction(
  * modifier chain keeps its original order (`fillMaxSize` → `padding` →
  * `tvFocusRestorer` → `focusRequester`).
  *
- * @param pickerHost when true, the scaffold owns one
- *   `activePicker: MutableState<PickerState<*>?>` cell, hands it to [content]
- *   for picker writes, and renders the single root [SettingsPickerDialog]
- *   (including dismissal). Screens with no pickers pass `false` and get no
- *   dialog host at all.
+ * @param pickerHost when true, the scaffold renders the single root
+ *   [SettingsPickerDialog] (including dismissal). Screens with no pickers
+ *   pass `false` and get no dialog host at all.
+ * @param pickerHostState a screen-owned picker cell handed in place of the
+ *   scaffold's private one — for screens that must open a picker from
+ *   OUTSIDE the lazy content (a screen-scope effect a lazy item scrolled
+ *   out of the viewport could never fire). The scaffold reads it for the
+ *   dialog host exactly as it reads its own.
  */
 @OptIn(
     ExperimentalMaterial3Api::class,
@@ -109,6 +112,7 @@ internal fun PreferenceScreenScaffold(
     advancedToggle: PreferenceAdvancedToggle? = null,
     reset: PreferenceResetAction? = null,
     pickerHost: Boolean = false,
+    pickerHostState: MutableState<PickerState<*>?>? = null,
     actions: @Composable () -> Unit = {},
     content: LazyListScope.(activePicker: MutableState<PickerState<*>?>) -> Unit,
 ) {
@@ -133,7 +137,7 @@ internal fun PreferenceScreenScaffold(
         HighlightScrollEffect(scrollState, scrollIndex)
     }
 
-    val activePicker = remember { mutableStateOf<PickerState<*>?>(null) }
+    val activePicker = pickerHostState ?: remember { mutableStateOf<PickerState<*>?>(null) }
     var showResetDialog by remember { mutableStateOf(false) }
 
     JellyPlayScreenScaffold(
