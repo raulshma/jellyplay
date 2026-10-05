@@ -13,12 +13,14 @@ walks you through installing JellyPlay on:
 ## Which APK to download
 
 From the [Releases](https://github.com/raulshma/jellyplay/releases) page,
-pick the **`*-tv-*.apk`** file (not the phone one). The TV APK:
+pick the **`jellyplay-v<version>-tv-<abi>.apk`** file (not the phone one;
+`-tv-universal.apk` covers every ABI). The TV APK:
 
 - Registers a Leanback launcher tile (appears in the "Your apps" row)
 - Forces landscape layout
 - Enables D-pad-first focus traversal
-- Hides the on-screen keyboard in favor of the TV remote input
+- Adds system search integration so the TV remote's search/voice input
+  finds your content
 - Includes screensaver (Daydream) support with Ken Burns effect
 
 ## Sideload using Downloader (easiest)
@@ -47,14 +49,14 @@ If you have `adb` on your computer:
 # 4. Confirm the RSA fingerprint prompt on the TV
 
 adb devices                              # confirm device shows up
-adb install -r app-tv-<version>.apk
+adb install -r jellyplay-v<version>-tv-<abi>.apk
 ```
 
 For network ADB (no USB cable):
 
 ```bash
 adb connect <tv-ip-address>:5555
-adb install -r app-tv-<version>.apk
+adb install -r jellyplay-v<version>-tv-<abi>.apk
 ```
 
 ## Sideload using a USB stick
@@ -70,15 +72,15 @@ adb install -r app-tv-<version>.apk
 Once JellyPlay is installed, open it and tweak the following for the best
 lean-back experience:
 
-- **Settings → Player → Engine** — try **libmpv** for the broadest codec
+- **Settings → Playback → Player Engine** — try **libmpv** for the broadest codec
   support and best ASS/SSA subtitle rendering on TV
-- **Settings → Player → Orientation** — set to **Sensor landscape** if you
+- **Settings → Playback → Orientation** — set to **Sensor landscape** if you
   use a swiveling mount
 - **Settings → Screensaver** — enable Android TV Daydream with the Ken
   Burns effect on your library artwork
-- **Settings → Onboarding** — re-run if your server URL or user
+- **Settings → System → Setup Wizard** — re-run if your server URL or user
   changed
-- **Settings → Player → Decoder** — set to **Hardware** unless you see
+- **Settings → Playback → Decoder** — set to **Hardware** unless you see
   frame drops; switch to **Software** for exotic codecs
 
 ## NVIDIA Shield tips
@@ -87,7 +89,7 @@ The Shield is a high-end device and JellyPlay runs buttery smooth on it.
 For 4K HDR content:
 
 - Set streaming quality to **Direct play** whenever possible
-- Enable **Refresh rate switching** in Settings → Player
+- Enable **Refresh Rate Match** in Settings → Playback
 - The Shield's Tegra X1+ has excellent HEVC hardware decoding; no
   special configuration required
 
@@ -95,22 +97,24 @@ For 4K HDR content:
 
 Budget boxes benefit from a few tweaks:
 
-- **Settings → Visual → Performance Mode** — disables animations
-- **Settings → Player → Engine** → **libmpv** is more robust than
+- **Settings → Appearance → Performance Mode** — disables animations
+- **Settings → Playback → Player Engine** → **libmpv** is more robust than
   ExoPlayer on low-RAM devices
-- Reduce home-section thumbnail resolution in **Settings → Visual**
+- **Settings → Appearance → Hide episode thumbnails** — lightens the home
+  screen on the weakest boxes
 
 ## Fire TV specific notes
 
 - JellyPlay is **not** published to the Amazon Appstore (yet) — sideload
   via the methods above
-- The Leanback launcher tile works on Fire TV OS 6+ (Fire TV Stick 4K,
-  Fire TV Stick Lite, Fire TV Cube 2nd gen, Fire TV Omni QLED)
-- On older Fire TV (1st/2nd gen Stick), use the `*-arm-*` APK for the
-  correct ABI
+- JellyPlay requires **Android 9 (Fire OS 7) or later** — Fire TV Stick
+  4K, Fire TV Stick Lite, Fire TV Cube, and Fire TV Omni QLED all
+  qualify, and the Leanback launcher tile works on them
+- Older 1st/2nd-gen Fire TV Sticks run Fire OS 5/6, below the minimum —
+  JellyPlay does not support them and no APK is published for their ABI
 
 ## Next steps
 
 - 🎬 [Pick the right video engine →](./player-engines.md)
-- 📡 [Connect Jellyseerr for movie requests from the couch →](./seerr-integration.md)
+- 📡 [Connect Jellyseerr for movie requests from the couch →](./jellyseerr-integration.md)
 - 👯 [Start a watch party with friends →](./syncplay-guide.md)

@@ -66,7 +66,7 @@ combined-vs-single working set labels below.
 | OS | Microsoft Windows 11 Home Single Language build 26200 |
 | CPU | Intel(R) Core(TM) Ultra 5 125H (18 logical cores) |
 | RAM | 15805 MB |
-| Build | Compose Multiplatform 1.11.1 desktop, JDK 17 toolchain, `includeAllModules=true`, **proguard disabled** (see limits) |
+| Build | Compose Multiplatform 1.11.1 desktop, JDK 17 toolchain, `includeAllModules=true` as measured — the build has since switched to explicit module enumeration, so numbers describe the 2026-08-27 packaging, **proguard disabled** (see limits) |
 
 ## Results (this machine, canonical harness execution)
 
@@ -83,7 +83,7 @@ executed the exact committed-tree binary:
 | 5 | 535.700 | 2713.816 | 2713.866 | 330.3 | 341.9 | 50.0 |
 
 **Aggregates over 5 measured runs** (min / median / max; warmup excluded).
-Regenerated after review round 1: the previous aggregation pipeline dropped
+Regenerated after an aggregation fix: the previous aggregation pipeline dropped
 measured run #1 and published 4-sample stats — every cell below was recomputed
 as a true 5-sample statistic; the per-run rows above are unchanged.
 
@@ -118,7 +118,7 @@ Read these before quoting any number above:
 1. **Single machine, consumer Windows laptop, wall-clock measurement.**
    `windowShown` aggregates landed anywhere from ~2.8 s to ~5.8 s across three
    same-day harness executions minutes apart as background desktop load
-   changed (two of those three ran via the pre-review aggregator that dropped
+   changed (two of those three ran via the earlier aggregator that dropped
    measured run #1, i.e. their medians describe a 4-run subset — direction of
    the noise conclusion is unaffected). Treat ms numbers as ballpark, not
    contract; only same-session A/B comparisons (before/after one specific

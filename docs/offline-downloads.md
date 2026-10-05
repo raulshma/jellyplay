@@ -33,8 +33,9 @@ series, music, and more — and plays it back with zero network.
   seasons, or entire series; JellyPlay pre-calculates storage needs.
 - 🔁 **Auto-download** — optionally fetch new episodes of series you
   already download, on a periodic schedule.
-- 🔄 **Watch-progress sync outbox** — playback position, start/stop, and
-  played/unplayed state are captured offline and drained back to your
+- 🔄 **Watch-progress sync outbox** — playback position, start/stop,
+  played/unplayed state, favorite flips, and book reading positions are
+  captured offline and drained back to your
   server the next time you're online.
 - 🔁 **Freshness resync** — detect when a download's metadata, artwork,
   subtitles, trickplay, or intro/outro segments have changed server-side and
@@ -146,7 +147,7 @@ Open **Settings → Storage** to tune downloads. Defaults are shown below.
 | **Download schedule** | Off | Restrict downloads to a start–end time window (optionally Wi-Fi-only during the window) |
 | **Live Updates** (Android 16+) | Off | Promotes the download-progress notification to the lock screen and status area (ProgressStyle); requires the system Live Updates grant — tap the row to open the Android settings screen. Hidden below Android 16 and on desktop. |
 | **Max download storage** | Unlimited (0) | Cap the downloads directory at 5/10/20/50 GB |
-| **Storage location** | Internal | Internal storage vs External (SD card) |
+| **Storage location** | Internal | Internal storage or an app-private external mount (SD card / USB; all detected mounts are listed when present) |
 
 ### Storage
 
@@ -214,16 +215,17 @@ on-device store:
   episodes) mid-watch — between 1% and 95% progress — most recently played
   first. Episodes count even though the library grid only shows the series:
   they come from their own episode index.
-- **Next Up** lists, for each downloaded series, the first not-yet-finished
-  downloaded episode in season/episode order, with the series you watched
+- **Next Up** lists, for each downloaded series, the first unplayed
+  downloaded episode that isn't mid-watch (in-progress episodes stay in
+  Continue Watching) in season/episode order, with the series you watched
   most recently first (capped at 20). Strict chronology: an episode isn't
   skipped past just because a later one is downloaded — the row follows the
   same order you'd watch in. It reflects offline watching live: finish an
   episode offline and the next one takes its place immediately.
 - Both rows honor your home-screen layout preferences (hide-from-
   Continue-Watching, excluded Next Up series, disabled sections, and the
-  merge Continue Watching + Next Up toggle). Server-side Next Up tuning
-  (rewatching, day cutoffs) stays online-only.
+  merge Continue Watching + Next Up toggle) and the server's Next Up
+  tuning (rewatching toggle, day cutoff) is mirrored offline too.
 
 All rows are playable offline and tap through to the offline detail screen.
 The hero follows the same rule: it features your downloaded movies and
@@ -297,6 +299,8 @@ Each offline playback session emits events to a `playback_outbox` table:
   lifecycle (session, position, play method)
 - `PLAYED` / `UNPLAYED` — watched-state flips, which mirror Jellyfin's
   server-side "mark played" cascade across a series/season hierarchy
+- `FAVORITE` / `UNFAVORITE` — favorite-state flips
+- `BOOK_PROGRESS` — book reader positions
 
 Progress events are **coalesced per item** (the latest position wins) so
 a long watch session doesn't bloat the outbox. Watched-state flips use a
@@ -315,10 +319,11 @@ deterministic id so re-toggling updates the same row in place.
   a transient failure), so the sync indicator correctly shows
   "will sync when online".
 
-Each event is replayed straight to the Jellyfin API. After **3 failed
-attempts** a persistently undeliverable event is dead-lettered (deleted
-+ logged) so the sync indicator can return to "up to date" instead of
-spinning forever.
+Each event is replayed straight to the Jellyfin API. A persistently
+undeliverable event is dead-lettered (flagged and retained, excluded
+from the pending count) so the sync indicator can return to "up to
+date" instead of spinning forever — progress telemetry after 3 failed
+attempts, user-intent flips (watched/favorite) after 10.
 
 ### Reconciliation
 
@@ -350,18 +355,19 @@ age) and offers a **Sync now** button (disabled while offline).
 
 Storage location is set in **Settings → Downloads → Storage location**.
 
-| Location | Video | Audio |
-| -------- | ----- | ----- |
-| **Internal** (default) | `<app internal>/downloads/` | `<app internal>/downloads/music/` |
-| **External** (SD card) | `<app external>/Movies/` | `<app external>/Music/` |
+| Location | Video | Audio | Books |
+| -------- | ----- | ----- | ----- |
+| **Internal** (default) | `<app internal>/downloads/` | `<app internal>/downloads/music/` | `<app internal>/downloads/books/` |
+| **External** (SD card / USB) | `<app external>/Movies/` | `<app external>/Music/` | `<app external>/Documents/` |
 
 In both cases the directory is **app-private** (not visible to other
 apps, excluded from the media scanner, wiped on uninstall). On internal
-storage this is under `/data/data/raulshma.jellyplay/files/`; on
-external it's under `/Android/data/raulshma.jellyplay/files/`. JellyPlay
+storage this is under `/data/data/com.raulshma.jellyplay/files/`; on
+external it's under `/Android/data/com.raulshma.jellyplay/files/`. JellyPlay
 requires at least 100 MB free before starting a download.
 
-File names follow `${name}_${itemId-prefix}.${ext}`, where the extension
+File names follow `${name}_${downloadId-prefix}.${ext}` — the prefix is
+the first 8 characters of the download row's id — and the extension
 is the **real container** reported by Jellyfin (defaulting to `mp4` /
 `mp3`) — this avoids the historical bug where an MKV stream saved as
 `.mp4` silently confused the player's extractor.
@@ -494,8 +500,9 @@ multi-connection chunking, and concurrency than the ExoPlayer helper.
 
 ### Persistence (Room)
 
-A single `JellyPlayDatabase` (v57; the migration ladder lives in
-`Migrations46To56` and `Migration56To57`) holds five relevant tables:
+A single `JellyPlayDatabase` (v60; the migration ladder lives in
+`Migrations25To45`, `Migrations46To56`, `Migration56To57`,
+`Migration57To58`, `Migration58To59`, and `Migration59To60`) holds five relevant tables:
 
 - **`downloads`** — live transfer state (path, url, sizes, status,
   speed, priority, error, container, series/season linkage). Indexed
@@ -512,7 +519,7 @@ A single `JellyPlayDatabase` (v57; the migration ladder lives in
   `isFavorite`, `lastPlayedDate`), read through the
   `OfflineMediaWithPlayback` LEFT JOIN. `applyPlayedStateToHierarchy`
   cascades a played / unplayed flip across an item and its whole
-  series/season hierarchy in one UPDATE, mirroring Jellyfin's server-side
+  series/season hierarchy in one query, mirroring Jellyfin's server-side
   behavior.
 - **`sync_baseline`** — the **freshness-resync baseline + result flags**,
   split out of the historical `offline_media` row so a metadata re-persist
@@ -523,16 +530,18 @@ A single `JellyPlayDatabase` (v57; the migration ladder lives in
   `syncUpdateAvailable`, `syncMediaChanged`, `syncChecking`, `syncError`,
   plus per-axis change flags and a failed-subtitle pending-retry flag).
 - **`playback_outbox`** — the offline telemetry queue drained by
-  `PlaybackSyncWorker`.
+  `PlaybackOutboxDrainer`.
 
 ### Sync outbox internals
 
 - **Capture** — `PlaybackRepositoryImpl` enqueues to the outbox whenever
   it's offline (or hits a transient HTTP failure) while reporting
   start/progress/stop, and when marking played/unplayed.
-- **Drain** — `PlaybackSyncWorker` replays entries oldest-first
+- **Drain** — `PlaybackOutboxDrainer` (invoked by `PlaybackSyncWorker`)
+  replays entries oldest-first
   directly through the API client (bypassing the repository to avoid
-  re-enqueuing). Dead-letters after 3 attempts.
+  re-enqueuing). Telemetry dead-letters after 3 attempts, user-intent
+  flips after 10.
 - **Reconciliation** — `reconcileOfflineRow` pulls a fresh server item
   after a push and applies latest-wins by ISO timestamp.
 - **Triggers** — `PlaybackSyncReconnectListener` enqueues an immediate
@@ -612,11 +621,12 @@ construction so a check interrupted by process death doesn't render as a stuck
   similar/collection, playlists), and owns all write actions (watched/favorite,
   download lifecycle: delete/resync/re-download, per-episode and whole-season
   batch delete). Download/sync presentation (`DownloadInfoCard`,
-  `WatchProgressSection`, `SyncUpdateBanner`, `ResyncSheet`,
-  `DeleteDownloadedEpisodesSheet`) and a manifest-backed local subtitle selector
+  `WatchProgressSection`, `SyncUpdateBanner`, `ResyncSheet`, plus
+  `DeleteDownloadedEpisodesSheet` from `shared/core/ui`) and a manifest-backed
+  local subtitle selector
   live here, gated by capability/attachment so they also serve a remote item with
-  a completed download. The `DownloadConfirmationDialog` and `SeriesDownloadSheet`
-  initiate downloads; `DetailViewModel` performs the cellular-warning check and
+  a completed download. The `DownloadPickerSheet` (quality / season / episode
+  selection) initiates downloads; `DetailViewModel` performs the cellular-warning check and
   calls `DownloadIntake`.
 - **`shared/feature/downloads`** — reserved for download **queue** and **offline-library**
   management: `DownloadsScreen` (queue + per-row actions, the freshness-resync
@@ -634,4 +644,3 @@ construction so a check interrupted by process death doesn't render as a stuck
 
 - 📺 [Set up JellyPlay on your TV →](./android-tv-setup.md)
 - 🎵 [Download music for offline listening →](./lyrics-music-player.md)
-- ⚖️ [See how JellyPlay compares to other Jellyfin clients →](./why-jellyplay-vs-plex-emby.md)

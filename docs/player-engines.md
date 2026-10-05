@@ -49,9 +49,8 @@ not to.
 ## libmpv
 
 [libmpv](https://github.com/mpv-player/mpv) is the Android port of the
-legendary [mpv](https://mpv.io/) player. JellyPlay bundles
-[libmpv-android](https://github.com/JarneDeprez/mpv-android) by Jarne
-Deprez.
+legendary [mpv](https://mpv.io/) player. JellyPlay bundles the
+`io.github.abdallahmehiz:mpv-android-lib` packaging by AbdallahMehiz.
 
 **Pros**
 
@@ -127,7 +126,7 @@ engine from the VLC media player.
 - ✅ Mature, well-tested code
 - ✅ Hardware decoding on a wide range of chipsets
 - ✅ Network streaming (SMB, NFS, SFTP, HTTP, FTP) built-in
-- ✅ Brightness / contrast / saturation / sharpness filter controls
+- ✅ Brightness / contrast / saturation filter controls
   (in JellyPlay's player)
 - ✅ Audio passthrough and audio-delay control
 - ✅ Native renderer (cast) item support
@@ -199,8 +198,9 @@ self-contained.
 
 ## How to switch engines
 
-1. Open **Settings → Player → Engine** (labeled **Preferred Player**)
-2. Pick **ExoPlayer**, **libmpv**, or **LibVLC**
+1. Open **Settings → Playback → Player Engine**
+   (labeled **Preferred Player**)
+2. Pick **ExoPlayer**, **mpv**, or **LibVLC**
 3. Tap to apply — JellyPlay reloads the player
 
 The choice is **per-device and manual** — JellyPlay does not auto-pick
@@ -216,14 +216,15 @@ time. If you hit a file no bundled engine handles well, use an
 
 ## Per-engine tuning (advanced)
 
-Below the engine picker, **Settings → Player → Engine Config** exposes
+Below the engine picker, **Settings → Playback → Engine Config** exposes
 knobs specific to the active engine. Defaults are sane for almost
 everyone; reach for these only if a particular file misbehaves.
 
 - **ExoPlayer** — video scaling mode, frame-rate strategy, preferred
   video MIME types, skip-silence, audio offload mode, back-buffer
   duration, decoder fallback.
-- **libmpv** — video output (`gpu-next` default), scaler (Lanczos),
+- **libmpv** — video output (`gpu-next` default), scaler (bilinear
+  default),
   hardware-decode override, audio output, demuxer max bytes, frame drop,
   skip-loop-filter, interpolation, deband.
 - **LibVLC** — audio output, video output, network caching,
@@ -235,12 +236,13 @@ everyone; reach for these only if a particular file misbehaves.
 ## External player
 
 If none of the bundled engines work for a specific file, JellyPlay can
-launch an **external player** (MX Player, VLC, mpv for Android, etc.):
+hand playback to an **external player** (MX Player, VLC, mpv for
+Android, etc.):
 
-1. Open the media detail page
-2. Tap the kebab menu → **Open in external player**
-3. Pick the player of your choice
-4. Watch via the external app
+1. Set **Settings → Playback → Preferred Player → External** — you can
+   also pick your preferred external app there
+2. Start playback on any video; JellyPlay launches the external app
+   with the stream and steps aside
 
 Internally this selects the **External** engine type, which is a no-op
 in-app placeholder — playback happens entirely in the third-party app.
@@ -249,7 +251,7 @@ server via the session, even when using an external player.
 
 ## Hardware vs. software decoding
 
-Each engine has a **decoder mode** setting in **Settings → Player →
+Each engine has a **decoder mode** setting in **Settings → Playback →
 Decoder**:
 
 - **Hardware** *(default)* — uses the device's GPU/DSP for video
@@ -299,8 +301,9 @@ instance.
 The three switchable engines above cover **on-demand video**. Two other
 playback paths exist and are **not** user-switchable:
 
-- **Live TV** uses a dedicated live engine (Media3 ExoPlayer, HLS-only,
-  always joins at the live edge) regardless of your Preferred Player
+- **Live TV** uses a dedicated live engine (Media3 ExoPlayer — HLS for
+  transcodes, progressive TS for direct streams — always joins at the
+  live edge) regardless of your Preferred Player
   setting. If a live stream can't direct-play, it falls back to a
   transcode path automatically.
 - **Background music / audio** runs on its own Media3

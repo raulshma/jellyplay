@@ -1,10 +1,10 @@
 # Compose-resources locale switching on Android — device pass result (wave 21)
 
-**Verdict: PASS.** With per-app locales set through the system
+**Result: PASS.** With per-app locales set through the system
 (`cmd locale set-app-locales`), the app's compose-resources strings follow
 the locale on a physical device: German and Japanese first-run screens
 render fully translated, and English is restored cleanly. Ten of ten script
-steps green (`tools/e2e/device-locale-pass.sh`, 2026-08-29, Nokia 6.1 Plus,
+steps green (`tools/e2e/device-locale-pass.sh`, 2026-08-29,
 Android 14 / API 34). This closes the migration plan's V1a risk
 ("compose-resources locale switching on Android under the app's
 LocaleApplier/per-app-locale flows — needs a device pass") — and it is the
@@ -35,8 +35,10 @@ app could not even start; both P0s are fixed and committed:
 2. **compose-resources assets missing from the APK** (commit `c6da8ff8a`).
    AGP-9 KMP library plugins leave android resources OFF, so no `.cvr` assets
    were packaged and the first `Res` string read threw
-   `MissingResourceException`. Fix: `androidResources { enable = true }` in
-   core:ui + all 22 shared feature modules. Fresh APK verification this
+  `MissingResourceException`. Fix: `androidResources { enable = true }` in
+  core:ui + all 22 shared feature modules (since moved into the
+  `KmpLibraryBasePlugin` convention plugin — module build files now carry
+  only a comment). Fresh APK verification this
    round: 216 `.cvr` entries = 24 modules × 9 locales (values, de, es, fr,
    it, ja, ko, pt, zh) under `assets/composeResources/`.
 
@@ -79,10 +81,11 @@ Assertions (shared/feature/auth compose-resources):
   side-menu in German — `Einstellungen`, `Offline gehen`,
   `Auf Gerät abspielen`, `Verknüpfungen`).
 
-## Finding: Settings screen ANRs on device (any locale)
+## Settings screen ANRs on device (any locale)
 
 The originally intended assertion surface — Settings
-(shared/feature/settings, a 1,583-string catalog) — never composes on the
+(shared/feature/settings, a 2,011-string catalog as of this update; 1,583
+when measured) — never composes on the
 device: opening it from the side-menu leaves the main thread blocked long
 enough for the system ANR dialog ("JellyPlay Dev isn't responding", Wait /
 Close app). Captured twice, 7 minutes apart, in
@@ -93,7 +96,7 @@ retained): compose-resources' `runBlocking`-backed `stringResource`
 resolving the huge string table on the main thread during the settings
 screen's first composition. Follow-up worth filing: capture a proper ANR
 trace (`adb bugreport`) and either split the settings string reads or move
-first resolution off the critical path. The locale verdict above is
+first resolution off the critical path. The locale result above is
 unaffected — it is asserted on screens that do compose.
 
 ## Script fix made during this run

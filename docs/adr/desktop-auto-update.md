@@ -82,9 +82,11 @@ The client half of option 2 is live; the Decision's unblocking path was taken
 app-side so no `shared/core/data` binding changed shape:
 
 - `apps/desktop/.../update/DesktopAppUpdate.kt` — `desktopAppUpdateModule`
-  REPLACES `desktopDataModule`'s sentinel-bound `AppUpdateRepository` single
-  (Main.kt loads it last with `allowOverride(true)`; Koin 4 dropped the
-  per-definition override flag). The real installed version comes from the
+  provides the ONE real `AppUpdateRepository` binding: core:data's desktop
+  module ships no update family at all (the former sentinel-bound binding
+  plus app-side override chain is gone; Koin's default no-override policy
+  holds — every definition is keyed and unique). The real installed version
+  comes from the
   generated `desktop-build.properties` classpath resource, which gained a
   `channel` line: `release` only when the build passed an explicit
   `-PjellyplayVersion` (i.e. a CI release lane), else `dev`. Dev builds are

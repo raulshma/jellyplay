@@ -1,7 +1,8 @@
 # JellyPlay → Kotlin Multiplatform Migration — Status Ledger
 
 Status: **COMPLETE (2026-09-13) — all approved phases landed; outstanding
-items are release-mechanics externals** ·
+items are release-mechanics externals and the v0.12 legacy-removal wave
+(R3 below)** ·
 Living doc, re-anchored 2026-09-13.
 
 This file re-anchors the ~50 references across build scripts, KDocs and CI
@@ -27,7 +28,7 @@ ledger tracks *where the migration stands*.
 **Done:**
 
 - `shared/` tree complete: `core/{concurrency,model,designsystem,datastore,database,network,data,ui,player-contract}`
-  + 23 `feature/*` modules; every commonMain expect has actuals; zero stubs
+  + 26 `feature/*` modules; every commonMain expect has actuals; zero stubs
   in shipped surfaces. `:app` builds phone+TV flavors on top of the shared
   modules exclusively.
 - Targets: android+jvm everywhere.
@@ -51,7 +52,8 @@ ledger tracks *where the migration stands*.
    and `:core:testing` dissolved — every Android-coupled file moved into
    `:shared:core:ui` / `:shared:core:data` `androidMain` under identical
    packages; the Robolectric suites execute in the new AGP-9
-   `androidHostTest` lanes; `:app` is the only Android-only module left.
+   `androidHostTest` lanes; `:app` is the only Android-only app module
+   left (`:baselineprofile` is an Android-only benchmark module).
    The v0/v1 settings-backup import sunset lands in v0.11; the typed-key
    prefs migration, the PIN legacy-hash verify and the legacy-download
    container sniffer outlived the cutover and are tracked below as R1/R3.
@@ -63,7 +65,7 @@ ledger tracks *where the migration stands*.
      list, this ledger)~~ **DONE (2026-09-12, 01894fe54)**.
    - R3: v0.12 removal wave — typed-key prefs fallback, PIN legacy-hash
      verify, sniffer runtime fallback — only after R1 has shipped one
-     full release (branch `chore/v0.12-legacy-removals` prepared).
+     full release.
      Accepted consequences: pre-typed-key skip-upgraders lose their
      legacy prefs; never-unlocked-since-PBKDF2 users re-onboard.
 3. **Phase D — Room 3 foundation:**
@@ -123,7 +125,7 @@ ledger tracks *where the migration stands*.
 ## Desktop packaging history (from :apps:desktop build script)
 
 Appended verbatim (append-only) when the :apps:desktop build script was
-slimmed from ~800 to ~270 lines (2026-10 architecture pass):
+slimmed from ~800 to ~240 lines (2026-10 architecture pass):
 
   * The per-feature dependency conveyor notes below moved here from the
     `dependencies` block (the declarations remain in the build script,

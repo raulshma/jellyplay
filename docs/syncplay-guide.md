@@ -3,8 +3,8 @@
 [SyncPlay](https://jellyfin.org/docs/general/server/sync-play) is Jellyfin's
 built-in feature for watching media in perfect sync with friends and
 family, no matter where they are. JellyPlay has first-class SyncPlay
-support, including in-player group chat and speed/skip correction to
-keep everyone's playback frame-aligned.
+support, including speed/skip correction to keep everyone's playback
+frame-aligned.
 
 ## What is SyncPlay?
 
@@ -31,48 +31,38 @@ accounts, no extra service, no cloud.
 
 1. Open any movie, episode, or video in JellyPlay
 2. Start playback
-3. Tap the **SyncPlay** icon in the player controls (or the kebab menu
-   → **SyncPlay → Start group**)
-4. Choose a **group name** and optional **password**
-5. Tap **Create**
+3. Tap the **SyncPlay** icon in the player controls — or open the
+   detail page's kebab menu and tap **Start watch party**
+4. Choose a **group name** and tap **Create**
 
 JellyPlay automatically:
 - Pauses your local playback
 - Registers the group with the Jellyfin server
-- Generates a 6-character **invite code**
 
 ### Inviting friends
 
-Share the invite code via Discord, Telegram, WhatsApp, or any chat app.
+The group appears in every participant's SyncPlay group list, so
+friends can join by tapping **Join** on the group's card.
 
-Friends join with: **SyncPlay → Join group → enter code**.
-
-You can also share a **deep link** that pre-fills the join dialog:
-`jellyplay://syncplay/join/<code>`
+You can also share a **deep link** that opens the group directly:
+`jellyplay://syncplay/<groupId>`
 
 ## Joining a watch party
 
 ### As a guest
 
-1. Open **SyncPlay** from the player controls (or from
-   **Settings → SyncPlay**)
-2. Tap **Join group**
-3. Enter the **invite code** shared by the host
-4. If the group has a password, enter it
-5. JellyPlay buffers the media and starts playback in sync
+1. Open **SyncPlay** from the player controls
+2. Tap **Join** on the host's group card
+3. JellyPlay buffers the media and starts playback in sync
 
-### Auto-join (optional)
+Depending on your **Join behavior** setting (see below), invites can
+also be accepted automatically.
+
+### Auto-accept invites (optional)
 
 If your friends start parties often, enable
-**Settings → SyncPlay → Auto-join groups I'm invited to** to be
-automatically added when a host lists you as a participant.
-
-## In-player group chat
-
-While watching together, tap the **Chat** icon in the player overlay
-(or press **OK / Enter** on the D-pad when a notification is on
-screen) to send a message to the group. Chat history is preserved for
-the session.
+**Settings → Playback → SyncPlay → Auto-accept invites** to be
+automatically added when you receive an invite.
 
 ## Sync correction
 
@@ -81,16 +71,21 @@ strategies:
 
 | Strategy | When used | Visible to the viewer? |
 | -------- | --------- | ---------------------- |
-| **Speed-to-sync** | Drift under 2 seconds | Briefly plays at 1.05x or 0.95x |
-| **Skip-to-sync** | Drift over 2 seconds | A small seek to the corrected timestamp |
+| **Speed-to-sync** | Drift between 60 ms and 400 ms | Briefly plays faster or slower to close the gap |
+| **Skip-to-sync** | Drift over 400 ms | A small seek to the corrected timestamp |
 
-The thresholds are configurable in **Settings → SyncPlay**:
+Drift under 60 ms is ignored. The thresholds are fixed in the client —
+no configuration needed.
 
-- `max_delay_speed` (default 50 ms) — max drift before speed-correction
-- `max_delay_skip` (default 300 ms) — max drift before skip-correction
-- `sync_attempts` (default 5) — number of retries before disabling sync
+## SyncPlay settings
 
-For most home networks on WiFi, the default values are perfect.
+SyncPlay options live in **Settings → Playback → SyncPlay**:
+
+- **Join behavior** — always join automatically, ask every time, or
+  never join
+- **Sync tolerance** — how far drift may wander before correction:
+  tight (50 ms), balanced (100 ms), loose (500 ms), or a custom value
+- **Auto-accept invites** — join invited groups without prompting
 
 ## Group settings
 
@@ -118,16 +113,14 @@ The group host can toggle from the SyncPlay overlay:
 
 | Problem | Fix |
 | ------- | --- |
-| "Group not found" | The host may have left or the server was restarted. Ask for a new code. |
-| Audio is desynced | Lower `sync_attempts` or increase `max_delay_speed` in **Settings → SyncPlay**. |
-| Chat messages not sending | Check that all participants are connected to the same Jellyfin server URL. |
+| "Group not found" | The host may have left or the server was restarted. Ask them to start a new group. |
 | Cannot start SyncPlay | Verify the server is Jellyfin 10.7.0+ — older versions don't support SyncPlay. |
-| Frame drops during sync | Switch to **libmpv** engine in **Settings → Player** for smoother buffering. |
+| Frame drops during sync | Switch to the **mpv** engine in **Settings → Playback → Player Engine** for smoother buffering. |
 
 ## Privacy
 
 SyncPlay runs entirely over your Jellyfin server. JellyPlay does **not**
-route any media or chat data through third-party services. If your
+route any media through third-party services. If your
 Jellyfin server is exposed via a reverse proxy, the same rules apply —
 your traffic stays on your infrastructure.
 

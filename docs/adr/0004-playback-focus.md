@@ -84,7 +84,7 @@ pause whom" had NO owner:
   video-side inputs. Feeding them into the matrix (duck vocabulary, per-
   surface policies) is additive: the decision vocabulary grows, the
   interface does not.
-- Slice-2 checklist addition (2026-09-15 review): `AndroidFocusArbiter`
+- Slice-2 checklist addition (2026-09-15): `AndroidFocusArbiter`
   hardcodes `USAGE_MEDIA + CONTENT_TYPE_SPEECH` attributes — correct for
   read-aloud, wrong for music/video (OS routing and ducking policy read the
   content type). `FocusArbiter.request(listener)` takes no attributes
