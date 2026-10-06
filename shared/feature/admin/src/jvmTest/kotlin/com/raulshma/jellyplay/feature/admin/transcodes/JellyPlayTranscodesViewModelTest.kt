@@ -68,6 +68,7 @@ class JellyPlayTranscodesViewModelTest {
         audioCodec = "aac",
         playMethod = "Transcode",
         videoBitrate = 8_000_000,
+        transcodeReasons = listOf("VideoCodecNotSupported", "AudioBitrateNotSupported"),
         positionTicks = 600_000_000,
         isPaused = false,
     )
@@ -177,6 +178,7 @@ class JellyPlayTranscodesViewModelTest {
         assertEquals("h264", transcodingRow.videoCodec)
         assertEquals("aac", transcodingRow.audioCodec)
         assertEquals("8 Mbps", transcodingRow.bitrateLabel)
+        assertEquals(listOf("VideoCodecNotSupported", "AudioBitrateNotSupported"), transcodingRow.transcodeReasons)
         assertFalse(transcodingRow.isPaused)
 
         val directRow = state.rows[1]
@@ -221,6 +223,13 @@ class JellyPlayTranscodesViewModelTest {
         assertEquals("12.3 Mbps", formatBitrate(12_340_000))
         assertEquals("800 kbps", formatBitrate(800_000))
         assertEquals("0 kbps", formatBitrate(0))
+    }
+
+    @Test
+    fun `reason names humanize into readable clauses`() {
+        assertEquals("video codec not supported", "VideoCodecNotSupported".humanizeTranscodeReason())
+        assertEquals("direct play error", "DirectPlayError".humanizeTranscodeReason())
+        assertEquals("container bitrate exceeds limit", "ContainerBitrateExceedsLimit".humanizeTranscodeReason())
     }
 
     // ── auto-refresh loop ──

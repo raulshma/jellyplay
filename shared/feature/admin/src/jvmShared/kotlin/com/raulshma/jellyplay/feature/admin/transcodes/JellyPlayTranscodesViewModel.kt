@@ -41,6 +41,11 @@ data class TranscodeRow(
     val audioCodec: String?,
     /** Human-formatted [JellyPlayActiveTranscode.videoBitrate] (bps), or null. */
     val bitrateLabel: String?,
+    /**
+     * Why the server is re-encoding, named flag-bit strings as the plugin
+     * decomposed them — shown while [isTranscoding], empty otherwise.
+     */
+    val transcodeReasons: List<String>,
     val isPaused: Boolean,
 )
 
@@ -295,6 +300,7 @@ internal fun toRow(transcode: JellyPlayActiveTranscode): TranscodeRow {
         videoCodec = transcode.videoCodec,
         audioCodec = transcode.audioCodec,
         bitrateLabel = transcode.videoBitrate?.let(::formatBitrate),
+        transcodeReasons = transcode.transcodeReasons.orEmpty(),
         isPaused = transcode.isPaused,
     )
 }
@@ -318,3 +324,13 @@ internal fun formatBitrate(bitsPerSecond: Int): String {
         "${(value + 500) / 1_000} kbps"
     }
 }
+
+/**
+ * "VideoCodecNotSupported" → "Video codec not supported" — the server's flag
+ * names are CamelCase sentences; the meta row wants a readable clause. Pure
+ * string math so the label is test-deterministic (no resx per reason — the
+ * host's enum vocabulary is the contract).
+ */
+internal fun String.humanizeTranscodeReason(): String =
+    replace(Regex("(?<=[a-z0-9])(?=[A-Z])"), " ")
+        .lowercase()

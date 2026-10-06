@@ -59,23 +59,20 @@ alternatives: inbox messages (`inbox` StateFlow).
   adopt/push split, LWW-reject retry, convergence.
 - `JellyPlayPreferencesSyncAdapterTest` (jvmTest) — real temp-file DataStore:
   dirty semantics, kind preservation, reserved-key exclusion.
-- Server side: 30 tests in the plugin repo (LWW, quotas, changelog cursor,
-  SSE hub, season grouping, scrapers, circuit breaker).
+- Server side: 46 tests in the plugin repo (LWW, quotas, changelog cursor,
+  SSE hub, season grouping, scrapers, circuit breaker, stream fold, strings).
 
-## Status / next steps
+## Status
 
-Wired end-to-end: capability gating, sync engine + adapter, events repo, DI.
-Remaining UI work (per-feature wiring consumes the pieces above):
+All planned client surfaces are wired and gated: capability gating, sync
+engine + adapter (settings screen section), events/messages inbox, Seerr
+bridge mode (with the data path riding the plugin proxy), details
+ratings/similar/anime faces, bookmarks sync, admin transcodes monitor,
+custom/seasonal home rows, newsletter.
 
-- DONE: Settings screen "Sync across devices" section (opt-in toggle + sync-now,
-  capability-gated group on the root screen; opt-in persisted device-scoped)
-- DONE: Seerr settings "via server" mode (capability-gated "Direct connection |
-  Via JellyPlay server" selector, `seerrStatus` linked-state pane, Quick
-  Connect link flow reusing the Jellyfin QC primitives, logout; mode persisted
-  as `SeerrPreferences.useServerBridge`). Remaining seam: the Seerr DATA PATH
-  still talks to the Seerr server directly — the follow-up reads that flag to
-  point `SeerrRepository`/`SeerrApiClient` at the plugin's
-  `jellyplay/seerr/{**path}` proxy (the flag's KDoc names the consumer seam).
-- Messages inbox + new-media notifications into `NotificationStore`/widgets
-- Ratings row, anime badges, custom/seasonal home rows, similar-items on
-  details, bookmarks in the book reader, admin transcodes tab
+Server plugin: all 12 modules, dashboard (localized config page with a
+tri-state client-defaults editor + backup/restore), YAML editor, quotas,
+rate limits, scheduled tasks, JF12 reflection provider.
+
+Known-good pairing: Jellyfin 10.11.x hosts; the plugin probes
+`jellyplay/capabilities` and everything degrades gracefully on its absence.

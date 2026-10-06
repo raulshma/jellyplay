@@ -229,6 +229,8 @@ data class JellyPlayActiveTranscode(
     val audioCodec: String? = null,
     val playMethod: String? = null,
     val videoBitrate: Int? = null,
+    /** Named flag bits the server decomposed its `[Flags]` reason word into. */
+    val transcodeReasons: List<String>? = null,
     val positionTicks: Long = 0,
     val isPaused: Boolean = false,
 )

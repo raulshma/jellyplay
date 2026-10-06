@@ -425,16 +425,19 @@
     <string name="admin_backups_restore_complete">Restore complete — reconnected to the server.</string>
     <string name="admin_backups_restore_server_unreachable">The server did not come back after the restore. Verify it is running, then sign in again.</string>
 
-    <!-- JellyPlay companion-plugin admin transcodes (JellyPlayTranscodesScreen) -->
-    <string name="jellyplay_tr_title">Transcodes</string>
-    <string name="jellyplay_tr_empty">No active transcodes</string>
+    <!-- JellyPlay companion-plugin admin active-streams monitor (JellyPlayTranscodesScreen).
+         The monitor lists every playing session — direct play included — with
+         re-encode detail when the server is transcoding; the route/ids keep the
+         historic `transcodes` naming. -->
+    <string name="jellyplay_tr_title">Active streams</string>
+    <string name="jellyplay_tr_empty">No active streams</string>
     <string name="jellyplay_tr_unknown">Unknown</string>
     <string name="jellyplay_tr_paused">Paused</string>
     <string name="jellyplay_tr_play_direct">Direct</string>
     <string name="jellyplay_tr_play_transcode">Transcode</string>
     <string name="jellyplay_tr_cancel">Cancel stream</string>
-    <string name="jellyplay_tr_cancel_title">Cancel transcode?</string>
+    <string name="jellyplay_tr_cancel_title">Cancel stream?</string>
     <string name="jellyplay_tr_cancel_body">This stops %1$s\'s stream of \"%2$s\" on %3$s. The client will end playback.</string>
-    <string name="jellyplay_tr_unavailable_title">Transcodes unavailable</string>
+    <string name="jellyplay_tr_unavailable_title">Active streams unavailable</string>
     <string name="jellyplay_tr_unavailable_body">The JellyPlay companion plugin is not available on this server, or it does not expose the transcodes feature.</string>
 </resources>

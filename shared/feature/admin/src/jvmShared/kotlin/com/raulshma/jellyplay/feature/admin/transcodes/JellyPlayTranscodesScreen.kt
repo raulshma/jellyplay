@@ -262,6 +262,9 @@ private fun TranscodeMetaRow(row: TranscodeRow) {
             listOfNotNull(row.videoCodec, row.audioCodec)
                 .takeIf { it.isNotEmpty() }
                 ?.let { codecs -> add(codecs.joinToString(" / ")) }
+            if (row.transcodeReasons.isNotEmpty()) {
+                add(row.transcodeReasons.joinToString(separator = ", ") { it.humanizeTranscodeReason() })
+            }
         }
         row.bitrateLabel?.let { add(it) }
     }
