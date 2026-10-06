@@ -92,17 +92,43 @@ class JellyPlayPreferencesSyncAdapter(
                 // Name-based lookup: Preferences.get(key) casts by key type and would
                 // throw reading e.g. an Int value under a String key.
                 val existing = current.asMap().entries.firstOrNull { it.key.name == name }?.value
-                prefs.remove(stringPreferencesKey(name)) // clear-then-set: kind switches must not throw
+                // Coerce FIRST, write after: an uncoercible remote value skips the
+                // key entirely — the local value and its kind survive a garbage or
+                // hostile row (removing first would have wiped the setting, and
+                // markSynced would then bury the old value for good).
                 when (existing) {
-                    is Boolean -> value.booleanOrNull?.let { prefs[booleanPreferencesKey(name)] = it }
-                    is Int -> coerceInt(value)?.let { prefs[intPreferencesKey(name)] = it }
-                    is Long -> value.longOrNull?.let { prefs[longPreferencesKey(name)] = it }
-                    is Float -> value.doubleOrNull?.let { prefs[floatPreferencesKey(name)] = it.toFloat() }
-                    is Double -> value.doubleOrNull?.let { prefs[doublePreferencesKey(name)] = it }
-                    is String -> prefs[stringPreferencesKey(name)] = value.content
-                    is Set<*> -> (value as? JsonArray)?.let { array ->
-                        prefs[stringSetPreferencesKey(name)] = array.mapNotNull { (it as? JsonPrimitive)?.content }.toSet()
+                    is Boolean -> value.booleanOrNull?.let {
+                        prefs.remove(stringPreferencesKey(name))
+                        prefs[booleanPreferencesKey(name)] = it
                     }
+                    is Int -> coerceInt(value)?.let {
+                        prefs.remove(stringPreferencesKey(name))
+                        prefs[intPreferencesKey(name)] = it
+                    }
+                    is Long -> value.longOrNull?.let {
+                        prefs.remove(stringPreferencesKey(name))
+                        prefs[longPreferencesKey(name)] = it
+                    }
+                    is Float -> value.doubleOrNull?.let {
+                        prefs.remove(stringPreferencesKey(name))
+                        prefs[floatPreferencesKey(name)] = it.toFloat()
+                    }
+                    is Double -> value.doubleOrNull?.let {
+                        prefs.remove(stringPreferencesKey(name))
+                        prefs[doublePreferencesKey(name)] = it
+                    }
+                    is String -> {
+                        prefs.remove(stringPreferencesKey(name))
+                        prefs[stringPreferencesKey(name)] = value.content
+                    }
+                    is Set<*> -> (value as? JsonArray)
+                        // A non-primitive element cannot become a String — partial
+                        // conversion would silently shrink the set, so skip too.
+                        ?.takeIf { array -> array.all { it is JsonPrimitive } }
+                        ?.let { array ->
+                            prefs.remove(stringPreferencesKey(name))
+                            prefs[stringSetPreferencesKey(name)] = array.map { (it as JsonPrimitive).content }.toSet()
+                        }
                     // Key new on this device: take the incoming kind.
                     null -> writeInferred(prefs, name, value)
                 }

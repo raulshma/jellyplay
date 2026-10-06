@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.core.ui.components
 
 import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.minus
 import kotlinx.datetime.todayIn
@@ -49,6 +50,15 @@ expect fun monthYear(year: Int, monthNumber: Int): String
 
 /** Short day-of-week + short month + day, e.g. "Mon, Jul 13" (calendar day headers). */
 expect fun weekdayShortMonthDay(date: LocalDate): String
+
+/**
+ * The clock-time fragment, 24-hour "HH:mm" — promoted from the settings sync
+ * screen's timestamp composite ("Yesterday, HH:mm"), which combines this with
+ * [relativeDayLabel] for its date half. Fixed pattern (the old settings-root
+ * row's precedent), not locale-am/pm aware: am/pm shapes ride the wall-clock
+ * seam in DurationFormatter, which is a different contract.
+ */
+expect fun clockTime(time: LocalTime): String
 
 /**
  * The Today/Yesterday ladder, pure and clock-free: the exact "Today" /

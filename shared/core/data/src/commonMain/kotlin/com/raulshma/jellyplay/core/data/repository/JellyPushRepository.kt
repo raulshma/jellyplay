@@ -8,7 +8,6 @@ import com.raulshma.jellyplay.core.data.log.Log
 import com.raulshma.jellyplay.core.data.session.JellyPlayFeatureGate
 import com.raulshma.jellyplay.core.data.session.JellyPlayPluginStatusStore
 import com.raulshma.jellyplay.core.model.JellyPlayPluginFeatures
-import com.raulshma.jellyplay.core.model.JellyPlayPluginStatus
 import com.raulshma.jellyplay.core.network.api.JellyPlayDevicePush
 import com.raulshma.jellyplay.core.network.api.JellyPlayPluginApiClient
 import com.raulshma.jellyplay.core.network.api.JellyPlayPushRegistration
@@ -156,9 +155,10 @@ class JellyPushRepository(
     fun start() {
         if (gateJob?.isActive == true) return
         gateJob = scope.launch {
-            if (statusStore.status.value != JellyPlayPluginStatus.AVAILABLE) {
-                statusStore.refresh()
-            }
+            // One probe when the store hasn't got a fresh AVAILABLE (the shared
+            // ladder) — a mid-session plugin install restores push without a
+            // re-auth; the collector below re-probes on capability flips.
+            statusStore.ensureAvailable()
             // Optimistic restore: a persisted endpoint re-attaches below (the
             // freshening re-POST) without demanding a live distributor round-trip.
             // Guarded on the WHOLE gate (probe exposing push AND the user's

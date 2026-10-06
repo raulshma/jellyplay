@@ -40,12 +40,13 @@ class SeerrPreferencesStore constructor(
 
         /**
          * The Seerr settings-surface connection MODE (direct fields vs the
-         * jellyfin-plugin-jellyplay "via server" bridge, ADR 0010).
-         *
-         * seam: the consumer seam for the follow-up that switches the Seerr
-         * DATA PATH to the plugin proxy — see [SeerrPreferences.useServerBridge].
-         * Deliberately NOT in [BOOLEAN_DEFAULTS]: it is the user's chosen mode,
-         * not a direct-connection feature toggle, so the direct pane's
+         * jellyfin-plugin-jellyplay "via server" bridge, ADR 0010). Its
+         * consumer is the data-path switch: with the mode on AND the
+         * `seerr-bridge` gate open, the Seerr client's calls ride the plugin
+         * proxy — see [SeerrPreferences.useServerBridge] and the SeerrBridge
+         * interceptor in core/network. Deliberately NOT in
+         * [BOOLEAN_DEFAULTS]: it is the user's chosen mode, not a
+         * direct-connection feature toggle, so the direct pane's
          * [disconnect] (which resets the defaults map) must not flip it.
          */
         val USE_SERVER_BRIDGE = booleanPreferencesKey("seerr_use_server_bridge")
@@ -124,9 +125,10 @@ class SeerrPreferencesStore constructor(
 
     /**
      * Persists the Seerr settings-surface connection MODE. Mode selection only —
-     * the actual data-path switch (pointing the Seerr client at the plugin's
-     * `jellyplay/seerr` proxy once the bridge is linked) is the follow-up
-     * consumer of this flag (see [SeerrPreferences.useServerBridge]).
+     * the data-path switch itself (pointing the Seerr client at the plugin's
+     * `jellyplay/seerr` proxy once the bridge is linked) reads this flag in
+     * core/network's SeerrBridge interceptor, gated on the `seerr-bridge`
+     * feature key (see [SeerrPreferences.useServerBridge]).
      */
     suspend fun setUseServerBridge(enabled: Boolean) {
         dataStore.edit { it[Keys.USE_SERVER_BRIDGE] = enabled }

@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.settings
 
 import androidx.compose.runtime.Immutable
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.repository.ProfileSyncRepository
 import com.raulshma.jellyplay.core.data.session.JellyPlayPluginStatusStore
 import com.raulshma.jellyplay.core.model.JellyPlayPluginFeatures
@@ -111,7 +112,7 @@ class JellyPlaySyncViewModel(
                 }
                 return@launch
             }
-            val thisDeviceId = runCatching { syncRepository.currentDeviceId() }.getOrNull()
+            val thisDeviceId = runCatchingRethrowingCancellation { syncRepository.currentDeviceId() }.getOrNull()
                 ?: _uiState.value.thisDeviceId
             val status = pluginApiClient.getSyncStatus().getOrNull()
             val history = pluginApiClient.getSyncHistory(limit = HISTORY_LIMIT).getOrNull()

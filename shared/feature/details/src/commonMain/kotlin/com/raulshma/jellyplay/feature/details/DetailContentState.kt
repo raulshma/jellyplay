@@ -115,9 +115,13 @@ internal data class DetailContentState(
     // Empty = section absent (probe failure / no data — never an error).
     val pluginRatings: List<com.raulshma.jellyplay.core.network.api.JellyPlayRatingEntry> = emptyList(),
     /** Server-scored "More like this", hydrated into displayable items.
-     *  Empty = section absent; non-empty replaces the stock relatedItems row
-     *  (the plugin feeds the server's similar pipeline the same list). */
+     *  Empty = section absent; the stock relatedItems row stays beside it. */
     val pluginSimilarItems: List<MediaItem> = emptyList(),
+    /** True only when the plugin's scorer feeds the HOST's similar pipeline
+     *  (Jellyfin 12+ — the capabilities handshake says so): there the stock
+     *  row returns the same scored list and is suppressed. See
+     *  [DetailUiState.pluginSimilarSuppressesStock]. */
+    val pluginSimilarSuppressesStock: Boolean = false,
     /** Anime filler/mixed/recap badges by episode number, rendered on the
      *  seasons section's episode rows. Empty = no badges. */
     val animeMarkers: Map<Int, AnimeBadgeKind> = emptyMap(),

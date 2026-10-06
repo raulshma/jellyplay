@@ -111,10 +111,14 @@ data class DetailUiState(
     val pluginRatings: List<com.raulshma.jellyplay.core.network.api.JellyPlayRatingEntry> = emptyList(),
     /** Server-scored "More like this" ([JellyPlayPluginFeatures.Recommendations]),
      *  hydrated into displayable items the shared poster row renders. Empty =
-     *  section absent. Non-empty REPLACES the stock relatedItems row (the
-     *  plugin feeds the server's similar pipeline the same list — rendering
-     *  both would duplicate the row). */
+     *  section absent; the stock relatedItems row stays in place beside it. */
     val pluginSimilarItems: List<MediaItem> = emptyList(),
+    /** True only when the capabilities handshake said the plugin registered
+     *  into the host's similar-items pipeline (Jellyfin 12+ hosts) — there the
+     *  stock endpoint returns the SAME scored list, so the stock row is
+     *  suppressed to avoid a duplicate. False on pre-12 hosts / older plugins:
+     *  the two lists differ and both rows render. */
+    val pluginSimilarSuppressesStock: Boolean = false,
     /** Anime filler/mixed/recap badges for the current series' episode numbers
      *  ([JellyPlayPluginFeatures.AnimeMarkers]). Rendered on episode rows in
      *  the seasons section; empty = no badges anywhere. */

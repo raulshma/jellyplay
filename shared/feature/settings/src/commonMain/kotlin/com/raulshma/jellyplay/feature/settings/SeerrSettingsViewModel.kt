@@ -427,13 +427,13 @@ class SeerrSettingsViewModel(
 
     /**
      * The bridge surfaces' gate arm (probe AND the user's `seerr-bridge`
-     * toggle); without the gate seam the probe alone governs. The saved
-     * via-server MODE pref stays put while off — the screen just renders the
-     * direct pane and the repository stays in direct mode until the toggle
-     * (or the pref) comes back.
+     * toggle). Fail-CLOSED on the unwired gate seam: the registry is the only
+     * gating mechanism (ADR 0010 §6). The saved via-server MODE pref stays put
+     * while off — the screen just renders the direct pane and the repository
+     * stays in direct mode until the toggle (or the pref) comes back.
      */
     private suspend fun bridgeGateOpen(): Boolean =
-        jellyPlayFeatureGate?.isAvailableNow(JellyPlayPluginFeatures.SeerrBridge) ?: true
+        jellyPlayFeatureGate?.isAvailableNow(JellyPlayPluginFeatures.SeerrBridge) ?: false
 
     /**
      * Persists the connection MODE and drives the pane transition: entering

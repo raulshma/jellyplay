@@ -56,6 +56,20 @@ a new capability key, not a contract break.
 `JellyfinRawRequester`), registered in the `JellyfinApiClient` composite —
 the same one-family-per-server-surface idiom as every other client family.
 
+> **Amendment (2026-10-07, Seerr bridge exemption).** The Seerr-via-server
+> mode is the one ratified exception: in bridge mode the EXISTING
+> `SeerrApiClient` rewrites `{seerr}/api/v1/...` to
+> `{jellyfin}/jellyplay/seerr/...` (an OkHttp interceptor in
+> `SeerrApiClientImpl`) and authenticates with the Jellyfin session token,
+> so the Seerr API key never leaves the server. Rationale: the Seerr API
+> surface is far too wide to mirror through typed `JellyPlayPluginApiClient`
+> methods, and the client is already written — the bridge is a transport
+> rewrite onto the plugin's catch-all proxy, not a second plugin client
+> family. The exemption covers only the `/jellyplay/seerr/*` proxy prefix;
+> every first-party plugin route (capabilities, settings, sync, events,
+> push, analytics, transcodes, ratings, markers) still rides the one
+> family.
+
 **6. Future in-app extension SPI.** The capability registry
 (`features: StateFlow<Set<String>>`) is deliberately the ONLY gating
 mechanism. A future in-app extension system plugs in at the same seam:

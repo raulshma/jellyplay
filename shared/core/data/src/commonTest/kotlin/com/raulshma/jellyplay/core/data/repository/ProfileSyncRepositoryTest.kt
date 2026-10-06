@@ -324,14 +324,17 @@ class ProfileSyncRepositoryTest {
     }
 
     @Test
-    fun unavailablePlugin_surfacesError_noPush() = runTest {
+    fun unavailablePlugin_endsQuietly_noPush_noErrorSurface() = runTest {
         val h = harness(local = mapOf("theme" to JsonPrimitive("dark")), capabilitiesFail = true)
 
         h.repo.setEnabled(true)
         h.repo.requestSync()
 
         assertTrue(h.api.pushedWrites.isEmpty())
-        assertEquals("Plugin unavailable", h.repo.state.value.lastError)
+        // ADR 0010 §1: probe failure = UNAVAILABLE, never an error surface —
+        // the cycle ends quietly instead of writing lastError.
+        assertNull(h.repo.state.value.lastError)
+        assertNull(h.repo.state.value.lastSyncAt)
         assertEquals(JellyPlayPluginStatus.UNAVAILABLE, h.statusStore.status.value)
     }
 

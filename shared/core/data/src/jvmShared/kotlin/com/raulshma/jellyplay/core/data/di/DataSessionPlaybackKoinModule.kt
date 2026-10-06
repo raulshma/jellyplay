@@ -26,8 +26,10 @@ import com.raulshma.jellyplay.core.data.session.SessionIdentityProvider
 import com.raulshma.jellyplay.core.data.sync.OfflineSyncComparator
 import com.raulshma.jellyplay.core.data.sync.OfflineSyncManager
 import com.raulshma.jellyplay.core.model.EpochMillisSource
+import com.raulshma.jellyplay.core.model.PlatformKind
 import com.raulshma.jellyplay.core.model.SystemTimeSource
 import com.raulshma.jellyplay.core.model.TimeSource
+import com.raulshma.jellyplay.core.model.currentPlatform
 import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.datastore.library.LibraryStore
@@ -253,7 +255,7 @@ internal val dataSessionPlaybackModule: Module = module {
             adapters = listOf(get<JellyPlayPreferencesSyncAdapter>()),
             deviceProfile = detectDeviceProfile(),
             deviceIdProvider = jpsyncDeviceIdProvider(dataStore),
-            nowMillis = { System.currentTimeMillis() },
+            nowMillis = { get<TimeSource>().nowEpochMillis() },
             persistenceScope = get(com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers.applicationScope),
             loadEnabled = {
                 dataStore.data.first()[booleanPreferencesKey("jpsync.device.sync_enabled")] ?: false
@@ -323,12 +325,34 @@ internal val dataSessionPlaybackModule: Module = module {
             scope = get(com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers.applicationScope),
         ).apply { start() }
     }
+
+    // The sync engine's live half (ADR 0010 §4): the settings SSE stream →
+    // requestSync. Rides auth AND the engine's own enabled edge (no connection
+    // for a user who never opted in, none doomed while signed out); the
+    // createdAtStart singleton-collector idiom again — one wiring covers both
+    // shells.
+    single(createdAtStart = true) {
+        com.raulshma.jellyplay.core.data.repository.JellyPlayLiveResyncConnector(
+            apiClient = get(),
+            syncRepository = get(),
+            statusStore = get(),
+            authRepository = get(),
+            scope = get(com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers.applicationScope),
+        ).apply { start() }
+    }
 }
 
-/** Desktop shells sync under the "desktop" profile, Android under "phone" (TV shells override later). */
-private fun detectDeviceProfile(): String {
-    val os = System.getProperty("os.name")?.lowercase().orEmpty()
-    return if (os.contains("windows") || os.contains("linux") || os.contains("mac")) "desktop" else "phone"
+/**
+ * Desktop shells sync under the "desktop" profile, Android under "phone".
+ * Rides the compile-time [currentPlatform] actual — never probe `os.name`,
+ * whose Android value is "Linux" and would misfile every Android device
+ * under the desktop profile. The axis is a compile-time constant, so TV
+ * binaries ride "phone" too: the plugin contract's "tv" profile would need
+ * a runtime form-factor provider seam, which nothing builds yet.
+ */
+private fun detectDeviceProfile(): String = when (currentPlatform) {
+    PlatformKind.DESKTOP -> "desktop"
+    PlatformKind.ANDROID -> "phone"
 }
 
 /**
@@ -345,8 +369,17 @@ private fun jpsyncDeviceIdProvider(
         ?: UUID.randomUUID().toString().also { fresh -> dataStore.edit { it[key] = fresh } }
 }
 
+/**
+ * The device display name the events/push device registration carries. Desktop
+ * shells read `os.name`; Android rides the compile-time platform actual —
+ * `os.name` is "Linux" on Android and would mislabel every phone (the rule
+ * [detectDeviceProfile]'s KDoc states).
+ */
 private fun detectDeviceName(): String =
-    System.getProperty("os.name")?.let { "$it device" } ?: "JellyPlay device"
+    when (currentPlatform) {
+        PlatformKind.ANDROID -> "Android device"
+        PlatformKind.DESKTOP -> System.getProperty("os.name")?.let { "$it device" } ?: "JellyPlay device"
+    }
 
 /** App version from the JVM manifest (best-effort; empty string when unpackaged). */
 private fun appVersionString(): String =

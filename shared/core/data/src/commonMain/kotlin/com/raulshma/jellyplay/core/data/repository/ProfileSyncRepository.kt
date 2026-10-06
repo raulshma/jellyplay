@@ -1,7 +1,6 @@
 package com.raulshma.jellyplay.core.data.repository
 
 import com.raulshma.jellyplay.core.data.session.JellyPlayPluginStatusStore
-import com.raulshma.jellyplay.core.model.JellyPlayPluginStatus
 import com.raulshma.jellyplay.core.network.api.JellyPlaySettingWrite
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -58,8 +57,9 @@ interface ProfileSyncAdapter {
  *     synced, so `stale-write` rejects retry next cycle and then converge.
  *
  * Local change watching stays with the store owners: they call [requestSync]
- * on change (the engine serializes + gates internally). SSE live re-sync
- * rides [JellyPlayEventsRepository]'s settings stream into [requestSync].
+ * on change (the engine serializes + gates internally). SSE live re-sync rides
+ * [JellyPlayLiveResyncConnector] — the settings stream's
+ * `settings.changed`/`settings.reset` frames fold into [requestSync].
  */
 class ProfileSyncRepository(
     private val apiClient: com.raulshma.jellyplay.core.network.api.JellyPlayPluginApiClient,
@@ -80,11 +80,12 @@ class ProfileSyncRepository(
     private val saveEnabled: (suspend (Boolean) -> Unit)? = null,
 ) {
 
-    /** Cumulative sync outcome for the settings screen. */
+    /** The latest cycle's sync outcome for the settings screen. */
     data class SyncState(
         val enabled: Boolean = false,
         val lastSyncAt: Long? = null,
         val lastError: String? = null,
+        /** Keys pushed + adopted by the LAST cycle (not cumulative across cycles). */
         val syncedKeys: Int = 0,
         val inFlight: Boolean = false,
     )
@@ -132,8 +133,13 @@ class ProfileSyncRepository(
     private fun reloadPersistedEnabled() {
         val load = loadEnabled ?: return
         persistenceScope?.launch {
+            // The read is async; a setEnabled landing while it is in flight is
+            // NEWER knowledge than the snapshot about to come back — a stale
+            // `true` must never re-arm the engine over it.
+            val token = ++loadGeneration
             try {
-                if (load()) {
+                val persisted = load()
+                if (token == loadGeneration && persisted) {
                     enabled = true
                     _state.value = _state.value.copy(enabled = true)
                 }
@@ -143,7 +149,11 @@ class ProfileSyncRepository(
         }
     }
 
+    /** Bumped by every [setEnabled]; stale persisted reloads discard themselves. */
+    private var loadGeneration = 0
+
     fun setEnabled(value: Boolean) {
+        loadGeneration++
         if (enabled == value) return
         enabled = value
         _state.value = _state.value.copy(enabled = value, lastError = null)
@@ -176,12 +186,18 @@ class ProfileSyncRepository(
     }
 
     private suspend fun runCycle(forceRemoteWins: Boolean = false) {
-        if (statusStore.status.value != JellyPlayPluginStatus.AVAILABLE) {
-            statusStore.refresh()
-            if (statusStore.status.value != JellyPlayPluginStatus.AVAILABLE) {
-                _state.value = _state.value.copy(lastError = "Plugin unavailable", inFlight = false)
-                return
-            }
+        // The gate is the probe ladder AND the registry's `settings-sync` key —
+        // the ONE gating mechanism (ADR 0010 §1/§6): a server whose handshake
+        // omits the key (admin-disabled, or the plugin predates the sync wave)
+        // ends the cycle the same quiet way a stock server does.
+        if (!statusStore.ensureAvailable() || !statusStore.hasFeature(FEATURE_SETTINGS_SYNC)) {
+            // ADR 0010 §1: probe failure = UNAVAILABLE, never an error
+            // surface. lastError is the sync screen's failure row; a
+            // pre-wave (or merely down) plugin ends the cycle quietly —
+            // nothing synced, nothing claimed, lastSyncAt keeps its
+            // previous value.
+            _state.value = _state.value.copy(inFlight = false)
+            return
         }
 
         _state.value = _state.value.copy(inFlight = true)
@@ -250,11 +266,18 @@ class ProfileSyncRepository(
         } catch (t: Throwable) {
             if (t is kotlinx.coroutines.CancellationException) throw t
             _state.value = _state.value.copy(lastError = t.message ?: t.javaClass.simpleName, inFlight = false)
+        } finally {
+            // A cancelled cycle rethrows from the catch above and skips both
+            // setters — the screen must never park on "Syncing…".
+            if (_state.value.inFlight) _state.value = _state.value.copy(inFlight = false)
         }
     }
 
     private companion object {
         const val OWNER = "profile-sync"
+
+        /** The registry key this engine gates on (ADR 0010 §6). */
+        const val FEATURE_SETTINGS_SYNC = com.raulshma.jellyplay.core.model.JellyPlayPluginFeatures.SettingsSync
 
         /** The admin-defaults mode that locks a key's UI (`unset`/`suggested` stay writable). */
         const val MODE_FORCED = "forced"

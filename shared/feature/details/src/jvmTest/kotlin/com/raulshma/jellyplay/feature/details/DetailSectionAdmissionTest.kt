@@ -80,6 +80,7 @@ class DetailSectionAdmissionTest {
         hasAttachedDownload: Boolean = false,
         hasPluginRatings: Boolean = false,
         hasPluginSimilar: Boolean = false,
+        suppressStockSimilar: Boolean = false,
     ): List<DetailSectionKind> = DetailSectionAdmission(
         mediaType = mediaType,
         isLocalOrigin = isLocalOrigin,
@@ -100,6 +101,7 @@ class DetailSectionAdmissionTest {
         hasAttachedDownload = hasAttachedDownload,
         hasPluginRatings = hasPluginRatings,
         hasPluginSimilar = hasPluginSimilar,
+        suppressStockSimilar = suppressStockSimilar,
     ).admit()
 
     private fun List<DetailSectionKind>.indices(): List<Int> = map { it.delayIndex }
@@ -613,14 +615,26 @@ class DetailSectionAdmissionTest {
         assertEquals(overviewIdx + 1, ratingsIdx, "ratings row follows the overview")
         assertEquals(3, DetailSectionKind.PLUGIN_RATINGS.delayIndex)
 
-        // Scored similar present → REPLACES the stock row (same slot 10):
-        // the plugin also feeds the server's similar-items pipeline, so the
-        // stock endpoint returns the same scored list — keeping both rows
-        // would duplicate it.
+        // Scored similar present → the plugin row admits (same slot 10 as the
+        // stock row), but suppression is NOT tied to its presence: on hosts
+        // where the plugin's scorer did NOT register into the stock pipeline
+        // (pre-Jellyfin-12 / older plugin) the two lists differ and BOTH rows
+        // render.
         val withSimilar = admission(MediaType.MOVIE, hasPluginSimilar = true)
         assertTrue(withSimilar.contains(DetailSectionKind.JELLYPLAY_SIMILAR))
-        assertFalse(withSimilar.contains(DetailSectionKind.MORE_LIKE_THIS), "plugin similar suppresses the stock row")
+        assertTrue(withSimilar.contains(DetailSectionKind.MORE_LIKE_THIS), "no pipeline → stock row stays")
         assertEquals(10, DetailSectionKind.JELLYPLAY_SIMILAR.delayIndex)
+
+        // Pipeline host (capabilities said the plugin registered into the
+        // host's similar-items pipeline) → the stock endpoint returns the
+        // SAME scored list; the stock row stands down to avoid the duplicate.
+        val withSimilarOnPipeline = admission(MediaType.MOVIE, hasPluginSimilar = true, suppressStockSimilar = true)
+        assertTrue(withSimilarOnPipeline.contains(DetailSectionKind.JELLYPLAY_SIMILAR))
+        assertFalse(withSimilarOnPipeline.contains(DetailSectionKind.MORE_LIKE_THIS), "pipeline host → stock row suppressed")
+
+        // Suppression never suppresses the plugin row itself (an odd
+        // capability/empty-list combination just reverts to stock).
+        assertTrue(admission(MediaType.MOVIE, suppressStockSimilar = true).contains(DetailSectionKind.MORE_LIKE_THIS))
 
         // Empty plugin hydration → the stock row stays admitted (bare above
         // already contains MORE_LIKE_THIS — re-asserted here against the

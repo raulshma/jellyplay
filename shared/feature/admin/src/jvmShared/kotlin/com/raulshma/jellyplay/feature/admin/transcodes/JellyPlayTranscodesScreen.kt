@@ -263,7 +263,7 @@ private fun TranscodeMetaRow(row: TranscodeRow) {
                 .takeIf { it.isNotEmpty() }
                 ?.let { codecs -> add(codecs.joinToString(" / ")) }
             if (row.transcodeReasons.isNotEmpty()) {
-                add(row.transcodeReasons.joinToString(separator = ", ") { it.humanizeTranscodeReason() })
+                add(row.transcodeReasons.transcodeReasonsLabel())
             }
         }
         row.bitrateLabel?.let { add(it) }

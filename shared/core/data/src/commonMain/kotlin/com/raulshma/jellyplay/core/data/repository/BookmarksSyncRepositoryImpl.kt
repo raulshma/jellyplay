@@ -6,7 +6,6 @@ import com.raulshma.jellyplay.core.database.dao.BookBookmarkDao
 import com.raulshma.jellyplay.core.database.entity.BookBookmarkEntity
 import com.raulshma.jellyplay.core.model.BookProgressPolicy
 import com.raulshma.jellyplay.core.model.JellyPlayPluginFeatures
-import com.raulshma.jellyplay.core.model.JellyPlayPluginStatus
 import com.raulshma.jellyplay.core.network.api.JellyPlayBookmark
 import com.raulshma.jellyplay.core.network.api.JellyPlayBookmarkRequest
 import com.raulshma.jellyplay.core.network.api.JellyPlayPluginApiClient
@@ -142,9 +141,7 @@ class BookmarksSyncRepositoryImpl(
      * bookmarks keep working, the plugin mirror just skips.
      */
     private suspend fun gate(): Boolean {
-        if (statusStore.status.value != JellyPlayPluginStatus.AVAILABLE) {
-            statusStore.refresh()
-        }
+        statusStore.ensureAvailable()
         return featureGate.isAvailableNowOrProbe(statusStore, JellyPlayPluginFeatures.Bookmarks)
     }
 

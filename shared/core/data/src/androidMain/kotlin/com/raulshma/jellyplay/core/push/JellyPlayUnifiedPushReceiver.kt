@@ -6,6 +6,7 @@ import com.raulshma.jellyplay.core.data.repository.JellyPushRepository
 import com.raulshma.jellyplay.core.data.session.JellyPlayFeatureGate
 import com.raulshma.jellyplay.core.model.JellyPlayPluginFeatures
 import com.raulshma.jellyplay.core.notification.dispatcher.NotificationDispatcher
+import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -93,6 +94,8 @@ class JellyPlayUnifiedPushReceiver : MessagingReceiver() {
         scope.launch {
             try {
                 block()
+            } catch (e: CancellationException) {
+                throw e
             } catch (t: Throwable) {
                 // A push callback is best-effort live signal — never crash the
                 // process for one; the inbox/messages surfaces are durable.

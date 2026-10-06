@@ -161,9 +161,9 @@ class JellyPlayFeatureGate(
  * plugin seams (direct-construction tests): the ONE gate seam when wired,
  * otherwise the probe-only fallback — AVAILABLE AND the registry has
  * [feature] ([JellyPlayPluginStatusStore.hasFeature] alone is equivalent —
- * the feature set only populates on a successful AVAILABLE probe). The Seerr
- * bridge is the declared exception: its unwired fallback is gate-OPEN
- * (`?: true` — the saved mode alone governs) and stays site-local.
+ * the feature set only populates on a successful AVAILABLE probe). Unwired
+ * consumers gate CLOSED: the registry is the only gating mechanism (ADR 0010
+ * §6), so an absent gate must never read as open.
  */
 suspend fun JellyPlayFeatureGate?.isAvailableNowOrProbe(
     statusStore: JellyPlayPluginStatusStore,

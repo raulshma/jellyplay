@@ -42,8 +42,13 @@ import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.SettingListItem
 import com.raulshma.jellyplay.core.ui.components.SettingToggleItem
 import com.raulshma.jellyplay.core.ui.components.SettingsItemList
+import com.raulshma.jellyplay.core.ui.components.clockTime
+import com.raulshma.jellyplay.core.ui.components.formatIntPattern
+import com.raulshma.jellyplay.core.ui.components.relativeDayLabel
 import com.raulshma.jellyplay.core.ui.components.rememberConfirmState
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState
+import kotlinx.datetime.toKotlinLocalDate
+import kotlinx.datetime.toKotlinLocalTime
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_cancel
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync
@@ -467,30 +472,36 @@ private fun QuietLine(text: String) {
 
 /**
  * The sync timestamps' shape: "HH:mm" today, "Yesterday, HH:mm" the day
- * before, "MMM d, HH:mm" older (the old settings-root row's locale-formatted
- * HH:mm precedent, lifted to a date ladder); fallback keeps the raw millis
- * honest. java.time rides the module's commonMain precedent (SettingsViewModel).
+ * before, "MMM d, HH:mm" older. The DATE half rides the core:ui seam —
+ * [relativeDayLabel] (Today / Yesterday / shortMonthDay) — the clock fragment
+ * rides [clockTime]; the feature owns only the composite. Fallback keeps the
+ * raw millis honest.
  */
 @Composable
 private fun formatSyncTimestamp(epochMillis: Long): String {
     val parts = runCatching {
         val zone = java.time.ZoneId.systemDefault()
         val dateTime = java.time.Instant.ofEpochMilli(epochMillis).atZone(zone)
-        Triple(dateTime.toLocalDate(), java.time.LocalDate.now(zone), dateTime.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm")))
+        Triple(
+            dateTime.toLocalDate().toKotlinLocalDate(),
+            java.time.LocalDate.now(zone).toKotlinLocalDate(),
+            dateTime.toLocalTime().toKotlinLocalTime(),
+        )
     }.getOrNull() ?: return epochMillis.toString()
     val (date, today, time) = parts
-    return when (date) {
-        today -> time
-        today.minusDays(1) -> stringResource(Res.string.settings_jellyplay_sync_time_yesterday, time)
-        else -> date.format(java.time.format.DateTimeFormatter.ofPattern("MMM d")) + ", $time"
+    return if (date == today) {
+        clockTime(time)
+    } else {
+        "${relativeDayLabel(date, today)}, ${clockTime(time)}"
     }
 }
 
 /**
  * The diff keys' relative stamp: "just now" / "5m ago" / "3h ago" / "2d ago"
- * (the core:ui relative-time ladder, epoch-millis-based — the wire stamps are
- * epochs, not ISO; [wallNowMillis] is the portable now, never a raw
- * System.currentTimeMillis in commonMain). A server clock ahead of this
+ * — the integer-slot patterns render through core:ui's [formatIntPattern]
+ * (the ONE renderer for "N days / N minutes" translation patterns), the
+ * epoch-millis delta computed against [wallNowMillis], never a raw
+ * System.currentTimeMillis in commonMain. A server clock ahead of this
  * device reads as "just now".
  */
 @Composable
@@ -498,8 +509,17 @@ private fun relativeSyncTime(epochMillis: Long): String {
     val deltaMinutes = (wallNowMillis() - epochMillis) / 60_000
     return when {
         deltaMinutes < 1 -> stringResource(Res.string.settings_jellyplay_sync_relative_now)
-        deltaMinutes < 60 -> stringResource(Res.string.settings_jellyplay_sync_relative_minutes, deltaMinutes)
-        deltaMinutes < 24 * 60 -> stringResource(Res.string.settings_jellyplay_sync_relative_hours, deltaMinutes / 60)
-        else -> stringResource(Res.string.settings_jellyplay_sync_relative_days, deltaMinutes / (24 * 60))
+        deltaMinutes < 60 -> formatIntPattern(
+            stringResource(Res.string.settings_jellyplay_sync_relative_minutes),
+            deltaMinutes.toInt(),
+        )
+        deltaMinutes < 24 * 60 -> formatIntPattern(
+            stringResource(Res.string.settings_jellyplay_sync_relative_hours),
+            (deltaMinutes / 60).toInt(),
+        )
+        else -> formatIntPattern(
+            stringResource(Res.string.settings_jellyplay_sync_relative_days),
+            (deltaMinutes / (24 * 60)).toInt(),
+        )
     }
 }

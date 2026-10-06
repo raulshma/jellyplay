@@ -704,28 +704,23 @@ public class HomeSectionsFetcher(
             }
 
             HomeSectionType.PLUGIN_ROW -> {
-                // The plugin row's single-row refetch (edge pull): the same
-                // leaf read the batch path runs, forced (the gesture means
-                // "fetch fresh") and rebuilt through the SAME builder, so the
-                // row id stays stable and only the payload moves. An emptied
-                // source (plugin row removed mid-session) returns null — the
-                // row drops, matching the batch's zero-items policy.
+                // The plugin row's single-row refetch (edge pull): the SAME
+                // gated leaf reads the batch path runs — fetchSeasonalPluginRow
+                // / fetchPluginCustomRow carry the gate, the TTL memo and the
+                // builder, so the row id stays stable and only the payload
+                // moves (the gesture's `force` flag carries the "fetch fresh").
+                // An emptied source (plugin row removed mid-session) yields
+                // null — the row drops, matching the batch's zero-items policy.
                 val instanceId = HomeSectionType.PLUGIN_ROW.descriptor.instanceIdFor(section.id)
                     ?: error("Plugin row ${section.id} carries no instance id")
-                val rowIdentity = identity
                 if (instanceId.startsWith("custom_")) {
                     fetchPluginCustomRow(
                         title = instanceId.removePrefix("custom_"),
                         force = force,
-                        identity = rowIdentity,
+                        identity = identity,
                     )
                 } else {
-                    if (jellyPlaySources == null || !jellyPlaySources.seasonalRowsEnabled()) null
-                    else pluginRowCacheThrough(
-                        cacheKey = "jellyplay_seasonal",
-                        force = force,
-                        identity = rowIdentity,
-                    ) { jellyPlaySources.getSeasonalRow(keyword = null) }
+                    fetchSeasonalPluginRow(force = force, identity = identity).firstOrNull()
                 }
             }
 

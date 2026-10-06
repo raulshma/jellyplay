@@ -1,7 +1,6 @@
 package com.raulshma.jellyplay.core.data.repository
 
 import com.raulshma.jellyplay.core.data.session.JellyPlayPluginStatusStore
-import com.raulshma.jellyplay.core.model.JellyPlayPluginStatus
 import com.raulshma.jellyplay.core.network.api.JellyPlayMessage
 import com.raulshma.jellyplay.core.network.api.JellyPlayPluginApiClient
 import com.raulshma.jellyplay.core.network.api.JellyPlaySseEvent
@@ -46,11 +45,11 @@ sealed interface JellyPlayPluginEvent {
  * registration, the live events SSE stream decoded into
  * [JellyPlayPluginEvent]s, and the admin inbox messages.
  *
- * [start] launches ONE stream consumer in [scope]; reconnects use linear
- * backoff capped at 60s, reset on a successful connection (events are
- * best-effort live pushes — the inbox covers durability, no replay needed).
- * Consumers collect [events]; UI also reads [inbox]. Session-scoped state
- * resets via the plugin status store's identity invalidation.
+ * [start] launches ONE stream consumer in [scope]; reconnects use exponential
+ * (doubling) backoff capped at 60s, reset on a successful connection (events
+ * are best-effort live pushes — the inbox covers durability, no replay
+ * needed). Consumers collect [events]; UI also reads [inbox]. Session-scoped
+ * state resets via the plugin status store's identity invalidation.
  */
 class JellyPlayEventsRepository(
     private val apiClient: JellyPlayPluginApiClient,
@@ -78,10 +77,10 @@ class JellyPlayEventsRepository(
     /** Registers this device and starts the live stream. Safe to call repeatedly (idempotent). */
     suspend fun start() {
         if (streamJob?.isActive == true) return
-        if (statusStore.status.value != JellyPlayPluginStatus.AVAILABLE) {
-            statusStore.refresh()
-            if (statusStore.status.value != JellyPlayPluginStatus.AVAILABLE) return
-        }
+        // The probe ladder AND the registry's `events` key — the ONE gating
+        // mechanism (ADR 0010 §1/§6): a server whose handshake omits `events`
+        // never gets a device registration or an SSE attempt.
+        if (!statusStore.ensureAvailable() || !statusStore.hasFeature(FEATURE_EVENTS)) return
 
         deviceIdProvider().let { deviceId ->
             apiClient.registerDevice(deviceId, deviceName, devicePlatform, appVersion)
@@ -107,11 +106,11 @@ class JellyPlayEventsRepository(
     }
 
     private suspend fun runEventStream() {
-        var backoffMillis = 1_000L
+        val reconnect = SseReconnectLoop()
         while (streamJob?.isActive == true) {
             try {
                 apiClient.eventsStream().collect { sse ->
-                    backoffMillis = 1_000L
+                    reconnect.onConnected()
                     _streamConnected.value = true
                     decode(sse)?.let { _events.emit(it) }
                 }
@@ -123,41 +122,41 @@ class JellyPlayEventsRepository(
             }
 
             if (streamJob?.isActive != true) break
-            kotlinx.coroutines.delay(backoffMillis)
-            backoffMillis = (backoffMillis * 2).coerceAtMost(60_000L)
+            reconnect.awaitRetryDelay()
             // Re-probe: a plugin installed mid-session should light the stream up.
-            if (statusStore.status.value != JellyPlayPluginStatus.AVAILABLE) {
-                statusStore.refresh()
-            }
+            statusStore.ensureAvailable()
         }
     }
 
     private fun decode(sse: JellyPlaySseEvent): JellyPlayPluginEvent? = try {
+        fun obj(data: String) = json.parseToJsonElement(data) as? kotlinx.serialization.json.JsonObject
+
+        /** The one primitive read every payload field decodes through. */
+        fun kotlinx.serialization.json.JsonObject.text(name: String): String? =
+            (this[name] as? kotlinx.serialization.json.JsonPrimitive)?.content
+
         when (sse.event) {
             "new-media" -> {
-                val obj = json.parseToJsonElement(sse.data).let { it as? kotlinx.serialization.json.JsonObject }
-                    ?: return null
+                val payload = obj(sse.data) ?: return null
                 JellyPlayPluginEvent.NewMedia(
-                    itemId = (obj["itemId"] as? kotlinx.serialization.json.JsonPrimitive)?.content ?: return null,
-                    seriesId = (obj["seriesId"] as? kotlinx.serialization.json.JsonPrimitive)?.content,
-                    seasonIndex = (obj["seasonIndex"] as? kotlinx.serialization.json.JsonPrimitive)?.content?.toIntOrNull(),
-                    title = (obj["title"] as? kotlinx.serialization.json.JsonPrimitive)?.content.orEmpty(),
-                    episodeCount = (obj["episodeCount"] as? kotlinx.serialization.json.JsonPrimitive)?.content?.toIntOrNull() ?: 1,
+                    itemId = payload.text("itemId") ?: return null,
+                    seriesId = payload.text("seriesId"),
+                    seasonIndex = payload.text("seasonIndex")?.toIntOrNull(),
+                    title = payload.text("title").orEmpty(),
+                    episodeCount = payload.text("episodeCount")?.toIntOrNull() ?: 1,
                 )
             }
             "broadcast" -> {
-                val obj = json.parseToJsonElement(sse.data).let { it as? kotlinx.serialization.json.JsonObject }
-                    ?: return null
+                val payload = obj(sse.data) ?: return null
                 JellyPlayPluginEvent.Broadcast(
-                    title = (obj["title"] as? kotlinx.serialization.json.JsonPrimitive)?.content.orEmpty(),
-                    body = (obj["body"] as? kotlinx.serialization.json.JsonPrimitive)?.content.orEmpty(),
-                    url = (obj["url"] as? kotlinx.serialization.json.JsonPrimitive)?.content,
+                    title = payload.text("title").orEmpty(),
+                    body = payload.text("body").orEmpty(),
+                    url = payload.text("url"),
                 )
             }
             "session-started", "playback-started", "user-locked-out" -> {
-                val obj = json.parseToJsonElement(sse.data).let { it as? kotlinx.serialization.json.JsonObject }
-                    ?: return null
-                val username = (obj["username"] as? kotlinx.serialization.json.JsonPrimitive)?.content.orEmpty()
+                val payload = obj(sse.data) ?: return null
+                val username = payload.text("username").orEmpty()
                 when (sse.event) {
                     "session-started" -> JellyPlayPluginEvent.SessionStarted(username)
                     "playback-started" -> JellyPlayPluginEvent.PlaybackStarted(username)
@@ -168,5 +167,10 @@ class JellyPlayEventsRepository(
         }
     } catch (t: kotlinx.serialization.SerializationException) {
         null
+    }
+
+    private companion object {
+        /** The registry key this face gates on (ADR 0010 §6). */
+        const val FEATURE_EVENTS = com.raulshma.jellyplay.core.model.JellyPlayPluginFeatures.Events
     }
 }

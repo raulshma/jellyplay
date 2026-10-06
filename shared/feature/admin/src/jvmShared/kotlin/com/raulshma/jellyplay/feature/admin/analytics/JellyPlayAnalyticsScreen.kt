@@ -88,7 +88,7 @@ import com.raulshma.jellyplay.feature.admin.generated.resources.jellyplay_tr_pla
 import com.raulshma.jellyplay.feature.admin.generated.resources.jellyplay_tr_unknown
 import com.raulshma.jellyplay.feature.admin.statistics.components.ActivityBarChart
 import com.raulshma.jellyplay.feature.admin.transcodes.TranscodePlayMethod
-import com.raulshma.jellyplay.feature.admin.transcodes.humanizeTranscodeReason
+import com.raulshma.jellyplay.feature.admin.transcodes.transcodeReasonsLabel
 
 /**
  * The admin analytics dashboard (Route.JellyPlayAnalytics): the companion
@@ -735,7 +735,7 @@ private fun SessionMetaRow(row: AnalyticsSessionRow, isTranscoding: Boolean) {
         // a direct play has nothing to show for them (the transcodes
         // monitor's rule).
         if (isTranscoding && row.transcodeReasons.isNotEmpty()) {
-            add(row.transcodeReasons.joinToString(separator = ", ") { it.humanizeTranscodeReason() })
+            add(row.transcodeReasons.transcodeReasonsLabel())
         }
     }
     if (parts.isEmpty()) return

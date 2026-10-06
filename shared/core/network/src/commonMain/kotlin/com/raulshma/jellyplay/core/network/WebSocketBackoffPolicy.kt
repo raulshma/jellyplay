@@ -28,6 +28,13 @@ class WebSocketBackoffPolicy(
     val maxDelayMs: Long = MAX_DELAY_MS,
 
     /**
+     * Exponent saturation override — see [SHIFT_CAP]. The default keeps the
+     * socket lane's 16s plateau; schedules with a higher ceiling (the SSE
+     * loops' 60s) raise it so the exponential term can actually reach it.
+     */
+    val shiftCap: Int = SHIFT_CAP,
+
+    /**
      * Additive jitter (ms) applied to the exponential term before the
      * ceiling. Default zero — the deterministic schedule.
      */
@@ -40,7 +47,7 @@ class WebSocketBackoffPolicy(
      */
     fun delayMs(attempt: Int): Long? {
         if (attempt !in 1..maxAttempts) return null
-        val exponential = baseDelayMs * (1L shl (attempt - 1).coerceAtMost(SHIFT_CAP))
+        val exponential = baseDelayMs * (1L shl (attempt - 1).coerceAtMost(shiftCap))
         return (exponential + jitterMs()).coerceAtMost(maxDelayMs)
     }
 

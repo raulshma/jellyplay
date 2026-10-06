@@ -507,6 +507,7 @@ fun MediaDetailScreen(
                     book = uiState.book,
                     pluginRatings = uiState.pluginRatings,
                     pluginSimilarItems = uiState.pluginSimilarItems,
+                    pluginSimilarSuppressesStock = uiState.pluginSimilarSuppressesStock,
                     animeMarkers = uiState.animeMarkers,
                     seasonRatings = uiState.seasonRatings,
                 )

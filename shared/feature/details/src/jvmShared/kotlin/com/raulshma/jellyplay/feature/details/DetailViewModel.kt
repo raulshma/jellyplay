@@ -55,8 +55,9 @@ import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
+import com.raulshma.jellyplay.core.concurrency.DEFAULT_FANOUT_PARALLELISM
+import com.raulshma.jellyplay.core.concurrency.mapConcurrentCatching
+import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -480,6 +481,12 @@ class DetailViewModel internal constructor(
      * covers both lifecycles.
      */
     private val loadGuard = DetailLoadGuard()
+    /**
+     * The plugin similar-items hydration width (the arrqueue searchSemaphore /
+     * heatmap resolveSemaphore idiom, [DEFAULT_FANOUT_PARALLELISM]) — the one
+     * bounded-parallel surface for the per-candidate getMediaDetail fan-out.
+     */
+    private val hydrationSemaphore = Semaphore(DEFAULT_FANOUT_PARALLELISM)
     /**
      * The series whose provider catalogue the current screen consumes — the
      * [loadItemInternal] invalidation target and the [loadEpisodesForSeason]
@@ -986,11 +993,12 @@ class DetailViewModel internal constructor(
         },
         DetailEnrichment(
             name = "pluginSimilarItems",
-            // The server-scored "More like this" — REPLACES the stock
-            // similarItems row while non-empty (the admission fold suppresses
-            // MORE_LIKE_THIS on hasPluginSimilar): the plugin also feeds the
-            // server's similar-items pipeline, so the stock endpoint returns
-            // the same scored list and both rows would duplicate. The plugin
+            // The server-scored "More like this" row, rendered BESIDE the stock
+            // one. The stock row stands down only when the capabilities
+            // handshake says the plugin registered into the host's similar
+            // pipeline (Jellyfin 12+ — there the stock endpoint returns the
+            // same scored list and both rows would duplicate); on pre-12 hosts
+            // / older plugins the lists differ and both render. The plugin
             // returns scored item ids only, so each id is hydrated through
             // the same per-item fetch the detail screen already uses
             // (getMediaDetail), preserving score order; per-id failures drop
@@ -1004,10 +1012,12 @@ class DetailViewModel internal constructor(
                 .filter { it.itemId != inputs.itemId }
                 .distinctBy { it.itemId }
             if (scored.isEmpty()) return@DetailEnrichment
-            val hydrated = kotlinx.coroutines.coroutineScope {
-                scored.map { candidate ->
-                    async { mediaRepository.getMediaDetail(candidate.itemId).getOrNull()?.item }
-                }.awaitAll()
+            // The shared bounded-parallel hydration (DEFAULT_FANOUT_PARALLELISM,
+            // the arrqueue/heatmap idiom): per-id failures and null details drop
+            // out (mapConcurrentCatching's drop policy) instead of an unbounded
+            // async/awaitAll fan-out over the server.
+            val hydrated = hydrationSemaphore.mapConcurrentCatching(scored) { candidate ->
+                mediaRepository.getMediaDetail(candidate.itemId).getOrNull()?.item
             }
             if (!loadGuard.isCurrent(inputs.itemId)) return@DetailEnrichment
             _uiState.update {
@@ -1016,6 +1026,10 @@ class DetailViewModel internal constructor(
                         .filterNotNull()
                         .filter { item -> item.id != inputs.itemId }
                         .distinctBy { item -> item.id },
+                    // The probe ran synchronously inside pluginFeature above, so
+                    // the capabilities payload is fresh for this read.
+                    pluginSimilarSuppressesStock =
+                        pluginStatusStore?.capabilities?.value?.serverSimilarPipeline == true,
                 )
             }
         },

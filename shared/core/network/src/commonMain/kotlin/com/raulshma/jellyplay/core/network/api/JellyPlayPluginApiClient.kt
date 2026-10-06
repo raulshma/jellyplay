@@ -320,6 +320,15 @@ data class JellyPlayCapabilities(
     val features: List<String> = emptyList(),
     val serverNow: Long = 0,
     val deviceProfiles: List<String> = emptyList(),
+    /**
+     * The plugin registered its scorer into the HOST's similar-items pipeline
+     * (a Jellyfin-12+ reflection-guarded registration; no-op on 10.11 — the
+     * plugin knows, the client cannot). Additive, default false: only when
+     * true does the stock `/Items/{id}/Similar` return the same scored list
+     * the plugin row renders — the detail screen's stock-row suppression
+     * reads this, never assumes it.
+     */
+    val serverSimilarPipeline: Boolean = false,
 )
 
 @Serializable

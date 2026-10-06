@@ -341,10 +341,11 @@ internal fun formatBitrate(bitsPerSecond: Int): String {
 }
 
 /**
- * "VideoCodecNotSupported" → "Video codec not supported" — the server's flag
- * names are CamelCase sentences; the meta row wants a readable clause. Pure
- * string math so the label is test-deterministic (no resx per reason — the
- * host's enum vocabulary is the contract).
+ * The unknown-token fallback of [transcodeReasonLabel]: known server tokens
+ * resolve through the shared core:ui TranscodeReasonCatalog (localized);
+ * this only renders what the catalog does not know yet — "VideoCodecNotSupported"
+ * → "video codec not supported". Pure string math so the label is
+ * test-deterministic.
  */
 internal fun String.humanizeTranscodeReason(): String =
     replace(Regex("(?<=[a-z0-9])(?=[A-Z])"), " ")

@@ -174,9 +174,14 @@ class SeerrRepositoryImpl(
         return block(url, credentials)
     }
 
-    /** The bridge arm's gate; without the seam the saved mode alone governs. */
+    /**
+     * The bridge arm's gate. Fail-CLOSED on the unwired seam
+     * (direct-construction tests): the registry is the only gating mechanism
+     * (ADR 0010 §6), so a missing gate must read "bridge off" — direct mode —
+     * never open.
+     */
     private suspend fun bridgeGateOpen(): Boolean =
-        featureGate?.isAvailableNow(com.raulshma.jellyplay.core.model.JellyPlayPluginFeatures.SeerrBridge) ?: true
+        featureGate?.isAvailableNow(com.raulshma.jellyplay.core.model.JellyPlayPluginFeatures.SeerrBridge) ?: false
 
     override suspend fun testConnection(): Result<SeerrStatusResponse> =
         withSeerrSession { url, credentials ->

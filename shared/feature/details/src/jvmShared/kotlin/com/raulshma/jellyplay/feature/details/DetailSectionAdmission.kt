@@ -67,13 +67,14 @@ internal enum class DetailSectionKind(val delayIndex: Int) {
     RELATED_VIDEOS(9),
 
     /** "More like this" — server relatedItems (remote) or localRelatedItems (local).
-     *  Suppressed when JELLYPLAY_SIMILAR has content: on Jellyfin 12+ the plugin
-     *  registers into the server's similar-items pipeline too, so the stock
-     *  endpoint returns the same scored list the plugin row renders. */
+     *  Suppressed only on a Jellyfin 12+ pipeline host ([DetailSectionAdmission.suppressStockSimilar])
+     *  while the plugin row actually renders — there the stock endpoint returns
+     *  the same scored list. */
     MORE_LIKE_THIS(10),
 
     /** JellyPlay companion plugin's server-scored "More like this" row (ADR 0010) —
-     *  replaces MORE_LIKE_THIS while present, falls back to it when empty. */
+     *  renders whenever the plugin returned items; on pipeline hosts the stock
+     *  row stands down (same list), on older hosts both rows render. */
     JELLYPLAY_SIMILAR(10),
 
     /** Seerr recommendations row. */
@@ -150,8 +151,15 @@ internal data class DetailSectionAdmission(
     /** Plugin ratings chips fetched (state.pluginRatings non-empty — ADR 0010). */
     val hasPluginRatings: Boolean = false,
     /** Plugin scored-similar items hydrated (state.pluginSimilarItems non-empty — ADR 0010).
-     *  Also the suppression flag for the stock MORE_LIKE_THIS row. */
+     *  Admits JELLYPLAY_SIMILAR; with [suppressStockSimilar] it also stands the
+     *  stock row down. */
     val hasPluginSimilar: Boolean = false,
+    /** The capabilities handshake confirmed the plugin registered into the
+     *  host's similar-items pipeline (Jellyfin 12+): there the stock endpoint
+     *  returns the same scored list, so while the plugin row actually has
+     *  content, MORE_LIKE_THIS stands down. False on pre-12 hosts / older
+     *  plugins — the lists differ, both rows render. */
+    val suppressStockSimilar: Boolean = false,
 ) {
 
     /**
@@ -198,7 +206,12 @@ internal data class DetailSectionAdmission(
         admit(DetailSectionKind.RELATED_VIDEOS, admitted = true)
         admit(
             DetailSectionKind.MORE_LIKE_THIS,
-            !hasPluginSimilar,
+            // Stand the stock row down only where it would duplicate the plugin
+            // row exactly: a pipeline host (stock == plugin list) AND the
+            // plugin row actually rendering. Anywhere else — pre-12 hosts,
+            // older plugins, empty/failed plugin hydration — the stock row is
+            // the content that would otherwise be lost.
+            !(suppressStockSimilar && hasPluginSimilar),
         )
         admit(
             DetailSectionKind.JELLYPLAY_SIMILAR,
@@ -255,6 +268,7 @@ internal data class DetailSectionAdmission(
             hasAttachedDownload = state.detailContext?.download != null,
             hasPluginRatings = state.pluginRatings.isNotEmpty(),
             hasPluginSimilar = state.pluginSimilarItems.isNotEmpty(),
+            suppressStockSimilar = state.pluginSimilarSuppressesStock,
         )
     }
 }

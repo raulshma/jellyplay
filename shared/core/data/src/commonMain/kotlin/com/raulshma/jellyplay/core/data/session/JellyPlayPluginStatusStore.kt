@@ -58,6 +58,21 @@ class JellyPlayPluginStatusStore(
     /** One-shot convenience gate over [features]; reactive consumers collect [features] instead. */
     fun hasFeature(feature: String): Boolean = _features.value.contains(feature)
 
+    /**
+     * The imperative probe ladder every plugin-backed entry point shares: true
+     * when the last probe said AVAILABLE; otherwise one re-probe (a plugin
+     * installed mid-session lights up without a re-auth) and the re-probe's
+     * verdict. Callers pair this with [hasFeature] — never per-endpoint 404s
+     * (ADR 0010 §1). The home row gates are the one deliberate divergence:
+     * they re-probe only from UNKNOWN, because home refreshes far more often
+     * than a session controller starts.
+     */
+    suspend fun ensureAvailable(): Boolean {
+        if (_status.value == JellyPlayPluginStatus.AVAILABLE) return true
+        refresh()
+        return _status.value == JellyPlayPluginStatus.AVAILABLE
+    }
+
     suspend fun refresh() {
         val caps = apiClient.getCapabilities().getOrNull()
         if (caps != null && caps.contractVersion in KNOWN_CONTRACT_VERSIONS) {

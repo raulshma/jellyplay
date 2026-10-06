@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.network.api
 
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.network.auth.tokenAuthHeader
 import java.io.BufferedReader
 import java.util.concurrent.TimeUnit
@@ -47,8 +48,7 @@ class JellyPlayPluginApiClientImpl(
     // ------------------------------------------------------------------
 
     override suspend fun getCapabilities(): Result<JellyPlayCapabilities> = runCatchingIO {
-        val text = requester.getBodyText("/jellyplay/capabilities")
-            ?: throw Exception("JellyPlay plugin not available: 404")
+        val text = getBodyTextOr404("/jellyplay/capabilities", "JellyPlay plugin not available")
         json.decodeFromString<JellyPlayCapabilities>(text)
     }
 
@@ -57,14 +57,15 @@ class JellyPlayPluginApiClientImpl(
     // ------------------------------------------------------------------
 
     override suspend fun getSettings(profile: String?): Result<JellyPlaySettingsSnapshot> = runCatchingIO {
-        val text = requester.getBodyText(profileQuery("/jellyplay/settings", profile))
-            ?: throw Exception("JellyPlay settings fetch failed: 404")
+        val text = getBodyTextOr404(profileQuery("/jellyplay/settings", profile), "JellyPlay settings fetch failed")
         json.decodeFromString<JellyPlaySettingsSnapshot>(text)
     }
 
     override suspend fun getChangedSettings(since: Long, profile: String?): Result<JellyPlaySettingsSnapshot> = runCatchingIO {
-        val text = requester.getBodyText(profileQuery("/jellyplay/settings/changed?since=$since", profile))
-            ?: throw Exception("JellyPlay settings delta fetch failed: 404")
+        val text = getBodyTextOr404(
+            profileQuery("/jellyplay/settings/changed?since=$since", profile),
+            "JellyPlay settings delta fetch failed",
+        )
         json.decodeFromString<JellyPlaySettingsSnapshot>(text)
     }
 
@@ -89,8 +90,7 @@ class JellyPlayPluginApiClientImpl(
 
     override suspend fun resolveProfile(profile: String?): Result<JellyPlaySettingsSnapshot> = runCatchingIO {
         val segment = profile?.takeIf { it.isNotEmpty() }?.let { "/$it" } ?: "/"
-        val text = requester.getBodyText("/jellyplay/settings/resolved$segment")
-            ?: throw Exception("JellyPlay resolved profile fetch failed: 404")
+        val text = getBodyTextOr404("/jellyplay/settings/resolved$segment", "JellyPlay resolved profile fetch failed")
         json.decodeFromString<JellyPlaySettingsSnapshot>(text)
     }
 
@@ -160,8 +160,7 @@ class JellyPlayPluginApiClientImpl(
     }
 
     override suspend fun getDevices(): Result<List<JellyPlayDevice>> = runCatchingIO {
-        val text = requester.getBodyText("/jellyplay/devices")
-            ?: throw Exception("JellyPlay devices fetch failed: 404")
+        val text = getBodyTextOr404("/jellyplay/devices", "JellyPlay devices fetch failed")
         json.decodeFromString<List<JellyPlayDevice>>(text)
     }
 
@@ -181,8 +180,7 @@ class JellyPlayPluginApiClientImpl(
     // ------------------------------------------------------------------
 
     override suspend fun getMessages(): Result<List<JellyPlayMessage>> = runCatchingIO {
-        val text = requester.getBodyText("/jellyplay/messages")
-            ?: throw Exception("JellyPlay messages fetch failed: 404")
+        val text = getBodyTextOr404("/jellyplay/messages", "JellyPlay messages fetch failed")
         val wrapper = json.decodeFromString<JsonObject>(text)
         json.decodeFromJsonElement(ListSerializer(JellyPlayMessage.serializer()), wrapper.getValue("messages"))
     }
@@ -196,8 +194,7 @@ class JellyPlayPluginApiClientImpl(
     // ------------------------------------------------------------------
 
     override suspend fun seerrStatus(): Result<JellyPlaySeerrStatus> = runCatchingIO {
-        val text = requester.getBodyText("/jellyplay/seerr/status")
-            ?: throw Exception("JellyPlay Seerr status failed: 404")
+        val text = getBodyTextOr404("/jellyplay/seerr/status", "JellyPlay Seerr status failed")
         json.decodeFromString<JellyPlaySeerrStatus>(text)
     }
 
@@ -247,8 +244,7 @@ class JellyPlayPluginApiClientImpl(
     // ------------------------------------------------------------------
 
     override suspend fun getJellyPlaySimilarItems(itemId: String, limit: Int): Result<List<JellyPlayScoredItem>> = runCatchingIO {
-        val text = requester.getBodyText("/jellyplay/items/$itemId/similar?limit=$limit")
-            ?: throw Exception("JellyPlay similar items failed: 404")
+        val text = getBodyTextOr404("/jellyplay/items/$itemId/similar?limit=$limit", "JellyPlay similar items failed")
         val wrapper = json.decodeFromString<JsonObject>(text)
         json.decodeFromJsonElement(ListSerializer(JellyPlayScoredItem.serializer()), wrapper.getValue("items"))
     }
@@ -291,8 +287,10 @@ class JellyPlayPluginApiClientImpl(
     // ------------------------------------------------------------------
 
     override suspend fun getBookmarks(itemId: String): Result<List<JellyPlayBookmark>> = runCatchingIO {
-        val text = requester.getBodyText("/jellyplay/bookmarks/" + java.net.URLEncoder.encode(itemId, "UTF-8"))
-            ?: throw Exception("JellyPlay bookmarks fetch failed: 404")
+        val text = getBodyTextOr404(
+            "/jellyplay/bookmarks/" + java.net.URLEncoder.encode(itemId, "UTF-8"),
+            "JellyPlay bookmarks fetch failed",
+        )
         val wrapper = json.decodeFromString<JsonObject>(text)
         json.decodeFromJsonElement(ListSerializer(JellyPlayBookmark.serializer()), wrapper.getValue("bookmarks"))
     }
@@ -315,8 +313,7 @@ class JellyPlayPluginApiClientImpl(
 
     override suspend fun getUserRatings(filter: String?): Result<List<JellyPlayUserRating>> = runCatchingIO {
         val suffix = filter?.let { "?filter=" + java.net.URLEncoder.encode(it, "UTF-8") } ?: ""
-        val text = requester.getBodyText("/jellyplay/userratings/mine$suffix")
-            ?: throw Exception("JellyPlay user ratings fetch failed: 404")
+        val text = getBodyTextOr404("/jellyplay/userratings/mine$suffix", "JellyPlay user ratings fetch failed")
         val wrapper = json.decodeFromString<JsonObject>(text)
         json.decodeFromJsonElement(ListSerializer(JellyPlayUserRating.serializer()), wrapper.getValue("ratings"))
     }
@@ -326,15 +323,13 @@ class JellyPlayPluginApiClientImpl(
     // ------------------------------------------------------------------
 
     override suspend fun getActiveTranscodes(): Result<List<JellyPlayActiveTranscode>> = runCatchingIO {
-        val text = requester.getBodyText("/jellyplay/transcodes/active")
-            ?: throw Exception("JellyPlay active transcodes fetch failed: 404")
+        val text = getBodyTextOr404("/jellyplay/transcodes/active", "JellyPlay active transcodes fetch failed")
         val wrapper = json.decodeFromString<JsonObject>(text)
         json.decodeFromJsonElement(ListSerializer(JellyPlayActiveTranscode.serializer()), wrapper.getValue("transcodes"))
     }
 
     override suspend fun getMyTranscodes(): Result<List<JellyPlayActiveTranscode>> = runCatchingIO {
-        val text = requester.getBodyText("/jellyplay/transcodes/mine")
-            ?: throw Exception("JellyPlay transcodes fetch failed: 404")
+        val text = getBodyTextOr404("/jellyplay/transcodes/mine", "JellyPlay transcodes fetch failed")
         val wrapper = json.decodeFromString<JsonObject>(text)
         json.decodeFromJsonElement(ListSerializer(JellyPlayActiveTranscode.serializer()), wrapper.getValue("transcodes"))
     }
@@ -374,7 +369,18 @@ class JellyPlayPluginApiClientImpl(
     // plumbing
     // ------------------------------------------------------------------
 
-    private inline fun <T> runCatchingIO(block: () -> T): Result<T> = runCatching(block)
+    private suspend inline fun <T> runCatchingIO(block: () -> T): Result<T> =
+        runCatchingRethrowingCancellation(block)
+
+    /**
+     * The one GET → body-text shape every mandatory-plugin-payload endpoint
+     * shares: a null body (the requester's 404 mapping — plugin absent or the
+     * route predates the installed wave) surfaces as the endpoint's failure,
+     * so the typed decode never sees a null. Optional reads (the nullable
+     * result shapes) use [JellyfinRawRequester.getBodyText] directly.
+     */
+    private suspend fun getBodyTextOr404(path: String, failure: String): String =
+        requester.getBodyText(path) ?: throw Exception("$failure: 404")
 
     private fun profileQuery(path: String, profile: String?): String {
         val value = profile?.takeIf { it.isNotEmpty() } ?: return path
@@ -424,7 +430,12 @@ class JellyPlayPluginApiClientImpl(
                             }
                             line.startsWith("id:") -> eventId = line.removePrefix("id:").trim().toLongOrNull() ?: ++id
                             line.startsWith("event:") -> eventName = line.removePrefix("event:").trim()
-                            line.startsWith("data:") -> data.append(line.removePrefix("data:").trim())
+                            line.startsWith("data:") ->
+                                // SSE joins a field's multiple data: lines with "\n"
+                                // and strips ONE leading space per line — a multi-line
+                                // JSON frame must not have its lines concatenated.
+                                data.append(line.removePrefix("data:").removePrefix(" "))
+                                    .append('\n')
                             // retry: and comment lines ignored
                         }
                     }
