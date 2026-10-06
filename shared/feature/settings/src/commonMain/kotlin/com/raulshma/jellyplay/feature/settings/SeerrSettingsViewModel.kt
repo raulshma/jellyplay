@@ -71,6 +71,12 @@ class SeerrSettingsViewModel(
      */
     private val pluginApiClient: JellyPlayPluginApiClient? = null,
     private val pluginStatusStore: JellyPlayPluginStatusStore? = null,
+    /**
+     * The per-feature gate seam (probe AND the user's toggle) over the store
+     * above. Nullable-with-default; without it the probe alone governs, the
+     * pre-toggle behavior.
+     */
+    private val jellyPlayFeatureGate: com.raulshma.jellyplay.core.data.session.JellyPlayFeatureGate? = null,
     /** Jellyfin Quick Connect source for the bridge link flow (the plugin authorizes a Jellyfin QC secret, then SSOs into Seerr). */
     private val authRepository: AuthRepository? = null,
 ) : JellyPlayViewModel() {
@@ -104,6 +110,17 @@ class SeerrSettingsViewModel(
     /** The plugin's live feature set; the mode selector gates on [JellyPlayPluginFeatures.SeerrBridge]. */
     val jellyPlayPluginFeatures: StateFlow<Set<String>> =
         pluginStatusStore?.features ?: MutableStateFlow(emptySet())
+
+    /**
+     * The per-feature USER toggles (the gate seam's switch states) — the
+     * screen ANDs this with the registry above so the mode selector is
+     * superseded while the `seerr-bridge` toggle is off.
+     */
+    val jellyPlayFeatureToggles: StateFlow<Set<String>> =
+        jellyPlayFeatureGate?.enabledFeatures
+            ?: MutableStateFlow(
+                com.raulshma.jellyplay.core.data.session.JellyPlayFeatureGate.TOGGLEABLE_FEATURES.toSet(),
+            )
 
     /** The saved connection MODE (false = direct connection, the pre-bridge default). */
     private val _useServerBridge = composeState(false)
@@ -192,7 +209,7 @@ class SeerrSettingsViewModel(
             if (!userModeChanged) {
                 _useServerBridge.value = prefs.useServerBridge
             }
-            if (prefs.useServerBridge && pluginApiClient != null) {
+            if (prefs.useServerBridge && pluginApiClient != null && bridgeGateOpen()) {
                 refreshBridgeStatus()
             }
             if (prefs.serverUrl.isNotBlank()) {
@@ -400,12 +417,23 @@ class SeerrSettingsViewModel(
             store.refresh()
             if (store.status.value == JellyPlayPluginStatus.AVAILABLE &&
                 _useServerBridge.value &&
-                _bridgeStatus.value == null
+                _bridgeStatus.value == null &&
+                bridgeGateOpen()
             ) {
                 fetchBridgeStatus()
             }
         }
     }
+
+    /**
+     * The bridge surfaces' gate arm (probe AND the user's `seerr-bridge`
+     * toggle); without the gate seam the probe alone governs. The saved
+     * via-server MODE pref stays put while off — the screen just renders the
+     * direct pane and the repository stays in direct mode until the toggle
+     * (or the pref) comes back.
+     */
+    private suspend fun bridgeGateOpen(): Boolean =
+        jellyPlayFeatureGate?.isAvailableNow(JellyPlayPluginFeatures.SeerrBridge) ?: true
 
     /**
      * Persists the connection MODE and drives the pane transition: entering

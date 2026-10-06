@@ -139,8 +139,18 @@ class BookmarksSyncRepositoryImplTest {
         override suspend fun applySettings(profile: String?, deviceId: String?, writes: List<JellyPlaySettingWrite>): Result<JellyPlaySettingsBatchResult> = Result.failure(IllegalStateException("unused"))
         override suspend fun resetNamespace(ns: String, profile: String?): Result<Unit> = Result.failure(IllegalStateException("unused"))
         override suspend fun resolveProfile(profile: String?): Result<JellyPlaySettingsSnapshot> = Result.failure(IllegalStateException("unused"))
+        override suspend fun getSyncStatus(): Result<com.raulshma.jellyplay.core.network.api.JellyPlaySyncStatus?> = Result.failure(IllegalStateException("unused"))
+        override suspend fun getSyncHistory(since: Long?, limit: Int): Result<com.raulshma.jellyplay.core.network.api.JellyPlaySyncHistory?> = Result.failure(IllegalStateException("unused"))
+        override suspend fun getSyncHistoryKeys(seq: Long, limit: Int): Result<com.raulshma.jellyplay.core.network.api.JellyPlaySyncHistoryKeys?> = Result.failure(IllegalStateException("unused"))
+        override suspend fun adminSyncOverview(): Result<com.raulshma.jellyplay.core.network.api.JellyPlaySyncAdminOverview?> = Result.failure(IllegalStateException("unused"))
         override fun settingsStream(): Flow<JellyPlaySseEvent> = emptyFlow()
-        override suspend fun registerDevice(deviceId: String, name: String, platform: String, appVersion: String): Result<Unit> = Result.success(Unit)
+        override suspend fun registerDevice(
+            deviceId: String,
+            name: String,
+            platform: String,
+            appVersion: String,
+            push: com.raulshma.jellyplay.core.network.api.JellyPlayDevicePush,
+        ): Result<Unit> = Result.success(Unit)
         override suspend fun unregisterDevice(deviceId: String): Result<Unit> = Result.success(Unit)
         override suspend fun getDevices(): Result<List<JellyPlayDevice>> = Result.success(emptyList())
         override fun eventsStream(): Flow<JellyPlaySseEvent> = emptyFlow()
@@ -160,6 +170,9 @@ class BookmarksSyncRepositoryImplTest {
         override suspend fun getActiveTranscodes(): Result<List<JellyPlayActiveTranscode>> = Result.failure(IllegalStateException("unused"))
         override suspend fun getMyTranscodes(): Result<List<JellyPlayActiveTranscode>> = Result.failure(IllegalStateException("unused"))
         override suspend fun cancelTranscode(sessionId: String): Result<Unit> = Result.failure(IllegalStateException("unused"))
+        override suspend fun getAnalyticsOverview(days: Int): Result<com.raulshma.jellyplay.core.network.api.JellyPlayAnalyticsOverview?> = Result.failure(IllegalStateException("unused"))
+        override suspend fun getAnalyticsSessions(userId: String?, since: Long?, limit: Int): Result<com.raulshma.jellyplay.core.network.api.JellyPlayAnalyticsSessions?> = Result.failure(IllegalStateException("unused"))
+        override suspend fun getMyAnalytics(days: Int): Result<com.raulshma.jellyplay.core.network.api.JellyPlayMyAnalytics?> = Result.failure(IllegalStateException("unused"))
     }
 
     // ------------------------------------------------------------------

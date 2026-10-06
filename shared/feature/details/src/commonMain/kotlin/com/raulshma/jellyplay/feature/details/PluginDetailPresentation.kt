@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.details
 
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.network.api.JellyPlayAnimeMarker
+import com.raulshma.jellyplay.core.network.api.JellyPlayEpisodeRatings
 
 /**
  * Pure presentation helpers for the jellyfin-plugin-jellyplay detail sections
@@ -92,3 +93,17 @@ internal fun animeBadges(markers: List<JellyPlayAnimeMarker>): Map<Int, AnimeBad
             put(marker.episodeNumber, kind)
         }
     }
+
+/**
+ * The season-average TMDB score the seasons section's header renders beside
+ * the title: the plain mean over the season's score-carrying episodes,
+ * rounded to one decimal, null when no episode carries a score (the chip then
+ * stays absent). Pure so the fold is directly unit-testable beside
+ * [animeBadges].
+ */
+internal fun seasonAverageScore(ratings: Map<Int, JellyPlayEpisodeRatings>): Double? {
+    val scores = ratings.values.mapNotNull { it.tmdbScore }
+    if (scores.isEmpty()) return null
+    return (scores.sum() / scores.size)
+        .let { kotlin.math.round(it * 10.0) / 10.0 }
+}

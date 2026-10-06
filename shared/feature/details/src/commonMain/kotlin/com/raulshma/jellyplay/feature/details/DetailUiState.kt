@@ -111,12 +111,19 @@ data class DetailUiState(
     val pluginRatings: List<com.raulshma.jellyplay.core.network.api.JellyPlayRatingEntry> = emptyList(),
     /** Server-scored "More like this" ([JellyPlayPluginFeatures.Recommendations]),
      *  hydrated into displayable items the shared poster row renders. Empty =
-     *  section absent (the stock relatedItems row is unaffected). */
+     *  section absent. Non-empty REPLACES the stock relatedItems row (the
+     *  plugin feeds the server's similar pipeline the same list — rendering
+     *  both would duplicate the row). */
     val pluginSimilarItems: List<MediaItem> = emptyList(),
     /** Anime filler/mixed/recap badges for the current series' episode numbers
      *  ([JellyPlayPluginFeatures.AnimeMarkers]). Rendered on episode rows in
      *  the seasons section; empty = no badges anywhere. */
     val animeMarkers: Map<Int, AnimeBadgeKind> = emptyMap(),
+    /** Per-season TMDB episode scores ([JellyPlayPluginFeatures.Ratings]),
+     *  keyed season id → (episode number → ratings). Rendered as compact
+     *  score chips on the seasons section's episode rows plus the season
+     *  header's average; empty = no scores anywhere. */
+    val seasonRatings: Map<String, Map<Int, com.raulshma.jellyplay.core.network.api.JellyPlayEpisodeRatings>> = emptyMap(),
     // Smart play (continue-watching / next-up computed target)
     val smartPlayTarget: SmartPlayTarget? = null,
     // Stream selection (audio/subtitle indices persisted across sessions)

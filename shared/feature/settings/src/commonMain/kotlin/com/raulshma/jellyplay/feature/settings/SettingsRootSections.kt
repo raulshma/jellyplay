@@ -122,6 +122,12 @@ internal fun SettingsProfileBanner(
     currentUser: UserInfo?,
     serverAddress: String?,
     isAdmin: Boolean,
+    /**
+     * The plugin's newsletter entry (the trailing News icon) — hidden while
+     * the probe lacks the feature or the user's `newsletter` toggle is off
+     * (the banner keeps its two-icon rhythm absent the entry).
+     */
+    newsletterVisible: Boolean,
     onNewsletterClick: () -> Unit,
     onUserManagementClick: () -> Unit,
     onServerManagementClick: () -> Unit,
@@ -245,12 +251,14 @@ internal fun SettingsProfileBanner(
                     contentDescription = stringResource(Res.string.settings_switch_user),
                     iconSize = 19.dp,
                 )
-                SettingsIconButton(
-                    onClick = onNewsletterClick,
-                    icon = Tabler.Outline.News,
-                    contentDescription = stringResource(Res.string.settings_newsletter_cd),
-                    iconSize = 19.dp,
-                )
+                if (newsletterVisible) {
+                    SettingsIconButton(
+                        onClick = onNewsletterClick,
+                        icon = Tabler.Outline.News,
+                        contentDescription = stringResource(Res.string.settings_newsletter_cd),
+                        iconSize = 19.dp,
+                    )
+                }
             }
         }
     }

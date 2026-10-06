@@ -440,4 +440,41 @@
     <string name="jellyplay_tr_cancel_body">This stops %1$s\'s stream of \"%2$s\" on %3$s. The client will end playback.</string>
     <string name="jellyplay_tr_unavailable_title">Active streams unavailable</string>
     <string name="jellyplay_tr_unavailable_body">The JellyPlay companion plugin is not available on this server, or it does not expose the transcodes feature.</string>
+
+    <!-- JellyPlay companion-plugin admin broadcast composer (AdminDashboardScreen, ADR 0010).
+         The composer fans a one-shot toast-style message out to every connected
+         client over the plugin's events stream (server returns 202). -->
+    <string name="jellyplay_bc_title">Send broadcast</string>
+    <string name="jellyplay_bc_field_title">Title</string>
+    <string name="jellyplay_bc_field_body">Message</string>
+    <string name="jellyplay_bc_field_url">Link URL (optional)</string>
+    <string name="jellyplay_bc_url_invalid">Enter a valid http(s) link</string>
+    <string name="jellyplay_bc_send">Send</string>
+    <string name="jellyplay_bc_sent">Broadcast sent</string>
+    <string name="jellyplay_bc_failed">Broadcast failed. Try again.</string>
+
+    <!-- JellyPlay companion-plugin admin analytics dashboard (JellyPlayAnalyticsScreen).
+         The plugin's server-side play-history aggregates: window totals, a
+         plays-per-day chart, per-user / top-item splits, and the recent
+         play-session ledger. -->
+    <string name="jellyplay_an_title">Analytics</string>
+    <string name="jellyplay_an_unavailable_title">Analytics unavailable</string>
+    <string name="jellyplay_an_unavailable_body">The JellyPlay companion plugin is not available on this server, or it does not expose the analytics feature.</string>
+    <string name="jellyplay_an_degraded_title">Analytics not available</string>
+    <string name="jellyplay_an_degraded_body">Analytics is not available on this server. The server\'s JellyPlay plugin does not provide it.</string>
+    <string name="jellyplay_an_empty">No playback has been recorded in this period yet.</string>
+    <string name="jellyplay_an_days_7">7 days</string>
+    <string name="jellyplay_an_days_30">30 days</string>
+    <string name="jellyplay_an_days_90">90 days</string>
+    <string name="jellyplay_an_plays">Plays</string>
+    <string name="jellyplay_an_totals_watch_time">Watch time</string>
+    <string name="jellyplay_an_totals_transcode_time">Transcode time</string>
+    <string name="jellyplay_an_totals_users">Unique users</string>
+    <string name="jellyplay_an_totals_items">Unique items</string>
+    <string name="jellyplay_an_section_chart">Plays per day</string>
+    <string name="jellyplay_an_section_users">By user</string>
+    <string name="jellyplay_an_section_top_items">Top items</string>
+    <string name="jellyplay_an_section_sessions">Recent sessions</string>
+    <string name="jellyplay_an_sessions_empty">No recent sessions</string>
+    <string name="jellyplay_an_filter_all">All users</string>
 </resources>

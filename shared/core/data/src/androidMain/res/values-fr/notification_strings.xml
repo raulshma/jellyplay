@@ -24,4 +24,12 @@
     <!-- New-episodes channel (opt-in routing for episode items) -->
     <string name="notification_channel_new_episodes">Nouveaux épisodes</string>
     <string name="notification_channel_new_episodes_desc">Notifications pour les nouveaux épisodes</string>
+
+    <!-- Companion-plugin live new-media push (ADR 0010, single-event tray post) -->
+    <string name="notification_plugin_new_media_subtitle">Nouveaux médias ajoutés sur votre serveur</string>
+    <string name="notification_plugin_new_episodes_count">%1$d nouveaux épisodes</string>
+
+    <!-- Companion-plugin UnifiedPush message (the push wave: broadcast/message
+         kinds — new-media rides the typed path above). -->
+    <string name="notification_plugin_push_title">Serveur JellyPlay</string>
 </resources>

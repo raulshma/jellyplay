@@ -613,13 +613,19 @@ class DetailSectionAdmissionTest {
         assertEquals(overviewIdx + 1, ratingsIdx, "ratings row follows the overview")
         assertEquals(3, DetailSectionKind.PLUGIN_RATINGS.delayIndex)
 
-        // Scored similar present → admitted right after MORE_LIKE_THIS (same slot 10).
+        // Scored similar present → REPLACES the stock row (same slot 10):
+        // the plugin also feeds the server's similar-items pipeline, so the
+        // stock endpoint returns the same scored list — keeping both rows
+        // would duplicate it.
         val withSimilar = admission(MediaType.MOVIE, hasPluginSimilar = true)
         assertTrue(withSimilar.contains(DetailSectionKind.JELLYPLAY_SIMILAR))
-        val similarIdx = withSimilar.indexOf(DetailSectionKind.JELLYPLAY_SIMILAR)
-        val moreLikeIdx = withSimilar.indexOf(DetailSectionKind.MORE_LIKE_THIS)
-        assertEquals(moreLikeIdx + 1, similarIdx, "plugin similar follows the stock row")
+        assertFalse(withSimilar.contains(DetailSectionKind.MORE_LIKE_THIS), "plugin similar suppresses the stock row")
         assertEquals(10, DetailSectionKind.JELLYPLAY_SIMILAR.delayIndex)
+
+        // Empty plugin hydration → the stock row stays admitted (bare above
+        // already contains MORE_LIKE_THIS — re-asserted here against the
+        // plugin row's absence).
+        assertTrue(bare.contains(DetailSectionKind.MORE_LIKE_THIS))
 
         // The two are independent.
         assertFalse(withRatings.contains(DetailSectionKind.JELLYPLAY_SIMILAR))

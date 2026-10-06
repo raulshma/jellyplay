@@ -33,6 +33,35 @@ interface JellyPlayPluginApiClient {
     suspend fun resolveProfile(profile: String? = null): Result<JellyPlaySettingsSnapshot>
 
     /**
+     * The sync engine's server-side status (usage, quotas, per-device last
+     * sync). null = the server's plugin predates the sync-status wave (404) —
+     * callers degrade quietly (hide the status/history surfaces), never error.
+     */
+    suspend fun getSyncStatus(): Result<JellyPlaySyncStatus?>
+
+    /**
+     * The sync history ledger, newest first. null = the same pre-wave 404
+     * degradation contract as [getSyncStatus].
+     */
+    suspend fun getSyncHistory(since: Long? = null, limit: Int = 50): Result<JellyPlaySyncHistory?>
+
+    /**
+     * The changed keys behind one history entry ([seq]) — the per-key diff
+     * face of the ledger. Reset rows and entries the server no longer details
+     * return an empty [JellyPlaySyncHistoryKeys.keys]; null = the server's
+     * plugin predates the per-key history wave (404) — callers degrade
+     * quietly, never error. [limit] is server-clamped (default 200).
+     */
+    suspend fun getSyncHistoryKeys(seq: Long, limit: Int = 200): Result<JellyPlaySyncHistoryKeys?>
+
+    /**
+     * The admin's cross-user sync usage overview. Admin-only route: a 403
+     * (non-admin) degrades to null exactly like a 404 (old plugin) — the
+     * sync screen hides the admin face quietly, never errors.
+     */
+    suspend fun adminSyncOverview(): Result<JellyPlaySyncAdminOverview?>
+
+    /**
      * Cold SSE stream of `settings.changed` / `settings.reset` events for the
      * signed-in user. Cancelling collection closes the connection.
      */
@@ -40,7 +69,23 @@ interface JellyPlayPluginApiClient {
 
     // ---- events & devices ----
 
-    suspend fun registerDevice(deviceId: String, name: String, platform: String, appVersion: String): Result<Unit>
+    /**
+     * Registers (or re-registers) this device. [push] is the explicit
+     * tri-state push half (the plugin's push wave): [JellyPlayDevicePush.Attach]
+     * attaches/rotates the push endpoint for [deviceId],
+     * [JellyPlayDevicePush.Detach] sends `push: null` — an explicit push-off
+     * re-registration that clears any endpoint the server holds — and
+     * [JellyPlayDevicePush.Keep] (the default) omits the field entirely, so
+     * the legacy wire shape stays byte-identical and the server keeps
+     * whatever push state it already holds.
+     */
+    suspend fun registerDevice(
+        deviceId: String,
+        name: String,
+        platform: String,
+        appVersion: String,
+        push: JellyPlayDevicePush = JellyPlayDevicePush.Keep,
+    ): Result<Unit>
 
     suspend fun unregisterDevice(deviceId: String): Result<Unit>
 
@@ -115,6 +160,39 @@ interface JellyPlayPluginApiClient {
     suspend fun getMyTranscodes(): Result<List<JellyPlayActiveTranscode>>
 
     suspend fun cancelTranscode(sessionId: String): Result<Unit>
+
+    // ---- admin analytics ----
+
+    /**
+     * The admin analytics overview (plays / watch-time / transcode-time
+     * aggregates over a [days] window the server clamps to 1..365). Admin-only
+     * route: a 403 (non-admin) degrades to null exactly like a 404 (old
+     * plugin / absent `analytics` key) — callers degrade quietly (hide the
+     * surface), never error.
+     */
+    suspend fun getAnalyticsOverview(days: Int = 30): Result<JellyPlayAnalyticsOverview?>
+
+    /**
+     * The admin's recent play sessions, newest first, optionally scoped to
+     * [userId] and to sessions ending at/after [since] (pagination cursor =
+     * the oldest `endedAt` of the previous page). [limit] is server-clamped
+     * (default 50, max 200). null = the same pre-wave 404 degradation contract
+     * as [getAnalyticsOverview].
+     */
+    suspend fun getAnalyticsSessions(
+        userId: String? = null,
+        since: Long? = null,
+        limit: Int = 50,
+    ): Result<JellyPlayAnalyticsSessions?>
+
+    /**
+     * The signed-in user's OWN analytics (`jellyplay/analytics/me` — any
+     * user, unlike the admin routes above; [days] is server-clamped to
+     * 1..365). null = the server's plugin predates the per-user analytics
+     * face or the `analytics` key is absent (404) — callers degrade quietly
+     * (the "not available" state), never error.
+     */
+    suspend fun getMyAnalytics(days: Int = 30): Result<JellyPlayMyAnalytics?>
 }
 
 @Serializable
@@ -260,6 +338,15 @@ data class JellyPlaySettingsSnapshot(
     val head: Long = 0,
     val profile: String = "",
     val settings: List<JellyPlaySettingsEntry> = emptyList(),
+    /**
+     * The admin-defaults tri-state per synced key, addressed by the composite
+     * `"ns/key"` form (`"prefs/pluginFeature.events.enabled"`) →
+     * `"unset" | "suggested" | "forced"`. Absent = an older plugin (no
+     * admin-default machinery on the wire) — `null` reads as "no mode is in
+     * force anywhere". A `"forced"` key is overwritten server-side every
+     * cycle: its UI switch renders disabled.
+     */
+    val modes: Map<String, String>? = null,
 )
 
 @Serializable
@@ -284,6 +371,214 @@ data class JellyPlaySettingsBatchResult(
     val rejected: List<JellyPlayRejectedSetting> = emptyList(),
 )
 
+// ---------------------------------------------------------------------------
+// sync status / history / admin overview (the `jellyplay/sync/*` wave) — the
+// usage-and-ledger face of the settings-sync engine. Every shape carries
+// defaults so a payload trimmed by an older plugin still decodes.
+// ---------------------------------------------------------------------------
+
+/** Server-side sync usage: totals, quotas, per-namespace and per-device split. */
+@Serializable
+data class JellyPlaySyncStatus(
+    val head: Long = 0,
+    val keys: Int = 0,
+    val bytes: Long = 0,
+    val quotaBytes: Long = 0,
+    val quotaKeys: Int = 0,
+    val historyRetentionDays: Int = 0,
+    val namespaces: List<JellyPlaySyncNamespaceUsage> = emptyList(),
+    val perDevice: List<JellyPlaySyncDeviceStat> = emptyList(),
+)
+
+/** One namespace's contribution to the synced store. */
+@Serializable
+data class JellyPlaySyncNamespaceUsage(
+    val ns: String,
+    val keys: Int = 0,
+    val bytes: Long = 0,
+)
+
+/** One device's last sync outcome as the server recorded it. */
+@Serializable
+data class JellyPlaySyncDeviceStat(
+    val deviceId: String,
+    val lastSyncAt: Long = 0,
+    val lastOp: String = "",
+)
+
+/** The sync history ledger (newest first). */
+@Serializable
+data class JellyPlaySyncHistory(
+    val entries: List<JellyPlaySyncHistoryEntry> = emptyList(),
+)
+
+/** One applied sync operation a device performed against the server. */
+@Serializable
+data class JellyPlaySyncHistoryEntry(
+    val seq: Long,
+    val ts: Long = 0,
+    val deviceId: String = "",
+    /** `push` | `pull` | `reset` — loosely matched by the UI, unknown → plain label. */
+    val op: String = "",
+    val keysApplied: Int = 0,
+    val keysRejected: Int = 0,
+    val rejects: List<JellyPlaySyncReject>? = null,
+)
+
+/** One per-key rejection inside a history entry. */
+@Serializable
+data class JellyPlaySyncReject(
+    val ns: String,
+    val key: String,
+    val reason: String = "",
+)
+
+/** The changed keys behind one sync-history entry (the per-key diff detail). */
+@Serializable
+data class JellyPlaySyncHistoryKeys(
+    val seq: Long,
+    /** `push` | `pull` | `reset` — empty for reset rows' key lists (no diff). */
+    val op: String = "",
+    val keys: List<JellyPlaySyncHistoryKey> = emptyList(),
+)
+
+/** One changed key inside a sync-history entry's diff. */
+@Serializable
+data class JellyPlaySyncHistoryKey(
+    val ns: String,
+    val key: String,
+    val updatedAt: Long = 0,
+)
+
+/** The admin's cross-user sync usage overview (`admin/sync/overview`). */
+@Serializable
+data class JellyPlaySyncAdminOverview(
+    val users: List<JellyPlaySyncAdminUser> = emptyList(),
+)
+
+/** One user's synced-store usage as the admin overview reports it. */
+@Serializable
+data class JellyPlaySyncAdminUser(
+    val userId: String,
+    val userName: String = "",
+    val keys: Int = 0,
+    val bytes: Long = 0,
+    val lastSyncAt: Long = 0,
+    val deviceCount: Int = 0,
+)
+
+// ---------------------------------------------------------------------------
+// admin analytics (the `jellyplay/admin/analytics/*` wave) — the play-history
+// aggregates the plugin computes server-side. Every shape carries defaults so
+// a payload trimmed by an older plugin still decodes.
+// ---------------------------------------------------------------------------
+
+/** The admin analytics overview: totals plus per-day/per-user/top-item splits. */
+@Serializable
+data class JellyPlayAnalyticsOverview(
+    val days: Int = 30,
+    val totals: JellyPlayAnalyticsTotals = JellyPlayAnalyticsTotals(),
+    val perDay: List<JellyPlayAnalyticsDay> = emptyList(),
+    val perUser: List<JellyPlayAnalyticsUser> = emptyList(),
+    val topItems: List<JellyPlayAnalyticsTopItem> = emptyList(),
+)
+
+/** The window's roll-up numbers (playSeconds/transcodeSeconds are wall-clock sums). */
+@Serializable
+data class JellyPlayAnalyticsTotals(
+    val plays: Long = 0,
+    val playSeconds: Long = 0,
+    val transcodeSeconds: Long = 0,
+    val uniqueUsers: Int = 0,
+    val uniqueItems: Int = 0,
+)
+
+/** One calendar day's play/watch/transcode counts (`day` is `yyyy-MM-dd`). */
+@Serializable
+data class JellyPlayAnalyticsDay(
+    val day: String,
+    val plays: Long = 0,
+    val playSeconds: Long = 0,
+    val transcodeSeconds: Long = 0,
+)
+
+/** One user's contribution to the window (the sessions filter's vocabulary). */
+@Serializable
+data class JellyPlayAnalyticsUser(
+    val userId: String,
+    val userName: String = "",
+    val plays: Long = 0,
+    val playSeconds: Long = 0,
+    val transcodeSeconds: Long = 0,
+)
+
+/** One most-played item of the window (server-ranked, top 10). */
+@Serializable
+data class JellyPlayAnalyticsTopItem(
+    val itemId: String,
+    val itemName: String = "",
+    val itemType: String = "",
+    val plays: Long = 0,
+    val playSeconds: Long = 0,
+)
+
+/** The admin's recent play-sessions page. */
+@Serializable
+data class JellyPlayAnalyticsSessions(
+    val sessions: List<JellyPlayAnalyticsSession> = emptyList(),
+)
+
+/**
+ * One recorded play session. [playMethod] is the plugin's free string
+ * (`"DirectPlay"` | `"Transcode"` in practice — loosely matched by the UI,
+ * the transcodes monitor's idiom); [since]/[endedAt] are the server's epoch
+ * stamps ([endedAt] doubling as the pagination cursor).
+ */
+@Serializable
+data class JellyPlayAnalyticsSession(
+    val userId: String = "",
+    val itemId: String = "",
+    val itemName: String = "",
+    val itemType: String = "",
+    val seriesName: String? = null,
+    val playMethod: String = "",
+    val videoCodec: String? = null,
+    val audioCodec: String? = null,
+    val bitrate: Long? = null,
+    val transcodeReasons: List<String>? = null,
+    val positionTicks: Long = 0,
+    val durationTicks: Long? = null,
+    val startedAt: Long = 0,
+    val endedAt: Long = 0,
+    val clientName: String? = null,
+    val deviceName: String? = null,
+)
+
+// ---------------------------------------------------------------------------
+// my analytics (the `jellyplay/analytics/me` wave) — the signed-in user's own
+// face of the play-history aggregates (the admin overview's per-user slice).
+// Every shape carries defaults so a payload trimmed by an older plugin still
+// decodes; the per-day / top-item rows reuse the admin wave's DTOs verbatim.
+// ---------------------------------------------------------------------------
+
+/** The user's own analytics overview: window totals, per-day split, top items. */
+@Serializable
+data class JellyPlayMyAnalytics(
+    val days: Int = 30,
+    val totals: JellyPlayMyAnalyticsTotals = JellyPlayMyAnalyticsTotals(),
+    val perDay: List<JellyPlayAnalyticsDay> = emptyList(),
+    val topItems: List<JellyPlayAnalyticsTopItem> = emptyList(),
+)
+
+/** The user's window roll-up (the admin totals minus the cross-user counts). */
+@Serializable
+data class JellyPlayMyAnalyticsTotals(
+    val plays: Long = 0,
+    val playSeconds: Long = 0,
+    val transcodeSeconds: Long = 0,
+    val uniqueItems: Int = 0,
+)
+
 @Serializable
 data class JellyPlayDevice(
     val deviceId: String,
@@ -293,6 +588,37 @@ data class JellyPlayDevice(
     val appVersion: String = "",
     val lastSeen: Long = 0,
 )
+
+/**
+ * The `push` half of a device registration (the plugin's push wave): the
+ * kind mirrors the plugin contract's `"generic" | "ntfy" | "fcm"` (the app
+ * only ever sends `"generic"`; the others are server/admin surfaces) and
+ * [endpoint] is the UnifiedPush endpoint URL the distributor handed out.
+ * Re-POSTing the same deviceId with a new endpoint rotates the registration
+ * server-side.
+ */
+@Serializable
+data class JellyPlayPushRegistration(
+    val kind: String,
+    val endpoint: String,
+)
+
+/**
+ * The wire tri-state of a registration's push half — attach, explicit
+ * detach (`"push": null`), or leave the field out (keep whatever push state
+ * the server holds). A nullable [JellyPlayPushRegistration] cannot express
+ * all three: Kotlin `null` would have to mean both "detach" and "omit".
+ */
+sealed interface JellyPlayDevicePush {
+    /** Attach/rotate the push endpoint (`"push": {kind, endpoint}`). */
+    data class Attach(val registration: JellyPlayPushRegistration) : JellyPlayDevicePush
+
+    /** Explicit push-off: `"push": null` clears the server-held endpoint. */
+    data object Detach : JellyPlayDevicePush
+
+    /** Omit the field — the legacy wire shape; the server's push state stands. */
+    data object Keep : JellyPlayDevicePush
+}
 
 @Serializable
 data class JellyPlayMessage(

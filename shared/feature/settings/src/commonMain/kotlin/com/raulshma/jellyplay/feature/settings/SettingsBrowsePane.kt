@@ -122,6 +122,10 @@ internal fun SettingsBrowsePane(
                             currentUser = viewModel.currentUser,
                             serverAddress = currentServerAddress,
                             isAdmin = viewModel.currentUser?.isAdmin == true,
+                            // The plugin's newsletter entry: probe AVAILABLE +
+                            // feature exposed + the user's toggle on.
+                            newsletterVisible =
+                                isJellyPlayFeatureShown(viewModel, com.raulshma.jellyplay.core.model.JellyPlayPluginFeatures.Newsletter),
                             onNewsletterClick = onNewsletterClick,
                             onUserManagementClick = { onNavigate(Route.UserManagement(null)) },
                             onServerManagementClick = { onNavigate(Route.ServerManagement(null)) },
@@ -173,24 +177,21 @@ internal fun SettingsBrowsePane(
                     )
                 }
 
-                // JellyPlay companion-plugin settings sync (ADR 0010) —
-                // capability-gated on-screen group: renders only where the
-                // plugin's probe reports AVAILABLE; a stock server shows
-                // nothing here (graceful-absent contract).
-                settingsSection("group_jellyplay_sync", isTv) {
-                    SettingsJellyPlaySyncSection(
+                // The JellyPlay companion plugin's whole root-screen face
+                // (ADR 0010) in ONE grouped row: the navigation entries
+                // (sync / messages / my ratings / your watching) above the
+                // per-feature switches, inside a single SettingsGroup card —
+                // the old five sibling sections consolidated. Same
+                // graceful-absent gating: the section hides unless the probe
+                // reports AVAILABLE, and each row rides its own gate.
+                settingsSection("group_jellyplay", isTv) {
+                    SettingsJellyPlayPluginSection(
                         viewModel = viewModel,
                         lastClickedSettingId = lastClickedSettingId,
-                    )
-                }
-
-                // The plugin's inbox messages entry (ADR 0010) — same
-                // graceful-absent gating (AVAILABLE + `messages` feature key),
-                // the only door to the messages screen.
-                settingsSection("group_jellyplay_messages", isTv) {
-                    SettingsJellyPlayMessagesEntry(
-                        viewModel = viewModel,
+                        onOpenSync = { onNavigate(Route.JellyPlaySync) },
                         onOpenMessages = { onNavigate(Route.JellyPlayMessages) },
+                        onOpenUserRatings = { onNavigate(Route.JellyPlayUserRatings) },
+                        onOpenYourWatching = { onNavigate(Route.JellyPlayYourWatching) },
                     )
                 }
 

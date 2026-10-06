@@ -92,6 +92,25 @@ class ProfileSyncRepository(
     private val _state = MutableStateFlow(SyncState())
     val state: StateFlow<SyncState> = _state.asStateFlow()
 
+    /**
+     * The keys (composite `"ns/key"` form, e.g. `prefs/pluginFeature.events.enabled`)
+     * whose admin default is `forced` in the LATEST resolved pull — derived
+     * from each cycle's `resolved/{profile}` payload's additive `modes` map
+     * (absent = an older plugin: no mode in force anywhere, the flow reads
+     * empty). Written only inside [runCycle] (the one place the resolved
+     * payload is held, under the engine mutex) and cleared on the identity
+     * reset; consumers (the feature-toggles section's forced locks) read it
+     * reactively.
+     */
+    private val _forcedKeys = MutableStateFlow<Set<String>>(emptySet())
+    val forcedKeys: StateFlow<Set<String>> = _forcedKeys.asStateFlow()
+
+    /** The resolved device profile this engine syncs under (base/desktop/phone/tv). */
+    val resolvedProfile: String get() = deviceProfile
+
+    /** This device's persisted sync identity (the `jpsync.device.id` seam). */
+    suspend fun currentDeviceId(): String = deviceIdProvider()
+
     private val mutex = Mutex()
     private var enabled = false
 
@@ -102,6 +121,9 @@ class ProfileSyncRepository(
         sessionCacheRegistry.registerAction(OWNER) {
             _state.value = _state.value.copy(enabled = false, inFlight = false)
             enabled = false
+            // The previous identity's admin defaults never leak into the next
+            // session's toggle locks.
+            _forcedKeys.value = emptySet()
             reloadPersistedEnabled()
         }
         reloadPersistedEnabled()
@@ -141,7 +163,19 @@ class ProfileSyncRepository(
         mutex.withLock { runCycle() }
     }
 
-    private suspend fun runCycle() {
+    /**
+     * The pull-dominant recovery path ("force re-pull"): one cycle where the
+     * server's view wins for every key it holds — remote values are adopted
+     * over locally-dirty state and nothing is pushed. Same mutex, same gates,
+     * no-op when disabled; use when a device wants to re-converge onto the
+     * server instead of fighting it with its own pending changes.
+     */
+    suspend fun forceRepull() {
+        if (!enabled) return
+        mutex.withLock { runCycle(forceRemoteWins = true) }
+    }
+
+    private suspend fun runCycle(forceRemoteWins: Boolean = false) {
         if (statusStore.status.value != JellyPlayPluginStatus.AVAILABLE) {
             statusStore.refresh()
             if (statusStore.status.value != JellyPlayPluginStatus.AVAILABLE) {
@@ -153,6 +187,13 @@ class ProfileSyncRepository(
         _state.value = _state.value.copy(inFlight = true)
         try {
             val resolved = apiClient.resolveProfile(deviceProfile).getOrThrow()
+            // The admin-defaults modes ride the same payload: derive the forced
+            // set here (the payload's only holder) so the UI's locks track the
+            // server's view cycle-by-cycle.
+            _forcedKeys.value = resolved.modes
+                ?.filterValues { mode -> mode == MODE_FORCED }
+                ?.keys
+                ?: emptySet()
             var adopted = 0
             var pushed = 0
 
@@ -163,15 +204,23 @@ class ProfileSyncRepository(
                     .filter { it.ns == adapter.namespace }
                     .associate { it.key to it.value }
 
-                // ADOPT: clean keys lost to another device.
-                val adopt = remote.filter { (key, value) -> key !in dirty && local[key] != value }
+                // ADOPT: clean keys lost to another device — or, in the
+                // force-remote-wins recovery path, EVERY differing key
+                // (locally-dirty state included; see [forceRepull]).
+                val adopt = if (forceRemoteWins) {
+                    remote.filter { (key, value) -> local[key] != value }
+                } else {
+                    remote.filter { (key, value) -> key !in dirty && local[key] != value }
+                }
                 if (adopt.isNotEmpty()) {
                     adapter.applyRemote(adopt)
                     adapter.markSynced(adopt)
                     adopted += adopt.size
                 }
 
-                // PUSH: local changes the server hasn't seen yet.
+                // PUSH: local changes the server hasn't seen yet. The recovery
+                // path pushes nothing — it exists to take the server's view.
+                if (forceRemoteWins) continue
                 val toPush = dirty.filter { (key, value) -> remote[key] != value }
                 if (toPush.isEmpty()) continue
 
@@ -206,5 +255,8 @@ class ProfileSyncRepository(
 
     private companion object {
         const val OWNER = "profile-sync"
+
+        /** The admin-defaults mode that locks a key's UI (`unset`/`suggested` stay writable). */
+        const val MODE_FORCED = "forced"
     }
 }

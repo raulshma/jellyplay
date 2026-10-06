@@ -82,6 +82,8 @@ class ProfileSyncRepositoryTest {
         val remote: MutableMap<String, JsonElement> = mutableMapOf(),
         var rejectKeys: Set<String> = emptySet(),
         var capabilitiesFail: Boolean = false,
+        /** The resolved-profile payload's admin-defaults modes ("ns/key" → mode). */
+        var modes: Map<String, String>? = null,
     ) : JellyPlayPluginApiClient {
         val pushedWrites = mutableListOf<JellyPlaySettingWrite>()
         private var seq = 0L
@@ -99,7 +101,12 @@ class ProfileSyncRepositoryTest {
         }
 
         private fun snapshotOf(): JellyPlaySettingsSnapshot =
-            JellyPlaySettingsSnapshot(head = seq, profile = "", settings = remote.map { (key, value) -> entryOf(key, value) })
+            JellyPlaySettingsSnapshot(
+                head = seq,
+                profile = "",
+                settings = remote.map { (key, value) -> entryOf(key, value) },
+                modes = modes,
+            )
 
         override suspend fun getSettings(profile: String?): Result<JellyPlaySettingsSnapshot> = Result.success(snapshotOf())
 
@@ -127,7 +134,13 @@ class ProfileSyncRepositoryTest {
         override suspend fun resetNamespace(ns: String, profile: String?): Result<Unit> = Result.success(Unit)
         override suspend fun resolveProfile(profile: String?): Result<JellyPlaySettingsSnapshot> = Result.success(snapshotOf())
         override fun settingsStream(): Flow<com.raulshma.jellyplay.core.network.api.JellyPlaySseEvent> = emptyFlow()
-        override suspend fun registerDevice(deviceId: String, name: String, platform: String, appVersion: String): Result<Unit> = Result.success(Unit)
+        override suspend fun registerDevice(
+            deviceId: String,
+            name: String,
+            platform: String,
+            appVersion: String,
+            push: com.raulshma.jellyplay.core.network.api.JellyPlayDevicePush,
+        ): Result<Unit> = Result.success(Unit)
         override suspend fun unregisterDevice(deviceId: String): Result<Unit> = Result.success(Unit)
         override suspend fun getDevices(): Result<List<JellyPlayDevice>> = Result.success(emptyList())
         override fun eventsStream(): Flow<com.raulshma.jellyplay.core.network.api.JellyPlaySseEvent> = emptyFlow()
@@ -140,6 +153,14 @@ class ProfileSyncRepositoryTest {
         override suspend fun seerrLogout(): Result<Unit> = Result.failure(IllegalStateException("unused"))
 
         // ── per-feature endpoints added after this fake was written; unused by the sync-engine tests ──
+        override suspend fun getSyncStatus(): Result<com.raulshma.jellyplay.core.network.api.JellyPlaySyncStatus?> =
+            Result.failure(IllegalStateException("unused"))
+        override suspend fun getSyncHistory(since: Long?, limit: Int): Result<com.raulshma.jellyplay.core.network.api.JellyPlaySyncHistory?> =
+            Result.failure(IllegalStateException("unused"))
+        override suspend fun getSyncHistoryKeys(seq: Long, limit: Int): Result<com.raulshma.jellyplay.core.network.api.JellyPlaySyncHistoryKeys?> =
+            Result.failure(IllegalStateException("unused"))
+        override suspend fun adminSyncOverview(): Result<com.raulshma.jellyplay.core.network.api.JellyPlaySyncAdminOverview?> =
+            Result.failure(IllegalStateException("unused"))
         override suspend fun getMdbListRatings(imdbId: String): Result<com.raulshma.jellyplay.core.network.api.JellyPlayRatingsResult?> =
             Result.failure(IllegalStateException("unused"))
         override suspend fun getTmdbSeasonRatings(tmdbId: String, seasonNumber: Int): Result<Map<Int, com.raulshma.jellyplay.core.network.api.JellyPlayEpisodeRatings>?> =
@@ -168,6 +189,12 @@ class ProfileSyncRepositoryTest {
             Result.failure(IllegalStateException("unused"))
         override suspend fun cancelTranscode(sessionId: String): Result<Unit> =
             Result.failure(IllegalStateException("unused"))
+        override suspend fun getAnalyticsOverview(days: Int): Result<com.raulshma.jellyplay.core.network.api.JellyPlayAnalyticsOverview?> =
+            Result.failure(IllegalStateException("unused"))
+        override suspend fun getAnalyticsSessions(userId: String?, since: Long?, limit: Int): Result<com.raulshma.jellyplay.core.network.api.JellyPlayAnalyticsSessions?> =
+            Result.failure(IllegalStateException("unused"))
+        override suspend fun getMyAnalytics(days: Int): Result<com.raulshma.jellyplay.core.network.api.JellyPlayMyAnalytics?> =
+            Result.failure(IllegalStateException("unused"))
     }
 
     // ------------------------------------------------------------------
@@ -186,8 +213,9 @@ class ProfileSyncRepositoryTest {
         remote: Map<String, JsonElement> = emptyMap(),
         rejectKeys: Set<String> = emptySet(),
         capabilitiesFail: Boolean = false,
+        modes: Map<String, String>? = null,
     ): Harness {
-        val api = FakePluginApi(remote.toMutableMap(), rejectKeys, capabilitiesFail)
+        val api = FakePluginApi(remote.toMutableMap(), rejectKeys, capabilitiesFail, modes)
         val adapter = FakeAdapter("prefs", local)
         val registry = SessionCacheRegistry(FakeSessionIdentity(), CoroutineScope(Dispatchers.Default))
         val statusStore = JellyPlayPluginStatusStore(api, registry)
@@ -320,5 +348,44 @@ class ProfileSyncRepositoryTest {
         assertNull(state.lastError)
         assertTrue(state.syncedKeys >= 1)
         assertFalse(state.inFlight)
+    }
+
+    // ── forced keys (the admin-defaults `modes` map, the resolved payload's additive face) ──
+
+    @Test
+    fun forcedModes_exposedOnForcedKeys_afterCycle() = runTest {
+        val h = harness(
+            local = mapOf("theme" to JsonPrimitive("dark")),
+            modes = mapOf(
+                "prefs/pluginFeature.events.enabled" to "forced",
+                "prefs/theme" to "suggested",
+                "other/row" to "unset",
+            ),
+        )
+
+        h.repo.setEnabled(true)
+        h.repo.requestSync()
+
+        // ONLY the `forced` mode locks — suggested/unset stay writable.
+        assertEquals(setOf("prefs/pluginFeature.events.enabled"), h.repo.forcedKeys.value)
+    }
+
+    @Test
+    fun absentModes_olderPlugin_forcedKeysStayEmpty() = runTest {
+        // A payload without the additive `modes` field (an older plugin) must
+        // read as "no mode in force anywhere", never as a stale set.
+        val h = harness(local = mapOf("theme" to JsonPrimitive("dark")), modes = null)
+        h.repo.setEnabled(true)
+        h.repo.requestSync()
+
+        assertTrue(h.repo.forcedKeys.value.isEmpty())
+
+        // A later payload that drops the modes again clears the set.
+        h.api.modes = mapOf("prefs/theme" to "forced")
+        h.repo.requestSync()
+        assertEquals(setOf("prefs/theme"), h.repo.forcedKeys.value)
+        h.api.modes = null
+        h.repo.requestSync()
+        assertTrue(h.repo.forcedKeys.value.isEmpty())
     }
 }

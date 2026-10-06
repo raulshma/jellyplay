@@ -5,6 +5,7 @@ import com.raulshma.jellyplay.core.data.notification.JellyPlayNewMediaNotifier
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.JellyPlayEventsRepository
 import com.raulshma.jellyplay.core.data.repository.JellyPlayPluginEvent
+import com.raulshma.jellyplay.core.data.repository.JellyPushRepository
 import com.raulshma.jellyplay.core.model.JellyPlayPluginFeatures
 import com.raulshma.jellyplay.core.model.JellyPlayPluginStatus
 import kotlinx.coroutines.CoroutineScope
@@ -26,12 +27,15 @@ import kotlinx.coroutines.launch
  * DesktopShellServices starts.
  *
  * Gating (ADR 0010 — the registry is the ONLY gate): on each auth-true edge
- * the controller probes [JellyPlayPluginStatusStore.refresh], proceeds only
- * when the probe reports [JellyPlayPluginStatus.AVAILABLE] AND the
- * [JellyPlayPluginFeatures.Events] key is present, then calls
- * [JellyPlayEventsRepository.start] (itself idempotent). A plugin installed
- * mid-session lights up on the next auth edge, or through the stream loop's
- * own re-probe once started.
+ * the controller probes [JellyPlayPluginStatusStore.refresh], then collects
+ * the [JellyPlayFeatureGate] — probe AVAILABLE AND the
+ * [JellyPlayPluginFeatures.Events] key present AND the user's per-feature
+ * toggle on. The gate is REACTIVE: the stream (+ device registration via
+ * [JellyPlayEventsRepository.start], itself idempotent) starts on the open
+ * edge and stops on the closed edge, so switching the `events` toggle in
+ * settings tears the SSE session down (and back up) mid-session without a
+ * re-auth. A plugin installed mid-session lights up on the next auth edge,
+ * or through the stream loop's own re-probe once started.
  *
  * Event surfaces:
  *  - [JellyPlayPluginEvent.NewMedia] → the platform's local-notification
@@ -47,10 +51,20 @@ class JellyPlayEventsSessionController(
     private val authRepository: AuthRepository,
     private val eventsRepository: JellyPlayEventsRepository,
     private val statusStore: JellyPlayPluginStatusStore,
+    /** The per-feature gate — probe AND the user's `events` toggle (the ONE seam). */
+    private val featureGate: JellyPlayFeatureGate,
     /** One-shot user-message seam (bridged to core/ui's UserMessageBus app-side). */
     private val broadcastMessenger: JellyPlayBroadcastMessenger?,
     /** Platform tray-notification seam; null where no local-notification surface exists. */
     private val newMediaNotifier: JellyPlayNewMediaNotifier?,
+    /**
+     * The push face (the plugin's push wave): armed on the session's auth
+     * edge, INDEPENDENT of the `events` gate — its own `push` gate collector
+     * (ADR 0010: one feature key per feature, the registry is the only gate)
+     * decides whether a registration happens, so a user with `events` off
+     * and `push` on still arms push. Cancelled only here, on sign-out.
+     */
+    private val pushRepository: JellyPushRepository,
     scope: CoroutineScope,
 ) {
 
@@ -60,11 +74,18 @@ class JellyPlayEventsSessionController(
     private var sessionJob: Job? = null
 
     /**
-     * The CURRENT signed-in session's event mapper. Cancelled by [stopSession]
-     * and replaced (cancel-then-launch) by a re-auth, so sessions never stack
-     * duplicate [JellyPlayEventsRepository.events] collectors.
+     * The CURRENT signed-in session's gate collector. Cancelled by
+     * [stopSession] and replaced (cancel-then-launch) by a re-auth, so
+     * sessions never stack duplicate gate collectors.
      */
-    private var sessionEventsJob: Job? = null
+    private var sessionGateJob: Job? = null
+
+    /**
+     * The start-stream + event-mapping job, owned by the gate: launched on
+     * every open edge, cancelled (with [JellyPlayEventsRepository.stop]) on
+     * every closed edge — the toggle-off teardown path.
+     */
+    private var eventsRunJob: Job? = null
 
     /**
      * Arms the auth-edge collector on the application scope. Safe to call
@@ -84,27 +105,54 @@ class JellyPlayEventsSessionController(
     }
 
     /**
-     * One signed-in session: probe, gate, start the stream, then map events
-     * onto the surfaces until the session ends — the mapper job IS the
-     * session's owner handle, so [stopSession] cancels the collector and the
-     * stream together.
+     * One signed-in session: probe, then ride the [JellyPlayFeatureGate]
+     * reactively — stream + event mapping while the gate reads open (probe
+     * AVAILABLE + `events` toggle on), teardown the moment it reads closed.
+     * The gate collector job IS the session's owner handle, so
+     * [stopSession] cancels the collector and the stream together.
      */
     private fun startSession() {
-        sessionEventsJob?.cancel()
-        sessionEventsJob = appScope.launch {
+        sessionGateJob?.cancel()
+        eventsRunJob?.cancel()
+        eventsRunJob = null
+        sessionGateJob = appScope.launch {
             statusStore.refresh()
             if (statusStore.status.value != JellyPlayPluginStatus.AVAILABLE) return@launch
-            if (!statusStore.hasFeature(JellyPlayPluginFeatures.Events)) return@launch
 
-            eventsRepository.start()
-            eventsRepository.events.collect(::present)
+            // Push arms with the SESSION, not the events gate: its repository
+            // rides its OWN `push` gate (ADR 0010 — one key per feature), so
+            // a user with `events` off and `push` on still registers. The
+            // plain device registration below POSTs with the push field
+            // omitted (the server keeps its push state), and the two POSTs
+            // are upserts of the same device record — whichever order they
+            // land in, the push half survives.
+            pushRepository.start()
+
+            featureGate.isAvailable(JellyPlayPluginFeatures.Events).collect { available ->
+                if (available) {
+                    // Replace (never stack) — only reachable after a closed
+                    // edge cancelled the previous run.
+                    eventsRunJob?.cancel()
+                    eventsRunJob = launch {
+                        eventsRepository.start()
+                        eventsRepository.events.collect(::present)
+                    }
+                } else {
+                    eventsRunJob?.cancel()
+                    eventsRunJob = null
+                    eventsRepository.stop()
+                }
+            }
         }
     }
 
     private fun stopSession() {
-        sessionEventsJob?.cancel()
-        sessionEventsJob = null
+        sessionGateJob?.cancel()
+        sessionGateJob = null
+        eventsRunJob?.cancel()
+        eventsRunJob = null
         eventsRepository.stop()
+        pushRepository.stop()
     }
 
     /** Event → surface mapping. See the class KDoc for the table. */

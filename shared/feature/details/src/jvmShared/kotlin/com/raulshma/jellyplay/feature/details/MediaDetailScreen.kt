@@ -508,6 +508,7 @@ fun MediaDetailScreen(
                     pluginRatings = uiState.pluginRatings,
                     pluginSimilarItems = uiState.pluginSimilarItems,
                     animeMarkers = uiState.animeMarkers,
+                    seasonRatings = uiState.seasonRatings,
                 )
 
                 val onVideoClick = rememberVideoClickHandler(

@@ -659,4 +659,154 @@
     <string name="settings_input_bindings_capture_escape_hint">Esc bricht ab</string>
     <string name="settings_input_bindings_row_reset">Auf Standard zurücksetzen</string>
     <string name="settings_input_bindings_row_delete">Tastenkürzel löschen</string>
+
+    <!-- JellyPlay companion plugin: Seerr via server -->
+    <string name="jellyplay_seerr_mode_direct">Direkte Verbindung</string>
+    <string name="jellyplay_seerr_mode_via_server">Über den JellyPlay-Server</string>
+    <string name="jellyplay_seerr_bridge_checking">JellyPlay-Server-Plugin wird geprüft…</string>
+    <string name="jellyplay_seerr_bridge_unlinked">Verknüpfe dein Seerr-Konto über das JellyPlay-Server-Plugin. Dein Seerr-API-Key verlässt den Server nie.</string>
+    <string name="jellyplay_seerr_bridge_unavailable">Das JellyPlay-Server-Plugin ist auf diesem Server nicht verfügbar.</string>
+    <string name="jellyplay_seerr_bridge_not_configured">Das JellyPlay-Server-Plugin hat noch keinen Seerr-Server konfiguriert. Bitte deinen Serveradministrator um Einrichtung.</string>
+    <string name="jellyplay_seerr_bridge_linked_with">Verknüpft mit %1$s</string>
+    <string name="jellyplay_seerr_bridge_via_note">Läuft über das JellyPlay-Server-Plugin — Anfragen werden von deinem Jellyfin-Server mit deiner eigenen Seerr-Sitzung weitergeleitet.</string>
+    <string name="jellyplay_seerr_bridge_login">Mit Quick Connect verknüpfen</string>
+    <string name="jellyplay_seerr_bridge_logout">Verknüpfung lösen</string>
+    <string name="jellyplay_seerr_bridge_retry">Erneut versuchen</string>
+    <string name="jellyplay_seerr_qc_enter_code">Genehmige die Anfrage auf deinem Jellyfin-Server (Dashboard → Quick Connect) und warte hier.</string>
+    <string name="jellyplay_seerr_qc_starting">Quick Connect wird gestartet…</string>
+    <string name="jellyplay_seerr_qc_waiting">Warten auf Genehmigung…</string>
+    <string name="jellyplay_seerr_qc_cancel">Abbrechen</string>
+    <string name="jellyplay_seerr_summary_linked">Über JellyPlay-Server verknüpft (%1$s)</string>
+    <string name="jellyplay_seerr_summary_unlinked">Nicht verknüpft (über JellyPlay-Server)</string>
+    <string name="jellyplay_seerr_error_status_unreachable">Die Seerr-Bridge des JellyPlay-Plugins ist nicht erreichbar.</string>
+    <string name="jellyplay_seerr_error_qc_disabled">Quick Connect ist auf dem Jellyfin-Server nicht aktiviert.</string>
+    <string name="jellyplay_seerr_error_qc_failed">Quick Connect fehlgeschlagen. Versuche es erneut.</string>
+    <string name="jellyplay_seerr_error_qc_timeout">Zeitüberschreitung bei der Quick Connect-Genehmigung. Versuche es erneut.</string>
+    <string name="jellyplay_seerr_error_login_failed">Seerr-Anmeldung fehlgeschlagen.</string>
+    <string name="jellyplay_seerr_error_logout_failed">Trennen der Verknüpfung fehlgeschlagen.</string>
+
+    <!-- JellyPlay companion plugin: settings sync -->
+    <string name="settings_jellyplay_sync">Geräteübergreifend synchronisieren</string>
+    <string name="settings_jellyplay_sync_on">Ein — Einstellungen folgen deinem Konto</string>
+    <string name="settings_jellyplay_sync_off">Aus — Einstellungen bleiben auf diesem Gerät</string>
+    <string name="settings_sync_across_devices">Einstellungen geräteübergreifend synchronisieren</string>
+    <string name="settings_sync_now">Jetzt synchronisieren</string>
+    <string name="settings_sync_never">Nie synchronisiert</string>
+    <string name="ss_jellyplay_sync_enabled_title">Einstellungen geräteübergreifend synchronisieren</string>
+    <string name="ss_jellyplay_sync_enabled_subtitle">Einstellungen, Layouts und Präferenzen folgen deinem Jellyfin-Konto über das JellyPlay-Plugin</string>
+    <string name="ss_jellyplay_sync_now_title">Jetzt synchronisieren</string>
+    <string name="ss_jellyplay_sync_now_subtitle">Synchronisierte Einstellungen sofort hoch- und herunterladen</string>
+    <string name="settings_jellyplay_sync_last_sync">Letzte Synchronisierung %1$s</string>
+    <string name="settings_jellyplay_sync_in_flight">Synchronisiere…</string>
+    <string name="settings_jellyplay_sync_failed">Letzte Synchronisierung fehlgeschlagen</string>
+    <string name="settings_jellyplay_sync_op_push">Push</string>
+    <string name="settings_jellyplay_sync_op_pull">Pull</string>
+    <string name="settings_jellyplay_sync_op_reset">Zurücksetzen</string>
+    <string name="settings_jellyplay_sync_op_unknown">Synchronisieren</string>
+    <string name="settings_jellyplay_sync_usage_title">Was synchronisiert wird</string>
+    <string name="settings_jellyplay_sync_usage_unavailable">Nutzungsdetails auf diesem Server nicht verfügbar</string>
+    <string name="settings_jellyplay_sync_quota_bytes">%1$s von %2$s belegt</string>
+    <string name="settings_jellyplay_sync_quota_keys">%1$d von %2$d Schlüsseln</string>
+    <string name="settings_jellyplay_sync_relative_days">vor %1$d Tg.</string>
+    <string name="settings_jellyplay_sync_relative_hours">vor %1$d Std.</string>
+    <string name="settings_jellyplay_sync_relative_minutes">vor %1$d Min.</string>
+    <string name="settings_jellyplay_sync_relative_now">Gerade eben</string>
+    <string name="settings_jellyplay_sync_ns_usage">%1$d Schlüssel • %2$s</string>
+    <string name="settings_jellyplay_sync_admin_section">Nutzung pro Nutzer (Admin)</string>
+    <string name="settings_jellyplay_sync_admin_user_usage">%1$d Schlüssel • %2$s • %3$d Geräte</string>
+    <string name="settings_jellyplay_sync_devices_title">Geräte</string>
+    <string name="settings_jellyplay_sync_this_device">Dieses Gerät</string>
+    <string name="settings_jellyplay_sync_time_yesterday">Gestern, %1$s</string>
+    <string name="settings_jellyplay_sync_device_last_sync">Letzte Synchronisierung %1$s</string>
+    <string name="settings_jellyplay_sync_profile_title">Geräteprofil</string>
+    <string name="settings_jellyplay_sync_profile_subtitle">Dieses Gerät synchronisiert mit dem Profil „%1$s“</string>
+    <string name="settings_jellyplay_sync_history_title">Letzte Aktivität</string>
+    <string name="settings_jellyplay_sync_history_empty">Noch keine Synchronisierungsaktivität</string>
+    <string name="settings_jellyplay_sync_history_entry">%1$s • %2$d angewendet, %3$d abgelehnt</string>
+    <string name="settings_jellyplay_sync_history_rejects">Abgelehnt: %1$s</string>
+    <string name="settings_jellyplay_sync_history_retention">Verlauf wird %1$d Tage aufbewahrt</string>
+    <string name="settings_jellyplay_sync_history_keys_empty">Keine Schlüsseländerungen</string>
+    <string name="settings_jellyplay_sync_history_keys_loading">Änderungen werden geladen…</string>
+    <string name="settings_jellyplay_sync_actions_title">Aktionen</string>
+    <string name="settings_jellyplay_sync_reset_title">Synchronisierte Einstellungen zurücksetzen</string>
+    <string name="settings_jellyplay_sync_reset_subtitle">Löscht die synchronisierten Einstellungen auf dem Server; jedes Gerät fällt auf seine lokalen Standardwerte zurück</string>
+    <string name="settings_jellyplay_sync_reset_confirm_title">Synchronisierte Einstellungen zurücksetzen?</string>
+    <string name="settings_jellyplay_sync_reset_confirm_message">Damit werden die synchronisierten Einstellungen auf dem Server für ALLE Geräte gelöscht. Jedes Gerät fällt bei der nächsten Synchronisierung auf seine lokalen Standardwerte zurück.</string>
+    <string name="settings_jellyplay_sync_force_repull_title">Erneutes Abrufen erzwingen</string>
+    <string name="settings_jellyplay_sync_force_repull_subtitle">Ausstehende Änderungen dieses Geräts verwerfen und den Serverstand übernehmen</string>
+
+    <!-- JellyPlay companion plugin: messages inbox -->
+    <string name="jellyplay_msgs_title">Nachrichten</string>
+    <string name="jellyplay_msgs_entry_subtitle">Updates vom JellyPlay-Plugin deines Servers</string>
+    <string name="jellyplay_msgs_unread_count">%1$d ungelesen</string>
+    <string name="jellyplay_msgs_unread_badge">Ungelesen</string>
+    <string name="jellyplay_msgs_empty">Noch keine Nachrichten von deinem Server</string>
+
+    <!-- JellyPlay companion plugin: my ratings -->
+    <string name="jellyplay_ur_title">Meine Bewertungen</string>
+    <string name="jellyplay_ur_entry_subtitle">Deine Likes, Dislikes und Bewertungen über das JellyPlay-Plugin</string>
+    <string name="jellyplay_ur_empty">Noch nichts hier — bewerte zuerst etwas</string>
+    <string name="jellyplay_ur_filter_likes">Likes</string>
+    <string name="jellyplay_ur_filter_dislikes">Dislikes</string>
+    <string name="jellyplay_ur_filter_rated">Bewertet</string>
+    <string name="jellyplay_ur_rating_value">%1$d/10</string>
+    <string name="jellyplay_ur_liked">Gefällt mir</string>
+    <string name="jellyplay_ur_disliked">Gefällt nicht</string>
+    <string name="jellyplay_ur_last_played">Zuletzt gespielt %1$s</string>
+    <plurals name="jellyplay_ur_plays">
+        <item quantity="one">%1$d Wiedergabe</item>
+        <item quantity="other">%1$d Wiedergaben</item>
+    </plurals>
+
+    <!-- JellyPlay companion plugin: your watching -->
+    <string name="settings_jellyplay_yw_title">Deine Wiedergaben</string>
+    <string name="settings_jellyplay_yw_entry_subtitle">Deine Wiedergaben, Sehdauer und Top-Titel über das JellyPlay-Plugin</string>
+    <string name="settings_jellyplay_yw_unavailable">Auf diesem Server nicht verfügbar</string>
+    <string name="settings_jellyplay_yw_empty">Keine Wiedergaben in diesem Zeitraum</string>
+    <string name="settings_jellyplay_yw_days_7">7 Tage</string>
+    <string name="settings_jellyplay_yw_days_30">30 Tage</string>
+    <string name="settings_jellyplay_yw_days_90">90 Tage</string>
+    <string name="settings_jellyplay_yw_plays">Wiedergaben</string>
+    <string name="settings_jellyplay_yw_watch_time">Sehdauer</string>
+    <string name="settings_jellyplay_yw_titles">Titel</string>
+    <string name="settings_jellyplay_yw_section_chart">Pro Tag</string>
+    <string name="settings_jellyplay_yw_section_top_items">Top-Titel</string>
+
+    <!-- JellyPlay companion plugin: per-feature switches -->
+    <string name="settings_jellyplay_plugin_section">Server-Plugin</string>
+    <string name="settings_jellyplay_plugin_section_summary">Wähle, welche Funktionen das JellyPlay-Plugin bereitstellt</string>
+    <string name="settings_jellyplay_feature_locked">Von deinem Serveradministrator festgelegt</string>
+    <string name="settings_jellyplay_feature_events">Live-Ereignisse</string>
+    <string name="ss_jellyplay_feature_events_subtitle">Benachrichtigungen zu neuen Medien und Server-Durchsagen werden an dieses Gerät gestreamt</string>
+    <string name="settings_jellyplay_feature_messages">Nachrichteneingang</string>
+    <string name="ss_jellyplay_feature_messages_subtitle">Vom Admin veröffentlichte Nachrichten unter Einstellungen</string>
+    <string name="settings_jellyplay_feature_seerr_bridge">Seerr über den Server</string>
+    <string name="ss_jellyplay_feature_seerr_bridge_subtitle">Seerr über das JellyPlay-Plugin verknüpfen statt mit direkten Zugangsdaten</string>
+    <string name="settings_jellyplay_feature_ratings">Aggregierte Bewertungen</string>
+    <string name="ss_jellyplay_feature_ratings_subtitle">MDBList-Bewertungs-Chips auf Detailseiten</string>
+    <string name="settings_jellyplay_feature_custom_rows">Eigene Startseiten-Reihen</string>
+    <string name="ss_jellyplay_feature_custom_rows_subtitle">Vom Administrator definierte Reihen auf der Startseite</string>
+    <string name="settings_jellyplay_feature_seasonal_rows">Saisonale Startseiten-Reihe</string>
+    <string name="ss_jellyplay_feature_seasonal_rows_subtitle">Die saisonalen Empfehlungen des Plugins auf der Startseite</string>
+    <string name="settings_jellyplay_feature_anime_markers">Anime-Markierungen</string>
+    <string name="ss_jellyplay_feature_anime_markers_subtitle">Filler- und Rückblick-Markierungen in Episodenlisten</string>
+    <string name="settings_jellyplay_feature_recommendations">Server-Empfehlungen</string>
+    <string name="ss_jellyplay_feature_recommendations_subtitle">Serverberechnete „Mehr wie dieses“ auf Detailseiten</string>
+    <string name="settings_jellyplay_feature_user_ratings">Nutzerbewertungen synchronisieren</string>
+    <string name="ss_jellyplay_feature_user_ratings_subtitle">Bewertungen über das Plugin synchronisieren</string>
+    <string name="settings_jellyplay_feature_bookmarks">Lesezeichen synchronisieren</string>
+    <string name="ss_jellyplay_feature_bookmarks_subtitle">Lesezeichen geräteübergreifend über das Plugin spiegeln</string>
+    <string name="settings_jellyplay_feature_newsletter">Newsletter</string>
+    <string name="ss_jellyplay_feature_newsletter_subtitle">Der Newsletter-Eintrag im Profilsbanner der Einstellungen</string>
+    <string name="settings_jellyplay_feature_transcodes">Transcodierungs-Monitor</string>
+    <string name="ss_jellyplay_feature_transcodes_subtitle">Die Karte für aktive Transcodierungen im Admin-Dashboard (nur Admin)</string>
+    <string name="settings_jellyplay_feature_push">Push-Benachrichtigungen</string>
+    <string name="ss_jellyplay_feature_push_subtitle">Server-Pushes über eine UnifiedPush-Distributor-App (z. B. ntfy)</string>
+    <string name="settings_jellyplay_push_state_unregistered">Aktivieren, um dieses Gerät für Pushes zu registrieren</string>
+    <string name="settings_jellyplay_push_state_registering">Registrierung beim Push-Distributor…</string>
+    <string name="settings_jellyplay_push_state_registered">Registriert — Pushes kommen über deinen Distributor an</string>
+    <string name="settings_jellyplay_push_state_no_distributor">Benötigt eine Push-Distributor-App (z. B. ntfy)</string>
+    <string name="settings_jellyplay_push_state_server_off">Server-Push deaktiviert</string>
+    <string name="settings_jellyplay_feature_analytics">Statistiken</string>
+    <string name="ss_jellyplay_feature_analytics_subtitle">Das Wiedergabeverlauf-Dashboard im Admin-Bereich (nur Admin)</string>
 </resources>

@@ -2,7 +2,9 @@ package com.raulshma.jellyplay.feature.admin.transcodes
 
 import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.data.log.Log
+import com.raulshma.jellyplay.core.data.session.JellyPlayFeatureGate
 import com.raulshma.jellyplay.core.data.session.JellyPlayPluginStatusStore
+import com.raulshma.jellyplay.core.data.session.isAvailableOrProbe
 import com.raulshma.jellyplay.core.model.JellyPlayPluginFeatures
 import com.raulshma.jellyplay.core.model.JellyPlayPluginStatus
 import com.raulshma.jellyplay.core.network.api.JellyPlayActiveTranscode
@@ -17,10 +19,11 @@ import kotlinx.coroutines.flow.combine
 
 /**
  * The admin transcodes monitor's gate — plugin AVAILABLE **and** the
- * `transcodes` feature key present (ADR 0010: the capability registry is the
- * ONLY gating mechanism). Admin-ness is enforced upstream by the admin area's
- * AdminRouteContainer — the existing admin gate, deliberately not re-built
- * here.
+ * `transcodes` feature key present **and** the user's per-feature toggle on
+ * (ADR 0010: the capability registry is the ONLY gating mechanism; the toggle
+ * rides [JellyPlayFeatureGate], the ONE per-feature seam). Admin-ness is
+ * enforced upstream by the admin area's AdminRouteContainer — the existing
+ * admin gate, deliberately not re-built here.
  */
 enum class TranscodesGate { Unknown, Available, Unavailable }
 
@@ -85,6 +88,12 @@ data class TranscodesState(
 class JellyPlayTranscodesViewModel(
     private val pluginApiClient: JellyPlayPluginApiClient,
     private val statusStore: JellyPlayPluginStatusStore? = null,
+    /**
+     * The per-feature gate seam (probe AND the user's toggle) over the store
+     * above. Nullable-with-default (the SettingsViewModel pattern); without
+     * it the probe-only availability keeps the pre-toggle behavior.
+     */
+    private val featureGate: JellyPlayFeatureGate? = null,
 ) : JellyPlayViewModel() {
 
     private val _uiState = stateFlow(TranscodesState())
@@ -168,6 +177,11 @@ class JellyPlayTranscodesViewModel(
      * The gate collector. The first transcode load rides the Available
      * transition (never before — a gated-off screen must not touch the
      * plugin route), so the screen opens on data rather than on a wasted 404.
+     *
+     * Availability is the ONE gate seam ([JellyPlayFeatureGate.isAvailable] —
+     * probe AND the user's `transcodes` toggle, so a switch-off tears the
+     * screen down reactively); without the seam the probe-only combine keeps
+     * the pre-toggle behavior.
      */
     private fun observeGate() {
         val store = statusStore
@@ -176,11 +190,12 @@ class JellyPlayTranscodesViewModel(
             _uiState.update { it.copy(gate = TranscodesGate.Unavailable, isLoading = false) }
             return
         }
+        val available: kotlinx.coroutines.flow.Flow<Boolean> =
+            featureGate.isAvailableOrProbe(store, JellyPlayPluginFeatures.Transcodes)
         launch {
-            combine(store.status, store.features) { status, features ->
+            combine(store.status, available) { status, gateOpen ->
                 when {
-                    status == JellyPlayPluginStatus.AVAILABLE &&
-                        features.contains(JellyPlayPluginFeatures.Transcodes) -> TranscodesGate.Available
+                    gateOpen -> TranscodesGate.Available
                     status == JellyPlayPluginStatus.UNKNOWN -> TranscodesGate.Unknown
                     else -> TranscodesGate.Unavailable
                 }

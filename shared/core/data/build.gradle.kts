@@ -153,6 +153,24 @@ kotlin {
             // TV provider (Watch Next / preview channels) — R8 strips for
             // phone release.
             implementation(libs.tvprovider)
+            // UnifiedPush connector (the jellyplay plugin's push wave): the
+            // receiver + distributor-seam impl in core/push talk to the user's
+            // UnifiedPush distributor app (ntfy & co). Android-only library —
+            // no JVM artifact exists, so jvmShared/commonMain never see it;
+            // the commonMain repository rides the JellyPushDistributor seam.
+            // Connector's POM drags JVM com.google.crypto.tink:tink, which
+            // duplicates class-for-class with security-crypto's tink-android;
+            // its bundled fixed_webpush helpers only touch
+            // tink.subtle.{EllipticCurves,EngineFactory}, both present in
+            // tink-android, so the JVM artifact drops out cleanly.
+            // Version lives in libs.versions.toml (unifiedpush); inlined as a
+            // string because the KGP source-set handler only offers the
+            // per-dependency exclude() overload on the String notation — the
+            // catalog Provider form resolves to an immutable minimal
+            // dependency that rejects configuration.
+            implementation("org.unifiedpush.android:connector:${libs.versions.unifiedpush.get()}") {
+                exclude(group = "com.google.crypto.tink")
+            }
         }
         getByName("jvmMain").dependencies {
             // Real org.json for the desktop target (SyncPlayEventHandler in

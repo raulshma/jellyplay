@@ -106,6 +106,7 @@ class NavigationRouteTest {
         Route.Devices,
         Route.Logs,
         Route.JellyPlayTranscodes,
+        Route.JellyPlayAnalytics,
         Route.UserStatistics,
         Route.UserStatisticsDetail("user-1"),
         Route.Users,

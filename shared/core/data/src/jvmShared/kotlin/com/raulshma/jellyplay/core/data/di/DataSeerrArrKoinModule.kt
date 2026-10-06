@@ -35,6 +35,9 @@ internal val dataSeerrArrModule: Module = module {
             // OfflineModeManager binding every other jvmShared consumer
             // (PlaybackRepositoryImpl, OfflineSyncManager, …) resolves.
             offlineModeManager = get(),
+            // The bridge arm's per-feature gate (probe AND the user's
+            // `seerr-bridge` toggle — JellyPlayFeatureGate).
+            featureGate = get(),
         )
     }
     single<SeerrRepository> { get<SeerrRepositoryImpl>() }

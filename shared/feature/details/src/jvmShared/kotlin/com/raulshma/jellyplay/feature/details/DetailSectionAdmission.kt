@@ -66,11 +66,14 @@ internal enum class DetailSectionKind(val delayIndex: Int) {
     /** Seerr "Videos" (trailers/extras mined from TMDB). */
     RELATED_VIDEOS(9),
 
-    /** "More like this" — server relatedItems (remote) or localRelatedItems (local). */
+    /** "More like this" — server relatedItems (remote) or localRelatedItems (local).
+     *  Suppressed when JELLYPLAY_SIMILAR has content: on Jellyfin 12+ the plugin
+     *  registers into the server's similar-items pipeline too, so the stock
+     *  endpoint returns the same scored list the plugin row renders. */
     MORE_LIKE_THIS(10),
 
     /** JellyPlay companion plugin's server-scored "More like this" row (ADR 0010) —
-     *  additive alongside MORE_LIKE_THIS, never a replacement. */
+     *  replaces MORE_LIKE_THIS while present, falls back to it when empty. */
     JELLYPLAY_SIMILAR(10),
 
     /** Seerr recommendations row. */
@@ -146,7 +149,8 @@ internal data class DetailSectionAdmission(
     val hasAttachedDownload: Boolean,
     /** Plugin ratings chips fetched (state.pluginRatings non-empty — ADR 0010). */
     val hasPluginRatings: Boolean = false,
-    /** Plugin scored-similar items hydrated (state.pluginSimilarItems non-empty — ADR 0010). */
+    /** Plugin scored-similar items hydrated (state.pluginSimilarItems non-empty — ADR 0010).
+     *  Also the suppression flag for the stock MORE_LIKE_THIS row. */
     val hasPluginSimilar: Boolean = false,
 ) {
 
@@ -192,7 +196,10 @@ internal data class DetailSectionAdmission(
         admit(DetailSectionKind.COLLECTION_ITEMS, admitted = true)
         admit(DetailSectionKind.CAST, mediaType != MediaType.BOOK)
         admit(DetailSectionKind.RELATED_VIDEOS, admitted = true)
-        admit(DetailSectionKind.MORE_LIKE_THIS, admitted = true)
+        admit(
+            DetailSectionKind.MORE_LIKE_THIS,
+            !hasPluginSimilar,
+        )
         admit(
             DetailSectionKind.JELLYPLAY_SIMILAR,
             hasPluginSimilar,

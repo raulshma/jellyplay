@@ -82,6 +82,7 @@ class SettingsCatalogScreenContractTest {
         BackupRows.all,
         AboutRows.all,
         JellyPlaySyncRows.all,
+        JellyPlayFeatureRows.all,
     )
 
     /** Every id a holder declares, via the holders' public const fields. */

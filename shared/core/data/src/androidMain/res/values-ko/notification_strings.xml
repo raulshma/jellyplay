@@ -24,4 +24,12 @@
     <!-- New-episodes channel (opt-in routing for episode items) -->
     <string name="notification_channel_new_episodes">새 에피소드</string>
     <string name="notification_channel_new_episodes_desc">새로 추가된 에피소드 알림</string>
+
+    <!-- Companion-plugin live new-media push (ADR 0010, single-event tray post) -->
+    <string name="notification_plugin_new_media_subtitle">서버에 새 미디어가 추가되었습니다</string>
+    <string name="notification_plugin_new_episodes_count">새 에피소드 %1$d개</string>
+
+    <!-- Companion-plugin UnifiedPush message (the push wave: broadcast/message
+         kinds — new-media rides the typed path above). -->
+    <string name="notification_plugin_push_title">JellyPlay 서버</string>
 </resources>

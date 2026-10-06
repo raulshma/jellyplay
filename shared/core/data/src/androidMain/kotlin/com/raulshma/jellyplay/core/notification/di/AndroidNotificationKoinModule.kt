@@ -42,6 +42,15 @@ fun androidNotificationModule(context: Context): Module = module {
         }
     }
 
+    // The push wave's platform half: the UnifiedPush connector over the user's
+    // distributor app (ntfy & co). The commonMain push repository resolves
+    // this seam getOrNull — desktop registers nothing and parks on
+    // NoDistributor; the push receiver routes the connector's broadcasts into
+    // the repository / the dispatcher here.
+    single<com.raulshma.jellyplay.core.data.repository.JellyPushDistributor> {
+        com.raulshma.jellyplay.core.push.AndroidJellyPushDistributor(context = context)
+    }
+
     single {
         NotificationScheduler(
             context = context,

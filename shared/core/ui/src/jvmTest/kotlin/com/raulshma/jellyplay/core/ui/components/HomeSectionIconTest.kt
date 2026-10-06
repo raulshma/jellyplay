@@ -11,6 +11,7 @@ import com.composables.icons.tabler.outline.LayersLinked
 import com.composables.icons.tabler.outline.Pinned
 import com.composables.icons.tabler.outline.PlayerPlay
 import com.composables.icons.tabler.outline.PlayerSkipForward
+import com.composables.icons.tabler.outline.Sparkles
 import com.composables.icons.tabler.outline.Wand
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import kotlin.test.Test

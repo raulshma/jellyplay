@@ -17,12 +17,11 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_jellyplay_
 /**
  * The JellyPlay companion-plugin sync rows (ADR 0010) — residual rows (the
  * knob lives on `ProfileSyncRepository`, no datastore spec): the opt-in
- * toggle and the manual sync-now action, rendered as one on-screen group on
- * the settings root, gated on the plugin's capabilities probe.
- *
- * Both rows carry `route = Route.Settings`: their search hits resolve to the
- * root screen's own rows, so a tap takes the NoOp+highlight arm of
- * `settingsResultClickAction` (the screensaver-rows precedent).
+ * toggle and the manual sync-now action. The on-screen face moved onto the
+ * [Route.JellyPlaySync] screen ([JellyPlaySyncScreen], the consolidation
+ * wave); these declarations stay the search catalog's single home — a search
+ * hit now navigates to the sync screen (their `route`), keeping the
+ * declarations / ratchets byte-stable through the move.
  */
 internal object JellyPlaySyncRows {
 
@@ -33,7 +32,7 @@ internal object JellyPlaySyncRows {
         searchTitleRes = Res.string.ss_jellyplay_sync_enabled_title,
         searchSubtitleRes = Res.string.ss_jellyplay_sync_enabled_subtitle,
         keywords = listOf("sync", "settings", "devices", "profile", "roam", "jellyplay", "plugin"),
-        route = Route.Settings,
+        route = Route.JellyPlaySync,
     )
 
     val SyncNow = SettingsRow(
@@ -43,7 +42,7 @@ internal object JellyPlaySyncRows {
         searchTitleRes = Res.string.ss_jellyplay_sync_now_title,
         searchSubtitleRes = Res.string.ss_jellyplay_sync_now_subtitle,
         keywords = listOf("sync", "refresh", "pull", "push", "jellyplay", "plugin"),
-        route = Route.Settings,
+        route = Route.JellyPlaySync,
     )
 
     /** The whole declaration — the ratchet tests' vocabulary entry. */
@@ -51,8 +50,8 @@ internal object JellyPlaySyncRows {
 }
 
 private val jellyPlaySyncSearchRoutes: Map<String, Route> = mapOf(
-    JellyPlaySyncRows.SyncEnabled.id to Route.Settings,
-    JellyPlaySyncRows.SyncNow.id to Route.Settings,
+    JellyPlaySyncRows.SyncEnabled.id to Route.JellyPlaySync,
+    JellyPlaySyncRows.SyncNow.id to Route.JellyPlaySync,
 )
 
 /** One on-screen group beside the system groups (capability-gated at emission). */

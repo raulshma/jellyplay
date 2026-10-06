@@ -14,6 +14,9 @@ import com.raulshma.jellyplay.feature.settings.LicensesViewModel
 import com.raulshma.jellyplay.feature.settings.DiscoverRowsViewModel
 import com.raulshma.jellyplay.feature.settings.InputBindingsViewModel
 import com.raulshma.jellyplay.feature.settings.JellyPlayMessagesViewModel
+import com.raulshma.jellyplay.feature.settings.JellyPlaySyncViewModel
+import com.raulshma.jellyplay.feature.settings.JellyPlayUserRatingsViewModel
+import com.raulshma.jellyplay.feature.settings.JellyPlayYourWatchingViewModel
 import com.raulshma.jellyplay.feature.settings.LibraryLayoutViewModel
 import com.raulshma.jellyplay.feature.settings.NotificationSettingsViewModel
 import com.raulshma.jellyplay.feature.settings.PlaybackSettingsViewModel
@@ -103,15 +106,50 @@ val settingsModule: Module = module {
             jellyPlayStatusStore = get(),
             jellyPlaySyncRepository = get(),
             jellyPlayEventsRepository = get(),
+            jellyPlayFeatureGate = get(),
+            jellyPlayPushRepository = get(),
         )
     }
 
     // The companion-plugin inbox screen (ADR 0010). Reachability is gated at
     // the settings root's "Messages" entry; the VM still re-checks the
-    // `messages` feature key before every api call.
+    // `messages` gate (probe AND the user's toggle) before every api call.
     viewModel {
         JellyPlayMessagesViewModel(
             eventsRepository = get(),
+            statusStore = get(),
+            featureGate = get(),
+        )
+    }
+    // The companion-plugin "My ratings" screen (ADR 0010). Reachability is
+    // gated at the settings root's entry; the VM still re-checks the
+    // `user-ratings` gate (probe AND the user's toggle) before every api call.
+    viewModel {
+        JellyPlayUserRatingsViewModel(
+            pluginApiClient = get(),
+            statusStore = get(),
+            featureGate = get(),
+        )
+    }
+    // The companion-plugin "Your watching" screen. Reachability is gated at
+    // the settings root's entry; the VM still re-checks the `analytics` gate
+    // (probe AND the user's toggle — the per-user analytics face, not the
+    // admin route) before every api call.
+    viewModel {
+        JellyPlayYourWatchingViewModel(
+            pluginApiClient = get(),
+            statusStore = get(),
+            featureGate = get(),
+        )
+    }
+    // The companion-plugin settings-sync screen (ADR 0010). Reachability is
+    // gated at the settings root's "Sync" entry (probe AND the `settings-sync`
+    // meta key — no user toggle exists for meta keys); the VM still re-checks
+    // the same probe-only gate before every api call.
+    viewModel {
+        JellyPlaySyncViewModel(
+            syncRepository = get(),
+            pluginApiClient = get(),
             statusStore = get(),
         )
     }
@@ -243,10 +281,13 @@ val settingsModule: Module = module {
             seerrPreferencesStore = get(),
             secureCredentialsStore = get(),
             // The "via server" bridge seams (ADR 0010): the plugin api client
-            // (seerr status/login/logout), the ONE availability gate, and the
-            // Jellyfin Quick Connect source the plugin authorizes against.
+            // (seerr status/login/logout), the ONE availability gate, the
+            // per-feature gate (probe AND the user's `seerr-bridge` toggle),
+            // and the Jellyfin Quick Connect source the plugin authorizes
+            // against.
             pluginApiClient = get(),
             pluginStatusStore = get(),
+            jellyPlayFeatureGate = get(),
             authRepository = get(),
         )
     }

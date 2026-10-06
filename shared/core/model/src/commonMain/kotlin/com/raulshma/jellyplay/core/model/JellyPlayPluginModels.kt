@@ -35,4 +35,6 @@ object JellyPlayPluginFeatures {
     const val UserRatings = "user-ratings"
     const val Bookmarks = "bookmarks"
     const val Transcodes = "transcodes"
+    const val Push = "push"
+    const val Analytics = "analytics"
 }

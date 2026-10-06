@@ -59,7 +59,12 @@ class SettingsSearchCatalogTest {
     @Test
     fun `aggregation preserves the verbatim move - the full catalog in flat order`() {
         val items = SettingsSearchCatalog.items
-        assertEquals(316, items.size)
+        // 316 through the fused conversion; +12 for the ADR-0010 companion-
+        // plugin wave (the per-feature switch rows + their group), re-pinned
+        // there and again through the sync-screen consolidation (zero net);
+        // +1 for the push wave's 13th per-feature switch row; +1 for the
+        // analytics wave's 14th per-feature switch row.
+        assertEquals(330, items.size)
         // Curated flat order starts with the account/session pair that used to
         // open the old registry, and the aggregation is a pure concatenation
         // of the decorated per-screen groups (no dedup, no reordering).

@@ -91,6 +91,7 @@ fun androidDetailsModule(context: Context): Module = module {
             // NetworkKoinModules); the VM null-guards everything anyway.
             pluginStatusStore = get(),
             pluginApiClient = get(),
+            jellyPlayFeatureGate = get(),
         )
     }
     // #147 merge: Collection/Person VMs left commonMain when their closure

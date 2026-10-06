@@ -120,6 +120,9 @@ internal val dataRepositoriesModule: Module = module {
             bookmarkDao = get(),
             apiClient = get(),
             statusStore = get(),
+            // The per-feature gate (probe AND the user's `bookmarks` toggle
+            // — JellyPlayFeatureGate) on top of the probe store.
+            featureGate = get(),
         )
     }
     single<BookmarksSyncRepository> { get<BookmarksSyncRepositoryImpl>() }

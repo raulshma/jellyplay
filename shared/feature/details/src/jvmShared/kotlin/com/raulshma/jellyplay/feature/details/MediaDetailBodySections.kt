@@ -1018,6 +1018,7 @@ internal fun DetailSeasonsSection(
                     getImageUrl = callbacks.artwork.getImageUrl,
                     callbacks = sectionCallbacks,
                     animeMarkers = state.animeMarkers,
+                    seasonRatings = state.seasonRatings,
                 )
             }
         }
@@ -1312,8 +1313,9 @@ internal fun formatPluginScore(score: Double): String =
  * mirrors [DetailMoreLikeThisSection]'s poster-row scaffolding exactly —
  * same geometry, same click/focus wiring — with the plugin's score-ordered
  * hydration in place of the stock list and a distinguishing source badge
- * beside the shared title. Additive by contract: the stock row renders
- * independently above it.
+ * beside the shared title. Replaces the stock row while non-empty (the
+ * admission fold suppresses MORE_LIKE_THIS on hasPluginSimilar); empty
+ * hydration falls back to the stock row.
  */
 @Composable
 internal fun DetailJellyPlaySimilarSection(

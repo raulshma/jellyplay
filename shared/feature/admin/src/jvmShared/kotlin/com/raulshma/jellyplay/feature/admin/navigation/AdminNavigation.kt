@@ -5,6 +5,7 @@ import androidx.navigation3.runtime.EntryProviderScope
 import androidx.navigation3.runtime.NavKey
 import com.raulshma.jellyplay.core.ui.navigation.Navigator
 import com.raulshma.jellyplay.core.ui.navigation.Route
+import com.raulshma.jellyplay.feature.admin.analytics.JellyPlayAnalyticsScreen
 import com.raulshma.jellyplay.feature.admin.backups.AdminBackupsScreen
 import com.raulshma.jellyplay.feature.admin.dashboard.AdminDashboardScreen
 import com.raulshma.jellyplay.feature.admin.devices.DevicesScreen
@@ -48,6 +49,7 @@ fun EntryProviderScope<NavKey>.adminSection(
                 onUsers = { navigator.navigate(Route.Users) },
                 onBackups = { navigator.navigate(Route.AdminBackups) },
                 onTranscodes = { navigator.navigate(Route.JellyPlayTranscodes) },
+                onAnalytics = { navigator.navigate(Route.JellyPlayAnalytics) },
             )
         }
     }
@@ -79,6 +81,14 @@ fun EntryProviderScope<NavKey>.adminSection(
     entry<Route.JellyPlayTranscodes> {
         AdminRouteEntry(navigator, isAdmin, isRefreshingAdmin, onRefreshAdmin) {
             JellyPlayTranscodesScreen(
+                onBack = { navigator.goBack() },
+            )
+        }
+    }
+
+    entry<Route.JellyPlayAnalytics> {
+        AdminRouteEntry(navigator, isAdmin, isRefreshingAdmin, onRefreshAdmin) {
+            JellyPlayAnalyticsScreen(
                 onBack = { navigator.goBack() },
             )
         }

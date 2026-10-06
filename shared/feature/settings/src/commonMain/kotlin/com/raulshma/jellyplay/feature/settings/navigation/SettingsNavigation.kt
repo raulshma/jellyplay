@@ -32,6 +32,9 @@ import com.raulshma.jellyplay.feature.settings.SecuritySettingsScreen
 import com.raulshma.jellyplay.feature.settings.ServerManagementScreen
 import com.raulshma.jellyplay.feature.settings.SettingsNavActions
 import com.raulshma.jellyplay.feature.settings.JellyPlayMessagesScreen
+import com.raulshma.jellyplay.feature.settings.JellyPlaySyncScreen
+import com.raulshma.jellyplay.feature.settings.JellyPlayUserRatingsScreen
+import com.raulshma.jellyplay.feature.settings.JellyPlayYourWatchingScreen
 import com.raulshma.jellyplay.feature.settings.SettingsScreen
 import com.raulshma.jellyplay.feature.settings.StorageSettingsScreen
 import com.raulshma.jellyplay.feature.settings.UserManagementScreen
@@ -266,6 +269,25 @@ fun EntryProviderScope<NavKey>.settingsSection(
 
     entry<Route.JellyPlayMessages> {
         JellyPlayMessagesScreen(
+            onBack = { navigator.goBack() },
+        )
+    }
+
+    entry<Route.JellyPlaySync> {
+        JellyPlaySyncScreen(
+            onBack = { navigator.goBack() },
+        )
+    }
+
+    entry<Route.JellyPlayUserRatings> {
+        JellyPlayUserRatingsScreen(
+            onBack = { navigator.goBack() },
+            onOpenItem = { itemId -> navigator.navigate(Route.MediaDetail(itemId)) },
+        )
+    }
+
+    entry<Route.JellyPlayYourWatching> {
+        JellyPlayYourWatchingScreen(
             onBack = { navigator.goBack() },
         )
     }

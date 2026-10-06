@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.core.data.repository
 
 import com.raulshma.jellyplay.core.data.cache.getOrFetchTyped
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
+import com.raulshma.jellyplay.core.data.session.JellyPlayFeatureGate
 import com.raulshma.jellyplay.core.data.session.SessionIdentityProvider
 import com.raulshma.jellyplay.core.data.session.SessionCacheRegistry
 import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
@@ -72,6 +73,12 @@ class SeerrRepositoryImpl(
      * binding. Nullable; a null manager skips the offline gate.
      */
     private val offlineModeManager: OfflineModeManager? = null,
+    /**
+     * The per-feature gate seam (probe AND the user's toggle) for the bridge
+     * arm below. Nullable-with-default (direct-construction tests) — without
+     * it the saved-mode pref alone governs, the pre-toggle behavior.
+     */
+    private val featureGate: JellyPlayFeatureGate? = null,
 ) : SeerrRepository,
     // Family seams (the SonarrSeriesOperations over-the-impl pattern): the
     // same single carries the service-directory, request-lifecycle and auth
@@ -155,13 +162,21 @@ class SeerrRepositoryImpl(
         // base passed here is a placeholder; the OkHttp bridge interceptor
         // rewrites every URL to `{jellyfin}/jellyplay/seerr/...` and swaps
         // the auth to the Jellyfin token before the call leaves the client.
-        if (seerrPreferencesStore.preferences.value.useServerBridge) {
+        // Gated on the ONE feature seam (probe AVAILABLE + the user's
+        // `seerr-bridge` toggle): switch-off forces DIRECT mode — the saved
+        // via-server pref stays put (flipping the toggle back on restores it)
+        // but no call ever rides the plugin proxy while the feature is off.
+        if (seerrPreferencesStore.preferences.value.useServerBridge && bridgeGateOpen()) {
             return block(BRIDGE_PLACEHOLDER_BASE, SeerrCredentials.ApiKey(apiKey = ""))
         }
         val url = serverUrl() ?: return Result.failure(IllegalStateException(NOT_CONFIGURED_MESSAGE))
         val credentials = getCredentials() ?: return Result.failure(IllegalStateException(NOT_CONFIGURED_MESSAGE))
         return block(url, credentials)
     }
+
+    /** The bridge arm's gate; without the seam the saved mode alone governs. */
+    private suspend fun bridgeGateOpen(): Boolean =
+        featureGate?.isAvailableNow(com.raulshma.jellyplay.core.model.JellyPlayPluginFeatures.SeerrBridge) ?: true
 
     override suspend fun testConnection(): Result<SeerrStatusResponse> =
         withSeerrSession { url, credentials ->

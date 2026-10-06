@@ -115,11 +115,16 @@ internal data class DetailContentState(
     // Empty = section absent (probe failure / no data — never an error).
     val pluginRatings: List<com.raulshma.jellyplay.core.network.api.JellyPlayRatingEntry> = emptyList(),
     /** Server-scored "More like this", hydrated into displayable items.
-     *  Empty = section absent; the stock relatedItems row is unaffected. */
+     *  Empty = section absent; non-empty replaces the stock relatedItems row
+     *  (the plugin feeds the server's similar pipeline the same list). */
     val pluginSimilarItems: List<MediaItem> = emptyList(),
     /** Anime filler/mixed/recap badges by episode number, rendered on the
      *  seasons section's episode rows. Empty = no badges. */
     val animeMarkers: Map<Int, AnimeBadgeKind> = emptyMap(),
+    /** Per-season TMDB episode scores (ADR 0010, [JellyPlayPluginFeatures.Ratings])
+     *  keyed season id → (episode number → ratings). Empty = section absent
+     *  (probe failure / no data — never an error). */
+    val seasonRatings: Map<String, Map<Int, com.raulshma.jellyplay.core.network.api.JellyPlayEpisodeRatings>> = emptyMap(),
 )
 
 /**

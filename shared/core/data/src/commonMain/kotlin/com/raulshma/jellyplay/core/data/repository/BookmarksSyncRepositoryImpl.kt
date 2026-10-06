@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.data.repository
 
 import com.raulshma.jellyplay.core.data.session.JellyPlayPluginStatusStore
+import com.raulshma.jellyplay.core.data.session.isAvailableNowOrProbe
 import com.raulshma.jellyplay.core.database.dao.BookBookmarkDao
 import com.raulshma.jellyplay.core.database.entity.BookBookmarkEntity
 import com.raulshma.jellyplay.core.model.BookProgressPolicy
@@ -70,6 +71,12 @@ class BookmarksSyncRepositoryImpl(
     private val bookmarkDao: BookBookmarkDao,
     private val apiClient: JellyPlayPluginApiClient,
     private val statusStore: JellyPlayPluginStatusStore,
+    /**
+     * The per-feature gate seam (probe AND the user's toggle). Nullable with
+     * default (direct-construction tests) — without it the probe alone
+     * governs, the pre-toggle behavior.
+     */
+    private val featureGate: com.raulshma.jellyplay.core.data.session.JellyPlayFeatureGate? = null,
 ) : BookmarksSyncRepository {
 
     override suspend fun pullBookmarks(itemId: String) {
@@ -128,15 +135,17 @@ class BookmarksSyncRepositoryImpl(
 
     /**
      * The ADR-0010 gate every plugin call sits behind: ensure the capability
-     * probe is fresh (an UNKNOWN/UNAVAILABLE store re-probes once), then
-     * require AVAILABLE + the `bookmarks` feature.
+     * probe is fresh (an UNKNOWN/UNAVAILABLE store re-probes once), then the
+     * ONE gate seam — AVAILABLE + the `bookmarks` feature + the user's
+     * per-feature toggle ([JellyPlayFeatureGate.isAvailableNow]; without the
+     * seam the probe-only read keeps the pre-toggle behavior). Off = local
+     * bookmarks keep working, the plugin mirror just skips.
      */
     private suspend fun gate(): Boolean {
         if (statusStore.status.value != JellyPlayPluginStatus.AVAILABLE) {
             statusStore.refresh()
         }
-        return statusStore.status.value == JellyPlayPluginStatus.AVAILABLE &&
-            statusStore.hasFeature(JellyPlayPluginFeatures.Bookmarks)
+        return featureGate.isAvailableNowOrProbe(statusStore, JellyPlayPluginFeatures.Bookmarks)
     }
 
     private fun JellyPlayBookmark.toEntity(itemId: String, ticks: Long) = BookBookmarkEntity(

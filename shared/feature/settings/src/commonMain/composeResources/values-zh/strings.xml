@@ -662,4 +662,153 @@
     <string name="settings_input_bindings_capture_escape_hint">按 Esc 取消</string>
     <string name="settings_input_bindings_row_reset">重置为默认</string>
     <string name="settings_input_bindings_row_delete">删除快捷键</string>
+
+    <!-- JellyPlay companion plugin: Seerr via server -->
+    <string name="jellyplay_seerr_mode_direct">直接连接</string>
+    <string name="jellyplay_seerr_mode_via_server">通过 JellyPlay 服务器</string>
+    <string name="jellyplay_seerr_bridge_checking">正在检查 JellyPlay 服务器插件…</string>
+    <string name="jellyplay_seerr_bridge_unlinked">通过 JellyPlay 服务器插件关联你的 Seerr 账号。你的 Seerr API 密钥不会离开服务器。</string>
+    <string name="jellyplay_seerr_bridge_unavailable">此服务器上没有 JellyPlay 服务器插件。</string>
+    <string name="jellyplay_seerr_bridge_not_configured">JellyPlay 服务器插件尚未配置 Seerr 服务器。请联系服务器管理员进行设置。</string>
+    <string name="jellyplay_seerr_bridge_linked_with">已关联到 %1$s</string>
+    <string name="jellyplay_seerr_bridge_via_note">通过 JellyPlay 服务器插件工作 — 请求由你的 Jellyfin 服务器使用你自己的 Seerr 会话代理。</string>
+    <string name="jellyplay_seerr_bridge_login">使用 Quick Connect 关联</string>
+    <string name="jellyplay_seerr_bridge_logout">取消关联</string>
+    <string name="jellyplay_seerr_bridge_retry">重试</string>
+    <string name="jellyplay_seerr_qc_enter_code">在你的 Jellyfin 服务器上批准请求（控制台 → Quick Connect），然后在此等待。</string>
+    <string name="jellyplay_seerr_qc_starting">正在启动 Quick Connect…</string>
+    <string name="jellyplay_seerr_qc_waiting">等待批准…</string>
+    <string name="jellyplay_seerr_qc_cancel">取消</string>
+    <string name="jellyplay_seerr_summary_linked">已通过 JellyPlay 服务器关联（%1$s）</string>
+    <string name="jellyplay_seerr_summary_unlinked">未关联（通过 JellyPlay 服务器）</string>
+    <string name="jellyplay_seerr_error_status_unreachable">无法连接 JellyPlay 插件的 Seerr 桥接。</string>
+    <string name="jellyplay_seerr_error_qc_disabled">Jellyfin 服务器未启用 Quick Connect。</string>
+    <string name="jellyplay_seerr_error_qc_failed">Quick Connect 失败。请重试。</string>
+    <string name="jellyplay_seerr_error_qc_timeout">Quick Connect 审批超时。请重试。</string>
+    <string name="jellyplay_seerr_error_login_failed">Seerr 登录失败。</string>
+    <string name="jellyplay_seerr_error_logout_failed">取消关联失败。</string>
+
+    <!-- JellyPlay companion plugin: settings sync -->
+    <string name="settings_jellyplay_sync">跨设备同步</string>
+    <string name="settings_jellyplay_sync_on">开 — 设置跟随你的账号</string>
+    <string name="settings_jellyplay_sync_off">关 — 设置仅保留在此设备上</string>
+    <string name="settings_sync_across_devices">跨设备同步设置</string>
+    <string name="settings_sync_now">立即同步</string>
+    <string name="settings_sync_never">从未同步</string>
+    <string name="ss_jellyplay_sync_enabled_title">跨设备同步设置</string>
+    <string name="ss_jellyplay_sync_enabled_subtitle">设置、布局和偏好通过 JellyPlay 插件跟随你的 Jellyfin 账号</string>
+    <string name="ss_jellyplay_sync_now_title">立即同步</string>
+    <string name="ss_jellyplay_sync_now_subtitle">立即上传并下载已同步的设置</string>
+    <string name="settings_jellyplay_sync_last_sync">上次同步 %1$s</string>
+    <string name="settings_jellyplay_sync_in_flight">正在同步…</string>
+    <string name="settings_jellyplay_sync_failed">上次同步失败</string>
+    <string name="settings_jellyplay_sync_op_push">上传</string>
+    <string name="settings_jellyplay_sync_op_pull">下载</string>
+    <string name="settings_jellyplay_sync_op_reset">重置</string>
+    <string name="settings_jellyplay_sync_op_unknown">同步</string>
+    <string name="settings_jellyplay_sync_usage_title">已同步的内容</string>
+    <string name="settings_jellyplay_sync_usage_unavailable">此服务器不提供用量详情</string>
+    <string name="settings_jellyplay_sync_quota_bytes">已用 %1$s / %2$s</string>
+    <string name="settings_jellyplay_sync_quota_keys">已用 %1$d / %2$d 个键</string>
+    <string name="settings_jellyplay_sync_relative_days">%1$d天前</string>
+    <string name="settings_jellyplay_sync_relative_hours">%1$d小时前</string>
+    <string name="settings_jellyplay_sync_relative_minutes">%1$d分钟前</string>
+    <string name="settings_jellyplay_sync_relative_now">刚刚</string>
+    <string name="settings_jellyplay_sync_ns_usage">%1$d 个键 • %2$s</string>
+    <string name="settings_jellyplay_sync_admin_section">各用户用量（管理员）</string>
+    <string name="settings_jellyplay_sync_admin_user_usage">%1$d 个键 • %2$s • %3$d 台设备</string>
+    <string name="settings_jellyplay_sync_devices_title">设备</string>
+    <string name="settings_jellyplay_sync_this_device">本设备</string>
+    <string name="settings_jellyplay_sync_time_yesterday">昨天，%1$s</string>
+    <string name="settings_jellyplay_sync_device_last_sync">上次同步 %1$s</string>
+    <string name="settings_jellyplay_sync_profile_title">设备配置文件</string>
+    <string name="settings_jellyplay_sync_profile_subtitle">本设备以“%1$s”配置文件同步</string>
+    <string name="settings_jellyplay_sync_history_title">最近活动</string>
+    <string name="settings_jellyplay_sync_history_empty">暂无同步活动</string>
+    <string name="settings_jellyplay_sync_history_entry">%1$s • 应用 %2$d 项，拒绝 %3$d 项</string>
+    <string name="settings_jellyplay_sync_history_rejects">已拒绝：%1$s</string>
+    <string name="settings_jellyplay_sync_history_retention">历史记录保留 %1$d 天</string>
+    <string name="settings_jellyplay_sync_history_keys_empty">无键变更</string>
+    <string name="settings_jellyplay_sync_history_keys_loading">正在加载变更…</string>
+    <string name="settings_jellyplay_sync_actions_title">操作</string>
+    <string name="settings_jellyplay_sync_reset_title">重置已同步的设置</string>
+    <string name="settings_jellyplay_sync_reset_subtitle">清除服务器上已同步的设置；每台设备都会恢复为本地默认值</string>
+    <string name="settings_jellyplay_sync_reset_confirm_title">重置已同步的设置？</string>
+    <string name="settings_jellyplay_sync_reset_confirm_message">这将清除服务器上所有设备的已同步偏好设置。下次同步时，每台设备都会恢复为本地默认值。</string>
+    <string name="settings_jellyplay_sync_force_repull_title">强制重新拉取</string>
+    <string name="settings_jellyplay_sync_force_repull_subtitle">放弃本设备待处理的更改，采用服务器上的版本</string>
+
+    <!-- JellyPlay companion plugin: messages inbox -->
+    <string name="jellyplay_msgs_title">消息</string>
+    <string name="jellyplay_msgs_entry_subtitle">来自服务器 JellyPlay 插件的更新</string>
+    <string name="jellyplay_msgs_unread_count">%1$d 条未读</string>
+    <string name="jellyplay_msgs_unread_badge">未读</string>
+    <string name="jellyplay_msgs_empty">服务器还没有发来消息</string>
+
+    <!-- JellyPlay companion plugin: my ratings -->
+    <string name="jellyplay_ur_title">我的评分</string>
+    <string name="jellyplay_ur_entry_subtitle">通过 JellyPlay 插件记录你的赞、踩和评分</string>
+    <string name="jellyplay_ur_empty">这里还什么都没有 — 先去评分吧</string>
+    <string name="jellyplay_ur_filter_likes">赞</string>
+    <string name="jellyplay_ur_filter_dislikes">踩</string>
+    <string name="jellyplay_ur_filter_rated">已评分</string>
+    <string name="jellyplay_ur_rating_value">%1$d/10</string>
+    <string name="jellyplay_ur_liked">已赞</string>
+    <string name="jellyplay_ur_disliked">已踩</string>
+    <string name="jellyplay_ur_last_played">上次播放 %1$s</string>
+    <plurals name="jellyplay_ur_plays">
+        <item quantity="other">%1$d 次播放</item>
+    </plurals>
+
+    <!-- JellyPlay companion plugin: your watching -->
+    <string name="settings_jellyplay_yw_title">你的观看</string>
+    <string name="settings_jellyplay_yw_entry_subtitle">通过 JellyPlay 插件查看你的播放、观看时长和热门影片</string>
+    <string name="settings_jellyplay_yw_unavailable">此服务器不支持</string>
+    <string name="settings_jellyplay_yw_empty">该时间段内还没有播放记录</string>
+    <string name="settings_jellyplay_yw_days_7">7 天</string>
+    <string name="settings_jellyplay_yw_days_30">30 天</string>
+    <string name="settings_jellyplay_yw_days_90">90 天</string>
+    <string name="settings_jellyplay_yw_plays">播放</string>
+    <string name="settings_jellyplay_yw_watch_time">观看时长</string>
+    <string name="settings_jellyplay_yw_titles">影片</string>
+    <string name="settings_jellyplay_yw_section_chart">每日</string>
+    <string name="settings_jellyplay_yw_section_top_items">热门影片</string>
+
+    <!-- JellyPlay companion plugin: per-feature switches -->
+    <string name="settings_jellyplay_plugin_section">服务器插件</string>
+    <string name="settings_jellyplay_plugin_section_summary">选择由 JellyPlay 插件提供的功能</string>
+    <string name="settings_jellyplay_feature_locked">由服务器管理员设定</string>
+    <string name="settings_jellyplay_feature_events">实时事件</string>
+    <string name="ss_jellyplay_feature_events_subtitle">新媒体提醒和服务器广播推送到此设备</string>
+    <string name="settings_jellyplay_feature_messages">消息收件箱</string>
+    <string name="ss_jellyplay_feature_messages_subtitle">管理员发布到设置页的收件箱消息</string>
+    <string name="settings_jellyplay_feature_seerr_bridge">经服务器的 Seerr</string>
+    <string name="ss_jellyplay_feature_seerr_bridge_subtitle">通过 JellyPlay 插件关联 Seerr，而非直接使用凭据</string>
+    <string name="settings_jellyplay_feature_ratings">聚合评分</string>
+    <string name="ss_jellyplay_feature_ratings_subtitle">详情页上的 MDBList 评分标签</string>
+    <string name="settings_jellyplay_feature_custom_rows">自定义首页栏目</string>
+    <string name="ss_jellyplay_feature_custom_rows_subtitle">管理员在首页定义的栏目</string>
+    <string name="settings_jellyplay_feature_seasonal_rows">节日首页栏目</string>
+    <string name="ss_jellyplay_feature_seasonal_rows_subtitle">插件的应季推荐栏目显示在首页</string>
+    <string name="settings_jellyplay_feature_anime_markers">动漫标记</string>
+    <string name="ss_jellyplay_feature_anime_markers_subtitle">剧集列表上的填充与回顾标记</string>
+    <string name="settings_jellyplay_feature_recommendations">服务器推荐</string>
+    <string name="ss_jellyplay_feature_recommendations_subtitle">详情页上服务器计算的“更多类似内容”</string>
+    <string name="settings_jellyplay_feature_user_ratings">用户评分同步</string>
+    <string name="ss_jellyplay_feature_user_ratings_subtitle">通过插件同步你的评分</string>
+    <string name="settings_jellyplay_feature_bookmarks">书签同步</string>
+    <string name="ss_jellyplay_feature_bookmarks_subtitle">通过插件在设备间同步阅读书签</string>
+    <string name="settings_jellyplay_feature_newsletter">新闻通讯</string>
+    <string name="ss_jellyplay_feature_newsletter_subtitle">设置页个人资料横幅上的新闻通讯入口</string>
+    <string name="settings_jellyplay_feature_transcodes">转码监控</string>
+    <string name="ss_jellyplay_feature_transcodes_subtitle">管理控制台中的活动转码卡片（仅管理员）</string>
+    <string name="settings_jellyplay_feature_push">推送通知</string>
+    <string name="ss_jellyplay_feature_push_subtitle">通过 UnifiedPush 分发应用（如 ntfy）接收服务器推送</string>
+    <string name="settings_jellyplay_push_state_unregistered">开启以将此设备注册为推送接收端</string>
+    <string name="settings_jellyplay_push_state_registering">正在注册推送分发器…</string>
+    <string name="settings_jellyplay_push_state_registered">已注册 — 推送将通过你的分发器到达</string>
+    <string name="settings_jellyplay_push_state_no_distributor">需要推送分发应用（如 ntfy）</string>
+    <string name="settings_jellyplay_push_state_server_off">服务器推送已停用</string>
+    <string name="settings_jellyplay_feature_analytics">统计</string>
+    <string name="ss_jellyplay_feature_analytics_subtitle">管理区域中的播放历史仪表板（仅管理员）</string>
 </resources>

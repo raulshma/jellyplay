@@ -217,6 +217,7 @@ internal fun SettingInfoItem(
     copyableValue: String? = null,
     copyLabel: String = stringResource(CoreUiRes.string.core_copy),
     copiedLabel: String = stringResource(CoreUiRes.string.core_copied_to_clipboard),
+    modifier: Modifier = Modifier,
 ) {
     val shape = expressiveListShape(index, count, innerRadius = 0.dp)
     val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
@@ -282,7 +283,8 @@ internal fun SettingInfoItem(
         modifier = Modifier
             .fillMaxWidth()
             .clip(shape)
-            .lightModeHairlineBorder(shape),
+            .lightModeHairlineBorder(shape)
+            .then(modifier),
     )
 }
 

@@ -24,4 +24,12 @@
     <!-- New-episodes channel (opt-in routing for episode items) -->
     <string name="notification_channel_new_episodes">新剧集</string>
     <string name="notification_channel_new_episodes_desc">新添加剧集的通知</string>
+
+    <!-- Companion-plugin live new-media push (ADR 0010, single-event tray post) -->
+    <string name="notification_plugin_new_media_subtitle">服务器上新增了媒体</string>
+    <string name="notification_plugin_new_episodes_count">%1$d 个新剧集</string>
+
+    <!-- Companion-plugin UnifiedPush message (the push wave: broadcast/message
+         kinds — new-media rides the typed path above). -->
+    <string name="notification_plugin_push_title">JellyPlay 服务器</string>
 </resources>

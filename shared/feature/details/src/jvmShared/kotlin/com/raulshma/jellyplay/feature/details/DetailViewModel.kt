@@ -4,6 +4,7 @@ import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.data.download.DownloadOutcomeMessenger
 import com.raulshma.jellyplay.core.data.download.MediaDownloadActions
 import com.raulshma.jellyplay.core.data.offline.OfflineDeleteActions
+import com.raulshma.jellyplay.core.data.session.isAvailableNowOrProbe
 import com.raulshma.jellyplay.core.data.repository.DetailLoadState
 import com.raulshma.jellyplay.core.data.repository.MediaDetailProvider
 import com.raulshma.jellyplay.core.data.repository.BookTocCacheRepository
@@ -184,6 +185,12 @@ class DetailViewModel internal constructor(
      */
     private val pluginStatusStore: com.raulshma.jellyplay.core.data.session.JellyPlayPluginStatusStore? = null,
     private val pluginApiClient: com.raulshma.jellyplay.core.network.api.JellyPlayPluginApiClient? = null,
+    /**
+     * The per-feature gate (probe AND the user's toggle — the ONE seam).
+     * Nullable-with-default like the two seams above; without it the
+     * probe-only fallback keeps the pre-toggle behavior (tests).
+     */
+    private val jellyPlayFeatureGate: com.raulshma.jellyplay.core.data.session.JellyPlayFeatureGate? = null,
 ) : JellyPlayViewModel() {
 
     /** Media-detail preference fields, projected centrally off the store slices. */
@@ -979,12 +986,15 @@ class DetailViewModel internal constructor(
         },
         DetailEnrichment(
             name = "pluginSimilarItems",
-            // The server-scored "More like this" — ADDITIVE alongside the
-            // stock similarItems row above (which keeps its own section). The
-            // plugin returns scored item ids only, so each id is hydrated
-            // through the same per-item fetch the detail screen already uses
+            // The server-scored "More like this" — REPLACES the stock
+            // similarItems row while non-empty (the admission fold suppresses
+            // MORE_LIKE_THIS on hasPluginSimilar): the plugin also feeds the
+            // server's similar-items pipeline, so the stock endpoint returns
+            // the same scored list and both rows would duplicate. The plugin
+            // returns scored item ids only, so each id is hydrated through
+            // the same per-item fetch the detail screen already uses
             // (getMediaDetail), preserving score order; per-id failures drop
-            // out and an empty hydration leaves the section absent.
+            // out and an empty hydration leaves the stock row in place.
             gate = { it.remoteDiscoveryAllowed },
         ) { inputs ->
             if (!pluginFeature(JellyPlayPluginFeatures.Recommendations, inputs.itemId)) return@DetailEnrichment
@@ -1027,6 +1037,34 @@ class DetailViewModel internal constructor(
             if (!loadGuard.isCurrent(inputs.itemId)) return@DetailEnrichment
             _uiState.update { it.copy(animeMarkers = animeBadges(markers.markers)) }
         },
+        DetailEnrichment(
+            name = "pluginSeasonRatings",
+            // The TMDB per-episode scores for the seasons section's episode
+            // rows + the season header's average (ADR 0010, the `ratings`
+            // feature family's season leg). Same series context as the anime
+            // badges; one fetch per LOADED season (a lazily-expanded season
+            // re-emits a new generation, so the enrichment re-runs and picks
+            // it up). Per-season null/empty results drop out; a wholly empty
+            // fold leaves the field empty — silent absence, never an error.
+            gate = {
+                it.remoteDiscoveryAllowed && it.detail.item.seriesIdForDetail != null
+            },
+        ) { inputs ->
+            if (!pluginFeature(JellyPlayPluginFeatures.Ratings, inputs.itemId)) return@DetailEnrichment
+            val tmdbId = resolveTmdbId(inputs.detail) ?: return@DetailEnrichment
+            val ratingsBySeasonId = buildMap {
+                for (season in inputs.snapshot.seasons) {
+                    val seasonNumber = season.indexNumber ?: continue
+                    val ratings = pluginApiClient?.getTmdbSeasonRatings(tmdbId.toString(), seasonNumber)
+                        ?.getOrNull() ?: continue
+                    if (ratings.isEmpty()) continue
+                    put(season.id, ratings)
+                }
+            }
+            if (ratingsBySeasonId.isEmpty()) return@DetailEnrichment
+            if (!loadGuard.isCurrent(inputs.itemId)) return@DetailEnrichment
+            _uiState.update { it.copy(seasonRatings = ratingsBySeasonId) }
+        },
     )
 
     /** The stock similar row's limit (the plugin row mirrors it). */
@@ -1037,9 +1075,12 @@ class DetailViewModel internal constructor(
     /**
      * The ADR 0010 feature gate for the plugin sections: one capabilities
      * probe per item navigation (latched on the item id — the store's own
-     * contract re-probes on identity transitions), then the snapshot
-     * [JellyPlayPluginStatusStore.hasFeature] read. False when the plugin
-     * seams are unwired (tests) or the probe failed — silent absence.
+     * contract re-probes on identity transitions), then the ONE gate seam —
+     * [JellyPlayFeatureGate.isAvailableNow] (probe AND the user's per-feature
+     * toggle; the fresh one-shot arm honors the refresh that just landed).
+     * Without the gate seam (direct-construction tests) the probe-only
+     * snapshot read keeps the pre-toggle behavior. False when the plugin
+     * seams are unwired or the probe failed — silent absence.
      */
     private var pluginProbedItemId: String? = null
 
@@ -1049,7 +1090,7 @@ class DetailViewModel internal constructor(
             pluginProbedItemId = itemId
             store.refresh()
         }
-        return store.hasFeature(feature)
+        return jellyPlayFeatureGate.isAvailableNowOrProbe(store, feature)
     }
 
     /**

@@ -29,4 +29,8 @@
     <!-- Companion-plugin live new-media push (ADR 0010, single-event tray post) -->
     <string name="notification_plugin_new_media_subtitle">New media added on your server</string>
     <string name="notification_plugin_new_episodes_count">%1$d new episodes</string>
+
+    <!-- Companion-plugin UnifiedPush message (the push wave: broadcast/message
+         kinds — new-media rides the typed path above). -->
+    <string name="notification_plugin_push_title">JellyPlay server</string>
 </resources>

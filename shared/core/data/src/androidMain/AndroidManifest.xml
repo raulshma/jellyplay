@@ -21,6 +21,25 @@
             </intent-filter>
         </receiver>
 
+        <!-- UnifiedPush connector receiver (the plugin's push wave): the user's
+             distributor app (ntfy & co) delivers NEW_ENDPOINT / MESSAGE /
+             UNREGISTERED / REGISTRATION_FAILED broadcasts. Exported by
+             necessity — the sender is another app; the connector's token
+             handshake in the extras is what the distributor authenticated.
+             Fully qualified name, same relative-resolution note as the
+             service below. -->
+        <receiver
+            android:name="com.raulshma.jellyplay.core.push.JellyPlayUnifiedPushReceiver"
+            android:exported="true"
+            android:enabled="true">
+            <intent-filter>
+                <action android:name="org.unifiedpush.android.connector.MESSAGE" />
+                <action android:name="org.unifiedpush.android.connector.UNREGISTERED" />
+                <action android:name="org.unifiedpush.android.connector.NEW_ENDPOINT" />
+                <action android:name="org.unifiedpush.android.connector.REGISTRATION_FAILED" />
+            </intent-filter>
+        </receiver>
+
         <!-- Fully qualified: the Kotlin package (com.raulshma.jellyplay.core.data.playback)
              does not contain this module's namespace segment `.shared`, so a relative
              `.playback.JellyPlayPlaybackService` resolves to a nonexistent class and the

@@ -25,6 +25,8 @@ class NotificationDispatcher(
 
     private val notificationManager = NotificationManagerCompat.from(context)
 
+    private val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+
     fun dispatch(
         newItemsByLibrary: Map<LibraryFolder, List<MediaItem>>,
         prefs: NotificationPreferences,
@@ -95,6 +97,84 @@ class NotificationDispatcher(
             .setSmallIcon(com.raulshma.jellyplay.shared.core.data.R.drawable.ic_notification_small)
             .setContentTitle(event.title.ifBlank { subtitle })
             .setContentText(text)
+            .setContentIntent(contentIntent)
+            .setAutoCancel(true)
+            .setOnlyAlertOnce(true)
+            .setDefaults(0)
+            .build()
+        notificationManager.notify(notificationId, notification)
+    }
+
+    /**
+     * The companion-plugin's UnifiedPush payload (the push wave) — the same
+     * tray surface as [dispatchPluginNewMedia], fed by the push receiver.
+     * The generic payload contract is
+     * `{"title": …, "body": …, "kind": "new-media"|"broadcast"|"message", "itemId": …?}`:
+     *
+     *  - `new-media` with an `itemId` reuses the typed new-media path above
+     *    (deep-link content intent, coalescing id — identical tray behavior
+     *    whether the event arrived over SSE or the distributor);
+     *  - everything else (`broadcast` / `message` / forward-compatible
+     *    kinds) posts a plain text notification on the same summary channel
+     *    with a plain open-app content intent ([DeepLinkGrammar] carries no
+     *    messages route to deep-link into).
+     *
+     * Malformed payloads drop silently — a push is best-effort live signal,
+     * the plugin's inbox is the durable counterpart.
+     */
+    fun dispatchPluginPush(payloadJson: String) {
+        if (!notificationManager.areNotificationsEnabled()) return
+        val payload = runCatching { json.parseToJsonElement(payloadJson) }
+            .getOrNull() as? kotlinx.serialization.json.JsonObject ?: return
+
+        fun text(key: String): String? =
+            (payload[key] as? kotlinx.serialization.json.JsonPrimitive)?.content
+
+        val itemId = text("itemId")
+        if (text("kind") == "new-media" && itemId != null) {
+            dispatchPluginNewMedia(
+                JellyPlayPluginEvent.NewMedia(
+                    itemId = itemId,
+                    seriesId = null,
+                    seasonIndex = null,
+                    title = text("title").orEmpty(),
+                    episodeCount = 1,
+                ),
+            )
+            return
+        }
+        dispatchPluginPushMessage(title = text("title").orEmpty(), body = text("body").orEmpty())
+    }
+
+    /**
+     * One generic push text (broadcast/message kind): title + body on the
+     * shared [NotificationChannelManager.CHANNEL_SUMMARY] channel, tapping
+     * plain-opens the app. Same explicit-intent convention as
+     * [dispatchPluginNewMedia] (CodeQL): setters chained on the Intent
+     * expression itself. Coalesces on the (title, body) pair so a redelivered
+     * push updates in place instead of stacking.
+     */
+    fun dispatchPluginPushMessage(title: String, body: String) {
+        if (!notificationManager.areNotificationsEnabled()) return
+        channelManager.ensureSummaryChannel()
+
+        val notificationId = pluginPushMessageNotificationIdFor(title, body)
+        val openAppIntent = Intent(Intent.ACTION_MAIN)
+            .addCategory(Intent.CATEGORY_LAUNCHER)
+            .setPackage(context.packageName)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+        val contentIntent = PendingIntent.getActivity(
+            context,
+            notificationId,
+            openAppIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+
+        val notification = NotificationCompat.Builder(context, NotificationChannelManager.CHANNEL_SUMMARY)
+            .setSmallIcon(com.raulshma.jellyplay.shared.core.data.R.drawable.ic_notification_small)
+            .setContentTitle(title.ifBlank { context.getString(R.string.notification_plugin_push_title) })
+            .setContentText(body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
             .setContentIntent(contentIntent)
             .setAutoCancel(true)
             .setOnlyAlertOnce(true)
@@ -436,5 +516,17 @@ class NotificationDispatcher(
         internal fun pluginNotificationIdFor(itemId: String): Int =
             PLUGIN_NOTIFICATION_ID_BASE +
                 ((itemId.hashCode().toLong() and 0xFFFFFFFFL).toInt() % PLUGIN_NOTIFICATION_ID_SLOTS)
+
+        // UnifiedPush message pushes (the push wave) sit one slot-family above
+        // the new-media family so a hashed itemId and a hashed (title, body)
+        // pair can never collide.
+        private const val PLUGIN_PUSH_MESSAGE_ID_BASE =
+            PLUGIN_NOTIFICATION_ID_BASE + PLUGIN_NOTIFICATION_ID_SLOTS
+
+        /** Stable coalescing id for a generic push text (title+body pair). */
+        internal fun pluginPushMessageNotificationIdFor(title: String, body: String): Int =
+            PLUGIN_PUSH_MESSAGE_ID_BASE +
+                (((31 * title.hashCode()) + body.hashCode()).toLong() and 0xFFFFFFFFL)
+                    .toInt() % PLUGIN_NOTIFICATION_ID_SLOTS
     }
 }

@@ -12,6 +12,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
@@ -92,19 +94,63 @@ class JellyPlayPluginApiClientImpl(
         json.decodeFromString<JellyPlaySettingsSnapshot>(text)
     }
 
+    override suspend fun getSyncStatus(): Result<JellyPlaySyncStatus?> = runCatchingIO {
+        val text = requester.getBodyText("/jellyplay/sync/status") ?: return@runCatchingIO null
+        json.decodeFromString<JellyPlaySyncStatus>(text)
+    }
+
+    override suspend fun getSyncHistory(since: Long?, limit: Int): Result<JellyPlaySyncHistory?> = runCatchingIO {
+        val params = buildList {
+            since?.let { add("since=$it") }
+            add("limit=$limit")
+        }
+        val text = requester.getBodyText("/jellyplay/sync/history?" + params.joinToString("&"))
+            ?: return@runCatchingIO null
+        json.decodeFromString<JellyPlaySyncHistory>(text)
+    }
+
+    override suspend fun getSyncHistoryKeys(seq: Long, limit: Int): Result<JellyPlaySyncHistoryKeys?> = runCatchingIO {
+        val text = requester.getBodyText("/jellyplay/sync/history/$seq/keys?limit=$limit")
+            ?: return@runCatchingIO null
+        json.decodeFromString<JellyPlaySyncHistoryKeys>(text)
+    }
+
+    override suspend fun adminSyncOverview(): Result<JellyPlaySyncAdminOverview?> = runCatchingIO {
+        val text = requester.getBodyText("/jellyplay/admin/sync/overview") ?: return@runCatchingIO null
+        json.decodeFromString<JellyPlaySyncAdminOverview>(text)
+    }
+
     override fun settingsStream(): Flow<JellyPlaySseEvent> = sseStream("/jellyplay/settings/stream")
 
     // ------------------------------------------------------------------
     // events & devices
     // ------------------------------------------------------------------
 
-    override suspend fun registerDevice(deviceId: String, name: String, platform: String, appVersion: String): Result<Unit> =
+    override suspend fun registerDevice(
+        deviceId: String,
+        name: String,
+        platform: String,
+        appVersion: String,
+        push: JellyPlayDevicePush,
+    ): Result<Unit> =
         runCatchingIO {
             val body = buildJsonObject {
                 put("deviceId", deviceId)
                 put("name", name)
                 put("platform", platform)
                 put("appVersion", appVersion)
+                // Additive push half (the plugin's push wave) — an explicit
+                // tri-state: Keep omits the field so the legacy wire shape is
+                // byte-identical; Detach writes the JSON null that clears the
+                // server-held endpoint.
+                when (push) {
+                    is JellyPlayDevicePush.Attach -> put(
+                        "push",
+                        json.encodeToJsonElement(JellyPlayPushRegistration.serializer(), push.registration),
+                    )
+                    JellyPlayDevicePush.Detach -> put("push", JsonNull)
+                    JellyPlayDevicePush.Keep -> {}
+                }
             }
             requester.postStatusOnly("/jellyplay/devices", "JellyPlay device registration failed", body.toString())
         }
@@ -295,6 +341,33 @@ class JellyPlayPluginApiClientImpl(
 
     override suspend fun cancelTranscode(sessionId: String): Result<Unit> = runCatchingIO {
         requester.deleteStatusOnly("/jellyplay/transcodes/active/" + java.net.URLEncoder.encode(sessionId, "UTF-8"), "JellyPlay transcode cancel failed")
+    }
+
+    // ------------------------------------------------------------------
+    // admin analytics
+    // ------------------------------------------------------------------
+
+    override suspend fun getAnalyticsOverview(days: Int): Result<JellyPlayAnalyticsOverview?> = runCatchingIO {
+        val text = requester.getBodyText("/jellyplay/admin/analytics/overview?days=$days")
+            ?: return@runCatchingIO null
+        json.decodeFromString<JellyPlayAnalyticsOverview>(text)
+    }
+
+    override suspend fun getAnalyticsSessions(userId: String?, since: Long?, limit: Int): Result<JellyPlayAnalyticsSessions?> = runCatchingIO {
+        val params = buildList {
+            userId?.let { add("userId=" + java.net.URLEncoder.encode(it, "UTF-8")) }
+            since?.let { add("since=$it") }
+            add("limit=$limit")
+        }
+        val text = requester.getBodyText("/jellyplay/admin/analytics/sessions?" + params.joinToString("&"))
+            ?: return@runCatchingIO null
+        json.decodeFromString<JellyPlayAnalyticsSessions>(text)
+    }
+
+    override suspend fun getMyAnalytics(days: Int): Result<JellyPlayMyAnalytics?> = runCatchingIO {
+        val text = requester.getBodyText("/jellyplay/analytics/me?days=$days")
+            ?: return@runCatchingIO null
+        json.decodeFromString<JellyPlayMyAnalytics>(text)
     }
 
     // ------------------------------------------------------------------

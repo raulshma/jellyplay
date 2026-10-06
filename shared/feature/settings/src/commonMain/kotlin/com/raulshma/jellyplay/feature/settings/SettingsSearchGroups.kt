@@ -125,6 +125,14 @@ internal object SettingsScreenGroups {
      */
     val jellyplaySync = JellyPlaySyncGroup
 
+    /**
+     * the JellyPlay companion-plugin per-feature switches ("Server plugin",
+     * ADR 0010) — one toggle row per user-facing capability, emitted only
+     * where the probe exposes it (the whole group hides when the plugin is
+     * UNAVAILABLE/UNKNOWN; `transcodes` additionally only for admins).
+     */
+    val jellyplayFeatures = JellyPlayFeaturesGroup
+
     // ── HomeSettingsScreen ─────────────────────────────────────────────
     /**
      * The home config hub's four screen groups — the rows moved off
@@ -248,6 +256,7 @@ internal object SettingsScreenGroups {
         systemDiscordPresence,
         systemHooks,
         jellyplaySync,
+        jellyplayFeatures,
         homeDisplay,
         homeNextUp,
         homeLayout,

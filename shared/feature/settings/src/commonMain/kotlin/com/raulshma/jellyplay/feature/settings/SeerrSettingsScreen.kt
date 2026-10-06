@@ -175,14 +175,20 @@ fun SeerrSettingsScreen(
 
     // ── "via JellyPlay server" mode (ADR 0010) ──
     // The mode selector arms only on AVAILABLE + the SeerrBridge feature key
-    // (the capability-registry gate — never a per-endpoint 404). The probe
-    // rides the selector's visibility (the sync-section discipline: UNKNOWN →
-    // one refresh; the store's identity reset re-arms the next visit).
+    // + the user's per-feature toggle (the capability-registry gate — never a
+    // per-endpoint 404). The probe rides the selector's visibility (the
+    // sync-section discipline: UNKNOWN → one refresh; the store's identity
+    // reset re-arms the next visit). While the toggle is off the mode is
+    // SUPERSEDED: the selector hides and the screen renders the direct pane
+    // regardless of the saved pref (the repository's bridge arm is gated to
+    // match — the saved mode comes back when the toggle does).
     val pluginStatus by viewModel.jellyPlayPluginStatus.collectAsStateWithLifecycle()
     val pluginFeatures by viewModel.jellyPlayPluginFeatures.collectAsStateWithLifecycle()
+    val featureToggles by viewModel.jellyPlayFeatureToggles.collectAsStateWithLifecycle()
     val bridgeAvailable = pluginStatus == JellyPlayPluginStatus.AVAILABLE &&
-        JellyPlayPluginFeatures.SeerrBridge in pluginFeatures
-    val useServerBridge = viewModel.useServerBridge
+        JellyPlayPluginFeatures.SeerrBridge in pluginFeatures &&
+        JellyPlayPluginFeatures.SeerrBridge in featureToggles
+    val useServerBridge = viewModel.useServerBridge && bridgeAvailable
     val bridgeLinked = viewModel.bridgeStatus?.linked == true
 
     LaunchedEffect(pluginStatus) {

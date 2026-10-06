@@ -426,6 +426,37 @@ sealed class Route : NavKey {
      */
     @Serializable data object JellyPlayMessages : Route()
 
+    /**
+     * The JellyPlay companion-plugin's settings-sync screen (ADR 0010) — the
+     * sync engine's whole UI: opt-in toggle, sync-now, server usage + quotas,
+     * per-device last sync, this device's resolved profile, the sync history
+     * ledger, and the namespace reset / force-re-pull recovery actions.
+     * Reached ONLY from the Settings root's capability-gated "Sync" entry
+     * (plugin probe AVAILABLE + the `settings-sync` meta feature key — no
+     * user toggle exists for meta keys), so no in-screen gate chrome.
+     */
+    @Serializable data object JellyPlaySync : Route()
+
+    /**
+     * The JellyPlay companion-plugin's "My ratings" screen (ADR 0010) — the
+     * user's synced likes / dislikes / ratings as the plugin recorded them,
+     * tapping a row opens the item's detail. Reached ONLY from the Settings
+     * root's capability-gated entry (plugin probe AVAILABLE + the
+     * `user-ratings` feature key), so no in-screen gate chrome.
+     */
+    @Serializable data object JellyPlayUserRatings : Route()
+
+    /**
+     * The JellyPlay companion-plugin's "Your watching" screen — the signed-in
+     * user's OWN play aggregates (plays, watch time, per-day chart, top
+     * titles) over a 7/30/90-day window, the per-user face of the plugin's
+     * analytics (any user, unlike the admin dashboard). Reached ONLY from the
+     * Settings root's capability-gated entry (plugin probe AVAILABLE + the
+     * `analytics` feature key + the user's toggle), so no in-screen gate
+     * chrome.
+     */
+    @Serializable data object JellyPlayYourWatching : Route()
+
     // ───────────────────────── Music ─────────────────────────
 
     @Serializable data object MusicBrowse : Route()
@@ -507,6 +538,16 @@ sealed class Route : NavKey {
      * AdminRouteContainer, so the route itself carries no extra classification.
      */
     @Serializable data object JellyPlayTranscodes : Route() {
+        override val isModal = true
+    }
+
+    /**
+     * Admin analytics dashboard — the companion plugin's play-history
+     * aggregates (ADR 0010, `analytics` feature). Same presentation contract
+     * as [JellyPlayTranscodes]: an admin tool behind the shared admin area's
+     * AdminRouteContainer, so the route itself carries no extra classification.
+     */
+    @Serializable data object JellyPlayAnalytics : Route() {
         override val isModal = true
     }
 

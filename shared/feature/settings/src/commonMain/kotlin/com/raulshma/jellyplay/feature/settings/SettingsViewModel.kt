@@ -4,6 +4,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
+import com.raulshma.jellyplay.core.data.session.JellyPlayFeatureGate
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
 import com.raulshma.jellyplay.core.datastore.SettingsBackup
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
@@ -53,6 +54,17 @@ class SettingsViewModel(
      * nullable-with-default discipline as the two seams above.
      */
     private val jellyPlayEventsRepository: com.raulshma.jellyplay.core.data.repository.JellyPlayEventsRepository? = null,
+    /**
+     * The per-feature gate seam (probe AND the user's toggle). Same
+     * nullable-with-default discipline as the seams above.
+     */
+    private val jellyPlayFeatureGate: JellyPlayFeatureGate? = null,
+    /**
+     * The plugin's push face (the push wave) — backs the `push` toggle row's
+     * dynamic subtitle (Registered / No distributor app / Server push
+     * disabled). Same nullable-with-default discipline as the seams above.
+     */
+    private val jellyPlayPushRepository: com.raulshma.jellyplay.core.data.repository.JellyPushRepository? = null,
 ) : SettingsEditorViewModel(editor) {
 
     private val preferencesFlow: kotlinx.coroutines.flow.StateFlow<SettingsScreenPreferences> =
@@ -127,6 +139,18 @@ class SettingsViewModel(
             ?: kotlinx.coroutines.flow.MutableStateFlow(com.raulshma.jellyplay.core.data.repository.ProfileSyncRepository.SyncState())
 
     /**
+     * The synced keys whose admin default is `forced` (composite `"ns/key"`
+     * form, derived from each sync cycle's resolved payload) — the "Server
+     * plugin" section's forced-lock treatment: a toggle whose sync key is in
+     * here renders disabled with the admin-set subtitle. Defaults to an empty
+     * flow where the sync repository seam is absent (direct-construction
+     * harnesses, old graphs).
+     */
+    val jellyPlayForcedKeys: kotlinx.coroutines.flow.StateFlow<Set<String>> =
+        jellyPlaySyncRepository?.forcedKeys
+            ?: kotlinx.coroutines.flow.MutableStateFlow(emptySet())
+
+    /**
      * The plugin's live feature keys (the capability registry — the ONE
      * gating mechanism, ADR 0010). The "Messages" entry gates on
      * [com.raulshma.jellyplay.core.model.JellyPlayPluginFeatures.Messages]
@@ -135,6 +159,31 @@ class SettingsViewModel(
     val jellyPlayPluginFeatures: kotlinx.coroutines.flow.StateFlow<Set<String>> =
         jellyPlayStatusStore?.features
             ?: kotlinx.coroutines.flow.MutableStateFlow(emptySet())
+
+    /**
+     * The per-feature USER toggles behind the "Server plugin" section's
+     * switches: the set of
+     * [JellyPlayFeatureGate.TOGGLEABLE_FEATURES]
+     * keys currently switched ON (absent pref = enabled). A row's VISIBILITY
+     * rides the probe registry above; this is only the switch state.
+     */
+    val jellyPlayFeatureToggles: kotlinx.coroutines.flow.StateFlow<Set<String>> =
+        jellyPlayFeatureGate?.enabledFeatures
+            ?: kotlinx.coroutines.flow.MutableStateFlow(
+                JellyPlayFeatureGate.TOGGLEABLE_FEATURES.toSet(),
+            )
+
+    /**
+     * The push registration machine's state — the `push` toggle row's dynamic
+     * subtitle reads it (Registered / No distributor app / Server push
+     * disabled / …). Defaults to a plain Unregistered flow where the push
+     * repository seam is absent (direct-construction harnesses, old graphs).
+     */
+    val jellyPlayPushState: kotlinx.coroutines.flow.StateFlow<com.raulshma.jellyplay.core.data.repository.JellyPushState> =
+        jellyPlayPushRepository?.state
+            ?: kotlinx.coroutines.flow.MutableStateFlow(
+                com.raulshma.jellyplay.core.data.repository.JellyPushState.Unregistered,
+            )
 
     /**
      * The plugin's inbox messages — the durable counterpart of the live
@@ -167,6 +216,16 @@ class SettingsViewModel(
     fun refreshJellyPlayPluginStatus() {
         val store = jellyPlayStatusStore ?: return
         scope.launch { store.refresh() }
+    }
+
+    /**
+     * Persists one per-feature toggle (the "Server plugin" section's switch
+     * rows). The write is an ordinary synced pref — the gate's reactive flows
+     * re-emit and every consumer surface re-gates on the next read/collect.
+     */
+    fun setJellyPlayFeatureEnabled(feature: String, enabled: Boolean) {
+        val gate = jellyPlayFeatureGate ?: return
+        scope.launch { gate.setEnabled(feature, enabled) }
     }
 
     fun setJellyPlaySyncEnabled(enabled: Boolean) {

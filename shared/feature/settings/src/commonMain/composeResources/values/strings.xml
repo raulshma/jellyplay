@@ -715,10 +715,129 @@
     <string name="ss_jellyplay_sync_now_title">Sync now</string>
     <string name="ss_jellyplay_sync_now_subtitle">Push and pull synced settings immediately</string>
 
+    <!-- JellyPlay companion-plugin settings-sync screen (ADR 0010). The whole
+         screen + its settings-root entry render only where the plugin probe
+         reports AVAILABLE AND the `settings-sync` meta feature key is exposed
+         (meta keys have no user toggle). Entry label/subtitle reuse
+         settings_jellyplay_sync + ss_jellyplay_sync_enabled_subtitle. -->
+    <string name="settings_jellyplay_sync_last_sync">Last sync %1$s</string>
+    <string name="settings_jellyplay_sync_in_flight">Syncing…</string>
+    <string name="settings_jellyplay_sync_failed">Last sync failed</string>
+    <string name="settings_jellyplay_sync_op_push">Push</string>
+    <string name="settings_jellyplay_sync_op_pull">Pull</string>
+    <string name="settings_jellyplay_sync_op_reset">Reset</string>
+    <string name="settings_jellyplay_sync_op_unknown">Sync</string>
+    <string name="settings_jellyplay_sync_usage_title">What’s synced</string>
+    <string name="settings_jellyplay_sync_usage_unavailable">Usage details unavailable on this server</string>
+    <string name="settings_jellyplay_sync_quota_bytes">%1$s of %2$s used</string>
+    <string name="settings_jellyplay_sync_quota_keys">%1$d of %2$d keys</string>
+    <string name="settings_jellyplay_sync_relative_days">%1$dd ago</string>
+    <string name="settings_jellyplay_sync_relative_hours">%1$dh ago</string>
+    <string name="settings_jellyplay_sync_relative_minutes">%1$dm ago</string>
+    <string name="settings_jellyplay_sync_relative_now">just now</string>
+    <string name="settings_jellyplay_sync_ns_usage">%1$d keys • %2$s</string>
+    <string name="settings_jellyplay_sync_admin_section">Per-user usage (admin)</string>
+    <string name="settings_jellyplay_sync_admin_user_usage">%1$d keys • %2$s • %3$d devices</string>
+    <string name="settings_jellyplay_sync_devices_title">Devices</string>
+    <string name="settings_jellyplay_sync_this_device">This device</string>
+    <string name="settings_jellyplay_sync_time_yesterday">Yesterday, %1$s</string>
+    <string name="settings_jellyplay_sync_device_last_sync">Last sync %1$s</string>
+    <string name="settings_jellyplay_sync_profile_title">Device profile</string>
+    <string name="settings_jellyplay_sync_profile_subtitle">This device syncs under the “%1$s” profile</string>
+    <string name="settings_jellyplay_sync_history_title">Recent activity</string>
+    <string name="settings_jellyplay_sync_history_empty">No sync activity yet</string>
+    <string name="settings_jellyplay_sync_history_entry">%1$s • %2$d applied, %3$d rejected</string>
+    <string name="settings_jellyplay_sync_history_rejects">Rejected: %1$s</string>
+    <string name="settings_jellyplay_sync_history_retention">History is kept %1$d days</string>
+    <string name="settings_jellyplay_sync_history_keys_empty">No key changes</string>
+    <string name="settings_jellyplay_sync_history_keys_loading">Loading changes…</string>
+    <string name="settings_jellyplay_sync_actions_title">Actions</string>
+    <string name="settings_jellyplay_sync_reset_title">Reset synced settings</string>
+    <string name="settings_jellyplay_sync_reset_subtitle">Wipe the server’s synced settings; every device falls back to its local defaults</string>
+    <string name="settings_jellyplay_sync_reset_confirm_title">Reset synced settings?</string>
+    <string name="settings_jellyplay_sync_reset_confirm_message">This wipes the synced preferences on the server for ALL devices. Each device falls back to its local defaults on the next sync.</string>
+    <string name="settings_jellyplay_sync_force_repull_title">Force re-pull</string>
+    <string name="settings_jellyplay_sync_force_repull_subtitle">Discard this device’s pending changes and take the server’s view</string>
+
     <!-- JellyPlay companion-plugin messages inbox (ADR 0010) -->
     <string name="jellyplay_msgs_title">Messages</string>
     <string name="jellyplay_msgs_entry_subtitle">Updates from your server\u2019s JellyPlay plugin</string>
     <string name="jellyplay_msgs_unread_count">%1$d unread</string>
     <string name="jellyplay_msgs_unread_badge">Unread</string>
     <string name="jellyplay_msgs_empty">No messages from your server yet</string>
+
+    <!-- JellyPlay companion-plugin "My ratings" screen (ADR 0010, user-ratings) -->
+    <string name="jellyplay_ur_title">My ratings</string>
+    <string name="jellyplay_ur_entry_subtitle">Your likes, dislikes and ratings via the JellyPlay plugin</string>
+    <string name="jellyplay_ur_empty">Nothing here yet — rate something first</string>
+    <string name="jellyplay_ur_filter_likes">Likes</string>
+    <string name="jellyplay_ur_filter_dislikes">Dislikes</string>
+    <string name="jellyplay_ur_filter_rated">Rated</string>
+    <string name="jellyplay_ur_rating_value">%1$d/10</string>
+    <string name="jellyplay_ur_liked">Liked</string>
+    <string name="jellyplay_ur_disliked">Disliked</string>
+    <string name="jellyplay_ur_last_played">Last played %1$s</string>
+    <plurals name="jellyplay_ur_plays">
+        <item quantity="one">%1$d play</item>
+        <item quantity="other">%1$d plays</item>
+    </plurals>
+
+    <!-- JellyPlay companion-plugin "Your watching" screen (the per-user face of
+         the plugin's analytics). The entry renders only where the plugin probe
+         reports AVAILABLE AND the `analytics` feature key is present AND the
+         user's toggle is on — any user, NOT admin-only. -->
+    <string name="settings_jellyplay_yw_title">Your watching</string>
+    <string name="settings_jellyplay_yw_entry_subtitle">Your plays, watch time and top titles via the JellyPlay plugin</string>
+    <string name="settings_jellyplay_yw_unavailable">Not available on this server</string>
+    <string name="settings_jellyplay_yw_empty">No plays in this window yet</string>
+    <string name="settings_jellyplay_yw_days_7">7 days</string>
+    <string name="settings_jellyplay_yw_days_30">30 days</string>
+    <string name="settings_jellyplay_yw_days_90">90 days</string>
+    <string name="settings_jellyplay_yw_plays">Plays</string>
+    <string name="settings_jellyplay_yw_watch_time">Watch time</string>
+    <string name="settings_jellyplay_yw_titles">Titles</string>
+    <string name="settings_jellyplay_yw_section_chart">Per day</string>
+    <string name="settings_jellyplay_yw_section_top_items">Top titles</string>
+
+    <!-- JellyPlay companion-plugin per-feature switches ("Server plugin" section, ADR 0010).
+         One row per user-facing capability; each row renders only where the plugin's
+         capabilities probe exposes the feature (transcodes: admin users only). -->
+    <string name="settings_jellyplay_plugin_section">Server plugin</string>
+    <string name="settings_jellyplay_plugin_section_summary">Choose which features the JellyPlay plugin provides</string>
+    <string name="settings_jellyplay_feature_locked">Set by your server admin</string>
+    <string name="settings_jellyplay_feature_events">Live events</string>
+    <string name="ss_jellyplay_feature_events_subtitle">New-media alerts and server broadcasts streamed to this device</string>
+    <string name="settings_jellyplay_feature_messages">Messages inbox</string>
+    <string name="ss_jellyplay_feature_messages_subtitle">Admin-published inbox messages on the settings root</string>
+    <string name="settings_jellyplay_feature_seerr_bridge">Seerr via server</string>
+    <string name="ss_jellyplay_feature_seerr_bridge_subtitle">Link Seerr through the JellyPlay plugin instead of direct credentials</string>
+    <string name="settings_jellyplay_feature_ratings">Aggregated ratings</string>
+    <string name="ss_jellyplay_feature_ratings_subtitle">MDBList ratings chips on detail pages</string>
+    <string name="settings_jellyplay_feature_custom_rows">Custom home rows</string>
+    <string name="ss_jellyplay_feature_custom_rows_subtitle">Administrator-defined rows on the home screen</string>
+    <string name="settings_jellyplay_feature_seasonal_rows">Seasonal home row</string>
+    <string name="ss_jellyplay_feature_seasonal_rows_subtitle">The plugin\u2019s seasonal picks row on the home screen</string>
+    <string name="settings_jellyplay_feature_anime_markers">Anime markers</string>
+    <string name="ss_jellyplay_feature_anime_markers_subtitle">Filler and recap badges on episode lists</string>
+    <string name="settings_jellyplay_feature_recommendations">Server recommendations</string>
+    <string name="ss_jellyplay_feature_recommendations_subtitle">Server-scored \u201cMore like this\u201d on detail pages</string>
+    <string name="settings_jellyplay_feature_user_ratings">User ratings sync</string>
+    <string name="ss_jellyplay_feature_user_ratings_subtitle">Sync your ratings through the plugin</string>
+    <string name="settings_jellyplay_feature_bookmarks">Bookmark sync</string>
+    <string name="ss_jellyplay_feature_bookmarks_subtitle">Mirror reader bookmarks across devices via the plugin</string>
+    <string name="settings_jellyplay_feature_newsletter">Newsletter</string>
+    <string name="ss_jellyplay_feature_newsletter_subtitle">The newsletter entry on the settings profile banner</string>
+    <string name="settings_jellyplay_feature_transcodes">Transcode monitor</string>
+    <string name="ss_jellyplay_feature_transcodes_subtitle">The active-transcodes card in the admin dashboard (admin only)</string>
+    <string name="settings_jellyplay_feature_push">Push notifications</string>
+    <string name="ss_jellyplay_feature_push_subtitle">Server pushes through a UnifiedPush distributor app (e.g. ntfy)</string>
+    <!-- The push row's dynamic subtitle: the JellyPushRepository machine's state
+         (the static search subtitle above stays the search-result face). -->
+    <string name="settings_jellyplay_push_state_unregistered">Enable to register this device for pushes</string>
+    <string name="settings_jellyplay_push_state_registering">Registering with the push distributor…</string>
+    <string name="settings_jellyplay_push_state_registered">Registered — pushes arrive through your distributor</string>
+    <string name="settings_jellyplay_push_state_no_distributor">Requires a push distributor app (e.g. ntfy)</string>
+    <string name="settings_jellyplay_push_state_server_off">Server push disabled</string>
+    <string name="settings_jellyplay_feature_analytics">Analytics</string>
+    <string name="ss_jellyplay_feature_analytics_subtitle">The play-history dashboard in the admin area (admin only)</string>
 </resources>
