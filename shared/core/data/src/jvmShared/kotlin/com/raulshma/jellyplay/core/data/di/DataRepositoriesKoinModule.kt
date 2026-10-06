@@ -4,6 +4,8 @@ import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.AuthRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.BookTocCacheRepository
 import com.raulshma.jellyplay.core.data.repository.BookTocCacheRepositoryImpl
+import com.raulshma.jellyplay.core.data.repository.BookmarksSyncRepository
+import com.raulshma.jellyplay.core.data.repository.BookmarksSyncRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.ClientCertificateRepository
 import com.raulshma.jellyplay.core.data.repository.ClientCertificateRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.ItemPlaybackPreferenceRepository
@@ -108,6 +110,19 @@ internal val dataRepositoriesModule: Module = module {
         )
     }
     single<ReaderAnnotationsRepository> { get<ReaderAnnotationsRepositoryImpl>() }
+
+    // Companion-plugin bookmark sync (ADR 0010, `bookmarks` feature) over the
+    // SAME book_bookmarks rows the marks repo owns — shares the BookBookmarkDao
+    // single. The status store resolves from dataSessionPlaybackModule (one
+    // graph); the network api client from the network modules.
+    single {
+        BookmarksSyncRepositoryImpl(
+            bookmarkDao = get(),
+            apiClient = get(),
+            statusStore = get(),
+        )
+    }
+    single<BookmarksSyncRepository> { get<BookmarksSyncRepositoryImpl>() }
 
     single { BookTocCacheRepositoryImpl(dao = get(), timeSource = get()) }
     single<BookTocCacheRepository> { get<BookTocCacheRepositoryImpl>() }

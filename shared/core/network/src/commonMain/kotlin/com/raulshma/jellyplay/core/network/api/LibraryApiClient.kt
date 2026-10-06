@@ -110,6 +110,16 @@ interface LibraryApiClient {
      */
     suspend fun getDiscoverRowItems(row: DiscoverRowConfig): Result<List<MediaItem>>
 
+    /**
+     * One batched read of specific items by id (`/Items?Ids=…`, the home/list
+     * projection so the results carry the per-item UserData the home cards
+     * render, parental-rating filtered like every list read). The
+     * plugin-sourced home rows resolve their entries' `localItemId` through
+     * this — the "fetch items by id" seam of the home pipeline. Ids the
+     * server does not know are simply absent from the result.
+     */
+    suspend fun getItemsByIds(ids: List<String>): Result<List<MediaItem>>
+
     suspend fun getMediaDetail(itemId: String): Result<MediaDetail>
 
     /**

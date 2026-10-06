@@ -13,6 +13,7 @@ import com.raulshma.jellyplay.core.model.HomeScreenPreferences
 import com.raulshma.jellyplay.core.model.SettingsScreenPreferences
 import com.raulshma.jellyplay.core.model.UserInfo
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
@@ -38,6 +39,20 @@ class SettingsViewModel(
     private val serverAdminActions: ServerAdminActions,
     editor: PreferencesEditor,
     private val recentsStore: SettingsRecentsStore,
+    /**
+     * The JellyPlay companion-plugin seams (ADR 0010). Nullable-with-default
+     * keeps the direct-construction test harnesses compiling; the Koin
+     * factory passes the real singles and the UI renders the sync section
+     * only when both are present AND the probe reports AVAILABLE.
+     */
+    private val jellyPlayStatusStore: com.raulshma.jellyplay.core.data.session.JellyPlayPluginStatusStore? = null,
+    private val jellyPlaySyncRepository: com.raulshma.jellyplay.core.data.repository.ProfileSyncRepository? = null,
+    /**
+     * The plugin's events/messages face — backs the capability-gated
+     * "Messages" entry (unread badge) on the settings root. Same
+     * nullable-with-default discipline as the two seams above.
+     */
+    private val jellyPlayEventsRepository: com.raulshma.jellyplay.core.data.repository.JellyPlayEventsRepository? = null,
 ) : SettingsEditorViewModel(editor) {
 
     private val preferencesFlow: kotlinx.coroutines.flow.StateFlow<SettingsScreenPreferences> =
@@ -100,6 +115,72 @@ class SettingsViewModel(
      * it lifecycle-aware without re-subscribing here.
      */
     val recentSettingIds: kotlinx.coroutines.flow.StateFlow<List<String>> = recentsStore.recents
+
+    /** Companion-plugin availability (UNKNOWN until [refreshJellyPlayPluginStatus] probes). */
+    val jellyPlayPluginStatus: kotlinx.coroutines.flow.StateFlow<com.raulshma.jellyplay.core.model.JellyPlayPluginStatus> =
+        jellyPlayStatusStore?.status
+            ?: kotlinx.coroutines.flow.MutableStateFlow(com.raulshma.jellyplay.core.model.JellyPlayPluginStatus.UNAVAILABLE)
+
+    /** The sync engine's outcome (opt-in toggle, last sync, errors). */
+    val jellyPlaySyncState: kotlinx.coroutines.flow.StateFlow<com.raulshma.jellyplay.core.data.repository.ProfileSyncRepository.SyncState> =
+        jellyPlaySyncRepository?.state
+            ?: kotlinx.coroutines.flow.MutableStateFlow(com.raulshma.jellyplay.core.data.repository.ProfileSyncRepository.SyncState())
+
+    /**
+     * The plugin's live feature keys (the capability registry — the ONE
+     * gating mechanism, ADR 0010). The "Messages" entry gates on
+     * [com.raulshma.jellyplay.core.model.JellyPlayPluginFeatures.Messages]
+     * being present, reactively.
+     */
+    val jellyPlayPluginFeatures: kotlinx.coroutines.flow.StateFlow<Set<String>> =
+        jellyPlayStatusStore?.features
+            ?: kotlinx.coroutines.flow.MutableStateFlow(emptySet())
+
+    /**
+     * The plugin's inbox messages — the durable counterpart of the live
+     * events stream. Feeds the "Messages" entry's unread badge; the
+     * [com.raulshma.jellyplay.feature.settings.JellyPlayMessagesViewModel]
+     * owns the screen-side consumption.
+     */
+    val jellyPlayInbox: kotlinx.coroutines.flow.StateFlow<List<com.raulshma.jellyplay.core.network.api.JellyPlayMessage>> =
+        jellyPlayEventsRepository?.inbox
+            ?: kotlinx.coroutines.flow.MutableStateFlow(emptyList())
+
+    /** Unread count behind the "Messages" entry's badge. */
+    val jellyPlayUnreadMessageCount: kotlinx.coroutines.flow.StateFlow<Int> =
+        jellyPlayInbox
+            .map { list -> list.count { !it.read } }
+            .stateIn(scope, SharingStarted.WhileSubscribed(5_000), 0)
+
+    /**
+     * One inbox refresh so the badge is fresh whenever the settings root
+     * becomes visible. Called from the gated entry (AVAILABLE + Messages
+     * feature), never on its own — the repository's api client 404s against
+     * a stock server.
+     */
+    fun refreshJellyPlayInbox() {
+        val repo = jellyPlayEventsRepository ?: return
+        scope.launch { repo.refreshInbox() }
+    }
+
+    /** One capabilities probe; called when the sync section becomes visible. */
+    fun refreshJellyPlayPluginStatus() {
+        val store = jellyPlayStatusStore ?: return
+        scope.launch { store.refresh() }
+    }
+
+    fun setJellyPlaySyncEnabled(enabled: Boolean) {
+        val repo = jellyPlaySyncRepository ?: return
+        repo.setEnabled(enabled)
+        if (enabled) {
+            // First enable pulls + pushes immediately so the toggle has an effect.
+            scope.launch { repo.requestSync() }
+        }
+    }
+
+    fun syncJellyPlayNow() {
+        jellyPlaySyncRepository?.let { repo -> scope.launch { repo.requestSync() } }
+    }
 
     var activeSessions by composeState<List<com.raulshma.jellyplay.core.model.SessionInfo>>(emptyList())
         private set

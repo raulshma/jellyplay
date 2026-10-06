@@ -35,6 +35,7 @@ import com.composables.icons.tabler.outline.Archive
 import com.composables.icons.tabler.outline.DeviceDesktop
 import com.composables.icons.tabler.outline.FileText
 import com.composables.icons.tabler.outline.PlayerPlay
+import com.composables.icons.tabler.outline.Transform
 import com.composables.icons.tabler.outline.Users
 import com.composables.icons.tabler.outline.Trash
 import com.composables.icons.tabler.outline.EyeOff
@@ -52,6 +53,7 @@ import com.raulshma.jellyplay.feature.admin.generated.resources.admin_qa_watched
 import com.raulshma.jellyplay.feature.admin.generated.resources.admin_quick_access
 import com.raulshma.jellyplay.feature.admin.generated.resources.admin_stale_media_title
 import com.raulshma.jellyplay.feature.admin.generated.resources.admin_users_title
+import com.raulshma.jellyplay.feature.admin.generated.resources.jellyplay_tr_title
 
 @Composable
 fun QuickActionsSection(
@@ -64,6 +66,13 @@ fun QuickActionsSection(
     onPlugins: () -> Unit = {},
     onUsers: () -> Unit = {},
     onBackups: () -> Unit = {},
+    /**
+     * The JellyPlay companion-plugin transcodes monitor (ADR 0010). [showTranscodes]
+     * is the plugin gate (AVAILABLE + `transcodes` feature) — when off the tile
+     * does not render and the row stays exactly as it was on a stock server.
+     */
+    showTranscodes: Boolean = false,
+    onTranscodes: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
@@ -138,6 +147,16 @@ fun QuickActionsSection(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
+            if (showTranscodes) {
+                QuickActionButton(
+                    icon = Tabler.Outline.Transform,
+                    label = stringResource(Res.string.jellyplay_tr_title),
+                    iconBackgroundColor = MaterialTheme.colorScheme.primaryContainer,
+                    iconTint = MaterialTheme.colorScheme.onPrimaryContainer,
+                    onClick = onTranscodes,
+                    modifier = Modifier.weight(1f),
+                )
+            }
             QuickActionButton(
                 icon = Tabler.Outline.Users,
                 label = stringResource(Res.string.admin_users_title),

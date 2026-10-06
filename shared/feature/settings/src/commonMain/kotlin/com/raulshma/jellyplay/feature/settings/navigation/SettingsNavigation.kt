@@ -31,6 +31,7 @@ import com.raulshma.jellyplay.feature.settings.SeerrSettingsScreen
 import com.raulshma.jellyplay.feature.settings.SecuritySettingsScreen
 import com.raulshma.jellyplay.feature.settings.ServerManagementScreen
 import com.raulshma.jellyplay.feature.settings.SettingsNavActions
+import com.raulshma.jellyplay.feature.settings.JellyPlayMessagesScreen
 import com.raulshma.jellyplay.feature.settings.SettingsScreen
 import com.raulshma.jellyplay.feature.settings.StorageSettingsScreen
 import com.raulshma.jellyplay.feature.settings.UserManagementScreen
@@ -260,6 +261,12 @@ fun EntryProviderScope<NavKey>.settingsSection(
         SubtitleProviderSettingsScreen(
             onBack = { navigator.goBack() },
             highlightSettingId = entry.highlightSettingId,
+        )
+    }
+
+    entry<Route.JellyPlayMessages> {
+        JellyPlayMessagesScreen(
+            onBack = { navigator.goBack() },
         )
     }
 

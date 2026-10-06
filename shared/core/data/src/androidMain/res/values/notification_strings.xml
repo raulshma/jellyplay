@@ -25,4 +25,8 @@
     <!-- New-episodes channel (opt-in routing for episode items) -->
     <string name="notification_channel_new_episodes">New Episodes</string>
     <string name="notification_channel_new_episodes_desc">Notifications for newly added episodes</string>
+
+    <!-- Companion-plugin live new-media push (ADR 0010, single-event tray post) -->
+    <string name="notification_plugin_new_media_subtitle">New media added on your server</string>
+    <string name="notification_plugin_new_episodes_count">%1$d new episodes</string>
 </resources>

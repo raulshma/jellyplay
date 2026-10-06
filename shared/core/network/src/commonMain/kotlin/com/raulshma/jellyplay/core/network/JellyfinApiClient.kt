@@ -5,6 +5,7 @@ import com.raulshma.jellyplay.core.network.api.AuthApiClient
 import com.raulshma.jellyplay.core.network.api.CollectionApiClient
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.network.api.LiveTvApiClient
+import com.raulshma.jellyplay.core.network.api.JellyPlayPluginApiClient
 import com.raulshma.jellyplay.core.network.api.MediaInfoApiClient
 import com.raulshma.jellyplay.core.network.api.MetadataApiClient
 import com.raulshma.jellyplay.core.network.api.PlaybackApiClient
@@ -22,6 +23,7 @@ interface JellyfinApiClient :
     AdminApiClient,
     MetadataApiClient,
     MediaInfoApiClient,
+    JellyPlayPluginApiClient,
     PluginApiClient,
     UserApiClient,
     PlaylistApiClient,

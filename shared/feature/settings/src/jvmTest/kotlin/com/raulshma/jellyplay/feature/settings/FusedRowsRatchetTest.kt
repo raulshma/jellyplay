@@ -190,6 +190,8 @@ class FusedRowsRatchetTest {
         "system.idleAmbient" to SystemIdleAmbientRows,
         "system.discordPresence" to SystemDiscordPresenceRows,
         "system.hooks" to SystemHooksRows,
+        // jellyplay companion-plugin sync (ADR 0010)
+        "jellyplay.sync" to JellyPlaySyncRows.all,
         // account / activity-insights
         "account" to AccountRowsList,
         "activityInsights" to ActivityInsightsRowsList,
@@ -216,6 +218,7 @@ class FusedRowsRatchetTest {
         IntegrationsRows.all,
         BackupRows.all,
         AboutRows.all,
+        JellyPlaySyncRows.all,
     )
 
     @Test
@@ -348,20 +351,20 @@ class FusedRowsRatchetTest {
     @Test
     fun `every converted domain's entrance section is the one declaration driving emission and step index`() {
         listOf(
-            HomeEntrance to (6 to 6),
-            AppearanceEntrance to (7 to 7),
-            PlaybackEntrance to (8 to 8),
-            AudioEntrance to (9 to 9),
-            LanguageEntrance to (10 to 10),
-            NotificationEntrance to (11 to 11),
-            StorageEntrance to (12 to 12),
-            SecurityEntrance to (13 to 13),
-            BackupEntrance to (15 to 15),
+            HomeEntrance to (8 to 8),
+            AppearanceEntrance to (9 to 9),
+            PlaybackEntrance to (10 to 10),
+            AudioEntrance to (11 to 11),
+            LanguageEntrance to (12 to 12),
+            NotificationEntrance to (13 to 13),
+            StorageEntrance to (14 to 14),
+            SecurityEntrance to (15 to 15),
+            BackupEntrance to (17 to 17),
             // HEAD's SettingsEntranceStepsTest literals: item_integrations
             // (20,21), item_about (21,22) — the tv side spans the whatsnew
             // slot that phone lacks.
-            IntegrationsEntrance to (20 to 21),
-            AboutEntrance to (21 to 22),
+            IntegrationsEntrance to (22 to 23),
+            AboutEntrance to (23 to 24),
         ).forEach { (entrance, expectedSteps) ->
             val occurrences = SETTINGS_ENTRANCE_SECTIONS.count { it.key == entrance.key }
             assertEquals(1, occurrences, "${entrance.key} is missing from (or duplicated in) SETTINGS_ENTRANCE_SECTIONS")

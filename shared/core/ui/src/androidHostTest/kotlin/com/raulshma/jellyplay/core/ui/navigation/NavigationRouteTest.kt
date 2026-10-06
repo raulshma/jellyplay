@@ -105,6 +105,7 @@ class NavigationRouteTest {
         Route.ScheduledTasks,
         Route.Devices,
         Route.Logs,
+        Route.JellyPlayTranscodes,
         Route.UserStatistics,
         Route.UserStatisticsDetail("user-1"),
         Route.Users,

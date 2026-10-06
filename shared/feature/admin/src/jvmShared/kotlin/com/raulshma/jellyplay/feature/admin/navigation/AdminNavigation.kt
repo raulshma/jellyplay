@@ -16,6 +16,7 @@ import com.raulshma.jellyplay.feature.admin.statistics.UserStatisticsScreen
 import com.raulshma.jellyplay.feature.admin.statistics.detail.UserStatisticsDetailScreen
 import com.raulshma.jellyplay.feature.admin.stalemedia.StaleMediaScreen
 import com.raulshma.jellyplay.feature.admin.tasks.ScheduledTasksScreen
+import com.raulshma.jellyplay.feature.admin.transcodes.JellyPlayTranscodesScreen
 import com.raulshma.jellyplay.feature.admin.users.UsersScreen
 import com.raulshma.jellyplay.feature.admin.users.detail.UserDetailScreen
 import com.raulshma.jellyplay.feature.admin.watchedremoval.WatchedMediaCleanupScreen
@@ -46,6 +47,7 @@ fun EntryProviderScope<NavKey>.adminSection(
                 onPlugins = { navigator.navigate(Route.Plugins) },
                 onUsers = { navigator.navigate(Route.Users) },
                 onBackups = { navigator.navigate(Route.AdminBackups) },
+                onTranscodes = { navigator.navigate(Route.JellyPlayTranscodes) },
             )
         }
     }
@@ -69,6 +71,14 @@ fun EntryProviderScope<NavKey>.adminSection(
     entry<Route.Logs> {
         AdminRouteEntry(navigator, isAdmin, isRefreshingAdmin, onRefreshAdmin) {
             LogsScreen(
+                onBack = { navigator.goBack() },
+            )
+        }
+    }
+
+    entry<Route.JellyPlayTranscodes> {
+        AdminRouteEntry(navigator, isAdmin, isRefreshingAdmin, onRefreshAdmin) {
+            JellyPlayTranscodesScreen(
                 onBack = { navigator.goBack() },
             )
         }

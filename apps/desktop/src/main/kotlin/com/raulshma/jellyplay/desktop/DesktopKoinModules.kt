@@ -91,6 +91,19 @@ internal fun desktopKoinModules(paths: DesktopPaths): List<Module> = listOf(
     // core:ui's UserMessageBus module — core, not feature, so it stays
     // inline (the shell's UserMessageHost collects this bus).
     coreUiMessageModule,
+    // The companion-plugin's live broadcast events (ADR 0010) surface as
+    // one-shot user messages over that same bus (the text is the session
+    // controller's title/body fold — server-supplied, UiText.Raw path).
+    // Same core:data-cannot-see-core:ui bridge shape as the Android shell's
+    // interop-adapter module.
+    module {
+        single<com.raulshma.jellyplay.core.data.session.JellyPlayBroadcastMessenger> {
+            val bus: com.raulshma.jellyplay.core.ui.message.UserMessageBus = get()
+            com.raulshma.jellyplay.core.data.session.JellyPlayBroadcastMessenger { text ->
+                bus.info(text)
+            }
+        }
+    },
     desktopBookPlayerModule(paths.dataDir),
 
     // ── Desktop auto-update (ADR desktop-auto-update) ────────────────

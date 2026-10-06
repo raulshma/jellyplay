@@ -15,6 +15,7 @@ import com.raulshma.jellyplay.feature.admin.stalemedia.StaleMediaViewModel
 import com.raulshma.jellyplay.feature.admin.statistics.UserStatisticsViewModel
 import com.raulshma.jellyplay.feature.admin.statistics.detail.UserStatisticsDetailViewModel
 import com.raulshma.jellyplay.feature.admin.tasks.ScheduledTasksViewModel
+import com.raulshma.jellyplay.feature.admin.transcodes.JellyPlayTranscodesViewModel
 import com.raulshma.jellyplay.feature.admin.users.UsersViewModel
 import com.raulshma.jellyplay.feature.admin.users.detail.UserDetailViewModel
 import com.raulshma.jellyplay.feature.admin.watchedremoval.WatchedMediaCleanupViewModel
@@ -41,6 +42,13 @@ val adminModule: Module = module {
     viewModel {
         AdminDashboardViewModel(
             adminRepository = get(),
+            jellyPlayStatusStore = get(),
+        )
+    }
+    viewModel {
+        JellyPlayTranscodesViewModel(
+            pluginApiClient = get(),
+            statusStore = get(),
         )
     }
     viewModel {

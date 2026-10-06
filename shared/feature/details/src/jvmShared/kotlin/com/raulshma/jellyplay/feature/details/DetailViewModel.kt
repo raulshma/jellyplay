@@ -17,6 +17,7 @@ import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.repository.UserDataContainer
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.model.HomeFreshness
+import com.raulshma.jellyplay.core.model.JellyPlayPluginFeatures
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestStateHolder
 import com.raulshma.jellyplay.core.data.seerr.TmdbCompanionFetches
 import com.raulshma.jellyplay.core.data.seerr.TmdbCompanionLanding
@@ -53,6 +54,8 @@ import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -165,6 +168,22 @@ class DetailViewModel internal constructor(
      * Tests inject the test dispatcher so `advanceUntilIdle` covers the launch.
      */
     private val smartPlayDispatcher: CoroutineDispatcher = Dispatchers.Default,
+    /**
+     * The jellyfin-plugin-jellyplay companion-plugin seams (ADR 0010), behind
+     * the three plugin-gated detail sections (ratings row, server-scored
+     * "More like this", anime filler/recap badges). Nullable-with-default
+     * keeps the direct-construction test harnesses compiling — the Settings
+     * screen's `jellyPlayStatusStore` precedent; the Koin factory passes the
+     * real singles and every enrichment degrades to silent absence when
+     * either is null (the plugin contract's never-an-error-surface rule).
+     *
+     * Gating goes through the status store ONLY ([JellyPlayPluginFeatures]
+     * keys, one [JellyPlayPluginStatusStore.refresh] probe per item
+     * navigation); data calls ride the client family — never per-endpoint
+     * 404 handling.
+     */
+    private val pluginStatusStore: com.raulshma.jellyplay.core.data.session.JellyPlayPluginStatusStore? = null,
+    private val pluginApiClient: com.raulshma.jellyplay.core.network.api.JellyPlayPluginApiClient? = null,
 ) : JellyPlayViewModel() {
 
     /** Media-detail preference fields, projected centrally off the store slices. */
@@ -940,7 +959,98 @@ class DetailViewModel internal constructor(
                     _uiState.update { it.copy(collectionItems = result.items) }
                 }
         },
+        DetailEnrichment(
+            name = "pluginRatings",
+            // ADR 0010: the mdblist ratings chips row. The feature-key gate is
+            // a suspend probe, so it lives in the BODY (the gate stays a pure
+            // snapshot read); failure/null → the field stays empty → the
+            // section is silently absent.
+            gate = { it.remoteDiscoveryAllowed },
+        ) { inputs ->
+            if (!pluginFeature(JellyPlayPluginFeatures.Ratings, inputs.itemId)) return@DetailEnrichment
+            val imdbId = resolveImdbId(inputs.detail) ?: return@DetailEnrichment
+            val result = pluginApiClient?.getMdbListRatings(imdbId)?.getOrNull() ?: return@DetailEnrichment
+            if (!loadGuard.isCurrent(inputs.itemId)) return@DetailEnrichment
+            _uiState.update {
+                // Scoreless entries would render an empty chip — dropped here so
+                // the section's emptiness check matches what it can render.
+                it.copy(pluginRatings = result.ratings.filter { r -> r.score != null })
+            }
+        },
+        DetailEnrichment(
+            name = "pluginSimilarItems",
+            // The server-scored "More like this" — ADDITIVE alongside the
+            // stock similarItems row above (which keeps its own section). The
+            // plugin returns scored item ids only, so each id is hydrated
+            // through the same per-item fetch the detail screen already uses
+            // (getMediaDetail), preserving score order; per-id failures drop
+            // out and an empty hydration leaves the section absent.
+            gate = { it.remoteDiscoveryAllowed },
+        ) { inputs ->
+            if (!pluginFeature(JellyPlayPluginFeatures.Recommendations, inputs.itemId)) return@DetailEnrichment
+            val scored = pluginApiClient?.getJellyPlaySimilarItems(inputs.itemId, limit = SIMILAR_ITEMS_LIMIT)
+                ?.getOrNull()
+                .orEmpty()
+                .filter { it.itemId != inputs.itemId }
+                .distinctBy { it.itemId }
+            if (scored.isEmpty()) return@DetailEnrichment
+            val hydrated = kotlinx.coroutines.coroutineScope {
+                scored.map { candidate ->
+                    async { mediaRepository.getMediaDetail(candidate.itemId).getOrNull()?.item }
+                }.awaitAll()
+            }
+            if (!loadGuard.isCurrent(inputs.itemId)) return@DetailEnrichment
+            _uiState.update {
+                it.copy(
+                    pluginSimilarItems = hydrated
+                        .filterNotNull()
+                        .filter { item -> item.id != inputs.itemId }
+                        .distinctBy { item -> item.id },
+                )
+            }
+        },
+        DetailEnrichment(
+            name = "pluginAnimeMarkers",
+            // Series-scoped filler/recap badges for the seasons section's
+            // episode rows. SERIES resolves to itself, EPISODE/SEASON to the
+            // parent series (seriesIdForDetail) — the same series context the
+            // seasons tree renders.
+            gate = {
+                it.remoteDiscoveryAllowed && it.detail.item.seriesIdForDetail != null
+            },
+        ) { inputs ->
+            if (!pluginFeature(JellyPlayPluginFeatures.AnimeMarkers, inputs.itemId)) return@DetailEnrichment
+            val seriesId = inputs.detail.item.seriesIdForDetail ?: return@DetailEnrichment
+            val providerSeriesId = resolveProviderSeriesId(inputs.detail) ?: return@DetailEnrichment
+            val markers = pluginApiClient?.getAnimeMarkers(seriesId, providerSeriesId)
+                ?.getOrNull() ?: return@DetailEnrichment
+            if (!loadGuard.isCurrent(inputs.itemId)) return@DetailEnrichment
+            _uiState.update { it.copy(animeMarkers = animeBadges(markers.markers)) }
+        },
     )
+
+    /** The stock similar row's limit (the plugin row mirrors it). */
+    private companion object {
+        const val SIMILAR_ITEMS_LIMIT = 12
+    }
+
+    /**
+     * The ADR 0010 feature gate for the plugin sections: one capabilities
+     * probe per item navigation (latched on the item id — the store's own
+     * contract re-probes on identity transitions), then the snapshot
+     * [JellyPlayPluginStatusStore.hasFeature] read. False when the plugin
+     * seams are unwired (tests) or the probe failed — silent absence.
+     */
+    private var pluginProbedItemId: String? = null
+
+    private suspend fun pluginFeature(feature: String, itemId: String): Boolean {
+        val store = pluginStatusStore ?: return false
+        if (pluginProbedItemId != itemId) {
+            pluginProbedItemId = itemId
+            store.refresh()
+        }
+        return store.hasFeature(feature)
+    }
 
     /**
      * The evaluator beside [reduceLoaded]: walks the declaration list in

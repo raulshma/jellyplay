@@ -417,6 +417,15 @@ sealed class Route : NavKey {
         override fun withHighlightSettingId(id: String) = copy(highlightSettingId = id)
     }
 
+    /**
+     * The JellyPlay companion-plugin's inbox messages screen (ADR 0010) — the
+     * durable counterpart of the plugin's live events stream: admin-published
+     * messages with read state, tapping one marks it read. Reached ONLY from
+     * the Settings root's capability-gated "Messages" entry (plugin probe
+     * AVAILABLE + the `messages` feature key), so no in-screen gate chrome.
+     */
+    @Serializable data object JellyPlayMessages : Route()
+
     // ───────────────────────── Music ─────────────────────────
 
     @Serializable data object MusicBrowse : Route()
@@ -488,6 +497,16 @@ sealed class Route : NavKey {
     }
 
     @Serializable data object Logs : Route() {
+        override val isModal = true
+    }
+
+    /**
+     * Admin transcodes monitor — the companion plugin's live active-transcode
+     * list (ADR 0010, `transcodes` feature). An admin tool presented like
+     * [Devices] / [Logs]; the admin gate is the shared admin area's
+     * AdminRouteContainer, so the route itself carries no extra classification.
+     */
+    @Serializable data object JellyPlayTranscodes : Route() {
         override val isModal = true
     }
 

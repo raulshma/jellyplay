@@ -71,12 +71,14 @@ internal fun sectionHasSeeAll(sectionType: HomeSectionType): Boolean =
  *
  * Per type: the direct-query sections (Continue Watching / Continue Reading /
  * Next Up), the per-library latest rows, Recently Added (aggregate — its
- * refetch re-runs the fan-out), the Jellyfin discover rows and the pinned
- * rows all map to a single-row fetch (see `HomeSectionsFetcher.refreshSection`).
+ * refetch re-runs the fan-out), the Jellyfin discover rows, the pinned rows
+ * and the plugin rows (PLUGIN_ROW — the fetcher's single-row plugin arm)
+ * all map to a single-row fetch (see `HomeSectionsFetcher.refreshSection`).
  * Seerr-sourced discover rows ride the group gate/last-known-good batch path
- * and are excluded; RECOMMENDATIONS' seed chain is batch-shaped; FAVORITES,
- * LIVE_TV and DOWNLOADED are never constructed by the network (offline rows
- * are excluded upstream — the offline feed never arms the gesture).
+ * and are excluded (the `seerrItems` guard below); RECOMMENDATIONS' seed
+ * chain is batch-shaped; FAVORITES, LIVE_TV and DOWNLOADED are never
+ * constructed by the network (offline rows are excluded upstream — the
+ * offline feed never arms the gesture).
  */
 internal fun isEdgeRefreshableSection(section: HomeSection): Boolean =
     when (section.type) {

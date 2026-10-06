@@ -315,6 +315,34 @@
     <string name="settings_seerr_password_placeholder">Seerr account password</string>
     <string name="settings_seerr_server_reached">Seerr server reached successfully</string>
 
+    <!-- SeerrSettingsScreen.kt — "via JellyPlay server" bridge mode (ADR 0010).
+         Mode selector + the plugin-brokered link pane: status display, Quick
+         Connect link flow (the plugin authorizes a Jellyfin QC secret and SSOs
+         into Seerr server-side), and logout. -->
+    <string name="jellyplay_seerr_mode_direct">Direct connection</string>
+    <string name="jellyplay_seerr_mode_via_server">Via JellyPlay server</string>
+    <string name="jellyplay_seerr_bridge_checking">Checking the JellyPlay server plugin…</string>
+    <string name="jellyplay_seerr_bridge_unlinked">Link your Seerr account through the JellyPlay server plugin. Your Seerr API key never leaves the server.</string>
+    <string name="jellyplay_seerr_bridge_unavailable">The JellyPlay server plugin is not available on this server.</string>
+    <string name="jellyplay_seerr_bridge_not_configured">The JellyPlay server plugin has no Seerr server configured yet. Ask your server administrator to set it up.</string>
+    <string name="jellyplay_seerr_bridge_linked_with">Linked to %1$s</string>
+    <string name="jellyplay_seerr_bridge_via_note">Working via the JellyPlay server plugin — requests are proxied by your Jellyfin server with your own Seerr session.</string>
+    <string name="jellyplay_seerr_bridge_login">Link with Quick Connect</string>
+    <string name="jellyplay_seerr_bridge_logout">Unlink</string>
+    <string name="jellyplay_seerr_bridge_retry">Retry</string>
+    <string name="jellyplay_seerr_qc_enter_code">Approve the request on your Jellyfin server (Dashboard → Quick Connect), then wait here.</string>
+    <string name="jellyplay_seerr_qc_starting">Starting Quick Connect…</string>
+    <string name="jellyplay_seerr_qc_waiting">Waiting for approval…</string>
+    <string name="jellyplay_seerr_qc_cancel">Cancel</string>
+    <string name="jellyplay_seerr_summary_linked">Linked via JellyPlay server (%1$s)</string>
+    <string name="jellyplay_seerr_summary_unlinked">Not linked (via JellyPlay server)</string>
+    <string name="jellyplay_seerr_error_status_unreachable">Could not reach the JellyPlay plugin\u2019s Seerr bridge.</string>
+    <string name="jellyplay_seerr_error_qc_disabled">Quick Connect is not enabled on the Jellyfin server.</string>
+    <string name="jellyplay_seerr_error_qc_failed">Quick Connect failed. Try again.</string>
+    <string name="jellyplay_seerr_error_qc_timeout">Quick Connect approval timed out. Try again.</string>
+    <string name="jellyplay_seerr_error_login_failed">Seerr sign-in failed.</string>
+    <string name="jellyplay_seerr_error_logout_failed">Unlinking failed.</string>
+
     <!-- PlaybackSettingsScreen.kt -->
     <!-- "Still watching?" prompt (feature 1.3): mode + episode threshold, behind the autoplay toggle. -->
 
@@ -676,4 +704,21 @@
     <string name="settings_input_bindings_capture_escape_hint">Escape cancels</string>
     <string name="settings_input_bindings_row_reset">Reset to default</string>
     <string name="settings_input_bindings_row_delete">Delete shortcut</string>
+    <string name="settings_jellyplay_sync">Sync across devices</string>
+    <string name="settings_jellyplay_sync_on">On — settings follow your account</string>
+    <string name="settings_jellyplay_sync_off">Off — settings stay on this device</string>
+    <string name="settings_sync_across_devices">Sync settings across devices</string>
+    <string name="settings_sync_now">Sync now</string>
+    <string name="settings_sync_never">Never synced</string>
+    <string name="ss_jellyplay_sync_enabled_title">Sync settings across devices</string>
+    <string name="ss_jellyplay_sync_enabled_subtitle">Settings, layouts and preferences follow your Jellyfin account via the JellyPlay plugin</string>
+    <string name="ss_jellyplay_sync_now_title">Sync now</string>
+    <string name="ss_jellyplay_sync_now_subtitle">Push and pull synced settings immediately</string>
+
+    <!-- JellyPlay companion-plugin messages inbox (ADR 0010) -->
+    <string name="jellyplay_msgs_title">Messages</string>
+    <string name="jellyplay_msgs_entry_subtitle">Updates from your server\u2019s JellyPlay plugin</string>
+    <string name="jellyplay_msgs_unread_count">%1$d unread</string>
+    <string name="jellyplay_msgs_unread_badge">Unread</string>
+    <string name="jellyplay_msgs_empty">No messages from your server yet</string>
 </resources>

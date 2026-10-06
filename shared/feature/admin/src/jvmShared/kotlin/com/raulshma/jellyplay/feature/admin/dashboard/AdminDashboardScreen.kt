@@ -19,6 +19,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -83,12 +84,23 @@ fun AdminDashboardScreen(
     onPlugins: () -> Unit = {},
     onUsers: () -> Unit = {},
     onBackups: () -> Unit = {},
+    /** Gated on the companion plugin's `transcodes` feature (ADR 0010); off = no tile. */
+    onTranscodes: () -> Unit = {},
     viewModel: AdminDashboardViewModel = koinViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val transcodesEnabled by viewModel.jellyPlayTranscodesEnabled.collectAsStateWithLifecycle()
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
     val backgroundColorState = rememberScreenBackgroundColorState()
+
+    // Resolve the companion-plugin gate when the dashboard becomes visible —
+    // UNKNOWN → one probe (no-op once AVAILABLE/UNAVAILABLE, re-armed by the
+    // store's identity reset). Without this the Quick Actions tile would stay
+    // hidden until the user visited settings.
+    LaunchedEffect(Unit) {
+        viewModel.refreshJellyPlayPluginStatus()
+    }
 
     // TV focus-on-launch: focus the first quick action once content arrives so D-pad input lands on
     // content, not the navigation drawer.
@@ -200,6 +212,8 @@ fun AdminDashboardScreen(
                     onPlugins = onPlugins,
                     onUsers = onUsers,
                     onBackups = onBackups,
+                    onTranscodes = onTranscodes,
+                    showTranscodes = transcodesEnabled,
                     onStopSession = { viewModel.showStopSessionDialog(it) },
                     contentFocusRequester = contentFocusRequester,
                     modifier = Modifier.fillMaxSize(),
@@ -227,6 +241,8 @@ private fun DashboardContent(
     onPlugins: () -> Unit = {},
     onUsers: () -> Unit = {},
     onBackups: () -> Unit = {},
+    onTranscodes: () -> Unit = {},
+    showTranscodes: Boolean = false,
     onStopSession: (SessionInfo) -> Unit = {},
     contentFocusRequester: FocusRequester,
     modifier: Modifier = Modifier,
@@ -334,6 +350,8 @@ private fun DashboardContent(
                 onPlugins = onPlugins,
                 onUsers = onUsers,
                 onBackups = onBackups,
+                showTranscodes = showTranscodes,
+                onTranscodes = onTranscodes,
             )
         }
     }

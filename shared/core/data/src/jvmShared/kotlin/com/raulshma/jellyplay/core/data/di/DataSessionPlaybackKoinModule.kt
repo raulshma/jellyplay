@@ -12,7 +12,15 @@ import com.raulshma.jellyplay.core.data.playback.SleepCountdownClock
 import com.raulshma.jellyplay.core.data.playback.VideoMiniPlayerState
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.session.HomeSession
+import com.raulshma.jellyplay.core.data.repository.JellyPlayEventsRepository
+import com.raulshma.jellyplay.core.data.repository.JellyPlayPreferencesSyncAdapter
+import com.raulshma.jellyplay.core.data.repository.ProfileSyncRepository
 import com.raulshma.jellyplay.core.data.session.SessionCacheRegistry
+import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.stringPreferencesKey
+import java.util.UUID
+import kotlinx.coroutines.flow.first
 import com.raulshma.jellyplay.core.data.session.SessionIdentityProvider
 import com.raulshma.jellyplay.core.data.sync.OfflineSyncComparator
 import com.raulshma.jellyplay.core.data.sync.OfflineSyncManager
@@ -159,5 +167,193 @@ internal val dataSessionPlaybackModule: Module = module {
             appScope = get(DatastoreQualifiers.applicationScope),
             timeSource = get(),
         )
+    }
+
+    // ------------------------------------------------------------------
+    // jellyfin-plugin-jellyplay companion plugin cluster (ADR 0010):
+    // capability probe store, opt-in profile sync engine over the
+    // user_prefs DataStore, live events/messages face.
+    // ------------------------------------------------------------------
+    single { com.raulshma.jellyplay.core.data.session.JellyPlayPluginStatusStore(get(), get()) }
+
+    // The home fetcher's plugin-row leaf transport (JellyPlayHomeSectionSources,
+    // declared in core:network): the wiring twin of NetworkKoinModules'
+    // SeerrHomeSectionSourcesImpl, built HERE because only this module sees
+    // both the plugin transport (JellyPlayPluginApiClient, networkJvmModule)
+    // and the capability probe (the status store above) — the network module
+    // resolves this binding cross-module via getOrNull, so graphs without the
+    // plugin cluster simply fetch no plugin rows. Declared beside the probe
+    // store it gates through; the row policy (TTL, mapping, ordering) stays
+    // in the fetcher.
+    single<com.raulshma.jellyplay.core.network.library.JellyPlayHomeSectionSources> {
+        // getKoin() captured at construction; the client read deferred to the
+        // first home fetch. Resolving LibraryApiClient eagerly here would
+        // cycle with the client impl (networkJvmModule) whose construction
+        // resolves THIS binding via getOrNull.
+        val koin = getKoin()
+        JellyPlayHomeSectionSourcesImpl(
+            apiClient = get(),
+            statusStore = get(),
+            libraryClient = { koin.get() },
+        )
+    }
+
+    single {
+        val dataStore: androidx.datastore.core.DataStore<androidx.datastore.preferences.core.Preferences> =
+            get(com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers.userPreferencesDataStore)
+        JellyPlayPreferencesSyncAdapter(
+            dataStore = dataStore,
+            namespace = "prefs",
+            // Per-device namespaces never sync (see docs/jellyplay-plugin.md).
+            excludedPrefixes = listOf("dream", "screensaver"),
+        )
+    }
+
+    single {
+        val dataStore: androidx.datastore.core.DataStore<androidx.datastore.preferences.core.Preferences> =
+            get(com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers.userPreferencesDataStore)
+        ProfileSyncRepository(
+            apiClient = get(),
+            statusStore = get(),
+            sessionCacheRegistry = get(),
+            adapters = listOf(JellyPlayPreferencesSyncAdapter(dataStore)),
+            deviceProfile = detectDeviceProfile(),
+            deviceIdProvider = {
+                // Reserved jpsync.device.* keys never sync (adapter rule).
+                val key = stringPreferencesKey("jpsync.device.id")
+                val existing = dataStore.data.first()[key]
+                if (existing != null) {
+                    existing
+                } else {
+                    val fresh = UUID.randomUUID().toString()
+                    dataStore.edit { it[key] = fresh }
+                    fresh
+                }
+            },
+            nowMillis = { System.currentTimeMillis() },
+            persistenceScope = get(com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers.applicationScope),
+            loadEnabled = {
+                dataStore.data.first()[booleanPreferencesKey("jpsync.device.sync_enabled")] ?: false
+            },
+            saveEnabled = { value ->
+                dataStore.edit { it[booleanPreferencesKey("jpsync.device.sync_enabled")] = value }
+            },
+        )
+    }
+
+    single {
+        JellyPlayEventsRepository(
+            apiClient = get(),
+            statusStore = get(),
+            scope = get(com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers.applicationScope),
+            deviceName = detectDeviceName(),
+            devicePlatform = detectDeviceProfile(),
+            appVersion = appVersionString(),
+            deviceIdProvider = {
+                val key = stringPreferencesKey("jpsync.device.id")
+                val dataStore: androidx.datastore.core.DataStore<androidx.datastore.preferences.core.Preferences> =
+                    get(com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers.userPreferencesDataStore)
+                val existing = dataStore.data.first()[key]
+                if (existing != null) {
+                    existing
+                } else {
+                    val fresh = UUID.randomUUID().toString()
+                    dataStore.edit { it[key] = fresh }
+                    fresh
+                }
+            },
+        )
+    }
+
+    // The events face's lifecycle owner: starts the SSE stream on the auth-true
+    // edge, stops it on sign-out, maps events onto the user surfaces. Both
+    // surface seams are nullable getOrNull resolutions bridged app-side (the
+    // core:data-cannot-see-core:ui rule, DownloadOutcomeMessenger idiom):
+    // JellyPlayNewMediaNotifier — the Android tray path, registered in the
+    // platform notification module (desktop registers nothing → log-only);
+    // JellyPlayBroadcastMessenger — bridged to the shared UserMessageBus by
+    // both shells' interop modules. Self-starting on the shared application
+    // scope at Koin creation, the same singleton-collector idiom as
+    // HomeSession / SessionCacheRegistry — one wiring covers the Android and
+    // desktop shells.
+    single(createdAtStart = true) {
+        com.raulshma.jellyplay.core.data.session.JellyPlayEventsSessionController(
+            authRepository = get(),
+            eventsRepository = get(),
+            statusStore = get(),
+            broadcastMessenger = getOrNull(),
+            newMediaNotifier = getOrNull(),
+            scope = get(com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers.applicationScope),
+        ).apply { start() }
+    }
+}
+
+/** Desktop shells sync under the "desktop" profile, Android under "phone" (TV shells override later). */
+private fun detectDeviceProfile(): String {
+    val os = System.getProperty("os.name")?.lowercase().orEmpty()
+    return if (os.contains("windows") || os.contains("linux") || os.contains("mac")) "desktop" else "phone"
+}
+
+private fun detectDeviceName(): String =
+    System.getProperty("os.name")?.let { "$it device" } ?: "JellyPlay device"
+
+/** App version from the JVM manifest (best-effort; empty string when unpackaged). */
+private fun appVersionString(): String =
+    JellyPlayEventsRepository::class.java.`package`?.implementationVersion ?: "dev"
+
+/**
+ * The session-aware transport satisfying the home fetcher's
+ * [com.raulshma.jellyplay.core.network.library.JellyPlayHomeSectionSources]
+ * for the PLUGIN_ROW home rows: the row reads forward verbatim onto the
+ * plugin api client (ADR 0010's one-family rule — every `jellyplay/` route
+ * rides `JellyPlayPluginApiClient`), the item resolution forwards onto the
+ * library client's batched ids read, and the two capability gates read ONLY
+ * the probe store's registry — the ONE gating mechanism (ADR 0010 §6).
+ *
+ * Gate semantics: a store still UNKNOWN (never probed this session) runs the
+ * once-per-session capabilities probe first — home is the first feature
+ * surface a plugin user meets, and no other surface probed on its behalf yet
+ * — then reads the registry. UNAVAILABLE is trusted for the session (the
+ * store's own failure semantics; callers re-probe on the next explicit
+ * refresh), so a plugin-absent server pays one probe, never one per home
+ * fetch. Every gate answer is `AVAILABLE && <row feature on>`, byte-for-byte
+ * the docs/jellyplay-plugin.md gating rule.
+ */
+private class JellyPlayHomeSectionSourcesImpl(
+    private val apiClient: com.raulshma.jellyplay.core.network.api.JellyPlayPluginApiClient,
+    private val statusStore: com.raulshma.jellyplay.core.data.session.JellyPlayPluginStatusStore,
+    /**
+     * Deferred [com.raulshma.jellyplay.core.network.api.LibraryApiClient]
+     * read — see the binding's comment: resolving the client eagerly here
+     * would cycle with the client impl that hosts this adapter.
+     */
+    private val libraryClient: () -> com.raulshma.jellyplay.core.network.api.LibraryApiClient,
+) : com.raulshma.jellyplay.core.network.library.JellyPlayHomeSectionSources {
+
+    override suspend fun seasonalRowsEnabled(): Boolean =
+        rowsEnabled(com.raulshma.jellyplay.core.model.JellyPlayPluginFeatures.SeasonalRows)
+
+    override suspend fun customRowsEnabled(): Boolean =
+        rowsEnabled(com.raulshma.jellyplay.core.model.JellyPlayPluginFeatures.CustomRows)
+
+    override suspend fun getSeasonalRow(keyword: String?): Result<com.raulshma.jellyplay.core.network.api.JellyPlayRowResult?> =
+        apiClient.getSeasonalRow(keyword)
+
+    override suspend fun getCustomRowCatalog(): Result<com.raulshma.jellyplay.core.network.api.JellyPlayRowCatalog?> =
+        apiClient.getCustomRowCatalog()
+
+    override suspend fun getCustomRow(title: String): Result<com.raulshma.jellyplay.core.network.api.JellyPlayRowResult?> =
+        apiClient.getCustomRow(title)
+
+    override suspend fun getItemsByIds(ids: List<String>): Result<List<com.raulshma.jellyplay.core.model.MediaItem>> =
+        libraryClient().getItemsByIds(ids)
+
+    /** Probe-when-UNKNOWN, then the registry read — the whole gate. */
+    private suspend fun rowsEnabled(feature: String): Boolean {
+        if (statusStore.status.value == com.raulshma.jellyplay.core.model.JellyPlayPluginStatus.UNKNOWN) {
+            statusStore.refresh()
+        }
+        return statusStore.status.value == com.raulshma.jellyplay.core.model.JellyPlayPluginStatus.AVAILABLE &&
+            feature in statusStore.features.value
     }
 }

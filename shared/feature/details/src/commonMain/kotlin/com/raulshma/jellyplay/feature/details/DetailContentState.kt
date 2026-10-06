@@ -110,6 +110,16 @@ internal data class DetailContentState(
     val downloadPicker: DownloadPickerState = DownloadPickerState(),
     // Book-only extras (BOOK media type): format + TOC cache + marks counts.
     val book: DetailUiState.BookDetailState? = null,
+    // ── jellyfin-plugin-jellyplay companion sections (ADR 0010) ──
+    // Aggregated external ratings (mdblist) chips for the item's IMDb id.
+    // Empty = section absent (probe failure / no data — never an error).
+    val pluginRatings: List<com.raulshma.jellyplay.core.network.api.JellyPlayRatingEntry> = emptyList(),
+    /** Server-scored "More like this", hydrated into displayable items.
+     *  Empty = section absent; the stock relatedItems row is unaffected. */
+    val pluginSimilarItems: List<MediaItem> = emptyList(),
+    /** Anime filler/mixed/recap badges by episode number, rendered on the
+     *  seasons section's episode rows. Empty = no badges. */
+    val animeMarkers: Map<Int, AnimeBadgeKind> = emptyMap(),
 )
 
 /**

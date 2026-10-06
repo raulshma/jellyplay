@@ -549,7 +549,9 @@ internal fun HomeContentList(
                 //
                 // Seerr-sourced custom discover rows bypass the chassis
                 // entirely — they carry TMDB cards with request actions, not
-                // server MediaItems.
+                // server MediaItems. The plugin-sourced rows (PLUGIN_ROW)
+                // bypass it the same way — a mixed list of resolved media
+                // cards and fallback tiles neither poster arm can render.
                 val armContext = HomeRowArmContext(
                     section = section,
                     title = sectionTitle,
@@ -566,6 +568,8 @@ internal fun HomeContentList(
                 )
                 if (section.seerrItems.isNotEmpty()) {
                     HomeSectionSeerrRow(ctx = armContext, state = state, callbacks = callbacks, renderInputs = renderInputs)
+                } else if (section.jellyPlayRowEntries.isNotEmpty()) {
+                    HomeSectionJellyPlayRow(ctx = armContext, state = state, callbacks = callbacks, renderInputs = renderInputs)
                 } else when (homeRowChassis(section, offlineContent != null)) {
                     is HomeRowChassis.OfflinePoster -> HomeSectionOfflinePosterRow(ctx = armContext, state = state, callbacks = callbacks, renderInputs = renderInputs)
                     is HomeRowChassis.OfflineWide -> HomeSectionOfflineWideRow(ctx = armContext, state = state, callbacks = callbacks, renderInputs = renderInputs)
@@ -716,6 +720,50 @@ private fun HomeSectionSeerrRow(
             onSeerrRequest = callbacks.onSeerrRequest,
         )
     }
+}
+
+/**
+ * Plugin-sourced row (PLUGIN_ROW — the companion plugin's seasonal row):
+ * resolved entries as native poster cards, unmatched entries as compact
+ * fallback tiles, dispatched here — ahead of the row chassis — for the same
+ * reason the Seerr arm is: no chassis arm can render the mixed list. Clicks
+ * ride the standard poster-row policy (plugin rows are not resume sections —
+ * [posterRowClick] falls through to the plain click) and the row is
+ * edge-refreshable like the other single-row types.
+ */
+@Composable
+private fun HomeSectionJellyPlayRow(
+    ctx: HomeRowArmContext,
+    state: HomeContentState,
+    callbacks: HomeContentCallbacks,
+    renderInputs: HomeRenderInputs,
+) {
+    val rowItemClick: (MediaItem) -> Unit = remember(
+        ctx.section.type, state.continueWatchingClickBehavior, renderInputs.mediaOnItemClick,
+    ) {
+        posterRowClick(
+            sectionType = ctx.section.type,
+            behavior = state.continueWatchingClickBehavior,
+            toMediaItem = { it },
+            sinks = ctx.resumeSinks,
+            onPlainClick = renderInputs.mediaOnItemClick,
+        )
+    }
+    JellyPlayHomeRow(
+        title = ctx.title,
+        entries = ctx.section.jellyPlayRowEntries,
+        imageUrlBuilder = renderInputs.mediaImageUrlBuilder,
+        fallbackImageUrlBuilder = renderInputs.fallbackImageUrlBuilder,
+        onItemClick = rowItemClick,
+        onPlayClick = renderInputs.mediaOnPlayClick,
+        modifier = ctx.modifier,
+        focusRequester = ctx.focusRequester,
+        onRowFocused = ctx.onRowFocused,
+        clippingEnabled = state.experimentalCardClippingEnabled,
+        onSectionLongClick = ctx.onSectionLongClick,
+        onFocusedItemChange = callbacks.onFocusedMediaItem,
+        edgeRefresh = ctx.edgeRefresh,
+    )
 }
 
 /** Offline-derived poster row: offline originals re-resolved by id, resume-row policy for Continue Reading. */

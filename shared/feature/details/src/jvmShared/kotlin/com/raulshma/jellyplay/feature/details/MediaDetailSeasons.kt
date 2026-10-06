@@ -108,6 +108,9 @@ import com.raulshma.jellyplay.feature.details.generated.resources.detail_section
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_spoiler
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_time_left_format
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_watched_badge
+import com.raulshma.jellyplay.feature.details.generated.resources.jellyplay_det_filler_badge
+import com.raulshma.jellyplay.feature.details.generated.resources.jellyplay_det_mixed_badge
+import com.raulshma.jellyplay.feature.details.generated.resources.jellyplay_det_recap_badge
 import org.jetbrains.compose.resources.stringResource
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalSharedTransitionApi::class)
@@ -134,6 +137,13 @@ internal fun SeasonsSection(
     getImageUrl: (String) -> String,
     /** Season-tab, episode-list and mark callbacks (see [SeasonsSectionCallbacks] for the pin/select split). */
     callbacks: SeasonsSectionCallbacks,
+    /**
+     * The jellyfin-plugin-jellyplay anime markers for this series
+     * (episodeNumber → badge kind, ADR 0010). Empty = no badges anywhere
+     * (plugin absent / probe failed / series carries no markers — silent
+     * absence by contract).
+     */
+    animeMarkers: Map<Int, AnimeBadgeKind> = emptyMap(),
 ) {
     // ── DEFERRED FOR LOCAL ORIGIN (decided in [SeasonsPresentation.from]) ────
     // The following affordances remain ONLINE-ONLY and are deliberately NOT
@@ -451,6 +461,7 @@ internal fun SeasonsSection(
                                     isDownloaded = presentation.downloadedEpisodeIds?.contains(episode.id) == true,
                                     onDeleteClick = { callbacks.onEpisodeDeleteClick(episode) },
                                     localImagePath = presentation.episodeLocalImagePaths[episode.id],
+                                    animeBadge = animeMarkers[episode.episodeNumber ?: episode.indexNumber],
                                     sharedThumbnailModifier = episodeThumbSharedModifier(
                                         episodeId = episode.id,
                                         sharedTransitionScope = sharedTransitionScope,
@@ -483,6 +494,7 @@ internal fun SeasonsSection(
                                     isDownloaded = presentation.downloadedEpisodeIds?.contains(episode.id) == true,
                                     onDeleteClick = { callbacks.onEpisodeDeleteClick(episode) },
                                     localImagePath = presentation.episodeLocalImagePaths[episode.id],
+                                    animeBadge = animeMarkers[episode.episodeNumber ?: episode.indexNumber],
                                     sharedThumbnailModifier = episodeThumbSharedModifier(
                                         episodeId = episode.id,
                                         sharedTransitionScope = sharedTransitionScope,
@@ -556,6 +568,8 @@ internal fun EpisodeCard(
     onDeleteClick: () -> Unit = {},
     /** On-disk thumbnail path; preferred over [getImageUrl] when non-null. */
     localImagePath: String? = null,
+    /** Plugin anime badge for this episode number (null = none — ADR 0010). */
+    animeBadge: AnimeBadgeKind? = null,
 ) {
     // Build the episode image URL once per episode instead of 3× per recomposition.
     // Prefer the on-disk local thumbnail (a downloaded episode's saved Primary
@@ -726,6 +740,17 @@ internal fun EpisodeCard(
                 )
             }
 
+            // Plugin anime badge — bottom-end, mirrored against the watched
+            // tag (a filler episode can be watched too; the two never collide).
+            animeBadge?.let { kind ->
+                AnimeEpisodeBadge(
+                    kind = kind,
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(start = 6.dp, bottom = 8.dp),
+                )
+            }
+
             // Per-episode delete affordance — only for a downloaded episode
             // (gated by `isDownloaded`, which the host sets from the downloaded-
             // episode-id set or the local origin). Online episodes never show
@@ -817,6 +842,8 @@ private fun CompactEpisodeRow(
     isDownloaded: Boolean = false,
     onDeleteClick: () -> Unit = {},
     localImagePath: String? = null,
+    /** Plugin anime badge for this episode number (null = none — ADR 0010). */
+    animeBadge: AnimeBadgeKind? = null,
 ) {
     val cardInteractionSource = remember { MutableInteractionSource() }
     val isCardPressed by cardInteractionSource.collectIsPressedAsState()
@@ -939,6 +966,17 @@ private fun CompactEpisodeRow(
                     label = stringResource(Res.string.detail_watched_badge),
                     modifier = Modifier
                         .align(Alignment.BottomStart)
+                        .padding(start = 4.dp, bottom = 6.dp),
+                )
+            }
+
+            // Plugin anime badge — bottom-end, mirrored against the watched
+            // tag (see EpisodeCard).
+            animeBadge?.let { kind ->
+                AnimeEpisodeBadge(
+                    kind = kind,
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
                         .padding(start = 4.dp, bottom = 6.dp),
                 )
             }
@@ -1271,6 +1309,43 @@ private fun VirtualEpisodeBadge(episode: MediaItem, modifier: Modifier = Modifie
         MissingEpisodeBadge.Missing -> stringResource(Res.string.detail_missing_badge)
     }
     MissingEpisodeTag(label = label, modifier = modifier)
+}
+
+/**
+ * The jellyfin-plugin-jellyplay anime badge (filler / mixed / recap) for an
+ * episode row — a compact tonal chip mirroring [EpisodeWatchedTag]'s chrome
+ * minus the check icon, in the secondary container so it never reads as a
+ * watch-state. Rendered only when the plugin's marker probe returned a
+ * badge-carrying kind for the episode number (ADR 0010: silent absence).
+ */
+@Composable
+internal fun AnimeEpisodeBadge(
+    kind: AnimeBadgeKind,
+    modifier: Modifier = Modifier,
+) {
+    val label = stringResource(
+        when (kind) {
+            AnimeBadgeKind.FILLER -> Res.string.jellyplay_det_filler_badge
+            AnimeBadgeKind.MIXED -> Res.string.jellyplay_det_mixed_badge
+            AnimeBadgeKind.RECAP -> Res.string.jellyplay_det_recap_badge
+        },
+    )
+    Surface(
+        modifier = modifier,
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+        shape = ShapeCache.smooth12,
+        shadowElevation = 2.dp,
+        tonalElevation = 1.dp,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+        )
+    }
 }
 // endregion
 

@@ -291,6 +291,9 @@ class HomeRowChassisTest {
             HomeSectionType.LATEST_MEDIA,
             HomeSectionType.PINNED,
             HomeSectionType.DISCOVER,
+            // The plugin rows (companion plugin, ADR 0010) ride the fetcher's
+            // single-row PLUGIN_ROW arm like the pins do.
+            HomeSectionType.PLUGIN_ROW,
         )
         for (type in HomeSectionType.entries) {
             val armed = isEdgeRefreshableSection(section(type))

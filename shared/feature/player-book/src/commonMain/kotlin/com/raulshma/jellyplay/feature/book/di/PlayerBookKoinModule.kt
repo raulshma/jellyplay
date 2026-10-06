@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.book.di
 
+import com.raulshma.jellyplay.core.data.repository.BookmarksSyncRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.repository.ReaderAnnotationsRepository
@@ -37,6 +38,7 @@ val playerBookModule: Module = module {
             playbackIdentity = get(),
             preferences = ReaderPreferences(store = get(), scope = get(DatastoreQualifiers.applicationScope)),
             annotationsRepository = get(),
+            bookmarksSyncRepository = get(),
             contentResolver = get(),
             documentOpener = get(),
             pdfOutlineParser = get(),

@@ -283,6 +283,15 @@ fun androidAppInteropAdaptersModule(application: Application): Module = module {
     single<DownloadOutcomeMessenger> {
         AppDownloadOutcomeMessenger(userMessageBus = get(), application = application)
     }
+    // The companion-plugin's live broadcast events (ADR 0010) surface as
+    // one-shot user messages over the same core bus (the text is the
+    // controller's title/body fold — server-supplied, UiText.Raw path).
+    single<com.raulshma.jellyplay.core.data.session.JellyPlayBroadcastMessenger> {
+        val bus: UserMessageBus = get()
+        com.raulshma.jellyplay.core.data.session.JellyPlayBroadcastMessenger { text ->
+            bus.info(text)
+        }
+    }
 }
 
 /** Bridges the shared music module's [MusicMessageBus] seam to the core bus. */

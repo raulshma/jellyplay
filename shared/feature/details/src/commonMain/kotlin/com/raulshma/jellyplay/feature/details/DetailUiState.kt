@@ -102,6 +102,21 @@ data class DetailUiState(
     /** True when the resolved item has an OUTRO (credits) media segment. Paired
      *  with [hasIntroSegment] to drive the detail-side skip chip. Remote-only. */
     val hasCreditSegment: Boolean = false,
+    // ── jellyfin-plugin-jellyplay companion sections (ADR 0010) ──
+    // All three reset to empty on navigation/refresh (the clearedForReload
+    // defaults) and stay empty on ANY plugin failure — silent absence, never
+    // an error surface (the plugin contract's gating rule).
+    /** Aggregated external ratings (mdblist) for the item's IMDb id, as the
+     *  server sent them (source + score entries). Empty = section absent. */
+    val pluginRatings: List<com.raulshma.jellyplay.core.network.api.JellyPlayRatingEntry> = emptyList(),
+    /** Server-scored "More like this" ([JellyPlayPluginFeatures.Recommendations]),
+     *  hydrated into displayable items the shared poster row renders. Empty =
+     *  section absent (the stock relatedItems row is unaffected). */
+    val pluginSimilarItems: List<MediaItem> = emptyList(),
+    /** Anime filler/mixed/recap badges for the current series' episode numbers
+     *  ([JellyPlayPluginFeatures.AnimeMarkers]). Rendered on episode rows in
+     *  the seasons section; empty = no badges anywhere. */
+    val animeMarkers: Map<Int, AnimeBadgeKind> = emptyMap(),
     // Smart play (continue-watching / next-up computed target)
     val smartPlayTarget: SmartPlayTarget? = null,
     // Stream selection (audio/subtitle indices persisted across sessions)

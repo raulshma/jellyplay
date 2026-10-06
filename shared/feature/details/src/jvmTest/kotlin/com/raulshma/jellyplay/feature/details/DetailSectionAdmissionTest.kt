@@ -78,6 +78,8 @@ class DetailSectionAdmissionTest {
         hasSpecialFeatures: Boolean = true,
         hasTmdbReviews: Boolean = true,
         hasAttachedDownload: Boolean = false,
+        hasPluginRatings: Boolean = false,
+        hasPluginSimilar: Boolean = false,
     ): List<DetailSectionKind> = DetailSectionAdmission(
         mediaType = mediaType,
         isLocalOrigin = isLocalOrigin,
@@ -96,6 +98,8 @@ class DetailSectionAdmissionTest {
         hasSpecialFeatures = hasSpecialFeatures,
         hasTmdbReviews = hasTmdbReviews,
         hasAttachedDownload = hasAttachedDownload,
+        hasPluginRatings = hasPluginRatings,
+        hasPluginSimilar = hasPluginSimilar,
     ).admit()
 
     private fun List<DetailSectionKind>.indices(): List<Int> = map { it.delayIndex }
@@ -478,6 +482,7 @@ class DetailSectionAdmissionTest {
             DetailSectionKind.BOOK_READING_CARD to 2,
             DetailSectionKind.MEDIA_INFO to 2,
             DetailSectionKind.OVERVIEW to 3,
+            DetailSectionKind.PLUGIN_RATINGS to 3,
             DetailSectionKind.CHAPTERS_OR_TOC to 4,
             DetailSectionKind.ALBUM_TRACKS to 5,
             DetailSectionKind.UP_NEXT to 6,
@@ -486,6 +491,7 @@ class DetailSectionAdmissionTest {
             DetailSectionKind.CAST to 8,
             DetailSectionKind.RELATED_VIDEOS to 9,
             DetailSectionKind.MORE_LIKE_THIS to 10,
+            DetailSectionKind.JELLYPLAY_SIMILAR to 10,
             DetailSectionKind.SEERR_RECOMMENDATIONS to 11,
             DetailSectionKind.SEERR_SIMILAR to 12,
             DetailSectionKind.SPECIAL_FEATURES to 13,
@@ -588,6 +594,36 @@ class DetailSectionAdmissionTest {
                 "origin $origin",
             )
         }
+    }
+
+    // ── JellyPlay plugin sections (ADR 0010) ────────────────────────────
+
+    @Test
+    fun pluginSections_admitOnlyWhenTheirContentArrived() {
+        // Silent absence: no plugin data → neither section in the body at all.
+        val bare = admission(MediaType.MOVIE)
+        assertFalse(bare.contains(DetailSectionKind.PLUGIN_RATINGS))
+        assertFalse(bare.contains(DetailSectionKind.JELLYPLAY_SIMILAR))
+
+        // Ratings present → admitted right after OVERVIEW (same slot 3).
+        val withRatings = admission(MediaType.MOVIE, hasPluginRatings = true)
+        assertTrue(withRatings.contains(DetailSectionKind.PLUGIN_RATINGS))
+        val ratingsIdx = withRatings.indexOf(DetailSectionKind.PLUGIN_RATINGS)
+        val overviewIdx = withRatings.indexOf(DetailSectionKind.OVERVIEW)
+        assertEquals(overviewIdx + 1, ratingsIdx, "ratings row follows the overview")
+        assertEquals(3, DetailSectionKind.PLUGIN_RATINGS.delayIndex)
+
+        // Scored similar present → admitted right after MORE_LIKE_THIS (same slot 10).
+        val withSimilar = admission(MediaType.MOVIE, hasPluginSimilar = true)
+        assertTrue(withSimilar.contains(DetailSectionKind.JELLYPLAY_SIMILAR))
+        val similarIdx = withSimilar.indexOf(DetailSectionKind.JELLYPLAY_SIMILAR)
+        val moreLikeIdx = withSimilar.indexOf(DetailSectionKind.MORE_LIKE_THIS)
+        assertEquals(moreLikeIdx + 1, similarIdx, "plugin similar follows the stock row")
+        assertEquals(10, DetailSectionKind.JELLYPLAY_SIMILAR.delayIndex)
+
+        // The two are independent.
+        assertFalse(withRatings.contains(DetailSectionKind.JELLYPLAY_SIMILAR))
+        assertFalse(withSimilar.contains(DetailSectionKind.PLUGIN_RATINGS))
     }
 }
 

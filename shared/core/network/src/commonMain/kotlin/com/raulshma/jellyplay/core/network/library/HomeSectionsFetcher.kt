@@ -11,6 +11,7 @@ import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionQuery
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.HomeSectionsResult
+import com.raulshma.jellyplay.core.model.JellyPlayRowEntry
 import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
@@ -25,6 +26,8 @@ import com.raulshma.jellyplay.core.model.descriptor
 import com.raulshma.jellyplay.core.model.monotonicNowMillis
 import com.raulshma.jellyplay.core.model.seerr.SeerrDiscoverParams
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
+import com.raulshma.jellyplay.core.network.api.JellyPlayRowItem
+import com.raulshma.jellyplay.core.network.api.JellyPlayRowResult
 import kotlin.concurrent.Volatile
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
@@ -96,6 +99,59 @@ public interface SeerrHomeSectionSources {
 }
 
 /**
+ * The plugin-side sibling of [SeerrHomeSectionSources]: the two jellyplay row
+ * reads the PLUGIN_ROW home rows need (the transport twin of
+ * `JellyPlayPluginApiClient.getSeasonalRow/getCustomRow`), the plugin's
+ * local-library matches resolved to full [MediaItem]s, and the capability
+ * gates. Signatures deliberately carry the raw wire payload — the port stays
+ * a dumb transport; payload→[HomeSection] mapping, TTL memoisation and the
+ * resolve-then-map order stay with the fetcher. `LibraryApiClientImpl` cannot
+ * satisfy this one for free (the probe lives in the data layer's
+ * `JellyPlayPluginStatusStore`), so the Koin construction owner wires a
+ * dedicated adapter beside the client — the exact shape of the Seerr port's
+ * `SeerrHomeSectionSourcesImpl`.
+ *
+ * The gates are SUSPEND (unlike the Seerr port's val probe) because the
+ * plugin's probe is a network handshake, not a preference read: the adapter
+ * runs the once-per-session capabilities probe when the store still reports
+ * UNKNOWN, then reads the registry — gating exactly on
+ * `AVAILABLE && JellyPlayPluginFeatures.X` per ADR 0010 (never on per-endpoint
+ * 404s; nothing here consumes raw probe results). An UNAVAILABLE store is
+ * trusted for the session (the store's own semantics), so a plugin-absent
+ * server costs at most one probe per session, never a per-refresh round-trip.
+ */
+public interface JellyPlayHomeSectionSources {
+
+    /** Capability gate for the seasonal row (probe + `seasonal-rows` feature). */
+    suspend fun seasonalRowsEnabled(): Boolean
+
+    /**
+     * Capability gate for admin-defined custom rows (probe + `custom-rows`
+     * feature). Unused by the batch home path in v1 — see
+     * [HomeSectionsFetcher.fetchPluginCustomRow] for the one blocker.
+     */
+    suspend fun customRowsEnabled(): Boolean
+
+    /** The plugin's seasonal row; null = unconfigured this season (plugin 404). */
+    suspend fun getSeasonalRow(keyword: String?): Result<JellyPlayRowResult?>
+
+    /** The admin-defined titled row; null = no such row (plugin 404). */
+    suspend fun getCustomRow(title: String): Result<JellyPlayRowResult?>
+
+    /** The admin-defined row catalog (the enumerate capability — titles in plugin config order); null = unavailable. */
+    suspend fun getCustomRowCatalog(): Result<com.raulshma.jellyplay.core.network.api.JellyPlayRowCatalog?>
+
+    /**
+     * The batched library read resolving a row entry's `localItemId` to the
+     * full [MediaItem] the native home cards render from (`/Items?Ids=…`,
+     * the same projection the home section sub-calls use, so resolved entries
+     * carry the per-item UserData the cards render). Failures degrade to
+     * fallback tiles, never a dropped row.
+     */
+    suspend fun getItemsByIds(ids: List<String>): Result<List<MediaItem>>
+}
+
+/**
  * The fetch half of the home feed, extracted from the hand-copied client
  * choreography (`LibraryApiClientImpl.getHomeSections` JVM-side)
  * into ONE commonMain orchestrator. It turns a [HomeSectionQuery] into
@@ -151,6 +207,13 @@ public interface SeerrHomeSectionSources {
  * null source behaves exactly like [SeerrHomeSectionSources.seerrAvailable]
  * == false — zero Seerr port calls, zero Seerr rows.
  *
+ * [jellyPlaySources] is nullable with a default for the same reason (and
+ * because the production construction owner — the network module — cannot see
+ * the data-layer probe the adapter reads, so the adapter arrives through a
+ * cross-module `getOrNull` that is null in graphs without the plugin cluster):
+ * a null source behaves exactly like a gate reading false — zero plugin port
+ * calls, zero plugin rows.
+ *
  * Construction scope (ADR-0008): the production constructor caller is
  * `LibraryApiClientImpl` (which also satisfies [HomeSectionSources] for free
  * and adapts the [HomeSectionsCachePort] verbs onto this class); the other
@@ -172,6 +235,13 @@ public class HomeSectionsFetcher(
      * exact value the feature produced.
      */
     private val today: () -> String,
+    /**
+     * The jellyfin-plugin-jellyplay row transport (seasonal today, admin
+     * custom rows plumbed beside it) — nullable-with-default, see the class
+     * KDoc. Null (or a gate reading false) means zero plugin port calls and
+     * zero PLUGIN_ROW sections.
+     */
+    private val jellyPlaySources: JellyPlayHomeSectionSources? = null,
 ) {
 
     // ── Home hot-path sub-call caches ──────────────────────────────────────
@@ -240,6 +310,20 @@ public class HomeSectionsFetcher(
     private val seerrRowsGate = DiscoverRowsTtlGate(HomeFreshness.DISCOVER_TTL_MS)
 
     /**
+     * Plugin rows (PLUGIN_ROW — the seasonal row today). Identity-scoped like
+     * every entry (a user/server switch misses by construction) with the
+     * sibling sub-call TTL ([HomeFreshness.NETWORK_SUBCALL_TTL_MS]): the row
+     * carries resolved MediaItems with per-item UserData, so it rides the
+     * same 2-minute memo the latest/similar rows ride and the same
+     * user-data-write invalidation ([invalidateCaches]). Session-scoped by
+     * construction — the fetcher lives as long as the client single. The
+     * cached VALUE is the mapped row (title + resolved entries), so a cache
+     * hit costs zero port calls and the plugin's row title survives the
+     * memo.
+     */
+    private val homePluginRowCache = TtlCache<PluginRowValue>(ttlMs = HomeFreshness.NETWORK_SUBCALL_TTL_MS)
+
+    /**
      * Drops both sub-call caches so the next home fetch re-hits the server for the
      * latest/similar rows. The rows carry per-item UserData (played badge,
      * favorite heart, resume bar), so a watched/favorite/progress write must
@@ -250,6 +334,10 @@ public class HomeSectionsFetcher(
         homeLatestMediaCache.clear()
         homeSimilarCache.clear()
         homeDiscoverRowCache.clear()
+        // Plugin rows carry resolved MediaItems with per-item UserData, so a
+        // watched/favorite write must not let this memo serve the pre-write
+        // row either.
+        homePluginRowCache.clear()
     }
 
     /**
@@ -348,6 +436,16 @@ public class HomeSectionsFetcher(
             }
         }
 
+        // Plugin rows (the seasonal row today): fetched ALWAYS regardless of
+        // enabledSections (PLUGIN_ROW is not user-configurable — the
+        // capability registry is its gate), concurrently with everything
+        // else. A null transport or a gate reading false resolves locally
+        // with no port calls — the row is silently absent, never an error.
+        val pluginRowsDeferred = async {
+            fetchSeasonalPluginRow(force = force, identity = identity) +
+                fetchTitledPluginRows(force = force, identity = identity)
+        }
+
         val continueWatchingResult = continueWatchingDeferred.await()
         val continueReadingResult = continueReadingDeferred.await()
         val nextUpResult = nextUpDeferred.await()
@@ -422,6 +520,7 @@ public class HomeSectionsFetcher(
                 suggestions = suggestions,
                 pinnedSections = pinnedDeferred.await(),
                 discoverSections = discoverDeferred.await(),
+                pluginRowSections = pluginRowsDeferred.await(),
             ),
         )
         if (output.result.sections.isEmpty() && output.firstError != null) {
@@ -475,6 +574,10 @@ public class HomeSectionsFetcher(
      *  - DISCOVER (JELLYFIN rows only): the row's memoised query, behind the
      *    same dice-roll generation guard ([observedGeneration]).
      *  - PINNED: the pin's item resolution, same routing table as the batch.
+     *  - PLUGIN_ROW: the same plugin leaf read the batch runs (seasonal under
+     *    the `seasonal` instance id, a titled row under `custom_<title>`),
+     *    rebuilt through the shared section builder so only the payload
+     *    moves.
      *
      * RECOMMENDATIONS and Seerr-sourced DISCOVER rows are deliberately NOT
      * refreshable here (the recommendations seed chain and the Seerr group
@@ -598,6 +701,32 @@ public class HomeSectionsFetcher(
                     HomeSectionType.PINNED.descriptor.idFor(it.id) == section.id
                 } ?: error("No pinned section configured for ${section.id}")
                 refreshedOrNull(section, getPinnedSectionItems(pin))
+            }
+
+            HomeSectionType.PLUGIN_ROW -> {
+                // The plugin row's single-row refetch (edge pull): the same
+                // leaf read the batch path runs, forced (the gesture means
+                // "fetch fresh") and rebuilt through the SAME builder, so the
+                // row id stays stable and only the payload moves. An emptied
+                // source (plugin row removed mid-session) returns null — the
+                // row drops, matching the batch's zero-items policy.
+                val instanceId = HomeSectionType.PLUGIN_ROW.descriptor.instanceIdFor(section.id)
+                    ?: error("Plugin row ${section.id} carries no instance id")
+                val rowIdentity = identity
+                if (instanceId.startsWith("custom_")) {
+                    fetchPluginCustomRow(
+                        title = instanceId.removePrefix("custom_"),
+                        force = force,
+                        identity = rowIdentity,
+                    )
+                } else {
+                    if (jellyPlaySources == null || !jellyPlaySources.seasonalRowsEnabled()) null
+                    else pluginRowCacheThrough(
+                        cacheKey = "jellyplay_seasonal",
+                        force = force,
+                        identity = rowIdentity,
+                    ) { jellyPlaySources.getSeasonalRow(keyword = null) }
+                }
             }
 
             // Never constructed by the network (FAVORITES, LIVE_TV, DOWNLOADED)
@@ -788,6 +917,143 @@ public class HomeSectionsFetcher(
         )
     }
 
+    // ── Plugin rows (PLUGIN_ROW — the companion server plugin, ADR 0010) ────
+    //
+    // The WHAT gate is the capability registry (the port's suspend gates —
+    // UNKNOWN probes once per session, UNAVAILABLE is trusted), the TTL memo
+    // is [homePluginRowCache], and failures degrade to a dropped row (the
+    // pinned-section policy: a curated plugin row must never fail home, and a
+    // plugin 404 legitimately means "no row this season"). The cached value
+    // is the MAPPED row (title + resolved entries), so a hit costs zero port
+    // calls.
+
+    /**
+     * The seasonal row for the batch home fetch: gate → TTL memo →
+     * [pluginRowCacheThrough] under the `seasonal` instance id. Empty list =
+     * gated off / unconfigured / empty payload / failed — silently absent,
+     * never an error (the assembler emits nothing for it).
+     */
+    private suspend fun fetchSeasonalPluginRow(force: Boolean, identity: CacheIdentity): List<HomeSection> {
+        if (jellyPlaySources == null || !jellyPlaySources.seasonalRowsEnabled()) return emptyList()
+        val section = pluginRowCacheThrough(
+            cacheKey = "jellyplay_seasonal",
+            force = force,
+            identity = identity,
+        ) { jellyPlaySources.getSeasonalRow(keyword = null) }
+        return listOfNotNull(section)
+    }
+
+    /**
+     * The admin-defined titled custom rows, in the plugin's configured order:
+     * the enumerate endpoint (`GET jellyplay/rows`) lists the titles, each is
+     * mapped through [fetchPluginCustomRow] (same gate, same TTL memo, same
+     * batched id resolution). A catalog failure or empty catalog = no rows,
+     * silently absent. Public for the leaf-test suite.
+     */
+    public suspend fun fetchTitledPluginRows(
+        force: Boolean = false,
+        identity: CacheIdentity? = null,
+    ): List<HomeSection> {
+        if (jellyPlaySources == null || !jellyPlaySources.customRowsEnabled()) return emptyList()
+        val resolvedIdentity = identity ?: cacheIdentity() ?: CacheIdentity.UNKNOWN
+        val catalog = runCatchingRethrowingCancellation {
+            jellyPlaySources.getCustomRowCatalog().getOrNull()
+        }.getOrNull() ?: return emptyList()
+        return catalog.rows.mapNotNull { definition ->
+            fetchPluginCustomRow(title = definition.title, force = force, identity = resolvedIdentity)
+        }
+    }
+
+    /**
+     * ONE admin-defined titled custom row, keyed by its exact title — mapped
+     * through the enumerate catalog by [fetchTitledPluginRows] for the batch
+     * home path; also public for direct single-row consumers (deep links).
+     */
+    public suspend fun fetchPluginCustomRow(
+        title: String,
+        force: Boolean = false,
+        identity: CacheIdentity? = null,
+    ): HomeSection? {
+        if (jellyPlaySources == null || !jellyPlaySources.customRowsEnabled()) return null
+        return pluginRowCacheThrough(
+            cacheKey = "jellyplay_custom_$title",
+            force = force,
+            identity = identity ?: cacheIdentity() ?: CacheIdentity.UNKNOWN,
+        ) { jellyPlaySources.getCustomRow(title = title) }
+    }
+
+    /**
+     * The one cache-through + section-builder shape both plugin row reads
+     * share: a miss fetches the raw payload, resolves every `localItemId`
+     * through one batched [JellyPlayHomeSectionSources.getItemsByIds] call,
+     * and maps to the PLUGIN_ROW [HomeSection] under [cacheKey]'s instance
+     * id. A null payload (plugin 404 — no such row), an empty item list, or a
+     * failed read yields null (no section); a resolution failure degrades the
+     * affected entries to fallback tiles instead of dropping the row.
+     */
+    private suspend fun pluginRowCacheThrough(
+        cacheKey: String,
+        force: Boolean,
+        identity: CacheIdentity,
+        fetch: suspend () -> Result<JellyPlayRowResult?>,
+    ): HomeSection? {
+        val value = homePluginRowCache.cacheThrough(identity, cacheKey, force = force) {
+            // A failed plugin read is a dropped row, not a fetch failure —
+            // normalize to an empty success so the memo policy (cache-through,
+            // drop-empty) stays the pinned-section one.
+            val payload = runCatchingRethrowingCancellation { fetch().getOrNull() }
+            Result.success(payload.getOrNull()?.let { row ->
+                PluginRowValue(
+                    title = row.title,
+                    entries = resolvePluginRowEntries(row.items),
+                )
+            } ?: PluginRowValue.EMPTY)
+        }.getOrDefault(PluginRowValue.EMPTY)
+        if (value.entries.isEmpty()) return null
+        val instanceId = cacheKey.removePrefix("jellyplay_")
+        return HomeSection(
+            id = HomeSectionType.PLUGIN_ROW.descriptor.idFor(instanceId),
+            // The plugin's row title is authoritative (it names the curated
+            // list, e.g. a Letterboxd collection); the descriptor's
+            // displayName is only the degenerate fallback.
+            title = value.title.ifBlank { HomeSectionType.PLUGIN_ROW.descriptor.displayName },
+            type = HomeSectionType.PLUGIN_ROW,
+            items = emptyList(),
+            jellyPlayRowEntries = value.entries,
+        )
+    }
+
+    /**
+     * Maps the raw wire items to [JellyPlayRowEntry]s in payload order,
+     * resolving the entries that carry a `localItemId` through ONE batched
+     * ids read. Per-entry resolution failure (or an id the server no longer
+     * knows) degrades that entry to a fallback tile — the row's shape is the
+     * plugin's curation order, preserved end-to-end.
+     */
+    private suspend fun resolvePluginRowEntries(items: List<JellyPlayRowItem>): List<JellyPlayRowEntry> {
+        if (items.isEmpty()) return emptyList()
+        val localIds = items.mapNotNull { it.localItemId }.distinct()
+        val resolved: Map<String, MediaItem> =
+            if (localIds.isEmpty()) {
+                emptyMap()
+            } else {
+                // Degrade, not fail: a lost ids read must not drop the row —
+                // every entry falls back to its title+year tile (the same
+                // policy as the classic-latest ids read in the client impl).
+                jellyPlaySources?.getItemsByIds(localIds)
+                    ?.getOrDefault(emptyList())
+                    .orEmpty()
+                    .associateBy { it.id }
+            }
+        return items.map { item ->
+            JellyPlayRowEntry(
+                title = item.title,
+                year = item.year,
+                localItem = item.localItemId?.let(resolved::get),
+            )
+        }
+    }
+
     /**
      * Home-path wrapper around [HomeSectionSources.getLatestMedia] that
      * consults [homeLatestMediaCache] first. Only the home path uses this —
@@ -920,6 +1186,21 @@ public class HomeSectionsFetcher(
             .getOrNull()?.items.orEmpty()
         PinnedSectionType.STUDIO -> sources.getItemsByStudio(pinned.sourceId, mediaTypes = null, startIndex = 0, limit = 20)
             .getOrNull()?.items.orEmpty()
+    }
+}
+
+/**
+ * One mapped plugin row as the [homePluginRowCache] memo value: the plugin's
+ * row title (authoritative header; [JellyPlayRowResult.title]) plus the
+ * local-library-resolved entries. [EMPTY] is the "no row" memo (a null
+ * payload or an all-dropped item list) — the section builder drops it.
+ */
+private data class PluginRowValue(
+    val title: String,
+    val entries: List<JellyPlayRowEntry>,
+) {
+    companion object {
+        val EMPTY = PluginRowValue(title = "", entries = emptyList())
     }
 }
 

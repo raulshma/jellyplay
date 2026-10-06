@@ -40,10 +40,52 @@ data class AdminDashboardState(
 
 class AdminDashboardViewModel(
     private val adminRepository: AdminRepository,
+    /**
+     * The JellyPlay companion-plugin seam (ADR 0010), nullable-with-default
+     * (SettingsViewModel pattern) so the direct-construction test harnesses
+     * compile. Backs the Quick Actions "Transcodes" tile's gate — the tile is
+     * offered only when the probe reports AVAILABLE **and** the `transcodes`
+     * feature key is present; a null store (or a stock server) never shows it.
+     */
+    private val jellyPlayStatusStore: com.raulshma.jellyplay.core.data.session.JellyPlayPluginStatusStore? = null,
 ) : JellyPlayViewModel() {
 
     private val _uiState = stateFlow(AdminDashboardState())
     val uiState: StateFlow<AdminDashboardState> = _uiState.flow
+
+    /**
+     * Whether the dashboard may offer the companion-plugin transcodes monitor:
+     * plugin AVAILABLE + [com.raulshma.jellyplay.core.model.JellyPlayPluginFeatures.Transcodes].
+     * Always false without the plugin seam — the tile simply never renders.
+     */
+    val jellyPlayTranscodesEnabled: StateFlow<Boolean> =
+        if (jellyPlayStatusStore != null) {
+            val store = jellyPlayStatusStore
+            stateIn(
+                initial = false,
+                flow = kotlinx.coroutines.flow.combine(store.status, store.features) { status, features ->
+                    status == com.raulshma.jellyplay.core.model.JellyPlayPluginStatus.AVAILABLE &&
+                        features.contains(com.raulshma.jellyplay.core.model.JellyPlayPluginFeatures.Transcodes)
+                },
+            )
+        } else {
+            kotlinx.coroutines.flow.MutableStateFlow(false)
+        }
+
+    /**
+     * One capabilities probe; called when the dashboard becomes visible so the
+     * Transcodes tile's gate resolves without a settings detour. The store
+     * itself only acts while UNKNOWN (same discipline as the settings screen's
+     * sync section) — a stock server eats exactly one probe per visit.
+     */
+    fun refreshJellyPlayPluginStatus() {
+        val store = jellyPlayStatusStore ?: return
+        launch {
+            if (store.status.value == com.raulshma.jellyplay.core.model.JellyPlayPluginStatus.UNKNOWN) {
+                store.refresh()
+            }
+        }
+    }
 
     /**
      * Deadline (via [System.currentTimeMillis]) up to which an IDLE scan task

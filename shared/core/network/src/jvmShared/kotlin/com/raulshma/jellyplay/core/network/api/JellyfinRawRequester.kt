@@ -48,6 +48,9 @@ internal class JellyfinRawRequester(
     private val engine: JellyfinApiEngine,
 ) {
 
+    /** The engine's shared OkHttp client — for stream-flavoured variants (SSE) that clone it with different timeouts. */
+    internal val httpClient: okhttp3.OkHttpClient get() = engine.okHttpClient
+
     /**
      * Failover-correct base address + access token — the guard every folded
      * Plugin/MediaInfo endpoint used to run inline, with the same texts:

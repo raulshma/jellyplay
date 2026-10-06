@@ -9,6 +9,8 @@ import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.network.api.LibraryApiClientImpl
 import com.raulshma.jellyplay.core.network.api.LiveTvApiClient
 import com.raulshma.jellyplay.core.network.api.LiveTvApiClientImpl
+import com.raulshma.jellyplay.core.network.api.JellyPlayPluginApiClient
+import com.raulshma.jellyplay.core.network.api.JellyPlayPluginApiClientImpl
 import com.raulshma.jellyplay.core.network.api.MediaInfoApiClient
 import com.raulshma.jellyplay.core.network.api.MediaInfoApiClientImpl
 import com.raulshma.jellyplay.core.network.api.MetadataApiClient
@@ -32,6 +34,7 @@ class JellyfinApiClientImpl(
     private val adminClient: AdminApiClientImpl,
     private val metadataClient: MetadataApiClientImpl,
     private val mediaInfoClient: MediaInfoApiClientImpl,
+    private val jellyPlayPluginClient: JellyPlayPluginApiClientImpl,
     private val pluginClient: PluginApiClientImpl,
     private val userClient: UserApiClientImpl,
 ) : JellyfinApiClient,
@@ -43,6 +46,7 @@ class JellyfinApiClientImpl(
     AdminApiClient by adminClient,
     MetadataApiClient by metadataClient,
     MediaInfoApiClient by mediaInfoClient,
+    JellyPlayPluginApiClient by jellyPlayPluginClient,
     PluginApiClient by pluginClient,
     UserApiClient by userClient,
     // The two library family seams ride the SAME library impl single (the

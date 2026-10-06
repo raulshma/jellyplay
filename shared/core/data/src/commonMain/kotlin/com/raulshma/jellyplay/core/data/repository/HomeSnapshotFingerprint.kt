@@ -19,6 +19,12 @@ import com.raulshma.jellyplay.core.model.HomeSectionsResult
  * `HomeSnapshotFingerprintTest` (jvmTest) — the field set here IS the
  * dedup-window contract; extend it when the home rows start rendering
  * another user-data field.
+ *
+ * Plugin rows (PLUGIN_ROW) fingerprint their [com.raulshma.jellyplay.core.model.JellyPlayRowEntry]
+ * list the same way — header payload aside, the entries render exactly the
+ * fields the media items do (title+year tiles and resolved cards with
+ * position/played/favorite), so an un fingerprinted change would let a
+ * watched flip or a re-curated list sit stale for a full dedup window.
  */
 internal object HomeSnapshotFingerprint {
 
@@ -54,6 +60,26 @@ internal object HomeSnapshotFingerprint {
                 sb.append(item.isPlayed)
                 sb.append('|')
                 sb.append(item.isFavorite)
+                sb.append(';')
+            }
+            // Plugin rows: the curated entry list IS the row's content —
+            // order, fallback-tile text and the resolved cards' user-data
+            // fields all render, so all fingerprint.
+            val rowEntries = section.jellyPlayRowEntries
+            for (i in rowEntries.indices) {
+                val entry = rowEntries[i]
+                sb.append(entry.title)
+                sb.append('|')
+                sb.append(entry.year)
+                sb.append('|')
+                val local = entry.localItem
+                sb.append(local?.id)
+                sb.append('|')
+                sb.append(local?.playbackPositionTicks)
+                sb.append('|')
+                sb.append(local?.isPlayed)
+                sb.append('|')
+                sb.append(local?.isFavorite)
                 sb.append(';')
             }
             sb.append('#')

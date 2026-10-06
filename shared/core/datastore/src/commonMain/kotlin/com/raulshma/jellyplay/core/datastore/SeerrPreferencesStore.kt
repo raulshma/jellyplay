@@ -37,6 +37,18 @@ class SeerrPreferencesStore constructor(
         val DISCOVER_UPCOMING_TV = booleanPreferencesKey("seerr_discover_upcoming_tv")
         val STREAMING_REGION = stringPreferencesKey("seerr_streaming_region")
         val DISCOVER_REGION = stringPreferencesKey("seerr_discover_region")
+
+        /**
+         * The Seerr settings-surface connection MODE (direct fields vs the
+         * jellyfin-plugin-jellyplay "via server" bridge, ADR 0010).
+         *
+         * seam: the consumer seam for the follow-up that switches the Seerr
+         * DATA PATH to the plugin proxy — see [SeerrPreferences.useServerBridge].
+         * Deliberately NOT in [BOOLEAN_DEFAULTS]: it is the user's chosen mode,
+         * not a direct-connection feature toggle, so the direct pane's
+         * [disconnect] (which resets the defaults map) must not flip it.
+         */
+        val USE_SERVER_BRIDGE = booleanPreferencesKey("seerr_use_server_bridge")
     }
 
     // Single source of truth for Seerr preference defaults: the read path
@@ -74,6 +86,7 @@ class SeerrPreferencesStore constructor(
         authMethod = prefs[Keys.AUTH_METHOD].toEnumOrNull() ?: SeerrAuthMethod.API_KEY,
         username = prefs[Keys.USERNAME] ?: "",
         email = prefs[Keys.EMAIL] ?: "",
+        useServerBridge = prefs[Keys.USE_SERVER_BRIDGE] ?: false,
         enabled = prefs.booleanWithDefault(Keys.ENABLED),
         searchEnabled = prefs.booleanWithDefault(Keys.SEARCH_ENABLED),
         recommendationsEnabled = prefs.booleanWithDefault(Keys.RECOMMENDATIONS_ENABLED),
@@ -107,6 +120,16 @@ class SeerrPreferencesStore constructor(
 
     suspend fun setEmail(email: String) {
         dataStore.edit { it[Keys.EMAIL] = email.trim() }
+    }
+
+    /**
+     * Persists the Seerr settings-surface connection MODE. Mode selection only —
+     * the actual data-path switch (pointing the Seerr client at the plugin's
+     * `jellyplay/seerr` proxy once the bridge is linked) is the follow-up
+     * consumer of this flag (see [SeerrPreferences.useServerBridge]).
+     */
+    suspend fun setUseServerBridge(enabled: Boolean) {
+        dataStore.edit { it[Keys.USE_SERVER_BRIDGE] = enabled }
     }
 
     suspend fun setEnabled(enabled: Boolean) {

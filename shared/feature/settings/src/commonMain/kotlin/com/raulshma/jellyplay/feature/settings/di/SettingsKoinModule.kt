@@ -13,6 +13,7 @@ import com.raulshma.jellyplay.feature.settings.LanguageSettingsViewModel
 import com.raulshma.jellyplay.feature.settings.LicensesViewModel
 import com.raulshma.jellyplay.feature.settings.DiscoverRowsViewModel
 import com.raulshma.jellyplay.feature.settings.InputBindingsViewModel
+import com.raulshma.jellyplay.feature.settings.JellyPlayMessagesViewModel
 import com.raulshma.jellyplay.feature.settings.LibraryLayoutViewModel
 import com.raulshma.jellyplay.feature.settings.NotificationSettingsViewModel
 import com.raulshma.jellyplay.feature.settings.PlaybackSettingsViewModel
@@ -99,6 +100,19 @@ val settingsModule: Module = module {
             serverAdminActions = get(),
             editor = get(),
             recentsStore = get(),
+            jellyPlayStatusStore = get(),
+            jellyPlaySyncRepository = get(),
+            jellyPlayEventsRepository = get(),
+        )
+    }
+
+    // The companion-plugin inbox screen (ADR 0010). Reachability is gated at
+    // the settings root's "Messages" entry; the VM still re-checks the
+    // `messages` feature key before every api call.
+    viewModel {
+        JellyPlayMessagesViewModel(
+            eventsRepository = get(),
+            statusStore = get(),
         )
     }
     viewModel {
@@ -228,6 +242,12 @@ val settingsModule: Module = module {
             seerrAuthenticator = get(),
             seerrPreferencesStore = get(),
             secureCredentialsStore = get(),
+            // The "via server" bridge seams (ADR 0010): the plugin api client
+            // (seerr status/login/logout), the ONE availability gate, and the
+            // Jellyfin Quick Connect source the plugin authorizes against.
+            pluginApiClient = get(),
+            pluginStatusStore = get(),
+            authRepository = get(),
         )
     }
     viewModel {

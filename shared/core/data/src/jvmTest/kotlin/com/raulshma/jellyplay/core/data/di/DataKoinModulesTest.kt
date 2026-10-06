@@ -329,6 +329,12 @@ class DataKoinModulesTest {
             assertResolves<AdminStatisticsRepository>(koin)
             assertResolves<PluginAdminRepository>(koin)
 
+            // ── Companion-plugin bookmark sync ───────────────────
+            // The reader-marks sync binding shares the BookBookmarkDao single
+            // and its ctor deps cross this aggregate (api client from
+            // networkJvmModule, status store from dataSessionPlaybackModule).
+            assertResolves<com.raulshma.jellyplay.core.data.repository.BookmarksSyncRepository>(koin)
+
             // ── AppUpdate split ──────────────────────────────────
             // NOT asserted anymore: core:data's desktop data module ships no
             // update family. The desktop AppUpdateRepository definition is

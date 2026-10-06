@@ -149,4 +149,20 @@ class SeerrPreferencesStoreTest {
         dataStore.edit { it.clear() }
         assertEquals(afterDisconnect, store.preferences.first())
     }
+
+    @Test
+    fun `server bridge mode persists and survives a direct disconnect`() = runTest {
+        store.setUseServerBridge(true)
+        assertTrue(store.preferences.first().useServerBridge)
+
+        // The mode is the settings surface's pane choice, not a
+        // direct-connection preference — disconnect (the direct pane's reset)
+        // must leave it alone.
+        store.setServerUrl("http://seerr.local")
+        store.disconnect()
+        assertTrue(store.preferences.first().useServerBridge)
+
+        store.setUseServerBridge(false)
+        assertFalse(store.preferences.first().useServerBridge)
+    }
 }

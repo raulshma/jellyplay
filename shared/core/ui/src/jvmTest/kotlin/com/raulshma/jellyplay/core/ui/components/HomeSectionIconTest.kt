@@ -43,6 +43,7 @@ class HomeSectionIconTest {
         assertEquals(Tabler.Outline.Wand, homeSectionIcon(HomeSectionType.RECOMMENDATIONS))
         assertEquals(Tabler.Outline.Pinned, homeSectionIcon(HomeSectionType.PINNED))
         assertEquals(Tabler.Outline.Compass, homeSectionIcon(HomeSectionType.DISCOVER))
+        assertEquals(Tabler.Outline.Sparkles, homeSectionIcon(HomeSectionType.PLUGIN_ROW))
     }
 
     @Test
@@ -50,7 +51,7 @@ class HomeSectionIconTest {
         // If a new HomeSectionType is added this fails on the distinct-icon
         // count unless the mapping gains a branch (compiler enforces the when;
         // this pins the test-side inventory).
-        assertEquals(HomeSectionType.entries.size, 11)
+        assertEquals(HomeSectionType.entries.size, 12)
     }
 
     @Test

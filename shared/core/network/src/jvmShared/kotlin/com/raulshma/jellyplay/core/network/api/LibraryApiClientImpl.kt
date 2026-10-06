@@ -36,6 +36,7 @@ import com.raulshma.jellyplay.core.network.library.HomeSectionsFetcher
 import com.raulshma.jellyplay.core.network.library.SEARCH_SUGGESTIONS_FIELDS
 import com.raulshma.jellyplay.core.network.library.SEARCH_SUGGESTIONS_ITEM_TYPES
 import com.raulshma.jellyplay.core.network.library.SEARCH_SUGGESTIONS_SORT_BY
+import com.raulshma.jellyplay.core.network.library.JellyPlayHomeSectionSources
 import com.raulshma.jellyplay.core.network.library.SeerrHomeSectionSources
 import com.raulshma.jellyplay.core.network.library.buildChildItemImagesQuerySpec
 import com.raulshma.jellyplay.core.network.library.buildDiscoverRowQuerySpec
@@ -123,6 +124,15 @@ class LibraryApiClientImpl(
      * layer). Default null = this wiring fetches no Seerr rows (unit fakes).
      */
     private val seerrHomeSectionSources: SeerrHomeSectionSources? = null,
+    /**
+     * The plugin-side leaf source for the home fetcher's PLUGIN_ROW rows
+     * (seasonal today; satisfied by the data layer's adapter beside the
+     * [com.raulshma.jellyplay.core.network.api.JellyPlayPluginApiClient] —
+     * the capability probe lives in the data layer's status store). Default
+     * null = this wiring fetches no plugin rows (unit fakes, graphs without
+     * the plugin cluster).
+     */
+    private val jellyPlayHomeSectionSources: JellyPlayHomeSectionSources? = null,
 ) : LibraryApiClient, PlaylistApiClient, CollectionApiClient, HomeSectionSources, HomeSectionsCachePort {
 
     /**
@@ -180,6 +190,7 @@ class LibraryApiClientImpl(
             // this Android floor must not assume): [nowLocalDateTime].
             timeSource.nowLocalDateTime().toLocalDate().toString()
         },
+        jellyPlaySources = jellyPlayHomeSectionSources,
     )
 
     /**
@@ -502,6 +513,24 @@ class LibraryApiClientImpl(
             totalRecordCount = totalCount,
             startIndex = startIndex,
         )
+    }
+
+    override suspend fun getItemsByIds(ids: List<String>): Result<List<MediaItem>> = engine.withApi { api ->
+        if (ids.isEmpty()) {
+            emptyList()
+        } else {
+            // Same batched-ids read the classic-latest pipeline uses to
+            // resolve grouped Series cards (degrade-not-fail there); here the
+            // caller — the home fetcher's plugin-row mapping — degrades per
+            // entry, so a failed read surfaces as a failed Result and every
+            // entry falls back to its title+year tile. Parental-rating
+            // filtered like every list read: the row renders on home, so it
+            // obeys the home rules.
+            api.itemsApi.getItems(
+                ids = ids.map { it.toUUID() },
+                fields = LIST_ITEM_FIELDS,
+            ).content?.items.orEmpty().toFilteredMediaItems(engine.currentMaxParentalRating)
+        }
     }
 
     override suspend fun getMediaDetail(itemId: String): Result<MediaDetail> = engine.withApi { api ->

@@ -96,6 +96,54 @@ class HomeSectionsAssemblerTest {
     }
 
     @Test
+    fun `plugin rows emit between discover rows and pinned rows`() {
+        // PLUGIN_ROW is not user-configurable, so OrderHomeSectionsUseCase's
+        // stable sort lands it (like PINNED) after the standard sections —
+        // this emission order IS its position: curated plugin rows ahead of
+        // the user's pins.
+        val output = assembleHomeSections(
+            HomeSectionsAssemblyInputs(
+                query = query,
+                discoverSections = listOf(
+                    HomeSection(
+                        id = "discover_r1",
+                        title = "My Discover Row",
+                        type = HomeSectionType.DISCOVER,
+                        items = listOf(item("d1")),
+                    ),
+                ),
+                pluginRowSections = listOf(
+                    HomeSection(
+                        id = "jellyplay_seasonal",
+                        title = "Spooky Season",
+                        type = HomeSectionType.PLUGIN_ROW,
+                        items = emptyList(),
+                    ),
+                ),
+                pinnedSections = listOf(
+                    HomeSection(
+                        id = "pinned_x",
+                        title = "My Pin",
+                        type = HomeSectionType.PINNED,
+                        items = listOf(item("p1")),
+                    ),
+                ),
+            ),
+        )
+
+        assertEquals(
+            listOf(
+                HomeSectionType.DISCOVER,
+                HomeSectionType.PLUGIN_ROW,
+                HomeSectionType.PINNED,
+            ),
+            output.result.sections.map { it.type },
+        )
+        assertNull(output.firstError)
+        assertTrue(output.result.failedSectionTypes.isEmpty())
+    }
+
+    @Test
     fun `continue reading emits between continue watching and next up and honors hidden cw ids`() {
         val output = assembleHomeSections(
             HomeSectionsAssemblyInputs(

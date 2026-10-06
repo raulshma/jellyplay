@@ -118,6 +118,13 @@ internal object SettingsScreenGroups {
      */
     val systemHooks = SystemHooksGroup
 
+    /**
+     * the JellyPlay companion-plugin settings-sync rows (ADR 0010) — the
+     * opt-in toggle + sync-now action, one capability-gated on-screen group
+     * (emitted only where the plugin's capabilities probe reports AVAILABLE).
+     */
+    val jellyplaySync = JellyPlaySyncGroup
+
     // ── HomeSettingsScreen ─────────────────────────────────────────────
     /**
      * The home config hub's four screen groups — the rows moved off
@@ -240,6 +247,7 @@ internal object SettingsScreenGroups {
         systemIdleAmbient,
         systemDiscordPresence,
         systemHooks,
+        jellyplaySync,
         homeDisplay,
         homeNextUp,
         homeLayout,

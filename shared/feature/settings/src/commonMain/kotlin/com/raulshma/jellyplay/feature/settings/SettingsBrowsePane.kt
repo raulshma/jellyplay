@@ -173,6 +173,27 @@ internal fun SettingsBrowsePane(
                     )
                 }
 
+                // JellyPlay companion-plugin settings sync (ADR 0010) —
+                // capability-gated on-screen group: renders only where the
+                // plugin's probe reports AVAILABLE; a stock server shows
+                // nothing here (graceful-absent contract).
+                settingsSection("group_jellyplay_sync", isTv) {
+                    SettingsJellyPlaySyncSection(
+                        viewModel = viewModel,
+                        lastClickedSettingId = lastClickedSettingId,
+                    )
+                }
+
+                // The plugin's inbox messages entry (ADR 0010) — same
+                // graceful-absent gating (AVAILABLE + `messages` feature key),
+                // the only door to the messages screen.
+                settingsSection("group_jellyplay_messages", isTv) {
+                    SettingsJellyPlayMessagesEntry(
+                        viewModel = viewModel,
+                        onOpenMessages = { onNavigate(Route.JellyPlayMessages) },
+                    )
+                }
+
                 settingsSection(HomeEntrance.section.key, isTv) {
                     val homePrefs by viewModel.homePreferences.collectAsStateWithLifecycle()
                     SettingListItem(

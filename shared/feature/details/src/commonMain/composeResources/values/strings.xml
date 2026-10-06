@@ -517,4 +517,13 @@
         <item quantity="one">%1$d item selected</item>
         <item quantity="other">%1$d items selected</item>
     </plurals>
+
+    <!-- ── JellyPlay companion plugin detail sections (ADR 0010) ─────────── -->
+    <!-- All plugin-gated: a failed/absent probe renders none of these; the
+         strings only ever surface inside a live section. -->
+    <string name="jellyplay_det_ratings_title">Ratings</string>
+    <string name="jellyplay_det_similar_badge">Server picks</string>
+    <string name="jellyplay_det_filler_badge">Filler</string>
+    <string name="jellyplay_det_mixed_badge">Mixed</string>
+    <string name="jellyplay_det_recap_badge">Recap</string>
 </resources>

@@ -8,6 +8,7 @@ import android.os.Build
 import android.provider.Settings
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import com.raulshma.jellyplay.core.data.repository.JellyPlayPluginEvent
 import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
@@ -52,6 +53,54 @@ class NotificationDispatcher(
         }
 
         channelManager.deleteStaleChannels(validLibraryIds)
+    }
+
+    /**
+     * The companion-plugin's live SSE `new-media` push (ADR 0010) mapped onto
+     * the same tray surface the periodic new-media check uses: one
+     * notification in the shared [NotificationChannelManager.CHANNEL_SUMMARY]
+     * channel ("New Media"), with the explicit deep-link content intent the
+     * item notifications build ([DeepLinkGrammar.mediaLink]).
+     *
+     * Deliberately NOT routed through [dispatch]: that path's
+     * [NotificationChannelManager.deleteStaleChannels] sweep is keyed to the
+     * libraries passed in and would delete every real per-library channel,
+     * and the group/seen machinery has nothing to group (an SSE push is one
+     * live event, not a scanned batch — the plugin's inbox is the durable
+     * counterpart).
+     */
+    fun dispatchPluginNewMedia(event: JellyPlayPluginEvent.NewMedia) {
+        if (!notificationManager.areNotificationsEnabled()) return
+        channelManager.ensureSummaryChannel()
+
+        val notificationId = pluginNotificationIdFor(event.itemId)
+        // Same explicit-intent convention as buildItemNotification (CodeQL):
+        // setters chained on the Intent expression itself.
+        val contentIntent = PendingIntent.getActivity(
+            context,
+            notificationId,
+            Intent(Intent.ACTION_VIEW, android.net.Uri.parse(DeepLinkGrammar.mediaLink(event.itemId)))
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                .setPackage(context.packageName),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+
+        val subtitle = context.getString(R.string.notification_plugin_new_media_subtitle)
+        val text = if (event.episodeCount > 1) {
+            context.getString(R.string.notification_plugin_new_episodes_count, event.episodeCount)
+        } else {
+            subtitle
+        }
+        val notification = NotificationCompat.Builder(context, NotificationChannelManager.CHANNEL_SUMMARY)
+            .setSmallIcon(com.raulshma.jellyplay.shared.core.data.R.drawable.ic_notification_small)
+            .setContentTitle(event.title.ifBlank { subtitle })
+            .setContentText(text)
+            .setContentIntent(contentIntent)
+            .setAutoCancel(true)
+            .setOnlyAlertOnce(true)
+            .setDefaults(0)
+            .build()
+        notificationManager.notify(notificationId, notification)
     }
 
     private fun isSystemDndEnabled(): Boolean {
@@ -373,5 +422,19 @@ class NotificationDispatcher(
             val slot = if (itemIndex == -1) SUMMARY_SLOT else itemIndex
             return base + slot
         }
+
+        // Companion-plugin SSE new-media pushes (ADR 0010). The base sits ABOVE the
+        // per-library scheme's top (NOTIFICATION_ID_BASE + LIBRARY_BUCKETS *
+        // SLOTS_PER_LIBRARY ≈ 2_102_159) so the two id families can never overlap.
+        private const val PLUGIN_NOTIFICATION_ID_BASE = 2_200_000
+        private const val PLUGIN_NOTIFICATION_ID_SLOTS = 100_000
+
+        /**
+         * Stable per-item id for a plugin `new-media` push — re-delivery of the
+         * same itemId coalesces instead of stacking.
+         */
+        internal fun pluginNotificationIdFor(itemId: String): Int =
+            PLUGIN_NOTIFICATION_ID_BASE +
+                ((itemId.hashCode().toLong() and 0xFFFFFFFFL).toInt() % PLUGIN_NOTIFICATION_ID_SLOTS)
     }
 }

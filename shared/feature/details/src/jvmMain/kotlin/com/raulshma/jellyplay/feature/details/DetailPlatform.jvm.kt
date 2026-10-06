@@ -81,6 +81,11 @@ fun desktopDetailsPlatformModule(dataDir: Path): Module = module {
             bookTocCacheRepository = get(),
             readerAnnotationsRepository = getOrNull(),
             bookTocProber = getOrNull(),
+            // ADR 0010 companion-plugin seams — registered core:data /
+            // core:network singles (DataSessionPlaybackKoinModule /
+            // NetworkKoinModules); the VM null-guards everything anyway.
+            pluginStatusStore = get(),
+            pluginApiClient = get(),
         )
     }
     // #147 merge: Collection/Person VMs left commonMain when their closure

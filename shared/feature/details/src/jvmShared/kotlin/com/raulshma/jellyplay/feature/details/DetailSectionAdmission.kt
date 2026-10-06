@@ -42,6 +42,9 @@ internal enum class DetailSectionKind(val delayIndex: Int) {
     /** Expandable synopsis. Always admitted; the overview-null gate is render-side. */
     OVERVIEW(3),
 
+    /** JellyPlay companion plugin's aggregated external-ratings chip row (ADR 0010). */
+    PLUGIN_RATINGS(3),
+
     /** Book Contents (TOC cache) or the video chapter thumbnail row — first match wins. */
     CHAPTERS_OR_TOC(4),
 
@@ -65,6 +68,10 @@ internal enum class DetailSectionKind(val delayIndex: Int) {
 
     /** "More like this" — server relatedItems (remote) or localRelatedItems (local). */
     MORE_LIKE_THIS(10),
+
+    /** JellyPlay companion plugin's server-scored "More like this" row (ADR 0010) —
+     *  additive alongside MORE_LIKE_THIS, never a replacement. */
+    JELLYPLAY_SIMILAR(10),
 
     /** Seerr recommendations row. */
     SEERR_RECOMMENDATIONS(11),
@@ -137,6 +144,10 @@ internal data class DetailSectionAdmission(
     val hasTmdbReviews: Boolean,
     /** A download lifecycle is attached to the snapshot (state.detailContext?.download != null). */
     val hasAttachedDownload: Boolean,
+    /** Plugin ratings chips fetched (state.pluginRatings non-empty — ADR 0010). */
+    val hasPluginRatings: Boolean = false,
+    /** Plugin scored-similar items hydrated (state.pluginSimilarItems non-empty — ADR 0010). */
+    val hasPluginSimilar: Boolean = false,
 ) {
 
     /**
@@ -161,6 +172,10 @@ internal data class DetailSectionAdmission(
         )
         admit(DetailSectionKind.OVERVIEW, admitted = true)
         admit(
+            DetailSectionKind.PLUGIN_RATINGS,
+            hasPluginRatings,
+        )
+        admit(
             DetailSectionKind.CHAPTERS_OR_TOC,
             (mediaType == MediaType.BOOK && hasBookToc) ||
                 (capabilities.chapters && hasChapters),
@@ -178,6 +193,10 @@ internal data class DetailSectionAdmission(
         admit(DetailSectionKind.CAST, mediaType != MediaType.BOOK)
         admit(DetailSectionKind.RELATED_VIDEOS, admitted = true)
         admit(DetailSectionKind.MORE_LIKE_THIS, admitted = true)
+        admit(
+            DetailSectionKind.JELLYPLAY_SIMILAR,
+            hasPluginSimilar,
+        )
         admit(
             DetailSectionKind.SEERR_RECOMMENDATIONS,
             seerrDataAvailable && hasSeerrRecommendations,
@@ -227,6 +246,8 @@ internal data class DetailSectionAdmission(
             hasSpecialFeatures = state.specialFeatures.isNotEmpty(),
             hasTmdbReviews = state.tmdbReviews.isNotEmpty(),
             hasAttachedDownload = state.detailContext?.download != null,
+            hasPluginRatings = state.pluginRatings.isNotEmpty(),
+            hasPluginSimilar = state.pluginSimilarItems.isNotEmpty(),
         )
     }
 }

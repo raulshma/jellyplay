@@ -34,24 +34,26 @@ class SettingsEntranceStepsTest {
         "account" to (3 to 3),
         "activity" to (4 to 4),
         "system" to (5 to 5),
-        "item_home" to (6 to 6),
-        "item_appearance" to (7 to 7),
-        "item_playback" to (8 to 8),
-        "item_audio" to (9 to 9),
-        "item_language" to (10 to 10),
-        "item_notifications" to (11 to 11),
-        "item_storage" to (12 to 12),
-        "item_security" to (13 to 13),
-        "item_privacy_data" to (14 to 14),
-        "item_backup" to (15 to 15),
-        "group_screensaver" to (16 to 16),
-        "group_idle_ambient" to (16 to 17),
-        "group_discord_presence" to (17 to 18),
-        "group_shell_hooks" to (18 to 19),
-        "item_experimental" to (19 to 20),
-        "item_integrations" to (20 to 21),
-        "item_about" to (21 to 22),
-        "item_whatsnew" to (22 to 23),
+        "group_jellyplay_sync" to (6 to 6),
+        "group_jellyplay_messages" to (7 to 7),
+        "item_home" to (8 to 8),
+        "item_appearance" to (9 to 9),
+        "item_playback" to (10 to 10),
+        "item_audio" to (11 to 11),
+        "item_language" to (12 to 12),
+        "item_notifications" to (13 to 13),
+        "item_storage" to (14 to 14),
+        "item_security" to (15 to 15),
+        "item_privacy_data" to (16 to 16),
+        "item_backup" to (17 to 17),
+        "group_screensaver" to (18 to 18),
+        "group_idle_ambient" to (18 to 19),
+        "group_discord_presence" to (19 to 20),
+        "group_shell_hooks" to (20 to 21),
+        "item_experimental" to (21 to 22),
+        "item_integrations" to (22 to 23),
+        "item_about" to (23 to 24),
+        "item_whatsnew" to (24 to 25),
     )
 
     @Test
@@ -80,9 +82,9 @@ class SettingsEntranceStepsTest {
         // sections after it one tv step but no phone step (the capability-
         // gated idle-ambient / discord-presence / shell-hooks groups keep
         // their slots on both axes).
-        assertEquals(19 to 20, settingsEntranceStep("item_experimental")?.let { it.phone to it.tv })
-        assertEquals(20 to 21, settingsEntranceStep("item_integrations")?.let { it.phone to it.tv })
-        assertEquals(21 to 22, settingsEntranceStep("item_about")?.let { it.phone to it.tv })
+        assertEquals(21 to 22, settingsEntranceStep("item_experimental")?.let { it.phone to it.tv })
+        assertEquals(22 to 23, settingsEntranceStep("item_integrations")?.let { it.phone to it.tv })
+        assertEquals(23 to 24, settingsEntranceStep("item_about")?.let { it.phone to it.tv })
     }
 
     @Test

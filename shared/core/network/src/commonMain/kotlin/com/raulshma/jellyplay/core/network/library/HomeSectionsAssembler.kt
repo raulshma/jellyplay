@@ -51,6 +51,15 @@ internal class HomeSectionsAssemblyInputs(
      * user's configured type position with rows in config order.
      */
     val discoverSections: List<HomeSection> = emptyList(),
+    /**
+     * Plugin-sourced rows (PLUGIN_ROW — the seasonal row today), already
+     * built as sections by the fetcher (empty = gated off / absent — the
+     * capability registry is the gate, never the layout config). Emitted
+     * after the discover rows and before the user's pinned sections, so the
+     * order's stable sort (both types sort last) keeps the curated plugin
+     * rows ahead of the pins while inheriting the standard sections' order.
+     */
+    val pluginRowSections: List<HomeSection> = emptyList(),
 )
 
 internal class HomeSectionsAssemblyOutput(
@@ -214,6 +223,10 @@ internal fun assembleHomeSections(input: HomeSectionsAssemblyInputs): HomeSectio
     // User-configured discover rows (Jellyfin sources; Seerr rows are spliced
     // in by the feature layer after ordering). Config order within the block.
     input.discoverSections.forEach { section -> sections.add(section) }
+
+    // Plugin-sourced rows (the companion plugin's seasonal row today) —
+    // capability-gated, not layout-driven; ahead of the user's pins.
+    input.pluginRowSections.forEach { section -> sections.add(section) }
 
     // Append user-pinned sections (collections / playlists / favorites /
     // genres / studios) — always fetched regardless of enabledSections, and

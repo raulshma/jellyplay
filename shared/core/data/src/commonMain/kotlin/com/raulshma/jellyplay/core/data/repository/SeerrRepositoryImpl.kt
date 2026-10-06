@@ -42,6 +42,9 @@ private const val POLL_INTERVAL_IDLE_MS = 15 * 60_000L
 /** The one failure message every session-bound member reports when Seerr is unconfigured. */
 private const val NOT_CONFIGURED_MESSAGE = "Seerr not configured"
 
+/** The interceptor-swapped base marker; see [withSeerrSession]'s bridge arm. */
+private const val BRIDGE_PLACEHOLDER_BASE = "https://jellyplay.bridge.invalid"
+
 class SeerrRepositoryImpl(
     private val seerrApiClient: SeerrApiClient,
     private val tmdbApiClient: TmdbApiClient,
@@ -147,6 +150,14 @@ class SeerrRepositoryImpl(
     private suspend fun <T> withSeerrSession(
         block: suspend (url: String, credentials: SeerrCredentials) -> Result<T>,
     ): Result<T> {
+        // Bridge mode (ADR 0010): the plugin proxy carries its own
+        // server-side session — no direct URL/credentials to resolve. The
+        // base passed here is a placeholder; the OkHttp bridge interceptor
+        // rewrites every URL to `{jellyfin}/jellyplay/seerr/...` and swaps
+        // the auth to the Jellyfin token before the call leaves the client.
+        if (seerrPreferencesStore.preferences.value.useServerBridge) {
+            return block(BRIDGE_PLACEHOLDER_BASE, SeerrCredentials.ApiKey(apiKey = ""))
+        }
         val url = serverUrl() ?: return Result.failure(IllegalStateException(NOT_CONFIGURED_MESSAGE))
         val credentials = getCredentials() ?: return Result.failure(IllegalStateException(NOT_CONFIGURED_MESSAGE))
         return block(url, credentials)

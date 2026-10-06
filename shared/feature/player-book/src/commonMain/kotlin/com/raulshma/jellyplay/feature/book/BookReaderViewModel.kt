@@ -2,7 +2,9 @@ package com.raulshma.jellyplay.feature.book
 
 import androidx.compose.ui.graphics.ImageBitmap
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
+import com.raulshma.jellyplay.core.data.repository.BookmarksSyncRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.NoopBookmarksSyncRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.repository.ReaderAnnotationColor
 import com.raulshma.jellyplay.core.data.repository.ReaderAnnotationStyle
@@ -63,7 +65,10 @@ import kotlin.math.roundToInt
  *
  * Reader marks (Wave 3) live in [ReaderAnnotationsRepository] and are exposed
  * per loaded item through [bookmarks]/[annotations] (re-subscribed per load);
- * the toggle/jump COORDINATION lives here while the EPUB host stays
+ * position bookmarks additionally mirror to the companion plugin through
+ * [BookmarksSyncRepository] (push on toggle/delete, pull on [load] — both
+ * fire-and-forget, silently skipped when the plugin gate is closed). The
+ * toggle/jump COORDINATION lives here while the EPUB host stays
  * screen-owned — [jumpToBookmark] only resolves the paged path, the screen
  * drives `host.goToCfi` for reflowable jumps (it owns the host). The
  * paged-vs-reflowable encoding of a row is [ReaderBookmarkCodec]'s one rule.
@@ -122,6 +127,13 @@ class BookReaderViewModel(
      * and platforms without a binding keep single-player semantics.
      */
     private val playbackFocus: PlaybackFocus = NoopPlaybackFocus,
+    /**
+     * Companion-plugin bookmark sync (ADR 0010, `bookmarks` feature): push
+     * rides the toggle/delete marks actions, pull rides [load]. Defaulted to
+     * the vacuous [NoopBookmarksSyncRepository] so tests and graphs without
+     * the plugin cluster compile unchanged.
+     */
+    private val bookmarksSyncRepository: BookmarksSyncRepository = NoopBookmarksSyncRepository(),
     /**
      * Process-wide scope for the exit flush: [reportNow] with `final = true`
      * runs from `onDispose`, and viewModelScope is already cancelled by the
@@ -383,6 +395,11 @@ class BookReaderViewModel(
         pendingJumpHref = jumpHref
         pendingJumpPage = jumpPage
         userDirectionPinned = false
+        // Companion-plugin pull (once per book open): server bookmarks merge
+        // into the local store and surface through the observe flows below as
+        // ordinary marks. Fire-and-forget — the sync repo swallows its own
+        // failures, so the open sequence neither waits on it nor fails with it.
+        scope.launch { bookmarksSyncRepository.pullBookmarks(itemId) }
         // One collector per item — a re-load must not stack a second one.
         // The persisted direction (with its pin flag) rides the pref snapshot.
         directionJob?.cancel()
@@ -832,6 +849,9 @@ class BookReaderViewModel(
             runCatchingRethrowingCancellation {
                 if (existing != null) {
                     annotationsRepository.removeBookmark(existing.id)
+                    // Mirror the delete to the companion plugin (silent skip
+                    // when gated/offline) — fire-and-forget semantics.
+                    bookmarksSyncRepository.pushBookmarkDeleted(itemId, existing.positionTicks)
                 } else {
                     val draft = ReaderBookmarkCodec.encode(currentBookmarkLocation(ready))
                     annotationsRepository.addBookmark(
@@ -840,13 +860,24 @@ class BookReaderViewModel(
                         cfi = draft.cfi,
                         chapterLabel = draft.chapterLabel,
                     )
+                    bookmarksSyncRepository.pushBookmark(itemId, draft.positionTicks, draft.chapterLabel)
                 }
             }
         }
     }
 
     fun deleteBookmark(id: Long) {
-        scope.launch { runCatchingRethrowingCancellation { annotationsRepository.removeBookmark(id) } }
+        // Capture the row before the local delete: its position is the join
+        // key the server twin is matched (and deleted) by.
+        val mark = bookmarks.value.firstOrNull { it.id == id }
+        scope.launch {
+            runCatchingRethrowingCancellation { annotationsRepository.removeBookmark(id) }
+            if (mark != null) {
+                runCatchingRethrowingCancellation {
+                    bookmarksSyncRepository.pushBookmarkDeleted(mark.itemId, mark.positionTicks)
+                }
+            }
+        }
     }
 
     /**
