@@ -29,7 +29,11 @@ import com.raulshma.jellyplay.core.model.EpochMillisSource
 import com.raulshma.jellyplay.core.model.SystemTimeSource
 import com.raulshma.jellyplay.core.model.TimeSource
 import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
+import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.datastore.library.LibraryStore
+import com.raulshma.jellyplay.core.datastore.security.PinRateLimiter
+import com.raulshma.jellyplay.core.datastore.security.SecurityStore
+import com.raulshma.jellyplay.core.datastore.spec.PreferenceSyncPolicy
 import kotlinx.coroutines.flow.first
 import org.koin.core.module.Module
 import org.koin.dsl.module
@@ -221,8 +225,17 @@ internal val dataSessionPlaybackModule: Module = module {
             // The plugin feature toggles' `pluginFeature.` prefix is
             // deliberately NOT excluded — those toggles are ordinary synced
             // prefs (JellyPlayFeatureGate); only jpsync.* reservations and
-            // these per-device prefixes may ever land here.
-            excludedPrefixes = listOf("dream", "screensaver"),
+            // these per-device prefixes may ever land here. The constant is
+            // shared with the settings-catalog generator so the catalog keeps
+            // describing exactly what syncs.
+            excludedPrefixes = PreferenceSyncPolicy.EXCLUDED_PREFIXES,
+            // Secrets and device/session identity never sync either — the
+            // owning stores export their key-name sets so renames stay in
+            // lockstep (same "never synced" list as docs/jellyplay-plugin.md;
+            // pin_hash leaving the device was a real leak this closes).
+            excludedKeys = SecurityStore.SyncExcludedKeys +
+                PinRateLimiter.SyncExcludedKeys +
+                ServerIdentityStore.SyncExcludedKeys,
         )
     }
 
@@ -233,7 +246,11 @@ internal val dataSessionPlaybackModule: Module = module {
             apiClient = get(),
             statusStore = get(),
             sessionCacheRegistry = get(),
-            adapters = listOf(JellyPlayPreferencesSyncAdapter(dataStore)),
+            // The shared adapter registration above (with its exclusions) —
+            // constructing a fresh adapter here would silently sync the
+            // excluded keys (that drift is how dream/screensaver leaked
+            // before).
+            adapters = listOf(get<JellyPlayPreferencesSyncAdapter>()),
             deviceProfile = detectDeviceProfile(),
             deviceIdProvider = jpsyncDeviceIdProvider(dataStore),
             nowMillis = { System.currentTimeMillis() },

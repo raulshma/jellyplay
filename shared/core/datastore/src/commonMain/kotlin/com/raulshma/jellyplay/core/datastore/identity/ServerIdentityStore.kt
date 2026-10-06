@@ -108,6 +108,22 @@ class ServerIdentityStore constructor(
         val ACTIVE_USER_ID = stringPreferencesKey("active_user_id")
         val DEVICE_ID = stringPreferencesKey("device_id")
     }
+
+    companion object {
+        /**
+         * Key names that must never leave the device through settings sync —
+         * session/device identity is per-device by design (docs/
+         * jellyplay-plugin.md's "never synced: … identity" list). Referenced
+         * by the sync adapter's registration (core/data DI), never by sync
+         * logic itself; mirrored in the plugin's settings-catalog generator
+         * denylist.
+         */
+        val SyncExcludedKeys: Set<String> = setOf(
+            Keys.ACTIVE_SERVER_ID,
+            Keys.ACTIVE_USER_ID,
+            Keys.DEVICE_ID,
+        ).map { it.name }.toSet()
+    }
 }
 
 /**

@@ -142,6 +142,13 @@ class PreferenceSpec<T> internal constructor(
     val resetCategory: PreferenceResetCategory?,
     /** The knob's settings-search entry, when the knob is searchable. */
     val search: PreferenceSearchSpec?,
+    /**
+     * The enum constant names when this row is an [enumRow] declaration (the
+     * persisted-by-name wire vocabulary), else null. Catalog metadata only —
+     * captures `enumValues<E>()` at declaration so the settings-catalog
+     * generator can advertise the allowed values without reflection.
+     */
+    internal val enumOptions: List<String>? = null,
 ) {
 
     /**
@@ -378,6 +385,7 @@ class PreferenceSpec<T> internal constructor(
                 default = default,
                 resetCategory = resetCategory,
                 search = search,
+                enumOptions = enumValues<E>().map { it.name },
             )
         }
 

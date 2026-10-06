@@ -60,6 +60,25 @@ class SecurityStore constructor(
         val REMOTE_DISPLAY_CONTENT_ENABLED = booleanPreferencesKey("remote_display_content_enabled")
     }
 
+    companion object {
+        /**
+         * Key names that must never leave the device through settings sync —
+         * the whole security domain is per-device by design (the stored PIN
+         * hash above all). Referenced by the sync adapter's registration
+         * (core/data DI), never by sync logic itself; mirrored in the plugin's
+         * settings-catalog generator denylist.
+         */
+        val SyncExcludedKeys: Set<String> = setOf(
+            Keys.PIN_LOCK_ENABLED,
+            Keys.PIN_HASH,
+            Keys.BIOMETRIC_LOCK_ENABLED,
+            Keys.USE_PIN_FOR_PLAYER_LOCK,
+            Keys.AUTO_LOCK_TIMER_MS,
+            Keys.REMOTE_CONTROL_ENABLED,
+            Keys.REMOTE_DISPLAY_CONTENT_ENABLED,
+        ).map { it.name }.toSet()
+    }
+
     private val sharedPrefs: Flow<Preferences> = dataStore.dataDegradingToDefaults()
 
     val security: StateFlow<SecuritySlice> =

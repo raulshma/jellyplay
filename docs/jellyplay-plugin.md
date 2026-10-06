@@ -44,6 +44,39 @@ Gating rule: feature code checks `statusStore.hasFeature(JellyPlayPluginFeatures
   incoming kind.
 - Never synced: secure stores, identity, byte arrays, `dream`/`screensaver`
   namespaces (per-device by definition), the `jpsync.*` reserved prefix.
+  The exclusions live at the adapter's registration (core/data DI): the
+  owning stores export `SyncExcludedKeys` sets (`SecurityStore`,
+  `PinRateLimiter`, `ServerIdentityStore`) so renames stay in lockstep, and
+  the prefixes come from one shared `PreferenceSyncPolicy` constant. The
+  adapter enforces the exclusions in BOTH directions — excluded and reserved
+  names are dropped on inbound `applyRemote`/`markSynced` too, so a server
+  still holding pre-exclusion leaked rows (or a hostile one) cannot write
+  secrets, identity, or mirror state back onto a device. Servers that synced
+  before these exclusions existed may still hold leaked rows server-side; an
+  admin namespace reset (`DELETE jellyplay/settings/prefs`) clears them.
+
+### Settings catalog (the plugin's known-keys list)
+
+The dashboard's client-defaults editor picks keys from a catalog the PLUGIN
+serves (`GET jellyplay/settings/catalog`) — admins never hand-type `ns/key`
+strings or raw values. The catalog is generated FROM THIS REPO:
+
+```
+./gradlew :shared:core:datastore:generateSettingsCatalog
+```
+
+walks the `PreferenceSpec` declarations (the same rows the stores persist
+through) and writes `jellyfin-plugin-jellyplay/src/Jellyfin.Plugin.JellyPlay/
+Resources/jellyplay-settings-catalog.json`, which the plugin embeds and
+serves. `checkSettingsCatalog` (wired into `check`) fails CI when the
+committed artifact is stale. Coverage: the six spec-backed domains plus a
+small supplemental allowlist (`volume_profiles`,
+`remember_volume_per_content_type`) — stores still on hand-written `Keys`
+objects join the catalog as they migrate to specs. Secrets and identity keys
+are denylisted at the generator (hard error, not a skip); the denylist is
+DERIVED from the same `SyncExcludedKeys` sets the sync adapter excludes, and
+the excluded prefixes come from the same shared `PreferenceSyncPolicy`
+constant, so the catalog cannot drift from what actually syncs.
 
 ## Live events
 

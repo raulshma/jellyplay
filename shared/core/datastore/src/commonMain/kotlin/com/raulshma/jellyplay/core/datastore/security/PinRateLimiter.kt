@@ -137,6 +137,14 @@ class PinRateLimiter constructor(
             15 * 60_000L,
             60 * 60_000L,
         )
+
+        /**
+         * Rate-limit state is per-device and must never sync — see
+         * [SecurityStore.SyncExcludedKeys] (this store shares its DataStore).
+         */
+        val SyncExcludedKeys: Set<String> = setOf(Keys.PIN_FAILED_ATTEMPTS, Keys.PIN_LOCKOUT_UNTIL_MS)
+            .map { it.name }
+            .toSet()
     }
 }
 

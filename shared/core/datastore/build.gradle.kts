@@ -45,3 +45,35 @@ kotlin {
         }
     }
 }
+
+// ── JellyPlay settings catalog artifact ──────────────────────────────────────
+// The generator (jvmMain .../tools/SettingsCatalogGenerator.kt) walks this
+// module's PreferenceSpec declarations and emits the catalog the Jellyfin
+// plugin embeds + serves to its dashboard. Regenerate after any spec row
+// change; `checkSettingsCatalog` (below, wired into `check`) fails when the
+// committed artifact is stale, so client and plugin cannot silently drift.
+
+val settingsCatalogJvmMain = kotlin.jvm().compilations.getByName("main")
+val settingsCatalogArtifact = rootProject.layout.projectDirectory.file(
+    "jellyfin-plugin-jellyplay/src/Jellyfin.Plugin.JellyPlay/Resources/jellyplay-settings-catalog.json",
+)
+val settingsCatalogClasspath =
+    settingsCatalogJvmMain.output.allOutputs + settingsCatalogJvmMain.compileDependencyFiles
+
+tasks.register<JavaExec>("generateSettingsCatalog") {
+    group = "jellyplay"
+    description = "Regenerates the JellyPlay settings catalog artifact embedded by the Jellyfin plugin."
+    mainClass.set("com.raulshma.jellyplay.core.datastore.tools.SettingsCatalogGeneratorKt")
+    classpath = settingsCatalogClasspath
+    args(settingsCatalogArtifact.asFile.absolutePath)
+}
+
+tasks.register<JavaExec>("checkSettingsCatalog") {
+    group = "verification"
+    description = "Fails when the committed settings catalog artifact no longer matches the PreferenceSpec declarations."
+    mainClass.set("com.raulshma.jellyplay.core.datastore.tools.SettingsCatalogGeneratorKt")
+    classpath = settingsCatalogClasspath
+    args("--check", settingsCatalogArtifact.asFile.absolutePath)
+}
+
+tasks.named("check") { dependsOn("checkSettingsCatalog") }

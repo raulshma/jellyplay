@@ -101,4 +101,68 @@ class JellyPlayPreferencesSyncAdapterTest {
         assertNull(snapshot["jpsync.mirror.theme"])
     }
 
+    @Test
+    fun excludedKeysAndPrefixes_neverSync() = runTest {
+        val store = newDataStore("excluded-${System.nanoTime()}").apply { reset() }
+        val adapter = JellyPlayPreferencesSyncAdapter(
+            store,
+            excludedPrefixes = listOf("dream"),
+            excludedKeys = setOf("pin_hash", "device_id"),
+        )
+        store.edit {
+            it[stringPreferencesKey("pin_hash")] = "secret"
+            it[stringPreferencesKey("device_id")] = "dev-1"
+            it[stringPreferencesKey("dream_enabled")] = "true"
+            it[stringPreferencesKey("theme_mode")] = "DARK"
+        }
+
+        val snapshot = adapter.snapshot()
+
+        // Secrets and identity must never leave the device; prefix-excluded
+        // namespaces stay per-device.
+        assertNull(snapshot["pin_hash"])
+        assertNull(snapshot["device_id"])
+        assertNull(snapshot["dream_enabled"])
+        assertEquals(JsonPrimitive("DARK"), snapshot["theme_mode"])
+    }
+
+    @Test
+    fun applyRemoteAndMarkSynced_dropExcludedAndReservedEntries() = runTest {
+        val store = newDataStore("excluded-inbound-${System.nanoTime()}").apply { reset() }
+        val adapter = JellyPlayPreferencesSyncAdapter(
+            store,
+            excludedPrefixes = listOf("dream"),
+            excludedKeys = setOf("pin_hash", "device_id"),
+        )
+        store.edit { it[stringPreferencesKey("pin_hash")] = "local-secret" }
+
+        // A server still holding pre-exclusion leaked rows (or a hostile one)
+        // must not re-write secrets, identity, per-device namespaces, or
+        // mirror state back onto this device.
+        adapter.applyRemote(
+            mapOf(
+                "pin_hash" to JsonPrimitive("attacker-hash"),
+                "device_id" to JsonPrimitive("attacker-device"),
+                "dream_enabled" to JsonPrimitive(true),
+                "jpsync.mirror.theme" to JsonPrimitive("\"dark\""),
+                "theme_mode" to JsonPrimitive("LIGHT"),
+            ),
+        )
+        adapter.markSynced(
+            mapOf(
+                "pin_hash" to JsonPrimitive("attacker-hash"),
+                "theme_mode" to JsonPrimitive("LIGHT"),
+            ),
+        )
+
+        val prefs = store.data.first()
+        assertEquals("local-secret", prefs[stringPreferencesKey("pin_hash")])
+        assertNull(prefs[booleanPreferencesKey("dream_enabled")])
+        assertNull(prefs[stringPreferencesKey("device_id")])
+        assertNull(prefs[stringPreferencesKey("jpsync.mirror.theme")])
+        assertEquals("LIGHT", prefs[stringPreferencesKey("theme_mode")])
+        assertNull(prefs[stringPreferencesKey("jpsync.mirror.pin_hash")])
+        assertEquals("\"LIGHT\"", prefs[stringPreferencesKey("jpsync.mirror.theme_mode")])
+    }
+
 }

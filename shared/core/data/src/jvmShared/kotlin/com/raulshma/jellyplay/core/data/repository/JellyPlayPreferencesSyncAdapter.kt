@@ -31,8 +31,15 @@ import kotlinx.serialization.json.longOrNull
  * `jpsync.mirror.` prefix (one file, no second DataStore instance; mirror
  * keys are excluded from the synced set so state can't feed back).
  *
- * Excluded from sync by design: `ByteArray` values (opaque binaries never
- * sync), anything matching [excludedPrefixes] (per-device namespaces).
+ * Excluded from sync by design — in BOTH directions: `ByteArray` values
+ * (opaque binaries never sync), anything matching [excludedPrefixes]
+ * (per-device namespaces), and anything in [excludedKeys] (secrets and
+ * device/session identity — see docs/jellyplay-plugin.md's "never synced"
+ * list; the exclusion sets are exported by the owning stores so the key
+ * names cannot drift). Outbound ([snapshot]) they never leave the device;
+ * inbound ([applyRemote]/[markSynced]) they are dropped even if a server
+ * still holds pre-exclusion leaked rows or is hostile — reserved `jpsync.*`
+ * names are likewise ignored so server state can't feed back.
  *
  * KIND PRESERVATION is the adapter's one hard rule: DataStore keys are
  * kind-locked by name — a `Float` read as `Double` crashes the app's readers.
@@ -43,11 +50,13 @@ class JellyPlayPreferencesSyncAdapter(
     private val dataStore: DataStore<Preferences>,
     override val namespace: String = "prefs",
     private val excludedPrefixes: List<String> = emptyList(),
+    private val excludedKeys: Set<String> = emptySet(),
 ) : ProfileSyncAdapter {
 
     private fun isReserved(name: String) = name.startsWith(MIRROR_PREFIX) || name.startsWith(DEVICE_PREFIX)
 
-    private fun isExcluded(name: String) = excludedPrefixes.any { name.startsWith(it) }
+    private fun isExcluded(name: String) =
+        name in excludedKeys || excludedPrefixes.any { name.startsWith(it) }
 
     override suspend fun snapshot(): Map<String, JsonElement> {
         val prefs = dataStore.data.first()
@@ -70,6 +79,10 @@ class JellyPlayPreferencesSyncAdapter(
         val current = dataStore.data.first()
         dataStore.edit { prefs ->
             entries.forEach { (name, value) ->
+                // Never-synced and reserved names are dropped inbound too: a
+                // server holding pre-exclusion leaked rows (or a hostile one)
+                // must not re-write secrets, identity, or mirror state here.
+                if (isReserved(name) || isExcluded(name)) return@forEach
                 if (value is JsonNull) {
                     prefs.remove(stringPreferencesKey(name))
                     return@forEach
@@ -100,6 +113,7 @@ class JellyPlayPreferencesSyncAdapter(
     override suspend fun markSynced(values: Map<String, JsonElement>) {
         dataStore.edit { prefs ->
             values.forEach { (name, value) ->
+                if (isReserved(name) || isExcluded(name)) return@forEach
                 prefs[stringPreferencesKey(MIRROR_PREFIX + name)] = value.toString()
             }
         }
