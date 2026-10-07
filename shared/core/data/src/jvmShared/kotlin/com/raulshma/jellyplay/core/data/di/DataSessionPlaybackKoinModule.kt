@@ -12,13 +12,19 @@ import com.raulshma.jellyplay.core.data.playback.SleepCountdownClock
 import com.raulshma.jellyplay.core.data.playback.VideoMiniPlayerState
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.session.HomeSession
+import com.raulshma.jellyplay.core.data.repository.JellyPlayBookmarksSyncAdapter
+import com.raulshma.jellyplay.core.data.repository.JellyPlayCwSyncAdapter
 import com.raulshma.jellyplay.core.data.repository.JellyPlayEventsRepository
+import com.raulshma.jellyplay.core.data.repository.JellyPlayHomeLayoutSyncAdapter
 import com.raulshma.jellyplay.core.data.repository.JellyPlayPreferencesSyncAdapter
+import com.raulshma.jellyplay.core.data.repository.JellyPlayReaderSyncAdapter
+import com.raulshma.jellyplay.core.data.repository.JellyPlaySearchHistorySyncAdapter
 import com.raulshma.jellyplay.core.data.repository.JellyPushRepository
 import com.raulshma.jellyplay.core.data.repository.ProfileSyncRepository
 import com.raulshma.jellyplay.core.data.session.SessionCacheRegistry
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import java.util.UUID
 import kotlinx.coroutines.flow.first
@@ -30,6 +36,7 @@ import com.raulshma.jellyplay.core.model.PlatformKind
 import com.raulshma.jellyplay.core.model.SystemTimeSource
 import com.raulshma.jellyplay.core.model.TimeSource
 import com.raulshma.jellyplay.core.model.currentPlatform
+import com.raulshma.jellyplay.core.model.deviceModelName
 import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.datastore.library.LibraryStore
@@ -241,6 +248,76 @@ internal val dataSessionPlaybackModule: Module = module {
         )
     }
 
+    // The reader's bookmarks under the general sync protocol (ADR 0011): the
+    // `books` namespace adapter over the Room `book_bookmarks` store, full
+    // payload (CFI included) in the value, deletes roaming via tombstones.
+    // Its mirror rides the SAME user-prefs DataStore the prefs adapter
+    // mirrors, under the reserved `jpsync.mirror.books.` prefix — the two
+    // adapters never see each other's entries (jpsync.* is reserved in both).
+    single {
+        JellyPlayBookmarksSyncAdapter(
+            bookmarkDao = get(),
+            mirrorStore = get(com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers.userPreferencesDataStore),
+        )
+    }
+
+    // The search history under the general sync protocol (ADR 0011): the
+    // `search` namespace adapter over the Room `search_history` store —
+    // sha1(query) keys, `{query, searchedAt}` values, deletes roaming — with
+    // the client's own 50-entry cap kept (adoption rides `insertAndEvict`).
+    // Rows are user-scoped: the adapter reads the ACTIVE session's user, the
+    // same identity the engine resets on.
+    single {
+        val identities = get<SessionIdentityProvider>()
+        JellyPlaySearchHistorySyncAdapter(
+            historyDao = get(),
+            mirrorStore = get(com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers.userPreferencesDataStore),
+            userIdProvider = { identities.currentIdentity()?.userId },
+        )
+    }
+
+    // The continue-watching removals under the general sync protocol (ADR
+    // 0011): the `cw` namespace adapter over the home store's hidden-CW set —
+    // `cw/hidden/{itemId}` keys, the SAME overlay the home pipelines filter
+    // on and the details screen's hide action writes, so this adds only the
+    // sync half (native Jellyfin data untouched; the settings restore list
+    // reads the same set).
+    single {
+        JellyPlayCwSyncAdapter(
+            homeDiscoveryStore = get(),
+            mirrorStore = get(com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers.userPreferencesDataStore),
+        )
+    }
+
+    // The reader's annotation backup under the general sync protocol (ADR
+    // 0011, ADR 0003 local-first): the `reader` namespace adapter over the
+    // Room `book_annotations` store — one `ann/{itemId}` key per book, the
+    // full annotation list as the value, deletes roaming. OPT-IN: the
+    // namespace's selective-sync toggle below DEFAULTS OFF (the backup never
+    // blocks a local op — off parks the namespace whole, on runs one cycle
+    // immediately); every other namespace defaults on.
+    single {
+        JellyPlayReaderSyncAdapter(
+            annotationDao = get(),
+            mirrorStore = get(com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers.userPreferencesDataStore),
+        )
+    }
+
+    // The home LAYOUT under the general sync protocol (ADR 0011): the
+    // `homelayout` namespace adapter over the home store's layout domains
+    // (section enabled-set/order, per-library overrides, pinned sections,
+    // Discover rows, layout presets) — the store's own setters are the
+    // adoption path, so the section algebra stays hers. These domains left
+    // the `prefs` adapter's raw snapshot with the per-user-namespaced key
+    // exclusion (PreferenceSyncPolicy): raw `u_<userId>::home_*` keys used to
+    // ride prefs verbatim; the typed namespaces own them now.
+    single {
+        JellyPlayHomeLayoutSyncAdapter(
+            homeDiscoveryStore = get(),
+            mirrorStore = get(com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers.userPreferencesDataStore),
+        )
+    }
+
     single {
         val dataStore: androidx.datastore.core.DataStore<androidx.datastore.preferences.core.Preferences> =
             get(com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers.userPreferencesDataStore)
@@ -248,11 +325,19 @@ internal val dataSessionPlaybackModule: Module = module {
             apiClient = get(),
             statusStore = get(),
             sessionCacheRegistry = get(),
-            // The shared adapter registration above (with its exclusions) —
+            // The shared adapter registrations above (with their exclusions) —
             // constructing a fresh adapter here would silently sync the
             // excluded keys (that drift is how dream/screensaver leaked
-            // before).
-            adapters = listOf(get<JellyPlayPreferencesSyncAdapter>()),
+            // before). The books adapter rides the same engine: one toggle,
+            // one cycle, per-namespace adapters.
+            adapters = listOf(
+                get<JellyPlayPreferencesSyncAdapter>(),
+                get<JellyPlayBookmarksSyncAdapter>(),
+                get<JellyPlaySearchHistorySyncAdapter>(),
+                get<JellyPlayCwSyncAdapter>(),
+                get<JellyPlayReaderSyncAdapter>(),
+                get<JellyPlayHomeLayoutSyncAdapter>(),
+            ),
             deviceProfile = detectDeviceProfile(),
             deviceIdProvider = jpsyncDeviceIdProvider(dataStore),
             nowMillis = { get<TimeSource>().nowEpochMillis() },
@@ -262,6 +347,28 @@ internal val dataSessionPlaybackModule: Module = module {
             },
             saveEnabled = { value ->
                 dataStore.edit { it[booleanPreferencesKey("jpsync.device.sync_enabled")] = value }
+            },
+            // The delta sweep's per-user resume cursor (reserved
+            // `jpsync.cursor.*` prefs, never synced): keyed by identity so two
+            // users sharing a device never read each other's change-log
+            // position.
+            loadDeltaCursor = jpsyncCursorLoader(dataStore, get<SessionIdentityProvider>(), CURSOR_DELTA),
+            saveDeltaCursor = jpsyncCursorSaver(dataStore, get<SessionIdentityProvider>(), CURSOR_DELTA),
+            // SELECTIVE SYNC: the per-namespace, device-local toggles under
+            // the reserved `jpsync.ns.enabled.<ns>` prefs (missing key = on —
+            // the default). The `jpsync.` reservation keeps them out of every
+            // adapter's synced set (device-local by construction); the engine
+            // honors them at both faces of a cycle (dirty collection AND
+            // adopt). The `reader` namespace is the ONE default-off toggle —
+            // annotation backup is opt-in (ADR 0003: backup never blocks
+            // local ops; the namespace toggle IS the opt-in, and flipping it
+            // on runs one cycle immediately).
+            loadNamespaceEnabled = { ns ->
+                dataStore.data.first()[booleanPreferencesKey("jpsync.ns.enabled." + ns)]
+                    ?: (ns != NAMESPACE_READER_BACKUP)
+            },
+            saveNamespaceEnabled = { ns, enabled ->
+                dataStore.edit { it[booleanPreferencesKey("jpsync.ns.enabled." + ns)] = enabled }
             },
         )
     }
@@ -274,6 +381,7 @@ internal val dataSessionPlaybackModule: Module = module {
             deviceName = detectDeviceName(),
             devicePlatform = detectDeviceProfile(),
             appVersion = appVersionString(),
+            deviceModel = deviceModelName,
             deviceIdProvider = jpsyncDeviceIdProvider(
                 get(com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers.userPreferencesDataStore),
             ),
@@ -330,14 +438,19 @@ internal val dataSessionPlaybackModule: Module = module {
     // requestSync. Rides auth AND the engine's own enabled edge (no connection
     // for a user who never opted in, none doomed while signed out); the
     // createdAtStart singleton-collector idiom again — one wiring covers both
-    // shells.
+    // shells. Reconnects resume from the last-seen event id, persisted per
+    // user beside the delta cursor (the `Last-Event-ID` reconnect contract).
     single(createdAtStart = true) {
+        val dataStore: androidx.datastore.core.DataStore<androidx.datastore.preferences.core.Preferences> =
+            get(com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers.userPreferencesDataStore)
         com.raulshma.jellyplay.core.data.repository.JellyPlayLiveResyncConnector(
             apiClient = get(),
             syncRepository = get(),
             statusStore = get(),
             authRepository = get(),
             scope = get(com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers.applicationScope),
+            loadLastEventId = jpsyncCursorLoader(dataStore, get<SessionIdentityProvider>(), CURSOR_SSE),
+            saveLastEventId = jpsyncCursorSaver(dataStore, get<SessionIdentityProvider>(), CURSOR_SSE),
         ).apply { start() }
     }
 }
@@ -370,6 +483,50 @@ private fun jpsyncDeviceIdProvider(
 }
 
 /**
+ * Which sync cursor a [jpsyncCursorLoader]/[jpsyncCursorSaver] pair drives —
+ * the delta sweep's change-log position ([CURSOR_DELTA]) or the settings SSE
+ * stream's last event id ([CURSOR_SSE]). Both live under the reserved
+ * `jpsync.cursor.` pref namespace (never synced, adapter rule).
+ */
+internal const val CURSOR_DELTA = "delta"
+internal const val CURSOR_SSE = "sse"
+
+/** The `reader` namespace — annotation backup, the ONE selective-sync toggle that defaults OFF. */
+internal const val NAMESPACE_READER_BACKUP = "reader"
+
+/**
+ * The per-user cursor loader the sync engine and the live re-sync connector
+ * resume from: keyed by session identity so two users sharing a device never
+ * read each other's position; a `null` identity (no session) loads as "no
+ * cursor" and the engine/connector starts from 0.
+ */
+private fun jpsyncCursorLoader(
+    dataStore: androidx.datastore.core.DataStore<androidx.datastore.preferences.core.Preferences>,
+    identities: SessionIdentityProvider,
+    cursor: String,
+): suspend () -> Long? = {
+    val userId = identities.currentIdentity()?.userId
+    userId?.let { dataStore.data.first()[longPreferencesKey("jpsync.cursor.$cursor.$it")] }
+}
+
+/**
+ * The per-user cursor saver — the write half of [jpsyncCursorLoader]. A
+ * `null` identity skips the save (nowhere to key it; the in-process cursor
+ * still advances, the next session just re-sweeps).
+ */
+private fun jpsyncCursorSaver(
+    dataStore: androidx.datastore.core.DataStore<androidx.datastore.preferences.core.Preferences>,
+    identities: SessionIdentityProvider,
+    cursor: String,
+): suspend (Long) -> Unit = { value ->
+    val userId = identities.currentIdentity()?.userId
+    if (userId != null) {
+        dataStore.edit { it[longPreferencesKey("jpsync.cursor.$cursor.$userId")] = value }
+    }
+}
+
+
+/**
  * The device display name the events/push device registration carries. Desktop
  * shells read `os.name`; Android rides the compile-time platform actual —
  * `os.name` is "Linux" on Android and would mislabel every phone (the rule
@@ -377,7 +534,9 @@ private fun jpsyncDeviceIdProvider(
  */
 private fun detectDeviceName(): String =
     when (currentPlatform) {
-        PlatformKind.ANDROID -> "Android device"
+        // The hardware model ("Nokia 6.1 Plus") beats the anonymous
+        // "Android device" — it's what the registry's device rows show.
+        PlatformKind.ANDROID -> deviceModelName ?: "Android device"
         PlatformKind.DESKTOP -> System.getProperty("os.name")?.let { "$it device" } ?: "JellyPlay device"
     }
 

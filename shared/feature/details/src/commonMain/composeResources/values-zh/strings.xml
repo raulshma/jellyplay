@@ -479,4 +479,12 @@
     <plurals name="detail_merge_count_selected">
         <item quantity="other">已选择 %1$d 个条目</item>
     </plurals>
+
+    <!-- The JellyPlay sync / details-badges / player-notice strings
+         (ADR 0010 wave), translated together with the default file. -->
+    <string name="jellyplay_det_ratings_title">评分</string>
+    <string name="jellyplay_det_similar_badge">服务器推荐</string>
+    <string name="jellyplay_det_filler_badge">灌水</string>
+    <string name="jellyplay_det_mixed_badge">褒贬不一</string>
+    <string name="jellyplay_det_recap_badge">前情提要</string>
 </resources>

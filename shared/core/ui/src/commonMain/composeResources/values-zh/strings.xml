@@ -401,4 +401,9 @@
     <string name="core_input_dpad_play_pause">播放/暂停</string>
     <string name="core_input_dpad_fast_forward">快进</string>
     <string name="core_input_dpad_rewind">快退</string>
+
+    <!-- The JellyPlay sync / details-badges / player-notice strings
+         (ADR 0010 wave), translated together with the default file. -->
+    <string name="core_action_hide_from_continue_watching">从“继续观看”中移除</string>
+    <string name="core_action_show_from_continue_watching">在“继续观看”中显示</string>
 </resources>

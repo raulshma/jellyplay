@@ -370,4 +370,10 @@
     <string name="player_video_preset_save_dialog_title">Enregistrer un préréglage</string>
     <string name="player_video_preset_name_label">Nom du préréglage</string>
     <string name="player_video_preset_delete_a11y">Supprimer le préréglage %1$s</string>
+
+    <!-- The JellyPlay sync / details-badges / player-notice strings
+         (ADR 0010 wave), translated together with the default file. -->
+    <string name="player_video_transcode_switched">Passage au flux transcodé — mise en mémoire tampon</string>
+    <string name="player_video_direct_play_unavailable">Lecture directe indisponible pour cet élément — repli sur le transcodage</string>
+    <string name="player_video_vlc_client_cert_unsupported">Le certificat client n'est pas pris en charge par le moteur VLC — passez à ExoPlayer ou mpv pour les serveurs mTLS</string>
 </resources>

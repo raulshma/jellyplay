@@ -73,8 +73,9 @@ class SeerrSettingsViewModel(
     private val pluginStatusStore: JellyPlayPluginStatusStore? = null,
     /**
      * The per-feature gate seam (probe AND the user's toggle) over the store
-     * above. Nullable-with-default; without it the probe alone governs, the
-     * pre-toggle behavior.
+     * above. Nullable-with-default; unwired, every bridge path fails CLOSED
+     * (ADR 0010 §6) — production always receives it from Koin, only direct
+     * test construction runs without it.
      */
     private val jellyPlayFeatureGate: com.raulshma.jellyplay.core.data.session.JellyPlayFeatureGate? = null,
     /** Jellyfin Quick Connect source for the bridge link flow (the plugin authorizes a Jellyfin QC secret, then SSOs into Seerr). */

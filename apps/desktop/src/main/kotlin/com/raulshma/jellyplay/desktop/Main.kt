@@ -341,6 +341,26 @@ fun main(args: Array<String>) {
                 onDispose { window.removeWindowListener(maximizeListener) }
             }
 
+            // The settings/profile sync engine's window-focus flush (ADR 0011):
+            // the desktop's app-background equivalent — the window regaining
+            // focus is the "the user is back" edge, so changes accumulated on
+            // this device flush promptly (the scheduler's own debounce
+            // collapses alt-tab bursts). Best-effort and inert before the
+            // scheduler's start(): the engine's gates stay authoritative.
+            DisposableEffect(Unit) {
+                val focusListener = object : java.awt.event.WindowAdapter() {
+                    override fun windowGainedFocus(e: java.awt.event.WindowEvent?) {
+                        runCatching {
+                            koinApp.koin
+                                .get<com.raulshma.jellyplay.core.data.worker.DesktopSettingsSyncScheduler>()
+                                .onWindowFocus()
+                        }
+                    }
+                }
+                window.addWindowFocusListener(focusListener)
+                onDispose { window.removeWindowFocusListener(focusListener) }
+            }
+
             // Persist the floating geometry on window teardown. This covers
             // every exit path (title-bar close, Ctrl+Q, tray Quit — all
             // funnel into exitApplication, which disposes the composition).

@@ -368,4 +368,10 @@
     <string name="player_video_preset_save_dialog_title">프리셋 저장</string>
     <string name="player_video_preset_name_label">프리셋 이름</string>
     <string name="player_video_preset_delete_a11y">프리셋 %1$s 삭제</string>
+
+    <!-- The JellyPlay sync / details-badges / player-notice strings
+         (ADR 0010 wave), translated together with the default file. -->
+    <string name="player_video_transcode_switched">트랜스코딩 스트림으로 전환됨 — 다시 버퍼링하는 중</string>
+    <string name="player_video_direct_play_unavailable">이 항목은 다이렉트 재생이 불가능합니다 — 트랜스코딩으로 전환합니다</string>
+    <string name="player_video_vlc_client_cert_unsupported">클라이언트 인증서는 VLC 엔진에서 지원되지 않습니다 — mTLS 서버는 ExoPlayer 또는 mpv로 전환하세요</string>
 </resources>

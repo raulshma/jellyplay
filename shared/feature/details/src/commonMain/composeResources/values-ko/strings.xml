@@ -479,4 +479,12 @@
     <plurals name="detail_merge_count_selected">
         <item quantity="other">항목 %1$d개 선택됨</item>
     </plurals>
+
+    <!-- The JellyPlay sync / details-badges / player-notice strings
+         (ADR 0010 wave), translated together with the default file. -->
+    <string name="jellyplay_det_ratings_title">평점</string>
+    <string name="jellyplay_det_similar_badge">서버 추천</string>
+    <string name="jellyplay_det_filler_badge">필러</string>
+    <string name="jellyplay_det_mixed_badge">복합</string>
+    <string name="jellyplay_det_recap_badge">리캡</string>
 </resources>

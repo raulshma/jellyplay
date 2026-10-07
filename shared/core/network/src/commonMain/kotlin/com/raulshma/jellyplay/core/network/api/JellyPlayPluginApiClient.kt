@@ -20,7 +20,18 @@ interface JellyPlayPluginApiClient {
 
     suspend fun getSettings(profile: String? = null): Result<JellyPlaySettingsSnapshot>
 
-    suspend fun getChangedSettings(since: Long, profile: String? = null): Result<JellyPlaySettingsSnapshot>
+    /**
+     * The delta since the change-log cursor [since], optionally paged: [limit]
+     * caps the page and [cursor] continues a previous page (the response's
+     * `nextCursor`, null = last page). Both null = the legacy unpaged read —
+     * byte-identical wire to pre-pagination plugins, which ignore the params.
+     */
+    suspend fun getChangedSettings(
+        since: Long,
+        profile: String? = null,
+        limit: Int? = null,
+        cursor: Long? = null,
+    ): Result<JellyPlaySettingsSnapshot>
 
     suspend fun applySettings(
         profile: String?,
@@ -62,10 +73,50 @@ interface JellyPlayPluginApiClient {
     suspend fun adminSyncOverview(): Result<JellyPlaySyncAdminOverview?>
 
     /**
+     * The user's rolling restore points (server-side settings snapshots),
+     * newest first. null = the server's plugin predates the restore-points
+     * wave (404) — callers degrade quietly (hide the surface), never error.
+     */
+    suspend fun getSnapshots(): Result<List<JellyPlaySnapshot>?>
+
+    /** Captures a manual restore point; [JellyPlaySnapshotCreated.id] is its handle. null = pre-wave 404. */
+    suspend fun createSnapshot(): Result<JellyPlaySnapshotCreated?>
+
+    /**
+     * Restores [id]: a server-orchestrated tombstone batch over the current
+     * rows followed by the snapshot re-applied (the restore always wins LWW).
+     * The result rides the ordinary batch pipeline's shape. null = pre-wave
+     * 404 (or the snapshot is not the caller's).
+     */
+    suspend fun restoreSnapshot(id: String): Result<JellyPlaySettingsBatchResult?>
+
+    /**
+     * The caller's whole synced store as one JSON export bundle (all profiles
+     * + resolved modes + catalog stamp), verbatim — the payload is opaque to
+     * the client (share/save it; hand it back to [importSettings]). null =
+     * pre-wave 404.
+     */
+    suspend fun exportSettings(): Result<String?>
+
+    /**
+     * Re-applies a bundle produced by [exportSettings] (the same wire shape)
+     * for the caller, server-now stamped — it beats anything older but never
+     * clobbers a legitimately newer local change. [deviceId] attributes the
+     * import. null = pre-wave 404.
+     */
+    suspend fun importSettings(bundleJson: String, deviceId: String? = null): Result<JellyPlaySettingsBatchResult?>
+
+    /**
      * Cold SSE stream of `settings.changed` / `settings.reset` events for the
      * signed-in user. Cancelling collection closes the connection.
+     *
+     * [resumeFromEventId] rides the `Last-Event-ID` header (0/omitted = no
+     * header — the legacy connect): a stream whose ids are anchored to the
+     * change-log head replays everything after that id, closing the reconnect
+     * gap. Callers own the cursor: read it off [JellyPlaySseEvent.id] and pass
+     * the last seen value back on the next (re)connect.
      */
-    fun settingsStream(): kotlinx.coroutines.flow.Flow<JellyPlaySseEvent>
+    fun settingsStream(resumeFromEventId: Long = 0): kotlinx.coroutines.flow.Flow<JellyPlaySseEvent>
 
     // ---- events & devices ----
 
@@ -78,6 +129,12 @@ interface JellyPlayPluginApiClient {
      * [JellyPlayDevicePush.Keep] (the default) omits the field entirely, so
      * the legacy wire shape stays byte-identical and the server keeps
      * whatever push state it already holds.
+     *
+     * [caps] is the registry-v7 self-reported capability list (what gates
+     * silent push kinds server-side). It REPLACES the stored caps on every
+     * registration — a re-POST (push rotation, re-registration) that omits it
+     * wipes the device's caps — so every caller asserts its caps on every
+     * registration ([CAP_SILENT_PUSH] today).
      */
     suspend fun registerDevice(
         deviceId: String,
@@ -85,9 +142,25 @@ interface JellyPlayPluginApiClient {
         platform: String,
         appVersion: String,
         push: JellyPlayDevicePush = JellyPlayDevicePush.Keep,
+        caps: List<String> = emptyList(),
+        /** Hardware model (e.g. "Nokia 6.1 Plus") for the dashboard's device rows. */
+        model: String? = null,
     ): Result<Unit>
 
-    suspend fun unregisterDevice(deviceId: String): Result<Unit>
+    /**
+     * Renames (and/or re-models) a registered device — registry v7's
+     * `POST jellyplay/devices/{id}`. Null fields keep their stored value.
+     * 404 surfaces as a failed Result (unknown id, or a pre-registry plugin).
+     */
+    suspend fun renameDevice(deviceId: String, name: String? = null, model: String? = null): Result<Unit>
+
+    /**
+     * Revokes a device — registry v7's `DELETE jellyplay/devices/{id}` is a
+     * REVOKE + wipe, not a row removal: the row survives flagged `revoked`,
+     * every push fan-out excludes it, and every settings row it wrote is
+     * tombstone-wiped server-side. 404 surfaces as a failed Result.
+     */
+    suspend fun revokeDevice(deviceId: String): Result<Unit>
 
     suspend fun getDevices(): Result<List<JellyPlayDevice>>
 
@@ -348,6 +421,18 @@ data class JellyPlaySettingsSnapshot(
     val profile: String = "",
     val settings: List<JellyPlaySettingsEntry> = emptyList(),
     /**
+     * The keys deleted since the delta cursor (the change-log's tombstones),
+     * additive on `GET settings/changed` pages. Absent/empty = an older plugin
+     * (no tombstone machinery on the wire) or nothing deleted — the read
+     * behaves exactly as before either way.
+     */
+    val deleted: List<JellyPlaySettingDelete> = emptyList(),
+    /**
+     * The pagination continuation for `GET settings` / `GET settings/changed`
+     * pages (null = last page). Absent = an older plugin — the unpaged read.
+     */
+    val nextCursor: Long? = null,
+    /**
      * The admin-defaults tri-state per synced key, addressed by the composite
      * `"ns/key"` form (`"prefs/pluginFeature.events.enabled"`) →
      * `"unset" | "suggested" | "forced"`. Absent = an older plugin (no
@@ -358,6 +443,10 @@ data class JellyPlaySettingsSnapshot(
     val modes: Map<String, String>? = null,
 )
 
+/** One tombstoned key inside a delta snapshot's [JellyPlaySettingsSnapshot.deleted] list. */
+@Serializable
+data class JellyPlaySettingDelete(val ns: String, val key: String)
+
 @Serializable
 data class JellyPlaySettingWrite(
     val ns: String,
@@ -365,11 +454,32 @@ data class JellyPlaySettingWrite(
     val schemaVersion: Int = 1,
     val updatedAt: Long,
     val value: JsonElement,
+    /**
+     * Tombstone marker for the plugin's delete op. `true` removes the stored
+     * value server-side and appends a change-log 'del' row so the delete roams
+     * to peers via the delta's `deleted[]`. This flag is the only tombstone
+     * form on the wire — a JSON-null [value] without it is stored verbatim.
+     */
+    val deleted: Boolean = false,
 )
 
 @Serializable
-data class JellyPlayAppliedSetting(val ns: String, val key: String, val updatedAt: Long, val seq: Long)
+data class JellyPlayAppliedSetting(
+    val ns: String,
+    val key: String,
+    val updatedAt: Long,
+    val seq: Long,
+    /** True when the applied write was a tombstone (the server's delete op). */
+    val deleted: Boolean = false,
+)
 
+/**
+ * One rejected write. `reason` is the plugin's vocabulary — `stale-write`
+ * (LWW loss, retryable), `key-too-large`/`quota-exceeded`/`key-limit-reached`,
+ * and the non-retryable `clock-skew` (the write's `updatedAt` runs ahead of
+ * the server clock) and `device-revoked` (the `deviceId` was revoked) — the
+ * last two must surface in sync state, never silently retry.
+ */
 @Serializable
 data class JellyPlayRejectedSetting(val ns: String, val key: String, val reason: String)
 
@@ -427,7 +537,7 @@ data class JellyPlaySyncHistoryEntry(
     val seq: Long,
     val ts: Long = 0,
     val deviceId: String = "",
-    /** `push` | `pull` | `reset` — loosely matched by the UI, unknown → plain label. */
+    /** `push` | `pull` | `reset` | `wipe` — loosely matched by the UI, unknown → plain label. */
     val op: String = "",
     val keysApplied: Int = 0,
     val keysRejected: Int = 0,
@@ -446,7 +556,7 @@ data class JellyPlaySyncReject(
 @Serializable
 data class JellyPlaySyncHistoryKeys(
     val seq: Long,
-    /** `push` | `pull` | `reset` — empty for reset rows' key lists (no diff). */
+    /** `push` | `pull` | `reset` | `wipe`; rows without a usable range (pre-v7 resets, no-ops) carry an empty [keys]. */
     val op: String = "",
     val keys: List<JellyPlaySyncHistoryKey> = emptyList(),
 )
@@ -475,6 +585,27 @@ data class JellyPlaySyncAdminUser(
     val lastSyncAt: Long = 0,
     val deviceCount: Int = 0,
 )
+
+// ---------------------------------------------------------------------------
+// restore points (the `jellyplay/settings/snapshots` wave) — the rolling
+// per-user server-side snapshots of the WHOLE synced store. Defaults keep a
+// payload trimmed by an older plugin decoding.
+// ---------------------------------------------------------------------------
+
+/** One restore point: a server-held settings snapshot (newest-first list order). */
+@Serializable
+data class JellyPlaySnapshot(
+    val id: String,
+    val createdAt: Long = 0,
+    /** `manual` | `admin-push` | `profile-copy` — loosely matched by the UI. */
+    val origin: String = "",
+    val keys: Int = 0,
+    val bytes: Long = 0,
+)
+
+/** The create-snapshot response — the new restore point's handle. */
+@Serializable
+data class JellyPlaySnapshotCreated(val id: String)
 
 // ---------------------------------------------------------------------------
 // admin analytics (the `jellyplay/admin/analytics/*` wave) — the play-history
@@ -588,6 +719,12 @@ data class JellyPlayMyAnalyticsTotals(
     val uniqueItems: Int = 0,
 )
 
+/**
+ * One row of the device registry (`GET jellyplay/devices`). The registry-v7
+ * fields ([model], [caps], [revoked], [push]) are additive with defaults, so
+ * a payload from a pre-registry-wave plugin still decodes; [push] (holding
+ * the secret endpoint URL) is only ever present on the caller's OWN rows.
+ */
 @Serializable
 data class JellyPlayDevice(
     val deviceId: String,
@@ -596,6 +733,14 @@ data class JellyPlayDevice(
     val platform: String = "",
     val appVersion: String = "",
     val lastSeen: Long = 0,
+    /** Self-reported hardware model (registry v7, informational). */
+    val model: String? = null,
+    /** Self-reported capability strings (registry v7) — what gates silent push. */
+    val caps: List<String> = emptyList(),
+    /** True once the device was revoked server-side (its writes reject, its rows were wiped). */
+    val revoked: Boolean = false,
+    /** The device's push registration, present only on the caller's own rows. */
+    val push: JellyPlayPushRegistration? = null,
 )
 
 /**
@@ -611,6 +756,16 @@ data class JellyPlayPushRegistration(
     val kind: String,
     val endpoint: String,
 )
+
+/**
+ * The one device capability this client self-reports (registry v7): opts the
+ * device into the `sync-nudge` SILENT push (a data-only frame the app turns
+ * into a [profile-sync][com.raulshma.jellyplay.core.data.repository.ProfileSyncRepository]
+ * cycle, never a tray notification). Old clients that render unknown kinds as
+ * visible notifications simply never send the cap, and the server never
+ * nudges them. Every registerDevice call asserts it — the wire REPLACES caps.
+ */
+const val CAP_SILENT_PUSH = "silent-push"
 
 /**
  * The wire tri-state of a registration's push half — attach, explicit

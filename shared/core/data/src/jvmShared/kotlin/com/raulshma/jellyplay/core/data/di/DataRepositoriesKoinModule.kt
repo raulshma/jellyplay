@@ -33,11 +33,13 @@ import com.raulshma.jellyplay.core.data.repository.StoragePolicy
 import com.raulshma.jellyplay.core.data.repository.WatchHistoryRepository
 import com.raulshma.jellyplay.core.data.repository.WatchHistoryRepositoryImpl
 import com.raulshma.jellyplay.core.data.session.PlaybackReportingStatusStore
+import com.raulshma.jellyplay.core.data.worker.SettingsSyncScheduler
 import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
 import com.raulshma.jellyplay.core.database.dao.DownloadDao
 import com.raulshma.jellyplay.core.network.websocket.JellyfinWebSocketClient
 import org.koin.core.module.Module
 import org.koin.dsl.module
+import org.koin.mp.KoinPlatformTools
 
 /**
  * The repository-layer family of the dataJvmModule split (C4 part 2, batch
@@ -90,7 +92,29 @@ internal val dataRepositoriesModule: Module = module {
     single { ServerDiscoveryRepositoryImpl(get()) }
     single<ServerDiscoveryRepository> { get<ServerDiscoveryRepositoryImpl>() }
 
-    single { SearchHistoryRepositoryImpl(get(), get()) }
+    // The dirty-write flush signal resolves the platform SettingsSyncScheduler
+    // (WorkManager on Android, the in-process desktop scheduler on desktop) —
+    // getKoin() captured here, the resolution deferred to each write (the
+    // JellyPlayHomeSectionSourcesImpl idiom: the single's own scope is gone by
+    // call time). Graphs without the scheduler (tests, bare constructions)
+    // resolve null and simply never enqueue a flush; the background triggers
+    // still cover those writes.
+    fun settingsSyncFlush(): suspend () -> Unit = {
+        // The global container resolved at WRITE time (the single's own scope
+        // is long gone by then, and module-registration time may precede
+        // context registration) — the JellyPlayHomeSectionSourcesImpl
+        // captured-container idiom, deferred all the way to the call.
+        runCatching { KoinPlatformTools.defaultContext().get() }.getOrNull()
+            ?.getOrNull<SettingsSyncScheduler>()
+            ?.enqueueNow()
+    }
+    single {
+        SearchHistoryRepositoryImpl(
+            dao = get(),
+            timeSource = get(),
+            onDirty = settingsSyncFlush(),
+        )
+    }
     single<SearchHistoryRepository> { get<SearchHistoryRepositoryImpl>() }
 
     single { ItemPlaybackPreferenceRepositoryImpl(get(), get(), get()) }
@@ -107,6 +131,7 @@ internal val dataRepositoriesModule: Module = module {
             bookmarkDao = get(),
             annotationDao = get(),
             timeSource = get(),
+            onDirty = settingsSyncFlush(),
         )
     }
     single<ReaderAnnotationsRepository> { get<ReaderAnnotationsRepositoryImpl>() }

@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.data.repository
 
 import com.raulshma.jellyplay.core.data.session.JellyPlayPluginStatusStore
+import com.raulshma.jellyplay.core.network.api.CAP_SILENT_PUSH
 import com.raulshma.jellyplay.core.network.api.JellyPlayMessage
 import com.raulshma.jellyplay.core.network.api.JellyPlayPluginApiClient
 import com.raulshma.jellyplay.core.network.api.JellyPlaySseEvent
@@ -59,6 +60,8 @@ class JellyPlayEventsRepository(
     private val devicePlatform: String,
     private val appVersion: String,
     private val deviceIdProvider: suspend () -> String,
+    /** Hardware model for the registry row (null where the platform has none). */
+    private val deviceModel: String? = null,
 ) {
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -83,7 +86,17 @@ class JellyPlayEventsRepository(
         if (!statusStore.ensureAvailable() || !statusStore.hasFeature(FEATURE_EVENTS)) return
 
         deviceIdProvider().let { deviceId ->
-            apiClient.registerDevice(deviceId, deviceName, devicePlatform, appVersion)
+            // The caps assertion rides EVERY registration (the wire REPLACES
+            // caps): "silent-push" opts this device into the sync-nudge
+            // silent push, whose client branch folds into requestSync.
+            apiClient.registerDevice(
+                deviceId,
+                deviceName,
+                devicePlatform,
+                appVersion,
+                caps = listOf(CAP_SILENT_PUSH),
+                model = deviceModel,
+            )
         }
         refreshInbox()
 

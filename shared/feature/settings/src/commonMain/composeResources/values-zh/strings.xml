@@ -811,4 +811,43 @@
     <string name="settings_jellyplay_push_state_server_off">服务器推送已停用</string>
     <string name="settings_jellyplay_feature_analytics">统计</string>
     <string name="ss_jellyplay_feature_analytics_subtitle">管理区域中的播放历史仪表板（仅管理员）</string>
+
+    <!-- The JellyPlay sync / details-badges / player-notice strings
+         (ADR 0010 wave), translated together with the default file. -->
+    <string name="settings_jellyplay_sync_pending">%1$d 项待同步</string>
+    <string name="settings_jellyplay_sync_error_title">同步出现问题</string>
+    <string name="settings_jellyplay_sync_rejected_keys">%1$d 个键被拒绝：%2$s</string>
+    <string name="settings_jellyplay_sync_conflicts_title">冲突</string>
+    <string name="settings_jellyplay_sync_conflict_row">%1$s • %2$s</string>
+    <string name="settings_jellyplay_sync_conflict_ours">本设备</string>
+    <string name="settings_jellyplay_sync_conflict_theirs">服务器 / 其他设备</string>
+    <string name="settings_jellyplay_sync_conflict_keep_mine">保留我的</string>
+    <string name="settings_jellyplay_sync_conflict_take_theirs">采用对方的</string>
+    <string name="settings_jellyplay_sync_conflict_deleted_value">(已删除)</string>
+    <string name="settings_jellyplay_sync_ns_toggle_subtitle">在此设备上同步“%1$s” — %2$d 个键 • %3$s</string>
+    <string name="settings_jellyplay_sync_ns_off">此设备已关闭同步</string>
+    <string name="settings_jellyplay_sync_device_rename_title">重命名设备</string>
+    <string name="settings_jellyplay_sync_device_rename_label">设备名称</string>
+    <string name="settings_jellyplay_sync_device_rename_confirm">重命名</string>
+    <string name="settings_jellyplay_sync_device_revoke_title">吊销设备</string>
+    <string name="settings_jellyplay_sync_device_revoke_subtitle">吊销并清除此设备的已同步设置</string>
+    <string name="settings_jellyplay_sync_device_revoke_confirm_title">要吊销此设备吗？</string>
+    <string name="settings_jellyplay_sync_device_revoke_confirm_message">该设备将从同步中移除，其推送将停止工作，并且它写入的所有设置都会从服务器中清除。在重新注册之前无法重新加入。</string>
+    <string name="settings_jellyplay_sync_device_revoked">已吊销</string>
+    <string name="settings_jellyplay_sync_snapshots_title">还原点</string>
+    <string name="settings_jellyplay_sync_snapshots_empty">还没有还原点</string>
+    <string name="settings_jellyplay_sync_snapshots_unavailable">此服务器不支持还原点</string>
+    <string name="settings_jellyplay_sync_snapshots_create_title">创建还原点</string>
+    <string name="settings_jellyplay_sync_snapshots_create_subtitle">在服务器上为当前已同步设置创建快照</string>
+    <string name="settings_jellyplay_sync_snapshot_entry">%1$s • %2$d 个键 • %3$s</string>
+    <string name="settings_jellyplay_sync_snapshot_restore_title">要还原此还原点吗？</string>
+    <string name="settings_jellyplay_sync_snapshot_restore_message">所有设备的已同步设置将恢复到此快照。之后的更改将在下次同步时被覆盖。</string>
+    <string name="settings_jellyplay_sync_snapshot_restore_confirm">还原</string>
+    <string name="settings_jellyplay_sync_export_title">导出设置 JSON</string>
+    <string name="settings_jellyplay_sync_export_subtitle">分享包含所有已同步设置的 JSON 包</string>
+    <string name="settings_jellyplay_sync_import_title">导入设置 JSON</string>
+    <string name="settings_jellyplay_sync_import_subtitle">从导出的 JSON 包应用设置</string>
+    <string name="settings_jellyplay_sync_import_confirm_title">要导入这些设置吗？</string>
+    <string name="settings_jellyplay_sync_import_confirm_message">包中的值将使用服务器时间戳应用，覆盖每台设备上较旧的已同步设置。</string>
+    <string name="settings_jellyplay_sync_action_failed">上次操作失败 — 请检查网络连接后重试</string>
 </resources>

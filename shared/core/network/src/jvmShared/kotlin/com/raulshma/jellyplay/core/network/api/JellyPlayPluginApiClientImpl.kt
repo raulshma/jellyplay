@@ -13,6 +13,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.jsonObject
@@ -61,11 +62,20 @@ class JellyPlayPluginApiClientImpl(
         json.decodeFromString<JellyPlaySettingsSnapshot>(text)
     }
 
-    override suspend fun getChangedSettings(since: Long, profile: String?): Result<JellyPlaySettingsSnapshot> = runCatchingIO {
-        val text = getBodyTextOr404(
-            profileQuery("/jellyplay/settings/changed?since=$since", profile),
-            "JellyPlay settings delta fetch failed",
-        )
+    override suspend fun getChangedSettings(
+        since: Long,
+        profile: String?,
+        limit: Int?,
+        cursor: Long?,
+    ): Result<JellyPlaySettingsSnapshot> = runCatchingIO {
+        // limit/cursor are additive (the pagination wave): omitted when null so
+        // the wire to a pre-pagination plugin stays byte-identical.
+        val path = buildString {
+            append("/jellyplay/settings/changed?since=").append(since)
+            limit?.let { append("&limit=").append(it) }
+            cursor?.let { append("&cursor=").append(it) }
+        }
+        val text = getBodyTextOr404(profileQuery(path, profile), "JellyPlay settings delta fetch failed")
         json.decodeFromString<JellyPlaySettingsSnapshot>(text)
     }
 
@@ -120,7 +130,38 @@ class JellyPlayPluginApiClientImpl(
         json.decodeFromString<JellyPlaySyncAdminOverview>(text)
     }
 
-    override fun settingsStream(): Flow<JellyPlaySseEvent> = sseStream("/jellyplay/settings/stream")
+    override suspend fun getSnapshots(): Result<List<JellyPlaySnapshot>?> = runCatchingIO {
+        val text = requester.getBodyText("/jellyplay/settings/snapshots") ?: return@runCatchingIO null
+        json.decodeFromString(ListSerializer(JellyPlaySnapshot.serializer()), text)
+    }
+
+    override suspend fun createSnapshot(): Result<JellyPlaySnapshotCreated?> = runCatchingIO {
+        val text = requester.postForTextOrNull("/jellyplay/settings/snapshots", "")
+            ?: return@runCatchingIO null
+        json.decodeFromString<JellyPlaySnapshotCreated>(text)
+    }
+
+    override suspend fun restoreSnapshot(id: String): Result<JellyPlaySettingsBatchResult?> = runCatchingIO {
+        val text = requester.postForTextOrNull(
+            "/jellyplay/settings/snapshots/" + java.net.URLEncoder.encode(id, "UTF-8") + "/restore",
+            "",
+        ) ?: return@runCatchingIO null
+        json.decodeFromString<JellyPlaySettingsBatchResult>(text)
+    }
+
+    override suspend fun exportSettings(): Result<String?> = runCatchingIO {
+        requester.getBodyText("/jellyplay/settings/export")
+    }
+
+    override suspend fun importSettings(bundleJson: String, deviceId: String?): Result<JellyPlaySettingsBatchResult?> = runCatchingIO {
+        val suffix = deviceId?.let { "?deviceId=" + java.net.URLEncoder.encode(it, "UTF-8") } ?: ""
+        val text = requester.postForTextOrNull("/jellyplay/settings/import$suffix", bundleJson)
+            ?: return@runCatchingIO null
+        json.decodeFromString<JellyPlaySettingsBatchResult>(text)
+    }
+
+    override fun settingsStream(resumeFromEventId: Long): Flow<JellyPlaySseEvent> =
+        sseStream("/jellyplay/settings/stream", resumeFromEventId)
 
     // ------------------------------------------------------------------
     // events & devices
@@ -132,6 +173,8 @@ class JellyPlayPluginApiClientImpl(
         platform: String,
         appVersion: String,
         push: JellyPlayDevicePush,
+        caps: List<String>,
+        model: String?,
     ): Result<Unit> =
         runCatchingIO {
             val body = buildJsonObject {
@@ -139,6 +182,13 @@ class JellyPlayPluginApiClientImpl(
                 put("name", name)
                 put("platform", platform)
                 put("appVersion", appVersion)
+                // Omitted when null — the server keeps its stored model.
+                if (model != null) put("model", model)
+                // Registry v7's self-reported caps (what gates silent push
+                // server-side). Empty list = the field still sends (as []) —
+                // the wire REPLACES caps, so an omitted field must never be
+                // how a re-registration silently drops them.
+                put("caps", JsonArray(caps.map { JsonPrimitive(it) }))
                 // Additive push half (the plugin's push wave) — an explicit
                 // tri-state: Keep omits the field so the legacy wire shape is
                 // byte-identical; Detach writes the JSON null that clears the
@@ -155,8 +205,22 @@ class JellyPlayPluginApiClientImpl(
             requester.postStatusOnly("/jellyplay/devices", "JellyPlay device registration failed", body.toString())
         }
 
-    override suspend fun unregisterDevice(deviceId: String): Result<Unit> = runCatchingIO {
-        requester.deleteStatusOnly("/jellyplay/devices/$deviceId", "JellyPlay device unregister failed")
+    override suspend fun renameDevice(deviceId: String, name: String?, model: String?): Result<Unit> =
+        runCatchingIO {
+            val body = buildJsonObject {
+                name?.let { put("name", it) }
+                model?.let { put("model", it) }
+            }
+            requester.postStatusOnly(
+                "/jellyplay/devices/" + java.net.URLEncoder.encode(deviceId, "UTF-8"),
+                "JellyPlay device rename failed",
+                body.toString(),
+            )
+        }
+
+    override suspend fun revokeDevice(deviceId: String): Result<Unit> = runCatchingIO {
+        // Registry v7: the DELETE is a revoke + tombstone wipe, not a row removal.
+        requester.deleteStatusOnly("/jellyplay/devices/" + java.net.URLEncoder.encode(deviceId, "UTF-8"), "JellyPlay device revoke failed")
     }
 
     override suspend fun getDevices(): Result<List<JellyPlayDevice>> = runCatchingIO {
@@ -164,7 +228,7 @@ class JellyPlayPluginApiClientImpl(
         json.decodeFromString<List<JellyPlayDevice>>(text)
     }
 
-    override fun eventsStream(): Flow<JellyPlaySseEvent> = sseStream("/jellyplay/events/stream")
+    override fun eventsStream(): Flow<JellyPlaySseEvent> = sseStream("/jellyplay/events/stream", 0)
 
     override suspend fun broadcast(title: String, body: String, url: String?): Result<Unit> = runCatchingIO {
         val payload = buildJsonObject {
@@ -393,8 +457,13 @@ class JellyPlayPluginApiClientImpl(
      * scope; collector cancellation aborts the blocking read via call.cancel()
      * from a cancellation watcher (blocking OkHttp reads do not observe
      * coroutine cancellation on their own).
+     *
+     * [resumeFromEventId] > 0 rides the `Last-Event-ID` header — the resume
+     * cursor for streams anchored to a server-side sequence (the settings
+     * stream anchors to the change-log head): the server replays everything
+     * after that id. 0 omits the header, the legacy connect.
      */
-    private fun sseStream(path: String): Flow<JellyPlaySseEvent> = callbackFlow {
+    private fun sseStream(path: String, resumeFromEventId: Long): Flow<JellyPlaySseEvent> = callbackFlow {
         val session = requester.requireSession()
         val client = engine.okHttpClient.newBuilder()
             .readTimeout(0, TimeUnit.MILLISECONDS)
@@ -402,6 +471,7 @@ class JellyPlayPluginApiClientImpl(
         val request = Request.Builder()
             .url(session.base + path)
             .tokenAuthHeader(session.token)
+            .apply { if (resumeFromEventId > 0) header("Last-Event-ID", resumeFromEventId.toString()) }
             .header("Accept", "text/event-stream")
             .build()
         val call = client.newCall(request)

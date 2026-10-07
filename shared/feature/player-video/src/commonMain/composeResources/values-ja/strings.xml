@@ -368,4 +368,10 @@
     <string name="player_video_preset_save_dialog_title">プリセットを保存</string>
     <string name="player_video_preset_name_label">プリセット名</string>
     <string name="player_video_preset_delete_a11y">プリセット %1$s を削除</string>
+
+    <!-- The JellyPlay sync / details-badges / player-notice strings
+         (ADR 0010 wave), translated together with the default file. -->
+    <string name="player_video_transcode_switched">トランスコードされたストリームに切り替えました — バッファリングし直しています</string>
+    <string name="player_video_direct_play_unavailable">このアイテムはダイレクト再生できません — トランスコードに切り替えます</string>
+    <string name="player_video_vlc_client_cert_unsupported">クライアント証明書は VLC エンジンでサポートされていません — mTLS サーバーには ExoPlayer または mpv に切り替えてください</string>
 </resources>

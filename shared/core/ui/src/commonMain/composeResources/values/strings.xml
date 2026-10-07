@@ -28,6 +28,8 @@
     <string name="core_action_favorite">Add to favorites</string>
     <string name="core_action_unfavorite">Remove from favorites</string>
     <string name="core_action_delete">Delete download</string>
+    <string name="core_action_hide_from_continue_watching">Remove from Continue Watching</string>
+    <string name="core_action_show_from_continue_watching">Show in Continue Watching</string>
     <string name="core_action_details">View details</string>
 
     <!-- Truly cross-module feedback (posted from the app/navigation layer

@@ -809,4 +809,43 @@
     <string name="settings_jellyplay_push_state_server_off">Server-Push deaktiviert</string>
     <string name="settings_jellyplay_feature_analytics">Statistiken</string>
     <string name="ss_jellyplay_feature_analytics_subtitle">Das Wiedergabeverlauf-Dashboard im Admin-Bereich (nur Admin)</string>
+
+    <!-- The JellyPlay sync / details-badges / player-notice strings
+         (ADR 0010 wave), translated together with the default file. -->
+    <string name="settings_jellyplay_sync_pending">%1$d ausstehend</string>
+    <string name="settings_jellyplay_sync_error_title">Synchronisierungsproblem</string>
+    <string name="settings_jellyplay_sync_rejected_keys">%1$d Schlüssel abgelehnt: %2$s</string>
+    <string name="settings_jellyplay_sync_conflicts_title">Konflikte</string>
+    <string name="settings_jellyplay_sync_conflict_row">%1$s • %2$s</string>
+    <string name="settings_jellyplay_sync_conflict_ours">Dieses Gerät</string>
+    <string name="settings_jellyplay_sync_conflict_theirs">Server / anderes Gerät</string>
+    <string name="settings_jellyplay_sync_conflict_keep_mine">Meine behalten</string>
+    <string name="settings_jellyplay_sync_conflict_take_theirs">Ihre übernehmen</string>
+    <string name="settings_jellyplay_sync_conflict_deleted_value">(gelöscht)</string>
+    <string name="settings_jellyplay_sync_ns_toggle_subtitle">„%1$s“ auf diesem Gerät synchronisieren — %2$d Schlüssel • %3$s</string>
+    <string name="settings_jellyplay_sync_ns_off">Sync auf diesem Gerät aus</string>
+    <string name="settings_jellyplay_sync_device_rename_title">Gerät umbenennen</string>
+    <string name="settings_jellyplay_sync_device_rename_label">Gerätename</string>
+    <string name="settings_jellyplay_sync_device_rename_confirm">Umbenennen</string>
+    <string name="settings_jellyplay_sync_device_revoke_title">Gerät widerrufen</string>
+    <string name="settings_jellyplay_sync_device_revoke_subtitle">Die synchronisierten Einstellungen dieses Geräts widerrufen und löschen</string>
+    <string name="settings_jellyplay_sync_device_revoke_confirm_title">Dieses Gerät widerrufen?</string>
+    <string name="settings_jellyplay_sync_device_revoke_confirm_message">Das Gerät wird aus der Synchronisierung entfernt, seine Push-Benachrichtigungen funktionieren nicht mehr, und jede von ihm geschriebene Einstellung wird vom Server gelöscht. Ein erneuter Beitritt ist erst nach einer erneuten Registrierung möglich.</string>
+    <string name="settings_jellyplay_sync_device_revoked">Widerrufen</string>
+    <string name="settings_jellyplay_sync_snapshots_title">Wiederherstellungspunkte</string>
+    <string name="settings_jellyplay_sync_snapshots_empty">Noch keine Wiederherstellungspunkte</string>
+    <string name="settings_jellyplay_sync_snapshots_unavailable">Wiederherstellungspunkte auf diesem Server nicht verfügbar</string>
+    <string name="settings_jellyplay_sync_snapshots_create_title">Wiederherstellungspunkt erstellen</string>
+    <string name="settings_jellyplay_sync_snapshots_create_subtitle">Momentane synchronisierte Einstellungen auf dem Server sichern</string>
+    <string name="settings_jellyplay_sync_snapshot_entry">%1$s • %2$d Schlüssel • %3$s</string>
+    <string name="settings_jellyplay_sync_snapshot_restore_title">Diesen Punkt wiederherstellen?</string>
+    <string name="settings_jellyplay_sync_snapshot_restore_message">Die synchronisierten Einstellungen jedes Geräts kehren zu diesem Schnappschuss zurück. Spätere Änderungen werden bei der nächsten Synchronisierung überschrieben.</string>
+    <string name="settings_jellyplay_sync_snapshot_restore_confirm">Wiederherstellen</string>
+    <string name="settings_jellyplay_sync_export_title">Einstellungs-JSON exportieren</string>
+    <string name="settings_jellyplay_sync_export_subtitle">JSON-Bündel aller synchronisierten Einstellungen teilen</string>
+    <string name="settings_jellyplay_sync_import_title">Einstellungs-JSON importieren</string>
+    <string name="settings_jellyplay_sync_import_subtitle">Einstellungen aus einem exportierten JSON-Bündel anwenden</string>
+    <string name="settings_jellyplay_sync_import_confirm_title">Diese Einstellungen importieren?</string>
+    <string name="settings_jellyplay_sync_import_confirm_message">Die Werte des Bündels werden mit Server-Zeitstempeln angewendet und überschreiben ältere synchronisierte Einstellungen auf jedem Gerät.</string>
+    <string name="settings_jellyplay_sync_action_failed">Die letzte Aktion ist fehlgeschlagen — Verbindung prüfen und es erneut versuchen</string>
 </resources>

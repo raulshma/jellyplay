@@ -178,6 +178,7 @@ fun androidAppModule(context: Context): Module = module {
             userDataSyncScheduler = lazy { get<UserDataSyncScheduler>() },
             playbackSyncScheduler = lazy { get<PlaybackSyncScheduler>() },
             playbackSyncReconnectListener = lazy { get<PlaybackSyncReconnectListener>() },
+            settingsSyncBackgroundTrigger = lazy { get<com.raulshma.jellyplay.core.data.worker.SettingsSyncBackgroundTrigger>() },
             downloadReconnectListener = lazy { get<DownloadReconnectListener>() },
             notificationReconnectListener = lazy { get<NotificationReconnectListener>() },
             autoDownloadScheduler = lazy { get<AutoDownloadScheduler>() },

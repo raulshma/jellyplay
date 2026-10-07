@@ -368,4 +368,10 @@
     <string name="player_video_preset_save_dialog_title">保存预设</string>
     <string name="player_video_preset_name_label">预设名称</string>
     <string name="player_video_preset_delete_a11y">删除预设 %1$s</string>
+
+    <!-- The JellyPlay sync / details-badges / player-notice strings
+         (ADR 0010 wave), translated together with the default file. -->
+    <string name="player_video_transcode_switched">已切换到转码流 — 正在重新缓冲</string>
+    <string name="player_video_direct_play_unavailable">此项目不支持直接播放 — 将回退到转码</string>
+    <string name="player_video_vlc_client_cert_unsupported">VLC 引擎不支持客户端证书 — mTLS 服务器请改用 ExoPlayer 或 mpv</string>
 </resources>

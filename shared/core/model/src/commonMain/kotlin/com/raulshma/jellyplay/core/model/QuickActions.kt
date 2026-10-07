@@ -67,6 +67,16 @@ private fun MediaQuickActionScope.actionableTypes(): Set<MediaType> = when (this
  *   [QuickAction.UNFAVORITE] toggle. Gated so the online hosts (which already
  *   expose favorite from the detail screen's action row) keep their current
  *   long-press surface, while the offline hosts opt in to close the parity gap.
+ * @param includeCwToggle When true, adds the [QuickAction.HIDE_FROM_CONTINUE_WATCHING]/
+ *   [QuickAction.SHOW_FROM_CONTINUE_WATCHING] toggle for the resume-row
+ *   families (video types — the Continue Watching / Next Up rows' content).
+ *   Hosts whose long-press surface already carries the toggle (the detail
+ *   screen's ⋮ menu) keep it off; the home card long-press opts in so a CW
+ *   row card can be removed right where it plays.
+ * @param isHiddenFromContinueWatching Whether this item is already in the
+ *   hidden resume-row overlay set. When true (and the toggle is included),
+ *   the slot flips to [QuickAction.SHOW_FROM_CONTINUE_WATCHING] so the sheet
+ *   reads as a state toggle rather than a redundant action.
  */
 fun MediaItem.quickActions(
     scope: MediaQuickActionScope,
@@ -75,6 +85,8 @@ fun MediaItem.quickActions(
     includeRemoveDownload: Boolean = false,
     isDownloaded: Boolean = false,
     includeFavorite: Boolean = false,
+    includeCwToggle: Boolean = false,
+    isHiddenFromContinueWatching: Boolean = false,
 ): List<QuickAction> {
     if (mediaType !in scope.actionableTypes()) return emptyList()
     return buildList {
@@ -82,6 +94,12 @@ fun MediaItem.quickActions(
         add(if (isPlayed) QuickAction.MARK_UNWATCHED else QuickAction.MARK_WATCHED)
         if (includeFavorite) {
             add(if (isFavorite) QuickAction.UNFAVORITE else QuickAction.FAVORITE)
+        }
+        if (includeCwToggle && mediaType.isVideoType) {
+            add(
+                if (isHiddenFromContinueWatching) QuickAction.SHOW_FROM_CONTINUE_WATCHING
+                else QuickAction.HIDE_FROM_CONTINUE_WATCHING,
+            )
         }
         if (includeDownload &&
             (mediaType.isAudioType || mediaType.isVideoType ||

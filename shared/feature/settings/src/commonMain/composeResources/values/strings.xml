@@ -758,6 +758,43 @@
     <string name="settings_jellyplay_sync_reset_confirm_message">This wipes the synced preferences on the server for ALL devices. Each device falls back to its local defaults on the next sync.</string>
     <string name="settings_jellyplay_sync_force_repull_title">Force re-pull</string>
     <string name="settings_jellyplay_sync_force_repull_subtitle">Discard this device’s pending changes and take the server’s view</string>
+    <!-- Sync screen rework: pending face, error banner, conflicts, selective sync, devices, restore points, export/import -->
+    <string name="settings_jellyplay_sync_pending">%1$d pending</string>
+    <string name="settings_jellyplay_sync_error_title">Sync problem</string>
+    <string name="settings_jellyplay_sync_rejected_keys">%1$d key(s) rejected: %2$s</string>
+    <string name="settings_jellyplay_sync_conflicts_title">Conflicts</string>
+    <string name="settings_jellyplay_sync_conflict_row">%1$s • %2$s</string>
+    <string name="settings_jellyplay_sync_conflict_ours">This device</string>
+    <string name="settings_jellyplay_sync_conflict_theirs">Server / other device</string>
+    <string name="settings_jellyplay_sync_conflict_keep_mine">Keep mine</string>
+    <string name="settings_jellyplay_sync_conflict_take_theirs">Take theirs</string>
+    <string name="settings_jellyplay_sync_conflict_deleted_value">(deleted)</string>
+    <string name="settings_jellyplay_sync_ns_toggle_subtitle">Sync “%1$s” on this device — %2$d keys • %3$s</string>
+    <string name="settings_jellyplay_sync_ns_off">Sync off on this device</string>
+    <string name="settings_jellyplay_sync_device_rename_title">Rename device</string>
+    <string name="settings_jellyplay_sync_device_rename_label">Device name</string>
+    <string name="settings_jellyplay_sync_device_rename_confirm">Rename</string>
+    <string name="settings_jellyplay_sync_device_revoke_title">Revoke device</string>
+    <string name="settings_jellyplay_sync_device_revoke_subtitle">Revoke and wipe this device’s synced settings</string>
+    <string name="settings_jellyplay_sync_device_revoke_confirm_title">Revoke this device?</string>
+    <string name="settings_jellyplay_sync_device_revoke_confirm_message">The device is removed from sync, its pushes stop working, and every setting it wrote is wiped from the server. It cannot rejoin until it re-registers.</string>
+    <string name="settings_jellyplay_sync_device_revoked">Revoked</string>
+    <string name="settings_jellyplay_sync_snapshots_title">Restore points</string>
+    <string name="settings_jellyplay_sync_snapshots_empty">No restore points yet</string>
+    <string name="settings_jellyplay_sync_snapshots_unavailable">Restore points unavailable on this server</string>
+    <string name="settings_jellyplay_sync_snapshots_create_title">Create restore point</string>
+    <string name="settings_jellyplay_sync_snapshots_create_subtitle">Snapshot the current synced settings on the server</string>
+    <string name="settings_jellyplay_sync_snapshot_entry">%1$s • %2$d keys • %3$s</string>
+    <string name="settings_jellyplay_sync_snapshot_restore_title">Restore this point?</string>
+    <string name="settings_jellyplay_sync_snapshot_restore_message">Every device’s synced settings return to this snapshot. Changes made after it are overwritten on the next sync.</string>
+    <string name="settings_jellyplay_sync_snapshot_restore_confirm">Restore</string>
+    <string name="settings_jellyplay_sync_export_title">Export settings JSON</string>
+    <string name="settings_jellyplay_sync_export_subtitle">Share a JSON bundle of all synced settings</string>
+    <string name="settings_jellyplay_sync_import_title">Import settings JSON</string>
+    <string name="settings_jellyplay_sync_import_subtitle">Apply settings from an exported JSON bundle</string>
+    <string name="settings_jellyplay_sync_import_confirm_title">Import these settings?</string>
+    <string name="settings_jellyplay_sync_import_confirm_message">The bundle’s values are applied with server timestamps, overwriting older synced settings on every device.</string>
+    <string name="settings_jellyplay_sync_action_failed">The last action failed — check your connection and try again</string>
 
     <!-- JellyPlay companion-plugin messages inbox (ADR 0010) -->
     <string name="jellyplay_msgs_title">Messages</string>

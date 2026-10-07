@@ -151,6 +151,12 @@ val settingsModule: Module = module {
             syncRepository = get(),
             pluginApiClient = get(),
             statusStore = get(),
+            // The export/import file IO seam (the backup screen's platform
+            // seam, reused for the sync bundle's import file pick).
+            backupIo = get(),
+            // The background flush scheduler — the disable edge de-arms the
+            // 12h catch-up periodic (ADR 0011: armed only while enabled).
+            syncScheduler = get(),
         )
     }
     viewModel {

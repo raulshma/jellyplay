@@ -369,4 +369,10 @@
     <string name="player_video_preset_save_dialog_title">Guardar predefinição</string>
     <string name="player_video_preset_name_label">Nome da predefinição</string>
     <string name="player_video_preset_delete_a11y">Eliminar predefinição %1$s</string>
+
+    <!-- The JellyPlay sync / details-badges / player-notice strings
+         (ADR 0010 wave), translated together with the default file. -->
+    <string name="player_video_transcode_switched">Mudou para stream transcodificado — a armazenar no buffer novamente</string>
+    <string name="player_video_direct_play_unavailable">Reprodução direta indisponível para este item — a usar transcodificação</string>
+    <string name="player_video_vlc_client_cert_unsupported">O certificado de cliente não é suportado pelo motor VLC — mude para ExoPlayer ou mpv em servidores mTLS</string>
 </resources>

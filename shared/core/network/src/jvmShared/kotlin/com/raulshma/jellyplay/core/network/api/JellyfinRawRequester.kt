@@ -206,4 +206,22 @@ internal class JellyfinRawRequester(
             response.body?.string().orEmpty()
         }
     }
+
+    /**
+     * [postForText]'s optional-read twin — [getBodyText]'s contract on a POST:
+     * null on ANY non-2xx, failure is "no data", never an error (the
+     * JellyPlay snapshots/import wave's degrade-to-hide reads). Same client as
+     * [postForText] (no timeout clone — these are short calls).
+     */
+    fun postForTextOrNull(path: String, bodyText: String): String? {
+        val session = requireSession()
+        val request = Request.Builder()
+            .url(session.base + path)
+            .tokenAuthHeader(session.token)
+            .post(bodyText.toRequestBody("application/json".toMediaType()))
+            .build()
+        return engine.okHttpClient.newCall(request).execute().use { response ->
+            if (response.isSuccessful) response.body?.string() else null
+        }
+    }
 }

@@ -98,6 +98,12 @@ class RoutePredicatesTest {
         Route.Integrations(),
         Route.ArrSettings(),
         Route.SubtitleProviderSettings(),
+        // JellyPlay companion-plugin screens (ADR 0010) — reached from the
+        // Settings root's capability-gated entries, no classification flags.
+        Route.JellyPlayMessages,
+        Route.JellyPlaySync,
+        Route.JellyPlayUserRatings,
+        Route.JellyPlayYourWatching,
         // music
         Route.MusicBrowse,
         Route.Artists,
@@ -122,6 +128,8 @@ class RoutePredicatesTest {
         Route.ScheduledTasks,
         Route.Devices,
         Route.Logs,
+        Route.JellyPlayTranscodes,
+        Route.JellyPlayAnalytics,
         Route.UserStatistics,
         Route.UserStatisticsDetail("user-1"),
         Route.Users,
@@ -224,6 +232,10 @@ class RoutePredicatesTest {
                 "NotificationSettings", "StorageSettings", "SecuritySettings",
                 "PrivacyData", "BackupSettings", "ImportPreview",
                 "ExperimentalSettings", "FactoryReset",
+                // JellyPlay companion-plugin screens (ADR 0010) — Settings-root
+                // capability-gated entries, deliberately unclassified
+                "JellyPlayMessages", "JellyPlaySync", "JellyPlayUserRatings",
+                "JellyPlayYourWatching",
                 // music
                 "Artists", "Albums", "Tracks", "Genres", "SmartPlaylists",
                 "MoodPlaylists", "Playlists",

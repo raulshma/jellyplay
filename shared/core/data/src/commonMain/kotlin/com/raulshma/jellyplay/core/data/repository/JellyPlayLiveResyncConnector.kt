@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 
 /**
@@ -33,7 +34,11 @@ import kotlinx.coroutines.launch
  * connected frame, plus an availability + `settings-sync` registry re-probe
  * per attempt — a stock server never gets an SSE connect attempt, only a
  * probe per backoff tick, and a plugin installed mid-session lights the
- * stream up without a re-auth. Bursts of frames (a
+ * stream up without a re-auth. Every (re)connect rides the LAST-SEEN event id
+ * (the frames' ids are anchored to the server's change-log head): the first
+ * connect resumes from the persisted per-user cursor, a reconnect from the
+ * id seen on the wire, both riding the `Last-Event-ID` header so the server
+ * replays the gap the disconnect swallowed. Bursts of frames (a
  * batch push echoes one `changed` per device) collapse through the upstream
  * [debounce] into one follow-up cycle — the cycle itself runs OUTSIDE any
  * cancellable per-frame window, so a frame arriving mid-cycle cannot kill it
@@ -51,6 +56,15 @@ class JellyPlayLiveResyncConnector(
      */
     private val authRepository: com.raulshma.jellyplay.core.data.repository.AuthRepository,
     private val scope: CoroutineScope,
+    /**
+     * The last settings-stream event id, persisted PER USER by the wiring
+     * (the seam closures key on the session identity) so a process restart
+     * resumes the stream where it left off instead of trusting the reconnect
+     * to a full delta sweep. Null on either = in-memory only (tests; the
+     * reconnect still resumes within the process).
+     */
+    private val loadLastEventId: (suspend () -> Long?)? = null,
+    private val saveLastEventId: (suspend (Long) -> Unit)? = null,
 ) {
 
     /** The process-lifetime edge collector; owned by [start]. */
@@ -92,7 +106,12 @@ class JellyPlayLiveResyncConnector(
 
     private suspend fun runStream() {
         val reconnect = SseReconnectLoop()
+        // The resume cursor: the persisted per-user value on the first
+        // connect, then the highest id seen on the wire — every reconnect
+        // asks the server to replay the gap since it.
+        var resumeId = loadLastEventId?.invoke() ?: 0L
         while (streamJob?.isActive == true) {
+            var lastSeen = resumeId
             try {
                 // Probe before connect: an opted-in user on a stock server must
                 // not open a doomed SSE attempt every tick — one probe per
@@ -105,11 +124,16 @@ class JellyPlayLiveResyncConnector(
                 ) {
                     throw StreamGateClosed()
                 }
-                apiClient.settingsStream()
+                apiClient.settingsStream(resumeId)
+                    .onEach { frame -> if (frame.id > lastSeen) lastSeen = frame.id }
                     .filter { it.event == EVENT_CHANGED || it.event == EVENT_RESET }
                     .debounce(DEBOUNCE_MILLIS)
                     .collect {
                         reconnect.onConnected()
+                        if (lastSeen > resumeId) {
+                            resumeId = lastSeen
+                            persistLastEventId(lastSeen)
+                        }
                         syncRepository.requestSync()
                     }
             } catch (t: Throwable) {
@@ -119,6 +143,16 @@ class JellyPlayLiveResyncConnector(
 
             if (streamJob?.isActive != true) break
             reconnect.awaitRetryDelay()
+        }
+    }
+
+    /** Best-effort cursor persistence — a failed write only costs replay. */
+    private suspend fun persistLastEventId(id: Long) {
+        val save = saveLastEventId ?: return
+        try {
+            save(id)
+        } catch (t: Throwable) {
+            if (t is kotlinx.coroutines.CancellationException) throw t
         }
     }
 

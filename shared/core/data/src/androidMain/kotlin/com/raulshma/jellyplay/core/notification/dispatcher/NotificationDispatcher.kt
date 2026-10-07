@@ -119,10 +119,16 @@ class NotificationDispatcher(
      *    with a plain open-app content intent ([DeepLinkGrammar] carries no
      *    messages route to deep-link into).
      *
+     * `sync-nudge` never renders here — it is the SILENT push kind (data-only
+     * by contract): [isSyncNudgePayload] answers before any tray call and the
+     * receiver folds it into the sync engine instead. The check repeats as a
+     * guard so a future caller can never post a nudge as visible text.
+     *
      * Malformed payloads drop silently — a push is best-effort live signal,
      * the plugin's inbox is the durable counterpart.
      */
     fun dispatchPluginPush(payloadJson: String) {
+        if (isSyncNudgePayload(payloadJson)) return
         if (!notificationManager.areNotificationsEnabled()) return
         val payload = runCatching { json.parseToJsonElement(payloadJson) }
             .getOrNull() as? kotlinx.serialization.json.JsonObject ?: return
@@ -144,6 +150,26 @@ class NotificationDispatcher(
             return
         }
         dispatchPluginPushMessage(title = text("title").orEmpty(), body = text("body").orEmpty())
+    }
+
+    /**
+     * Whether [payloadJson] is the SILENT `sync-nudge` kind. The generic
+     * UnifiedPush body carries `kind` at the top level; a relayed ntfy JSON
+     * publish body carries it in the per-message `headers` map under
+     * `X-JellyPlay-Kind` — both spellings answer true (data-only either way).
+     * Malformed JSON is simply not a nudge.
+     */
+    internal fun isSyncNudgePayload(payloadJson: String): Boolean {
+        val payload = runCatching { json.parseToJsonElement(payloadJson) }
+            .getOrNull() as? kotlinx.serialization.json.JsonObject ?: return false
+
+        fun text(element: kotlinx.serialization.json.JsonElement?, key: String): String? =
+            (element as? kotlinx.serialization.json.JsonObject)
+                ?.let { it[key] as? kotlinx.serialization.json.JsonPrimitive }
+                ?.content
+
+        if (text(payload, "kind") == KIND_SYNC_NUDGE) return true
+        return text(payload["headers"], NTFY_KIND_HEADER) == KIND_SYNC_NUDGE
     }
 
     /**
@@ -470,6 +496,12 @@ class NotificationDispatcher(
 
     companion object {
         private const val GROUP_GLOBAL = "new_media_global"
+
+        /** The silent push kind (registry v7) — data-only, never a tray notification. */
+        internal const val KIND_SYNC_NUDGE = "sync-nudge"
+
+        /** The ntfy per-message header the kind rides in the ntfy JSON publish body. */
+        internal const val NTFY_KIND_HEADER = "X-JellyPlay-Kind"
         private const val NOTIFICATION_ID_GLOBAL = 5000
         private const val NOTIFICATION_ID_BASE = 5001
 

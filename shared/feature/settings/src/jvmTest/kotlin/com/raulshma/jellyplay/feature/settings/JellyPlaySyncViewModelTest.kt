@@ -4,11 +4,14 @@ import com.raulshma.jellyplay.core.data.repository.ProfileSyncRepository
 import com.raulshma.jellyplay.core.data.session.JellyPlayPluginStatusStore
 import com.raulshma.jellyplay.core.model.JellyPlayPluginFeatures
 import com.raulshma.jellyplay.core.model.JellyPlayPluginStatus
+import com.raulshma.jellyplay.core.network.api.JellyPlayDevice
 import com.raulshma.jellyplay.core.network.api.JellyPlayPluginApiClient
 import com.raulshma.jellyplay.core.network.api.JellyPlaySyncHistory
 import com.raulshma.jellyplay.core.network.api.JellyPlaySyncHistoryEntry
 import com.raulshma.jellyplay.core.network.api.JellyPlaySyncHistoryKey
 import com.raulshma.jellyplay.core.network.api.JellyPlaySyncHistoryKeys
+import com.raulshma.jellyplay.core.network.api.JellyPlaySyncNamespaceUsage
+import com.raulshma.jellyplay.core.network.api.JellyPlaySyncStatus
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -27,6 +30,7 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -37,7 +41,10 @@ import kotlin.test.assertTrue
  * collapse/re-expand. The degrade ladder is quiet by contract: a reset row's
  * empty diff reads "No key changes", a pre-wave 404 (null payload) and a
  * failed read both cache the "—" degrade, and a degraded gate never touches
- * the api at all.
+ * the api at all. The Phase-2 faces ride the same refresh: the snapshot list
+ * (null = the pre-wave hide), the namespace rows (server usage ∪ engine
+ * namespaces, selective-sync flags folded in), and the device rows (model +
+ * revoked carried, this-device first).
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class JellyPlaySyncViewModelTest {
@@ -58,7 +65,16 @@ class JellyPlaySyncViewModelTest {
     private lateinit var pluginApi: JellyPlayPluginApiClient
     private lateinit var statusStore: JellyPlayPluginStatusStore
     private lateinit var syncRepository: ProfileSyncRepository
+    private lateinit var backupIo: SettingsBackupIo
     private val pluginStatus = MutableStateFlow(JellyPlayPluginStatus.UNAVAILABLE)
+
+    /** Recorded route/engine calls — the awaitUntil-friendly observation seam. */
+    private val toggleCalls = mutableListOf<Pair<String, Boolean>>()
+    private val renameCalls = mutableListOf<Pair<String, String?>>()
+    private val revokeCalls = mutableListOf<String>()
+    private val createCalls = mutableListOf<Int>()
+    private val restoreCalls = mutableListOf<String>()
+    private val imports = mutableListOf<String>()
 
     @BeforeTest
     fun setUp() {
@@ -66,7 +82,15 @@ class JellyPlaySyncViewModelTest {
         pluginApi = mockk(relaxed = true)
         statusStore = mockk(relaxed = true)
         syncRepository = mockk(relaxed = true)
+        backupIo = mockk(relaxed = true)
         every { statusStore.status } returns pluginStatus
+        every { syncRepository.activeNamespaces } returns listOf("prefs", "books")
+        // The pending face's baseline: no pending keys anywhere.
+        every { syncRepository.state } returns MutableStateFlow(ProfileSyncRepository.SyncState())
+        coEvery { syncRepository.namespaceEnabled(any()) } returns true
+        coEvery { syncRepository.setNamespaceEnabled(any(), any()) } coAnswers {
+            toggleCalls += arg<String>(0) to arg<Boolean>(1)
+        }
         // The status/history pull's baseline: an empty status, four ledger rows.
         coEvery { pluginApi.getSyncStatus() } returns Result.success(null)
         coEvery { pluginApi.getSyncHistory(any(), any()) } returns Result.success(
@@ -81,6 +105,7 @@ class JellyPlaySyncViewModelTest {
         )
         coEvery { pluginApi.getDevices() } returns Result.success(emptyList())
         coEvery { pluginApi.adminSyncOverview() } returns Result.success(null)
+        coEvery { pluginApi.getSnapshots() } returns Result.success(null)
     }
 
     @AfterTest
@@ -94,7 +119,44 @@ class JellyPlaySyncViewModelTest {
         every { statusStore.hasFeature(JellyPlayPluginFeatures.SettingsSync) } returns true
     }
 
-    private fun viewModel() = JellyPlaySyncViewModel(syncRepository, pluginApi, statusStore)
+    private fun viewModel() = JellyPlaySyncViewModel(syncRepository, pluginApi, statusStore, backupIo)
+
+    @Test
+    fun setSyncEnabled_off_deArmsThePeriodicCatchUp() {
+        val cancelCalls = mutableListOf<Int>()
+        val scheduler = object : com.raulshma.jellyplay.core.data.worker.SettingsSyncScheduler {
+            override fun enqueueNow() = Unit
+            override fun enqueuePeriodicIfEnabled() = Unit
+            override fun cancelPeriodic() {
+                cancelCalls += 1
+            }
+        }
+
+        JellyPlaySyncViewModel(syncRepository, pluginApi, statusStore, backupIo, scheduler)
+            .setSyncEnabled(enabled = false)
+
+        coVerify(exactly = 1) { syncRepository.setEnabled(false) }
+        assertEquals(1, cancelCalls.size)
+    }
+
+    @Test
+    fun setSyncEnabled_on_doesNotTouchThePeriodicArm() = runTest {
+        val cancelCalls = mutableListOf<Int>()
+        val scheduler = object : com.raulshma.jellyplay.core.data.worker.SettingsSyncScheduler {
+            override fun enqueueNow() = Unit
+            override fun enqueuePeriodicIfEnabled() = Unit
+            override fun cancelPeriodic() {
+                cancelCalls += 1
+            }
+        }
+
+        JellyPlaySyncViewModel(syncRepository, pluginApi, statusStore, backupIo, scheduler)
+            .setSyncEnabled(enabled = true)
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { syncRepository.setEnabled(true) }
+        assertTrue(cancelCalls.isEmpty())
+    }
 
     @Test
     fun expand_fetchesKeysLazily_andCachesPerSeq() = runTest {
@@ -169,5 +231,162 @@ class JellyPlaySyncViewModelTest {
         assertEquals(1L, viewModel.uiState.value.expandedHistorySeq)
         assertTrue(viewModel.uiState.value.historyKeyDetails.isEmpty())
         coVerify(exactly = 0) { pluginApi.getSyncHistoryKeys(any(), any()) }
+    }
+
+    // ── the Phase-2 faces: snapshots, namespace rows, device rows, registry actions ──
+
+    @Test
+    fun refresh_loadsSnapshots_degradesQuietlyOnPreWave404() = runTest {
+        gateOpen()
+        coEvery { pluginApi.getSnapshots() } returns Result.success(
+            listOf(
+                com.raulshma.jellyplay.core.network.api.JellyPlaySnapshot(
+                    id = "s1", createdAt = 1_700_000_000_000, origin = "manual", keys = 4, bytes = 900,
+                ),
+            ),
+        )
+        val viewModel = viewModel()
+        viewModel.refresh()
+        awaitUntil { !viewModel.uiState.value.isLoading }
+        assertEquals(1, viewModel.uiState.value.snapshots?.size)
+
+        // The pre-wave 404 (null) hides the section, never errors.
+        coEvery { pluginApi.getSnapshots() } returns Result.success(null)
+        viewModel.refresh()
+        awaitUntil { viewModel.uiState.value.snapshots == null }
+    }
+
+    @Test
+    fun refresh_namespaceRows_mergeServerUsageEngineNamespacesAndToggles() = runTest {
+        gateOpen()
+        coEvery { pluginApi.getSyncStatus() } returns Result.success(
+            JellyPlaySyncStatus(
+                namespaces = listOf(
+                    JellyPlaySyncNamespaceUsage("prefs", keys = 10, bytes = 2048),
+                    JellyPlaySyncNamespaceUsage("cw", keys = 2, bytes = 64),
+                ),
+            ),
+        )
+        coEvery { syncRepository.namespaceEnabled("prefs") } returns true
+        coEvery { syncRepository.namespaceEnabled("books") } returns false
+        every { syncRepository.state } returns MutableStateFlow(
+            ProfileSyncRepository.SyncState(pendingByNamespace = mapOf("books" to 3)),
+        )
+
+        val viewModel = viewModel()
+        viewModel.refresh()
+        awaitUntil { viewModel.uiState.value.namespaceRows.isNotEmpty() }
+
+        val rows = viewModel.uiState.value.namespaceRows.associateBy { it.ns }
+        // Server-only namespace: usage without a toggle.
+        assertEquals(JellyPlaySyncNamespaceRow("cw", 2, 64, 0, toggleable = false, enabled = true), rows["cw"])
+        // Engine namespace: toggleable, flag from the persisted seam, pending folded in.
+        assertEquals(JellyPlaySyncNamespaceRow("prefs", 10, 2048, 0, toggleable = true, enabled = true), rows["prefs"])
+        assertEquals(JellyPlaySyncNamespaceRow("books", 0, 0, 3, toggleable = true, enabled = false), rows["books"])
+    }
+
+    @Test
+    fun setNamespaceEnabled_flipsRowOptimistically_andDelegatesToTheEngine() = runTest {
+        gateOpen()
+        val viewModel = viewModel()
+        viewModel.refresh()
+        awaitUntil { viewModel.uiState.value.namespaceRows.isNotEmpty() }
+
+        viewModel.setNamespaceEnabled("prefs", false)
+        assertEquals(false, viewModel.uiState.value.namespaceRows.first { it.ns == "prefs" }.enabled)
+        awaitUntil { toggleCalls.size == 1 }
+        assertEquals("prefs" to false, toggleCalls.single())
+    }
+
+    @Test
+    fun refresh_deviceRows_carryModelRevoked_thisDeviceFirst() = runTest {
+        gateOpen()
+        coEvery { syncRepository.currentDeviceId() } returns "device-a"
+        coEvery { pluginApi.getDevices() } returns Result.success(
+            listOf(
+                JellyPlayDevice(deviceId = "device-b", name = "Living Room", platform = "tv", model = "Onn 4K", revoked = true),
+                JellyPlayDevice(deviceId = "device-a", name = "Desk", platform = "desktop", model = null),
+            ),
+        )
+
+        val viewModel = viewModel()
+        viewModel.refresh()
+        awaitUntil { viewModel.uiState.value.devices.isNotEmpty() }
+
+        val rows = viewModel.uiState.value.devices
+        assertEquals(listOf("device-a", "device-b"), rows.map { it.deviceId }, "this device first")
+        val this_ = rows[0]
+        val revoked = rows[1]
+        assertTrue(this_.isThisDevice)
+        assertNull(this_.model)
+        assertTrue(revoked.revoked)
+        assertEquals("Onn 4K", revoked.model)
+    }
+
+    @Test
+    fun registryActions_revoke_and_rename_callTheRoutes_andRefresh() = runTest {
+        gateOpen()
+        coEvery { syncRepository.currentDeviceId() } returns "device-a"
+        coEvery { pluginApi.renameDevice(any(), any(), any()) } coAnswers {
+            renameCalls += arg<String>(0) to arg<String?>(1)
+            Result.success(Unit)
+        }
+        coEvery { pluginApi.revokeDevice(any()) } coAnswers {
+            revokeCalls += arg<String>(0)
+            Result.success(Unit)
+        }
+
+        val viewModel = viewModel()
+        viewModel.refresh()
+        awaitUntil { viewModel.uiState.value.thisDeviceId == "device-a" }
+
+        viewModel.renameThisDevice("New name")
+        awaitUntil { renameCalls.size == 1 }
+        assertEquals("device-a" to "New name", renameCalls.single())
+
+        viewModel.revokeDevice("device-b")
+        awaitUntil { revokeCalls.size == 1 }
+        assertEquals("device-b", revokeCalls.single())
+    }
+
+    @Test
+    fun snapshotActions_createAndRestore_guardAndRefresh_importRidesTheIoSeam() = runTest {
+        gateOpen()
+        val importBundle = """{"profiles":[]}"""
+        coEvery { pluginApi.createSnapshot() } coAnswers {
+            createCalls += 1
+            Result.success(com.raulshma.jellyplay.core.network.api.JellyPlaySnapshotCreated("s9"))
+        }
+        coEvery { pluginApi.restoreSnapshot(any()) } coAnswers {
+            restoreCalls += arg<String>(0)
+            Result.success(com.raulshma.jellyplay.core.network.api.JellyPlaySettingsBatchResult())
+        }
+        coEvery { backupIo.readImportPayload("content://pick") } returns importBundle
+        coEvery { pluginApi.importSettings(any(), any()) } coAnswers {
+            imports += arg<String>(0)
+            Result.success(com.raulshma.jellyplay.core.network.api.JellyPlaySettingsBatchResult())
+        }
+
+        val viewModel = viewModel()
+        viewModel.refresh()
+        awaitUntil { !viewModel.uiState.value.isLoading }
+
+        viewModel.createSnapshot()
+        awaitUntil { createCalls.size == 1 }
+        assertFalse(viewModel.uiState.value.actionError)
+
+        viewModel.restoreSnapshot("s9")
+        awaitUntil { restoreCalls.size == 1 }
+        assertEquals("s9", restoreCalls.single())
+
+        viewModel.importFromUri("content://pick")
+        awaitUntil { imports.size == 1 }
+        assertEquals(importBundle, imports.single())
+        assertFalse(viewModel.uiState.value.actionError)
+
+        // A failed import (unreadable file) raises the quiet action-error face.
+        coEvery { backupIo.readImportPayload("content://bad") } returns null
+        viewModel.importFromUri("content://bad")
+        awaitUntil { viewModel.uiState.value.actionError }
     }
 }

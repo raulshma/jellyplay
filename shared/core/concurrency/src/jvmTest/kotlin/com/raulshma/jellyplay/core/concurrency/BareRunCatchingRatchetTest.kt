@@ -262,6 +262,15 @@ class BareRunCatchingRatchetTest {
                 if (ch == '(') { sawOpenParen = true; depthParen++ }
                 if (ch == ')') depthParen--
                 if (ch == '{' && sawOpenParen && depthParen <= 0) { brace = j; break }
+                // A '}' outside the parameter parens closes the declaration
+                // (the interface's own brace after a bodyless member): no body
+                // brace can follow, so stop here. Without this, the ')' of the
+                // bodyless signature leaves depthParen at -1 and the NEXT
+                // declaration's opening brace (a class body, e.g.) reads as
+                // this fun's body — swallowing every following top-level
+                // declaration into the window (observed: a companion object's
+                // non-suspend parse helper counted against the ratchet).
+                if (ch == '}' && depthParen <= 0) break
                 if (ch == '\n' && !sawOpenParen) break // expression body / property
                 j++
             }

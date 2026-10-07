@@ -404,4 +404,9 @@
     <string name="core_input_dpad_play_pause">Lecture/Pause</string>
     <string name="core_input_dpad_fast_forward">Avance rapide</string>
     <string name="core_input_dpad_rewind">Retour rapide</string>
+
+    <!-- The JellyPlay sync / details-badges / player-notice strings
+         (ADR 0010 wave), translated together with the default file. -->
+    <string name="core_action_hide_from_continue_watching">Retirer de « Reprendre le visionnage »</string>
+    <string name="core_action_show_from_continue_watching">Afficher dans « Reprendre le visionnage »</string>
 </resources>

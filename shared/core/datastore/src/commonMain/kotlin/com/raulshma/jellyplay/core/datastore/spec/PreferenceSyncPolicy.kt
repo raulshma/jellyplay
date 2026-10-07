@@ -11,6 +11,19 @@ package com.raulshma.jellyplay.core.datastore.spec
  */
 object PreferenceSyncPolicy {
 
+    /**
+     * The `u_<userId>::` per-user key-namespacing grammar's prefix — the ONE
+     * raw-name marker every per-user namespaced key shares
+     * (`UserNamespacedKeys`, internal to the datastore module; the raw string
+     * is mirrored here because the prefs adapter matches raw key names).
+     * Namespaced keys never sync through the `prefs` namespace: their
+     * syncable domains (the home layout) own dedicated sync namespaces whose
+     * adapters read the store's typed projection instead of raw names, and
+     * the rest (per-user rows of OTHER installs' users riding along under
+     * their embedded user ids) was never state this device should push.
+     */
+    const val PER_USER_NAMESPACED_PREFIX = "u_"
+
     /** Per-device namespaces that never sync, by key prefix. */
-    val EXCLUDED_PREFIXES: List<String> = listOf("dream", "screensaver")
+    val EXCLUDED_PREFIXES: List<String> = listOf(PER_USER_NAMESPACED_PREFIX, "dream", "screensaver")
 }

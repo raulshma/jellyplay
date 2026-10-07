@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.core.push
 import android.content.Context
 import com.raulshma.jellyplay.core.data.di.koin
 import com.raulshma.jellyplay.core.data.repository.JellyPushRepository
+import com.raulshma.jellyplay.core.data.repository.ProfileSyncRepository
 import com.raulshma.jellyplay.core.data.session.JellyPlayFeatureGate
 import com.raulshma.jellyplay.core.model.JellyPlayPluginFeatures
 import com.raulshma.jellyplay.core.notification.dispatcher.NotificationDispatcher
@@ -27,8 +28,11 @@ import org.unifiedpush.android.connector.data.PushMessage
  *  - endpoint/unregistration/failed-registration → [JellyPushRepository]'s
  *    state machine (persist + `registerDevice` with the push field, or
  *    detach + surface NoDistributor);
- *  - message → the `push` gate (ADR 0010 — the registry is the ONLY gate) is
- *    re-checked one-shot before anything surfaces, then
+ *  - the SILENT `sync-nudge` kind (registry v7's caps-gated data-only push)
+ *    → the sync engine's requestSync — never a notification, never gated on
+ *    the `push` toggle (it targets the SYNC toggle);
+ *  - other messages → the `push` gate (ADR 0010 — the registry is the ONLY
+ *    gate) is re-checked one-shot before anything surfaces, then
  *    [NotificationDispatcher.dispatchPluginPush]: the generic JSON payload
  *    (`title`/`body`/`kind`/`itemId`?) maps onto the same tray surface the
  *    SSE new-media path uses. A message that lands while the user's toggle
@@ -72,6 +76,21 @@ class JellyPlayUnifiedPushReceiver : MessagingReceiver() {
 
     override fun onMessage(context: Context, message: PushMessage, instance: String) {
         launchPending {
+            val content = message.content.decodeToString()
+
+            // The SILENT push kind (registry v7): fold into the sync engine —
+            // the JellyPlayLiveResyncConnector fold's push twin, no tray
+            // notification, the engine's own gates (opt-in, probe, mutex)
+            // authoritative. Deliberately BEFORE the `push` feature gate: a
+            // nudge targets the SYNC toggle, not the push one — a user with
+            // push off but sync on still flushes; a disabled engine makes
+            // requestSync the documented no-op.
+            if (notificationDispatcher.isSyncNudgePayload(content)) {
+                android.util.Log.d("JellyPlayUnifiedPush", "sync-nudge received: requesting sync")
+                koin().get<ProfileSyncRepository>().requestSync()
+                return@launchPending
+            }
+
             // The gate re-check (ADR 0010): a delivered message is not proof
             // the user still wants push — the toggle may have gone off while
             // the detach POST was in flight (or the endpoint was stale).
@@ -79,7 +98,7 @@ class JellyPlayUnifiedPushReceiver : MessagingReceiver() {
                 android.util.Log.d("JellyPlayUnifiedPush", "dropping push message: gate closed")
                 return@launchPending
             }
-            notificationDispatcher.dispatchPluginPush(message.content.decodeToString())
+            notificationDispatcher.dispatchPluginPush(content)
         }
     }
 

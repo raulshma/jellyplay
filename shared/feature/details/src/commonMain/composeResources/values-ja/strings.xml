@@ -479,4 +479,12 @@
     <plurals name="detail_merge_count_selected">
         <item quantity="other">%1$d 件のアイテムを選択中</item>
     </plurals>
+
+    <!-- The JellyPlay sync / details-badges / player-notice strings
+         (ADR 0010 wave), translated together with the default file. -->
+    <string name="jellyplay_det_ratings_title">評価</string>
+    <string name="jellyplay_det_similar_badge">サーバーのおすすめ</string>
+    <string name="jellyplay_det_filler_badge">フィラー</string>
+    <string name="jellyplay_det_mixed_badge">複合</string>
+    <string name="jellyplay_det_recap_badge">あらすじ</string>
 </resources>

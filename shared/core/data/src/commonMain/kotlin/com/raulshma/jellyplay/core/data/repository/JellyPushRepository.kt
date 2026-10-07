@@ -8,6 +8,7 @@ import com.raulshma.jellyplay.core.data.log.Log
 import com.raulshma.jellyplay.core.data.session.JellyPlayFeatureGate
 import com.raulshma.jellyplay.core.data.session.JellyPlayPluginStatusStore
 import com.raulshma.jellyplay.core.model.JellyPlayPluginFeatures
+import com.raulshma.jellyplay.core.network.api.CAP_SILENT_PUSH
 import com.raulshma.jellyplay.core.network.api.JellyPlayDevicePush
 import com.raulshma.jellyplay.core.network.api.JellyPlayPluginApiClient
 import com.raulshma.jellyplay.core.network.api.JellyPlayPushRegistration
@@ -353,6 +354,10 @@ class JellyPushRepository(
             platform = devicePlatform,
             appVersion = appVersion,
             push = push,
+            // The caps assertion rides EVERY registration — the wire REPLACES
+            // caps, so this rotation path must re-assert what the events face
+            // registered or the silent-push opt-in would silently drop.
+            caps = listOf(CAP_SILENT_PUSH),
         )
 
     private suspend fun persistedEndpoint(): String? =

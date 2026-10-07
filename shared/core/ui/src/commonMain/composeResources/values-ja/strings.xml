@@ -401,4 +401,9 @@
     <string name="core_input_dpad_play_pause">再生/一時停止</string>
     <string name="core_input_dpad_fast_forward">早送り</string>
     <string name="core_input_dpad_rewind">巻き戻し</string>
+
+    <!-- The JellyPlay sync / details-badges / player-notice strings
+         (ADR 0010 wave), translated together with the default file. -->
+    <string name="core_action_hide_from_continue_watching">「視聴を続ける」から削除</string>
+    <string name="core_action_show_from_continue_watching">「視聴を続ける」に表示</string>
 </resources>

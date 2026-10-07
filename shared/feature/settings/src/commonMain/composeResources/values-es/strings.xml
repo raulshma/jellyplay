@@ -811,4 +811,43 @@
     <string name="settings_jellyplay_push_state_server_off">Push del servidor desactivado</string>
     <string name="settings_jellyplay_feature_analytics">Estadísticas</string>
     <string name="ss_jellyplay_feature_analytics_subtitle">El panel del historial de reproducción en el área de administración (solo admin)</string>
+
+    <!-- The JellyPlay sync / details-badges / player-notice strings
+         (ADR 0010 wave), translated together with the default file. -->
+    <string name="settings_jellyplay_sync_pending">%1$d pendientes</string>
+    <string name="settings_jellyplay_sync_error_title">Problema de sincronización</string>
+    <string name="settings_jellyplay_sync_rejected_keys">%1$d clave(s) rechazada(s): %2$s</string>
+    <string name="settings_jellyplay_sync_conflicts_title">Conflictos</string>
+    <string name="settings_jellyplay_sync_conflict_row">%1$s • %2$s</string>
+    <string name="settings_jellyplay_sync_conflict_ours">Este dispositivo</string>
+    <string name="settings_jellyplay_sync_conflict_theirs">Servidor / otro dispositivo</string>
+    <string name="settings_jellyplay_sync_conflict_keep_mine">Conservar la mía</string>
+    <string name="settings_jellyplay_sync_conflict_take_theirs">Usar la suya</string>
+    <string name="settings_jellyplay_sync_conflict_deleted_value">(eliminado)</string>
+    <string name="settings_jellyplay_sync_ns_toggle_subtitle">Sincronizar «%1$s» en este dispositivo — %2$d claves • %3$s</string>
+    <string name="settings_jellyplay_sync_ns_off">Sincronización desactivada en este dispositivo</string>
+    <string name="settings_jellyplay_sync_device_rename_title">Renombrar dispositivo</string>
+    <string name="settings_jellyplay_sync_device_rename_label">Nombre del dispositivo</string>
+    <string name="settings_jellyplay_sync_device_rename_confirm">Renombrar</string>
+    <string name="settings_jellyplay_sync_device_revoke_title">Revocar dispositivo</string>
+    <string name="settings_jellyplay_sync_device_revoke_subtitle">Revoca y borra los ajustes sincronizados de este dispositivo</string>
+    <string name="settings_jellyplay_sync_device_revoke_confirm_title">¿Revocar este dispositivo?</string>
+    <string name="settings_jellyplay_sync_device_revoke_confirm_message">El dispositivo se elimina de la sincronización, sus notificaciones push dejan de funcionar y todos los ajustes que escribió se borran del servidor. No podrá volver a unirse hasta que se registre de nuevo.</string>
+    <string name="settings_jellyplay_sync_device_revoked">Revocado</string>
+    <string name="settings_jellyplay_sync_snapshots_title">Puntos de restauración</string>
+    <string name="settings_jellyplay_sync_snapshots_empty">Aún no hay puntos de restauración</string>
+    <string name="settings_jellyplay_sync_snapshots_unavailable">Puntos de restauración no disponibles en este servidor</string>
+    <string name="settings_jellyplay_sync_snapshots_create_title">Crear punto de restauración</string>
+    <string name="settings_jellyplay_sync_snapshots_create_subtitle">Guarda en el servidor una instantánea de los ajustes sincronizados actuales</string>
+    <string name="settings_jellyplay_sync_snapshot_entry">%1$s • %2$d claves • %3$s</string>
+    <string name="settings_jellyplay_sync_snapshot_restore_title">¿Restaurar este punto?</string>
+    <string name="settings_jellyplay_sync_snapshot_restore_message">Los ajustes sincronizados de todos los dispositivos vuelven a esta instantánea. Los cambios posteriores se sobrescribirán en la próxima sincronización.</string>
+    <string name="settings_jellyplay_sync_snapshot_restore_confirm">Restaurar</string>
+    <string name="settings_jellyplay_sync_export_title">Exportar JSON de ajustes</string>
+    <string name="settings_jellyplay_sync_export_subtitle">Comparte un paquete JSON con todos los ajustes sincronizados</string>
+    <string name="settings_jellyplay_sync_import_title">Importar JSON de ajustes</string>
+    <string name="settings_jellyplay_sync_import_subtitle">Aplica ajustes de un paquete JSON exportado</string>
+    <string name="settings_jellyplay_sync_import_confirm_title">¿Importar estos ajustes?</string>
+    <string name="settings_jellyplay_sync_import_confirm_message">Los valores del paquete se aplican con marcas de tiempo del servidor, sobrescribiendo los ajustes sincronizados más antiguos en cada dispositivo.</string>
+    <string name="settings_jellyplay_sync_action_failed">La última acción falló — comprueba tu conexión e inténtalo de nuevo</string>
 </resources>

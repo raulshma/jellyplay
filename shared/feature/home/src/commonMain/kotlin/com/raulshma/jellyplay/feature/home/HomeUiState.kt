@@ -119,6 +119,15 @@ data class HomeUiState(
      */
     val offlineSectionPrefs: OfflineHomeSectionPrefs = OfflineHomeSectionPrefs(),
     /**
+     * The hidden resume-row item ids (the client-side Continue Watching /
+     * Next Up / Continue Reading overlay), mirrored from the same prefs
+     * snapshot that drives the section query so the quick-action toggle can
+     * resolve HIDE↔SHOW per card at long-press time. Restore lives in the
+     * settings Home-display row and the detail ⋮ menu; the set roams via the
+     * `cw` sync namespace.
+     */
+    val hiddenCwItemIds: Set<String> = emptySet(),
+    /**
      * The single offline-render predicate, computed once per gate/library
      * emission by [computeHomeRenderSource] (see [HomeRenderSource]). The
      * screen branches and the VM's downloads-rendering gate read this value —

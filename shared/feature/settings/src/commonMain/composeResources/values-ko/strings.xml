@@ -809,4 +809,43 @@
     <string name="settings_jellyplay_push_state_server_off">서버 푸시 사용 안 함</string>
     <string name="settings_jellyplay_feature_analytics">통계</string>
     <string name="ss_jellyplay_feature_analytics_subtitle">관리 영역의 재생 기록 대시보드(관리자 전용)</string>
+
+    <!-- The JellyPlay sync / details-badges / player-notice strings
+         (ADR 0010 wave), translated together with the default file. -->
+    <string name="settings_jellyplay_sync_pending">%1$d개 대기 중</string>
+    <string name="settings_jellyplay_sync_error_title">동기화 문제</string>
+    <string name="settings_jellyplay_sync_rejected_keys">%1$d개 키가 거부됨: %2$s</string>
+    <string name="settings_jellyplay_sync_conflicts_title">충돌</string>
+    <string name="settings_jellyplay_sync_conflict_row">%1$s • %2$s</string>
+    <string name="settings_jellyplay_sync_conflict_ours">이 기기</string>
+    <string name="settings_jellyplay_sync_conflict_theirs">서버 / 다른 기기</string>
+    <string name="settings_jellyplay_sync_conflict_keep_mine">내 값 유지</string>
+    <string name="settings_jellyplay_sync_conflict_take_theirs">상대 값 사용</string>
+    <string name="settings_jellyplay_sync_conflict_deleted_value">(삭제됨)</string>
+    <string name="settings_jellyplay_sync_ns_toggle_subtitle">이 기기에서 “%1$s” 동기화 — %2$d개 키 • %3$s</string>
+    <string name="settings_jellyplay_sync_ns_off">이 기기에서 동기화 꺼짐</string>
+    <string name="settings_jellyplay_sync_device_rename_title">기기 이름 바꾸기</string>
+    <string name="settings_jellyplay_sync_device_rename_label">기기 이름</string>
+    <string name="settings_jellyplay_sync_device_rename_confirm">이름 바꾸기</string>
+    <string name="settings_jellyplay_sync_device_revoke_title">기기 해지</string>
+    <string name="settings_jellyplay_sync_device_revoke_subtitle">이 기기의 동기화된 설정을 해지하고 삭제합니다</string>
+    <string name="settings_jellyplay_sync_device_revoke_confirm_title">이 기기를 해지할까요?</string>
+    <string name="settings_jellyplay_sync_device_revoke_confirm_message">기기는 동기화에서 제거되고 푸시가 작동을 멈추며, 이 기기가 기록한 모든 설정이 서버에서 삭제됩니다. 다시 등록하기 전에는 다시 참여할 수 없습니다.</string>
+    <string name="settings_jellyplay_sync_device_revoked">해지됨</string>
+    <string name="settings_jellyplay_sync_snapshots_title">복원 지점</string>
+    <string name="settings_jellyplay_sync_snapshots_empty">아직 복원 지점이 없습니다</string>
+    <string name="settings_jellyplay_sync_snapshots_unavailable">이 서버에서는 복원 지점을 사용할 수 없습니다</string>
+    <string name="settings_jellyplay_sync_snapshots_create_title">복원 지점 만들기</string>
+    <string name="settings_jellyplay_sync_snapshots_create_subtitle">현재 동기화된 설정의 스냅샷을 서버에 저장합니다</string>
+    <string name="settings_jellyplay_sync_snapshot_entry">%1$s • %2$d개 키 • %3$s</string>
+    <string name="settings_jellyplay_sync_snapshot_restore_title">이 지점을 복원할까요?</string>
+    <string name="settings_jellyplay_sync_snapshot_restore_message">모든 기기의 동기화된 설정이 이 스냅샷으로 돌아갑니다. 이후의 변경 사항은 다음 동기화에서 덮어써집니다.</string>
+    <string name="settings_jellyplay_sync_snapshot_restore_confirm">복원</string>
+    <string name="settings_jellyplay_sync_export_title">설정 JSON 내보내기</string>
+    <string name="settings_jellyplay_sync_export_subtitle">동기화된 모든 설정을 JSON 번들로 공유합니다</string>
+    <string name="settings_jellyplay_sync_import_title">설정 JSON 가져오기</string>
+    <string name="settings_jellyplay_sync_import_subtitle">내보낸 JSON 번들에서 설정을 적용합니다</string>
+    <string name="settings_jellyplay_sync_import_confirm_title">이 설정들을 가져올까요?</string>
+    <string name="settings_jellyplay_sync_import_confirm_message">번들의 값은 서버 타임스탬프와 함께 적용되며, 각 기기에서 오래된 동기화 설정을 덮어씁니다.</string>
+    <string name="settings_jellyplay_sync_action_failed">마지막 작업이 실패했습니다 — 연결을 확인하고 다시 시도하세요</string>
 </resources>

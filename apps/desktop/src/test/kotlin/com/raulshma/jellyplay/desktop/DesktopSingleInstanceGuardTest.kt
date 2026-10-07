@@ -4,8 +4,6 @@ import java.io.File
 import java.lang.ProcessBuilder.Redirect
 import java.nio.file.Files
 import java.nio.file.Path
-import kotlin.io.path.readText
-import kotlin.io.path.writeText
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -72,10 +70,10 @@ class DesktopSingleInstanceGuardTest {
         childProcesses.add(holder)
 
         // Wait until the child reports it holds the lock (or failed).
-        awaitContent(sentinel, timeoutMs = 30_000, holder = holder, logDir = lockFile.parent)
+        val reported = awaitContent(sentinel, timeoutMs = 30_000, holder = holder, logDir = lockFile.parent)
         assertEquals(
             "locked",
-            sentinel.readText().trim(),
+            reported,
             "child lock holder failed to acquire — environment problem, not a guard bug",
         )
 
@@ -135,9 +133,17 @@ class DesktopSingleInstanceGuardTest {
     private fun javaExecutableName(): String =
         if (System.getProperty("os.name").lowercase().contains("win")) "java.exe" else "java"
 
-    private fun awaitContent(sentinel: Path, timeoutMs: Long, holder: Process, logDir: Path) {
+    /**
+     * Waits until the sentinel carries content and returns it. Polls CONTENT,
+     * not mere existence: a plain `writeText` on Windows makes the file
+     * visible in the directory before its bytes land, so an exists-check can
+     * read an empty sentinel (observed once as `expected: <locked> but was:
+     * <>`); the holder also publishes atomically (see [LockHolderMain.main]),
+     * and this read loop stays safe even for a non-atomic writer.
+     */
+    private fun awaitContent(sentinel: Path, timeoutMs: Long, holder: Process, logDir: Path): String {
         val deadline = System.currentTimeMillis() + timeoutMs
-        while (!Files.exists(sentinel) && System.currentTimeMillis() < deadline) {
+        while (System.currentTimeMillis() < deadline) {
             // Fail fast when the child already died without reporting.
             assertTrue(
                 holder.isAlive,
@@ -145,10 +151,13 @@ class DesktopSingleInstanceGuardTest {
                     readTail(logDir.resolve("holder.err.log")) +
                     " stdout: " + readTail(logDir.resolve("holder.out.log")),
             )
+            if (Files.isRegularFile(sentinel)) {
+                val content = Files.readString(sentinel).trim()
+                if (content.isNotEmpty()) return content
+            }
             Thread.sleep(25)
         }
-        assertTrue(
-            Files.exists(sentinel),
+        throw AssertionError(
             "lock holder never reported status within ${timeoutMs}ms; stderr: " +
                 readTail(logDir.resolve("holder.err.log")) +
                 " stdout: " + readTail(logDir.resolve("holder.out.log")),
@@ -183,15 +192,29 @@ class LockHolderMain {
             val sentinel = Path.of(args[1])
             val handle = DesktopSingleInstanceGuard.acquire(lockFile)
             if (handle == null) {
-                sentinel.writeText("contended")
+                reportAtomically(sentinel, "contended")
                 kotlin.system.exitProcess(3)
             }
-            sentinel.writeText("locked")
+            reportAtomically(sentinel, "locked")
             val deadline = System.currentTimeMillis() + 60_000
             while (Files.exists(sentinel) && System.currentTimeMillis() < deadline) {
                 Thread.sleep(25)
             }
             handle.close()
+        }
+
+        /**
+         * Publishes the status via temp-file + atomic move so the test's
+         * sentinel read never observes a created-but-empty file.
+         */
+        private fun reportAtomically(sentinel: Path, content: String) {
+            val tmp = sentinel.resolveSibling(sentinel.fileName.toString() + ".tmp")
+            Files.writeString(tmp, content)
+            try {
+                Files.move(tmp, sentinel, java.nio.file.StandardCopyOption.ATOMIC_MOVE)
+            } catch (_: java.nio.file.AtomicMoveNotSupportedException) {
+                Files.move(tmp, sentinel)
+            }
         }
     }
 }

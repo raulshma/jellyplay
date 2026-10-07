@@ -491,4 +491,12 @@
         <item quantity="one">%1$d élément sélectionné</item>
         <item quantity="other">%1$d éléments sélectionnés</item>
     </plurals>
+
+    <!-- The JellyPlay sync / details-badges / player-notice strings
+         (ADR 0010 wave), translated together with the default file. -->
+    <string name="jellyplay_det_ratings_title">Évaluations</string>
+    <string name="jellyplay_det_similar_badge">Sélection du serveur</string>
+    <string name="jellyplay_det_filler_badge">Filler</string>
+    <string name="jellyplay_det_mixed_badge">Mitigé</string>
+    <string name="jellyplay_det_recap_badge">Récap</string>
 </resources>

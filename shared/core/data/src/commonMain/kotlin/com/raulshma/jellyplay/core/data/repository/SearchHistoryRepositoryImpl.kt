@@ -16,6 +16,13 @@ class SearchHistoryRepositoryImpl constructor(
     private val dao: SearchHistoryDao,
     /** Clock seam for the persisted `searchedAt` stamp. */
     private val timeSource: EpochMillisSource,
+    /**
+     * The dirty-write flush signal: fired (best-effort, never blocking the
+     * local write) after every history mutation so the sync engine's
+     * background one-shot can pick the change up (ADR 0011's dirty-write
+     * trigger). Null in direct-construction tests.
+     */
+    private val onDirty: (suspend () -> Unit)? = null,
 ) : SearchHistoryRepository {
 
     override fun getRecent(userId: String, limit: Int): Flow<List<SearchHistoryItem>> =
@@ -32,14 +39,27 @@ class SearchHistoryRepositoryImpl constructor(
                 searchedAt = timeSource.nowEpochMillis(),
             )
         )
+        notifyDirty()
     }
 
     override suspend fun deleteById(id: Long) {
         dao.deleteById(id)
+        notifyDirty()
     }
 
     override suspend fun clearAll(userId: String) {
         dao.clearAll(userId)
+        notifyDirty()
+    }
+
+    /** Best-effort flush signal — a failed trigger never fails the local write. */
+    private suspend fun notifyDirty() {
+        val signal = onDirty ?: return
+        try {
+            signal()
+        } catch (t: Throwable) {
+            if (t is kotlinx.coroutines.CancellationException) throw t
+        }
     }
 
     private fun SearchHistoryEntity.toItem() = SearchHistoryItem(

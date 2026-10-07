@@ -39,6 +39,17 @@ internal sealed interface HomeQuickActionEffect {
     /** Ask for confirmation before deleting a non-series download. */
     data class ConfirmDeleteDownload(val item: MediaItem) : HomeQuickActionEffect
 
+    /**
+     * Hide the item from the resume rows (Continue Watching / Next Up /
+     * Continue Reading — the one client-side overlay set). The write rides
+     * the home store (the same seam the detail ⋮ menu's toggle uses); the
+     * home refresh re-filters the rows off the changed prefs snapshot.
+     */
+    data class HideFromContinueWatching(val item: MediaItem) : HomeQuickActionEffect
+
+    /** The un-hide counterpart of [HideFromContinueWatching]. */
+    data class ShowFromContinueWatching(val item: MediaItem) : HomeQuickActionEffect
+
     /** Action not handled on home (e.g. favourite toggles live elsewhere). */
     data object None : HomeQuickActionEffect
 }
@@ -72,5 +83,7 @@ internal fun homeQuickActionEffect(
         } else {
             HomeQuickActionEffect.ConfirmDeleteDownload(item)
         }
+    QuickAction.HIDE_FROM_CONTINUE_WATCHING -> HomeQuickActionEffect.HideFromContinueWatching(item)
+    QuickAction.SHOW_FROM_CONTINUE_WATCHING -> HomeQuickActionEffect.ShowFromContinueWatching(item)
     else -> HomeQuickActionEffect.None
 }

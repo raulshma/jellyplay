@@ -26,11 +26,19 @@ interface BookBookmarkDao {
     @Query("SELECT * FROM book_bookmarks WHERE itemId = :itemId ORDER BY positionTicks ASC, createdAt ASC")
     fun observeByItemId(itemId: String): Flow<List<BookBookmarkEntity>>
 
+    /** Every bookmark across every item — the sync adapter's snapshot read. */
+    @Query("SELECT * FROM book_bookmarks ORDER BY itemId ASC, positionTicks ASC, createdAt ASC")
+    suspend fun getAll(): List<BookBookmarkEntity>
+
     @Query("DELETE FROM book_bookmarks WHERE id = :id")
     suspend fun deleteById(id: Long)
 
     @Query("DELETE FROM book_bookmarks WHERE itemId = :itemId")
     suspend fun deleteByItemId(itemId: String)
+
+    /** The sync tombstone read: every row at one (itemId, positionTicks) join key. */
+    @Query("DELETE FROM book_bookmarks WHERE itemId = :itemId AND positionTicks = :positionTicks")
+    suspend fun deleteAtPosition(itemId: String, positionTicks: Long)
 
     @Query("SELECT COUNT(*) FROM book_bookmarks WHERE itemId = :itemId")
     suspend fun countByItemId(itemId: String): Int

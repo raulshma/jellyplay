@@ -79,6 +79,15 @@ class SeerrSettingsViewModelTest {
     private lateinit var pluginApiClient: JellyPlayPluginApiClient
     private lateinit var pluginStatusStore: JellyPlayPluginStatusStore
     private lateinit var authRepository: AuthRepository
+
+    /**
+     * The bridge's per-feature gate, mock-open for the whole class: every
+     * bridge path (the init seed, the mode flip, Quick Connect, logout) gates
+     * through [com.raulshma.jellyplay.core.data.session.JellyPlayFeatureGate.isAvailableNow]
+     * and fails closed without it. The toggle itself defaults on, so an open
+     * gate here is exactly the "registry exposes the feature" contract.
+     */
+    private lateinit var featureGate: com.raulshma.jellyplay.core.data.session.JellyPlayFeatureGate
     private val preferencesState = MutableStateFlow(SeerrPreferences())
     private val pluginStatusState = MutableStateFlow(JellyPlayPluginStatus.UNAVAILABLE)
     private val pluginFeaturesState = MutableStateFlow<Set<String>>(emptySet())
@@ -92,6 +101,13 @@ class SeerrSettingsViewModelTest {
         pluginApiClient = mockk(relaxed = true)
         pluginStatusStore = mockk(relaxed = true)
         authRepository = mockk(relaxed = true)
+        featureGate = mockk(relaxed = true)
+        coEvery { featureGate.isAvailableNow(any()) } returns true
+        every {
+            featureGate.enabledFeatures
+        } returns MutableStateFlow(
+            com.raulshma.jellyplay.core.data.session.JellyPlayFeatureGate.TOGGLEABLE_FEATURES.toSet(),
+        )
         every { seerrPreferencesStore.preferences } returns preferencesState
         every { pluginStatusStore.status } returns pluginStatusState
         every { pluginStatusStore.features } returns pluginFeaturesState
@@ -116,6 +132,10 @@ class SeerrSettingsViewModelTest {
         secureCredentialsStore,
         pluginApiClient = pluginApiClient.takeIf { withBridge },
         pluginStatusStore = pluginStatusStore.takeIf { withBridge },
+        // The per-feature gate seam (ADR 0010 §6): fail-CLOSED when unwired,
+        // so every bridge path (the init seed included) needs the gate —
+        // production always receives it from Koin, tests pass this mock.
+        jellyPlayFeatureGate = featureGate.takeIf { withBridge },
         authRepository = authRepository.takeIf { withBridge },
     )
 

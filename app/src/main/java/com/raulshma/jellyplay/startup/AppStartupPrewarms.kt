@@ -7,6 +7,7 @@ import com.raulshma.jellyplay.core.data.worker.AutoDownloadScheduler
 import com.raulshma.jellyplay.core.data.worker.DownloadReconnectListener
 import com.raulshma.jellyplay.core.data.worker.PlaybackSyncReconnectListener
 import com.raulshma.jellyplay.core.data.worker.PlaybackSyncScheduler
+import com.raulshma.jellyplay.core.data.worker.SettingsSyncBackgroundTrigger
 import com.raulshma.jellyplay.core.data.worker.UserDataSyncScheduler
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore
@@ -140,6 +141,10 @@ class AppStartupPrewarms(
     private val userDataSyncScheduler: Lazy<UserDataSyncScheduler>,
     private val playbackSyncScheduler: Lazy<PlaybackSyncScheduler>,
     private val playbackSyncReconnectListener: Lazy<PlaybackSyncReconnectListener>,
+    // The settings/profile sync engine's background trigger (ADR 0011): the
+    // app-background + reconnect flush edges and the 12h catch-up arm point,
+    // in the same deferred group as the other listeners.
+    private val settingsSyncBackgroundTrigger: Lazy<SettingsSyncBackgroundTrigger>,
     private val downloadReconnectListener: Lazy<DownloadReconnectListener>,
     private val notificationReconnectListener: Lazy<NotificationReconnectListener>,
     private val widgetWorkScheduler: Lazy<WidgetWorkScheduler>,
@@ -268,6 +273,7 @@ class AppStartupPrewarms(
             userDataSyncScheduler.value.enqueuePeriodic()
             playbackSyncScheduler.value.enqueuePeriodic()
             playbackSyncReconnectListener.value.start()
+            settingsSyncBackgroundTrigger.value.start()
             downloadReconnectListener.value.start()
             notificationReconnectListener.value.start()
             autoDownloadScheduler.value.sync()

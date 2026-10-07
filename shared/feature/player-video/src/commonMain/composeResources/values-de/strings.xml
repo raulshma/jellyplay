@@ -369,4 +369,10 @@
     <string name="player_video_preset_save_dialog_title">Vorlage speichern</string>
     <string name="player_video_preset_name_label">Name der Vorlage</string>
     <string name="player_video_preset_delete_a11y">Vorlage %1$s löschen</string>
+
+    <!-- The JellyPlay sync / details-badges / player-notice strings
+         (ADR 0010 wave), translated together with the default file. -->
+    <string name="player_video_transcode_switched">Zu transkodiertem Stream gewechselt — wird neu gepuffert</string>
+    <string name="player_video_direct_play_unavailable">Direct Play für dieses Element nicht verfügbar — Transkodierung als Ausweichlösung</string>
+    <string name="player_video_vlc_client_cert_unsupported">Client-Zertifikat wird von der VLC-Engine nicht unterstützt — für mTLS-Server zu ExoPlayer oder mpv wechseln</string>
 </resources>

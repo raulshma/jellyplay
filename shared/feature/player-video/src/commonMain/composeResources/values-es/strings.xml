@@ -369,4 +369,10 @@
     <string name="player_video_preset_save_dialog_title">Guardar ajuste</string>
     <string name="player_video_preset_name_label">Nombre del ajuste</string>
     <string name="player_video_preset_delete_a11y">Eliminar ajuste %1$s</string>
+
+    <!-- The JellyPlay sync / details-badges / player-notice strings
+         (ADR 0010 wave), translated together with the default file. -->
+    <string name="player_video_transcode_switched">Cambiado a transmisión transcodificada — volviendo a almacenar en el búfer</string>
+    <string name="player_video_direct_play_unavailable">Reproducción directa no disponible para este elemento — se usará la transcodificación</string>
+    <string name="player_video_vlc_client_cert_unsupported">El certificado de cliente no es compatible con el motor VLC — cambia a ExoPlayer o mpv para servidores mTLS</string>
 </resources>

@@ -165,4 +165,35 @@ class JellyPlayPreferencesSyncAdapterTest {
         assertEquals("\"LIGHT\"", prefs[stringPreferencesKey("jpsync.mirror.theme_mode")])
     }
 
+    @Test
+    fun deleteRemote_removesValueOfAnyKind_andItsMirror() = runTest {
+        // The inbound tombstone face (a namespace reset's tombstone batch, or
+        // another device's roaming delete): the local value AND its mirror
+        // entry go — the adopted delete never resurrects nor re-reads dirty.
+        val store = newDataStore("delete-remote-${System.nanoTime()}").apply { reset() }
+        val adapter = JellyPlayPreferencesSyncAdapter(store)
+        store.edit {
+            it[stringPreferencesKey("theme")] = "dark"
+            it[intPreferencesKey("volume")] = 30
+            it[stringPreferencesKey("jpsync.mirror.theme")] = "\"dark\""
+            it[stringPreferencesKey("jpsync.mirror.volume")] = "30"
+        }
+        // The cursors the sync wiring parks under the reserved prefix are
+        // untouchable (a hostile/stale tombstone cannot wipe identity or
+        // cursor state).
+        store.edit { it[stringPreferencesKey("jpsync.cursor.delta.user-1")] = "42" }
+
+        adapter.deleteRemote(setOf("theme", "volume", "pin_hash"))
+
+        val prefs = store.data.first()
+        assertNull(prefs[stringPreferencesKey("theme")])
+        assertNull(prefs[intPreferencesKey("volume")])
+        assertNull(prefs[stringPreferencesKey("jpsync.mirror.theme")])
+        assertNull(prefs[stringPreferencesKey("jpsync.mirror.volume")])
+        assertEquals("42", prefs[stringPreferencesKey("jpsync.cursor.delta.user-1")])
+        // Nothing re-reads as deleted or dirty afterwards.
+        assertTrue(adapter.dirtyValues(adapter.snapshot()).isEmpty())
+        assertTrue(adapter.deletedKeys().isEmpty())
+    }
+
 }

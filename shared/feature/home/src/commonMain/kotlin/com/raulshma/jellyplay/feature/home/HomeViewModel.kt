@@ -454,6 +454,10 @@ internal class HomeViewModel(
                         accentColorSwatch = prefs.appearance.accentColorSwatch,
                         performanceMode = prefs.appearance.performanceMode,
                     ),
+                    // The resume-row overlay mirror (quick-action toggle
+                    // resolution reads it; the same snapshot the section
+                    // query rides).
+                    hiddenCwItemIds = prefs.home.hiddenCwItemIds,
                     homeHeroEnabled = prefs.home.homeHeroEnabled,
                     homeBackdropEnabled = prefs.home.homeBackdropEnabled,
                     showClock = prefs.home.showClockOnHome,
@@ -647,6 +651,8 @@ internal class HomeViewModel(
             is HomeUiEvent.SwitchUser -> switchUser(event.userId)
             is HomeUiEvent.MarkItemPlayed -> setItemPlayed(event.item, played = true)
             is HomeUiEvent.MarkItemUnplayed -> setItemPlayed(event.item, played = false)
+            is HomeUiEvent.HideFromContinueWatching -> setHiddenFromContinueWatching(event.itemId, hidden = true)
+            is HomeUiEvent.ShowFromContinueWatching -> setHiddenFromContinueWatching(event.itemId, hidden = false)
             is HomeUiEvent.DeleteOfflineMedia -> deleteOfflineMedia(event.item)
             is HomeUiEvent.RequestSeriesDownload -> seriesDownloadStateHolder.requestSeriesDownload(event.series)
             is HomeUiEvent.LoadSeriesDownloadEpisodes -> seriesDownloadStateHolder.loadSeasonEpisodes(event.seasonId)
@@ -811,6 +817,19 @@ internal class HomeViewModel(
                 mode = UserDataMutator.FlipMode.Optimistic,
                 containers = listOf(sectionItemContainer),
             )
+        }
+    }
+
+    /**
+     * Quick-action hide/un-hide of a resume-row item: the home store's own
+     * write (the same seam the detail ⋮ menu's toggle uses). The prefs
+     * collector above re-filters the rows off the changed snapshot — the
+     * card leaves the row without an explicit refresh — and the hidden set
+     * roams via the `cw` sync namespace (ADR 0011).
+     */
+    private fun setHiddenFromContinueWatching(itemId: String, hidden: Boolean) {
+        launch {
+            if (hidden) prefs.homeDiscovery.hideCwItem(itemId) else prefs.homeDiscovery.unhideCwItem(itemId)
         }
     }
 

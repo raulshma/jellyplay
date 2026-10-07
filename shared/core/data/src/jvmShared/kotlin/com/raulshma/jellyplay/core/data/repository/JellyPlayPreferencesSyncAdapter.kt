@@ -38,8 +38,9 @@ import kotlinx.serialization.json.longOrNull
  * list; the exclusion sets are exported by the owning stores so the key
  * names cannot drift). Outbound ([snapshot]) they never leave the device;
  * inbound ([applyRemote]/[markSynced]) they are dropped even if a server
- * still holds pre-exclusion leaked rows or is hostile — reserved `jpsync.*`
- * names are likewise ignored so server state can't feed back.
+ * still holds pre-exclusion leaked rows or is hostile — the whole reserved
+ * `jpsync.*` space (mirrors, device identity, sync cursors) is likewise
+ * ignored so server state can't feed back.
  *
  * KIND PRESERVATION is the adapter's one hard rule: DataStore keys are
  * kind-locked by name — a `Float` read as `Double` crashes the app's readers.
@@ -53,7 +54,7 @@ class JellyPlayPreferencesSyncAdapter(
     private val excludedKeys: Set<String> = emptySet(),
 ) : ProfileSyncAdapter {
 
-    private fun isReserved(name: String) = name.startsWith(MIRROR_PREFIX) || name.startsWith(DEVICE_PREFIX)
+    private fun isReserved(name: String) = name.startsWith(RESERVED_PREFIX)
 
     private fun isExcluded(name: String) =
         name in excludedKeys || excludedPrefixes.any { name.startsWith(it) }
@@ -145,6 +146,29 @@ class JellyPlayPreferencesSyncAdapter(
         }
     }
 
+    /**
+     * Applies remote tombstones: the server deleted these keys (a namespace
+     * reset's tombstone batch, or another device's roaming delete) — the local
+     * values AND their mirror entries go, so the adopted delete neither
+     * resurrects the setting nor re-reads as a local edit. Reserved/excluded
+     * names are dropped inbound like everywhere else (a hostile or stale row
+     * cannot touch secrets, identity, or mirror state). [deletedKeys] stays
+     * the SPI default: a removed pref means "reset to default", never
+     * "deleted everywhere", so prefs never push tombstones.
+     */
+    override suspend fun deleteRemote(keys: Set<String>) {
+        if (keys.isEmpty()) return
+        dataStore.edit { prefs ->
+            keys.forEach { name ->
+                if (isReserved(name) || isExcluded(name)) return@forEach
+                // Key equality in DataStore is name-based, so the String-typed
+                // key removes the entry whatever kind is stored under the name.
+                prefs.remove(stringPreferencesKey(name))
+                prefs.remove(stringPreferencesKey(MIRROR_PREFIX + name))
+            }
+        }
+    }
+
     private fun writeInferred(prefs: androidx.datastore.preferences.core.MutablePreferences, name: String, value: JsonPrimitive) {
         when {
             value.booleanOrNull != null -> prefs[booleanPreferencesKey(name)] = value.boolean
@@ -172,6 +196,12 @@ class JellyPlayPreferencesSyncAdapter(
     }
 
     private companion object {
+        /**
+         * The whole reserved `jpsync.` space — mirror state (`jpsync.mirror.`),
+         * device identity (`jpsync.device.`), sync cursors (`jpsync.cursor.`)
+         * — never syncs in either direction.
+         */
+        const val RESERVED_PREFIX = "jpsync."
         const val MIRROR_PREFIX = "jpsync.mirror."
         const val DEVICE_PREFIX = "jpsync.device."
     }

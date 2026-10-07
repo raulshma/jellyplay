@@ -29,6 +29,15 @@ class ReaderAnnotationsRepositoryImpl constructor(
     private val annotationDao: BookAnnotationDao,
     /** Clock seam for the persisted createdAt/updatedAt stamps. */
     private val timeSource: EpochMillisSource,
+    /**
+     * The dirty-write flush signal: fired (best-effort, never blocking the
+     * local op — ADR 0003's backup-never-blocks rule) after every annotation
+     * or bookmark mutation so the sync engine's background one-shot can pick
+     * the change up (ADR 0011's dirty-write trigger — the `reader` and
+     * `books` namespaces both roam this repo's rows). Null in
+     * direct-construction tests.
+     */
+    private val onDirty: (suspend () -> Unit)? = null,
 ) : ReaderAnnotationsRepository {
 
     override fun observeBookmarks(itemId: String): Flow<List<ReaderBookmark>> =
@@ -47,10 +56,12 @@ class ReaderAnnotationsRepositoryImpl constructor(
                 createdAt = timeSource.nowEpochMillis(),
             )
         )
+        notifyDirty()
     }
 
     override suspend fun removeBookmark(id: Long) {
         bookmarkDao.deleteById(id)
+        notifyDirty()
     }
 
     override suspend fun addAnnotation(
@@ -76,6 +87,7 @@ class ReaderAnnotationsRepositoryImpl constructor(
                 updatedAt = now,
             )
         )
+        notifyDirty()
     }
 
     override suspend fun updateAnnotation(
@@ -97,15 +109,28 @@ class ReaderAnnotationsRepositoryImpl constructor(
                 updatedAt = timeSource.nowEpochMillis(),
             )
         )
+        notifyDirty()
     }
 
     override suspend fun deleteAnnotation(id: Long) {
         annotationDao.deleteById(id)
+        notifyDirty()
     }
 
     override suspend fun deleteAllForItem(itemId: String) {
         bookmarkDao.deleteByItemId(itemId)
         annotationDao.deleteByItemId(itemId)
+        notifyDirty()
+    }
+
+    /** Best-effort flush signal — a failed trigger never fails the local op (ADR 0003). */
+    private suspend fun notifyDirty() {
+        val signal = onDirty ?: return
+        try {
+            signal()
+        } catch (t: Throwable) {
+            if (t is kotlinx.coroutines.CancellationException) throw t
+        }
     }
 
     override fun exportMarkdown(

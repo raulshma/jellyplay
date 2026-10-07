@@ -82,7 +82,7 @@ class JellyPushRepositoryTest {
     @BeforeTest
     fun setup() {
         api = mockk(relaxUnitFun = true)
-        coEvery { api.registerDevice(any(), any(), any(), any(), any()) } returns Result.success(Unit)
+        coEvery { api.registerDevice(any(), any(), any(), any(), any(), any()) } returns Result.success(Unit)
         statusStore = JellyPlayPluginStatusStore(
             apiClient = api,
             sessionCacheRegistry = SessionCacheRegistry(FakeSessionIdentity(), CoroutineScope(Dispatchers.Default)),
@@ -185,7 +185,7 @@ class JellyPushRepositoryTest {
 
         assertEquals(JellyPushState.NoDistributor, repo.state.value)
         assertTrue(distributor.registered.isEmpty())
-        coVerify(exactly = 0) { api.registerDevice(any(), any(), any(), any(), any()) }
+        coVerify(exactly = 0) { api.registerDevice(any(), any(), any(), any(), any(), any()) }
     }
 
     @Test
@@ -196,7 +196,7 @@ class JellyPushRepositoryTest {
         repo.enable()
 
         assertEquals(JellyPushState.NoDistributor, repo.state.value)
-        coVerify(exactly = 0) { api.registerDevice(any(), any(), any(), any(), any()) }
+        coVerify(exactly = 0) { api.registerDevice(any(), any(), any(), any(), any(), any()) }
     }
 
     @Test
@@ -231,6 +231,9 @@ class JellyPushRepositoryTest {
                 JellyPlayDevicePush.Attach(
                     JellyPlayPushRegistration(kind = "generic", endpoint = "https://ntfy.example/endpoint-1"),
                 ),
+                // The caps assertion rides every registration (the wire
+                // REPLACES caps) — the silent-push opt-in is pinned here.
+                eq(listOf("silent-push")),
             )
         }
     }
@@ -252,6 +255,7 @@ class JellyPushRepositoryTest {
                 JellyPlayDevicePush.Attach(
                     JellyPlayPushRegistration(kind = "generic", endpoint = "https://ntfy.example/endpoint-2"),
                 ),
+                any(),
             )
         }
     }
@@ -267,7 +271,7 @@ class JellyPushRepositoryTest {
 
         assertEquals(JellyPushState.Unregistered, repo.state.value)
         assertNull(persistedEndpoint(datastore))
-        coVerify(exactly = 0) { api.registerDevice(any(), any(), any(), any(), any()) }
+        coVerify(exactly = 0) { api.registerDevice(any(), any(), any(), any(), any(), any()) }
     }
 
     // ── disable / onUnregistered (the detach paths) ─────────────────────
@@ -285,7 +289,7 @@ class JellyPushRepositoryTest {
         assertEquals(JellyPushState.Unregistered, repo.state.value)
         assertNull(persistedEndpoint(datastore))
         assertEquals(listOf(JellyPushDistributor.INSTANCE_DEFAULT), distributor.unregistered)
-        coVerify(exactly = 1) { api.registerDevice("device-1", "Test device", "desktop", "test", JellyPlayDevicePush.Detach) }
+        coVerify(exactly = 1) { api.registerDevice("device-1", "Test device", "desktop", "test", JellyPlayDevicePush.Detach, any()) }
     }
 
     @Test
@@ -299,7 +303,7 @@ class JellyPushRepositoryTest {
 
         assertEquals(JellyPushState.NoDistributor, repo.state.value)
         assertNull(persistedEndpoint(datastore))
-        coVerify(exactly = 1) { api.registerDevice("device-1", "Test device", "desktop", "test", JellyPlayDevicePush.Detach) }
+        coVerify(exactly = 1) { api.registerDevice("device-1", "Test device", "desktop", "test", JellyPlayDevicePush.Detach, any()) }
     }
 
     @Test
@@ -315,7 +319,7 @@ class JellyPushRepositoryTest {
         repo.onUnregistered()
 
         assertEquals("https://ntfy.example/persisted", persistedEndpoint(datastore))
-        coVerify(exactly = 0) { api.registerDevice(any(), any(), any(), any(), any()) }
+        coVerify(exactly = 0) { api.registerDevice(any(), any(), any(), any(), any(), any()) }
     }
 
     // ── onRegistrationFailed ────────────────────────────────────────────
@@ -361,6 +365,7 @@ class JellyPushRepositoryTest {
                 JellyPlayDevicePush.Attach(
                     JellyPlayPushRegistration(kind = "generic", endpoint = "https://ntfy.example/persisted"),
                 ),
+                any(),
             )
         }
         repo.stop()
@@ -396,7 +401,7 @@ class JellyPushRepositoryTest {
         // detaches instead of attaching-then-tearing-down.
         assertEquals(JellyPushState.Unregistered, state)
         coVerify(exactly = 0) {
-            api.registerDevice(any(), any(), any(), any(), ofType<JellyPlayDevicePush.Attach>())
+            api.registerDevice(any(), any(), any(), any(), ofType<JellyPlayDevicePush.Attach>(), any())
         }
         repo.stop()
     }
@@ -415,7 +420,7 @@ class JellyPushRepositoryTest {
         val state = awaitState(repo) { it == JellyPushState.Unregistered }
 
         assertEquals(JellyPushState.Unregistered, state)
-        coVerify(exactly = 1) { api.registerDevice("device-1", "Test device", "desktop", "test", JellyPlayDevicePush.Detach) }
+        coVerify(exactly = 1) { api.registerDevice("device-1", "Test device", "desktop", "test", JellyPlayDevicePush.Detach, any()) }
         assertEquals(1, distributor.unregistered.size)
         repo.stop()
     }
@@ -437,7 +442,7 @@ class JellyPushRepositoryTest {
         // nothing was sent to the server (an old plugin must not see a push field).
         assertEquals("https://ntfy.example/persisted", persistedEndpoint(datastore))
         assertTrue(distributor.unregistered.isEmpty())
-        coVerify(exactly = 0) { api.registerDevice(any(), any(), any(), any(), any()) }
+        coVerify(exactly = 0) { api.registerDevice(any(), any(), any(), any(), any(), any()) }
         repo.stop()
     }
 
@@ -446,7 +451,7 @@ class JellyPushRepositoryTest {
     @Test
     fun `a failed attach POST parks on Unregistered and keeps the endpoint for restore`() = runTest {
         makeAvailable()
-        coEvery { api.registerDevice(any(), any(), any(), any(), any()) } returns Result.failure(java.io.IOException("503"))
+        coEvery { api.registerDevice(any(), any(), any(), any(), any(), any()) } returns Result.failure(java.io.IOException("503"))
         val datastore = newDataStore(backgroundScope)
         val repo = repo(backgroundScope, FakeDistributor(), datastore)
 
@@ -464,7 +469,7 @@ class JellyPushRepositoryTest {
         val repo = repo(backgroundScope, distributor, datastore)
         repo.onNewEndpoint("https://ntfy.example/endpoint-1")
 
-        coEvery { api.registerDevice(any(), any(), any(), any(), any()) } returns Result.failure(java.io.IOException("offline"))
+        coEvery { api.registerDevice(any(), any(), any(), any(), any(), any()) } returns Result.failure(java.io.IOException("offline"))
         repo.disable()
 
         // The server still holds the endpoint — the row must keep reading
@@ -478,7 +483,7 @@ class JellyPushRepositoryTest {
     fun `a failed restore re-post stays unregistered for the next cycle`() = runTest {
         makeAvailable()
         var attachAttempts = 0
-        coEvery { api.registerDevice(any(), any(), any(), any(), any()) } answers {
+        coEvery { api.registerDevice(any(), any(), any(), any(), any(), any()) } answers {
             attachAttempts++
             Result.failure(java.io.IOException("offline"))
         }
@@ -493,7 +498,7 @@ class JellyPushRepositoryTest {
         val state = awaitState(repo) { attachAttempts > 0 && it == JellyPushState.Registering }
 
         assertEquals(JellyPushState.Registering, state)
-        coVerify(exactly = 1) { api.registerDevice(any(), any(), any(), any(), ofType<JellyPlayDevicePush.Attach>()) }
+        coVerify(exactly = 1) { api.registerDevice(any(), any(), any(), any(), ofType<JellyPlayDevicePush.Attach>(), any()) }
         assertEquals("https://ntfy.example/persisted", persistedEndpoint(datastore))
         repo.stop()
     }

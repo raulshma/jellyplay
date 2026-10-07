@@ -1,11 +1,14 @@
 package com.raulshma.jellyplay.core.data.di
 
+import com.raulshma.jellyplay.core.data.repository.ProfileSyncRepository
 import com.raulshma.jellyplay.core.data.widget.ContinueWatchingBroadcaster
 import com.raulshma.jellyplay.core.data.widget.LibrarySyncHook
 import com.raulshma.jellyplay.core.data.worker.DesktopPlaybackSyncScheduler
+import com.raulshma.jellyplay.core.data.worker.DesktopSettingsSyncScheduler
 import com.raulshma.jellyplay.core.data.worker.PlaybackOutboxDrainer
 import com.raulshma.jellyplay.core.data.worker.PlaybackOutboxDrainerImpl
 import com.raulshma.jellyplay.core.data.worker.PlaybackSyncScheduler
+import com.raulshma.jellyplay.core.data.worker.SettingsSyncScheduler
 import com.raulshma.jellyplay.core.data.worker.TvWatchNextScheduler
 import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
 import org.koin.core.module.Module
@@ -79,6 +82,33 @@ internal val desktopHomeConveyorModule: Module = module {
         )
     }
     single<PlaybackSyncScheduler> { get<DesktopPlaybackSyncScheduler>() }
+
+    // The settings/profile sync engine's desktop flush trigger (ADR 0011):
+    // the desktop actual of the SettingsSyncScheduler seam — startup +
+    // reconnect + dirty-write flushes in process, the window-focus edge
+    // replacing Android's app-background one (Main.kt's windowGainedFocus
+    // hook calls DesktopSettingsSyncScheduler.onWindowFocus). The flush IS
+    // the engine's own requestSync (its gates stay authoritative); the
+    // repositories' dirty-write signal resolves THIS interface via
+    // getOrNull. Android overrides the interface with the WorkManager-backed
+    // pair in androidWorkSchedulersModule — the two platform modules never
+    // load together. Started from the desktop composition root beside
+    // DesktopPlaybackSyncScheduler.
+    single {
+        // getKoin() captured at construction; the engine read deferred to each
+        // flush (the JellyPlayHomeSectionSourcesImpl idiom — the definition
+        // lambda's Scope is not the object a deferred call should hold).
+        val koin = getKoin()
+        DesktopSettingsSyncScheduler(
+            networkMonitor = get(),
+            offlineModeManager = get(),
+            scope = get(DatastoreQualifiers.applicationScope),
+            flush = { koin.get<ProfileSyncRepository>().requestSync() },
+        )
+    }
+    single<SettingsSyncScheduler> {
+        get<DesktopSettingsSyncScheduler>()
+    }
     single<TvWatchNextScheduler> {
         object : TvWatchNextScheduler {
             override fun scheduleRefresh() {}
