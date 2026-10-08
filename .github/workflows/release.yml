@@ -353,14 +353,20 @@ jobs:
           # only, not those.
           pattern: 'apk-*'
 
-      - name: Publish to GitHub Releases
+      # Draft contract: the run uploads APKs to a DRAFT release for human
+      # review. Publishing the draft (manually) creates the tag at the exact
+      # commit this run built (target_commitish — drafts don't create the tag
+      # up front), after which it becomes /releases/latest by recency.
+      # make_latest can't be combined with draft: drafts cannot be set latest.
+      - name: Publish to GitHub Releases (draft)
         uses: softprops/action-gh-release@v3
         with:
           tag_name: "${{ needs.determine-version.outputs.tag }}"
           name: "Release ${{ needs.determine-version.outputs.tag }}"
           files: apks/jellyplay-*.apk
           generate_release_notes: true
-          make_latest: true
+          draft: true
+          target_commitish: ${{ github.sha }}
 
   kmp-alpha-release:
     needs: [determine-version, desktop-package]

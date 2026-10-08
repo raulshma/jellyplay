@@ -421,6 +421,36 @@ See [Book reader](./docs/book-reader.md) for the full guide.
 </details>
 
 <details>
+<summary><strong>JellyPlay companion server plugin</strong></summary>
+
+JellyPlay works great against a plain Jellyfin server — but install the companion **[JellyPlay server plugin](https://github.com/raulshma/jellyfin-plugin-jellyplay)** and a set of JellyPlay-exclusive features light up. The app probes the server for the plugin's capabilities endpoint at sign-in; every feature below degrades gracefully when the plugin is absent.
+
+**Install** (Jellyfin 12.x / .NET 10 hosts): Jellyfin Dashboard → Plugins → Repositories → add
+
+```
+https://raw.githubusercontent.com/raulshma/jellyfin-plugin-jellyplay/main/manifest.json
+```
+
+then install **JellyPlay** from the catalog and restart.
+
+What it unlocks:
+
+- **Settings & profile sync** — opt-in per-user sync of preferences, search history, hidden-content (continue-watching) filters, book bookmarks/annotations and home layout across your devices: last-write-wins with server-side conflict previews (keep mine / take theirs), deletions that roam both ways, per-namespace selective sync with pending counts, restore points and export/import — live via SSE with background flushes and a silent push nudge when no live connection exists
+- **Admin defaults** — tri-state (unset / suggested / forced) client defaults pushed to users from the plugin dashboard, with config backup/restore
+- **Events & messages** — new-media events, admin broadcasts and a rich inbox message system over per-user SSE streams
+- **Seerr bridge** — server-brokered Seerr single sign-on (password + Quick Connect) with a full catch-all API proxy, so no per-user Seerr tokens live on devices
+- **Newsletter** — the weekly server digest gets a real SMTP backend
+- **Ratings** — MDBList aggregates, TMDB episode/season ratings, and IMDb charts with server-held API keys and caching
+- **Custom & seasonal home rows** — Letterboxd / IMDb / MDBList lists and seasonal keyword rows resolved against your library
+- **Anime markers** — filler / recap / canon badges (AnimeFillerList + Tenrai) with MAL↔AniList mapping
+- **Recommendations** — server-scored similar items (genres / tags / people / studios / franchise)
+- **User data & transcode insights** — one-response personal ratings plus book-reader bookmark/notes sync, admin transcode dashboard data and per-user download progress
+
+Client-side architecture, sync semantics and the wire contract are documented in the [plugin guide](./docs/jellyplay-plugin.md).
+
+</details>
+
+<details>
 <summary><strong>Platform, theming, widgets & accessibility</strong></summary>
 
 - Multi-server Jellyfin support with auto-discovery
@@ -550,6 +580,7 @@ See [Book reader](./docs/book-reader.md) for the full guide.
 - JDK 17
 - Android Studio with Android SDK (compileSdk 37)
 - A Jellyfin server (10.x or 12.x) for authentication and playback
+- Optional: the [JellyPlay companion server plugin](https://github.com/raulshma/jellyfin-plugin-jellyplay) (Jellyfin 12.x / .NET 10 hosts) — unlocks settings sync, Seerr SSO, the newsletter backend, ratings, custom home rows and more; everything degrades gracefully without it
 
 ---
 
@@ -764,12 +795,14 @@ Looking for setup, integration, or troubleshooting guides?
 - [Book reader](./docs/book-reader.md) — read comics, PDFs, and EPUBs in-app
 - [Player engines comparison](./docs/player-engines.md) — ExoPlayer vs libmpv vs LibVLC
 - [Playback progress sync](./docs/playback-progress-sync.md) — how watch progress is reported and synced
+- [Companion server plugin](./docs/jellyplay-plugin.md) — the JellyPlay server plugin: what it adds, install, and how the client integrates
 ---
 
 ## See Also
 
 Other open-source projects in the Jellyfin ecosystem:
 
+- [jellyfin-plugin-jellyplay](https://github.com/raulshma/jellyfin-plugin-jellyplay) — the JellyPlay companion server plugin (settings sync, events, Seerr bridge, ratings, custom rows & more)
 - [jellyfin/jellyfin](https://github.com/jellyfin/jellyfin) — the free software media system
 - [jellyfin/jellyfin-android](https://github.com/jellyfin/jellyfin-android) — the official Android client (web wrapper)
 - [jellyfin/jellyfin-androidtv](https://github.com/jellyfin/jellyfin-androidtv) — the official Android TV client
