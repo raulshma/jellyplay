@@ -20,6 +20,7 @@ import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import java.io.File
+import javax.xml.parsers.DocumentBuilderFactory
 
 /**
  * Generates the JellyPlay client settings catalog — the artifact the Jellyfin
@@ -84,9 +85,16 @@ object SettingsCatalogGenerator {
         val valueType: String,
         val defaultValue: JsonPrimitive?,
         val options: List<String>?,
+        val optionLabels: List<String>?,
+        val group: String,
+        val min: Double?,
+        val max: Double?,
     ) {
         val id: String get() = "$ns/$key"
     }
+
+    /** Catalog group of the hand-written [SUPPLEMENTAL] rows. */
+    const val SUPPLEMENTAL_GROUP = "General"
 
     /**
      * Hand-written store keys worth advertising before their stores migrate
@@ -129,10 +137,12 @@ object SettingsCatalogGenerator {
 
     /**
      * All catalog entries, in artifact order (spec domains, then supplemental
-     * rows). Throws on denylisted or duplicate keys — a broken policy must
-     * fail the generation, not ship a wrong catalog.
+     * rows). [strings] is the settings-search resource table (name → text)
+     * the labels and descriptions resolve from. Throws on denylisted or
+     * duplicate keys — a broken policy must fail the generation, not ship a
+     * wrong catalog.
      */
-    fun entries(): List<Entry> {
+    fun entries(strings: Map<String, String>): List<Entry> {
         val result = mutableListOf<Entry>()
         val seen = mutableSetOf<String>()
 
@@ -149,10 +159,10 @@ object SettingsCatalogGenerator {
             result += entry
         }
 
-        SPEC_DOMAINS.forEach { (_, rows) ->
+        SPEC_DOMAINS.forEach { (domain, rows) ->
             rows.forEach { spec ->
                 if (SYNC_EXCLUDED_PREFIXES.none { spec.keyName.startsWith(it) }) {
-                    spec.toEntry()?.let(::add)
+                    spec.toEntry(domain, strings)?.let(::add)
                 }
             }
         }
@@ -166,6 +176,10 @@ object SettingsCatalogGenerator {
                     valueType = it.valueType,
                     defaultValue = it.defaultValue,
                     options = null,
+                    optionLabels = null,
+                    group = SUPPLEMENTAL_GROUP,
+                    min = null,
+                    max = null,
                 ),
             )
         }
@@ -179,8 +193,16 @@ object SettingsCatalogGenerator {
      * string; defaults are only carried when they are wire-representable
      * (a codec-encoded default like a Set cannot be rendered without its
      * store codec, so it is omitted rather than approximated).
+     *
+     * The human-facing label and description resolve from the settings-search
+     * resource table ([strings], name → text): the row's own
+     * [PreferenceSearchSpec.titleKey]/[PreferenceSearchSpec.subtitleKey] are
+     * the same strings the client's in-app settings search shows, so the
+     * catalog cannot drift from what users see in the app. Rows without
+     * search metadata (and keys missing from the table) fall back to the
+     * mechanical [humanize] label and an empty description.
      */
-    private fun PreferenceSpec<*>.toEntry(): Entry {
+    private fun PreferenceSpec<*>.toEntry(group: String, strings: Map<String, String>): Entry {
         val type: String
         var options: List<String>? = null
         var defaultValue: JsonPrimitive? = null
@@ -191,7 +213,7 @@ object SettingsCatalogGenerator {
         fun wireDefault(storageKind: String, render: (Any) -> JsonPrimitive): JsonPrimitive? {
             val declared = this@toEntry.default ?: return null
             check(declared::class.simpleName == storageKind) {
-                "settings catalog: spec '$keyName' declares $storage storage but a " +
+                "settings catalog: spec '$keyName' declares $storageKind storage but a " +
                     "${declared::class.simpleName} default — the row's default cannot be rendered"
             }
             return render(declared)
@@ -226,14 +248,31 @@ object SettingsCatalogGenerator {
                 }
             }
         }
+        val label = search?.titleKey?.let { strings[it] }
+        val description = search?.subtitleKey?.let { strings[it] }
+        if (search != null) {
+            // A miss degrades to the mechanical label / no description —
+            // legal (the fallbacks keep the artifact valid) but a resources
+            // regression the committer should see, never a silent one.
+            if (strings[search.titleKey] == null) {
+                System.err.println("settings catalog: title key '${search.titleKey}' (spec $keyName) missing from the strings tables — label degraded")
+            }
+            if (strings[search.subtitleKey] == null) {
+                System.err.println("settings catalog: subtitle key '${search.subtitleKey}' (spec $keyName) missing from the strings tables — description degraded")
+            }
+        }
         return Entry(
             ns = NAMESPACE,
             key = keyName,
-            label = humanize(keyName),
-            description = "",
+            label = label ?: humanize(keyName),
+            description = description ?: "",
             valueType = type,
             defaultValue = defaultValue,
             options = options,
+            optionLabels = options?.map(::humanizeEnum),
+            group = group,
+            min = min,
+            max = max,
         )
     }
 
@@ -242,24 +281,64 @@ object SettingsCatalogGenerator {
             word.replaceFirstChar { it.uppercaseChar() }
         }
 
+    /** "TONAL_SPOT" → "Tonal Spot" — SCREAMING_SNAKE enum names for display. */
+    private fun humanizeEnum(name: String): String =
+        name.split('_').joinToString(" ") { word ->
+            word.lowercase().replaceFirstChar { it.uppercaseChar() }
+        }
+
+    /**
+     * Parses one settings-search resource file into a name → text map. A real
+     * XML parser, not regex, so entities (`&amp;`, `&apos;`, …) resolve
+     * exactly as the in-app strings do. A missing file is a broken checkout
+     * and fails the generation — the artifact must never ship with
+     * silently-degraded labels.
+     */
+    internal fun loadSearchStrings(path: String): Map<String, String> {
+        val file = File(path)
+        check(file.isFile) {
+            "settings catalog: search strings file missing at $path — pass the client's resource tables via --strings"
+        }
+        val factory = DocumentBuilderFactory.newInstance()
+        factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
+        val document = factory.newDocumentBuilder().parse(file)
+        val nodes = document.getElementsByTagName("string")
+        val strings = mutableMapOf<String, String>()
+        for (i in 0 until nodes.length) {
+            val node = nodes.item(i)
+            val name = node.attributes?.getNamedItem("name")?.nodeValue ?: continue
+            strings[name] = node.textContent.trim()
+        }
+        return strings
+    }
+
     /** The deterministic artifact text (spec declaration order, fixed shape). */
-    fun render(): String {
+    fun render(strings: Map<String, String>): String = renderEntries(entries(strings))
+
+    /** The deterministic artifact text for pre-built entries (check mode reuses its walk). */
+    internal fun renderEntries(entries: List<Entry>): String {
         val artifact = buildJsonObject {
             put("catalogSchema", CATALOG_SCHEMA)
             put(
                 "settings",
                 buildJsonArray {
-                    entries().forEach { entry ->
+                    entries.forEach { entry ->
                         add(
                             buildJsonObject {
                                 put("ns", entry.ns)
                                 put("key", entry.key)
                                 put("label", entry.label)
                                 put("description", entry.description)
+                                put("group", entry.group)
                                 put("valueType", entry.valueType)
                                 entry.defaultValue?.let { put("defaultValue", it) }
+                                entry.min?.let { put("min", it) }
+                                entry.max?.let { put("max", it) }
                                 entry.options?.let { names ->
                                     put("options", buildJsonArray { names.forEach { add(JsonPrimitive(it)) } })
+                                }
+                                entry.optionLabels?.let { labels ->
+                                    put("optionLabels", buildJsonArray { labels.forEach { add(JsonPrimitive(it)) } })
                                 }
                             },
                         )
@@ -272,34 +351,62 @@ object SettingsCatalogGenerator {
 }
 
 fun main(args: Array<String>) {
-    val checkMode = args.firstOrNull() == "--check"
-    val path = args.lastOrNull { it != "--check" }
-        ?: error("usage: SettingsCatalogGenerator [--check] <artifact-path>")
-    val file = File(path)
+    val usage = "usage: SettingsCatalogGenerator [--check] [--strings <resource.xml>]... <artifact-path>"
+    val checkMode = args.contains("--check")
+    val stringsPaths = mutableListOf<String>()
+    var artifactPath: String? = null
+    var i = 0
+    while (i < args.size) {
+        when (val arg = args[i]) {
+            "--check" -> Unit
+            "--strings" -> {
+                i++
+                stringsPaths += args.getOrNull(i) ?: error(usage)
+            }
+            else -> {
+                // Guard the ambiguity that would make a table path silently
+                // (or worse, destructively) pass for the artifact.
+                check(artifactPath == null) { "multiple artifact paths given: $artifactPath, $arg — $usage" }
+                artifactPath = arg
+            }
+        }
+        i++
+    }
+    val path = artifactPath ?: error(usage)
+    check(stringsPaths.isNotEmpty()) { usage }
+    // Later files win on name collisions (the client's resource merge allows
+    // duplicates across files); the search table leads so its ss_* keys are
+    // the baseline.
+    val strings = stringsPaths.fold(mutableMapOf<String, String>()) { acc, file ->
+        acc.putAll(SettingsCatalogGenerator.loadSearchStrings(file))
+        acc
+    }
 
     if (checkMode) {
         // The plugin tree (and its embedded artifact) is committed in this
         // repo, so an absent artifact is a broken checkout, not a skip —
         // silently passing here would let a deleted artifact through CI.
-        if (!file.isFile) {
+        if (!File(path).isFile) {
             error(
                 "settings catalog artifact missing at $path — run " +
                     "./gradlew :shared:core:datastore:generateSettingsCatalog and commit the artifact",
             )
         }
-        val committed = file.readText().replace("\r\n", "\n")
-        val generated = SettingsCatalogGenerator.render()
+        val entries = SettingsCatalogGenerator.entries(strings)
+        val committed = File(path).readText().replace("\r\n", "\n")
+        val generated = SettingsCatalogGenerator.renderEntries(entries)
         if (committed != generated) {
             error(
                 "settings catalog is stale: $path does not match the PreferenceSpec declarations. " +
                     "Run ./gradlew :shared:core:datastore:generateSettingsCatalog and commit the artifact.",
             )
         }
-        println("settings catalog: ${SettingsCatalogGenerator.entries().size} entries up to date")
+        println("settings catalog: ${entries.size} entries up to date")
         return
     }
 
-    file.parentFile?.mkdirs()
-    file.writeText(SettingsCatalogGenerator.render())
-    println("settings catalog: wrote ${SettingsCatalogGenerator.entries().size} entries to $path")
+    val entries = SettingsCatalogGenerator.entries(strings)
+    File(path).parentFile?.mkdirs()
+    File(path).writeText(SettingsCatalogGenerator.renderEntries(entries))
+    println("settings catalog: wrote ${entries.size} entries to $path")
 }

@@ -22,7 +22,7 @@ class SettingsCatalogGeneratorTest {
             "settings catalog artifact missing: $artifact — run :shared:core:datastore:generateSettingsCatalog and commit"
         }
         assertEquals(
-            SettingsCatalogGenerator.render(),
+            SettingsCatalogGenerator.render(searchStrings()),
             artifact.readText().replace("\r\n", "\n"),
             "stale catalog artifact — run :shared:core:datastore:generateSettingsCatalog and commit",
         )
@@ -30,7 +30,7 @@ class SettingsCatalogGeneratorTest {
 
     @Test
     fun `entries are unique and policy clean`() {
-        val entries = SettingsCatalogGenerator.entries()
+        val entries = SettingsCatalogGenerator.entries(searchStrings())
         assertTrue(entries.size > 100, "expected the full spec surface, got ${entries.size}")
         assertEquals(entries.size, entries.map { it.id }.toSet().size, "duplicate ids")
         assertEquals(
@@ -46,7 +46,7 @@ class SettingsCatalogGeneratorTest {
 
     @Test
     fun `enum entries carry options and their default among them`() {
-        SettingsCatalogGenerator.entries()
+        SettingsCatalogGenerator.entries(searchStrings())
             .filter { it.valueType == "enum" }
             .forEach { entry ->
                 assertTrue(entry.options.orEmpty().isNotEmpty(), "${entry.id}: enum without options")
@@ -61,7 +61,7 @@ class SettingsCatalogGeneratorTest {
 
     @Test
     fun `defaults match their declared value type`() {
-        SettingsCatalogGenerator.entries().forEach { entry ->
+        SettingsCatalogGenerator.entries(searchStrings()).forEach { entry ->
             val default = entry.defaultValue ?: return@forEach
             when (entry.valueType) {
                 "boolean" -> assertTrue(
@@ -74,6 +74,68 @@ class SettingsCatalogGeneratorTest {
                 }
                 "enum", "string" -> assertTrue(default.isString, "${entry.id}: ${default.content} is not a string")
             }
+        }
+    }
+
+    @Test
+    fun `every entry carries a human label and a group`() {
+        SettingsCatalogGenerator.entries(searchStrings()).forEach { entry ->
+            assertTrue(entry.label.isNotEmpty(), "${entry.id}: empty label")
+            assertTrue(entry.group.isNotEmpty(), "${entry.id}: empty group")
+        }
+    }
+
+    @Test
+    fun `enum entries carry display labels matching their options`() {
+        SettingsCatalogGenerator.entries(searchStrings())
+            .filter { it.valueType == "enum" }
+            .forEach { entry ->
+                val labels = entry.optionLabels.orEmpty()
+                assertEquals(entry.options.orEmpty().size, labels.size, "${entry.id}: optionLabels/options size mismatch")
+                assertTrue(labels.all { it.isNotEmpty() }, "${entry.id}: empty option label")
+            }
+    }
+
+    @Test
+    fun `ranges are number-only, ordered, and limited to the audited rows`() {
+        val entries = SettingsCatalogGenerator.entries(searchStrings())
+        entries.forEach { entry ->
+            if (entry.min == null && entry.max == null) { return@forEach }
+            assertEquals("number", entry.valueType, "${entry.id}: range on a non-number row")
+            entry.min?.let { min -> entry.max?.let { max -> assertTrue(min <= max, "${entry.id}: min > max") } }
+        }
+        // The audited bounds — each backed by a visible clamp in the owning
+        // store (downmix 0–12 dB, the rest floor-at-zero). A new bound must
+        // be evidence-backed: declare it on the spec row AND extend this set
+        // in the same commit. (The dream_* rows carry no bounds — the sync
+        // prefix policy excludes them from the catalog entirely.)
+        assertEquals(
+            setOf(
+                "downmix_boost_db",
+                "next_up_max_days",
+                "video_pass_out_protection_hours",
+                "video_skip_back_on_resume_ms",
+                "still_watching_episode_threshold",
+            ),
+            entries.filter { it.min != null || it.max != null }.map { it.key }.toSet(),
+            "the bounded-row set changed — audit the new clamp before advertising it",
+        )
+    }
+
+    private fun searchStrings(): Map<String, String> {
+        // KEEP IN SYNC with settingsCatalogStrings in build.gradle.kts — same
+        // tables, resolved against the repo root.
+        val root = findRepoRoot()
+        val tables = listOf(
+            "shared/feature/settings/src/commonMain/composeResources/values/strings_search.xml",
+            "shared/feature/settings/src/commonMain/composeResources/values/strings_appearance.xml",
+            "shared/feature/settings/src/commonMain/composeResources/values/strings_playback.xml",
+            "shared/feature/settings/src/commonMain/composeResources/values/strings.xml",
+            "shared/core/ui/src/commonMain/composeResources/values/strings.xml",
+        )
+        return tables.fold(mutableMapOf<String, String>()) { acc, table ->
+            acc.putAll(SettingsCatalogGenerator.loadSearchStrings(root.resolve(table).absolutePath))
+            acc
         }
     }
 

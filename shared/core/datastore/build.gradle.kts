@@ -57,6 +57,17 @@ val settingsCatalogJvmMain = kotlin.jvm().compilations.getByName("main")
 val settingsCatalogArtifact = rootProject.layout.projectDirectory.file(
     "jellyfin-plugin-jellyplay/src/Jellyfin.Plugin.JellyPlay/Resources/jellyplay-settings-catalog.json",
 )
+// The resource tables the catalog's human labels/descriptions resolve from —
+// the settings-search table plus the screen tables whose non-ss_* title keys
+// a few folded rows reuse. KEEP IN SYNC with searchStrings() in
+// SettingsCatalogGeneratorTest (same tables, relative to the repo root).
+val settingsCatalogStrings = listOf(
+    "shared/feature/settings/src/commonMain/composeResources/values/strings_search.xml",
+    "shared/feature/settings/src/commonMain/composeResources/values/strings_appearance.xml",
+    "shared/feature/settings/src/commonMain/composeResources/values/strings_playback.xml",
+    "shared/feature/settings/src/commonMain/composeResources/values/strings.xml",
+    "shared/core/ui/src/commonMain/composeResources/values/strings.xml",
+).map { rootProject.layout.projectDirectory.file(it).asFile.absolutePath }
 val settingsCatalogClasspath =
     settingsCatalogJvmMain.output.allOutputs + settingsCatalogJvmMain.compileDependencyFiles
 
@@ -65,7 +76,7 @@ tasks.register<JavaExec>("generateSettingsCatalog") {
     description = "Regenerates the JellyPlay settings catalog artifact embedded by the Jellyfin plugin."
     mainClass.set("com.raulshma.jellyplay.core.datastore.tools.SettingsCatalogGeneratorKt")
     classpath = settingsCatalogClasspath
-    args(settingsCatalogArtifact.asFile.absolutePath)
+    args(settingsCatalogStrings.flatMap { listOf("--strings", it) } + settingsCatalogArtifact.asFile.absolutePath)
 }
 
 tasks.register<JavaExec>("checkSettingsCatalog") {
@@ -73,7 +84,7 @@ tasks.register<JavaExec>("checkSettingsCatalog") {
     description = "Fails when the committed settings catalog artifact no longer matches the PreferenceSpec declarations."
     mainClass.set("com.raulshma.jellyplay.core.datastore.tools.SettingsCatalogGeneratorKt")
     classpath = settingsCatalogClasspath
-    args("--check", settingsCatalogArtifact.asFile.absolutePath)
+    args(listOf("--check") + settingsCatalogStrings.flatMap { listOf("--strings", it) } + settingsCatalogArtifact.asFile.absolutePath)
 }
 
 tasks.named("check") { dependsOn("checkSettingsCatalog") }

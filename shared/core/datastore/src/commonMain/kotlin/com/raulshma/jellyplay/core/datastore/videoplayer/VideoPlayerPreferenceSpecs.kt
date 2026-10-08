@@ -339,6 +339,7 @@ object VideoPlayerPreferenceSpecs {
         keyName = "video_pass_out_protection_hours",
         default = 0,
         resetCategory = PreferenceResetCategory.PLAYBACK,
+        min = 0,
         search = PreferenceSearchSpec(
             id = "pass_out_protection",
             titleKey = "ss_pass_out_protection_title",
@@ -354,6 +355,7 @@ object VideoPlayerPreferenceSpecs {
         keyName = "video_skip_back_on_resume_ms",
         default = 0L,
         resetCategory = PreferenceResetCategory.PLAYBACK,
+        min = 0L,
         search = PreferenceSearchSpec(
             id = "skip_back_on_resume",
             titleKey = "ss_skip_back_on_resume_title",
@@ -435,6 +437,7 @@ object VideoPlayerPreferenceSpecs {
         keyName = "still_watching_episode_threshold",
         default = 0,
         resetCategory = PreferenceResetCategory.PLAYBACK,
+        min = 0,
         search = PreferenceSearchSpec(
             id = "still_watching_episodes",
             titleKey = "ss_still_watching_episodes_title",
