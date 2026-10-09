@@ -16,7 +16,7 @@ import org.jetbrains.compose.resources.getString
  * renders identical text (including the unknown-token fallback, which
  * interpolates the raw server token). Resolution is suspend because the
  * session renders off composition (the same compose-resources
- * `getString` path PlayerSessionManager/PlayerWiring already use).
+ * `getString` path PlayerSessionManager already uses).
  */
 fun interface TranscodeReasonsRenderer {
     suspend fun render(rawReasons: List<String>): List<String>

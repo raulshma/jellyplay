@@ -145,7 +145,7 @@ private const val SEEK_PROGRESS = "PlaybackSession.seekProgress"
 /**
  * One playback session's lifecycle — the player's DEEP MODULE and, since the
  * C6 collapse, its COMPOSITION ROOT: the collaborator graph that the deleted
- * [PlayerWiring] builder used to construct in its two-phase protocol is built
+ * `PlayerWiring` builder used to construct in its two-phase protocol is built
  * here, inside the session, in one deliberate construction pass (the class
  * body's collaborator section, in dependency order) and armed by [arm] (the
  * former phase 2: the builder's late-bound back-reference slots and the

@@ -316,7 +316,7 @@ class VideoPlayerViewModel(
     // ── Collaborator graph ───────────────────────────────────────────────────
     // The session stack, the controllers and the whole collaborator graph are
     // constructed and armed by [playbackSession] ([PlaybackSession], the
-    // composition root the deleted [PlayerWiring] builder collapsed into):
+    // composition root the deleted `PlayerWiring` builder collapsed into):
     // its class body constructs every collaborator once — the six
     // mutual-recursion construction cycles dissolved by ownership
     // (self-referencing seams, an owned projection cluster, owner funnels;

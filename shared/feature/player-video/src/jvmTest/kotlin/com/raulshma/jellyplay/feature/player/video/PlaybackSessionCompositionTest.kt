@@ -7,7 +7,7 @@ import kotlin.test.assertTrue
 
 /**
  * Composition ratchet for [PlaybackSession], the composition root that
- * replaced the deleted two-phase [PlayerWiring] builder (the builder had
+ * replaced the deleted two-phase `PlayerWiring` builder (the builder had
  * itself replaced the VM's ~1,400 lines of in-class collaborator wiring AND
  * the deleted [VideoSessionHost] pass-through layer). [VideoPlayerViewModel]
  * is too heavy to construct in jvmTest — a 30+-dependency constructor — so,

@@ -28,7 +28,7 @@ import java.io.File
  *     non-user-initiated, while the overlay-button arm
  *     (`VideoPlayerViewModel.skipSegment`) stays user-initiated.
  *
- * Since the [VideoPlayerViewModel] wiring moved into [PlayerWiring] (the
+ * Since the [VideoPlayerViewModel] wiring moved into `PlayerWiring` (the
  * two-phase composition builder) and then into [PlaybackSession] (the C6
  * collapse made the session its own composition root), three anchors live in
  * the session's source instead of the VM's: the SyncPlay position-sync

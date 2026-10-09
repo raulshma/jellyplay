@@ -46,7 +46,7 @@ sealed interface LoadOutcome {
 /**
  * The ui-state → ui-state transform [SessionLoadOutputs.onPrefsProjected]
  * carries. Internal alias so implementers of the outputs seam (formerly the
- * deleted [VideoSessionHost]; then the deleted [PlayerWiring] builder; today
+ * deleted [VideoSessionHost]; then the deleted `PlayerWiring` builder; today
  * [PlaybackSession], the composition root the builder collapsed into
  * that implements it) can take the transform through the command-lambda
  * split: ControllerOwnershipTest's migrated-controller ratchet forbids the
@@ -64,7 +64,7 @@ internal typealias PrefsProjection = VideoPlayerUiState.() -> VideoPlayerUiState
  * UiState-shaped load outputs. Implemented by [PlaybackSession] (the
  * composition root that owns the collaborator graph — the ViewModel's
  * former object-literal, then the deleted VideoSessionHost, then the deleted
- * [PlayerWiring] builder) — uiState ownership stays with the ViewModel. Each method is called at a
+ * `PlayerWiring` builder) — uiState ownership stays with the ViewModel. Each method is called at a
  * defined point of the [SessionLoadPipeline] spine; the interface exists so
  * the *order* of the stages is testable against a fake.
  */

@@ -76,7 +76,7 @@ class PlayerStores(
  * ONE internally-built module cluster — the session body shows each member
  * flowing to its single consumer under its original receiving name.
  *
- * These lived on the deleted [PlayerWiring] composition builder before the
+ * These lived on the deleted `PlayerWiring` composition builder before the
  * builder dissolved into the session (the C6 collapse); they are the same
  * bundles at the same construction sites, re-homed beside [PlayerStores].
  */

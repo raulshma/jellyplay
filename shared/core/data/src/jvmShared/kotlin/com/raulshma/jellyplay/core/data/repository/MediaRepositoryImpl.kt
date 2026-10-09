@@ -789,8 +789,10 @@ class MediaRepositoryImpl internal constructor(
     // nothing for (zero TtlCache involvement), so their consumers inject the
     // [LibraryApiClient] family single directly (getIntros/getSpecialFeatures,
     // getPeople/getItemsByPerson/getTags, getMediaItems/getFavorites/
-    // getSearchSuggestions). getItemsByStudio retired outright: zero
-    // repo-typed callers. The two paged projections that routed through two of
+    // getSearchSuggestions). getItemsByStudio retired from this union: zero
+    // repo-typed callers (the LibraryApiClient member itself stays — the
+    // home fetcher's pinned-studio rows inject the client directly). The two
+    // paged projections that routed through two of
     // those forwards (getMediaItemsPaged / getFavoritesPaged) stay here and
     // call the client directly — same named arguments, so the wire calls are
     // unchanged.

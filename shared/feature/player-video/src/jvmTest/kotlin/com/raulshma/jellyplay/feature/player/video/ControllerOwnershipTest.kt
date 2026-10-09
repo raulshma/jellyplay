@@ -24,7 +24,7 @@ import java.io.File
  *    the list with their fold-backs: the font funs into
  *    SubtitleStyleController, the background-cast pair into the VM as two
  *    private funs. VideoSessionHost left the list with its deletion; the
- *    [PlayerWiring] builder inherited its composition-surface exemption and
+ *    `PlayerWiring` builder inherited its composition-surface exemption and
  *    handed it to [PlaybackSession] at the C6 collapse — the composition
  *    root is the one module besides the VM that legitimately carries the
  *    sanctioned god-state wirings (the SettingsProjector pair; see
@@ -232,7 +232,7 @@ class ControllerOwnershipTest {
         // The engine-flow collector launched from the VM's init used to call
         // into trackSelectionHelper, and the SessionEvent forwarder collected
         // playbackSession.events — so those properties had to be declared
-        // before the VM's init block. Since the [PlayerWiring] move — and,
+        // before the VM's init block. Since the `PlayerWiring` move — and,
         // after the C6 collapse, the move INTO [PlaybackSession] itself — the
         // invariant is pinned at the composition root's source: every
         // collaborator the arm phase's collectors drive is constructed in the

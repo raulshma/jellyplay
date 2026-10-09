@@ -21,7 +21,7 @@ import kotlin.test.assertTrue
 /**
  * Pins the resolved-preference fold the arm-phase collector delegates to
  * [TrackPreferenceFanout] — previously the inline body in the
- * [PlayerWiring] builder with ZERO direct pins (the composition suite can
+ * `PlayerWiring` builder with ZERO direct pins (the composition suite can
  * only see that the collector exists, not what it decides). With plain
  * recording fakes:
  *
