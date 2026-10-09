@@ -24,6 +24,14 @@ import kotlin.test.assertNull
  * (unguarded title/subtitle + stored-seed every emission; item-change =
  * refresh THEN the fire-and-forget render poke) that used to live as the
  * VM's inline collector body.
+ *
+ * Since the C6 wiring collapse the projector OWNS the detail-application
+ * cluster ([MediaDetailProjection], the former construction-cycle sibling):
+ * `applyDetail` is a real fun over that owned projection, so the cluster's
+ * construction inputs are recording fakes here and the refreshed-detail
+ * ordering pin observes the cluster's steps (detail-holder write → chapters
+ * → media slice → episode adoption → companion lyrics) instead of a
+ * stand-in lambda.
  */
 class MediaContentProjectorTest {
 
@@ -65,7 +73,6 @@ class MediaContentProjectorTest {
                 media = update(media)
                 log += "mediaWrite"
             },
-            applyDetail = { log += "applyDetail" },
             applyRefreshedDetail = { _, attachToEngine ->
                 lastAttachToEngine = attachToEngine
                 log += "applyRefreshedDetail"
@@ -96,6 +103,20 @@ class MediaContentProjectorTest {
                 log += "launchAsync"
                 kotlinx.coroutines.runBlocking { block() }
             },
+            // ── The owned detail-application cluster's construction inputs ──
+            // Only the refreshed-detail path ([onDetailRefreshed]) runs the
+            // cluster; its fan-outs log their steps so the refresh ordering
+            // pin observes the real detail application, not a stand-in.
+            scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Unconfined),
+            lyricsRepository = io.mockk.mockk(relaxed = true),
+            volumeProfileStore = io.mockk.mockk(relaxed = true),
+            setDetail = { log += "applyDetail" },
+            setChapters = { log += "chapters" },
+            artworkUrl = { _ -> "https://art/400" },
+            adoptSeasonOf = { log += "adoptSeasonOf" },
+            // No engine: the volume-memory restore/capture arm skips (its
+            // scope launch never starts).
+            getEngine = { null },
         )
     }
 
@@ -304,14 +325,21 @@ class MediaContentProjectorTest {
             )
         )
 
-        // THE ordering pin: the session-manager re-sync must run BEFORE the
-        // streams write (so reloads rebuild side-loads from the refreshed
-        // detail and the session collector cannot revert the write to stale
-        // streams), and the track-rebuild fan-outs LAST (so the picker reads
-        // the refreshed streams).
+        // THE ordering pin: the owned detail-application cluster must run
+        // BEFORE the session-manager re-sync (so reloads rebuild side-loads
+        // from the refreshed detail and the session collector cannot revert
+        // the write to stale streams), and the track-rebuild fan-outs LAST
+        // (so the picker reads the refreshed streams). The cluster's own
+        // steps are visible between the "applyDetail" marker and the
+        // re-sync: chapters → media slice (onDetail + artwork) → episode
+        // adoption → companion lyrics (empty for a movie, a media write).
         assertEquals(
             listOf(
                 "applyDetail",
+                "chapters",
+                "mediaWrite",
+                "adoptSeasonOf",
+                "mediaWrite",
                 "applyRefreshedDetail",
                 "matchMediaSource",
                 "mediaWrite",

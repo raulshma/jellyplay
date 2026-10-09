@@ -265,7 +265,7 @@ fun VideoPlayerScreen(
     ) { uriString: String? ->
         if (uriString != null) {
             val fileName = pickedDocumentDisplayName(uriString) ?: "subtitle.srt"
-            viewModel.subtitles.addLocalSubtitle(uriString, fileName)
+            viewModel.playbackSession.subtitles.addLocalSubtitle(uriString, fileName)
             currentSheet = PlayerSheet.None
         }
     }
@@ -294,7 +294,7 @@ fun VideoPlayerScreen(
     var tvTrickplayBitmap by remember { mutableStateOf<PlatformBitmap?>(null) }
 
     LaunchedEffect(itemId) {
-        if (viewModel.cast.isBackgroundCasting) {
+        if (viewModel.playbackSession.cast.isBackgroundCasting) {
             viewModel.onEvent(VideoPlayerUiEvent.ReattachFromBackgroundCast)
         } else {
             viewModel.onEvent(
@@ -356,7 +356,7 @@ fun VideoPlayerScreen(
         isScreenLocked = isScreenLocked,
         lifecycleOwner = lifecycleOwner,
         pipController = viewModel.pipController,
-        cast = viewModel.cast,
+        cast = viewModel.playbackSession.cast,
         releasePlayer = { viewModel.release() },
         detachForBackgroundCast = { viewModel.onEvent(VideoPlayerUiEvent.DetachForBackgroundCast) },
         setScreenLocked = { viewModel.onEvent(VideoPlayerUiEvent.SetScreenLocked(it)) },
@@ -378,10 +378,10 @@ fun VideoPlayerScreen(
     val engine by viewModel.playerEngineFlow.collectAsStateWithLifecycle()
     val title = uiState.title
     val subtitle = uiState.subtitle
-    val isCastConnected by viewModel.cast.isConnectedFlow.collectAsStateWithLifecycle(initialValue = false)
-    val isCastConnecting by viewModel.cast.isConnectingFlow.collectAsStateWithLifecycle(initialValue = false)
-    val castIsPlaying by viewModel.cast.castIsPlaying.collectAsStateWithLifecycle(initialValue = false)
-    val castDuration by viewModel.cast.castDurationMs.collectAsStateWithLifecycle(initialValue = 0L)
+    val isCastConnected by viewModel.playbackSession.cast.isConnectedFlow.collectAsStateWithLifecycle(initialValue = false)
+    val isCastConnecting by viewModel.playbackSession.cast.isConnectingFlow.collectAsStateWithLifecycle(initialValue = false)
+    val castIsPlaying by viewModel.playbackSession.cast.castIsPlaying.collectAsStateWithLifecycle(initialValue = false)
+    val castDuration by viewModel.playbackSession.cast.castDurationMs.collectAsStateWithLifecycle(initialValue = 0L)
 
     val isPlaying = if (isCastConnected) castIsPlaying else uiState.isPlaying
     // If playback is actually running, the user intended it — reconcile the
@@ -414,7 +414,7 @@ fun VideoPlayerScreen(
         }
     }
 
-    val syncPlayIgnoreWait by viewModel.syncPlay.ignoreWait.collectAsStateWithLifecycle()
+    val syncPlayIgnoreWait by viewModel.playbackSession.syncPlay.ignoreWait.collectAsStateWithLifecycle()
 
     LaunchedEffect(isCastConnected, uiState.uiPrefs.defaultOrientation) {
         when (val decision = orientationLockDecision(
@@ -572,7 +572,7 @@ fun VideoPlayerScreen(
             getEngine = { engine },
             getSwipeSeekMaxMs = { uiState.gestures.swipeSeekMaxMs },
             isCastConnected = { isCastConnected },
-            getCastVolume = { viewModel.cast.castVolumeFlow.value },
+            getCastVolume = { viewModel.playbackSession.cast.castVolumeFlow.value },
             readWindowBrightness = { windowOps.readWindowBrightness() },
             writeWindowBrightness = { newBrightness ->
                 windowOps.writeWindowBrightness(newBrightness)
@@ -586,7 +586,7 @@ fun VideoPlayerScreen(
             },
             doSeekTo = doSeekTo,
             saveBrightness = { viewModel.onEvent(VideoPlayerUiEvent.SaveBrightness(it)) },
-            setCastVolume = viewModel.cast::setCastVolume,
+            setCastVolume = viewModel.playbackSession.cast::setCastVolume,
         )
     }
     val gestureSeekPositionMs by gestureController.seekPositionMs.collectAsStateWithLifecycle()
@@ -728,7 +728,7 @@ fun VideoPlayerScreen(
             getPlaybackSpeed = { uiState.playbackSpeed },
             getSubtitleOffsetMs = { uiState.subtitleStyle.offsetMs },
             getSupportsAudioDelay = { uiState.engineCapabilities.supportsAudioDelay },
-            getAudioDelayMs = { viewModel.effects.state.value.audioDelayMs },
+            getAudioDelayMs = { viewModel.playbackSession.effects.state.value.audioDelayMs },
             getSeekStepMs = { currentSeekDurationMs },
             getCurrentPositionMs = { viewModel.playerEngineRef?.currentPositionMs ?: 0L },
             getDurationMs = { viewModel.playerEngineRef?.durationMs ?: 0L },
@@ -738,7 +738,7 @@ fun VideoPlayerScreen(
             doPause = doPause,
             toggleOrientation = { currentToggleOrientation() },
             streamVolumeAdjuster = { up -> currentStreamVolumeAdjuster(up) },
-            setAudioDelay = { ms -> viewModel.effects.setAudioDelay(ms) },
+            setAudioDelay = { ms -> viewModel.playbackSession.effects.setAudioDelay(ms) },
             onUiEvent = { viewModel.onEvent(it) },
             doSeekForward = doSeekForward,
             doSeekBack = doSeekBack,
@@ -1155,10 +1155,10 @@ fun VideoPlayerScreen(
             // uiState. Each is low-frequency; collecting per-leaf keeps the
             // root scope unaffected.
             val trackState by viewModel.trackState.collectAsStateWithLifecycle()
-            val effectsState by viewModel.effects.state.collectAsStateWithLifecycle()
-            val sleepTimer by viewModel.sleepTimer.state.collectAsStateWithLifecycle()
-            val abRepeat by viewModel.abRepeat.state.collectAsStateWithLifecycle()
-            val syncPlay by viewModel.syncPlay.state.collectAsStateWithLifecycle()
+            val effectsState by viewModel.playbackSession.effects.state.collectAsStateWithLifecycle()
+            val sleepTimer by viewModel.playbackSession.sleepTimer.state.collectAsStateWithLifecycle()
+            val abRepeat by viewModel.playbackSession.abRepeat.state.collectAsStateWithLifecycle()
+            val syncPlay by viewModel.playbackSession.syncPlay.state.collectAsStateWithLifecycle()
 
             val statusOverlayInputs = remember(
                 duration,
@@ -1298,13 +1298,13 @@ fun VideoPlayerScreen(
                     channelMixEnabled = effectsState.channelMixEnabled,
                     onDialogueBoostClick = { viewModel.onEvent(VideoPlayerUiEvent.ToggleDialogueBoost) },
                     onDialogueBoostStrengthChange = { strength -> viewModel.onEvent(VideoPlayerUiEvent.SetDialogueBoostStrength(strength)) },
-                    onNightModeClick = { viewModel.effects.toggleNightMode() },
-                    onNightModeStrengthChange = { strength -> viewModel.effects.setNightModeStrength(strength) },
-                    onPassthroughClick = { viewModel.effects.setAudioPassthrough(!effectsState.audioPassthrough) },
-                    onAudioNormalizationClick = { viewModel.effects.toggleAudioNormalization() },
-                    onAudioNormalizationModeChange = { mode -> viewModel.effects.setAudioNormalizationMode(mode) },
-                    onChannelMixClick = { viewModel.effects.toggleChannelMix() },
-                    onChannelMixModeChange = { mode -> viewModel.effects.setChannelMixMode(mode) },
+                    onNightModeClick = { viewModel.playbackSession.effects.toggleNightMode() },
+                    onNightModeStrengthChange = { strength -> viewModel.playbackSession.effects.setNightModeStrength(strength) },
+                    onPassthroughClick = { viewModel.playbackSession.effects.setAudioPassthrough(!effectsState.audioPassthrough) },
+                    onAudioNormalizationClick = { viewModel.playbackSession.effects.toggleAudioNormalization() },
+                    onAudioNormalizationModeChange = { mode -> viewModel.playbackSession.effects.setAudioNormalizationMode(mode) },
+                    onChannelMixClick = { viewModel.playbackSession.effects.toggleChannelMix() },
+                    onChannelMixModeChange = { mode -> viewModel.playbackSession.effects.setChannelMixMode(mode) },
                 )
             }
             val onPipClick by remember(onEnterPip) { mutableStateOf({ onEnterPip() }) }
@@ -1395,10 +1395,10 @@ fun VideoPlayerScreen(
                     onVideoStatsClick = onVideoStatsClick,
                     videoFiltersActive = !uiState.videoFx.videoEffects.isNeutral,
                     onScreenshotClick = onScreenshotClick,
-                    onAbRepeatToggle = { viewModel.abRepeat.setEnabled(!abRepeat.enabled) },
-                    onAbRepeatSetA = { viewModel.abRepeat.setPointA() },
-                    onAbRepeatSetB = { viewModel.abRepeat.setPointB() },
-                    onAbRepeatClear = { viewModel.abRepeat.clear() },
+                    onAbRepeatToggle = { viewModel.playbackSession.abRepeat.setEnabled(!abRepeat.enabled) },
+                    onAbRepeatSetA = { viewModel.playbackSession.abRepeat.setPointA() },
+                    onAbRepeatSetB = { viewModel.playbackSession.abRepeat.setPointB() },
+                    onAbRepeatClear = { viewModel.playbackSession.abRepeat.clear() },
                     audioOnly = uiState.audioOnly,
                     onToggleAudioOnly = { viewModel.onEvent(VideoPlayerUiEvent.ToggleAudioOnly) },
                     incognitoModeEnabled = viewModel.incognitoModeEnabled,
@@ -1411,7 +1411,7 @@ fun VideoPlayerScreen(
                     onRenderClick = { openSheet(PlayerSheet.Render) },
                     supportsDeinterlace = uiState.engineCapabilities.supportsDeinterlace,
                     deinterlaceMode = if (uiState.engineCapabilities.supportsDeinterlace) {
-                        viewModel.sessionRender.deinterlace
+                        viewModel.playbackSession.sessionRender.deinterlace
                     } else {
                         null
                     },
@@ -1446,7 +1446,7 @@ fun VideoPlayerScreen(
                 sleepTimer = SleepTimerControls(
                     active = sleepTimer.sleepTimerActive,
                     endOfEpisode = sleepTimer.sleepTimerEndOfEpisode,
-                    remainingFlow = viewModel.sleepTimer.remainingMs,
+                    remainingFlow = viewModel.playbackSession.sleepTimer.remainingMs,
                 ),
                 abRepeat = abRepeat,
                 castManager = viewModel.platformCastManager,
@@ -1613,7 +1613,7 @@ fun VideoPlayerScreen(
             // Disconnected → onCastDisconnected) — inert on desktop.
             launchPlatformCastSessionEvents(viewModel)
             launch {
-                viewModel.syncPlay.notifications.collect { message ->
+                viewModel.playbackSession.syncPlay.notifications.collect { message ->
                     snackbarHostState.showSnackbar(
                         message = message,
                         duration = androidx.compose.material3.SnackbarDuration.Short,
@@ -1642,7 +1642,7 @@ fun VideoPlayerScreen(
             onSheetChange = { sheet -> currentSheet = sheet },
             dismissSheet = dismissSheet,
             currentPositionFlow = viewModel.currentPositionMs,
-            sleepTimerRemainingFlow = viewModel.sleepTimer.remainingMs,
+            sleepTimerRemainingFlow = viewModel.playbackSession.sleepTimer.remainingMs,
             doSeekTo = doSeekTo,
             itemId = itemId,
             syncPlayIgnoreWait = syncPlayIgnoreWait,
@@ -1712,8 +1712,8 @@ private fun CastCompanionDashboardBranch(
         lyricsLines = uiState.media.lyricsLines,
         artworkUrl = uiState.media.artworkUrl,
         isPlaying = isPlaying,
-        castPositionFlow = viewModel.cast.castPositionMs,
-        castVolumeFlow = viewModel.cast.castVolumeFlow,
+        castPositionFlow = viewModel.playbackSession.cast.castPositionMs,
+        castVolumeFlow = viewModel.playbackSession.cast.castVolumeFlow,
         durationMs = durationMs,
         isConnecting = isCastConnecting,
         audioTracks = trackState.audioTracks,
@@ -1723,8 +1723,8 @@ private fun CastCompanionDashboardBranch(
         onSeekBack = doSeekBack,
         onSeekForward = doSeekForward,
         onSeekTo = doSeekTo,
-        onVolumeChange = { vol -> viewModel.cast.setCastVolume(vol) },
-        onDisconnect = { viewModel.cast.onCastDisconnected(); disconnectCast() },
+        onVolumeChange = { vol -> viewModel.playbackSession.cast.setCastVolume(vol) },
+        onDisconnect = { viewModel.playbackSession.cast.onCastDisconnected(); disconnectCast() },
         onSelectAudioTrack = { viewModel.onEvent(VideoPlayerUiEvent.SelectAudioTrack(it)) },
         onSelectSubtitleTrack = { viewModel.onEvent(VideoPlayerUiEvent.SelectSubtitleTrack(it)) },
         onPlayEpisode = { epId -> viewModel.onEvent(VideoPlayerUiEvent.PlayEpisode(epId)) },

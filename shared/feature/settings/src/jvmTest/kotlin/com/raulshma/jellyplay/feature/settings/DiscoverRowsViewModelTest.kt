@@ -1,7 +1,6 @@
 package com.raulshma.jellyplay.feature.settings
 
-import com.raulshma.jellyplay.core.data.repository.MediaBrowseReads
-import com.raulshma.jellyplay.core.data.repository.HomeFeed
+import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.datastore.PreferencesEditScope
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
@@ -84,8 +83,7 @@ class DiscoverRowsViewModelTest {
 
     private lateinit var homeDiscovery: HomeDiscoveryStore
     private lateinit var mediaRepository: MediaRepository
-    private lateinit var homeFeed: HomeFeed
-    private lateinit var mediaBrowseReads: MediaBrowseReads
+    private lateinit var libraryApiClient: LibraryApiClient
     private lateinit var editor: PreferencesEditor
 
     private val homeDiscoverySlice = MutableStateFlow(HomeDiscoverySlice())
@@ -95,14 +93,13 @@ class DiscoverRowsViewModelTest {
         Dispatchers.setMain(testDispatcher)
         homeDiscovery = mockk(relaxed = true)
         mediaRepository = mockk(relaxed = true)
-        homeFeed = mockk(relaxed = true)
-        mediaBrowseReads = mockk(relaxed = true)
+        libraryApiClient = mockk(relaxed = true)
         every { homeDiscovery.homeDiscovery } returns homeDiscoverySlice
         coEvery { mediaRepository.getLibraryFolders() } returns Result.success(emptyList())
         coEvery { mediaRepository.getGenres() } returns Result.success(emptyList())
         coEvery { mediaRepository.getStudios() } returns Result.success(emptyList())
-        coEvery { mediaBrowseReads.getTags(any(), any(), any()) } returns Result.success(emptyList())
-        coEvery { homeFeed.getDiscoverRowItems(any()) } returns Result.success(emptyList())
+        coEvery { libraryApiClient.getTags(any(), any(), any()) } returns Result.success(emptyList())
+        coEvery { libraryApiClient.getDiscoverRowItems(any()) } returns Result.success(emptyList())
         editor = PreferencesEditor(
             scope = CoroutineScope(testDispatcher + Job()),
             editScope = PreferencesEditScope(
@@ -137,7 +134,7 @@ class DiscoverRowsViewModelTest {
     }
 
     private fun viewModel(): DiscoverRowsViewModel =
-        DiscoverRowsViewModel(homeDiscovery, editor, mediaRepository, homeFeed, mediaBrowseReads)
+        DiscoverRowsViewModel(homeDiscovery, editor, mediaRepository, libraryApiClient)
 
     private fun item(name: String): MediaItem =
         MediaItem(id = name.lowercase().replace(' ', '-'), name = name, mediaType = MediaType.MOVIE)
@@ -271,7 +268,7 @@ class DiscoverRowsViewModelTest {
 
     @Test
     fun `a burst of draft updates costs one debounced preview fetch for the last state`() = runTest(testDispatcher) {
-        coEvery { homeFeed.getDiscoverRowItems(any()) } returns Result.success(listOf(item("Only Fetch")))
+        coEvery { libraryApiClient.getDiscoverRowItems(any()) } returns Result.success(listOf(item("Only Fetch")))
         val vm = viewModel()
         advanceUntilIdle()
 
@@ -279,15 +276,15 @@ class DiscoverRowsViewModelTest {
         repeat(5) { i -> vm.updateRow { it.copy(title = "burst $i") } }
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { homeFeed.getDiscoverRowItems(any()) }
-        coVerify { homeFeed.getDiscoverRowItems(match { it.title == "burst 4" && it.limit == 12 }) }
+        coVerify(exactly = 1) { libraryApiClient.getDiscoverRowItems(any()) }
+        coVerify { libraryApiClient.getDiscoverRowItems(match { it.title == "burst 4" && it.limit == 12 }) }
         assertEquals(listOf("Only Fetch"), vm.draft.value?.previewItems?.map { it.name })
         assertFalse(vm.draft.value?.previewLoading == true)
     }
 
     @Test
     fun `updateRow drops the previous query's preview items while the debounced refetch is pending`() = runTest(testDispatcher) {
-        coEvery { homeFeed.getDiscoverRowItems(any()) } returns Result.success(listOf(item("Old")))
+        coEvery { libraryApiClient.getDiscoverRowItems(any()) } returns Result.success(listOf(item("Old")))
         val vm = viewModel()
         advanceUntilIdle()
         vm.startNew()
@@ -309,7 +306,7 @@ class DiscoverRowsViewModelTest {
         // NORMALLY into the already-cancelled coroutine — the exact leak the
         // content guard exists for. The replacement query answers instantly.
         val staleAnswer = CompletableDeferred<Unit>()
-        coEvery { homeFeed.getDiscoverRowItems(match { it.filters.minRating == 6f }) } coAnswers {
+        coEvery { libraryApiClient.getDiscoverRowItems(match { it.filters.minRating == 6f }) } coAnswers {
             try {
                 withContext(NonCancellable) { staleAnswer.await() }
             } catch (_: CancellationException) {
@@ -317,7 +314,7 @@ class DiscoverRowsViewModelTest {
             }
             Result.success(listOf(item("Stale")))
         }
-        coEvery { homeFeed.getDiscoverRowItems(match { it.filters.minRating == 7f }) } returns
+        coEvery { libraryApiClient.getDiscoverRowItems(match { it.filters.minRating == 7f }) } returns
             Result.success(listOf(item("Fresh")))
 
         val vm = viewModel()

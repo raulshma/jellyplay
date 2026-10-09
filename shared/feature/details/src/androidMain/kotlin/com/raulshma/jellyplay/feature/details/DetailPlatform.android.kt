@@ -71,7 +71,8 @@ fun androidDetailsModule(context: Context): Module = module {
             storageProbe = get(),
             strings = get(),
             mediaRepository = get(),
-            mediaExtrasReads = get(),
+            libraryApiClient = get(),
+            collectionApiClient = get(),
             userDataMutator = get(),
             mediaDetailProvider = get(),
             playbackRepository = get(),
@@ -90,7 +91,9 @@ fun androidDetailsModule(context: Context): Module = module {
             // core:network singles (DataSessionPlaybackKoinModule /
             // NetworkKoinModules); the VM null-guards everything anyway.
             pluginStatusStore = get(),
-            pluginApiClient = get(),
+            pluginRatingsApi = get(),
+            pluginRecommendationsApi = get(),
+            pluginMarkersApi = get(),
             jellyPlayFeatureGate = get(),
         )
     }
@@ -108,7 +111,7 @@ fun androidDetailsModule(context: Context): Module = module {
     viewModel {
         PersonDetailViewModel(
             mediaRepository = get(),
-            mediaBrowseReads = get(),
+            libraryApiClient = get(),
             userDataMutator = get(),
             imageUrlProvider = get(),
             mediaDownloadActions = get(),

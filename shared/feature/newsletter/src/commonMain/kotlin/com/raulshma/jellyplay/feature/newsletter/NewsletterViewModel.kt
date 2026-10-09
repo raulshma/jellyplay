@@ -2,7 +2,7 @@ package com.raulshma.jellyplay.feature.newsletter
 
 import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
-import com.raulshma.jellyplay.core.data.repository.NewsletterRepository
+import com.raulshma.jellyplay.core.network.api.NewsletterApiClient
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.notification.NotificationStore
 import com.raulshma.jellyplay.core.model.NewsletterSectionType
@@ -19,7 +19,7 @@ import kotlinx.datetime.todayIn
 import kotlin.time.Clock
 
 class NewsletterViewModel(
-    private val newsletterRepository: NewsletterRepository,
+    private val newsletterApiClient: NewsletterApiClient,
     private val imageUrlProvider: ImageUrlProvider,
     private val notificationStore: NotificationStore,
     authRepository: AuthRepository,
@@ -83,7 +83,7 @@ class NewsletterViewModel(
             val sinceDate =
                 "${Clock.System.todayIn(TimeZone.currentSystemDefault()).minus(DatePeriod(days = 7))}T00:00:00"
 
-            newsletterRepository.getNewsletterData(sinceDate)
+            newsletterApiClient.getNewsletterData(sinceDate)
                 .onSuccess { data ->
                     val prefs = notificationStore.notification.value
                     val resolvedOrder = prefs.newsletterSectionOrder
@@ -133,8 +133,8 @@ class NewsletterViewModel(
         }
         launch {
             val result = when (action) {
-                NewsletterSendAction.SEND_NOW -> newsletterRepository.sendNewsletter()
-                NewsletterSendAction.SEND_TEST -> newsletterRepository.sendTestNewsletter()
+                NewsletterSendAction.SEND_NOW -> newsletterApiClient.sendNewsletter()
+                NewsletterSendAction.SEND_TEST -> newsletterApiClient.sendTestNewsletter()
             }
             _uiState.update {
                 it.copy(

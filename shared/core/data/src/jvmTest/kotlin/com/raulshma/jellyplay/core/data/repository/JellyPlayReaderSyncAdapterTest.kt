@@ -265,7 +265,7 @@ class JellyPlayReaderSyncAdapterTest {
         mirrorStore.edit { } // settle the write side
         assertEquals(
             null,
-            mirrorStore.data.first()[stringPreferencesKey("jpsync.mirror.reader.$key")],
+            mirrorStore.data.first()[stringPreferencesKey(JpsyncReservation.mirrorKey("reader", key))],
         )
     }
 }

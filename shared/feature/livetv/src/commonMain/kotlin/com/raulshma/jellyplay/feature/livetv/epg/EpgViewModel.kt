@@ -1,8 +1,8 @@
 package com.raulshma.jellyplay.feature.livetv.epg
 
 import com.raulshma.jellyplay.core.concurrency.SingleFlight
-import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
-import com.raulshma.jellyplay.core.data.util.EpochMillisSource
+import com.raulshma.jellyplay.core.network.api.LiveTvApiClient
+import com.raulshma.jellyplay.core.model.EpochMillisSource
 import com.raulshma.jellyplay.core.model.EpgGuide
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.LiveTvProgram
@@ -50,7 +50,7 @@ private fun guideWindow(now: Instant): Pair<Instant, Instant> =
         now.plus((GUIDE_WINDOW_HOURS - GUIDE_LOOKBACK_HOURS).hours)
 
 class EpgViewModel(
-    private val mediaRepository: LiveTvRepository,
+    private val mediaRepository: LiveTvApiClient,
     private val timeSource: EpochMillisSource,
     /** Off-Main dispatcher for the grid rebuild; injectable so jvmTest rides the test scheduler. */
     private val gridDispatcher: CoroutineDispatcher = Dispatchers.Default,

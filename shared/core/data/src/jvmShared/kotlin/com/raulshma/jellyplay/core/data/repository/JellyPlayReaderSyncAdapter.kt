@@ -60,7 +60,7 @@ class JellyPlayReaderSyncAdapter(
     override val namespace: String = NAMESPACE,
 ) : ProfileSyncAdapter {
 
-    private val mirror = SyncMirror(mirrorStore, MIRROR_PREFIX)
+    private val mirror = SyncMirror(mirrorStore, JpsyncReservation.mirrorPrefix(NAMESPACE))
 
     // ------------------------------------------------------------------
     // key <-> itemId: `"ann/{itemId}"`. Item ids are Jellyfin guids (no
@@ -159,6 +159,5 @@ class JellyPlayReaderSyncAdapter(
     private companion object {
         const val NAMESPACE = "reader"
         const val KEY_PREFIX = "ann/"
-        const val MIRROR_PREFIX = "jpsync.mirror.reader."
     }
 }

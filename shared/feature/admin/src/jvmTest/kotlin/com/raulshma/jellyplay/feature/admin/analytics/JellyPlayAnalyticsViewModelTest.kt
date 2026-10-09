@@ -11,7 +11,8 @@ import com.raulshma.jellyplay.core.network.api.JellyPlayAnalyticsTopItem
 import com.raulshma.jellyplay.core.network.api.JellyPlayAnalyticsTotals
 import com.raulshma.jellyplay.core.network.api.JellyPlayAnalyticsUser
 import com.raulshma.jellyplay.core.network.api.JellyPlayCapabilities
-import com.raulshma.jellyplay.core.network.api.JellyPlayPluginApiClient
+import com.raulshma.jellyplay.core.network.api.JellyPlayAnalyticsRoutes
+import com.raulshma.jellyplay.core.network.api.JellyPlayCapabilitiesRoutes
 import com.raulshma.jellyplay.feature.admin.transcodes.TranscodePlayMethod
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -51,7 +52,7 @@ import kotlin.test.assertTrue
  *    Load-more pages with `since = oldest endedAt` and de-duplicates.
  *
  * The store is the REAL [JellyPlayPluginStatusStore] over the same mocked
- * [JellyPlayPluginApiClient] the ViewModel reads — gating flows through the
+ * [JellyPlayAnalyticsRoutes] role the ViewModel reads — gating flows through the
  * actual probe, exactly as it does in production (the transcodes suite's
  * harness shape).
  */
@@ -62,7 +63,8 @@ class JellyPlayAnalyticsViewModelTest {
     // has no access to that module (search/music/livetv conveyor port pattern).
     private val mainDispatcher = StandardTestDispatcher()
 
-    private lateinit var pluginApi: JellyPlayPluginApiClient
+    private lateinit var pluginApi: JellyPlayAnalyticsRoutes
+    private lateinit var capabilitiesApi: JellyPlayCapabilitiesRoutes
     private lateinit var sessionCacheRegistry: SessionCacheRegistry
     private lateinit var statusStore: JellyPlayPluginStatusStore
 
@@ -119,8 +121,9 @@ class JellyPlayAnalyticsViewModelTest {
     fun setUp() {
         Dispatchers.setMain(mainDispatcher)
         pluginApi = mockk()
+        capabilitiesApi = mockk()
         sessionCacheRegistry = mockk(relaxed = true)
-        statusStore = JellyPlayPluginStatusStore(pluginApi, sessionCacheRegistry)
+        statusStore = JellyPlayPluginStatusStore(capabilitiesApi, sessionCacheRegistry)
     }
 
     @AfterTest
@@ -130,7 +133,7 @@ class JellyPlayAnalyticsViewModelTest {
 
     /** Probes the real store: the capabilities stub decides AVAILABLE + feature set. */
     private suspend fun makeStoreAvailable(features: List<String> = defaultFeatures()) {
-        coEvery { pluginApi.getCapabilities() } returns Result.success(
+        coEvery { capabilitiesApi.getCapabilities() } returns Result.success(
             JellyPlayCapabilities(
                 contractVersion = 1,
                 pluginVersion = "1.0.0",
@@ -168,7 +171,7 @@ class JellyPlayAnalyticsViewModelTest {
 
     @Test
     fun `plugin unavailable gates the screen off and never fetches analytics`() = runTest(mainDispatcher) {
-        coEvery { pluginApi.getCapabilities() } returns Result.failure(RuntimeException("plugin absent"))
+        coEvery { capabilitiesApi.getCapabilities() } returns Result.failure(RuntimeException("plugin absent"))
         statusStore.refresh()
 
         val viewModel = JellyPlayAnalyticsViewModel(pluginApi, statusStore)
@@ -199,7 +202,7 @@ class JellyPlayAnalyticsViewModelTest {
 
         assertEquals(AnalyticsGate.Unavailable, viewModel.uiState.value.gate)
         assertFalse(viewModel.uiState.value.isLoading)
-        coVerify(exactly = 0) { pluginApi.getCapabilities() }
+        coVerify(exactly = 0) { capabilitiesApi.getCapabilities() }
         coVerify(exactly = 0) { pluginApi.getAnalyticsOverview(any()) }
     }
 

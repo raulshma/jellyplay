@@ -8,7 +8,6 @@ import com.raulshma.jellyplay.core.data.session.HomeSession
 import com.raulshma.jellyplay.core.data.session.SessionCacheRegistry
 import com.raulshma.jellyplay.core.data.session.SessionScopedCache
 import com.raulshma.jellyplay.core.model.CacheIdentity
-import com.raulshma.jellyplay.core.model.CollectionSummary
 import com.raulshma.jellyplay.core.model.FreshnessCeilings
 import com.raulshma.jellyplay.core.model.DiscoverRowConfig
 import com.raulshma.jellyplay.core.model.Genre
@@ -20,7 +19,7 @@ import com.raulshma.jellyplay.core.model.HomeSectionQuery
 import com.raulshma.jellyplay.core.model.LibraryFilters
 import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue
-import com.raulshma.jellyplay.core.data.util.TimeSource
+import com.raulshma.jellyplay.core.model.TimeSource
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
@@ -52,10 +51,11 @@ import kotlinx.coroutines.flow.merge
 //    `internal` no longer crosses the module boundary after this move.
 //
 //  MediaRepository facade split: the LiveTv / Newsletter / Playlist family
-// surfaces moved out to their own impls (LiveTvRepositoryImpl,
-// NewsletterRepositoryImpl, PlaylistRepositoryImpl — same package), each
-// over the narrow API family client (the PlaybackRepositoryImpl ctor
-// precedent). The one piece of shared state an extracted
+// surfaces moved out to their own impls over the narrow API family clients
+// (the PlaybackRepositoryImpl ctor precedent); the PlaylistRepositoryImpl
+// split survives, the LiveTv / Newsletter pass-through mirrors later retired
+// to their client families entirely. The one piece of shared state an
+// extracted
 // surface observes — the detail-cache cluster — moved to the
 // [MediaRepositoryInternals] Koin single this ctor now takes, so the group
 // stays ONE instance across the split. Declared divergence: the primary
@@ -513,9 +513,6 @@ class MediaRepositoryImpl internal constructor(
         }
     }
 
-    override suspend fun getDiscoverRowItems(row: DiscoverRowConfig): Result<List<MediaItem>> =
-        libraryApiClient.getDiscoverRowItems(row)
-
     override suspend fun refreshHomeSection(
         section: HomeSection,
         query: HomeSectionQuery,
@@ -557,7 +554,7 @@ class MediaRepositoryImpl internal constructor(
         // ordering contract, the three race windows and the generation bump
         // rule are owned by the interface KDoc (HomeFeed.rerollDiscoverRow).
         invalidateDiscoverRowCache(row.id)
-        val result = getDiscoverRowItems(row)
+        val result = libraryApiClient.getDiscoverRowItems(row)
         // Commit only a real roll: seedDiscoverRowCache no-ops on an empty
         // list, so a failed/empty fetch leaves nothing behind but the
         // pre-fetch drop — the next home fetch re-queries the row instead of
@@ -655,9 +652,6 @@ class MediaRepositoryImpl internal constructor(
         }
     }
 
-    override suspend fun findItemByProviderId(provider: String, id: String): Result<String?> =
-        libraryApiClient.findItemByProviderId(provider, id)
-
     override fun getMediaItemsPaged(
         parentId: String?,
         filters: LibraryFilters,
@@ -696,9 +690,6 @@ class MediaRepositoryImpl internal constructor(
             libraryApiClient.getStudios(parentId)
         }
 
-    override suspend fun getArtistAlbums(artistId: String, limit: Int): Result<List<MediaItem>> =
-        libraryApiClient.getArtistAlbums(artistId, limit)
-
     override suspend fun getAlbumTracks(albumId: String, force: Boolean): Result<List<MediaItem>> =
         // Announced-staleness read (see [albumTracksStale]): a track flip
         // arms the marker because the composite user-data eviction only
@@ -716,9 +707,6 @@ class MediaRepositoryImpl internal constructor(
         // with a different limit doesn't serve a stale truncated list;
         // epoch-guarded write — see DetailCacheGroup's KDoc.
         detailCaches.similarItems(itemId, limit)
-
-    override suspend fun getInstantMix(itemId: String, limit: Int): Result<List<MediaItem>> =
-        libraryApiClient.getInstantMix(itemId, limit)
 
     override suspend fun getThemeSongs(itemId: String): Result<List<MediaItem>> =
         // Cached exactly like getSimilarItems: identity-keyed,
@@ -767,11 +755,6 @@ class MediaRepositoryImpl internal constructor(
             }
         }
 
-    override suspend fun getCollections(limit: Int): Result<List<CollectionSummary>> =
-        // Not cached: the picker refetches on every open so a freshly-created
-        // collection is immediately selectable without a cache-invalidation hop.
-        collectionApiClient.getCollections(limit)
-
     override suspend fun createCollection(name: String, itemIds: List<String>): Result<String> =
         // Plan 08: collection edits self-invalidate — the detail screen used to
         // compensate with a manual invalidateCollectionItemsCache call.
@@ -801,17 +784,16 @@ class MediaRepositoryImpl internal constructor(
     // (detailCaches.invalidateItem per playlist edit) is unchanged — it now
     // runs in the extracted impl against the SAME single-backed group.
 
-    //  Facade split, second wave: the nine uncached browse-read members moved
-    // to [MediaUncachedReadsImpl] (same package) over the same
-    // [LibraryApiClient] — getIntros/getSpecialFeatures (MediaExtrasReads),
-    // getPeople/getItemsByPerson/getTags (MediaBrowseReads),
-    // getMediaItems/getFavorites/getSearchSuggestions (MediaCollectionReads) —
-    // every one a stateless forward this class cached nothing for (zero TtlCache
-    // involvement), so nothing shared stayed behind. getItemsByStudio retired
-    // outright: zero repo-typed callers. The two paged projections that routed
-    // through two of those forwards (getMediaItemsPaged / getFavoritesPaged)
-    // stay here and call the client directly — same named arguments, so the
-    // wire calls are unchanged.
+    //  Facade split, second wave: the nine uncached browse-read members left
+    // the union outright — every one a stateless forward this class cached
+    // nothing for (zero TtlCache involvement), so their consumers inject the
+    // [LibraryApiClient] family single directly (getIntros/getSpecialFeatures,
+    // getPeople/getItemsByPerson/getTags, getMediaItems/getFavorites/
+    // getSearchSuggestions). getItemsByStudio retired outright: zero
+    // repo-typed callers. The two paged projections that routed through two of
+    // those forwards (getMediaItemsPaged / getFavoritesPaged) stay here and
+    // call the client directly — same named arguments, so the wire calls are
+    // unchanged.
 
     private val syntheticUserDataChanges = MutableSharedFlow<UserDataChange>(
         extraBufferCapacity = SYNTHETIC_CHANGES_BUFFER,
@@ -988,10 +970,10 @@ class MediaRepositoryImpl internal constructor(
             ?: cached.takeIf { it.item.mediaType == MediaType.SERIES }?.item?.id
     }
 
-    //  Facade split: the fifteen LiveTvRepository members that used to live
-    // here moved to LiveTvRepositoryImpl (same package) over the narrow
-    // LiveTvApiClient/MediaInfoApiClient family seams — every one was a
-    // stateless forward, so nothing shared stayed behind.
+    //  Facade split: the fifteen LiveTv members that used to live here moved
+    // out over the narrow LiveTvApiClient/MediaInfoApiClient family seams —
+    // every one was a stateless forward, so nothing shared stayed behind (the
+    // pass-through seam later retired to the client family entirely).
 
     /**
      * Wholesale in-memory cache drop (plan 08: demoted off the public
@@ -1037,9 +1019,10 @@ class MediaRepositoryImpl internal constructor(
         // directly via homeSnapshotStore.clearIdentity() — see the init block above.
     }
 
-    //  Facade split: the three NewsletterRepository members that used to live
-    // here moved to NewsletterRepositoryImpl (same package) over the narrow
-    // MediaInfoApiClient family seam (one-line forwards, nothing shared).
+    //  Facade split: the three newsletter members that used to live here
+    // moved out over the narrow MediaInfoApiClient family seam (one-line
+    // forwards, nothing shared — the pass-through mirror later retired to the
+    // client family entirely).
 
     companion object {
         /**

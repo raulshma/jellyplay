@@ -9,264 +9,31 @@ import kotlinx.serialization.json.JsonElement
  * Split from the other families so the sync engine (data layer) can depend on
  * THIS interface alone, mirroring the NewsletterApiClient pass-through idiom.
  *
+ * Since the roles wave, THIS type is the FAMILY composite: it extends every
+ * role interface in [JellyPlayPluginApiRoles] (one per docs/CONTRACT.md
+ * contract area) and adds nothing of its own. ADR-0010 §5 stands — all routes
+ * ride the one family impl ([JellyPlayPluginApiClientImpl]) over the raw
+ * requester — while consumers and test fakes depend on the single narrow
+ * role they use. The composite stays what `JellyfinApiClient` registers.
+ *
  * Availability contract: every call 404s when the plugin is absent. The
- * capability probe ([getCapabilities]) is the ONE bootstrap check — callers
- * gate on the resulting feature set, never on per-endpoint 404 handling.
+ * capability probe ([JellyPlayCapabilitiesRoutes.getCapabilities]) is the ONE
+ * bootstrap check — callers gate on the resulting feature set, never on
+ * per-endpoint 404 handling.
  */
-interface JellyPlayPluginApiClient {
-    suspend fun getCapabilities(): Result<JellyPlayCapabilities>
-
-    // ---- settings sync ----
-
-    suspend fun getSettings(profile: String? = null): Result<JellyPlaySettingsSnapshot>
-
-    /**
-     * The delta since the change-log cursor [since], optionally paged: [limit]
-     * caps the page and [cursor] continues a previous page (the response's
-     * `nextCursor`, null = last page). Both null = the legacy unpaged read —
-     * byte-identical wire to pre-pagination plugins, which ignore the params.
-     */
-    suspend fun getChangedSettings(
-        since: Long,
-        profile: String? = null,
-        limit: Int? = null,
-        cursor: Long? = null,
-    ): Result<JellyPlaySettingsSnapshot>
-
-    suspend fun applySettings(
-        profile: String?,
-        deviceId: String?,
-        writes: List<JellyPlaySettingWrite>,
-    ): Result<JellyPlaySettingsBatchResult>
-
-    suspend fun resetNamespace(ns: String, profile: String? = null): Result<Unit>
-
-    suspend fun resolveProfile(profile: String? = null): Result<JellyPlaySettingsSnapshot>
-
-    /**
-     * The sync engine's server-side status (usage, quotas, per-device last
-     * sync). null = the server's plugin predates the sync-status wave (404) —
-     * callers degrade quietly (hide the status/history surfaces), never error.
-     */
-    suspend fun getSyncStatus(): Result<JellyPlaySyncStatus?>
-
-    /**
-     * The sync history ledger, newest first. null = the same pre-wave 404
-     * degradation contract as [getSyncStatus].
-     */
-    suspend fun getSyncHistory(since: Long? = null, limit: Int = 50): Result<JellyPlaySyncHistory?>
-
-    /**
-     * The changed keys behind one history entry ([seq]) — the per-key diff
-     * face of the ledger. Reset rows and entries the server no longer details
-     * return an empty [JellyPlaySyncHistoryKeys.keys]; null = the server's
-     * plugin predates the per-key history wave (404) — callers degrade
-     * quietly, never error. [limit] is server-clamped (default 200).
-     */
-    suspend fun getSyncHistoryKeys(seq: Long, limit: Int = 200): Result<JellyPlaySyncHistoryKeys?>
-
-    /**
-     * The admin's cross-user sync usage overview. Admin-only route: a 403
-     * (non-admin) degrades to null exactly like a 404 (old plugin) — the
-     * sync screen hides the admin face quietly, never errors.
-     */
-    suspend fun adminSyncOverview(): Result<JellyPlaySyncAdminOverview?>
-
-    /**
-     * The user's rolling restore points (server-side settings snapshots),
-     * newest first. null = the server's plugin predates the restore-points
-     * wave (404) — callers degrade quietly (hide the surface), never error.
-     */
-    suspend fun getSnapshots(): Result<List<JellyPlaySnapshot>?>
-
-    /** Captures a manual restore point; [JellyPlaySnapshotCreated.id] is its handle. null = pre-wave 404. */
-    suspend fun createSnapshot(): Result<JellyPlaySnapshotCreated?>
-
-    /**
-     * Restores [id]: a server-orchestrated tombstone batch over the current
-     * rows followed by the snapshot re-applied (the restore always wins LWW).
-     * The result rides the ordinary batch pipeline's shape. null = pre-wave
-     * 404 (or the snapshot is not the caller's).
-     */
-    suspend fun restoreSnapshot(id: String): Result<JellyPlaySettingsBatchResult?>
-
-    /**
-     * The caller's whole synced store as one JSON export bundle (all profiles
-     * + resolved modes + catalog stamp), verbatim — the payload is opaque to
-     * the client (share/save it; hand it back to [importSettings]). null =
-     * pre-wave 404.
-     */
-    suspend fun exportSettings(): Result<String?>
-
-    /**
-     * Re-applies a bundle produced by [exportSettings] (the same wire shape)
-     * for the caller, server-now stamped — it beats anything older but never
-     * clobbers a legitimately newer local change. [deviceId] attributes the
-     * import. null = pre-wave 404.
-     */
-    suspend fun importSettings(bundleJson: String, deviceId: String? = null): Result<JellyPlaySettingsBatchResult?>
-
-    /**
-     * Cold SSE stream of `settings.changed` / `settings.reset` events for the
-     * signed-in user. Cancelling collection closes the connection.
-     *
-     * [resumeFromEventId] rides the `Last-Event-ID` header (0/omitted = no
-     * header — the legacy connect): a stream whose ids are anchored to the
-     * change-log head replays everything after that id, closing the reconnect
-     * gap. Callers own the cursor: read it off [JellyPlaySseEvent.id] and pass
-     * the last seen value back on the next (re)connect.
-     */
-    fun settingsStream(resumeFromEventId: Long = 0): kotlinx.coroutines.flow.Flow<JellyPlaySseEvent>
-
-    // ---- events & devices ----
-
-    /**
-     * Registers (or re-registers) this device. [push] is the explicit
-     * tri-state push half (the plugin's push wave): [JellyPlayDevicePush.Attach]
-     * attaches/rotates the push endpoint for [deviceId],
-     * [JellyPlayDevicePush.Detach] sends `push: null` — an explicit push-off
-     * re-registration that clears any endpoint the server holds — and
-     * [JellyPlayDevicePush.Keep] (the default) omits the field entirely, so
-     * the legacy wire shape stays byte-identical and the server keeps
-     * whatever push state it already holds.
-     *
-     * [caps] is the registry-v7 self-reported capability list (what gates
-     * silent push kinds server-side). It REPLACES the stored caps on every
-     * registration — a re-POST (push rotation, re-registration) that omits it
-     * wipes the device's caps — so every caller asserts its caps on every
-     * registration ([CAP_SILENT_PUSH] today).
-     */
-    suspend fun registerDevice(
-        deviceId: String,
-        name: String,
-        platform: String,
-        appVersion: String,
-        push: JellyPlayDevicePush = JellyPlayDevicePush.Keep,
-        caps: List<String> = emptyList(),
-        /** Hardware model (e.g. "Nokia 6.1 Plus") for the dashboard's device rows. */
-        model: String? = null,
-    ): Result<Unit>
-
-    /**
-     * Renames (and/or re-models) a registered device — registry v7's
-     * `POST jellyplay/devices/{id}`. Null fields keep their stored value.
-     * 404 surfaces as a failed Result (unknown id, or a pre-registry plugin).
-     */
-    suspend fun renameDevice(deviceId: String, name: String? = null, model: String? = null): Result<Unit>
-
-    /**
-     * Revokes a device — registry v7's `DELETE jellyplay/devices/{id}` is a
-     * REVOKE + wipe, not a row removal: the row survives flagged `revoked`,
-     * every push fan-out excludes it, and every settings row it wrote is
-     * tombstone-wiped server-side. 404 surfaces as a failed Result.
-     */
-    suspend fun revokeDevice(deviceId: String): Result<Unit>
-
-    suspend fun getDevices(): Result<List<JellyPlayDevice>>
-
-    /** Cold SSE stream of the events channel (new-media, broadcast, session notices). */
-    fun eventsStream(): kotlinx.coroutines.flow.Flow<JellyPlaySseEvent>
-
-    suspend fun broadcast(title: String, body: String, url: String? = null): Result<Unit>
-
-    // ---- inbox messages ----
-
-    suspend fun getMessages(): Result<List<JellyPlayMessage>>
-
-    suspend fun markMessageRead(messageId: String): Result<Unit>
-
-    // ---- Seerr bridge ----
-
-    suspend fun seerrStatus(): Result<JellyPlaySeerrStatus>
-
-    suspend fun seerrLogin(
-        authType: String,
-        username: String?,
-        password: String?,
-        quickConnectSecret: String?,
-    ): Result<Unit>
-
-    suspend fun seerrLogout(): Result<Unit>
-
-    // ---- ratings ----
-
-    /** null = MDBList unconfigured or no data for the id (plugin 404). */
-    suspend fun getMdbListRatings(imdbId: String): Result<JellyPlayRatingsResult?>
-
-    suspend fun getTmdbSeasonRatings(tmdbId: String, seasonNumber: Int): Result<Map<Int, JellyPlayEpisodeRatings>?>
-
-    // ---- recommendations ----
-
-    suspend fun getJellyPlaySimilarItems(itemId: String, limit: Int = 12): Result<List<JellyPlayScoredItem>>
-
-    // ---- anime markers ----
-
-    /** null = no markers cached for the series (plugin 404). */
-    suspend fun getAnimeMarkers(seriesId: String, providerSeriesId: String): Result<JellyPlaySeriesMarkers?>
-
-    // ---- rows ----
-
-    /** null = the admin-defined row does not exist (plugin 404). */
-    suspend fun getCustomRow(title: String): Result<JellyPlayRowResult?>
-
-    /** The admin-defined custom row catalog (titles + sources, plugin config order). */
-    suspend fun getCustomRowCatalog(): Result<JellyPlayRowCatalog?>
-
-    /** null = seasonal rows unconfigured (no TMDB key / no keyword this season). */
-    suspend fun getSeasonalRow(keyword: String? = null): Result<JellyPlayRowResult?>
-
-    // ---- user data ----
-
-    suspend fun getBookmarks(itemId: String): Result<List<JellyPlayBookmark>>
-
-    suspend fun upsertBookmark(itemId: String, request: JellyPlayBookmarkRequest): Result<JellyPlayBookmark>
-
-    suspend fun deleteBookmark(itemId: String, bookmarkId: String): Result<Unit>
-
-    suspend fun getUserRatings(filter: String? = null): Result<List<JellyPlayUserRating>>
-
-    // ---- transcodes ----
-
-    /** Admin-only route; 403 for non-admins surfaces as a failed Result. */
-    suspend fun getActiveTranscodes(): Result<List<JellyPlayActiveTranscode>>
-
-    suspend fun getMyTranscodes(): Result<List<JellyPlayActiveTranscode>>
-
-    suspend fun cancelTranscode(sessionId: String): Result<Unit>
-
-    // ---- admin analytics ----
-
-    /**
-     * The admin analytics overview (plays / watch-time / transcode-time
-     * aggregates over a [days] window the server clamps to 1..365). Admin-only
-     * route: a 403 (non-admin) degrades to null exactly like a 404 (old
-     * plugin / absent `analytics` key) — callers degrade quietly (hide the
-     * surface), never error.
-     */
-    suspend fun getAnalyticsOverview(days: Int = 30): Result<JellyPlayAnalyticsOverview?>
-
-    /**
-     * The admin's recent play sessions, newest first, optionally scoped to
-     * [userId] and to sessions ending at/after [since] (pagination cursor =
-     * the oldest `endedAt` of the previous page). [limit] is server-clamped
-     * (default 50, max 200). null = the same pre-wave 404 degradation contract
-     * as [getAnalyticsOverview].
-     */
-    suspend fun getAnalyticsSessions(
-        userId: String? = null,
-        since: Long? = null,
-        limit: Int = 50,
-    ): Result<JellyPlayAnalyticsSessions?>
-
-    /**
-     * The signed-in user's OWN analytics (`jellyplay/analytics/me` — any
-     * user, unlike the admin routes above; [days] is server-clamped to
-     * 1..365). null = the server's plugin predates the per-user analytics
-     * face or the `analytics` key is absent (404) — callers degrade quietly
-     * (the "not available" state), never error.
-     */
-    suspend fun getMyAnalytics(days: Int = 30): Result<JellyPlayMyAnalytics?>
-}
+interface JellyPlayPluginApiClient :
+    JellyPlayCapabilitiesRoutes,
+    JellyPlaySettingsSyncRoutes,
+    JellyPlayDeviceRegistryRoutes,
+    JellyPlayEventsRoutes,
+    JellyPlaySeerrRoutes,
+    JellyPlayRatingsRoutes,
+    JellyPlayRecommendationsRoutes,
+    JellyPlayMarkersRoutes,
+    JellyPlayRowsRoutes,
+    JellyPlayUserDataRoutes,
+    JellyPlayTranscodesRoutes,
+    JellyPlayAnalyticsRoutes
 
 @Serializable
 data class JellyPlayRatingEntry(

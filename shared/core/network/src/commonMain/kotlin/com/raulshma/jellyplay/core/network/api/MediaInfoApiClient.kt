@@ -13,10 +13,9 @@ import com.raulshma.jellyplay.core.model.WatchedMediaItem
 
 /**
  * The newsletter family seam of [MediaInfoApiClient]: the three `/newsletter`
- * routes. Split out so core/data's [com.raulshma.jellyplay.core.data.repository.NewsletterRepository]
- * can extend THIS interface instead of the wide media-info client (the
- * pass-through mirror retired: the repository is the same [MediaInfoApiClient]
- * single re-bound under the data-facing name — see the data DI module).
+ * routes. Split out so consumers can inject THIS interface instead of the
+ * wide media-info client (the data DI module re-binds the [MediaInfoApiClient]
+ * single under this family name — the same single, the narrow seam).
  */
 interface NewsletterApiClient {
     suspend fun getNewsletterData(sinceDate: String, limit: Int = 20): Result<NewsletterData>

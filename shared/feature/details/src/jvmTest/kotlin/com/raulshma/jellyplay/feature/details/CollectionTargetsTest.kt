@@ -6,6 +6,7 @@ import com.raulshma.jellyplay.core.model.CollectionSummary
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.network.api.CollectionApiClient
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -35,6 +36,7 @@ import com.raulshma.jellyplay.feature.details.generated.resources.detail_msg_no_
 class CollectionTargetsTest {
 
     private val mediaRepository: MediaRepository = mockk(relaxed = true)
+    private val collectionApiClient: CollectionApiClient = mockk(relaxed = true)
     private val mediaDetailProvider: MediaDetailProvider = mockk(relaxed = true)
 
     private val strings = fakeDetailStrings()
@@ -75,7 +77,7 @@ class CollectionTargetsTest {
             scope = scope,
             session = session,
             messages = messages.flow,
-            adapter = CollectionAddTarget(strings, mediaRepository),
+            adapter = CollectionAddTarget(strings, collectionApiClient, mediaRepository),
             mediaDetailProvider = mediaDetailProvider,
         )
     }
@@ -84,7 +86,7 @@ class CollectionTargetsTest {
     @Test
     fun `openPicker with a movie sets showPicker and loads collections`() = runTest {
         val c1 = CollectionSummary(id = "c1", name = "Marvel", itemCount = 4)
-        coEvery { mediaRepository.getCollections(any()) } returns Result.success(listOf(c1))
+        coEvery { collectionApiClient.getCollections(any()) } returns Result.success(listOf(c1))
         val a = actions(this)
 
         a.openPicker()
@@ -98,7 +100,7 @@ class CollectionTargetsTest {
 
     @Test
     fun `openPicker with an audio detail is a no-op`() = runTest {
-        coEvery { mediaRepository.getCollections(any()) } returns Result.success(emptyList())
+        coEvery { collectionApiClient.getCollections(any()) } returns Result.success(emptyList())
         val a = actions(this, detail = audioDetail)
 
         a.openPicker()
@@ -107,13 +109,13 @@ class CollectionTargetsTest {
         assertFalse(a.state.value.showPicker)
         assertTrue(a.state.value.targets.isEmpty())
         // The audio type is ineligible, so the list should never be fetched.
-        coVerify(exactly = 0) { mediaRepository.getCollections(any()) }
+        coVerify(exactly = 0) { collectionApiClient.getCollections(any()) }
     }
 
     @Test
     fun `openPicker with a series sets showPicker and loads collections`() = runTest {
         val c1 = CollectionSummary(id = "c1", name = "Marvel", itemCount = 4)
-        coEvery { mediaRepository.getCollections(any()) } returns Result.success(listOf(c1))
+        coEvery { collectionApiClient.getCollections(any()) } returns Result.success(listOf(c1))
         val a = actions(this, detail = seriesDetail)
 
         a.openPicker()
@@ -131,12 +133,12 @@ class CollectionTargetsTest {
         advanceUntilIdle()
 
         assertFalse(a.state.value.showPicker)
-        coVerify(exactly = 0) { mediaRepository.getCollections(any()) }
+        coVerify(exactly = 0) { collectionApiClient.getCollections(any()) }
     }
 
     @Test
     fun `dismissPicker clears the picker flag`() = runTest {
-        coEvery { mediaRepository.getCollections(any()) } returns Result.success(emptyList())
+        coEvery { collectionApiClient.getCollections(any()) } returns Result.success(emptyList())
         val a = actions(this)
         a.openPicker()
         advanceUntilIdle()
@@ -149,7 +151,7 @@ class CollectionTargetsTest {
 
     @Test
     fun `openCreateDialog closes the picker and opens the dialog`() = runTest {
-        coEvery { mediaRepository.getCollections(any()) } returns Result.success(emptyList())
+        coEvery { collectionApiClient.getCollections(any()) } returns Result.success(emptyList())
         val a = actions(this)
         a.openPicker()
         advanceUntilIdle()

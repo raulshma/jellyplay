@@ -47,8 +47,8 @@ internal fun androidPlaybackStackModule(context: Context): Module = module {
             // session callbacks on it.
             scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
             mediaRepository = get(),
+            libraryApiClient = get(),
             musicCatalogue = get(),
-            mediaCollectionReads = get(),
             playlistRepository = get(),
             downloadRepository = get(),
             playbackRepository = get(),
@@ -133,7 +133,7 @@ internal fun androidPlaybackStackModule(context: Context): Module = module {
     single<AudioQueueFacade> {
         DefaultAudioQueueFacade(
             queueManager = get(),
-            musicCatalogue = get(),
+            libraryApiClient = get(),
             imageUrlProvider = get(),
             radioScope = get(DatastoreQualifiers.applicationScope),
         )

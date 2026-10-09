@@ -20,6 +20,7 @@ import com.raulshma.jellyplay.core.data.repository.JellyPlayPreferencesSyncAdapt
 import com.raulshma.jellyplay.core.data.repository.JellyPlayReaderSyncAdapter
 import com.raulshma.jellyplay.core.data.repository.JellyPlaySearchHistorySyncAdapter
 import com.raulshma.jellyplay.core.data.repository.JellyPushRepository
+import com.raulshma.jellyplay.core.data.repository.JpsyncReservation
 import com.raulshma.jellyplay.core.data.repository.ProfileSyncRepository
 import com.raulshma.jellyplay.core.data.session.SessionCacheRegistry
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -204,7 +205,7 @@ internal val dataSessionPlaybackModule: Module = module {
     // The home fetcher's plugin-row leaf transport (JellyPlayHomeSectionSources,
     // declared in core:network): the wiring twin of NetworkKoinModules'
     // SeerrHomeSectionSourcesImpl, built HERE because only this module sees
-    // both the plugin transport (JellyPlayPluginApiClient, networkJvmModule)
+    // both the plugin transport (the JellyPlayPluginApiClient roles, networkJvmModule)
     // and the capability probe (the status store above) — the network module
     // resolves this binding cross-module via getOrNull, so graphs without the
     // plugin cluster simply fetch no plugin rows. Declared beside the probe
@@ -343,10 +344,10 @@ internal val dataSessionPlaybackModule: Module = module {
             nowMillis = { get<TimeSource>().nowEpochMillis() },
             persistenceScope = get(com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers.applicationScope),
             loadEnabled = {
-                dataStore.data.first()[booleanPreferencesKey("jpsync.device.sync_enabled")] ?: false
+                dataStore.data.first()[booleanPreferencesKey(JpsyncReservation.deviceSyncEnabledKey())] ?: false
             },
             saveEnabled = { value ->
-                dataStore.edit { it[booleanPreferencesKey("jpsync.device.sync_enabled")] = value }
+                dataStore.edit { it[booleanPreferencesKey(JpsyncReservation.deviceSyncEnabledKey())] = value }
             },
             // The delta sweep's per-user resume cursor (reserved
             // `jpsync.cursor.*` prefs, never synced): keyed by identity so two
@@ -364,18 +365,19 @@ internal val dataSessionPlaybackModule: Module = module {
             // local ops; the namespace toggle IS the opt-in, and flipping it
             // on runs one cycle immediately).
             loadNamespaceEnabled = { ns ->
-                dataStore.data.first()[booleanPreferencesKey("jpsync.ns.enabled." + ns)]
+                dataStore.data.first()[booleanPreferencesKey(JpsyncReservation.namespaceToggleKey(ns))]
                     ?: (ns != NAMESPACE_READER_BACKUP)
             },
             saveNamespaceEnabled = { ns, enabled ->
-                dataStore.edit { it[booleanPreferencesKey("jpsync.ns.enabled." + ns)] = enabled }
+                dataStore.edit { it[booleanPreferencesKey(JpsyncReservation.namespaceToggleKey(ns))] = enabled }
             },
         )
     }
 
     single {
         JellyPlayEventsRepository(
-            apiClient = get(),
+            deviceApi = get(),
+            eventsApi = get(),
             statusStore = get(),
             scope = get(com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers.applicationScope),
             deviceName = detectDeviceName(),
@@ -477,7 +479,7 @@ private fun detectDeviceProfile(): String = when (currentPlatform) {
 private fun jpsyncDeviceIdProvider(
     dataStore: androidx.datastore.core.DataStore<androidx.datastore.preferences.core.Preferences>,
 ): suspend () -> String = {
-    val key = stringPreferencesKey("jpsync.device.id")
+    val key = stringPreferencesKey(JpsyncReservation.deviceIdKey())
     dataStore.data.first()[key]
         ?: UUID.randomUUID().toString().also { fresh -> dataStore.edit { it[key] = fresh } }
 }
@@ -506,7 +508,7 @@ private fun jpsyncCursorLoader(
     cursor: String,
 ): suspend () -> Long? = {
     val userId = identities.currentIdentity()?.userId
-    userId?.let { dataStore.data.first()[longPreferencesKey("jpsync.cursor.$cursor.$it")] }
+    userId?.let { dataStore.data.first()[longPreferencesKey(JpsyncReservation.cursorKey(cursor, it))] }
 }
 
 /**
@@ -521,7 +523,7 @@ private fun jpsyncCursorSaver(
 ): suspend (Long) -> Unit = { value ->
     val userId = identities.currentIdentity()?.userId
     if (userId != null) {
-        dataStore.edit { it[longPreferencesKey("jpsync.cursor.$cursor.$userId")] = value }
+        dataStore.edit { it[longPreferencesKey(JpsyncReservation.cursorKey(cursor, userId))] = value }
     }
 }
 
@@ -549,7 +551,7 @@ private fun appVersionString(): String =
  * [com.raulshma.jellyplay.core.network.library.JellyPlayHomeSectionSources]
  * for the PLUGIN_ROW home rows: the row reads forward verbatim onto the
  * plugin api client (ADR 0010's one-family rule — every `jellyplay/` route
- * rides `JellyPlayPluginApiClient`), the item resolution forwards onto the
+ * rides the `JellyPlayRowsRoutes` role of the one plugin client family), the item resolution forwards onto the
  * library client's batched ids read, and the two capability gates read ONLY
  * the probe store's registry — the ONE gating mechanism (ADR 0010 §6).
  *
@@ -563,7 +565,7 @@ private fun appVersionString(): String =
  * the docs/jellyplay-plugin.md gating rule.
  */
 private class JellyPlayHomeSectionSourcesImpl(
-    private val apiClient: com.raulshma.jellyplay.core.network.api.JellyPlayPluginApiClient,
+    private val apiClient: com.raulshma.jellyplay.core.network.api.JellyPlayRowsRoutes,
     private val statusStore: com.raulshma.jellyplay.core.data.session.JellyPlayPluginStatusStore,
     /**
      * The per-feature gate (probe AND the user's toggle) — the row gates read

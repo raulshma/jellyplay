@@ -5,7 +5,8 @@ import com.raulshma.jellyplay.core.data.session.SessionCacheRegistry
 import com.raulshma.jellyplay.core.model.JellyPlayPluginFeatures
 import com.raulshma.jellyplay.core.network.api.JellyPlayActiveTranscode
 import com.raulshma.jellyplay.core.network.api.JellyPlayCapabilities
-import com.raulshma.jellyplay.core.network.api.JellyPlayPluginApiClient
+import com.raulshma.jellyplay.core.network.api.JellyPlayCapabilitiesRoutes
+import com.raulshma.jellyplay.core.network.api.JellyPlayTranscodesRoutes
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -44,7 +45,7 @@ import kotlin.test.assertTrue
  *    refuses a dismiss while the request is in flight.
  *
  * The store is the REAL [JellyPlayPluginStatusStore] over the same mocked
- * [JellyPlayPluginApiClient] the ViewModel reads — gating flows through the
+ * [JellyPlayTranscodesRoutes] role the ViewModel reads — gating flows through the
  * actual probe, exactly as it does in production. The registry is relaxed
  * (the store only registers its session-reset action into it).
  */
@@ -55,7 +56,8 @@ class JellyPlayTranscodesViewModelTest {
     // has no access to that module (search/music/livetv conveyor port pattern).
     private val mainDispatcher = StandardTestDispatcher()
 
-    private lateinit var pluginApi: JellyPlayPluginApiClient
+    private lateinit var pluginApi: JellyPlayTranscodesRoutes
+    private lateinit var capabilitiesApi: JellyPlayCapabilitiesRoutes
     private lateinit var sessionCacheRegistry: SessionCacheRegistry
     private lateinit var statusStore: JellyPlayPluginStatusStore
 
@@ -87,8 +89,9 @@ class JellyPlayTranscodesViewModelTest {
     fun setUp() {
         Dispatchers.setMain(mainDispatcher)
         pluginApi = mockk()
+        capabilitiesApi = mockk()
         sessionCacheRegistry = mockk(relaxed = true)
-        statusStore = JellyPlayPluginStatusStore(pluginApi, sessionCacheRegistry)
+        statusStore = JellyPlayPluginStatusStore(capabilitiesApi, sessionCacheRegistry)
     }
 
     @AfterTest
@@ -98,7 +101,7 @@ class JellyPlayTranscodesViewModelTest {
 
     /** Probes the real store: the capabilities stub decides AVAILABLE + feature set. */
     private suspend fun makeStoreAvailable(features: List<String> = defaultFeatures()) {
-        coEvery { pluginApi.getCapabilities() } returns Result.success(
+        coEvery { capabilitiesApi.getCapabilities() } returns Result.success(
             JellyPlayCapabilities(
                 contractVersion = 1,
                 pluginVersion = "1.0.0",
@@ -122,7 +125,7 @@ class JellyPlayTranscodesViewModelTest {
 
     @Test
     fun `plugin unavailable gates the list off and never fetches transcodes`() = runTest(mainDispatcher) {
-        coEvery { pluginApi.getCapabilities() } returns Result.failure(RuntimeException("plugin absent"))
+        coEvery { capabilitiesApi.getCapabilities() } returns Result.failure(RuntimeException("plugin absent"))
         statusStore.refresh()
 
         val viewModel = JellyPlayTranscodesViewModel(pluginApi, statusStore)
@@ -151,7 +154,7 @@ class JellyPlayTranscodesViewModelTest {
 
         assertEquals(TranscodesGate.Unavailable, viewModel.uiState.value.gate)
         assertFalse(viewModel.uiState.value.isLoading)
-        coVerify(exactly = 0) { pluginApi.getCapabilities() }
+        coVerify(exactly = 0) { capabilitiesApi.getCapabilities() }
         coVerify(exactly = 0) { pluginApi.getActiveTranscodes() }
     }
 
@@ -272,7 +275,7 @@ class JellyPlayTranscodesViewModelTest {
 
     @Test
     fun `the poll loop never fetches while gated off`() = runTest(mainDispatcher) {
-        coEvery { pluginApi.getCapabilities() } returns Result.failure(RuntimeException("plugin absent"))
+        coEvery { capabilitiesApi.getCapabilities() } returns Result.failure(RuntimeException("plugin absent"))
         statusStore.refresh()
         val viewModel = JellyPlayTranscodesViewModel(pluginApi, statusStore)
         advanceUntilIdle()

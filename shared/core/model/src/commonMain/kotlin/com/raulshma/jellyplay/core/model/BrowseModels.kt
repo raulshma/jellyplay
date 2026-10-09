@@ -156,7 +156,10 @@ enum class HomeSectionType {
          * The configurable types in DEFAULT ORDER. Mirrors
          * [HomeSectionDescriptor.isConfigurable] but is spelled out because the
          * list order defines the default home section order — deriving it from
-         * `entries` would silently reshuffle defaults.
+         * `entries` would silently reshuffle defaults. This list stays the
+         * wire-safe authority (persisted layouts reference it);
+         * [com.raulshma.jellyplay.core.model.home.HomeRowModules.defaultOrder]
+         * is its registry-side derivation, pinned equal by HomeRowModulesTest.
          */
         val CONFIGURABLE = listOf(
             CONTINUE_WATCHING,

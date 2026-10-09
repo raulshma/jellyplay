@@ -2,7 +2,7 @@ package com.raulshma.jellyplay.core.data.repository
 
 import com.raulshma.jellyplay.core.data.log.Log
 import com.raulshma.jellyplay.core.data.session.JellyPlayPluginStatusStore
-import com.raulshma.jellyplay.core.network.api.JellyPlayPluginApiClient
+import com.raulshma.jellyplay.core.network.api.JellyPlaySettingsSyncRoutes
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.combine
@@ -46,7 +46,7 @@ import kotlinx.coroutines.launch
  * pull-only converge), so there is no loop.
  */
 class JellyPlayLiveResyncConnector(
-    private val apiClient: JellyPlayPluginApiClient,
+    private val apiClient: JellyPlaySettingsSyncRoutes,
     private val syncRepository: ProfileSyncRepository,
     private val statusStore: JellyPlayPluginStatusStore,
     /**

@@ -12,7 +12,7 @@ import com.raulshma.jellyplay.core.data.repository.DetailLoadError
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaDetailProvider
 import com.raulshma.jellyplay.core.data.repository.MetadataEditorRepository
-import com.raulshma.jellyplay.core.data.repository.MediaExtrasReads
+import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
@@ -114,7 +114,7 @@ class DetailViewModelTest {
     // relaxed mocks — no VM test exercises those helpers directly; their own
     // suites do).
     private lateinit var mediaRepository: MediaRepository
-    private lateinit var mediaExtrasReads: MediaExtrasReads
+    private lateinit var libraryApiClient: LibraryApiClient
     private lateinit var mediaDetailProvider: MediaDetailProvider
     private lateinit var userDataMutator: FakeUserDataMutator
     private lateinit var playbackRepository: PlaybackRepository
@@ -137,7 +137,7 @@ class DetailViewModelTest {
     fun setUp() {
         mediaRepository = mockk(relaxed = true)
 
-        mediaExtrasReads = mockk(relaxed = true)
+        libraryApiClient = mockk(relaxed = true)
         mediaDetailProvider = mockk(relaxed = false)
         playbackRepository = mockk(relaxed = true)
         offlineRepository = mockk(relaxed = true)
@@ -158,7 +158,7 @@ class DetailViewModelTest {
         // Default stub for the special-features fetch so its REMOTE side-effect
         // launch doesn't crash casting the relaxed-mock Result default. Individual
         // tests override this to drive the specialFeatures list.
-        coEvery { mediaExtrasReads.getSpecialFeatures(any()) } returns Result.success(emptyList())
+        coEvery { libraryApiClient.getSpecialFeatures(any()) } returns Result.success(emptyList())
         // Default stub for the media-segments pre-warm fetch so its REMOTE
         // side-effect launch doesn't crash casting the relaxed-mock Result default.
         // Individual tests override this to drive the availability booleans.
@@ -231,7 +231,8 @@ class DetailViewModelTest {
             storageProbe = mockk<DetailStorageProbe>(relaxed = true),
             strings = strings,
             mediaRepository = mediaRepository,
-            mediaExtrasReads = mediaExtrasReads,
+            libraryApiClient = libraryApiClient,
+            collectionApiClient = mockk<com.raulshma.jellyplay.core.network.api.CollectionApiClient>(relaxed = true),
             userDataMutator = userDataMutator,
             mediaDetailProvider = mediaDetailProvider,
             playbackRepository = playbackRepository,
@@ -1669,7 +1670,7 @@ class DetailViewModelTest {
         }
 
     // ── Special features / extras ───────────────────────────────────────────
-    // A REMOTE load fires mediaExtrasReads.getSpecialFeatures (sourced from
+    // A REMOTE load fires libraryApiClient.getSpecialFeatures (sourced from
     // Jellyfin's /Items/{id}/SpecialFeatures) and projects the result onto
     // uiState.specialFeatures so the "Special Features" row can render.
 
@@ -1685,13 +1686,13 @@ class DetailViewModelTest {
                 MediaItem(id = "extra-1", name = "Making Of", mediaType = MediaType.MOVIE),
                 MediaItem(id = "extra-2", name = "Deleted Scenes", mediaType = MediaType.MOVIE),
             )
-            coEvery { mediaExtrasReads.getSpecialFeatures("m1") } returns Result.success(extras)
+            coEvery { libraryApiClient.getSpecialFeatures("m1") } returns Result.success(extras)
 
             viewModel.onEvent(DetailUiEvent.LoadItem("m1"))
             advanceUntilIdle()
 
             // The fetch fired exactly once for the resolved item.
-            coVerify(exactly = 1) { mediaExtrasReads.getSpecialFeatures("m1") }
+            coVerify(exactly = 1) { libraryApiClient.getSpecialFeatures("m1") }
             // The extras landed on uiState for the detail row.
             assertEquals(extras, viewModel.uiState.value.specialFeatures)
         }
@@ -1706,7 +1707,7 @@ class DetailViewModelTest {
                 remoteSnapshot(MediaDetail(item = MediaItem(id = "m1", name = "Movie", mediaType = MediaType.MOVIE))),
             )
             val extras = listOf(MediaItem(id = "extra-1", name = "Making Of", mediaType = MediaType.MOVIE))
-            coEvery { mediaExtrasReads.getSpecialFeatures("m1") } returns Result.success(extras)
+            coEvery { libraryApiClient.getSpecialFeatures("m1") } returns Result.success(extras)
             viewModel.onEvent(DetailUiEvent.LoadItem("m1"))
             advanceUntilIdle()
             assertEquals(extras, viewModel.uiState.value.specialFeatures)
@@ -1731,7 +1732,7 @@ class DetailViewModelTest {
 
             assertTrue(viewModel.uiState.value.specialFeatures.isEmpty())
             // A LOCAL origin short-circuits remote discovery — no extras fetch.
-            coVerify(exactly = 0) { mediaExtrasReads.getSpecialFeatures("s1") }
+            coVerify(exactly = 0) { libraryApiClient.getSpecialFeatures("s1") }
         }
 
     // ── Instant Mix ───────────────────────────────────────────────────────

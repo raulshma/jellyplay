@@ -9,9 +9,9 @@ import com.raulshma.jellyplay.core.data.playback.focus.FocusOutcome
 import com.raulshma.jellyplay.core.data.playback.focus.PlaybackFocus
 import com.raulshma.jellyplay.core.data.playback.focus.PlaybackSurfaceId
 import com.raulshma.jellyplay.core.data.playback.focus.VideoFocusPolicyInput
-import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
+import com.raulshma.jellyplay.core.network.api.LiveTvApiClient
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
-import com.raulshma.jellyplay.core.data.util.EpochMillisSource
+import com.raulshma.jellyplay.core.model.EpochMillisSource
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackSlice
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
 import com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeState
@@ -60,7 +60,7 @@ import com.raulshma.jellyplay.core.ui.message.UiMessage
 @OptIn(ExperimentalCoroutinesApi::class)
 class LiveTvPlayerViewModelTest {
 
-    private lateinit var liveTvRepo: LiveTvRepository
+    private lateinit var liveTvRepo: LiveTvApiClient
     private lateinit var playbackRepo: PlaybackRepository
     private lateinit var playbackIdentity: PlaybackIdentity
     private lateinit var appRuntimeStateStore: AppRuntimeStateStore
@@ -86,7 +86,7 @@ class LiveTvPlayerViewModelTest {
     @BeforeTest
     fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
-        liveTvRepo = mockk<LiveTvRepository>(relaxed = true)
+        liveTvRepo = mockk<LiveTvApiClient>(relaxed = true)
         playbackRepo = mockk(relaxed = true)
         playbackIdentity = mockk(relaxed = true)
         appRuntimeStateStore = mockk(relaxed = true)

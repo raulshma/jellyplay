@@ -23,11 +23,12 @@ import java.io.File
  *    transformer. (SubtitleFontController and BackgroundCastController left
  *    the list with their fold-backs: the font funs into
  *    SubtitleStyleController, the background-cast pair into the VM as two
- *    private funs. VideoSessionHost left the list with its deletion: the
- *    pass-through layer was dissolved by the [PlayerWiring] two-phase
- *    composition — the builder implements the session-facing seams itself
- *    and, being the VM's construction surface, is the one module besides the
- *    VM that legitimately names the ui state bag.)
+ *    private funs. VideoSessionHost left the list with its deletion; the
+ *    [PlayerWiring] builder inherited its composition-surface exemption and
+ *    handed it to [PlaybackSession] at the C6 collapse — the composition
+ *    root is the one module besides the VM that legitimately carries the
+ *    sanctioned god-state wirings (the SettingsProjector pair; see
+ *    godStateWiringCount_neverIncreases).)
  *    DECLARED EXCEPTION (the ratchet's ONE sanctioned state transformer):
  *    the prefs projection [SessionLoadOutputs.onPrefsProjected] forwards is
  *    spelled through the transparent `PrefsProjection` alias declared beside
@@ -146,6 +147,12 @@ class ControllerOwnershipTest {
                 text.contains("VideoPlayerUiState"),
                 "$controller must not reference VideoPlayerUiState (its interface is its state class + commands)",
             )
+            // The composition root's sanctioned exception: the session carries
+            // the SettingsProjector god-state wiring PAIR since the C6
+            // collapse (the former PlayerWiring builder's — the count is
+            // pinned unchanged by godStateWiringCount_neverIncreases). A
+            // controller taking a transformer is still a violation.
+            if (controller == "PlaybackSession.kt") continue
             assertFalse(text.contains("updateUiState"), "$controller must not take a god-state transformer")
             assertFalse(text.contains("getUiState"), "$controller must not read the god state")
         }
@@ -198,24 +205,47 @@ class ControllerOwnershipTest {
     }
 
     @Test
+    fun playbackSession_totalLineCeiling() {
+        // The composition-root companion to videoPlayerViewModel_totalLineCeiling:
+        // the C6 collapse folded the former PlayerWiring builder INTO the
+        // session, making it the player's largest surface, so its TOTAL line
+        // count is a one-way ratchet too. Baseline: 3_054 — the current
+        // 3_053 lines by this suite's lineSequence count plus one line of
+        // slack, pinned EXACTLY like every other ratchet in this suite.
+        // Lower the ceiling when a cluster moves out; never raise it to
+        // admit growth.
+        val maxPlaybackSessionLines = 3_054
+        val session = mainSources().first { it.name == "PlaybackSession.kt" }
+        val lines = session.sourceText().lineSequence().count()
+        assertTrue(
+            lines <= maxPlaybackSessionLines,
+            "PlaybackSession.kt grew to $lines lines (ceiling " +
+                "$maxPlaybackSessionLines) — new behaviour belongs in an " +
+                "extracted collaborator, with the session a thin composition " +
+                "root. Lower the ceiling when a cluster moves out; never " +
+                "raise it.",
+        )
+    }
+
+    @Test
     fun constructionOrderConvention_wiringPhaseOneBeforeArm() {
         // The engine-flow collector launched from the VM's init used to call
         // into trackSelectionHelper, and the SessionEvent forwarder collected
         // playbackSession.events — so those properties had to be declared
-        // before the VM's init block. Since the [PlayerWiring] move, the VM
-        // declares ONE wiring property and init only calls [PlayerWiring.arm];
-        // the same invariant is now enforced structurally by the builder and
-        // pinned HERE at the builder's source: every collaborator the arm
-        // phase's collectors drive is constructed in phase 1 (before the arm
-        // function exists in the file), so no collector registration can run
-        // against an uninitialized collaborator.
-        val wiring = mainSources().first { it.name == "PlayerWiring.kt" }.sourceText()
-        val armFun = wiring.indexOf("    fun arm() {")
-        assertTrue(armFun >= 0, "PlayerWiring.arm not found")
+        // before the VM's init block. Since the [PlayerWiring] move — and,
+        // after the C6 collapse, the move INTO [PlaybackSession] itself — the
+        // invariant is pinned at the composition root's source: every
+        // collaborator the arm phase's collectors drive is constructed in the
+        // class body BEFORE the arm function exists in the file, so no
+        // collector registration can run against an uninitialized
+        // collaborator (Kotlin initialises properties in declaration order).
+        val wiring = mainSources().first { it.name == "PlaybackSession.kt" }.sourceText()
+        val armFun = wiring.indexOf("    internal fun arm() {")
+        assertTrue(armFun >= 0, "PlaybackSession.arm not found")
         for ((collaborator, what) in listOf(
-            "internal val playerSessionManager = PlayerSessionManager(" to
+            "internal val playerSessionManager: PlayerSessionManager = playerSessionManagerOverride" to
                 "the engine-attach + preference collectors' session handle",
-            "internal val playbackSession = PlaybackSession(" to
+            "private val engineEventShell = EngineSessionShell<SessionEvent>(" to
                 "the session-event forwarder's events flow + the rearm callback",
             "internal val trackSelectionHelper: TrackSelectionHelper = TrackSelectionHelper(" to
                 "the engine-attach + resolver collectors' track helper",
@@ -230,9 +260,8 @@ class ControllerOwnershipTest {
             assertTrue(decl >= 0, "collaborator declaration not found: $collaborator")
             assertTrue(
                 decl < armFun,
-                "$what must be constructed in phase 1 (before fun arm) — the arm-phase " +
-                    "collectors register against it and Kotlin initialises properties in " +
-                    "declaration order",
+                "$what must be constructed before fun arm() — the arm-phase collectors register " +
+                    "against it and Kotlin initialises properties in declaration order",
             )
         }
     }

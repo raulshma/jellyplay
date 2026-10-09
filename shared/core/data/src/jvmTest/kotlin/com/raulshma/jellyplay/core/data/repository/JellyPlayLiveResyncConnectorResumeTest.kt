@@ -3,7 +3,8 @@ package com.raulshma.jellyplay.core.data.repository
 import com.raulshma.jellyplay.core.data.session.JellyPlayPluginStatusStore
 import com.raulshma.jellyplay.core.data.session.SessionCacheRegistry
 import com.raulshma.jellyplay.core.model.JellyPlayPluginStatus
-import com.raulshma.jellyplay.core.network.api.JellyPlayPluginApiClient
+import com.raulshma.jellyplay.core.network.api.JellyPlayCapabilitiesRoutes
+import com.raulshma.jellyplay.core.network.api.JellyPlaySettingsSyncRoutes
 import com.raulshma.jellyplay.core.network.api.JellyPlaySseEvent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -46,7 +47,7 @@ class JellyPlayLiveResyncConnectorResumeTest {
     }
 
     /** Api fake: the probe says AVAILABLE + `settings-sync`; streams are scripted. */
-    private class FakePluginApi : JellyPlayPluginApiClient {
+    private class FakePluginApi : JellyPlayCapabilitiesRoutes, JellyPlaySettingsSyncRoutes {
         /** Every settings-stream connect: the resume id it asked to resume from. */
         val connectResumeIds = mutableListOf<Long>()
 
@@ -89,23 +90,8 @@ class JellyPlayLiveResyncConnectorResumeTest {
 
         private fun emptySnapshot() = com.raulshma.jellyplay.core.network.api.JellyPlaySettingsSnapshot()
 
-        // ── unused families ──
-        override suspend fun getDevices(): Result<List<com.raulshma.jellyplay.core.network.api.JellyPlayDevice>> =
-            Result.success(emptyList())
-        override fun eventsStream(): Flow<JellyPlaySseEvent> = emptyFlow()
-        override suspend fun broadcast(title: String, body: String, url: String?): Result<Unit> = Result.success(Unit)
-        override suspend fun getMessages(): Result<List<com.raulshma.jellyplay.core.network.api.JellyPlayMessage>> =
-            Result.success(emptyList())
-        override suspend fun markMessageRead(messageId: String): Result<Unit> = Result.success(Unit)
-        override suspend fun registerDevice(
-            deviceId: String,
-            name: String,
-            platform: String,
-            appVersion: String,
-            push: com.raulshma.jellyplay.core.network.api.JellyPlayDevicePush,
-            caps: List<String>,
-            model: String?,
-        ): Result<Unit> = Result.success(Unit)
+        // ── sync-ledger / restore-point / export-import routes (settings-sync
+        // role members this suite never exercises) ──
         override suspend fun getSyncStatus() = error("unused")
         override suspend fun getSyncHistory(since: Long?, limit: Int) = error("unused")
         override suspend fun getSyncHistoryKeys(seq: Long, limit: Int) = error("unused")
@@ -115,28 +101,7 @@ class JellyPlayLiveResyncConnectorResumeTest {
         override suspend fun restoreSnapshot(id: String) = error("unused")
         override suspend fun exportSettings() = error("unused")
         override suspend fun importSettings(bundleJson: String, deviceId: String?) = error("unused")
-        override suspend fun renameDevice(deviceId: String, name: String?, model: String?) = error("unused")
-        override suspend fun revokeDevice(deviceId: String) = error("unused")
-        override suspend fun getMdbListRatings(imdbId: String) = error("unused")
-        override suspend fun getTmdbSeasonRatings(tmdbId: String, seasonNumber: Int) = error("unused")
-        override suspend fun getJellyPlaySimilarItems(itemId: String, limit: Int) = error("unused")
-        override suspend fun getAnimeMarkers(seriesId: String, providerSeriesId: String) = error("unused")
-        override suspend fun getCustomRow(title: String) = error("unused")
-        override suspend fun getCustomRowCatalog() = error("unused")
-        override suspend fun getSeasonalRow(keyword: String?) = error("unused")
-        override suspend fun getBookmarks(itemId: String) = error("unused")
-        override suspend fun upsertBookmark(itemId: String, request: com.raulshma.jellyplay.core.network.api.JellyPlayBookmarkRequest) = error("unused")
-        override suspend fun deleteBookmark(itemId: String, bookmarkId: String) = error("unused")
-        override suspend fun getUserRatings(filter: String?) = error("unused")
-        override suspend fun getActiveTranscodes() = error("unused")
-        override suspend fun getMyTranscodes() = error("unused")
-        override suspend fun cancelTranscode(sessionId: String) = error("unused")
-        override suspend fun getAnalyticsOverview(days: Int) = error("unused")
-        override suspend fun getAnalyticsSessions(userId: String?, since: Long?, limit: Int) = error("unused")
-        override suspend fun getMyAnalytics(days: Int) = error("unused")
-        override suspend fun seerrStatus() = error("unused")
-        override suspend fun seerrLogin(authType: String, username: String?, password: String?, quickConnectSecret: String?) = error("unused")
-        override suspend fun seerrLogout() = error("unused")
+
     }
 
     /** Auth fake: only the authenticated edge the connector arms on. */

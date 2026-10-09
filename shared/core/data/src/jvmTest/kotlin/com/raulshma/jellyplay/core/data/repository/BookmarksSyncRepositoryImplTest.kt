@@ -8,28 +8,14 @@ import com.raulshma.jellyplay.core.database.JellyPlayDatabase
 import com.raulshma.jellyplay.core.database.entity.BookBookmarkEntity
 import com.raulshma.jellyplay.core.model.BookProgressPolicy
 import com.raulshma.jellyplay.core.model.JellyPlayPluginStatus
-import com.raulshma.jellyplay.core.network.api.JellyPlayActiveTranscode
 import com.raulshma.jellyplay.core.network.api.JellyPlayBookmark
 import com.raulshma.jellyplay.core.network.api.JellyPlayBookmarkRequest
 import com.raulshma.jellyplay.core.network.api.JellyPlayCapabilities
-import com.raulshma.jellyplay.core.network.api.JellyPlayDevice
-import com.raulshma.jellyplay.core.network.api.JellyPlayEpisodeRatings
-import com.raulshma.jellyplay.core.network.api.JellyPlayMessage
-import com.raulshma.jellyplay.core.network.api.JellyPlayPluginApiClient
-import com.raulshma.jellyplay.core.network.api.JellyPlayRatingsResult
-import com.raulshma.jellyplay.core.network.api.JellyPlayRowResult
-import com.raulshma.jellyplay.core.network.api.JellyPlayScoredItem
-import com.raulshma.jellyplay.core.network.api.JellyPlaySeerrStatus
-import com.raulshma.jellyplay.core.network.api.JellyPlaySeriesMarkers
-import com.raulshma.jellyplay.core.network.api.JellyPlaySettingWrite
-import com.raulshma.jellyplay.core.network.api.JellyPlaySettingsBatchResult
-import com.raulshma.jellyplay.core.network.api.JellyPlaySettingsSnapshot
-import com.raulshma.jellyplay.core.network.api.JellyPlaySseEvent
+import com.raulshma.jellyplay.core.network.api.JellyPlayCapabilitiesRoutes
+import com.raulshma.jellyplay.core.network.api.JellyPlayUserDataRoutes
 import com.raulshma.jellyplay.core.network.api.JellyPlayUserRating
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import kotlin.test.AfterTest
@@ -80,7 +66,7 @@ class BookmarksSyncRepositoryImplTest {
         var features: List<String> = listOf("bookmarks"),
         var capabilitiesFail: Boolean = false,
         var bookmarksFail: Boolean = false,
-    ) : JellyPlayPluginApiClient {
+    ) : JellyPlayCapabilitiesRoutes, JellyPlayUserDataRoutes {
         val upserts = mutableListOf<Pair<String, JellyPlayBookmarkRequest>>()
         val deletes = mutableListOf<Pair<String, String>>()
         var getBookmarksCalls = 0
@@ -132,60 +118,9 @@ class BookmarksSyncRepositoryImplTest {
             return Result.success(Unit)
         }
 
-        // ---- unused families ----
-        override suspend fun getCustomRowCatalog(): Result<com.raulshma.jellyplay.core.network.api.JellyPlayRowCatalog?> = Result.failure(IllegalStateException("unused"))
-        override suspend fun getSettings(profile: String?): Result<JellyPlaySettingsSnapshot> = Result.failure(IllegalStateException("unused"))
-        override suspend fun getChangedSettings(
-            since: Long,
-            profile: String?,
-            limit: Int?,
-            cursor: Long?,
-        ): Result<JellyPlaySettingsSnapshot> = Result.failure(IllegalStateException("unused"))
-        override suspend fun applySettings(profile: String?, deviceId: String?, writes: List<JellyPlaySettingWrite>): Result<JellyPlaySettingsBatchResult> = Result.failure(IllegalStateException("unused"))
-        override suspend fun resetNamespace(ns: String, profile: String?): Result<Unit> = Result.failure(IllegalStateException("unused"))
-        override suspend fun resolveProfile(profile: String?): Result<JellyPlaySettingsSnapshot> = Result.failure(IllegalStateException("unused"))
-        override suspend fun getSyncStatus(): Result<com.raulshma.jellyplay.core.network.api.JellyPlaySyncStatus?> = Result.failure(IllegalStateException("unused"))
-        override suspend fun getSyncHistory(since: Long?, limit: Int): Result<com.raulshma.jellyplay.core.network.api.JellyPlaySyncHistory?> = Result.failure(IllegalStateException("unused"))
-        override suspend fun getSyncHistoryKeys(seq: Long, limit: Int): Result<com.raulshma.jellyplay.core.network.api.JellyPlaySyncHistoryKeys?> = Result.failure(IllegalStateException("unused"))
-        override suspend fun adminSyncOverview(): Result<com.raulshma.jellyplay.core.network.api.JellyPlaySyncAdminOverview?> = Result.failure(IllegalStateException("unused"))
-        override suspend fun getSnapshots(): Result<List<com.raulshma.jellyplay.core.network.api.JellyPlaySnapshot>?> = Result.failure(IllegalStateException("unused"))
-        override suspend fun createSnapshot(): Result<com.raulshma.jellyplay.core.network.api.JellyPlaySnapshotCreated?> = Result.failure(IllegalStateException("unused"))
-        override suspend fun restoreSnapshot(id: String): Result<JellyPlaySettingsBatchResult?> = Result.failure(IllegalStateException("unused"))
-        override suspend fun exportSettings(): Result<String?> = Result.failure(IllegalStateException("unused"))
-        override suspend fun importSettings(bundleJson: String, deviceId: String?): Result<JellyPlaySettingsBatchResult?> = Result.failure(IllegalStateException("unused"))
-        override suspend fun renameDevice(deviceId: String, name: String?, model: String?): Result<Unit> = Result.failure(IllegalStateException("unused"))
-        override suspend fun revokeDevice(deviceId: String): Result<Unit> = Result.failure(IllegalStateException("unused"))
-        override fun settingsStream(resumeFromEventId: Long): Flow<JellyPlaySseEvent> = emptyFlow()
-        override suspend fun registerDevice(
-            deviceId: String,
-            name: String,
-            platform: String,
-            appVersion: String,
-            push: com.raulshma.jellyplay.core.network.api.JellyPlayDevicePush,
-            caps: List<String>,
-            model: String?,
-        ): Result<Unit> = Result.success(Unit)
-        override suspend fun getDevices(): Result<List<JellyPlayDevice>> = Result.success(emptyList())
-        override fun eventsStream(): Flow<JellyPlaySseEvent> = emptyFlow()
-        override suspend fun broadcast(title: String, body: String, url: String?): Result<Unit> = Result.success(Unit)
-        override suspend fun getMessages(): Result<List<JellyPlayMessage>> = Result.success(emptyList())
-        override suspend fun markMessageRead(messageId: String): Result<Unit> = Result.success(Unit)
-        override suspend fun seerrStatus(): Result<JellyPlaySeerrStatus> = Result.failure(IllegalStateException("unused"))
-        override suspend fun seerrLogin(authType: String, username: String?, password: String?, quickConnectSecret: String?): Result<Unit> = Result.failure(IllegalStateException("unused"))
-        override suspend fun seerrLogout(): Result<Unit> = Result.failure(IllegalStateException("unused"))
-        override suspend fun getMdbListRatings(imdbId: String): Result<JellyPlayRatingsResult?> = Result.failure(IllegalStateException("unused"))
-        override suspend fun getTmdbSeasonRatings(tmdbId: String, seasonNumber: Int): Result<Map<Int, JellyPlayEpisodeRatings>?> = Result.failure(IllegalStateException("unused"))
-        override suspend fun getJellyPlaySimilarItems(itemId: String, limit: Int): Result<List<JellyPlayScoredItem>> = Result.failure(IllegalStateException("unused"))
-        override suspend fun getAnimeMarkers(seriesId: String, providerSeriesId: String): Result<JellyPlaySeriesMarkers?> = Result.failure(IllegalStateException("unused"))
-        override suspend fun getCustomRow(title: String): Result<JellyPlayRowResult?> = Result.failure(IllegalStateException("unused"))
-        override suspend fun getSeasonalRow(keyword: String?): Result<JellyPlayRowResult?> = Result.failure(IllegalStateException("unused"))
-        override suspend fun getUserRatings(filter: String?): Result<List<JellyPlayUserRating>> = Result.success(emptyList())
-        override suspend fun getActiveTranscodes(): Result<List<JellyPlayActiveTranscode>> = Result.failure(IllegalStateException("unused"))
-        override suspend fun getMyTranscodes(): Result<List<JellyPlayActiveTranscode>> = Result.failure(IllegalStateException("unused"))
-        override suspend fun cancelTranscode(sessionId: String): Result<Unit> = Result.failure(IllegalStateException("unused"))
-        override suspend fun getAnalyticsOverview(days: Int): Result<com.raulshma.jellyplay.core.network.api.JellyPlayAnalyticsOverview?> = Result.failure(IllegalStateException("unused"))
-        override suspend fun getAnalyticsSessions(userId: String?, since: Long?, limit: Int): Result<com.raulshma.jellyplay.core.network.api.JellyPlayAnalyticsSessions?> = Result.failure(IllegalStateException("unused"))
-        override suspend fun getMyAnalytics(days: Int): Result<com.raulshma.jellyplay.core.network.api.JellyPlayMyAnalytics?> = Result.failure(IllegalStateException("unused"))
+        override suspend fun getUserRatings(filter: String?): Result<List<JellyPlayUserRating>> =
+            Result.success(emptyList())
+
     }
 
     // ------------------------------------------------------------------

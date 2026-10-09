@@ -150,6 +150,7 @@ val settingsModule: Module = module {
         JellyPlaySyncViewModel(
             syncRepository = get(),
             pluginApiClient = get(),
+            deviceRegistry = get(),
             statusStore = get(),
             // The export/import file IO seam (the backup screen's platform
             // seam, reused for the sync bundle's import file pick).
@@ -335,7 +336,7 @@ val settingsModule: Module = module {
             homeDiscoveryStore = get(),
             editor = get(),
             mediaRepository = get(),
-            mediaCollectionReads = get(),
+            libraryApiClient = get(),
             playlistRepository = get(),
         )
     }
@@ -344,8 +345,7 @@ val settingsModule: Module = module {
             homeDiscoveryStore = get(),
             editor = get(),
             mediaRepository = get(),
-            homeFeed = get(),
-            mediaBrowseReads = get(),
+            libraryApiClient = get(),
         )
     }
     viewModel {

@@ -9,9 +9,9 @@ import com.raulshma.jellyplay.core.data.playback.reArmPipTransport
 import com.raulshma.jellyplay.core.data.playback.PlaybackIdentity
 import com.raulshma.jellyplay.core.data.playback.focus.PlaybackSurfaceId
 import com.raulshma.jellyplay.core.data.playback.focus.claimOnPlayEdge
-import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
+import com.raulshma.jellyplay.core.network.api.LiveTvApiClient
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
-import com.raulshma.jellyplay.core.data.util.EpochMillisSource
+import com.raulshma.jellyplay.core.model.EpochMillisSource
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
 import com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeStateStore
@@ -78,7 +78,9 @@ private const val PROGRAM_LOOKAHEAD_HOURS = 12L
  * stays behind the androidMain `Media3LivePlayerEngine` cast),
  * [LivePlayerAudio] (audio-focus/becoming-noisy + raw player volume; the
  * legacy `PlayerAudioLifecycle` wrapper and its `@ApplicationContext Context`
- * died with it) and [TranscodeReasonsRenderer] (legacy core:ui formatter).
+ * died with it) and [TranscodeReasonsRenderer] (the commonMain
+ * `CatalogTranscodeReasonsRenderer` over core:ui's transcode-reason catalog;
+ * the legacy core:ui `TranscodeReasonsFormatter` died with it).
  * The `UserMessageBus`/`UiText` ctor dep died too: record/cancel feedback
  * now flows through [events] as [LivePlayerEvent.Message] values (livetv's
  * LiveTvUserMessage screen-forward seam) and localized error state stays
@@ -100,7 +102,7 @@ private const val PROGRAM_LOOKAHEAD_HOURS = 12L
  * former strict `Instant.parse` ladder died with it).
  */
 class LiveTvPlayerViewModel(
-    private val liveTvRepository: LiveTvRepository,
+    private val liveTvRepository: LiveTvApiClient,
     playbackRepository: PlaybackRepository,
     playbackIdentity: PlaybackIdentity,
     private val appRuntimeStateStore: AppRuntimeStateStore,

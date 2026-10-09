@@ -260,7 +260,7 @@ class JellyPlaySearchHistorySyncAdapterTest {
         mirrorStore.edit { } // settle the write side
         assertEquals(
             null,
-            mirrorStore.data.first()[stringPreferencesKey("jpsync.mirror.search.$key")],
+            mirrorStore.data.first()[stringPreferencesKey(JpsyncReservation.mirrorKey("search", key))],
         )
     }
 

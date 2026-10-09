@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.core.data.network
 
 import com.raulshma.jellyplay.core.data.testutil.FakeNetworkMonitor
-import com.raulshma.jellyplay.core.data.testutil.FakeTimeSource
+import com.raulshma.jellyplay.core.testfixtures.FakeTimeSource
 import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.ServerHealth
 import com.raulshma.jellyplay.core.model.ServerInfo

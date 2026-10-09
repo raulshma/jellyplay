@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.core.data.repository
 
-import com.raulshma.jellyplay.core.data.util.EpochMillisSource
+import com.raulshma.jellyplay.core.model.EpochMillisSource
 import com.raulshma.jellyplay.core.database.dao.SearchHistoryDao
 import com.raulshma.jellyplay.core.database.entity.SearchHistoryEntity
 import kotlinx.coroutines.flow.Flow

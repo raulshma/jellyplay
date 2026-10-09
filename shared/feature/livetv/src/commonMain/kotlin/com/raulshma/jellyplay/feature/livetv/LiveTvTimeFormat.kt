@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.feature.livetv
 
-import com.raulshma.jellyplay.core.data.util.EpochMillisSource
+import com.raulshma.jellyplay.core.model.EpochMillisSource
 import com.raulshma.jellyplay.core.model.LiveTvProgram
 import kotlin.time.Instant
 import kotlinx.datetime.LocalDateTime

@@ -3,7 +3,7 @@ package com.raulshma.jellyplay.core.data.network
 import com.raulshma.jellyplay.core.concurrency.SingleFlight
 import com.raulshma.jellyplay.core.concurrency.TaskBundle
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
-import com.raulshma.jellyplay.core.data.util.EpochMillisSource
+import com.raulshma.jellyplay.core.model.EpochMillisSource
 import com.raulshma.jellyplay.core.data.util.ioDispatcher
 import com.raulshma.jellyplay.core.model.ServerHealth
 import com.raulshma.jellyplay.core.network.api.AuthApiClient

@@ -1,8 +1,8 @@
 package com.raulshma.jellyplay.feature.details
 
+import com.raulshma.jellyplay.core.model.JellyPlayEpisodeScore
+import com.raulshma.jellyplay.core.model.JellyPlayEpisodeMarker
 import com.raulshma.jellyplay.core.model.MediaDetail
-import com.raulshma.jellyplay.core.network.api.JellyPlayAnimeMarker
-import com.raulshma.jellyplay.core.network.api.JellyPlayEpisodeRatings
 
 /**
  * Pure presentation helpers for the jellyfin-plugin-jellyplay detail sections
@@ -18,7 +18,7 @@ import com.raulshma.jellyplay.core.network.api.JellyPlayEpisodeRatings
  */
 
 /**
- * The IMDb id the mdblist ratings probe ([com.raulshma.jellyplay.core.network.api.JellyPlayPluginApiClient.getMdbListRatings])
+ * The IMDb id the mdblist ratings probe (`JellyPlayRatingsRoutes.getMdbListRatings`)
  * is keyed on. Resolution order mirrors [resolveTmdbId]:
  *   1. `imdb` provider id
  *   2. `imdbid` provider id
@@ -40,7 +40,7 @@ private val IMDB_ID_REGEX = Regex("""tt\d+""")
 
 /**
  * The series-level provider id the anime-markers probe
- * ([com.raulshma.jellyplay.core.network.api.JellyPlayPluginApiClient.getAnimeMarkers])
+ * (`JellyPlayMarkersRoutes.getAnimeMarkers`)
  * resolves fillers/recaps by. Anime scrapers key on the anime databases
  * first, falling back to tvdb (the id every Jellyfin series carries):
  * anilist → mal → anidb → tvdb, first non-blank wins, null when the series
@@ -58,7 +58,7 @@ private val PROVIDER_SERIES_ID_KEYS = listOf("anilist", "mal", "anidb", "tvdb")
 
 /**
  * The episode-badge kinds the seasons section renders from the plugin's
- * anime markers. The wire `type` strings are the contract's
+ * anime markers. The marker `type` strings are the contract's
  * `filler | mixed | canon | recap`; `canon` (and any forward-compatible
  * unknown type) renders NO badge.
  */
@@ -86,7 +86,7 @@ internal fun animeBadgeKindFor(type: String): AnimeBadgeKind? = when (type.lower
  * rather than crashing). Only badge-carrying kinds are kept — canon
  * episodes are absent from the map and render without a badge.
  */
-internal fun animeBadges(markers: List<JellyPlayAnimeMarker>): Map<Int, AnimeBadgeKind> =
+internal fun animeBadges(markers: List<JellyPlayEpisodeMarker>): Map<Int, AnimeBadgeKind> =
     buildMap {
         for (marker in markers) {
             val kind = animeBadgeKindFor(marker.type) ?: continue
@@ -101,7 +101,7 @@ internal fun animeBadges(markers: List<JellyPlayAnimeMarker>): Map<Int, AnimeBad
  * stays absent). Pure so the fold is directly unit-testable beside
  * [animeBadges].
  */
-internal fun seasonAverageScore(ratings: Map<Int, JellyPlayEpisodeRatings>): Double? {
+internal fun seasonAverageScore(ratings: Map<Int, JellyPlayEpisodeScore>): Double? {
     val scores = ratings.values.mapNotNull { it.tmdbScore }
     if (scores.isEmpty()) return null
     return (scores.sum() / scores.size)

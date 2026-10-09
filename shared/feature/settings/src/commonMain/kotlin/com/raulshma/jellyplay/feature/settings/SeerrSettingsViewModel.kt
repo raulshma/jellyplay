@@ -10,7 +10,7 @@ import com.raulshma.jellyplay.core.model.JellyPlayPluginStatus
 import com.raulshma.jellyplay.core.model.seerr.SeerrAuthMethod
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
 import com.raulshma.jellyplay.core.model.seerr.SeerrStatusResponse
-import com.raulshma.jellyplay.core.network.api.JellyPlayPluginApiClient
+import com.raulshma.jellyplay.core.network.api.JellyPlaySeerrRoutes
 import com.raulshma.jellyplay.core.network.api.JellyPlaySeerrStatus
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.core.ui.viewmodel.MutableComposeState
@@ -69,7 +69,7 @@ class SeerrSettingsViewModel(
      * real singles and the screen renders the mode selector only when the
      * probe reports AVAILABLE with the SeerrBridge feature key.
      */
-    private val pluginApiClient: JellyPlayPluginApiClient? = null,
+    private val pluginApiClient: JellyPlaySeerrRoutes? = null,
     private val pluginStatusStore: JellyPlayPluginStatusStore? = null,
     /**
      * The per-feature gate seam (probe AND the user's toggle) over the store
@@ -491,7 +491,7 @@ class SeerrSettingsViewModel(
     /**
      * The Quick Connect link flow — the AuthViewModel discipline (availability
      * check → initiate → code display → poll → finalize) with the plugin's
-     * [JellyPlayPluginApiClient.seerrLogin] as the finalize step: the plugin
+     * `JellyPlaySeerrRoutes.seerrLogin` as the finalize step: the plugin
      * authorizes the JELLYFIN Quick Connect secret server-side and SSOs into
      * Seerr with it, so the client never handles a Seerr credential. Failures
      * land in [bridgeFailure]; success re-fetches the status (linked).
@@ -532,11 +532,11 @@ class SeerrSettingsViewModel(
     /**
      * The approval poll (the AuthViewModel cadence: one poll per
      * [QC_POLL_INTERVAL_MS], [QC_MAX_ATTEMPTS] total). On approval the code
-     * clears and the finalize runs ([JellyPlayPluginApiClient.seerrLogin]
+     * clears and the finalize runs (`JellyPlaySeerrRoutes.seerrLogin`
      * with the secret); on exhaustion the declared timeout fallback lands.
      */
     private suspend fun pollBridgeQuickConnect(
-        client: JellyPlayPluginApiClient,
+        client: JellyPlaySeerrRoutes,
         repo: AuthRepository,
         secret: String,
     ) {

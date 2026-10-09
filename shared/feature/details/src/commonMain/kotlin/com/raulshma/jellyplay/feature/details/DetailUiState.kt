@@ -108,7 +108,7 @@ data class DetailUiState(
     // an error surface (the plugin contract's gating rule).
     /** Aggregated external ratings (mdblist) for the item's IMDb id, as the
      *  server sent them (source + score entries). Empty = section absent. */
-    val pluginRatings: List<com.raulshma.jellyplay.core.network.api.JellyPlayRatingEntry> = emptyList(),
+    val pluginRatings: List<com.raulshma.jellyplay.core.model.JellyPlayPluginRating> = emptyList(),
     /** Server-scored "More like this" ([JellyPlayPluginFeatures.Recommendations]),
      *  hydrated into displayable items the shared poster row renders. Empty =
      *  section absent; the stock relatedItems row stays in place beside it. */
@@ -127,7 +127,7 @@ data class DetailUiState(
      *  keyed season id → (episode number → ratings). Rendered as compact
      *  score chips on the seasons section's episode rows plus the season
      *  header's average; empty = no scores anywhere. */
-    val seasonRatings: Map<String, Map<Int, com.raulshma.jellyplay.core.network.api.JellyPlayEpisodeRatings>> = emptyMap(),
+    val seasonRatings: Map<String, Map<Int, com.raulshma.jellyplay.core.model.JellyPlayEpisodeScore>> = emptyMap(),
     // Smart play (continue-watching / next-up computed target)
     val smartPlayTarget: SmartPlayTarget? = null,
     // Stream selection (audio/subtitle indices persisted across sessions)

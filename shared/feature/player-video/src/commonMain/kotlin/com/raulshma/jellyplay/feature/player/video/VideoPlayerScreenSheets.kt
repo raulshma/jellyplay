@@ -150,18 +150,18 @@ internal fun PlayerSheetRouter(
             // config-change sheet restore re-enters with the flag reset to
             // false, i.e. the same no-reset re-load this effect always did.
             LaunchedEffect(Unit) {
-                viewModel.subtitles.openSubtitleHub(resetFirst = inputs.subtitleHubResetFirst)
+                viewModel.playbackSession.subtitles.openSubtitleHub(resetFirst = inputs.subtitleHubResetFirst)
                 inputs.onSubtitleHubResetConsumed()
             }
             // Track + subtitle-workflow slices: collected inside the
             // branch — only this hub consumes them while the sheet is open.
             val trackState by viewModel.trackState.collectAsStateWithLifecycle()
-            val subtitleState by viewModel.subtitles.state.collectAsStateWithLifecycle()
+            val subtitleState by viewModel.playbackSession.subtitles.state.collectAsStateWithLifecycle()
             // named style presets: the hub's Style tab is the apply/save/
             // delete surface. Presets are pure data over the subtitle-style
             // controller slice (the screen drives it directly, the funnel's
             // controller-handle carve-out); the list rides the subtitle slice.
-            val userStylePresets by viewModel.subtitleStyleController.userStylePresets
+            val userStylePresets by viewModel.playbackSession.subtitleStyleController.userStylePresets
                 .collectAsStateWithLifecycle(initialValue = emptyList())
             // Custom-mpv-config ownership: which sub-* styling keys the engine
             // yields to Advanced MPV Configuration / mpv.conf this session.
@@ -224,16 +224,16 @@ internal fun PlayerSheetRouter(
                     ?: MpvSubtitleOwnership.NONE,
                 userStylePresets = userStylePresets,
                 onSaveStylePreset = { name ->
-                    viewModel.subtitleStyleController.savePreset(name, uiState.subtitleStyle)
+                    viewModel.playbackSession.subtitleStyleController.savePreset(name, uiState.subtitleStyle)
                 },
                 onDeleteStylePreset = { name ->
-                    viewModel.subtitleStyleController.deletePreset(name)
+                    viewModel.playbackSession.subtitleStyleController.deletePreset(name)
                 },
                 // Get tab
                 downloadSubtitles = subtitleState.remoteSubtitles,
                 isDownloading = subtitleState.isLoadingRemoteSubtitles,
                 remoteSubtitlesError = subtitleState.remoteSubtitlesError,
-                onDownload = { viewModel.subtitles.downloadSubtitle(it) },
+                onDownload = { viewModel.playbackSession.subtitles.downloadSubtitle(it) },
                 onLoadLocalFile = inputs.onLoadLocalSubtitle,
                 searchResults = subtitleState.searchedSubtitles,
                 isSearching = subtitleState.isSearchingSubtitles,
@@ -241,13 +241,13 @@ internal fun PlayerSheetRouter(
                 searchError = subtitleState.subtitleSearchError,
                 cultures = subtitleState.subtitleCultures,
                 defaultLanguage = subtitleState.defaultSearchLanguage,
-                onSearch = { viewModel.subtitles.searchRemoteSubtitles(it) },
-                onDownloadSearched = { viewModel.subtitles.downloadSubtitle(it) },
+                onSearch = { viewModel.playbackSession.subtitles.searchRemoteSubtitles(it) },
+                onDownloadSearched = { viewModel.playbackSession.subtitles.downloadSubtitle(it) },
                 providerSearchResults = subtitleState.providerSearchResults,
                 providerSearchErrors = subtitleState.providerSearchErrors,
                 configuredProviders = subtitleState.configuredSubtitleProviders,
-                onSearchAllProviders = { viewModel.subtitles.searchAllProviders(it) },
-                onDownloadProviderSubtitle = { viewModel.subtitles.downloadProviderSubtitle(it) },
+                onSearchAllProviders = { viewModel.playbackSession.subtitles.searchAllProviders(it) },
+                onDownloadProviderSubtitle = { viewModel.playbackSession.subtitles.downloadProviderSubtitle(it) },
                 downloadingSubtitles = subtitleState.downloadingSubtitles,
                 // "Use" activates the downloaded subtitle as the current track
                 // (resolved from the manager's ready hints); on success the hub
@@ -258,7 +258,7 @@ internal fun PlayerSheetRouter(
                 onUpload = { uriStr, fileName, language, isForced, isHearingImpaired ->
                     // KMP seam: the sheets hand the picked SAF
                     // document as its string form; SubtitleManager consumes it.
-                    viewModel.subtitles.uploadSubtitle(
+                    viewModel.playbackSession.subtitles.uploadSubtitle(
                         uriStr,
                         fileName,
                         language,
@@ -289,7 +289,7 @@ internal fun PlayerSheetRouter(
         is PlayerSheet.PlaybackInfo -> {
             // Track + effects slices: collected inside the branch.
             val trackState by viewModel.trackState.collectAsStateWithLifecycle()
-            val effectsState by viewModel.effects.state.collectAsStateWithLifecycle()
+            val effectsState by viewModel.playbackSession.effects.state.collectAsStateWithLifecycle()
             PlayerModalBottomSheet(
                 onDismissRequest = inputs.dismissSheet,
                 sheetState = rememberModalBottomSheetState(),
@@ -332,20 +332,20 @@ internal fun PlayerSheetRouter(
         }
         is PlayerSheet.AVSync -> {
             // Effects slice: collected inside the branch.
-            val effectsState by viewModel.effects.state.collectAsStateWithLifecycle()
+            val effectsState by viewModel.playbackSession.effects.state.collectAsStateWithLifecycle()
             AVSyncSheet(
                 currentAudioDelayMs = effectsState.audioDelayMs,
-                onAudioDelayChange = { viewModel.effects.setAudioDelay(it) },
+                onAudioDelayChange = { viewModel.playbackSession.effects.setAudioDelay(it) },
                 onDismiss = inputs.dismissSheet,
                 audioDelaySupported = uiState.engineCapabilities.supportsAudioDelay,
             )
         }
         is PlayerSheet.Decoder -> {
             // Effects slice: collected inside the branch.
-            val effectsState by viewModel.effects.state.collectAsStateWithLifecycle()
+            val effectsState by viewModel.playbackSession.effects.state.collectAsStateWithLifecycle()
             DecoderPickerSheet(
                 currentMode = effectsState.decoderMode,
-                onSelect = { viewModel.effects.setDecoderMode(it) },
+                onSelect = { viewModel.playbackSession.effects.setDecoderMode(it) },
                 onDismiss = inputs.dismissSheet,
             )
         }
@@ -367,7 +367,7 @@ internal fun PlayerSheetRouter(
         }
         is PlayerSheet.SyncPlay -> {
             // SyncPlay group-display slice: collected inside the branch.
-            val syncPlayState by viewModel.syncPlay.state.collectAsStateWithLifecycle()
+            val syncPlayState by viewModel.playbackSession.syncPlay.state.collectAsStateWithLifecycle()
             SyncPlayPlayerSheet(
                 groupName = syncPlayState.syncPlayGroupName ?: "Group",
                 participantCount = syncPlayState.syncPlayParticipantCount,
@@ -378,13 +378,13 @@ internal fun PlayerSheetRouter(
                 shuffleMode = syncPlayState.syncPlayShuffleMode,
                 onRepeatModeChange = { viewModel.onEvent(VideoPlayerUiEvent.SetSyncPlayRepeatMode(it)) },
                 onShuffleModeChange = { viewModel.onEvent(VideoPlayerUiEvent.SetSyncPlayShuffleMode(it)) },
-                onTogglePlayPause = { viewModel.syncPlay.togglePlayPause() },
-                onStop = { viewModel.syncPlay.sendStop() },
+                onTogglePlayPause = { viewModel.playbackSession.syncPlay.togglePlayPause() },
+                onStop = { viewModel.playbackSession.syncPlay.sendStop() },
                 onLeave = {
-                    viewModel.syncPlay.leaveGroup()
+                    viewModel.playbackSession.syncPlay.leaveGroup()
                     inputs.onSheetChange(PlayerSheet.None)
                 },
-                onIgnoreWaitChange = { viewModel.syncPlay.setIgnoreWait(it) },
+                onIgnoreWaitChange = { viewModel.playbackSession.syncPlay.setIgnoreWait(it) },
                  onDismiss = inputs.dismissSheet,
              )
          }
@@ -435,15 +435,15 @@ internal fun PlayerSheetRouter(
         }
         is PlayerSheet.SleepTimer -> {
             // Sleep-timer slice: collected inside the branch.
-            val sleepTimerState by viewModel.sleepTimer.state.collectAsStateWithLifecycle()
+            val sleepTimerState by viewModel.playbackSession.sleepTimer.state.collectAsStateWithLifecycle()
             SleepTimerSheetBinder(
                 isActive = sleepTimerState.sleepTimerActive,
                 isEndOfEpisodeMode = sleepTimerState.sleepTimerEndOfEpisode,
                 lastUsedDurationMs = sleepTimerState.sleepTimerLastUsedDurationMs,
                 sleepTimerRemainingFlow = inputs.sleepTimerRemainingFlow,
-                onSelectDuration = { viewModel.sleepTimer.startSleepTimer(it) },
-                onSelectEndOfEpisode = { viewModel.sleepTimer.startSleepTimerEndOfEpisode() },
-                onCancel = { viewModel.sleepTimer.cancelSleepTimer() },
+                onSelectDuration = { viewModel.playbackSession.sleepTimer.startSleepTimer(it) },
+                onSelectEndOfEpisode = { viewModel.playbackSession.sleepTimer.startSleepTimerEndOfEpisode() },
+                onCancel = { viewModel.playbackSession.sleepTimer.cancelSleepTimer() },
                 onDismiss = inputs.dismissSheet,
             )
         }
@@ -458,7 +458,7 @@ internal fun PlayerSheetRouter(
             // mpv render surface. The session render state is the
             // sheet's source of truth; picks apply to the running engine
             // immediately and (with the toggle on) persist to the series row.
-            val sessionRender = viewModel.sessionRender
+            val sessionRender = viewModel.playbackSession.sessionRender
             val global = viewModel.globalMpvConfig
             val effective = sessionRender.effectiveMpvConfig(global)
             val active = sessionRender.override

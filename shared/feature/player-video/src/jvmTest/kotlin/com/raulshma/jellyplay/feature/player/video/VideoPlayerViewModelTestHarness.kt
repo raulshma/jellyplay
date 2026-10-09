@@ -161,7 +161,7 @@ open class VideoPlayerViewModelHarness {
         viewModel = VideoPlayerViewModel(
             platform = FakePlatform(),
             mediaRepository = mediaRepository,
-            mediaExtrasReads = mockk(relaxed = true),
+            libraryApiClient = mockk(relaxed = true),
             lyricsRepository = mockk(relaxed = true),
             playbackRepository = playbackRepository,
             playbackIdentity = mockk<PlaybackIdentity>(relaxed = true).apply {

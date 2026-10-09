@@ -7,7 +7,8 @@ import com.raulshma.jellyplay.core.data.session.JellyPlayPluginStatusStore
 import com.raulshma.jellyplay.core.data.worker.SettingsSyncScheduler
 import com.raulshma.jellyplay.core.model.JellyPlayPluginFeatures
 import com.raulshma.jellyplay.core.model.JellyPlayPluginStatus
-import com.raulshma.jellyplay.core.network.api.JellyPlayPluginApiClient
+import com.raulshma.jellyplay.core.network.api.JellyPlayDeviceRegistryRoutes
+import com.raulshma.jellyplay.core.network.api.JellyPlaySettingsSyncRoutes
 import com.raulshma.jellyplay.core.network.api.JellyPlaySnapshot
 import com.raulshma.jellyplay.core.network.api.JellyPlaySyncAdminUser
 import com.raulshma.jellyplay.core.network.api.JellyPlaySyncDeviceStat
@@ -124,7 +125,8 @@ data class JellyPlaySyncUiState(
  */
 class JellyPlaySyncViewModel(
     private val syncRepository: ProfileSyncRepository,
-    private val pluginApiClient: JellyPlayPluginApiClient,
+    private val pluginApiClient: JellyPlaySettingsSyncRoutes,
+    private val deviceRegistry: JellyPlayDeviceRegistryRoutes,
     private val statusStore: JellyPlayPluginStatusStore,
     /** The export/import file IO seam (Android SAF / desktop files) — the backup screen's seam, reused. */
     private val backupIo: SettingsBackupIo,
@@ -174,7 +176,7 @@ class JellyPlaySyncViewModel(
                 ?: _uiState.value.thisDeviceId
             val status = pluginApiClient.getSyncStatus().getOrNull()
             val history = pluginApiClient.getSyncHistory(limit = HISTORY_LIMIT).getOrNull()
-            val registryDevices = pluginApiClient.getDevices().getOrNull().orEmpty()
+            val registryDevices = deviceRegistry.getDevices().getOrNull().orEmpty()
             val adminUsers = pluginApiClient.adminSyncOverview().getOrNull()?.users
             val snapshots = pluginApiClient.getSnapshots().getOrNull()
             val namespaceEnabled = buildMap {
@@ -294,7 +296,7 @@ class JellyPlaySyncViewModel(
         val deviceId = _uiState.value.thisDeviceId ?: return
         scope.launch {
             if (!syncGateOpen()) return@launch
-            pluginApiClient.renameDevice(deviceId, name = name)
+            deviceRegistry.renameDevice(deviceId, name = name)
                 .onSuccess { refresh() }
         }
     }
@@ -307,7 +309,7 @@ class JellyPlaySyncViewModel(
     fun revokeDevice(deviceId: String) {
         scope.launch {
             if (!syncGateOpen()) return@launch
-            pluginApiClient.revokeDevice(deviceId)
+            deviceRegistry.revokeDevice(deviceId)
                 .onSuccess { refresh() }
         }
     }

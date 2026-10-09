@@ -55,12 +55,15 @@ class ItemSwitchResetOrderTest {
 
     @Test
     fun releaseInternalsVmPart_rebuildsUiState_beforeTheNavigatorResetsTheEpisodeSlice() {
-        val vm = moduleSource("VideoPlayerViewModel.kt")
-        val body = vm
-            .substringAfter("private fun releaseInternalsVmPart()")
-            .substringBefore("\n    fun release()")
+        // The VM half moved session-side with the C6 collapse (every
+        // collaborator it touches is session-internal now) — the order pin
+        // moved with it.
+        val session = moduleSource("PlaybackSession.kt")
+        val body = session
+            .substringAfter("override fun releaseInternalsVmPart()")
+            .substringBefore("override fun clearTrickplay()")
 
-        val rebuild = body.indexOf("_uiState.update { it.keepAcrossItems() }")
+        val rebuild = body.indexOf("uiState.update { it.keepAcrossItems() }")
         val navigatorReset = body.indexOf("episodeContinuation.resetForItemSwitch()")
         assertTrue(rebuild >= 0, "the keepAcrossItems rebuild is missing from releaseInternalsVmPart")
         assertTrue(navigatorReset >= 0, "the episode-slice reset is missing from releaseInternalsVmPart")
@@ -78,8 +81,10 @@ class ItemSwitchResetOrderTest {
         val session = moduleSource("PlaybackSession.kt")
         // Only whitespace may sit between the session half's call and the VM
         // half's hook: the pair is one synchronous call chain on both the
-        // per-item re-initialization path and the full-release path.
-        val adjacency = Regex("releaseInternalsSessionPart\\(\\)\\s*\\n\\s*hooks\\.releaseInternalsVmPart\\(\\)")
+        // per-item re-initialization path and the full-release path. The VM
+        // half rides the session's own lifecycleHooks override since the C6
+        // collapse (the former wiring builder's receiver).
+        val adjacency = Regex("releaseInternalsSessionPart\\(\\)\\s*\\n\\s*lifecycleHooks\\.releaseInternalsVmPart\\(\\)")
         val sites = adjacency.findAll(session).toList()
         assertEquals(
             2,

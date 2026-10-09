@@ -45,8 +45,8 @@ import kotlin.test.assertTrue
 import com.raulshma.jellyplay.core.data.session.HomeSession
 import com.raulshma.jellyplay.core.data.session.PlaybackReportingStatusStore
 import com.raulshma.jellyplay.core.data.session.SessionCacheRegistry
-import com.raulshma.jellyplay.core.data.testutil.FakeTimeSource
-import com.raulshma.jellyplay.core.data.util.TimeSource
+import com.raulshma.jellyplay.core.testfixtures.FakeTimeSource
+import com.raulshma.jellyplay.core.model.TimeSource
 
 /**
  * Exercises [AdminStatisticsRepositoryImpl]'s real decision logic against

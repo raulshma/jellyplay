@@ -11,7 +11,6 @@ import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
-import com.raulshma.jellyplay.core.model.PersonRef
 import com.raulshma.jellyplay.core.model.SearchResult
 import com.raulshma.jellyplay.core.model.Studio
 import com.raulshma.jellyplay.core.model.UserDataChange
@@ -47,13 +46,6 @@ interface MediaRepository {
         limit: Int = 50,
         startIndex: Int = 0,
     ): Result<SearchResult>
-
-    /**
-     * Resolves a library item id by provider (external) id such as `tmdb`, `tvdb`,
-     * or `imdb`. Returns the matching Jellyfin item id, or null when no item has
-     * that provider id. Used to open a Seerr "Available" item in the library.
-     */
-    suspend fun findItemByProviderId(provider: String, id: String): Result<String?>
 
     fun getMediaItemsPaged(
         parentId: String? = null,
@@ -115,14 +107,6 @@ interface MediaRepository {
     ): Result<SearchResult>
 
     /**
-     * Lists the user's collections (Jellyfin BoxSet items) for the detail
-     * screen's "Add to Collection" picker. Remote-only — collections are a
-     * server-side library construct. Returned summaries are not cached: the
-     * picker refetches on every open so newly-created collections appear.
-     */
-    suspend fun getCollections(limit: Int = 100): Result<List<com.raulshma.jellyplay.core.model.CollectionSummary>>
-
-    /**
      * Creates a new collection seeded with the given item ids and returns the
      * new collection's id. Used by the detail screen's Create-Collection flow.
      * Remote-only.
@@ -171,17 +155,20 @@ interface MediaRepository {
 }
 
 /**
- * The music-catalogue family seam of [MediaRepository]: the artist → album →
- * track reads, the instant-mix radio seed, and the theme-song lookup — the
- * members only music surfaces ever call. [MediaRepositoryImpl] implements
- * this seam alongside the wide interface (the [SonarrSeriesOperations]
- * over-the-impl pattern), so a consumer narrows without a second repository
- * instance or a family supertype creeping back onto the union.
+ * The music-catalogue family seam of [MediaRepository]: the album → track
+ * reads and the theme-song lookup — the cached members only music surfaces
+ * ever call. [MediaRepositoryImpl] implements this seam alongside the wide
+ * interface (the [SonarrSeriesOperations] over-the-impl pattern), so a
+ * consumer narrows without a second repository instance or a family supertype
+ * creeping back onto the union. The uncached catalogue reads
+ * (getArtistAlbums / getInstantMix) retired from the seam to
+ * [com.raulshma.jellyplay.core.network.api.LibraryApiClient] — their callers
+ * inject the client family directly.
  *
  * Consumers: the migration is complete on this family's original caller
  * census — the audio playback stack (AudioLibraryBrowser / AudioQueueFacade /
  * ThemeMusicPlayer) and feature:music's artist/album/home ViewModels all
- * inject THIS seam for the catalogue reads now, keeping [MediaRepository]
+ * inject THIS seam for the cached catalogue reads, keeping [MediaRepository]
  * only where they are mixed consumers (detail reads, the user-data change
  * feed). [getAlbumTracks] is the one member that stays dual-declared: the
  * detail provider's session (UnifiedMediaDetailProviderImpl) resolves detail +
@@ -195,8 +182,6 @@ interface MusicCatalogue {
     // so no member here carries one — seam-typed callers pass explicit
     // values.
 
-    suspend fun getArtistAlbums(artistId: String, limit: Int): Result<List<MediaItem>>
-
     /**
      * [force] drops the cached track list first (the freshness lever the
      * album detail's deferred silent refresh needs: a track user-data flip
@@ -204,8 +189,6 @@ interface MusicCatalogue {
      * cached list can only be superseded by an explicit force).
      */
     suspend fun getAlbumTracks(albumId: String, force: Boolean): Result<List<MediaItem>>
-
-    suspend fun getInstantMix(itemId: String, limit: Int): Result<List<MediaItem>>
 
     suspend fun getThemeSongs(itemId: String): Result<List<MediaItem>>
 }
@@ -248,112 +231,10 @@ interface UserDataWriteOperations {
 }
 
 /**
- * The item-attached EXTRAS family seam of [MediaRepository]: the reads that
- * return media attached to one item rather than a browsable slice of the
- * library — Cinema Mode intros (the player session's pre-roll lookup) and the
- * special features / extras (the detail screen's featurettes row). Both are
- * uncached remote-only forwards (an intro/extras row must reflect the server's
- * current plugin configuration, not a TTL snapshot), which is exactly why they
- * left the union: nothing in the repository's cache cluster ever touched them.
- * [MediaRepositoryImpl]'s family impl ([MediaUncachedReadsImpl]) satisfies this
- * seam over [com.raulshma.jellyplay.core.network.api.LibraryApiClient] — the
- * LiveTvRepositoryImpl shape (one client, pure forwards, no cache state).
- */
-interface MediaExtrasReads {
-
-    /**
-     * Cinema Mode intros. Returns the list of trailers/intros configured on the
-     * server for the given item (via Jellyfin's built-in intros endpoint).
-     * Returns an empty list when no intros are available.
-     */
-    suspend fun getIntros(itemId: String): Result<List<MediaItem>>
-
-    /**
-     * Special features / extras (featurettes, deleted scenes, interviews, etc.)
-     * attached to the given item via Jellyfin's `/Items/{id}/SpecialFeatures`
-     * endpoint. Returns an empty list when the item has no extras. Remote-only.
-     */
-    suspend fun getSpecialFeatures(itemId: String): Result<List<MediaItem>>
-}
-
-/**
- * The browse-FACET family seam of [MediaRepository]: the uncached metadata
- * reads that drive pickers and filter rows — the cast/crew People lookup (the
- * discover-row editor's picker, a live search-as-you-type surface where a TTL
- * would only serve stale keystrokes), a person's filmography (the person
- * detail's item grid) and the library's tag facet names. None of these ever
- * grew a cache in [MediaRepositoryImpl] (no TtlCache, no detail-epoch
- * coupling), so they compose into one narrow seam instead of riding the union.
- */
-interface MediaBrowseReads {
-
-    /**
-     * Cast/crew person lookup for the discover-row editor's People picker,
-     * narrowed server-side by [searchTerm]. Deliberately returns the bare
-     * id+name pair: persons have no playable detail surface in the app, so a
-     * MediaItem projection would be dead weight.
-     */
-    suspend fun getPeople(searchTerm: String? = null, limit: Int = 50): Result<List<PersonRef>>
-
-    suspend fun getItemsByPerson(personId: String, limit: Int = 50): Result<List<MediaItem>>
-
-    suspend fun getTags(
-        parentId: String? = null,
-        startIndex: Int = 0,
-        limit: Int = 100,
-    ): Result<List<String>>
-}
-
-/**
- * The SearchResult-shaped collection-read family seam of [MediaRepository]:
- * the three members that run an items query and hand back a page-shaped
- * [SearchResult] — the generic browse workhorse ([getMediaItems]), its
- * favorites preset ([getFavorites], the same query with IsFavorite=true) and
- * the empty-search discovery suggestions. All three are uncached forwards (the
- * paged wrappers own their own store; the favorites/suggestions surfaces
- * refetch per open), so the family left the union without leaving any cache
- * choreography behind. The repository's paged projections
- * ([MediaRepository.getMediaItemsPaged] / [MediaRepository.getFavoritesPaged])
- * stay on the union and reach the same client internally.
- */
-interface MediaCollectionReads {
-
-    suspend fun getMediaItems(
-        parentId: String? = null,
-        /**
-         * Bundles the filter/sort dimensions that always travel together
-         * (mediaTypes, genres, years, tags, sortBy, playedStatus, minRating,
-         * isResumable). Replaces a long primitive parameter list so adding a
-         * dimension is a single field on [LibraryFilters] instead of a signature
-         * edit across repository → paging source → network client.
-         */
-        filters: LibraryFilters = LibraryFilters(),
-        studioIds: List<String>? = null,
-        startIndex: Int = 0,
-        limit: Int = 50,
-        kindFilter: com.raulshma.jellyplay.core.model.ItemKindFilter = com.raulshma.jellyplay.core.model.ItemKindFilter.TOP_LEVEL,
-    ): Result<SearchResult>
-
-    suspend fun getFavorites(
-        mediaTypes: List<MediaType>? = null,
-        limit: Int = 50,
-        startIndex: Int = 0,
-    ): Result<SearchResult>
-
-    /**
-     * Discovery suggestions for the empty search state — favorited/liked movies,
-     * shows and artists surfaced in random order (matches the official
-     * jellyfin-web behavior). Clicking a suggestion should navigate to the
-     * item's detail page.
-     */
-    suspend fun getSearchSuggestions(limit: Int = 20): Result<SearchResult>
-}
-
-/**
  * The home-feed family seam of [MediaRepository]: the home screen's sections
  * payload and its row-scoped verbs — the batched sections fetch, the
  * single-row edge-pull refetch, the cold-open SWR snapshot reads, and the
- * custom-discover row's preview fetch + dice roll. [MediaRepositoryImpl]
+ * custom-discover row's dice roll. [MediaRepositoryImpl]
  * implements this seam alongside the wide interface (the [MusicCatalogue]
  * over-the-impl pattern), so a home-only consumer narrows without a second
  * repository instance or a family supertype creeping back onto the union.
@@ -428,15 +309,6 @@ interface HomeFeed {
         mergeNextUpIntoContinueWatching: Boolean,
         force: Boolean,
     ): Result<HomeSection?>
-
-    /**
-     * Fetches one custom discover row's items fresh from the server (the
-     * editor's unsaved-draft preview) — bypasses every cache by construction
-     * (direct client call, not the home-sections path). A ROLL that must
-     * survive the next periodic home refresh is [rerollDiscoverRow]'s job,
-     * not a hand-sequenced pair with a cache drop.
-     */
-    suspend fun getDiscoverRowItems(row: DiscoverRowConfig): Result<List<MediaItem>>
 
     /**
      * The dice re-roll as ONE operation: drops the caches still carrying the

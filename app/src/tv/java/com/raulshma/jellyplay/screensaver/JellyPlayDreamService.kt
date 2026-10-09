@@ -16,7 +16,7 @@ import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
-import com.raulshma.jellyplay.core.data.repository.MediaCollectionReads
+import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.screensaver.ScreensaverSlice
@@ -53,11 +53,11 @@ class JellyPlayDreamService : DreamService() {
     private val koin by lazy { org.koin.mp.KoinPlatform.getKoin()!! }
     private val authRepository: AuthRepository by lazy { koin.get() }
     private val mediaRepository: MediaRepository by lazy { koin.get() }
-    private val mediaCollectionReads: MediaCollectionReads by lazy { koin.get() }
+    private val libraryApiClient: LibraryApiClient by lazy { koin.get() }
     private val imageUrlProvider: ImageUrlProvider by lazy { koin.get() }
     private val preferencesStore: ScreensaverStore by lazy { koin.get() }
     private val imageProvider by lazy {
-        DreamImageProvider(mediaRepository, mediaCollectionReads, imageUrlProvider, applicationContext)
+        DreamImageProvider(mediaRepository, libraryApiClient, imageUrlProvider, applicationContext)
     }
 
     private val dreamLifecycle = DreamLifecycleOwner()

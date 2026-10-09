@@ -1,7 +1,6 @@
 package com.raulshma.jellyplay.core.data.repository
 
 import com.raulshma.jellyplay.core.database.dao.HomeSectionCacheDao
-import com.raulshma.jellyplay.core.model.CollectionSummary
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
@@ -11,7 +10,7 @@ import com.raulshma.jellyplay.core.network.realtime.UserDataRealtimeChannel
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueImpl
 import com.raulshma.jellyplay.core.data.session.HomeSession
 import com.raulshma.jellyplay.core.data.session.SessionCacheRegistry
-import com.raulshma.jellyplay.core.data.util.SystemTimeSource
+import com.raulshma.jellyplay.core.model.SystemTimeSource
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -723,24 +722,10 @@ class MediaRepositoryImplTest {
     }
 
     // ------------------------------------------------------------------
-    // Collection write/list paths are uncached passthroughs to the apiClient
+    // Collection write paths are uncached passthroughs to the apiClient
     // (the picker refetches on every open so a freshly-created collection is
     // immediately selectable). Pin the delegation here.
     // ------------------------------------------------------------------
-
-    @Test
-    fun `getCollections delegates to apiClient`() = runTest {
-        val collections = listOf(
-            CollectionSummary(id = "c1", name = "Marvel", itemCount = 4),
-        )
-        coEvery { apiClient.getCollections(100) } returns Result.success(collections)
-
-        val result = repository.getCollections()
-
-        assertTrue(result.isSuccess)
-        assertEquals(collections, result.getOrNull())
-        coVerify(exactly = 1) { apiClient.getCollections(100) }
-    }
 
     @Test
     fun `createCollection delegates name and seed ids to apiClient`() = runTest {

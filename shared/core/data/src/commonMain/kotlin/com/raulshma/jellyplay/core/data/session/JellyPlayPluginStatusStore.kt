@@ -2,7 +2,7 @@ package com.raulshma.jellyplay.core.data.session
 
 import com.raulshma.jellyplay.core.model.JellyPlayPluginStatus
 import com.raulshma.jellyplay.core.network.api.JellyPlayCapabilities
-import com.raulshma.jellyplay.core.network.api.JellyPlayPluginApiClient
+import com.raulshma.jellyplay.core.network.api.JellyPlayCapabilitiesRoutes
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -28,7 +28,7 @@ import kotlinx.coroutines.flow.asStateFlow
  * versioning rule, client side).
  */
 class JellyPlayPluginStatusStore(
-    private val apiClient: JellyPlayPluginApiClient,
+    private val apiClient: JellyPlayCapabilitiesRoutes,
     private val sessionCacheRegistry: SessionCacheRegistry,
 ) {
 

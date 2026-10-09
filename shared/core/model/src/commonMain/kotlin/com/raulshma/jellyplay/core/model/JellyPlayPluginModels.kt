@@ -38,3 +38,40 @@ object JellyPlayPluginFeatures {
     const val Push = "push"
     const val Analytics = "analytics"
 }
+
+/**
+ * One mdblist rating chip the detail screen's plugin ratings row renders
+ * (the model projection of the plugin client's `JellyPlayRatingEntry` wire
+ * shape — mapped at the core:network boundary). Scoreless entries render an
+ * empty chip and are dropped before they reach the UI state.
+ */
+data class JellyPlayPluginRating(
+    val source: String,
+    val score: Double? = null,
+    val votes: Int? = null,
+    val url: String? = null,
+)
+
+/**
+ * One episode's TMDB score the detail screen's seasons section renders (the
+ * model projection of the plugin client's `JellyPlayEpisodeRatings` wire
+ * shape — mapped at the core:network boundary). The season header's average
+ * folds over the score-carrying episodes only.
+ */
+data class JellyPlayEpisodeScore(
+    val tmdbScore: Double? = null,
+    val tmdbVotes: Int? = null,
+)
+
+/**
+ * One anime marker the detail screen's seasons section folds into episode
+ * badges (the model projection of the plugin client's `JellyPlayAnimeMarker`
+ * wire shape — mapped at the core:network boundary). The wire `type` strings
+ * are the contract's `filler | mixed | canon | recap`; `canon` (and any
+ * forward-compatible unknown type) renders NO badge.
+ */
+data class JellyPlayEpisodeMarker(
+    val type: String,
+    val episodeNumber: Int,
+    val note: String? = null,
+)

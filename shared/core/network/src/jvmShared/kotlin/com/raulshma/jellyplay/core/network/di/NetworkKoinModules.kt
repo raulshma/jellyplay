@@ -27,6 +27,18 @@ import com.raulshma.jellyplay.core.network.api.LiveTvApiClient
 import com.raulshma.jellyplay.core.network.api.LiveTvApiClientImpl
 import com.raulshma.jellyplay.core.network.api.MediaInfoApiClient
 import com.raulshma.jellyplay.core.network.api.JellyPlayPluginApiClient
+import com.raulshma.jellyplay.core.network.api.JellyPlayAnalyticsRoutes
+import com.raulshma.jellyplay.core.network.api.JellyPlayCapabilitiesRoutes
+import com.raulshma.jellyplay.core.network.api.JellyPlayDeviceRegistryRoutes
+import com.raulshma.jellyplay.core.network.api.JellyPlayEventsRoutes
+import com.raulshma.jellyplay.core.network.api.JellyPlayMarkersRoutes
+import com.raulshma.jellyplay.core.network.api.JellyPlayRecommendationsRoutes
+import com.raulshma.jellyplay.core.network.api.JellyPlayRatingsRoutes
+import com.raulshma.jellyplay.core.network.api.JellyPlayRowsRoutes
+import com.raulshma.jellyplay.core.network.api.JellyPlaySeerrRoutes
+import com.raulshma.jellyplay.core.network.api.JellyPlaySettingsSyncRoutes
+import com.raulshma.jellyplay.core.network.api.JellyPlayTranscodesRoutes
+import com.raulshma.jellyplay.core.network.api.JellyPlayUserDataRoutes
 import com.raulshma.jellyplay.core.network.seerr.SeerrBridge
 import com.raulshma.jellyplay.core.network.api.JellyPlayPluginApiClientImpl
 import com.raulshma.jellyplay.core.network.api.MediaInfoApiClientImpl
@@ -183,6 +195,22 @@ val networkJvmModule: Module = module {
     single<MediaInfoApiClient> { get<MediaInfoApiClientImpl>() }
     single { JellyPlayPluginApiClientImpl(get()) }
     single<JellyPlayPluginApiClient> { get<JellyPlayPluginApiClientImpl>() }
+    // The plugin roles (ADR 0010 §5, the roles split): the ONE impl instance
+    // satisfies every contract-area role, so each binding just re-exposes the
+    // same singleton under its role type — consumers depend on the single
+    // role they read, never on the whole family.
+    single<JellyPlayCapabilitiesRoutes> { get<JellyPlayPluginApiClientImpl>() }
+    single<JellyPlaySettingsSyncRoutes> { get<JellyPlayPluginApiClientImpl>() }
+    single<JellyPlayDeviceRegistryRoutes> { get<JellyPlayPluginApiClientImpl>() }
+    single<JellyPlayEventsRoutes> { get<JellyPlayPluginApiClientImpl>() }
+    single<JellyPlaySeerrRoutes> { get<JellyPlayPluginApiClientImpl>() }
+    single<JellyPlayRatingsRoutes> { get<JellyPlayPluginApiClientImpl>() }
+    single<JellyPlayRecommendationsRoutes> { get<JellyPlayPluginApiClientImpl>() }
+    single<JellyPlayMarkersRoutes> { get<JellyPlayPluginApiClientImpl>() }
+    single<JellyPlayRowsRoutes> { get<JellyPlayPluginApiClientImpl>() }
+    single<JellyPlayUserDataRoutes> { get<JellyPlayPluginApiClientImpl>() }
+    single<JellyPlayTranscodesRoutes> { get<JellyPlayPluginApiClientImpl>() }
+    single<JellyPlayAnalyticsRoutes> { get<JellyPlayPluginApiClientImpl>() }
     single { PluginApiClientImpl(get()) }
     single<PluginApiClient> { get<PluginApiClientImpl>() }
 

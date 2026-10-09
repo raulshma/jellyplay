@@ -6,7 +6,7 @@ import com.raulshma.jellyplay.core.data.download.ActiveDownloadCount
 import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.playback.TrackWithAlbumFallback
-import com.raulshma.jellyplay.core.data.repository.MediaCollectionReads
+import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.data.repository.MusicCatalogue
 import com.raulshma.jellyplay.core.data.repository.UserDataChanges
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
@@ -36,7 +36,7 @@ class MusicHomeViewModel(
     private val userDataChanges: UserDataChanges,
     private val musicCatalogue: MusicCatalogue,
     /** The SearchResult-shaped reads (favorites + browse queries — off the union). */
-    private val mediaCollectionReads: MediaCollectionReads,
+    private val libraryApiClient: LibraryApiClient,
     private val imageUrlProvider: ImageUrlProvider,
     private val audioQueueFacade: MusicQueuePlayer,
     private val activeDownloads: ActiveDownloadCount,
@@ -176,13 +176,13 @@ class MusicHomeViewModel(
         val ok = try {
             coroutineScope {
                 val favArtists = async {
-                    mediaCollectionReads.getFavorites(
+                    libraryApiClient.getFavorites(
                         mediaTypes = listOf(MediaType.ARTIST),
                         limit = 20,
                     ).getOrNull()?.items
                 }
                 val latestAlbums = async {
-                    mediaCollectionReads.getMediaItems(
+                    libraryApiClient.getMediaItems(
                         filters = LibraryFilters(
                             mediaTypes = listOf(MediaType.ALBUM),
                             sortBy = SortOption.DATE_ADDED,
@@ -191,7 +191,7 @@ class MusicHomeViewModel(
                     ).getOrNull()?.items
                 }
                 val recentlyPlayed = async {
-                    mediaCollectionReads.getMediaItems(
+                    libraryApiClient.getMediaItems(
                         filters = LibraryFilters(
                             mediaTypes = listOf(MediaType.AUDIO),
                             sortBy = SortOption.DATE_PLAYED,
@@ -200,7 +200,7 @@ class MusicHomeViewModel(
                     ).getOrNull()?.items
                 }
                 val topRatedAlbums = async {
-                    mediaCollectionReads.getMediaItems(
+                    libraryApiClient.getMediaItems(
                         filters = LibraryFilters(
                             mediaTypes = listOf(MediaType.ALBUM),
                             sortBy = SortOption.RATING,
@@ -209,7 +209,7 @@ class MusicHomeViewModel(
                     ).getOrNull()?.items
                 }
                 val favTracks = async {
-                    mediaCollectionReads.getFavorites(
+                    libraryApiClient.getFavorites(
                         mediaTypes = listOf(MediaType.AUDIO),
                         limit = 20,
                     ).getOrNull()?.items
@@ -280,7 +280,7 @@ class MusicHomeViewModel(
 
     fun surpriseMe(callback: (String) -> Unit) {
         launch {
-            mediaCollectionReads.getMediaItems(
+            libraryApiClient.getMediaItems(
                 filters = LibraryFilters(
                     mediaTypes = listOf(MediaType.AUDIO),
                     sortBy = SortOption.RANDOM,
@@ -313,7 +313,7 @@ class MusicHomeViewModel(
 
     fun playArtist(artistId: String) {
         launch {
-            musicCatalogue.getArtistAlbums(artistId, limit = 50)
+            libraryApiClient.getArtistAlbums(artistId, limit = 50)
                 .onSuccess { albums ->
                     if (albums.isNotEmpty()) {
                         playAlbums(albums)

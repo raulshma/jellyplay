@@ -12,15 +12,15 @@ import kotlin.test.assertSame
 
 /**
  * Pins the commonMain transcode-reason catalog (the ONE token → compose-resource
- * table shared by the android formatter's R-string mirror and the desktop
- * compose-resources seam):
+ * table every consumer resolves through — the video stats overlay/error
+ * dialog, the live error detail and the admin transcodes monitor):
  *
- *  - every [TranscodeReasonKind] has a catalog entry — a kind missing here
- *    would silently fall back to the unknown-token template on desktop;
+ *  - every [TranscodeReasonKind] has a resolvable label path — a kind missing
+ *    its catalog entry would silently fall back to the unknown-token template;
  *  - both token spellings the server uses (SDK SCREAMING_SNAKE, wire
  *    PascalCase) resolve to the same entry;
- *  - the remedy-hint pairing stays aligned with the android table
- *    (engine/decoder/quality classes and the hint-less kinds);
+ *  - the remedy-hint pairings stay in their remedy classes
+ *    (engine/decoder/quality) and the hint-less kinds stay hint-less;
  *  - unknown tokens return null so callers keep the raw text visible.
  */
 class TranscodeReasonCatalogTest {
@@ -48,7 +48,7 @@ class TranscodeReasonCatalogTest {
     }
 
     @Test
-    fun `hint pairings align with the android table`() {
+    fun `hint pairings stay in their remedy classes`() {
         assertEquals(
             Res.string.transcode_reason_hint_engine,
             TranscodeReasonCatalog.lookup("VideoCodecNotSupported")?.hint,

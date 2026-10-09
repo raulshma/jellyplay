@@ -150,7 +150,7 @@ internal fun SeasonsSection(
      * "★ score" chip on the episode rows and the season-average chip beside
      * the section header. Empty = no scores anywhere (silent absence).
      */
-    seasonRatings: Map<String, Map<Int, com.raulshma.jellyplay.core.network.api.JellyPlayEpisodeRatings>> = emptyMap(),
+    seasonRatings: Map<String, Map<Int, com.raulshma.jellyplay.core.model.JellyPlayEpisodeScore>> = emptyMap(),
 ) {
     // ── DEFERRED FOR LOCAL ORIGIN (decided in [SeasonsPresentation.from]) ────
     // The following affordances remain ONLINE-ONLY and are deliberately NOT
@@ -1396,7 +1396,7 @@ internal fun AnimeEpisodeBadge(
  * compact "★ 7.8" badge rendered on the episode rows and beside the seasons
  * header's title (the season average). Chip chrome mirrors
  * [AnimeEpisodeBadge]'s compact sizing; the colors MATCH the plugin ratings
- * section's mdblist chips ([com.raulshma.jellyplay.core.network.api.JellyPlayRatingEntry]
+ * section's mdblist chips (`JellyPlayPluginRating`
  * rendering in MediaDetailBodySections: onSurface 15% / 95%). Rendered only
  * when the plugin sent a score (silent absence).
  */

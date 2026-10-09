@@ -203,7 +203,7 @@ class AudioPlaybackManagerQueueSemanticsTest {
             scope = scope,
             mediaRepository = mediaRepository,
             musicCatalogue = mockk(relaxed = true),
-            mediaCollectionReads = mockk(relaxed = true),
+            libraryApiClient = mockk(relaxed = true),
             playlistRepository = mockk(relaxed = true),
             downloadRepository = mockk(relaxed = true),
             playbackRepository = playbackRepository,

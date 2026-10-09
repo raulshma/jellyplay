@@ -1,11 +1,8 @@
 package com.raulshma.jellyplay.feature.player.video
 
-import com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager
 import com.raulshma.jellyplay.core.testfixtures.FakePositionStore
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflinePlaybackFacade
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
-import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaStreamSelection
 import com.raulshma.jellyplay.core.model.PlayMethod
@@ -18,19 +15,14 @@ import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
-import io.mockk.mockk
 import io.mockk.slot
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.test.Test
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
@@ -43,31 +35,26 @@ import kotlinx.coroutines.test.runTest
  * stop-report + pending-seek join on the release scope), and the transcode
  * fallback's [SessionEvent.InformUser] notices.
  *
- * Conventions: the session's injected scope uses [Dispatchers.Unconfined] so
+ * Conventions: the session's injected scope uses an Unconfined dispatcher so
  * the session's `scope.launch` blocks run synchronously on the test thread;
  * repositories are relaxed mocks and the VM-facing seams
  * ([SessionLifecycleHooks], [SessionPositionStore]) are recording fakes. The
- * release scope is injected too — a real IO scope, built by the test like the
- * production VM does — and cancelled after its work was verified: that
- * teardown must outlive the caller's scope, so it cannot run on the test
- * dispatcher. The wall clock is injected as a controllable fake
- * ([nowMs]), so the seek-freshness window and the persist throttle are pinned
- * deterministically instead of against real time.
+ * session builds its release scope internally ([PlaybackSession.releaseScope],
+ * a real IO scope, the C6 composition-root behavior) — the per-test teardown
+ * cancels it AFTER its work was verified: that teardown must outlive the
+ * caller's scope, so it cannot run on the test dispatcher. The wall clock is
+ * injected as a controllable fake ([nowMs]), so the seek-freshness window and
+ * the persist throttle are pinned deterministically instead of against real
+ * time.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class PlaybackSessionReportingTest {
 
-    /** The session's injected scope — Unconfined so launches run synchronously. */
-    private val sessionScope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
+    /** The construction graph (scheduler-less: the session scope runs on a plain Unconfined dispatcher). */
+    private lateinit var graph: PlaybackSessionTestGraph
 
-    /**
-     * The session's injected release scope — a real IO scope, so release()'s
-     * NonCancellable teardown keeps running after the test body returns.
-     */
-    private val releaseScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-
-    /** The injected wall clock's current reading; [buildSession] resets it. */
-    private var nowMs = 0L
+    /** The injected wall clock's current reading (the graph's controllable fake). */
+    private val nowMs get() = graph.nowMs
 
     private lateinit var playerSessionManager: PlayerSessionManager
     private lateinit var sessionStateFlow: MutableStateFlow<PlayerSessionState>
@@ -81,10 +68,13 @@ class PlaybackSessionReportingTest {
 
     @kotlin.test.AfterTest
     fun tearDown() {
-        // Cancel the injected release scope AFTER its IO work was verified —
-        // the owner's teardown path, as in the VM's onCleared.
-        releaseScope.cancel()
-        sessionScope.cancel()
+        // Cancel the session's internally-built release scope AFTER its IO
+        // work was verified, then the session scope — the owner's teardown
+        // path, as in the VM's onCleared (cancel-after-release ordering).
+        if (this::graph.isInitialized) {
+            session.releaseScope.cancel()
+            graph.sessionScope.cancel()
+        }
     }
 
     @kotlin.test.BeforeTest
@@ -104,51 +94,36 @@ class PlaybackSessionReportingTest {
         mirrorQuality: StreamingQuality = StreamingQuality.AUTO,
         mirrorMode: PlaybackMode = PlaybackMode.AUTO,
     ) {
-        nowMs = 1_000_000L
-        engine = FakeMediaEngine().apply {
-            durationValue = 100_000L
-            advanceTo(30_000L)
-        }
-        sessionStateFlow = MutableStateFlow(
-            PlayerSessionState(currentItemId = "item-1", playSessionId = "server-1"),
-        )
-        playerSessionManager = mockk(relaxed = true)
-        every { playerSessionManager.sessionState } returns sessionStateFlow
-        every { playerSessionManager.engineFlow } returns MutableStateFlow<MediaEngine?>(engine)
-        every { playerSessionManager.engine } returns engine
-        playbackRepository = mockk(relaxed = true)
-        offlinePlaybackFacade = mockk(relaxed = true)
         hooks = RecordingHooks()
-        positionStore = FakePositionStore()
-        progressReporter = mockk(relaxed = true)
-
-        session = PlaybackSession(
-            scope = sessionScope,
-            upgradesPassOutToOverlay = { false },
-            releaseScope = releaseScope,
-            clock = { nowMs },
-            playerSessionManager = playerSessionManager,
-            progressReporter = progressReporter,
-            sessionLoadPipeline = mockk(relaxed = true),
+        graph = PlaybackSessionTestGraph(
             hooks = hooks,
-            mediaSessionController = mockk(relaxed = true),
-            playbackStore = mockk(relaxed = true),
-            adaptiveBitrateManager = mockk(relaxed = true),
-            playbackRepository = playbackRepository,
-            offlinePlaybackFacade = offlinePlaybackFacade,
-            mediaRepository = mockk(relaxed = true),
-            setCinemaIntroState = {},
-            seedDisplayedPositionMs = {},
-            positionStore = positionStore,
-            getStreamingQuality = { mirrorQuality },
-            setUiPlaybackMode = {},
-            getIncognitoModeEnabled = { incognito },
-            setPendingStreams = {},
-            getPlaybackMode = { mirrorMode },
-            directPlayFallbackNotice = { it },
-            passOutHours = flowOf(0),
-            onEngineEventCoordinatorRearmed = {},
+            initialItem = "item-1",
+            initialPlaySessionId = "server-1",
         )
+        graph.nowMs = 1_000_000L
+        engine = graph.engine
+        sessionStateFlow = graph.sessionStateFlow
+        playerSessionManager = graph.playerSessionManager
+        playbackRepository = graph.playbackRepository
+        offlinePlaybackFacade = graph.offlinePlaybackFacade
+        positionStore = graph.positionStore
+        progressReporter = graph.progressReporter
+        session = graph.session
+        if (incognito) {
+            // The incognito gate reads the session's cached preference
+            // aggregate (arm-time collector-fed; the suites don't arm, so the
+            // test seeds it directly — the graph KDoc's flip-the-gate seam).
+            session.cachedAggregate = com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregate(
+                videoPlayer = com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerSlice(
+                    incognitoModeEnabled = true,
+                ),
+            )
+        }
+        if (mirrorQuality != StreamingQuality.AUTO || mirrorMode != PlaybackMode.AUTO) {
+            graph.uiState.update {
+                it.copy(uiPrefs = it.uiPrefs.copy(streamingQuality = mirrorQuality, playbackMode = mirrorMode))
+            }
+        }
     }
 
     // ── getReportPositionMs: the 3-second seek-freshness window ────────────

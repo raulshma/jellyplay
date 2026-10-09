@@ -144,7 +144,7 @@ internal fun BoxScope.PlayerStatusOverlayTier(
         detectedAspectRatio = inputs.detectedAspectRatio,
         aspectRatio = inputs.aspectRatio,
     )
-    AbRepeatBadge(events = viewModel.abRepeat.events)
+    AbRepeatBadge(events = viewModel.playbackSession.abRepeat.events)
 
     ZoomBadge(videoZoom = inputs.videoZoom)
 

@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.core.data.playback
 
-import com.raulshma.jellyplay.core.data.repository.MusicCatalogue
+import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
@@ -34,7 +34,7 @@ import java.util.concurrent.CopyOnWriteArrayList
 
 /**
  * Plain-JVM test over the facade's three mocked seams ([AudioQueueManager],
- * [MusicCatalogue], [ImageUrlProvider]) — no Robolectric, no concrete
+ * [LibraryApiClient], [ImageUrlProvider]) — no Robolectric, no concrete
  * AudioPlaybackManager (its constructor pulls in ~20 collaborators).
  *
  * `Main` is the shared [StandardTestDispatcher] so the dispatcher-contract
@@ -47,7 +47,7 @@ class AudioQueueFacadeTest {
     private val testDispatcher = StandardTestDispatcher()
 
     private val queueManager: AudioQueueManager = mockk(relaxed = true)
-    private val musicCatalogue: MusicCatalogue = mockk()
+    private val libraryApiClient: LibraryApiClient = mockk()
     private val imageUrlProvider: ImageUrlProvider = mockk(relaxed = true)
 
     private lateinit var facade: DefaultAudioQueueFacade
@@ -57,7 +57,7 @@ class AudioQueueFacadeTest {
         Dispatchers.setMain(testDispatcher)
         facade = DefaultAudioQueueFacade(
             queueManager = queueManager,
-            musicCatalogue = musicCatalogue,
+            libraryApiClient = libraryApiClient,
             imageUrlProvider = imageUrlProvider,
             radioScope = CoroutineScope(SupervisorJob() + testDispatcher),
         )
@@ -178,7 +178,7 @@ class AudioQueueFacadeTest {
     @Test
     fun `startInstantMix plays the fetched mix at index 0 with the fallback applied`() = runTest(testDispatcher) {
         val guardThreads = CopyOnWriteArrayList<String>()
-        coEvery { musicCatalogue.getInstantMix("seed", 100) } returns Result.success(
+        coEvery { libraryApiClient.getInstantMix("seed", 100) } returns Result.success(
             listOf(track("m1", album = null), track("m2", album = "Own Album")),
         )
 
@@ -200,7 +200,7 @@ class AudioQueueFacadeTest {
 
     @Test
     fun `startInstantMix on empty mix returns Empty without playing`() = runTest(testDispatcher) {
-        coEvery { musicCatalogue.getInstantMix("seed", 100) } returns Result.success(emptyList())
+        coEvery { libraryApiClient.getInstantMix("seed", 100) } returns Result.success(emptyList())
 
         assertEquals(AudioQueueOutcome.Empty, facade.startInstantMix("seed"))
         verify { queueManager wasNot Called }
@@ -209,7 +209,7 @@ class AudioQueueFacadeTest {
     @Test
     fun `startInstantMix on repository failure returns Failed with the cause`() = runTest(testDispatcher) {
         val boom = RuntimeException("boom")
-        coEvery { musicCatalogue.getInstantMix("seed", 100) } returns Result.failure(boom)
+        coEvery { libraryApiClient.getInstantMix("seed", 100) } returns Result.failure(boom)
 
         val outcome = facade.startInstantMix("seed")
 
@@ -220,7 +220,7 @@ class AudioQueueFacadeTest {
 
     @Test
     fun `startInstantMix on guard veto returns Suppressed without playing`() = runTest(testDispatcher) {
-        coEvery { musicCatalogue.getInstantMix("seed", 100) } returns Result.success(listOf(track("m1")))
+        coEvery { libraryApiClient.getInstantMix("seed", 100) } returns Result.success(listOf(track("m1")))
 
         val outcome = facade.startInstantMix("seed") { false }
 
@@ -300,7 +300,7 @@ class AudioQueueFacadeTest {
         val indexFlow = MutableStateFlow(0)
         every { queueManager.queue } returns queueFlow
         every { queueManager.currentIndex } returns indexFlow
-        coEvery { musicCatalogue.getInstantMix(any(), any()) } returns Result.success(listOf(track("m1")))
+        coEvery { libraryApiClient.getInstantMix(any(), any()) } returns Result.success(listOf(track("m1")))
 
         facade.startRadio("seed")
         assertTrue(facade.radioState.value.active)

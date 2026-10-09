@@ -18,10 +18,7 @@ import com.raulshma.jellyplay.core.data.repository.HomeFeed
 import com.raulshma.jellyplay.core.data.repository.LyricsRepository
 import com.raulshma.jellyplay.core.data.repository.LyricsRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.LocalStreamProbe
-import com.raulshma.jellyplay.core.data.repository.MediaBrowseReads
-import com.raulshma.jellyplay.core.data.repository.MediaCollectionReads
 import com.raulshma.jellyplay.core.data.repository.MediaDetailProvider
-import com.raulshma.jellyplay.core.data.repository.MediaExtrasReads
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryAccess
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryCacheInvalidation
@@ -193,17 +190,6 @@ class DataKoinModulesTest {
             assertTrue(
                 koin.get<UserDataChanges>() === koin.get<MediaRepository>(),
                 "UserDataChanges must alias the MediaRepositoryImpl single (one impl, two seams)",
-            )
-            // The uncached browse-read families are their OWN impl single
-            // (MediaUncachedReadsImpl over LibraryApiClient — not a view of the
-            // media single), with the three seams aliasing it.
-            assertResolves<MediaExtrasReads>(koin)
-            assertResolves<MediaBrowseReads>(koin)
-            assertResolves<MediaCollectionReads>(koin)
-            assertTrue(
-                koin.get<MediaExtrasReads>() === koin.get<MediaBrowseReads>() &&
-                    koin.get<MediaBrowseReads>() === koin.get<MediaCollectionReads>(),
-                "the three uncached-read seams must alias the MediaUncachedReadsImpl single (one impl, three seams)",
             )
             assertTrue(
                 koin.get<SeerrServiceDirectory>() === koin.get<SeerrRepository>(),

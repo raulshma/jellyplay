@@ -7,7 +7,7 @@ import com.raulshma.jellyplay.core.data.download.DownloadOutcomeMessenger
 import com.raulshma.jellyplay.core.data.download.QuickDownloadActions
 import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
-import com.raulshma.jellyplay.core.data.repository.MediaBrowseReads
+import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
@@ -68,7 +68,7 @@ private data class PagedQueryKey(
 internal class LibraryViewModel(
     private val mediaRepository: MediaRepository,
     /** The browse-facet seam (the filter row's tag list — off the union). */
-    private val mediaBrowseReads: MediaBrowseReads,
+    private val libraryApiClient: LibraryApiClient,
     private val offlineRepository: OfflineRepository,
     private val quickDownloadActions: QuickDownloadActions,
     private val offlineModeManager: OfflineModeManager,
@@ -102,7 +102,7 @@ internal class LibraryViewModel(
     private val filterDimensions = FilterDimensionsHolder(
         scope = scope,
         getGenres = { force -> mediaRepository.getGenres(force = force) },
-        getTags = { mediaBrowseReads.getTags() },
+        getTags = { libraryApiClient.getTags() },
     )
     val genres: StateFlow<List<Genre>> = filterDimensions.genres
     val tags: StateFlow<List<String>> = filterDimensions.tags

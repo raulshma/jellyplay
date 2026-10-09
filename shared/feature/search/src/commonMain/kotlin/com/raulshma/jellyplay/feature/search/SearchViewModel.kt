@@ -42,10 +42,9 @@ import com.raulshma.jellyplay.core.data.util.FilterDimensionsHolder
 @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
 internal class SearchViewModel(
     private val mediaRepository: MediaRepository,
-    /** The browse-facet seam (the filter row's tag list — off the union). */
-    private val mediaBrowseReads: com.raulshma.jellyplay.core.data.repository.MediaBrowseReads,
-    /** The SearchResult-shaped reads (the empty-search suggestions — off the union). */
-    private val mediaCollectionReads: com.raulshma.jellyplay.core.data.repository.MediaCollectionReads,
+    /** The library client's uncached reads (the filter row's tag list and the
+     *  empty-search suggestions — both off the union). */
+    private val libraryApiClient: com.raulshma.jellyplay.core.network.api.LibraryApiClient,
     private val userDataMutator: com.raulshma.jellyplay.core.data.repository.UserDataMutator,
     private val imageUrlProvider: ImageUrlProvider,
     private val seerrRepository: SeerrRepository,
@@ -72,7 +71,7 @@ internal class SearchViewModel(
     private val filterDimensions = FilterDimensionsHolder(
         scope = scope,
         getGenres = { force -> mediaRepository.getGenres(force = force) },
-        getTags = { mediaBrowseReads.getTags() },
+        getTags = { libraryApiClient.getTags() },
     )
     val genres: StateFlow<List<Genre>> = filterDimensions.genres
     val tags: StateFlow<List<String>> = filterDimensions.tags
@@ -233,7 +232,7 @@ internal class SearchViewModel(
         if (suggestionsLoaded) return
         suggestionsLoaded = true
         launch {
-            val result = mediaCollectionReads.getSearchSuggestions(limit = 20)
+            val result = libraryApiClient.getSearchSuggestions(limit = 20)
             _suggestions.set(result.getOrElse { SearchResult(emptyList(), 0, 0) }.items)
         }
     }

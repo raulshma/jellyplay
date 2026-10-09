@@ -3,8 +3,8 @@ package com.raulshma.jellyplay.feature.details
 import com.raulshma.jellyplay.core.model.ExternalUrl
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.JellyPlayEpisodeMarker
 import com.raulshma.jellyplay.core.model.MediaType
-import com.raulshma.jellyplay.core.network.api.JellyPlayAnimeMarker
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -120,9 +120,9 @@ class PluginDetailPresentationTest {
     fun `marker types fold to badge kinds`() {
         val badges = animeBadges(
             listOf(
-                JellyPlayAnimeMarker(type = "filler", episodeNumber = 3),
-                JellyPlayAnimeMarker(type = "mixed", episodeNumber = 5),
-                JellyPlayAnimeMarker(type = "recap", episodeNumber = 1),
+                JellyPlayEpisodeMarker(type = "filler", episodeNumber = 3),
+                JellyPlayEpisodeMarker(type = "mixed", episodeNumber = 5),
+                JellyPlayEpisodeMarker(type = "recap", episodeNumber = 1),
             ),
         )
         assertEquals(
@@ -139,8 +139,8 @@ class PluginDetailPresentationTest {
     fun `canon and unknown types render no badge`() {
         val badges = animeBadges(
             listOf(
-                JellyPlayAnimeMarker(type = "canon", episodeNumber = 2),
-                JellyPlayAnimeMarker(type = "something-new", episodeNumber = 9),
+                JellyPlayEpisodeMarker(type = "canon", episodeNumber = 2),
+                JellyPlayEpisodeMarker(type = "something-new", episodeNumber = 9),
             ),
         )
         assertEquals(emptyMap(), badges)
@@ -150,8 +150,8 @@ class PluginDetailPresentationTest {
     fun `type matching is case-insensitive and later duplicates win`() {
         val badges = animeBadges(
             listOf(
-                JellyPlayAnimeMarker(type = "Filler", episodeNumber = 4),
-                JellyPlayAnimeMarker(type = "RECAP", episodeNumber = 4),
+                JellyPlayEpisodeMarker(type = "Filler", episodeNumber = 4),
+                JellyPlayEpisodeMarker(type = "RECAP", episodeNumber = 4),
             ),
         )
         assertEquals(mapOf(4 to AnimeBadgeKind.RECAP), badges)

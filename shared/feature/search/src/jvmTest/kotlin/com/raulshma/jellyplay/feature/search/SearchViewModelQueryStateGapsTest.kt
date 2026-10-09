@@ -1,8 +1,7 @@
 package com.raulshma.jellyplay.feature.search
 
 import com.raulshma.jellyplay.core.data.download.QuickDownloadActions
-import com.raulshma.jellyplay.core.data.repository.MediaBrowseReads
-import com.raulshma.jellyplay.core.data.repository.MediaCollectionReads
+import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
@@ -66,8 +65,7 @@ class SearchViewModelQueryStateGapsTest {
     private val mainDispatcher = StandardTestDispatcher()
 
     private lateinit var mediaRepository: MediaRepository
-    private lateinit var mediaBrowseReads: MediaBrowseReads
-    private lateinit var mediaCollectionReads: MediaCollectionReads
+    private lateinit var libraryApiClient: LibraryApiClient
     private val userDataMutator: UserDataMutator = mockk(relaxed = true)
     private val imageUrlProvider: ImageUrlProvider = mockk(relaxed = true)
     private val seerrRepository: SeerrRepository = mockk(relaxed = true)
@@ -83,9 +81,7 @@ class SearchViewModelQueryStateGapsTest {
         Dispatchers.setMain(mainDispatcher)
         mediaRepository = mockk(relaxed = true)
 
-        mediaBrowseReads = mockk(relaxed = true)
-
-        mediaCollectionReads = mockk(relaxed = true)
+        libraryApiClient = mockk(relaxed = true)
 
         every { mediaSearchEngine.debounceMs } returns 300L
         every { mediaSearchEngine.recentHistory() } returns flowOf(emptyList())
@@ -93,8 +89,8 @@ class SearchViewModelQueryStateGapsTest {
         every { searchFiltersStore.searchFiltersJson } returns MutableStateFlow(null)
         every { seerrRepository.preferences } returns MutableStateFlow(SeerrPreferences())
         coEvery { mediaRepository.getGenres(any()) } returns Result.success(emptyList())
-        coEvery { mediaBrowseReads.getTags(any(), any(), any()) } returns Result.success(emptyList())
-        coEvery { mediaCollectionReads.getSearchSuggestions(any()) } returns Result.success(
+        coEvery { libraryApiClient.getTags(any(), any(), any()) } returns Result.success(emptyList())
+        coEvery { libraryApiClient.getSearchSuggestions(any()) } returns Result.success(
             SearchResult(emptyList(), 0, 0)
         )
 
@@ -108,8 +104,7 @@ class SearchViewModelQueryStateGapsTest {
 
     private fun createViewModel() = SearchViewModel(
         mediaRepository,
-        mediaBrowseReads,
-        mediaCollectionReads,
+        libraryApiClient,
         userDataMutator,
         imageUrlProvider,
         seerrRepository,
@@ -138,8 +133,7 @@ class SearchViewModelQueryStateGapsTest {
         advanceUntilIdle()
         clearMocks(
             mediaRepository,
-            mediaBrowseReads,
-            mediaCollectionReads,
+            libraryApiClient,
             answers = false,
             recordedCalls = true,
             childMocks = false,
@@ -153,7 +147,7 @@ class SearchViewModelQueryStateGapsTest {
         val second = com.raulshma.jellyplay.core.model.MediaItem(
             id = "s2", name = "Second Pick", mediaType = MediaType.MOVIE,
         )
-        coEvery { mediaCollectionReads.getSearchSuggestions(any()) } returnsMany listOf(
+        coEvery { libraryApiClient.getSearchSuggestions(any()) } returnsMany listOf(
             Result.success(SearchResult(listOf(first), 1, 0)),
             Result.success(SearchResult(listOf(second), 1, 0)),
         )
@@ -177,16 +171,16 @@ class SearchViewModelQueryStateGapsTest {
         // (StateFlow conflation — no new emission reaches the reload
         // collector). search("") clears the list synchronously, and without a
         // new debounced emission nothing re-populates it.
-        coVerify(exactly = 2) { mediaCollectionReads.getSearchSuggestions(any()) }
+        coVerify(exactly = 2) { libraryApiClient.getSearchSuggestions(any()) }
         viewModel.onEvent(SearchUiEvent.Search(""))
         advanceUntilIdle()
         assertTrue(viewModel.suggestions.value.isEmpty())
-        coVerify(exactly = 2) { mediaCollectionReads.getSearchSuggestions(any()) }
+        coVerify(exactly = 2) { libraryApiClient.getSearchSuggestions(any()) }
     }
 
     @Test
     fun `a failed discovery fetch degrades to empty suggestions`() = runTest(mainDispatcher) {
-        coEvery { mediaCollectionReads.getSearchSuggestions(any()) } returns
+        coEvery { libraryApiClient.getSearchSuggestions(any()) } returns
             Result.failure(RuntimeException("network down"))
         viewModel = createViewModel()
         backgroundScope.launch { viewModel.suggestions.collect { } }

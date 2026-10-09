@@ -2,7 +2,7 @@ package com.raulshma.jellyplay.feature.music.moodplaylist
 
 import com.raulshma.jellyplay.core.data.playback.AudioQueueOutcome
 import com.raulshma.jellyplay.feature.music.MusicQueuePlayer
-import com.raulshma.jellyplay.core.data.repository.MediaCollectionReads
+import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.MoodPlaylistRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
@@ -52,7 +52,7 @@ class MoodPlaylistsViewModelTest {
     private val mainDispatcher = StandardTestDispatcher()
 
         private val mediaRepository: MediaRepository = mockk()
-    private val mediaCollectionReads: MediaCollectionReads = mockk()
+    private val libraryApiClient: LibraryApiClient = mockk()
     private val imageUrlProvider: ImageUrlProvider = mockk(relaxed = true)
     private val audioQueueFacade: MusicQueuePlayer = mockk()
     private val moodPlaylistRepository: MoodPlaylistRepository = mockk()
@@ -69,7 +69,7 @@ class MoodPlaylistsViewModelTest {
         every { moodPlaylistRepository.observePreferences() } returns preferencesFlow
         viewModel = MoodPlaylistsViewModel(
             mediaRepository = mediaRepository,
-            mediaCollectionReads = mediaCollectionReads,
+            libraryApiClient = libraryApiClient,
             imageUrlProvider = imageUrlProvider,
             audioQueueFacade = audioQueueFacade,
             moodPlaylistRepository = moodPlaylistRepository,
@@ -148,7 +148,7 @@ class MoodPlaylistsViewModelTest {
         val excluded = track("e", name = "Excluded", genres = listOf("Rock", "Metal"), rating = 5f)
         val noMatch = track("n", name = "NoMatch", genres = listOf("Pop"), rating = 5f)
         val unrated = track("nc", name = "NoRating", genres = listOf("Rock"), rating = null)
-        coEvery { mediaCollectionReads.getMediaItems(any(), any(), any(), any(), any(), any()) } returns
+        coEvery { libraryApiClient.getMediaItems(any(), any(), any(), any(), any(), any(), any()) } returns
             Result.success(SearchResult(listOf(keep, belowMin, excluded, noMatch, unrated), 5, 0))
 
         viewModel.generatePlaylist(playlist)
@@ -163,7 +163,7 @@ class MoodPlaylistsViewModelTest {
     @Test
     fun generatePlaylist_sortsByTitleAndTakesMaxItems() = runTest(mainDispatcher) {
         val playlist = moodPlaylist(sortBy = MoodPlaylistSort.TITLE, maxItems = 2)
-        coEvery { mediaCollectionReads.getMediaItems(any(), any(), any(), any(), any(), any()) } returns
+        coEvery { libraryApiClient.getMediaItems(any(), any(), any(), any(), any(), any(), any()) } returns
             Result.success(
                 SearchResult(
                     listOf(
@@ -184,7 +184,7 @@ class MoodPlaylistsViewModelTest {
 
     @Test
     fun generatePlaylist_failure_setsErrorAndStopsLoading() = runTest(mainDispatcher) {
-        coEvery { mediaCollectionReads.getMediaItems(any(), any(), any(), any(), any(), any()) } returns
+        coEvery { libraryApiClient.getMediaItems(any(), any(), any(), any(), any(), any(), any()) } returns
             Result.failure(RuntimeException("boom"))
 
         viewModel.generatePlaylist(moodPlaylist())
@@ -196,7 +196,7 @@ class MoodPlaylistsViewModelTest {
 
     @Test
     fun clearGenerated_resetsItemsAndSelection() = runTest(mainDispatcher) {
-        coEvery { mediaCollectionReads.getMediaItems(any(), any(), any(), any(), any(), any()) } returns
+        coEvery { libraryApiClient.getMediaItems(any(), any(), any(), any(), any(), any(), any()) } returns
             Result.success(SearchResult(listOf(track("a", genres = listOf("rock"))), 1, 0))
         viewModel.generatePlaylist(moodPlaylist())
         awaitGenerated { viewModel.generatedItems.isNotEmpty() }
@@ -210,7 +210,7 @@ class MoodPlaylistsViewModelTest {
     @Test
     fun playAll_delegatesGeneratedItemsWithStartIndex() = runTest(mainDispatcher) {
         val kept = track("a", genres = listOf("rock"))
-        coEvery { mediaCollectionReads.getMediaItems(any(), any(), any(), any(), any(), any()) } returns
+        coEvery { libraryApiClient.getMediaItems(any(), any(), any(), any(), any(), any(), any()) } returns
             Result.success(SearchResult(listOf(kept), 1, 0))
         coEvery { audioQueueFacade.playTracks(any(), any(), any(), any(), any()) } returns
             AudioQueueOutcome.Started(emptyList(), 0)

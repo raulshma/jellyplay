@@ -55,7 +55,7 @@ class JellyPlaySearchHistorySyncAdapter(
     override val namespace: String = NAMESPACE,
 ) : ProfileSyncAdapter {
 
-    private val mirror = SyncMirror(mirrorStore, MIRROR_PREFIX)
+    private val mirror = SyncMirror(mirrorStore, JpsyncReservation.mirrorPrefix(NAMESPACE))
 
     // ------------------------------------------------------------------
     // key <-> query: the fixed-length sha1 hex of the query text. The hash
@@ -137,6 +137,5 @@ class JellyPlaySearchHistorySyncAdapter(
 
         /** The client's own history cap (the DAO's `insertAndEvict` default) — sync never grows the store. */
         const val CAP = 50
-        const val MIRROR_PREFIX = "jpsync.mirror.search."
     }
 }

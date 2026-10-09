@@ -14,7 +14,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * Delegation pins for [SyncPlayRepositoryImpl] (the MediaUncachedReadsImplTest
+ * Delegation pins for [SyncPlayRepositoryImpl] (the stateless-forward
  * shape): the family is four stateless members with no cache state, so the
  * only behavior to pin is the argument-exact forward per member — the two
  * reads and the set-new-queue push ride [SyncPlayApiClient], and

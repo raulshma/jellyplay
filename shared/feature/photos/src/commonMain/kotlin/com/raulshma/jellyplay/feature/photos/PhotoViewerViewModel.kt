@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.feature.photos
 
 import com.raulshma.jellyplay.core.data.error.UserErrorMessages
-import com.raulshma.jellyplay.core.data.repository.MediaCollectionReads
+import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.MediaDetail
@@ -15,7 +15,7 @@ import kotlinx.coroutines.isActive
 class PhotoViewerViewModel(
     private val mediaRepository: MediaRepository,
     /** The SearchResult-shaped reads (the sibling-photos query — off the union). */
-    private val mediaCollectionReads: MediaCollectionReads,
+    private val libraryApiClient: LibraryApiClient,
     private val imageUrlProvider: ImageUrlProvider,
     private val photoExport: PhotoExport,
 ) : JellyPlayViewModel() {
@@ -81,7 +81,7 @@ class PhotoViewerViewModel(
             }
 
             if (parentId != null) {
-                val siblingsResult = mediaCollectionReads.getMediaItems(
+                val siblingsResult = libraryApiClient.getMediaItems(
                     parentId = parentId,
                     filters = com.raulshma.jellyplay.core.model.LibraryFilters(
                         mediaTypes = listOf(MediaType.PHOTO),

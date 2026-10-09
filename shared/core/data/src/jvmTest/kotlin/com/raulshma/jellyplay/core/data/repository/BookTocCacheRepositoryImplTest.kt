@@ -2,7 +2,7 @@ package com.raulshma.jellyplay.core.data.repository
 
 import com.raulshma.jellyplay.core.database.dao.BookTocCacheDao
 import com.raulshma.jellyplay.core.database.entity.BookTocCacheEntity
-import com.raulshma.jellyplay.core.data.util.EpochMillisSource
+import com.raulshma.jellyplay.core.model.EpochMillisSource
 import com.raulshma.jellyplay.core.model.BookFormat
 import com.raulshma.jellyplay.core.model.BookTocEntry
 import kotlinx.coroutines.flow.Flow

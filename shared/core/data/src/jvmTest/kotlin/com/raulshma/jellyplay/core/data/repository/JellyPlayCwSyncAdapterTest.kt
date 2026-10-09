@@ -97,7 +97,7 @@ class JellyPlayCwSyncAdapterTest {
         mirrorStore.edit { } // settle the write side
         assertEquals(
             null,
-            mirrorStore.data.first()[stringPreferencesKey("jpsync.mirror.cw.$key")],
+            mirrorStore.data.first()[stringPreferencesKey(JpsyncReservation.mirrorKey("cw", key))],
         )
     }
 

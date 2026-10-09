@@ -8,7 +8,7 @@ import com.raulshma.jellyplay.core.model.BookProgressPolicy
 import com.raulshma.jellyplay.core.model.JellyPlayPluginFeatures
 import com.raulshma.jellyplay.core.network.api.JellyPlayBookmark
 import com.raulshma.jellyplay.core.network.api.JellyPlayBookmarkRequest
-import com.raulshma.jellyplay.core.network.api.JellyPlayPluginApiClient
+import com.raulshma.jellyplay.core.network.api.JellyPlayUserDataRoutes
 import kotlinx.coroutines.flow.first
 import kotlin.math.roundToLong
 
@@ -68,7 +68,7 @@ internal fun positionSecondsToTicks(seconds: Double): Long =
  */
 class BookmarksSyncRepositoryImpl(
     private val bookmarkDao: BookBookmarkDao,
-    private val apiClient: JellyPlayPluginApiClient,
+    private val apiClient: JellyPlayUserDataRoutes,
     private val statusStore: JellyPlayPluginStatusStore,
     /**
      * The per-feature gate seam (probe AND the user's toggle). Nullable with

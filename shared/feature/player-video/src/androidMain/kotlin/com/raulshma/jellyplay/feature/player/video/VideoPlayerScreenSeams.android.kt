@@ -24,7 +24,6 @@ import com.raulshma.jellyplay.core.data.cast.CastSessionEvent
 import com.raulshma.jellyplay.core.data.playback.FrameRateMatcher
 import com.raulshma.jellyplay.core.model.RefreshRateMode
 import com.raulshma.jellyplay.core.model.SubtitleStyle
-import com.raulshma.jellyplay.core.ui.player.TranscodeReasonsFormatter
 import com.raulshma.jellyplay.core.ui.player.findActivity
 import com.raulshma.jellyplay.feature.player.video.components.CastButton
 import com.raulshma.jellyplay.feature.player.video.components.MpvSubtitleOverlay
@@ -331,8 +330,8 @@ internal actual fun CoroutineScope.launchPlatformCastSessionEvents(viewModel: Vi
     launch {
         viewModel.androidCast.castSessionEvents.collect { event ->
             when (event) {
-                is CastSessionEvent.Connected -> viewModel.cast.castToDevice()
-                is CastSessionEvent.Disconnected -> viewModel.cast.onCastDisconnected()
+                is CastSessionEvent.Connected -> viewModel.playbackSession.cast.castToDevice()
+                is CastSessionEvent.Disconnected -> viewModel.playbackSession.cast.onCastDisconnected()
             }
         }
     }
@@ -449,20 +448,5 @@ internal actual fun requestVideoFrameCapture(
                     "Capture failed: ${result.reason}"
             }
         )
-    }
-}
-
-// ── Transcode reasons ──────────────────────────────────────────────────────
-
-actual typealias PlatformTranscodeReason =
-    com.raulshma.jellyplay.core.ui.player.FormattedTranscodeReason
-
-@Composable
-internal actual fun rememberFormattedTranscodeReasons(
-    rawReasons: List<String>,
-): List<PlatformTranscodeReason> {
-    val context = LocalContext.current
-    return remember(context, rawReasons) {
-        TranscodeReasonsFormatter.format(context, rawReasons)
     }
 }

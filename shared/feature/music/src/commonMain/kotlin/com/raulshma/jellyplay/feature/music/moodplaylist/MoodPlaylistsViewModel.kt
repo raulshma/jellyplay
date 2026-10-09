@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.feature.music.moodplaylist
 
-import com.raulshma.jellyplay.core.data.repository.MediaCollectionReads
+import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.MoodPlaylistRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
@@ -19,7 +19,7 @@ import kotlinx.coroutines.flow.collectLatest
 class MoodPlaylistsViewModel(
     private val mediaRepository: MediaRepository,
     /** The SearchResult-shaped reads (the mood query — off the union). */
-    private val mediaCollectionReads: MediaCollectionReads,
+    private val libraryApiClient: LibraryApiClient,
     private val imageUrlProvider: ImageUrlProvider,
     audioQueueFacade: MusicQueuePlayer,
     private val moodPlaylistRepository: MoodPlaylistRepository,
@@ -125,7 +125,7 @@ class MoodPlaylistsViewModel(
         generated.generate(
             playlist = playlist,
             fetch = {
-                mediaCollectionReads.getMediaItems(
+                libraryApiClient.getMediaItems(
                     filters = LibraryFilters(
                         mediaTypes = listOf(MediaType.AUDIO),
                         sortBy = SortOption.RANDOM,

@@ -5,7 +5,7 @@ import com.raulshma.jellyplay.core.data.session.JellyPlayFeatureGate
 import com.raulshma.jellyplay.core.data.session.JellyPlayPluginStatusStore
 import com.raulshma.jellyplay.core.data.session.isAvailableNowOrProbe
 import com.raulshma.jellyplay.core.model.JellyPlayPluginFeatures
-import com.raulshma.jellyplay.core.network.api.JellyPlayPluginApiClient
+import com.raulshma.jellyplay.core.network.api.JellyPlayUserDataRoutes
 import com.raulshma.jellyplay.core.network.api.JellyPlayUserRating
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -52,7 +52,7 @@ data class JellyPlayUserRatingsState(
  * probe-only read keeps the pre-toggle behavior.
  */
 class JellyPlayUserRatingsViewModel(
-    private val pluginApiClient: JellyPlayPluginApiClient,
+    private val pluginApiClient: JellyPlayUserDataRoutes,
     private val statusStore: JellyPlayPluginStatusStore,
     private val featureGate: JellyPlayFeatureGate? = null,
 ) : JellyPlayViewModel() {

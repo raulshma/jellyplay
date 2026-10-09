@@ -6,7 +6,7 @@ import com.raulshma.jellyplay.core.data.repository.ArrRepository
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.DetailLoadState
 import com.raulshma.jellyplay.core.data.repository.MediaDetailProvider
-import com.raulshma.jellyplay.core.data.repository.MediaExtrasReads
+import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.MetadataEditorRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
@@ -103,7 +103,7 @@ class DetailViewModelEnrichmentsTest {
     private val strings = fakeDetailStrings()
 
     private lateinit var mediaRepository: MediaRepository
-    private lateinit var mediaExtrasReads: MediaExtrasReads
+    private lateinit var libraryApiClient: LibraryApiClient
     private lateinit var mediaDetailProvider: MediaDetailProvider
     private lateinit var playbackRepository: PlaybackRepository
     private lateinit var offlineRepository: OfflineRepository
@@ -119,7 +119,7 @@ class DetailViewModelEnrichmentsTest {
     @BeforeTest
     fun setUp() {
         mediaRepository = mockk(relaxed = true)
-        mediaExtrasReads = mockk(relaxed = true)
+        libraryApiClient = mockk(relaxed = true)
         mediaDetailProvider = mockk(relaxed = false)
         playbackRepository = mockk(relaxed = true)
         offlineRepository = mockk(relaxed = true)
@@ -131,7 +131,7 @@ class DetailViewModelEnrichmentsTest {
         val offlineModeManager = mockk<OfflineModeManager>(relaxed = true)
         every { offlineModeManager.networkStatus } returns MutableStateFlow(NetworkStatus.Online)
         coEvery { mediaRepository.getSimilarItems(any(), any()) } returns Result.success(emptyList())
-        coEvery { mediaExtrasReads.getSpecialFeatures(any()) } returns Result.success(emptyList())
+        coEvery { libraryApiClient.getSpecialFeatures(any()) } returns Result.success(emptyList())
         coEvery { playbackRepository.getMediaSegments(any()) } returns Result.success(emptyList())
         coEvery { seerrRepository.getTmdbVideos(any(), any()) } returns Result.success(emptyList())
         coEvery { seerrRepository.getTmdbReviews(any(), any()) } returns Result.success(emptyList())
@@ -157,7 +157,8 @@ class DetailViewModelEnrichmentsTest {
             storageProbe = mockk<DetailStorageProbe>(relaxed = true),
             strings = strings,
             mediaRepository = mediaRepository,
-            mediaExtrasReads = mediaExtrasReads,
+            libraryApiClient = libraryApiClient,
+            collectionApiClient = mockk<com.raulshma.jellyplay.core.network.api.CollectionApiClient>(relaxed = true),
             userDataMutator = FakeUserDataMutator(mediaDetailProvider),
             mediaDetailProvider = mediaDetailProvider,
             playbackRepository = playbackRepository,
@@ -275,7 +276,7 @@ class DetailViewModelEnrichmentsTest {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
         coEvery { mediaRepository.getSimilarItems("m1", limit = 12) } returns
             Result.success(listOf(MediaItem(id = "other", name = "Other", mediaType = MediaType.MOVIE)))
-        coEvery { mediaExtrasReads.getSpecialFeatures("m1") } returns
+        coEvery { libraryApiClient.getSpecialFeatures("m1") } returns
             Result.success(listOf(MediaItem(id = "extra1", name = "Extra", mediaType = MediaType.MOVIE)))
         coEvery { playbackRepository.getMediaSegments("m1") } returns Result.success(
             listOf(
@@ -394,7 +395,7 @@ class DetailViewModelEnrichmentsTest {
         assertFalse(state.hasCreditSegment)
         assertTrue(state.collectionItems.isEmpty())
         coVerify(exactly = 0) { mediaRepository.getSimilarItems(any(), any()) }
-        coVerify(exactly = 0) { mediaExtrasReads.getSpecialFeatures(any()) }
+        coVerify(exactly = 0) { libraryApiClient.getSpecialFeatures(any()) }
         coVerify(exactly = 0) { playbackRepository.getMediaSegments(any()) }
         coVerify(exactly = 0) { mediaRepository.getCollectionItems(any(), any(), any(), any()) }
         coVerify(exactly = 0) { arrRepository.resolveServers() }
@@ -469,7 +470,7 @@ class DetailViewModelEnrichmentsTest {
         assertTrue(state.specialFeatures.isEmpty())
         assertFalse(state.hasIntroSegment)
         coVerify(exactly = 0) { mediaRepository.getSimilarItems(any(), any()) }
-        coVerify(exactly = 0) { mediaExtrasReads.getSpecialFeatures(any()) }
+        coVerify(exactly = 0) { libraryApiClient.getSpecialFeatures(any()) }
         coVerify(exactly = 0) { playbackRepository.getMediaSegments(any()) }
         verify(exactly = 0) { themeMusicPlayer.playThemeFor(any()) }
     }

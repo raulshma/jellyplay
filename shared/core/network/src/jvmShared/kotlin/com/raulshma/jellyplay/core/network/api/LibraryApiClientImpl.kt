@@ -127,7 +127,7 @@ class LibraryApiClientImpl(
     /**
      * The plugin-side leaf source for the home fetcher's PLUGIN_ROW rows
      * (seasonal today; satisfied by the data layer's adapter beside the
-     * [com.raulshma.jellyplay.core.network.api.JellyPlayPluginApiClient] —
+     * `JellyPlayPluginApiClient` (the family) —
      * the capability probe lives in the data layer's status store). Default
      * null = this wiring fetches no plugin rows (unit fakes, graphs without
      * the plugin cluster).

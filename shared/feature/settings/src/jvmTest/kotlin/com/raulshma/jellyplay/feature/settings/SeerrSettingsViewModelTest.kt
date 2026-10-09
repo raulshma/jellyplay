@@ -11,7 +11,7 @@ import com.raulshma.jellyplay.core.model.JellyPlayPluginStatus
 import com.raulshma.jellyplay.core.model.seerr.SeerrAuthMethod
 import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
 import com.raulshma.jellyplay.core.model.seerr.SeerrStatusResponse
-import com.raulshma.jellyplay.core.network.api.JellyPlayPluginApiClient
+import com.raulshma.jellyplay.core.network.api.JellyPlaySeerrRoutes
 import com.raulshma.jellyplay.core.network.api.JellyPlaySeerrStatus
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -76,7 +76,7 @@ class SeerrSettingsViewModelTest {
     private lateinit var seerrAuthenticator: SeerrAuthenticator
     private lateinit var seerrPreferencesStore: SeerrPreferencesStore
     private lateinit var secureCredentialsStore: SeerrSecureCredentialsStore
-    private lateinit var pluginApiClient: JellyPlayPluginApiClient
+    private lateinit var pluginApiClient: JellyPlaySeerrRoutes
     private lateinit var pluginStatusStore: JellyPlayPluginStatusStore
     private lateinit var authRepository: AuthRepository
 

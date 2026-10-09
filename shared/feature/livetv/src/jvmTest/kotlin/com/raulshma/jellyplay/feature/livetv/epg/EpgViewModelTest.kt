@@ -2,7 +2,7 @@
 
 package com.raulshma.jellyplay.feature.livetv.epg
 
-import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
+import com.raulshma.jellyplay.core.network.api.LiveTvApiClient
 import com.raulshma.jellyplay.core.model.EpgGuide
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.LiveTvProgram
@@ -81,7 +81,7 @@ class EpgViewModelTest {
 
     private val mainDispatcher = StandardTestDispatcher()
 
-    private lateinit var mediaRepository: LiveTvRepository
+    private lateinit var mediaRepository: LiveTvApiClient
 
     /** The fake clock every created VM reads; tests move [FakeTimeSource.nowMs] deliberately. */
     private val fakeTimeSource = FakeTimeSource(BOOT_NOW_MS)

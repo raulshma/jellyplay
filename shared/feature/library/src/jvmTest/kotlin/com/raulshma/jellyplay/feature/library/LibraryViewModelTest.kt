@@ -9,7 +9,7 @@ import androidx.paging.PagingDataEvent
 import androidx.paging.PagingDataPresenter
 import com.raulshma.jellyplay.core.data.download.DownloadOutcomeMessenger
 import com.raulshma.jellyplay.core.data.download.DownloadRequestResult
-import com.raulshma.jellyplay.core.data.repository.MediaBrowseReads
+import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
@@ -61,7 +61,7 @@ class LibraryViewModelTest {
     private val mainDispatcher = StandardTestDispatcher()
 
     private lateinit var mediaRepository: MediaRepository
-    private val mediaBrowseReads: MediaBrowseReads = mockk(relaxed = true)
+    private val libraryApiClient: LibraryApiClient = mockk(relaxed = true)
     private lateinit var offlineRepository: com.raulshma.jellyplay.core.data.repository.OfflineRepository
     private lateinit var quickDownloadActions: com.raulshma.jellyplay.core.data.download.QuickDownloadActions
     private lateinit var offlineModeManager: com.raulshma.jellyplay.core.data.offline.OfflineModeManager
@@ -125,7 +125,7 @@ class LibraryViewModelTest {
         // ClassCasts inside the inline onSuccess/onFailure.
         coEvery { mediaRepository.getLibraryFolders(any()) } returns Result.success(emptyList<LibraryFolder>())
         coEvery { mediaRepository.getGenres(any(), any()) } returns Result.success(emptyList())
-        coEvery { mediaBrowseReads.getTags(any(), any(), any()) } returns Result.success(emptyList())
+        coEvery { libraryApiClient.getTags(any(), any(), any()) } returns Result.success(emptyList())
         // The deferred refresher collects this for the whole VM lifetime.
         every { mediaRepository.userDataChanges } returns userDataEvents
     }
@@ -143,7 +143,7 @@ class LibraryViewModelTest {
             com.raulshma.jellyplay.core.ui.message.UserMessageBus(),
     ): LibraryViewModel = LibraryViewModel(
         mediaRepository = mediaRepository,
-        mediaBrowseReads = mediaBrowseReads,
+        libraryApiClient = libraryApiClient,
         offlineRepository = offlineRepository,
         quickDownloadActions = quickDownloadActions,
         offlineModeManager = offlineModeManager,
@@ -987,7 +987,7 @@ class LibraryViewModelTest {
         coVerify(exactly = 1) { mediaRepository.getLibraryFolders(force = true) }
         coVerify(exactly = 1) { mediaRepository.getGenres(force = true) }
         // Tags are an uncached passthrough: both loads hit them.
-        coVerify(exactly = 2) { mediaBrowseReads.getTags(any(), any(), any()) }
+        coVerify(exactly = 2) { libraryApiClient.getTags(any(), any(), any()) }
     }
 
     // ── Saved sort fallbacks ─────────────────────────────────────────────────

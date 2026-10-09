@@ -54,7 +54,16 @@ class JellyPlayPreferencesSyncAdapter(
     private val excludedKeys: Set<String> = emptySet(),
 ) : ProfileSyncAdapter {
 
-    private fun isReserved(name: String) = name.startsWith(RESERVED_PREFIX)
+    // The mirror rides the SAME store as the synced set, under the reserved
+    // root prefix (`jpsync.mirror.<key>` — that stored shape predates
+    // per-namespace mirroring and is frozen), with the adapter's exclusion
+    // rule handed to SyncMirror so the dirty/mark/clear comparison keeps
+    // exactly one implementation.
+    private val mirror = SyncMirror(
+        mirrorStore = dataStore,
+        prefix = JpsyncReservation.MIRROR_ROOT,
+        shouldMirror = { name -> !JpsyncReservation.isReserved(name) && !isExcluded(name) },
+    )
 
     private fun isExcluded(name: String) =
         name in excludedKeys || excludedPrefixes.any { name.startsWith(it) }
@@ -62,18 +71,12 @@ class JellyPlayPreferencesSyncAdapter(
     override suspend fun snapshot(): Map<String, JsonElement> {
         val prefs = dataStore.data.first()
         return prefs.asMap().keys
-            .filter { key -> !isReserved(key.name) && !isExcluded(key.name) && prefs[key] !is ByteArray }
+            .filter { key -> !JpsyncReservation.isReserved(key.name) && !isExcluded(key.name) && prefs[key] !is ByteArray }
             .associate { key -> key.name to toJson(prefs[key]) }
     }
 
-    override suspend fun dirtyValues(current: Map<String, JsonElement>): Map<String, JsonElement> {
-        val prefs = dataStore.data.first()
-        return current.filter { (name, value) ->
-            val mirrored = prefs[stringPreferencesKey(MIRROR_PREFIX + name)]
-            // Never-synced key = dirty by definition (mirror holds no entry).
-            mirrored == null || mirrored != value.toString()
-        }
-    }
+    override suspend fun dirtyValues(current: Map<String, JsonElement>): Map<String, JsonElement> =
+        mirror.dirtyValues(current)
 
     override suspend fun applyRemote(entries: Map<String, JsonElement>) {
         if (entries.isEmpty()) return
@@ -83,7 +86,7 @@ class JellyPlayPreferencesSyncAdapter(
                 // Never-synced and reserved names are dropped inbound too: a
                 // server holding pre-exclusion leaked rows (or a hostile one)
                 // must not re-write secrets, identity, or mirror state here.
-                if (isReserved(name) || isExcluded(name)) return@forEach
+                if (JpsyncReservation.isReserved(name) || isExcluded(name)) return@forEach
                 if (value is JsonNull) {
                     prefs.remove(stringPreferencesKey(name))
                     return@forEach
@@ -137,14 +140,7 @@ class JellyPlayPreferencesSyncAdapter(
         }
     }
 
-    override suspend fun markSynced(values: Map<String, JsonElement>) {
-        dataStore.edit { prefs ->
-            values.forEach { (name, value) ->
-                if (isReserved(name) || isExcluded(name)) return@forEach
-                prefs[stringPreferencesKey(MIRROR_PREFIX + name)] = value.toString()
-            }
-        }
-    }
+    override suspend fun markSynced(values: Map<String, JsonElement>) = mirror.markSynced(values)
 
     /**
      * Applies remote tombstones: the server deleted these keys (a namespace
@@ -160,13 +156,16 @@ class JellyPlayPreferencesSyncAdapter(
         if (keys.isEmpty()) return
         dataStore.edit { prefs ->
             keys.forEach { name ->
-                if (isReserved(name) || isExcluded(name)) return@forEach
+                if (JpsyncReservation.isReserved(name) || isExcluded(name)) return@forEach
                 // Key equality in DataStore is name-based, so the String-typed
                 // key removes the entry whatever kind is stored under the name.
                 prefs.remove(stringPreferencesKey(name))
-                prefs.remove(stringPreferencesKey(MIRROR_PREFIX + name))
             }
         }
+        // The mirror entries go with the values, under the same exclusion rule
+        // (SyncMirror applies the [shouldMirror] predicate): the adopted delete
+        // neither resurrects the setting nor re-reads as a local edit.
+        mirror.clear(keys)
     }
 
     private fun writeInferred(prefs: androidx.datastore.preferences.core.MutablePreferences, name: String, value: JsonPrimitive) {
@@ -193,16 +192,5 @@ class JellyPlayPreferencesSyncAdapter(
         is String -> JsonPrimitive(value)
         is Set<*> -> JsonArray(value.map { JsonPrimitive(it.toString()) })
         else -> JsonPrimitive(value.toString())
-    }
-
-    private companion object {
-        /**
-         * The whole reserved `jpsync.` space — mirror state (`jpsync.mirror.`),
-         * device identity (`jpsync.device.`), sync cursors (`jpsync.cursor.`)
-         * — never syncs in either direction.
-         */
-        const val RESERVED_PREFIX = "jpsync."
-        const val MIRROR_PREFIX = "jpsync.mirror."
-        const val DEVICE_PREFIX = "jpsync.device."
     }
 }

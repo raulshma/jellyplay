@@ -6,7 +6,7 @@ import com.raulshma.jellyplay.core.data.session.JellyPlayPluginStatusStore
 import com.raulshma.jellyplay.core.data.session.isAvailableNowOrProbe
 import com.raulshma.jellyplay.core.model.JellyPlayPluginFeatures
 import com.raulshma.jellyplay.core.network.api.JellyPlayMyAnalytics
-import com.raulshma.jellyplay.core.network.api.JellyPlayPluginApiClient
+import com.raulshma.jellyplay.core.network.api.JellyPlayAnalyticsRoutes
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -54,7 +54,7 @@ data class JellyPlayYourWatchingState(
  * probe-only read keeps the pre-toggle behavior.
  */
 class JellyPlayYourWatchingViewModel(
-    private val pluginApiClient: JellyPlayPluginApiClient,
+    private val pluginApiClient: JellyPlayAnalyticsRoutes,
     private val statusStore: JellyPlayPluginStatusStore,
     private val featureGate: JellyPlayFeatureGate? = null,
 ) : JellyPlayViewModel() {

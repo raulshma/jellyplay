@@ -30,3 +30,14 @@ internal fun List<String>.transcodeReasonsLabel(): String {
     for (reason in this) labels += reason.transcodeReasonLabel()
     return labels.joinToString(separator = ", ")
 }
+
+/**
+ * The unknown-token fallback of [transcodeReasonLabel]: known server tokens
+ * resolve through the shared core:ui TranscodeReasonCatalog (localized);
+ * this only renders what the catalog does not know yet — "VideoCodecNotSupported"
+ * → "video codec not supported". Pure string math so the label is
+ * test-deterministic.
+ */
+internal fun String.humanizeTranscodeReason(): String =
+    replace(Regex("(?<=[a-z0-9])(?=[A-Z])"), " ")
+        .lowercase()

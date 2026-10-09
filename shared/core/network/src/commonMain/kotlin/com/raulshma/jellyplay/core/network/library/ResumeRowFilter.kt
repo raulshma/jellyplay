@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.core.network.library
 
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.home.ContinueWatchingRowRule
 
 /**
  * Resume rows the user can actually continue — the client-side half of the
@@ -28,9 +29,15 @@ import com.raulshma.jellyplay.core.model.MediaType
  * BOOK rows are excluded from the video resume row outright — they surface in
  * their own Continue Reading section ([readingResumableOnly]) and must not
  * pollute the video resume row.
+ *
+ * The rule itself lives in
+ * [com.raulshma.jellyplay.core.model.home.ContinueWatchingRowRule] — the
+ * single owner the online fetch, the single-row refresh, the ordering use
+ * case and the offline mirror all consume; these extensions are this module's
+ * named handles on it.
  */
 fun List<MediaItem>.resumableOnly(): List<MediaItem> =
-    filter { !it.isPlayed && it.mediaType != MediaType.BOOK }
+    ContinueWatchingRowRule.filterResumable(this)
 
 /**
  * The books half of the resume query — the exact complement of
@@ -40,10 +47,11 @@ fun List<MediaItem>.resumableOnly(): List<MediaItem> =
  * forever). Applied by every `getContinueReading` implementation (JVM
  * `LibraryApiClientImpl`) as the
  * belt-and-braces client-side filter behind the server's
- * `IncludeItemTypes=Book` narrowing.
+ * `IncludeItemTypes=Book` narrowing. The rule's single owner is
+ * [ContinueWatchingRowRule.filterReadingResumable].
  */
 fun List<MediaItem>.readingResumableOnly(): List<MediaItem> =
-    filter { !it.isPlayed && it.mediaType == MediaType.BOOK }
+    ContinueWatchingRowRule.filterReadingResumable(this)
 
 /**
  * The resume rows' full post-fetch chain, folded once for the client twins
@@ -52,7 +60,9 @@ fun List<MediaItem>.readingResumableOnly(): List<MediaItem> =
  * played-row rule's books-or-video half → the optional classic-rows rollup
  * fold. [isBooks] selects [readingResumableOnly] over [resumableOnly]
  * exactly as the getContinueReading implementations do behind their
- * server-side `Book` narrowing.
+ * server-side `Book` narrowing — both halves are
+ * [ContinueWatchingRowRule] members; the parental and rollup folds around
+ * them are this module's wire-adjacent shaping and stay here.
  *
  * [dropContainerRollups] is the classic-rows (#168) half: Jellyfin 12.x
  * reports Series/Season containers as resumable themselves (upstream

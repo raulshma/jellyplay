@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.feature.livetv.components
 
-import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
+import com.raulshma.jellyplay.core.network.api.LiveTvApiClient
 import com.raulshma.jellyplay.core.model.LiveTvProgram
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -10,13 +10,13 @@ import kotlinx.coroutines.launch
 
 /** The timer mutation a [RecordOutcome] describes. */
 enum class RecordAction {
-    /** Create a single-episode timer ([LiveTvRepository.createTimer]). */
+    /** Create a single-episode timer ([LiveTvApiClient.createTimer]). */
     RECORD_ONCE,
-    /** Create a series timer ([LiveTvRepository.createSeriesTimer]). */
+    /** Create a series timer ([LiveTvApiClient.createSeriesTimer]). */
     RECORD_SERIES,
-    /** Cancel an existing timer ([LiveTvRepository.cancelTimer]). */
+    /** Cancel an existing timer ([LiveTvApiClient.cancelTimer]). */
     CANCEL_TIMER,
-    /** Cancel a series timer ([LiveTvRepository.cancelSeriesTimer]). */
+    /** Cancel a series timer ([LiveTvApiClient.cancelSeriesTimer]). */
     CANCEL_SERIES,
 }
 
@@ -53,7 +53,7 @@ sealed interface RecordOutcome {
 /**
  * The ONE recording choreography behind the Live TV tabs, replacing the
  * per-ViewModel copies (Programs, Channel Detail, EPG, Schedule, Series).
- * Constructed over [LiveTvRepository] and the owning ViewModel's scope, it
+ * Constructed over [LiveTvApiClient] and the owning ViewModel's scope, it
  * runs every command through the same sequence — publish
  * [RecordOutcome.Requesting], make the single repository call, publish
  * [RecordOutcome.Success] or [RecordOutcome.Error] — and surfaces each outcome
@@ -66,7 +66,7 @@ sealed interface RecordOutcome {
  * one-shot message channel, or the tab's error field).
  */
 class RecordActions(
-    private val repository: LiveTvRepository,
+    private val repository: LiveTvApiClient,
     private val scope: CoroutineScope,
     private val onOutcome: (RecordOutcome) -> Unit,
 ) {

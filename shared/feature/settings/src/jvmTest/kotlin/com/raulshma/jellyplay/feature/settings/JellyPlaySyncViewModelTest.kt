@@ -5,7 +5,8 @@ import com.raulshma.jellyplay.core.data.session.JellyPlayPluginStatusStore
 import com.raulshma.jellyplay.core.model.JellyPlayPluginFeatures
 import com.raulshma.jellyplay.core.model.JellyPlayPluginStatus
 import com.raulshma.jellyplay.core.network.api.JellyPlayDevice
-import com.raulshma.jellyplay.core.network.api.JellyPlayPluginApiClient
+import com.raulshma.jellyplay.core.network.api.JellyPlayDeviceRegistryRoutes
+import com.raulshma.jellyplay.core.network.api.JellyPlaySettingsSyncRoutes
 import com.raulshma.jellyplay.core.network.api.JellyPlaySyncHistory
 import com.raulshma.jellyplay.core.network.api.JellyPlaySyncHistoryEntry
 import com.raulshma.jellyplay.core.network.api.JellyPlaySyncHistoryKey
@@ -62,7 +63,8 @@ class JellyPlaySyncViewModelTest {
 
     private val mainDispatcher = StandardTestDispatcher()
 
-    private lateinit var pluginApi: JellyPlayPluginApiClient
+    private lateinit var pluginApi: JellyPlaySettingsSyncRoutes
+    private lateinit var deviceRegistry: JellyPlayDeviceRegistryRoutes
     private lateinit var statusStore: JellyPlayPluginStatusStore
     private lateinit var syncRepository: ProfileSyncRepository
     private lateinit var backupIo: SettingsBackupIo
@@ -80,6 +82,7 @@ class JellyPlaySyncViewModelTest {
     fun setUp() {
         Dispatchers.setMain(mainDispatcher)
         pluginApi = mockk(relaxed = true)
+        deviceRegistry = mockk(relaxed = true)
         statusStore = mockk(relaxed = true)
         syncRepository = mockk(relaxed = true)
         backupIo = mockk(relaxed = true)
@@ -103,7 +106,7 @@ class JellyPlaySyncViewModelTest {
                 ),
             ),
         )
-        coEvery { pluginApi.getDevices() } returns Result.success(emptyList())
+        coEvery { deviceRegistry.getDevices() } returns Result.success(emptyList())
         coEvery { pluginApi.adminSyncOverview() } returns Result.success(null)
         coEvery { pluginApi.getSnapshots() } returns Result.success(null)
     }
@@ -119,7 +122,7 @@ class JellyPlaySyncViewModelTest {
         every { statusStore.hasFeature(JellyPlayPluginFeatures.SettingsSync) } returns true
     }
 
-    private fun viewModel() = JellyPlaySyncViewModel(syncRepository, pluginApi, statusStore, backupIo)
+    private fun viewModel() = JellyPlaySyncViewModel(syncRepository, pluginApi, deviceRegistry, statusStore, backupIo)
 
     @Test
     fun setSyncEnabled_off_deArmsThePeriodicCatchUp() {
@@ -132,7 +135,7 @@ class JellyPlaySyncViewModelTest {
             }
         }
 
-        JellyPlaySyncViewModel(syncRepository, pluginApi, statusStore, backupIo, scheduler)
+        JellyPlaySyncViewModel(syncRepository, pluginApi, deviceRegistry, statusStore, backupIo, scheduler)
             .setSyncEnabled(enabled = false)
 
         coVerify(exactly = 1) { syncRepository.setEnabled(false) }
@@ -150,7 +153,7 @@ class JellyPlaySyncViewModelTest {
             }
         }
 
-        JellyPlaySyncViewModel(syncRepository, pluginApi, statusStore, backupIo, scheduler)
+        JellyPlaySyncViewModel(syncRepository, pluginApi, deviceRegistry, statusStore, backupIo, scheduler)
             .setSyncEnabled(enabled = true)
         advanceUntilIdle()
 
@@ -302,7 +305,7 @@ class JellyPlaySyncViewModelTest {
     fun refresh_deviceRows_carryModelRevoked_thisDeviceFirst() = runTest {
         gateOpen()
         coEvery { syncRepository.currentDeviceId() } returns "device-a"
-        coEvery { pluginApi.getDevices() } returns Result.success(
+        coEvery { deviceRegistry.getDevices() } returns Result.success(
             listOf(
                 JellyPlayDevice(deviceId = "device-b", name = "Living Room", platform = "tv", model = "Onn 4K", revoked = true),
                 JellyPlayDevice(deviceId = "device-a", name = "Desk", platform = "desktop", model = null),
@@ -327,11 +330,11 @@ class JellyPlaySyncViewModelTest {
     fun registryActions_revoke_and_rename_callTheRoutes_andRefresh() = runTest {
         gateOpen()
         coEvery { syncRepository.currentDeviceId() } returns "device-a"
-        coEvery { pluginApi.renameDevice(any(), any(), any()) } coAnswers {
+        coEvery { deviceRegistry.renameDevice(any(), any(), any()) } coAnswers {
             renameCalls += arg<String>(0) to arg<String?>(1)
             Result.success(Unit)
         }
-        coEvery { pluginApi.revokeDevice(any()) } coAnswers {
+        coEvery { deviceRegistry.revokeDevice(any()) } coAnswers {
             revokeCalls += arg<String>(0)
             Result.success(Unit)
         }

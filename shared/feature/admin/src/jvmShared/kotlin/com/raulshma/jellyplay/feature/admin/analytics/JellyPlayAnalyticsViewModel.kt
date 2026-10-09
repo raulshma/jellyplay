@@ -10,7 +10,7 @@ import com.raulshma.jellyplay.core.model.JellyPlayPluginStatus
 import com.raulshma.jellyplay.core.model.PlaybackActivityPoint
 import com.raulshma.jellyplay.core.network.api.JellyPlayAnalyticsOverview
 import com.raulshma.jellyplay.core.network.api.JellyPlayAnalyticsSession
-import com.raulshma.jellyplay.core.network.api.JellyPlayPluginApiClient
+import com.raulshma.jellyplay.core.network.api.JellyPlayAnalyticsRoutes
 import com.raulshma.jellyplay.core.ui.components.formatDurationFromMinutes
 import com.raulshma.jellyplay.core.ui.components.formatDurationFromTicks
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
@@ -150,7 +150,7 @@ data class AnalyticsState(
  * [AnalyticsState.overviewDegraded], never an error.
  */
 class JellyPlayAnalyticsViewModel(
-    private val pluginApiClient: JellyPlayPluginApiClient,
+    private val pluginApiClient: JellyPlayAnalyticsRoutes,
     private val statusStore: JellyPlayPluginStatusStore? = null,
     /**
      * The per-feature gate seam (probe AND the user's toggle) over the store

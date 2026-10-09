@@ -8,7 +8,7 @@ import com.raulshma.jellyplay.core.data.session.isAvailableOrProbe
 import com.raulshma.jellyplay.core.model.JellyPlayPluginFeatures
 import com.raulshma.jellyplay.core.model.JellyPlayPluginStatus
 import com.raulshma.jellyplay.core.network.api.JellyPlayActiveTranscode
-import com.raulshma.jellyplay.core.network.api.JellyPlayPluginApiClient
+import com.raulshma.jellyplay.core.network.api.JellyPlayTranscodesRoutes
 import com.raulshma.jellyplay.core.ui.viewmodel.ConfirmationHost
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.core.ui.viewmodel.loadInto
@@ -86,7 +86,7 @@ data class TranscodesState(
  * construction (tests) may omit it — a null store is simply gated off.
  */
 class JellyPlayTranscodesViewModel(
-    private val pluginApiClient: JellyPlayPluginApiClient,
+    private val pluginApiClient: JellyPlayTranscodesRoutes,
     private val statusStore: JellyPlayPluginStatusStore? = null,
     /**
      * The per-feature gate seam (probe AND the user's toggle) over the store
@@ -339,14 +339,3 @@ internal fun formatBitrate(bitsPerSecond: Int): String {
         "${(value + 500) / 1_000} kbps"
     }
 }
-
-/**
- * The unknown-token fallback of [transcodeReasonLabel]: known server tokens
- * resolve through the shared core:ui TranscodeReasonCatalog (localized);
- * this only renders what the catalog does not know yet — "VideoCodecNotSupported"
- * → "video codec not supported". Pure string math so the label is
- * test-deterministic.
- */
-internal fun String.humanizeTranscodeReason(): String =
-    replace(Regex("(?<=[a-z0-9])(?=[A-Z])"), " ")
-        .lowercase()

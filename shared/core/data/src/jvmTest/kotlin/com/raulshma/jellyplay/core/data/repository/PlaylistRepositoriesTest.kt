@@ -19,7 +19,7 @@ import kotlin.test.assertEquals
 import kotlin.test.Test
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
-import com.raulshma.jellyplay.core.data.testutil.FakeTimeSource
+import com.raulshma.jellyplay.core.testfixtures.FakeTimeSource
 
 /**
  * Exercises [SmartPlaylistRepository] and [MoodPlaylistRepository] against a

@@ -9,7 +9,7 @@ import com.raulshma.jellyplay.core.data.session.SessionCacheRegistry
 import com.raulshma.jellyplay.core.model.JellyPlayPluginFeatures
 import com.raulshma.jellyplay.core.network.api.JellyPlayCapabilities
 import com.raulshma.jellyplay.core.network.api.JellyPlayDevicePush
-import com.raulshma.jellyplay.core.network.api.JellyPlayPluginApiClient
+import com.raulshma.jellyplay.core.network.api.JellyPlayDeviceRegistryRoutes
 import com.raulshma.jellyplay.core.network.api.JellyPlayPushRegistration
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -75,16 +75,18 @@ class JellyPushRepositoryTest {
         }
     }
 
-    private lateinit var api: JellyPlayPluginApiClient
+    private lateinit var api: JellyPlayDeviceRegistryRoutes
+    private lateinit var capabilitiesApi: com.raulshma.jellyplay.core.network.api.JellyPlayCapabilitiesRoutes
     private lateinit var statusStore: JellyPlayPluginStatusStore
     private lateinit var dataStoreFile: okio.Path
 
     @BeforeTest
     fun setup() {
         api = mockk(relaxUnitFun = true)
+        capabilitiesApi = mockk()
         coEvery { api.registerDevice(any(), any(), any(), any(), any(), any()) } returns Result.success(Unit)
         statusStore = JellyPlayPluginStatusStore(
-            apiClient = api,
+            apiClient = capabilitiesApi,
             sessionCacheRegistry = SessionCacheRegistry(FakeSessionIdentity(), CoroutineScope(Dispatchers.Default)),
         )
         // Unique per test run: AndroidX forbids two DataStore instances on one
@@ -101,7 +103,7 @@ class JellyPushRepositoryTest {
 
     /** Drives the capability probe so the store reads AVAILABLE (with [features]). */
     private suspend fun makeAvailable(features: List<String> = listOf(JellyPlayPluginFeatures.Push)) {
-        coEvery { api.getCapabilities() } returns Result.success(
+        coEvery { capabilitiesApi.getCapabilities() } returns Result.success(
             JellyPlayCapabilities(contractVersion = 1, pluginVersion = "test", features = features),
         )
         statusStore.refresh()
@@ -517,6 +519,6 @@ class JellyPushRepositoryTest {
     }
 
     private companion object {
-        val ENDPOINT_KEY = stringPreferencesKey("jpsync.device.push.endpoint")
+        val ENDPOINT_KEY = stringPreferencesKey(JpsyncReservation.pushEndpointKey())
     }
 }

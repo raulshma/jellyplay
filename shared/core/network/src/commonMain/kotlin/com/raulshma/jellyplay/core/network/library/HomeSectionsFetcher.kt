@@ -101,7 +101,7 @@ public interface SeerrHomeSectionSources {
 /**
  * The plugin-side sibling of [SeerrHomeSectionSources]: the two jellyplay row
  * reads the PLUGIN_ROW home rows need (the transport twin of
- * `JellyPlayPluginApiClient.getSeasonalRow/getCustomRow`), the plugin's
+ * `JellyPlayRowsRoutes.getSeasonalRow/getCustomRow`), the plugin's
  * local-library matches resolved to full [MediaItem]s, and the capability
  * gates. Signatures deliberately carry the raw wire payload — the port stays
  * a dumb transport; payload→[HomeSection] mapping, TTL memoisation and the
@@ -394,23 +394,16 @@ public class HomeSectionsFetcher(
         val identity = cacheIdentity() ?: CacheIdentity.UNKNOWN
 
         val continueWatchingDeferred = async {
-            if (HomeSectionType.CONTINUE_WATCHING in enabledSections) sources.getContinueWatching(
-                limit = 20,
-                classicRows = query.classicRows,
-            )
-            else Result.success(emptyList())
+            // The resume-row trio's per-type sub-call (enabled gate + query
+            // parameter wiring) lives in HomeRowBatchSubcalls — the row's own
+            // registration; the schedule (what launches when) stays here.
+            HomeRowBatchSubcalls.getValue(HomeSectionType.CONTINUE_WATCHING)(sources, query)
         }
         val continueReadingDeferred = async {
-            if (HomeSectionType.CONTINUE_READING in enabledSections) sources.getContinueReading(limit = 20)
-            else Result.success(emptyList())
+            HomeRowBatchSubcalls.getValue(HomeSectionType.CONTINUE_READING)(sources, query)
         }
         val nextUpDeferred = async {
-            if (HomeSectionType.NEXT_UP in enabledSections) sources.getNextUp(
-                limit = 20,
-                enableRewatching = query.nextUpRewatching,
-                maxDays = query.nextUpMaxDays,
-            )
-            else Result.success(emptyList())
+            HomeRowBatchSubcalls.getValue(HomeSectionType.NEXT_UP)(sources, query)
         }
         val foldersDeferred = async {
             if (HomeSectionType.LATEST_MEDIA in enabledSections || HomeSectionType.RECENTLY_ADDED in enabledSections) {
@@ -554,7 +547,9 @@ public class HomeSectionsFetcher(
      * persist — those live a layer up (MediaRepository), keyed by the whole
      * query, and a single-row result must never masquerade as one.
      *
-     * Refreshable types and their mapping:
+     * The per-type arms themselves live in [HomeRowRefreshArms] (the
+     * transport half of the home row registry — one arm per row type); this
+     * method owns the outcome contract and the context wiring. Mapping:
      *  - CONTINUE_WATCHING / CONTINUE_READING / NEXT_UP: the direct port call
      *    with the [query]'s parameters, then the assembler's filters verbatim
      *    (hidden-CW set; Next Up's CW-overlap + excluded-series drops — the
@@ -592,144 +587,33 @@ public class HomeSectionsFetcher(
         force: Boolean = true,
     ): Result<HomeSection?> = runCatchingRethrowingCancellation {
         val identity = cacheIdentity() ?: CacheIdentity.UNKNOWN
-        when (section.type) {
-            HomeSectionType.CONTINUE_WATCHING -> {
-                val cw = sources.getContinueWatching(limit = 20, classicRows = query.classicRows)
-                    .getOrThrow()
-                    .excludingHiddenItemIds(query.hiddenCwItemIds)
-                if (!mergeNextUpIntoContinueWatching) {
-                    cw.takeIf { it.isNotEmpty() }
-                        ?.let { HomeSectionType.CONTINUE_WATCHING.descriptor.section(it) }
-                } else {
-                    // Merged row: the batch assembler folded Next Up into this
-                    // row (OrderHomeSectionsUseCase), so the refetch rebuilds
-                    // that fold from BOTH fresh sources — fresh CW first,
-                    // fresh Next Up (same eligibility filters as the NEXT_UP
-                    // arm, deduped by id) appended. A Next Up failure degrades
-                    // to the CW half (the batch's per-source failure policy);
-                    // CW empty + Next Up present is the merge's relabel arm —
-                    // the row survives carrying Next Up; both empty drops it.
-                    val nextUp = sources.getNextUp(
-                        limit = 20,
-                        enableRewatching = query.nextUpRewatching,
-                        maxDays = query.nextUpMaxDays,
-                    )
-                        .getOrDefault(emptyList())
-                        .filterNextUpEligible(cw.map { it.id }.toSet(), query.nextUpExcludedSeriesIds)
-                    val merged = (cw + nextUp).distinctBy { it.id }
-                    merged.takeIf { it.isNotEmpty() }
-                        ?.let { HomeSectionType.CONTINUE_WATCHING.descriptor.section(it) }
-                }
-            }
-
-            HomeSectionType.CONTINUE_READING ->
-                sources.getContinueReading(limit = 20)
-                    .getOrThrow()
-                    .excludingHiddenItemIds(query.hiddenCwItemIds)
-                    .takeIf { it.isNotEmpty() }
-                    ?.let { HomeSectionType.CONTINUE_READING.descriptor.section(it) }
-
-            HomeSectionType.NEXT_UP -> {
-                val cwIds = continueWatchingIdsForFilters(query)
-                sources.getNextUp(
-                    limit = 20,
-                    enableRewatching = query.nextUpRewatching,
-                    maxDays = query.nextUpMaxDays,
-                )
-                    .getOrThrow()
-                    .filterNextUpEligible(cwIds, query.nextUpExcludedSeriesIds)
-                    .takeIf { it.isNotEmpty() }
-                    ?.let { HomeSectionType.NEXT_UP.descriptor.section(it) }
-            }
-
-            HomeSectionType.LATEST_MEDIA -> {
-                val libraryId = HomeSectionType.LATEST_MEDIA.descriptor.instanceIdFor(section.id)
-                    ?: error("Latest Media row ${section.id} carries no library id")
-                val latest = latestForLibrary(
-                    libraryId = libraryId,
-                    collectionType = section.collectionType,
-                    classicRows = query.classicRows,
-                    force = force,
-                    identity = identity,
-                ).getOrThrow()
-                refreshedOrNull(section, latest)
-            }
-
-            HomeSectionType.RECENTLY_ADDED -> {
-                val folders = sources.getLibraryFolders().getOrThrow()
-                    .filter { it.collectionType != "music" }
-                val allLatest = Semaphore(4).mapConcurrent(folders) { folder ->
-                    // The assembler feeds the aggregate only from libraries the
-                    // user hasn't disabled Recently Added for.
-                    if (HomeSectionType.RECENTLY_ADDED in query.libraryHomeSectionOverrides[folder.id].orEmpty()) {
-                        emptyList()
-                    } else {
-                        latestForLibrary(
-                            libraryId = folder.id,
-                            collectionType = folder.collectionType,
-                            classicRows = query.classicRows,
-                            force = force,
-                            identity = identity,
-                        ).getOrDefault(emptyList())
-                    }
-                }.flatten()
-                val cwIds = continueWatchingIdsForFilters(query)
-                refreshedOrNull(section, allLatest.distinctByIdExcluding(cwIds))
-            }
-
-            HomeSectionType.DISCOVER -> {
-                val row = query.discoverRows.firstOrNull {
-                    it.enabled && HomeSectionType.DISCOVER.descriptor.idFor(it.id) == section.id
-                } ?: error("No enabled discover row for section ${section.id}")
-                check(row.source == DiscoverRowSource.JELLYFIN) {
-                    "Seerr discover rows are not edge-refreshable (${section.id})"
-                }
-                homeDiscoverRowCache.cacheThrough(
-                    identity,
-                    discoverRowCacheKey(row.id, row.limit),
-                    force = force,
-                    currentEpoch = { observedGeneration },
-                ) {
-                    sources.getDiscoverRowItems(row)
-                }
-                    .getOrThrow()
-                    .let { refreshedOrNull(section, it) }
-            }
-
-            HomeSectionType.PINNED -> {
-                val pin = query.pinnedSections.firstOrNull {
-                    HomeSectionType.PINNED.descriptor.idFor(it.id) == section.id
-                } ?: error("No pinned section configured for ${section.id}")
-                refreshedOrNull(section, getPinnedSectionItems(pin))
-            }
-
-            HomeSectionType.PLUGIN_ROW -> {
-                // The plugin row's single-row refetch (edge pull): the SAME
-                // gated leaf reads the batch path runs — fetchSeasonalPluginRow
-                // / fetchPluginCustomRow carry the gate, the TTL memo and the
-                // builder, so the row id stays stable and only the payload
-                // moves (the gesture's `force` flag carries the "fetch fresh").
-                // An emptied source (plugin row removed mid-session) yields
-                // null — the row drops, matching the batch's zero-items policy.
-                val instanceId = HomeSectionType.PLUGIN_ROW.descriptor.instanceIdFor(section.id)
-                    ?: error("Plugin row ${section.id} carries no instance id")
-                if (instanceId.startsWith("custom_")) {
-                    fetchPluginCustomRow(
-                        title = instanceId.removePrefix("custom_"),
+        // The per-type arms live in HomeRowRefreshArms (the transport half of
+        // the home row registry — see its KDoc); this method owns the
+        // outcome contract only. Non-refreshable types fail with the same
+        // caller-bug error the former `else` arm threw.
+        HomeRowRefreshArms.forType(section.type).refresh(
+            ctx = HomeRowRefreshContext(
+                sources = sources,
+                query = query,
+                force = force,
+                mergeNextUpIntoContinueWatching = mergeNextUpIntoContinueWatching,
+                latestForLibrary = { libraryId, collectionType, classicRows ->
+                    latestForLibrary(
+                        libraryId = libraryId,
+                        collectionType = collectionType,
+                        classicRows = classicRows,
                         force = force,
                         identity = identity,
                     )
-                } else {
-                    fetchSeasonalPluginRow(force = force, identity = identity).firstOrNull()
-                }
-            }
-
-            // Never constructed by the network (FAVORITES, LIVE_TV, DOWNLOADED)
-            // or deliberately unrefreshable (RECOMMENDATIONS — the seed chain
-            // is batch-shaped). The gesture is gated off these; reaching here
-            // is a caller bug.
-            else -> error("Home section type ${section.type} is not refreshable")
-        }
+                },
+                continueWatchingFilterIds = { continueWatchingIdsForFilters(query) },
+                discoverRowItems = { row, rowForce -> discoverRowItemsCached(row, rowForce, identity) },
+                fetchPluginCustomRow = { title, rowForce -> fetchPluginCustomRow(title, rowForce, identity) },
+                fetchSeasonalPluginRow = { rowForce -> fetchSeasonalPluginRow(force = rowForce, identity = identity) },
+                pinnedSectionItems = { pinned -> getPinnedSectionItems(pinned) },
+            ),
+            section = section,
+        )
     }
 
     /**
@@ -753,13 +637,23 @@ public class HomeSectionsFetcher(
         }
 
     /**
-     * The one item-swap shape for instance-typed rows (LATEST_MEDIA /
-     * RECENTLY_ADDED / DISCOVER / PINNED): fresh items, every identity field
-     * preserved; an empty result drops the row (the assembler's
-     * zero-items-is-not-rendered policy).
+     * The dice-roll generation-guarded discover-row memo read — the ONE
+     * cache-through shape both readers share: the batch fan-out
+     * ([fetchJellyfinDiscoverRows]) and the DISCOVER refresh arm
+     * (HomeRowRefreshArms, through the refresh context).
      */
-    private fun refreshedOrNull(section: HomeSection, items: List<MediaItem>): HomeSection? =
-        if (items.isEmpty()) null else section.copy(items = items)
+    private suspend fun discoverRowItemsCached(
+        row: DiscoverRowConfig,
+        force: Boolean,
+        identity: CacheIdentity,
+    ): Result<List<MediaItem>> = homeDiscoverRowCache.cacheThrough(
+        identity,
+        discoverRowCacheKey(row.id, row.limit),
+        force = force,
+        currentEpoch = { observedGeneration },
+    ) {
+        sources.getDiscoverRowItems(row)
+    }
 
     /**
      * Fetches the enabled discover rows of BOTH sources and emits the
@@ -841,14 +735,7 @@ public class HomeSectionsFetcher(
         identity: CacheIdentity,
     ): List<HomeSection> {
         val sections: List<HomeSection?> = Semaphore(3).mapConcurrentCatching(jellyfinRows) { row ->
-            homeDiscoverRowCache.cacheThrough(
-                identity,
-                discoverRowCacheKey(row.id, row.limit),
-                force = force,
-                currentEpoch = { observedGeneration },
-            ) {
-                sources.getDiscoverRowItems(row)
-            }
+            discoverRowItemsCached(row, force, identity)
                 .getOrNull()
                 ?.takeIf { it.isNotEmpty() }
                 ?.let { items ->

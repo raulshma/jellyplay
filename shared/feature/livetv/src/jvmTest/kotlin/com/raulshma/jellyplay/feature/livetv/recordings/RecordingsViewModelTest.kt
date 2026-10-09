@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.livetv.recordings
 
-import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
+import com.raulshma.jellyplay.core.network.api.LiveTvApiClient
+import com.raulshma.jellyplay.core.network.api.MediaInfoApiClient
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.LiveTvRecording
 import com.raulshma.jellyplay.core.ui.message.UiMessage
@@ -31,7 +32,8 @@ class RecordingsViewModelTest {
     // has no access to that module (search/music conveyor port pattern).
     private val mainDispatcher = StandardTestDispatcher()
 
-    private lateinit var mediaRepository: LiveTvRepository
+    private lateinit var mediaRepository: LiveTvApiClient
+    private lateinit var mediaInfoApiClient: MediaInfoApiClient
     private lateinit var imageUrlProvider: ImageUrlProvider
     private lateinit var viewModel: RecordingsViewModel
 
@@ -39,9 +41,10 @@ class RecordingsViewModelTest {
     fun setUp() {
         Dispatchers.setMain(mainDispatcher)
         mediaRepository = mockk(relaxed = true)
+        mediaInfoApiClient = mockk(relaxed = true)
         imageUrlProvider = mockk(relaxed = true)
         coEvery { mediaRepository.getRecordings(any(), any()) } returns Result.success(emptyList())
-        viewModel = RecordingsViewModel(mediaRepository, imageUrlProvider)
+        viewModel = RecordingsViewModel(mediaRepository, mediaInfoApiClient, imageUrlProvider)
     }
 
     @AfterTest
@@ -93,13 +96,13 @@ class RecordingsViewModelTest {
 
     @Test
     fun deleteRecording_deletes_then_reloads() = runTest(mainDispatcher) {
-        coEvery { mediaRepository.deleteRecording("r1") } returns Result.success(Unit)
+        coEvery { mediaInfoApiClient.deleteItem("r1") } returns Result.success(Unit)
         viewModel.showDeleteDialog(recording("r1"))
 
         viewModel.deleteRecording()
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { mediaRepository.deleteRecording("r1") }
+        coVerify(exactly = 1) { mediaInfoApiClient.deleteItem("r1") }
         assertEquals(null, viewModel.deleteConfirmation.item)
         assertFalse(viewModel.uiState.value.isDeleting)
         assertEquals(null, viewModel.uiState.value.error)
@@ -110,19 +113,19 @@ class RecordingsViewModelTest {
     @Test
     fun deleteRecording_cancels_the_series_timer_first_when_one_is_attached() = runTest(mainDispatcher) {
         coEvery { mediaRepository.cancelSeriesTimer("st-1") } returns Result.success(Unit)
-        coEvery { mediaRepository.deleteRecording("r1") } returns Result.success(Unit)
+        coEvery { mediaInfoApiClient.deleteItem("r1") } returns Result.success(Unit)
         viewModel.showDeleteDialog(recording("r1", seriesTimerId = "st-1"))
 
         viewModel.deleteRecording()
         advanceUntilIdle()
 
         coVerify(exactly = 1) { mediaRepository.cancelSeriesTimer("st-1") }
-        coVerify(exactly = 1) { mediaRepository.deleteRecording("r1") }
+        coVerify(exactly = 1) { mediaInfoApiClient.deleteItem("r1") }
     }
 
     @Test
     fun deleteRecording_failure_surfaces_the_error_and_keeps_the_dialog_open() = runTest(mainDispatcher) {
-        coEvery { mediaRepository.deleteRecording("r1") } returns Result.failure(RuntimeException("locked"))
+        coEvery { mediaInfoApiClient.deleteItem("r1") } returns Result.failure(RuntimeException("locked"))
         val rec = recording("r1")
         viewModel.showDeleteDialog(rec)
 
@@ -139,14 +142,14 @@ class RecordingsViewModelTest {
         viewModel.deleteRecording()
         advanceUntilIdle()
 
-        coVerify(exactly = 0) { mediaRepository.deleteRecording(any()) }
+        coVerify(exactly = 0) { mediaInfoApiClient.deleteItem(any()) }
     }
 
     @Test
     fun dismissDeleteDialog_is_blocked_while_a_delete_is_in_flight() = runTest(mainDispatcher) {
         // Park the delete inside the repository so isDeleting is observable.
         val gate = kotlinx.coroutines.CompletableDeferred<Unit>()
-        coEvery { mediaRepository.deleteRecording("r1") } coAnswers { gate.await(); Result.success(Unit) }
+        coEvery { mediaInfoApiClient.deleteItem("r1") } coAnswers { gate.await(); Result.success(Unit) }
         viewModel.showDeleteDialog(recording("r1"))
 
         viewModel.deleteRecording()

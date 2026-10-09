@@ -5,7 +5,7 @@ import com.raulshma.jellyplay.core.model.JellyPlayPluginFeatures
 import com.raulshma.jellyplay.core.model.JellyPlayPluginStatus
 import com.raulshma.jellyplay.core.network.api.JellyPlayMyAnalytics
 import com.raulshma.jellyplay.core.network.api.JellyPlayMyAnalyticsTotals
-import com.raulshma.jellyplay.core.network.api.JellyPlayPluginApiClient
+import com.raulshma.jellyplay.core.network.api.JellyPlayAnalyticsRoutes
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -36,7 +36,7 @@ class JellyPlayYourWatchingViewModelTest {
 
     private val mainDispatcher = StandardTestDispatcher()
 
-    private lateinit var pluginApi: JellyPlayPluginApiClient
+    private lateinit var pluginApi: JellyPlayAnalyticsRoutes
     private lateinit var statusStore: JellyPlayPluginStatusStore
 
     @BeforeTest

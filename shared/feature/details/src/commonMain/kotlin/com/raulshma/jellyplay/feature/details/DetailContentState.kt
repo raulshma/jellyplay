@@ -113,7 +113,7 @@ internal data class DetailContentState(
     // ── jellyfin-plugin-jellyplay companion sections (ADR 0010) ──
     // Aggregated external ratings (mdblist) chips for the item's IMDb id.
     // Empty = section absent (probe failure / no data — never an error).
-    val pluginRatings: List<com.raulshma.jellyplay.core.network.api.JellyPlayRatingEntry> = emptyList(),
+    val pluginRatings: List<com.raulshma.jellyplay.core.model.JellyPlayPluginRating> = emptyList(),
     /** Server-scored "More like this", hydrated into displayable items.
      *  Empty = section absent; the stock relatedItems row stays beside it. */
     val pluginSimilarItems: List<MediaItem> = emptyList(),
@@ -128,7 +128,7 @@ internal data class DetailContentState(
     /** Per-season TMDB episode scores (ADR 0010, [JellyPlayPluginFeatures.Ratings])
      *  keyed season id → (episode number → ratings). Empty = section absent
      *  (probe failure / no data — never an error). */
-    val seasonRatings: Map<String, Map<Int, com.raulshma.jellyplay.core.network.api.JellyPlayEpisodeRatings>> = emptyMap(),
+    val seasonRatings: Map<String, Map<Int, com.raulshma.jellyplay.core.model.JellyPlayEpisodeScore>> = emptyMap(),
 )
 
 /**

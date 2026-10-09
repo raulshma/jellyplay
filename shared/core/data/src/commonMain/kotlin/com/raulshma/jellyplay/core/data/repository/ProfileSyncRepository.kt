@@ -105,7 +105,7 @@ interface ProfileSyncAdapter {
  * `settings.changed`/`settings.reset` frames fold into [requestSync].
  */
 class ProfileSyncRepository(
-    private val apiClient: com.raulshma.jellyplay.core.network.api.JellyPlayPluginApiClient,
+    private val apiClient: com.raulshma.jellyplay.core.network.api.JellyPlaySettingsSyncRoutes,
     private val statusStore: JellyPlayPluginStatusStore,
     private val sessionCacheRegistry: com.raulshma.jellyplay.core.data.session.SessionCacheRegistry,
     private val adapters: List<ProfileSyncAdapter>,

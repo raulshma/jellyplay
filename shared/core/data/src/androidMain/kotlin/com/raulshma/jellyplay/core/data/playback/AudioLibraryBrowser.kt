@@ -19,7 +19,7 @@ import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.SettableFuture
 import com.raulshma.jellyplay.core.concurrency.mapConcurrent
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
-import com.raulshma.jellyplay.core.data.repository.MediaCollectionReads
+import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.MusicCatalogue
 import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
@@ -86,7 +86,7 @@ class AudioLibraryBrowser(
      * getFavorites retired to this seam). The browser is otherwise a mixed
      * consumer — catalogue + detail reads still ride [mediaRepository].
      */
-    private val mediaCollectionReads: MediaCollectionReads,
+    private val libraryApiClient: LibraryApiClient,
     private val playlistRepository: PlaylistRepository,
     private val downloadRepository: DownloadRepository,
     private val playbackRepository: PlaybackRepository,
@@ -200,7 +200,7 @@ class AudioLibraryBrowser(
                     parentId == "RECENT" -> {
                         // The MusicHome "recently played" query: audio tracks
                         // by DatePlayed descending.
-                        val result = mediaCollectionReads.getMediaItems(
+                        val result = libraryApiClient.getMediaItems(
                             filters = LibraryFilters(
                                 mediaTypes = listOf(MediaType.AUDIO),
                                 sortBy = SortOption.DATE_PLAYED,
@@ -213,7 +213,7 @@ class AudioLibraryBrowser(
                         }
                     }
                     parentId == "RECENT_ALBUMS" -> {
-                        val result = mediaCollectionReads.getMediaItems(
+                        val result = libraryApiClient.getMediaItems(
                             filters = LibraryFilters(
                                 mediaTypes = listOf(MediaType.ALBUM),
                                 sortBy = SortOption.DATE_ADDED,
@@ -237,7 +237,7 @@ class AudioLibraryBrowser(
                         // The two arms differ only in the requested media type
                         // and the folder-node mapper — one paged fetch serves both.
                         val isArtists = parentId == "ARTISTS"
-                        val result = mediaCollectionReads.getMediaItems(
+                        val result = libraryApiClient.getMediaItems(
                             filters = LibraryFilters(
                                 mediaTypes = listOf(if (isArtists) MediaType.ARTIST else MediaType.ALBUM),
                             ),
@@ -255,7 +255,7 @@ class AudioLibraryBrowser(
                         }
                     }
                     parentId == "FAVORITES" -> {
-                        val result = mediaCollectionReads.getFavorites(
+                        val result = libraryApiClient.getFavorites(
                             mediaTypes = listOf(MediaType.MUSIC, MediaType.AUDIO),
                             startIndex = page * pageSize,
                             limit = pageSize
@@ -279,7 +279,7 @@ class AudioLibraryBrowser(
                     }
                     parentId.startsWith(ARTIST_ID_PREFIX) -> {
                         val artistId = parentId.removePrefix(ARTIST_ID_PREFIX)
-                        val albums = musicCatalogue.getArtistAlbums(artistId, limit = pageSize).getOrNull() ?: emptyList()
+                        val albums = libraryApiClient.getArtistAlbums(artistId, limit = pageSize).getOrNull() ?: emptyList()
                         albums.forEach { album ->
                             list.add(mapAlbumToMediaItem(album))
                         }
@@ -527,7 +527,7 @@ class AudioLibraryBrowser(
     private suspend fun genreTracks(genreId: String, limit: Int, offset: Int): List<com.raulshma.jellyplay.core.model.MediaItem> {
         val genreName = mediaRepository.getGenres().getOrNull()?.firstOrNull { it.id == genreId }?.name
             ?: return emptyList()
-        return mediaCollectionReads.getMediaItems(
+        return libraryApiClient.getMediaItems(
             filters = LibraryFilters(
                 mediaTypes = listOf(MediaType.AUDIO),
                 genres = listOf(genreName),
@@ -624,7 +624,7 @@ class AudioLibraryBrowser(
             offsets[index] = tracks.size
             when {
                 mediaId.startsWith(ARTIST_ID_PREFIX) -> {
-                    val albums = musicCatalogue.getArtistAlbums(mediaId.removePrefix(ARTIST_ID_PREFIX), limit = 50)
+                    val albums = libraryApiClient.getArtistAlbums(mediaId.removePrefix(ARTIST_ID_PREFIX), limit = 50)
                         .getOrNull() ?: emptyList()
                     mapConcurrently(albums) { album ->
                         musicCatalogue.getAlbumTracks(album.id, force = false).getOrNull()

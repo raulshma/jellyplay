@@ -80,7 +80,7 @@ val detailsModule: Module = module {
             seerrRequestDelegate = get(),
             projections = get(),
             seerrPreferencesStore = get(),
-            mediaRepository = get(),
+            libraryApiClient = get(),
         )
     }
 }

@@ -49,7 +49,7 @@ class JellyPlayCwSyncAdapter(
     override val namespace: String = NAMESPACE,
 ) : ProfileSyncAdapter {
 
-    private val mirror = SyncMirror(mirrorStore, MIRROR_PREFIX)
+    private val mirror = SyncMirror(mirrorStore, JpsyncReservation.mirrorPrefix(NAMESPACE))
 
     // ------------------------------------------------------------------
     // key <-> itemId: `"hidden/{itemId}"`. Item ids are Jellyfin guids (no
@@ -112,6 +112,5 @@ class JellyPlayCwSyncAdapter(
         const val NAMESPACE = "cw"
         const val KEY_PREFIX = "hidden/"
         val HIDDEN_VALUE: JsonElement = JsonPrimitive(true)
-        const val MIRROR_PREFIX = "jpsync.mirror.cw."
     }
 }

@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.network.library
 
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.home.ContinueWatchingRowRule
 
 /**
  * The per-type shaping rules the home batch path ([assembleHomeSections])
@@ -8,36 +9,45 @@ import com.raulshma.jellyplay.core.model.MediaItem
  * apply identically — this file is THE single home of each rule, and both
  * paths route through it so they cannot drift (the same one-shape-per-rule
  * policy as [filterNextUpEligible]).
+ *
+ * The continue-watching-shaped rules (the hidden-item drop, the Continue
+ * Watching id capture) are owned by
+ * [com.raulshma.jellyplay.core.model.home.ContinueWatchingRowRule] — the
+ * single owner the online fetch, the single-row refresh, the ordering use
+ * case and the offline mirror all consume; the extensions here are this
+ * module's named handles on it. [distinctByIdExcluding] is the Recently
+ * Added row's own fold and stays local — it is not part of the
+ * continue-watching rule.
  */
 
 /**
  * The hidden-resume-rows filter — drops the items the user hid from the
  * resume rows (`hiddenCwItemIds`) from the Continue Watching and Continue
- * Reading lists. THE single home of that rule: the assembler's CW/CR arms
- * and [HomeSectionsFetcher.refreshSection]'s CW/CR arms all route through
- * it.
+ * Reading lists. Routes through [ContinueWatchingRowRule.excludingHiddenItems],
+ * the rule's single owner: the assembler's CW/CR arms and
+ * [HomeSectionsFetcher.refreshSection]'s CW/CR arms all route through it.
  *
  * Books ride the same per-item "hide from resume rows" affordance as
  * Continue Watching — one `hiddenCwItemIds` set covers both rows.
  */
 internal fun List<MediaItem>.excludingHiddenItemIds(hiddenItemIds: Set<String>): List<MediaItem> =
-    filter { it.id !in hiddenItemIds }
+    ContinueWatchingRowRule.excludingHiddenItems(this, hiddenItemIds)
 
 /**
  * The Continue Watching id set that seeds the Next Up / Recently Added
  * CW-overlap drops ([filterNextUpEligible] / [distinctByIdExcluding]) —
  * derived from the HIDDEN-FILTERED CW list ([excludingHiddenItemIds]), so an
  * item hidden from Continue Watching stays eligible for Next Up / Recently
- * Added (its series' next episode being the intended resume path). THE
- * single home of that derivation: the assembler derives it from its
- * batch-fetched CW list, [HomeSectionsFetcher.refreshSection] from its fresh
- * CW read — each passes its own list and the rule applies once.
+ * Added (its series' next episode being the intended resume path). Routes
+ * through [ContinueWatchingRowRule.continueWatchingFilterIds], the rule's
+ * single owner: the assembler derives it from its batch-fetched CW list,
+ * [HomeSectionsFetcher.refreshSection] from its fresh CW read — each passes
+ * its own list and the rule applies once.
  */
 internal fun continueWatchingFilterIds(
     continueWatchingItems: List<MediaItem>,
     hiddenItemIds: Set<String>,
-): Set<String> =
-    continueWatchingItems.excludingHiddenItemIds(hiddenItemIds).map { it.id }.toSet()
+): Set<String> = ContinueWatchingRowRule.continueWatchingFilterIds(continueWatchingItems, hiddenItemIds)
 
 /**
  * The Recently Added aggregate's shaping fold — id-distinct (the

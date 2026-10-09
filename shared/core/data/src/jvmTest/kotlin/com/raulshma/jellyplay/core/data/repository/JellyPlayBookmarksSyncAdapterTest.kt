@@ -225,7 +225,7 @@ class JellyPlayBookmarksSyncAdapterTest {
         assertTrue(adapter.deletedKeys().isEmpty())
         assertTrue(adapter.dirtyValues(adapter.snapshot()).isEmpty())
         assertTrue(rows().isEmpty())
-        assertNull(mirrorStore.data.first()[stringPreferencesKey("jpsync.mirror.books.book-1/12345")])
+        assertNull(mirrorStore.data.first()[stringPreferencesKey(JpsyncReservation.mirrorKey("books", "book-1/12345"))])
     }
 
     @Test
@@ -252,7 +252,7 @@ class JellyPlayBookmarksSyncAdapterTest {
 
         assertNull(
             mirrorStore.data.first()[
-                stringPreferencesKey("jpsync.mirror.books.weird"),
+                stringPreferencesKey(JpsyncReservation.mirrorKey("books", "weird")),
             ],
         )
         assertTrue(adapter.dirtyValues(adapter.snapshot()).isEmpty())

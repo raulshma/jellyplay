@@ -4,7 +4,7 @@ import android.content.Context
 import android.util.Log
 import androidx.work.WorkerParameters
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
-import com.raulshma.jellyplay.core.data.repository.MediaCollectionReads
+import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.data.repository.HomeFeed
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
@@ -35,7 +35,7 @@ class LibraryRecommendationsWidgetWorker(
     /** The home-feed seam (the LATEST source's sections read — off the union). */
     private val homeFeed: HomeFeed,
     /** The SearchResult-shaped reads (latest/favorites/random queries — off the union). */
-    private val mediaCollectionReads: MediaCollectionReads,
+    private val libraryApiClient: LibraryApiClient,
     private val imageUrlProvider: ImageUrlProvider,
     private val authRepository: AuthRepository,
 ) : RecommendationWorkerSkeleton<MediaItem, LibraryWidgetItem>(
@@ -104,7 +104,7 @@ class LibraryRecommendationsWidgetWorker(
             .distinctBy { it.id }
             .take(MAX_ITEMS)
         if (items.isNotEmpty()) return items
-        return mediaCollectionReads.getMediaItems(
+        return libraryApiClient.getMediaItems(
             filters = com.raulshma.jellyplay.core.model.LibraryFilters(
                 mediaTypes = VIDEO_MEDIA_TYPES,
                 sortBy = com.raulshma.jellyplay.core.model.SortOption.DATE_ADDED,
@@ -114,14 +114,14 @@ class LibraryRecommendationsWidgetWorker(
     }
 
     private suspend fun fetchFavorites(): List<MediaItem> {
-        return mediaCollectionReads.getFavorites(
+        return libraryApiClient.getFavorites(
             mediaTypes = VIDEO_MEDIA_TYPES,
             limit = MAX_ITEMS,
         ).getOrDefault(EMPTY_RESULT).items
     }
 
     private suspend fun fetchSurprise(): List<MediaItem> {
-        return mediaCollectionReads.getMediaItems(
+        return libraryApiClient.getMediaItems(
             filters = com.raulshma.jellyplay.core.model.LibraryFilters(
                 mediaTypes = VIDEO_MEDIA_TYPES,
                 sortBy = com.raulshma.jellyplay.core.model.SortOption.RANDOM,

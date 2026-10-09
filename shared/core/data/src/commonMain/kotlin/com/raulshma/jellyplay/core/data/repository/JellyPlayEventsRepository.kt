@@ -2,8 +2,9 @@ package com.raulshma.jellyplay.core.data.repository
 
 import com.raulshma.jellyplay.core.data.session.JellyPlayPluginStatusStore
 import com.raulshma.jellyplay.core.network.api.CAP_SILENT_PUSH
+import com.raulshma.jellyplay.core.network.api.JellyPlayDeviceRegistryRoutes
+import com.raulshma.jellyplay.core.network.api.JellyPlayEventsRoutes
 import com.raulshma.jellyplay.core.network.api.JellyPlayMessage
-import com.raulshma.jellyplay.core.network.api.JellyPlayPluginApiClient
 import com.raulshma.jellyplay.core.network.api.JellyPlaySseEvent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -53,7 +54,8 @@ sealed interface JellyPlayPluginEvent {
  * state resets via the plugin status store's identity invalidation.
  */
 class JellyPlayEventsRepository(
-    private val apiClient: JellyPlayPluginApiClient,
+    private val deviceApi: JellyPlayDeviceRegistryRoutes,
+    private val eventsApi: JellyPlayEventsRoutes,
     private val statusStore: JellyPlayPluginStatusStore,
     private val scope: CoroutineScope,
     private val deviceName: String,
@@ -89,7 +91,7 @@ class JellyPlayEventsRepository(
             // The caps assertion rides EVERY registration (the wire REPLACES
             // caps): "silent-push" opts this device into the sync-nudge
             // silent push, whose client branch folds into requestSync.
-            apiClient.registerDevice(
+            deviceApi.registerDevice(
                 deviceId,
                 deviceName,
                 devicePlatform,
@@ -110,11 +112,11 @@ class JellyPlayEventsRepository(
     }
 
     suspend fun refreshInbox() {
-        _inbox.value = apiClient.getMessages().getOrDefault(_inbox.value)
+        _inbox.value = eventsApi.getMessages().getOrDefault(_inbox.value)
     }
 
     suspend fun markRead(messageId: String) {
-        apiClient.markMessageRead(messageId)
+        eventsApi.markMessageRead(messageId)
         _inbox.value = _inbox.value.map { if (it.id == messageId) it.copy(read = true) else it }
     }
 
@@ -122,7 +124,7 @@ class JellyPlayEventsRepository(
         val reconnect = SseReconnectLoop()
         while (streamJob?.isActive == true) {
             try {
-                apiClient.eventsStream().collect { sse ->
+                eventsApi.eventsStream().collect { sse ->
                     reconnect.onConnected()
                     _streamConnected.value = true
                     decode(sse)?.let { _events.emit(it) }

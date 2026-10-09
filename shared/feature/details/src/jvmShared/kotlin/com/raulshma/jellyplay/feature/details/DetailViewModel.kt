@@ -11,7 +11,8 @@ import com.raulshma.jellyplay.core.data.repository.BookTocCacheRepository
 import com.raulshma.jellyplay.core.data.repository.NoopBookTocCacheRepository
 import com.raulshma.jellyplay.core.data.repository.ReaderAnnotationsRepository
 import com.raulshma.jellyplay.core.data.book.BookTocProber
-import com.raulshma.jellyplay.core.data.repository.MediaExtrasReads
+import com.raulshma.jellyplay.core.network.api.LibraryApiClient
+import com.raulshma.jellyplay.core.network.api.toModel
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
@@ -118,8 +119,11 @@ class DetailViewModel internal constructor(
     private val storageProbe: DetailStorageProbe,
     private val strings: DetailStrings,
     private val mediaRepository: MediaRepository,
-    /** The item-attached extras seam (the detail screen's special-features row). */
-    private val mediaExtrasReads: MediaExtrasReads,
+    /** The item-attached extras + provider-id reads (the detail screen's
+     *  special-features row, the Seerr item resolution). */
+    private val libraryApiClient: LibraryApiClient,
+    /** The collection family reads/writes (the Add-to-Collection picker). */
+    private val collectionApiClient: com.raulshma.jellyplay.core.network.api.CollectionApiClient,
     /**
      * The single seam for user-data mutations (watched / favorite). The VM
      * supplies only the container adapter below (which projections of an item
@@ -173,19 +177,25 @@ class DetailViewModel internal constructor(
     /**
      * The jellyfin-plugin-jellyplay companion-plugin seams (ADR 0010), behind
      * the three plugin-gated detail sections (ratings row, server-scored
-     * "More like this", anime filler/recap badges). Nullable-with-default
-     * keeps the direct-construction test harnesses compiling — the Settings
-     * screen's `jellyPlayStatusStore` precedent; the Koin factory passes the
-     * real singles and every enrichment degrades to silent absence when
-     * either is null (the plugin contract's never-an-error-surface rule).
+     * "More like this", anime filler/recap badges). The data seams are the
+     * NARROW plugin roles the enrichments read — the ratings role (mdblist
+     * chips + per-season TMDB scores), the recommendations role (similar
+     * items) and the markers role (filler/recap badges) — not the whole
+     * client family. Nullable-with-default keeps the direct-construction test
+     * harnesses compiling — the Settings screen's `jellyPlayStatusStore`
+     * precedent; the Koin factory passes the real singles and every
+     * enrichment degrades to silent absence when either is null (the plugin
+     * contract's never-an-error-surface rule).
      *
      * Gating goes through the status store ONLY ([JellyPlayPluginFeatures]
      * keys, one [JellyPlayPluginStatusStore.refresh] probe per item
-     * navigation); data calls ride the client family — never per-endpoint
-     * 404 handling.
+     * navigation); data calls ride the roles — never per-endpoint 404
+     * handling.
      */
     private val pluginStatusStore: com.raulshma.jellyplay.core.data.session.JellyPlayPluginStatusStore? = null,
-    private val pluginApiClient: com.raulshma.jellyplay.core.network.api.JellyPlayPluginApiClient? = null,
+    private val pluginRatingsApi: com.raulshma.jellyplay.core.network.api.JellyPlayRatingsRoutes? = null,
+    private val pluginRecommendationsApi: com.raulshma.jellyplay.core.network.api.JellyPlayRecommendationsRoutes? = null,
+    private val pluginMarkersApi: com.raulshma.jellyplay.core.network.api.JellyPlayMarkersRoutes? = null,
     /**
      * The per-feature gate (probe AND the user's toggle — the ONE seam).
      * Nullable-with-default like the two seams above; without it the
@@ -385,7 +395,7 @@ class DetailViewModel internal constructor(
         scope = scope,
         session = _session,
         messages = _messages,
-        adapter = CollectionAddTarget(strings, mediaRepository),
+        adapter = CollectionAddTarget(strings, collectionApiClient, mediaRepository),
         mediaDetailProvider = mediaDetailProvider,
     )
     private val downloadLifecycleActions = actionFactories.downloads.create(
@@ -900,7 +910,7 @@ class DetailViewModel internal constructor(
             // Fetch special features / extras (featurettes, deleted scenes, etc.)
             // concurrently so the core detail renders immediately; the result lands
             // in specialFeatures and renders as its own horizontal row.
-            mediaExtrasReads.getSpecialFeatures(inputs.itemId)
+            libraryApiClient.getSpecialFeatures(inputs.itemId)
                 .onSuccess { extras ->
                     if (!loadGuard.isCurrent(inputs.itemId)) return@onSuccess
                     _uiState.update { it.copy(specialFeatures = extras) }
@@ -983,12 +993,16 @@ class DetailViewModel internal constructor(
         ) { inputs ->
             if (!pluginFeature(JellyPlayPluginFeatures.Ratings, inputs.itemId)) return@DetailEnrichment
             val imdbId = resolveImdbId(inputs.detail) ?: return@DetailEnrichment
-            val result = pluginApiClient?.getMdbListRatings(imdbId)?.getOrNull() ?: return@DetailEnrichment
+            val result = pluginRatingsApi?.getMdbListRatings(imdbId)?.getOrNull() ?: return@DetailEnrichment
             if (!loadGuard.isCurrent(inputs.itemId)) return@DetailEnrichment
             _uiState.update {
                 // Scoreless entries would render an empty chip — dropped here so
                 // the section's emptiness check matches what it can render.
-                it.copy(pluginRatings = result.ratings.filter { r -> r.score != null })
+                it.copy(
+                    pluginRatings = result.ratings
+                        .filter { r -> r.score != null }
+                        .map { it.toModel() },
+                )
             }
         },
         DetailEnrichment(
@@ -1006,7 +1020,7 @@ class DetailViewModel internal constructor(
             gate = { it.remoteDiscoveryAllowed },
         ) { inputs ->
             if (!pluginFeature(JellyPlayPluginFeatures.Recommendations, inputs.itemId)) return@DetailEnrichment
-            val scored = pluginApiClient?.getJellyPlaySimilarItems(inputs.itemId, limit = SIMILAR_ITEMS_LIMIT)
+            val scored = pluginRecommendationsApi?.getJellyPlaySimilarItems(inputs.itemId, limit = SIMILAR_ITEMS_LIMIT)
                 ?.getOrNull()
                 .orEmpty()
                 .filter { it.itemId != inputs.itemId }
@@ -1046,10 +1060,10 @@ class DetailViewModel internal constructor(
             if (!pluginFeature(JellyPlayPluginFeatures.AnimeMarkers, inputs.itemId)) return@DetailEnrichment
             val seriesId = inputs.detail.item.seriesIdForDetail ?: return@DetailEnrichment
             val providerSeriesId = resolveProviderSeriesId(inputs.detail) ?: return@DetailEnrichment
-            val markers = pluginApiClient?.getAnimeMarkers(seriesId, providerSeriesId)
+            val markers = pluginMarkersApi?.getAnimeMarkers(seriesId, providerSeriesId)
                 ?.getOrNull() ?: return@DetailEnrichment
             if (!loadGuard.isCurrent(inputs.itemId)) return@DetailEnrichment
-            _uiState.update { it.copy(animeMarkers = animeBadges(markers.markers)) }
+            _uiState.update { it.copy(animeMarkers = animeBadges(markers.markers.map { it.toModel() })) }
         },
         DetailEnrichment(
             name = "pluginSeasonRatings",
@@ -1069,10 +1083,10 @@ class DetailViewModel internal constructor(
             val ratingsBySeasonId = buildMap {
                 for (season in inputs.snapshot.seasons) {
                     val seasonNumber = season.indexNumber ?: continue
-                    val ratings = pluginApiClient?.getTmdbSeasonRatings(tmdbId.toString(), seasonNumber)
+                    val ratings = pluginRatingsApi?.getTmdbSeasonRatings(tmdbId.toString(), seasonNumber)
                         ?.getOrNull() ?: continue
                     if (ratings.isEmpty()) continue
-                    put(season.id, ratings)
+                    put(season.id, ratings.mapValues { (_, episode) -> episode.toModel() })
                 }
             }
             if (ratingsBySeasonId.isEmpty()) return@DetailEnrichment

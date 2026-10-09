@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.feature.livetv.schedule
 
 import androidx.compose.runtime.Immutable
-import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
+import com.raulshma.jellyplay.core.network.api.LiveTvApiClient
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.DvrTimer
 import com.raulshma.jellyplay.core.model.LiveTvRecording
@@ -38,7 +38,7 @@ data class ScheduleUiState(
  * (`getTimers(isActive=false, isScheduled=true)`) grouped by date.
  */
 class ScheduleViewModel(
-    private val mediaRepository: LiveTvRepository,
+    private val mediaRepository: LiveTvApiClient,
     private val imageUrlProvider: ImageUrlProvider,
 ) : JellyPlayViewModel() {
 

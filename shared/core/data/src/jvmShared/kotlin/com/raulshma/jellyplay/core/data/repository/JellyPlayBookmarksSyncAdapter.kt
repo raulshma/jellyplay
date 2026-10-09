@@ -47,10 +47,11 @@ class JellyPlayBookmarksSyncAdapter(
     override val namespace: String = NAMESPACE,
 ) : ProfileSyncAdapter {
 
-    // `jpsync.mirror.books.` — the prefs adapter's MIRROR_PREFIX plus this
-    // namespace: every key here is reserved in BOTH adapters (never synced,
-    // never adopted) while the two mirrors never see each other's entries.
-    private val mirror = SyncMirror(mirrorStore, MIRROR_PREFIX)
+    // `jpsync.mirror.books.` — the reserved mirror prefix this namespace's
+    // entries live under: every key here is reserved in BOTH adapters (never
+    // synced, never adopted) while the two mirrors never see each other's
+    // entries.
+    private val mirror = SyncMirror(mirrorStore, JpsyncReservation.mirrorPrefix(NAMESPACE))
 
     // ------------------------------------------------------------------
     // key <-> (itemId, positionTicks) — the join key. Item ids are Jellyfin
@@ -141,6 +142,5 @@ class JellyPlayBookmarksSyncAdapter(
 
     private companion object {
         const val NAMESPACE = "books"
-        const val MIRROR_PREFIX = "jpsync.mirror.books."
     }
 }

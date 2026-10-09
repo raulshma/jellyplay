@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.feature.player.live
 
 import com.raulshma.jellyplay.core.data.playback.PlaybackIdentity
-import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
+import com.raulshma.jellyplay.core.network.api.LiveTvApiClient
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackSlice
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
@@ -53,7 +53,7 @@ class LivePlaybackSessionTest {
 
     private val scheduler = TestCoroutineScheduler()
 
-    private val liveTvRepo: LiveTvRepository = mockk(relaxed = true)
+    private val liveTvRepo: LiveTvApiClient = mockk(relaxed = true)
     private val playbackRepo: PlaybackRepository = mockk(relaxed = true)
     private val playbackStore: PlaybackStore = mockk(relaxed = true)
     private val playbackIdentity: PlaybackIdentity = mockk(relaxed = true)

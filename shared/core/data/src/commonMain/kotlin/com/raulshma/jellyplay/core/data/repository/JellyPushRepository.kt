@@ -10,7 +10,7 @@ import com.raulshma.jellyplay.core.data.session.JellyPlayPluginStatusStore
 import com.raulshma.jellyplay.core.model.JellyPlayPluginFeatures
 import com.raulshma.jellyplay.core.network.api.CAP_SILENT_PUSH
 import com.raulshma.jellyplay.core.network.api.JellyPlayDevicePush
-import com.raulshma.jellyplay.core.network.api.JellyPlayPluginApiClient
+import com.raulshma.jellyplay.core.network.api.JellyPlayDeviceRegistryRoutes
 import com.raulshma.jellyplay.core.network.api.JellyPlayPushRegistration
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -115,7 +115,7 @@ interface JellyPushDistributor {
  * `pluginFeature.push.enabled` pref like every other feature key.
  */
 class JellyPushRepository(
-    private val apiClient: JellyPlayPluginApiClient,
+    private val apiClient: JellyPlayDeviceRegistryRoutes,
     private val statusStore: JellyPlayPluginStatusStore,
     private val featureGate: JellyPlayFeatureGate,
     private val dataStore: DataStore<Preferences>,
@@ -377,7 +377,7 @@ class JellyPushRepository(
         /** The plugin contract's kind for the connector-agnostic generic payload. */
         const val KIND_GENERIC = "generic"
 
-        /** Reserved per-device pref (`jpsync.device.` keys never sync — adapter rule). */
-        val ENDPOINT_KEY = stringPreferencesKey("jpsync.device.push.endpoint")
+        /** Reserved per-device pref (minted by [JpsyncReservation.pushEndpointKey]; `jpsync.device.` keys never sync — adapter rule). */
+        val ENDPOINT_KEY = stringPreferencesKey(JpsyncReservation.pushEndpointKey())
     }
 }

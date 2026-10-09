@@ -9,7 +9,7 @@ package com.raulshma.jellyplay.core.data.repository
  * here rather than in the reader:
  *
  *  - [pushBookmark] — after a LOCAL create, mirror the row to the server
- *    ([com.raulshma.jellyplay.core.network.api.JellyPlayPluginApiClient.upsertBookmark]).
+ *    (`JellyPlayUserDataRoutes.upsertBookmark`).
  *    A server row already sitting at the same position is overwritten in
  *    place only when the local row is NEWER (local `createdAt` vs server
  *    `updatedAt`); an equal-or-newer server row wins and the push is skipped.

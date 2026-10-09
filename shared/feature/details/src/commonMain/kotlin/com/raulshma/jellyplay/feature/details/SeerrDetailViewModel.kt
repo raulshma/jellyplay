@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.feature.details
 
 import com.raulshma.jellyplay.core.data.log.Log
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestStateHolder
@@ -42,7 +42,7 @@ class SeerrDetailViewModel constructor(
     private val seerrRequestDelegate: SeerrRequestDelegate,
     private val projections: PreferenceProjections,
     private val seerrPreferencesStore: SeerrPreferencesStore,
-    private val mediaRepository: MediaRepository,
+    private val libraryApiClient: LibraryApiClient,
 ) : JellyPlayViewModel() {
 
     /** Artwork theme + inline-trailer autoplay, projected centrally off the store slices. */
@@ -220,7 +220,7 @@ class SeerrDetailViewModel constructor(
         }
 
         for ((provider, id) in candidates) {
-            val result = mediaRepository.findItemByProviderId(provider, id).getOrNull()
+            val result = libraryApiClient.findItemByProviderId(provider, id).getOrNull()
             if (!result.isNullOrBlank()) {
                 _uiState.update { it.copy(jellyfinItemId = result) }
                 return

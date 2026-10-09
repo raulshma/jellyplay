@@ -3,23 +3,16 @@ package com.raulshma.jellyplay.core.data.di
 import com.raulshma.jellyplay.core.data.playback.AudioLyricsManager
 import com.raulshma.jellyplay.core.data.playback.PlaybackSourceResolver
 import com.raulshma.jellyplay.core.data.playback.PlaybackSourceResolverImpl
-import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
-import com.raulshma.jellyplay.core.data.repository.LiveTvRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.LyricsRepository
 import com.raulshma.jellyplay.core.data.repository.LyricsRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.MediaCacheInvalidator
-import com.raulshma.jellyplay.core.data.repository.MediaBrowseReads
-import com.raulshma.jellyplay.core.data.repository.MediaCollectionReads
 import com.raulshma.jellyplay.core.data.repository.MediaDetailProvider
-import com.raulshma.jellyplay.core.data.repository.MediaExtrasReads
 import com.raulshma.jellyplay.core.data.repository.HomeFeed
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryCacheInvalidation
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryInternals
-import com.raulshma.jellyplay.core.data.repository.MediaUncachedReadsImpl
 import com.raulshma.jellyplay.core.data.repository.MusicCatalogue
-import com.raulshma.jellyplay.core.data.repository.NewsletterRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineFirstItemResolver
 import com.raulshma.jellyplay.core.data.repository.OfflineFirstItemResolverImpl
 import com.raulshma.jellyplay.core.data.repository.OfflinePlaybackFacade
@@ -155,18 +148,6 @@ internal val dataMediaRepositoryModule: Module = module {
     // refetchers take it beside the surfaces they are mixed consumers of.
     single<HomeFeed> { get<MediaRepositoryImpl>() }
     single<UserDataChanges> { get<MediaRepositoryImpl>() }
-    // Family-repository split, second wave: the nine uncached browse-read
-    // members left the union for their own narrow seams over the
-    // [LibraryApiClient] single ([MediaUncachedReadsImpl] — one impl, three
-    // seams, the same one-impl-many-seams idiom as the two binds above; the
-    // LiveTvRepositoryImpl shape: pure forwards, no cache state). Consumers
-    // inject only the seam they read — MediaExtrasReads (intros/extras),
-    // MediaBrowseReads (people/tags), MediaCollectionReads (items/favorites/
-    // suggestions queries).
-    single { MediaUncachedReadsImpl(libraryApiClient = get()) }
-    single<MediaExtrasReads> { get<MediaUncachedReadsImpl>() }
-    single<MediaBrowseReads> { get<MediaUncachedReadsImpl>() }
-    single<MediaCollectionReads> { get<MediaUncachedReadsImpl>() }
     // Plan 08's module-internal cache-maintenance view (the former DataModule
     // bindMediaRepositoryCacheInvalidation @Binds): same single, narrow seam.
     single<MediaRepositoryCacheInvalidation> { get<MediaRepositoryImpl>() }
@@ -185,23 +166,11 @@ internal val dataMediaRepositoryModule: Module = module {
         )
     }
     single<SyncPlayRepository> { get<SyncPlayRepositoryImpl>() }
-    single {
-        LiveTvRepositoryImpl(
-            liveTvApiClient = get(),
-            // deleteRecording goes through the generic item delete — the
-            // one route this family uses that MediaInfoApiClient owns.
-            mediaInfoApiClient = get(),
-        )
-    }
-    single<LiveTvRepository> { get<LiveTvRepositoryImpl>() }
-    // Pass-through mirror retired: NewsletterRepository extends the
-    // NewsletterApiClient family seam and the MediaInfoApiClient single
-    // implements that family — interface delegation (a two-line inline
-    // object, the LiveTvRepositoryImpl `by` shape without the class) carries
-    // the three members verbatim, so no forward impl class exists anymore.
-    single<NewsletterRepository> {
-        val apiClient = get<com.raulshma.jellyplay.core.network.api.MediaInfoApiClient>()
-        object : NewsletterRepository, com.raulshma.jellyplay.core.network.api.NewsletterApiClient by apiClient {}
+    // The newsletter family seam of the MediaInfoApiClient single (the
+    // one-impl-many-seams idiom the network module uses for the other client
+    // families): the newsletter feature's view model injects the family type.
+    single<com.raulshma.jellyplay.core.network.api.NewsletterApiClient> {
+        get<com.raulshma.jellyplay.core.network.api.MediaInfoApiClient>()
     }
     single {
         PlaylistRepositoryImpl(

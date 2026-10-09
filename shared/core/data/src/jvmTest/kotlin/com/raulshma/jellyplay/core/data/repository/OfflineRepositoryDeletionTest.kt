@@ -7,7 +7,7 @@ import com.raulshma.jellyplay.core.database.entity.DownloadEntity
 import com.raulshma.jellyplay.core.database.entity.OfflineMediaEntity
 import com.raulshma.jellyplay.core.database.entity.PlaybackStateEntity
 import com.raulshma.jellyplay.core.database.entity.SyncBaselineEntity
-import com.raulshma.jellyplay.core.data.util.SystemTimeSource
+import com.raulshma.jellyplay.core.model.SystemTimeSource
 import com.raulshma.jellyplay.core.model.OfflinePersonInfo
 import java.io.File
 import kotlin.io.path.createTempDirectory

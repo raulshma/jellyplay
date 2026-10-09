@@ -60,7 +60,7 @@ class AdminDashboardViewModel(
      * default like the seams above; the send is refused while either gate is
      * unwired, so direct construction (tests) simply can't broadcast.
      */
-    private val jellyPlayPluginApiClient: com.raulshma.jellyplay.core.network.api.JellyPlayPluginApiClient? = null,
+    private val jellyPlayPluginApiClient: com.raulshma.jellyplay.core.network.api.JellyPlayEventsRoutes? = null,
 ) : JellyPlayViewModel() {
 
     private val _uiState = stateFlow(AdminDashboardState())

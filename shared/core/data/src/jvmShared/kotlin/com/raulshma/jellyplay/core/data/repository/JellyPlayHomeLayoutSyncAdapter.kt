@@ -64,7 +64,7 @@ class JellyPlayHomeLayoutSyncAdapter(
 
     private val json = Json { ignoreUnknownKeys = true }
 
-    private val mirror = SyncMirror(mirrorStore, MIRROR_PREFIX)
+    private val mirror = SyncMirror(mirrorStore, JpsyncReservation.mirrorPrefix(NAMESPACE))
 
     /** One layout domain: the canonical key, its slice reader, and its store-setter adoption. */
     private abstract class Domain<T>(
@@ -208,7 +208,6 @@ class JellyPlayHomeLayoutSyncAdapter(
 
     private companion object {
         const val NAMESPACE = "homelayout"
-        const val MIRROR_PREFIX = "jpsync.mirror.homelayout."
 
         // The canonical wire names — the store's own spec-declared key names
         // (the `u_<userId>::` layer stays device-local; these are the names

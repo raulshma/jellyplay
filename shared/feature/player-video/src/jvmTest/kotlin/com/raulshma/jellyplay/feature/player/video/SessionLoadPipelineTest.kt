@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.feature.player.video
 
-import com.raulshma.jellyplay.core.data.repository.MediaExtrasReads
+import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.data.repository.OfflinePlaybackFacade
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager
@@ -45,7 +45,7 @@ import org.junit.Test
  * constraints that used to live unwritten inside `initializeInternal`'s inlined
  * ~15-stage coroutine. A fake [SessionLoadOutputs] + recording [SessionLoadHooks]
  * capture the invocation order; the collaborators ([PlayerSessionManager],
- * [MediaExtrasReads], stores) are stubbed.
+ * [LibraryApiClient], stores) are stubbed.
  *
  * Since the [VideoSessionHost] deletion, the three stage bodies with real
  * logic are pipeline members, so their behavior pins moved here too (from the
@@ -157,8 +157,8 @@ class SessionLoadPipelineTest {
             }
         }
 
-        val mediaExtrasReads = mockk<MediaExtrasReads>(relaxed = true)
-        coEvery { mediaExtrasReads.getIntros(any()) } returns Result.success(intros)
+        val libraryApiClient = mockk<LibraryApiClient>(relaxed = true)
+        coEvery { libraryApiClient.getIntros(any()) } returns Result.success(intros)
 
         val aggregateStore = mockk<VideoPlayerAggregateStore>(relaxed = true)
         every { aggregateStore.aggregate } returns MutableStateFlow(aggregate)
@@ -180,7 +180,7 @@ class SessionLoadPipelineTest {
 
         val pipeline = SessionLoadPipeline(
             sessionManager = sessionManager,
-            mediaExtrasReads = mediaExtrasReads,
+            libraryApiClient = libraryApiClient,
             aggregateStore = aggregateStore,
             networkOfflineStore = networkOfflineStore,
             offlinePlaybackFacade = offlinePlaybackFacade,
@@ -486,8 +486,8 @@ class SessionLoadPipelineTest {
         coEvery { sessionManager.loadMedia(any(), any(), any()) } throws
             RuntimeException("playback info failed")
 
-        val mediaExtrasReads = mockk<MediaExtrasReads>(relaxed = true)
-        coEvery { mediaExtrasReads.getIntros(any()) } returns Result.success(emptyList())
+        val libraryApiClient = mockk<LibraryApiClient>(relaxed = true)
+        coEvery { libraryApiClient.getIntros(any()) } returns Result.success(emptyList())
         val aggregateStore = mockk<VideoPlayerAggregateStore>(relaxed = true)
         every { aggregateStore.aggregate } returns MutableStateFlow(VideoPlayerAggregate())
         every { aggregateStore.aggregateRaw } returns flowOf(VideoPlayerAggregate())
@@ -498,7 +498,7 @@ class SessionLoadPipelineTest {
 
         val pipeline = SessionLoadPipeline(
             sessionManager = sessionManager,
-            mediaExtrasReads = mediaExtrasReads,
+            libraryApiClient = libraryApiClient,
             aggregateStore = aggregateStore,
             networkOfflineStore = networkOfflineStore,
             offlinePlaybackFacade = mockk(relaxed = true),

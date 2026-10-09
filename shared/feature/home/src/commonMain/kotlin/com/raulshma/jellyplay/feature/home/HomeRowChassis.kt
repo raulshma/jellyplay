@@ -4,6 +4,7 @@ import com.raulshma.jellyplay.core.model.ContinueWatchingClickBehavior
 import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.home.HomeRowModules
 
 /**
  * Which row chassis renders a home section — the per-section branch chain of
@@ -44,7 +45,9 @@ internal sealed interface HomeRowChassis {
  * online poster row.
  */
 internal fun homeRowChassis(section: HomeSection, hasOfflineContent: Boolean): HomeRowChassis {
-    val isWide = section.type == HomeSectionType.CONTINUE_WATCHING || section.type == HomeSectionType.NEXT_UP
+    // The wide-row membership is the row registry's fact (Continue Watching /
+    // Next Up); the precedence chain below is chassis policy and stays here.
+    val isWide = HomeRowModules[section.type].wideRow
     return when {
         section.type == HomeSectionType.DOWNLOADED || (hasOfflineContent && !isWide) ->
             HomeRowChassis.OfflinePoster(section)
@@ -58,10 +61,10 @@ internal fun homeRowChassis(section: HomeSection, hasOfflineContent: Boolean): H
  * The section types that get the "See All" pill — the single source both
  * poster rows (the offline mirror and the online row) read through the one
  * hoisted gate in [HomeContentList], so they agree on which sections carry
- * the affordance.
+ * the affordance. Reads the row registry's [HomeRowModules.hasSeeAll] fact.
  */
 internal fun sectionHasSeeAll(sectionType: HomeSectionType): Boolean =
-    sectionType == HomeSectionType.RECENTLY_ADDED || sectionType == HomeSectionType.LATEST_MEDIA
+    HomeRowModules[sectionType].hasSeeAll
 
 /**
  * Whether a section can be refetched on its own — the single gate for BOTH
@@ -73,22 +76,17 @@ internal fun sectionHasSeeAll(sectionType: HomeSectionType): Boolean =
  * Next Up), the per-library latest rows, Recently Added (aggregate — its
  * refetch re-runs the fan-out), the Jellyfin discover rows, the pinned rows
  * and the plugin rows (PLUGIN_ROW — the fetcher's single-row plugin arm)
- * all map to a single-row fetch (see `HomeSectionsFetcher.refreshSection`).
- * Seerr-sourced discover rows ride the group gate/last-known-good batch path
- * and are excluded (the `seerrItems` guard below); RECOMMENDATIONS' seed
+ * all map to a single-row fetch (see `HomeSectionsFetcher.refreshSection`,
+ * the HomeRowRefreshArms registry). Seerr-sourced discover rows ride the
+ * group gate/last-known-good batch path and are excluded (the `seerrItems`
+ * guard below — the per-INSTANCE half of the gate; the type half is the
+ * registry's [HomeRowModules]/edgeRefreshable fact). RECOMMENDATIONS' seed
  * chain is batch-shaped; FAVORITES, LIVE_TV and DOWNLOADED are never
  * constructed by the network (offline rows are excluded upstream — the
  * offline feed never arms the gesture).
  */
 internal fun isEdgeRefreshableSection(section: HomeSection): Boolean =
-    when (section.type) {
-        HomeSectionType.RECOMMENDATIONS,
-        HomeSectionType.FAVORITES,
-        HomeSectionType.LIVE_TV,
-        HomeSectionType.DOWNLOADED,
-        -> false
-        else -> section.seerrItems.isEmpty()
-    }
+    HomeRowModules[section.type].edgeRefreshable && section.seerrItems.isEmpty()
 
 /**
  * The three sinks every resume row routes through — the triple
@@ -104,12 +102,13 @@ internal class ResumeRowSinks(
 
 /**
  * The section types that honor the resume click behavior ([ContinueWatchingClickBehavior]):
- * CONTINUE_WATCHING and CONTINUE_READING — the ONE predicate [resumeRowClick]
- * and [posterRowClick] share, so the next resume section joins both folds by
- * editing this single site.
+ * the registry's [HomeRowModules]/resumeLike fact (CONTINUE_WATCHING and
+ * CONTINUE_READING) — the ONE predicate [resumeRowClick] and [posterRowClick]
+ * share, so the next resume section joins both folds by editing its module
+ * registration, nothing else.
  */
 internal fun isResumeSection(sectionType: HomeSectionType): Boolean =
-    sectionType == HomeSectionType.CONTINUE_WATCHING || sectionType == HomeSectionType.CONTINUE_READING
+    HomeRowModules[sectionType].resumeLike
 
 /**
  * One implementation of the CW / CONTINUE_READING / NEXT_UP click routing,

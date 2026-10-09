@@ -91,14 +91,14 @@ class JellyPlayPreferencesSyncAdapterTest {
         val store = newDataStore("reserved-${System.nanoTime()}").apply { reset() }
         val adapter = JellyPlayPreferencesSyncAdapter(store)
         store.edit {
-            it[stringPreferencesKey("jpsync.mirror.theme")] = "\"dark\""
+            it[stringPreferencesKey(JpsyncReservation.MIRROR_ROOT + "theme")] = "\"dark\""
             it[stringPreferencesKey("normal")] = "value"
         }
 
         val snapshot = adapter.snapshot()
 
         assertTrue(snapshot.containsKey("normal"))
-        assertNull(snapshot["jpsync.mirror.theme"])
+        assertNull(snapshot[JpsyncReservation.MIRROR_ROOT + "theme"])
     }
 
     @Test
@@ -144,7 +144,7 @@ class JellyPlayPreferencesSyncAdapterTest {
                 "pin_hash" to JsonPrimitive("attacker-hash"),
                 "device_id" to JsonPrimitive("attacker-device"),
                 "dream_enabled" to JsonPrimitive(true),
-                "jpsync.mirror.theme" to JsonPrimitive("\"dark\""),
+                JpsyncReservation.MIRROR_ROOT + "theme" to JsonPrimitive("\"dark\""),
                 "theme_mode" to JsonPrimitive("LIGHT"),
             ),
         )
@@ -159,10 +159,10 @@ class JellyPlayPreferencesSyncAdapterTest {
         assertEquals("local-secret", prefs[stringPreferencesKey("pin_hash")])
         assertNull(prefs[booleanPreferencesKey("dream_enabled")])
         assertNull(prefs[stringPreferencesKey("device_id")])
-        assertNull(prefs[stringPreferencesKey("jpsync.mirror.theme")])
+        assertNull(prefs[stringPreferencesKey(JpsyncReservation.MIRROR_ROOT + "theme")])
         assertEquals("LIGHT", prefs[stringPreferencesKey("theme_mode")])
-        assertNull(prefs[stringPreferencesKey("jpsync.mirror.pin_hash")])
-        assertEquals("\"LIGHT\"", prefs[stringPreferencesKey("jpsync.mirror.theme_mode")])
+        assertNull(prefs[stringPreferencesKey(JpsyncReservation.MIRROR_ROOT + "pin_hash")])
+        assertEquals("\"LIGHT\"", prefs[stringPreferencesKey(JpsyncReservation.MIRROR_ROOT + "theme_mode")])
     }
 
     @Test
@@ -175,22 +175,22 @@ class JellyPlayPreferencesSyncAdapterTest {
         store.edit {
             it[stringPreferencesKey("theme")] = "dark"
             it[intPreferencesKey("volume")] = 30
-            it[stringPreferencesKey("jpsync.mirror.theme")] = "\"dark\""
-            it[stringPreferencesKey("jpsync.mirror.volume")] = "30"
+            it[stringPreferencesKey(JpsyncReservation.MIRROR_ROOT + "theme")] = "\"dark\""
+            it[stringPreferencesKey(JpsyncReservation.MIRROR_ROOT + "volume")] = "30"
         }
         // The cursors the sync wiring parks under the reserved prefix are
         // untouchable (a hostile/stale tombstone cannot wipe identity or
         // cursor state).
-        store.edit { it[stringPreferencesKey("jpsync.cursor.delta.user-1")] = "42" }
+        store.edit { it[stringPreferencesKey(JpsyncReservation.cursorKey("delta", "user-1"))] = "42" }
 
         adapter.deleteRemote(setOf("theme", "volume", "pin_hash"))
 
         val prefs = store.data.first()
         assertNull(prefs[stringPreferencesKey("theme")])
         assertNull(prefs[intPreferencesKey("volume")])
-        assertNull(prefs[stringPreferencesKey("jpsync.mirror.theme")])
-        assertNull(prefs[stringPreferencesKey("jpsync.mirror.volume")])
-        assertEquals("42", prefs[stringPreferencesKey("jpsync.cursor.delta.user-1")])
+        assertNull(prefs[stringPreferencesKey(JpsyncReservation.MIRROR_ROOT + "theme")])
+        assertNull(prefs[stringPreferencesKey(JpsyncReservation.MIRROR_ROOT + "volume")])
+        assertEquals("42", prefs[stringPreferencesKey(JpsyncReservation.cursorKey("delta", "user-1"))])
         // Nothing re-reads as deleted or dirty afterwards.
         assertTrue(adapter.dirtyValues(adapter.snapshot()).isEmpty())
         assertTrue(adapter.deletedKeys().isEmpty())

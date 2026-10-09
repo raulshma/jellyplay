@@ -6,7 +6,7 @@ import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaSession
 import androidx.media3.session.LibraryResult
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
-import com.raulshma.jellyplay.core.data.repository.MediaCollectionReads
+import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.MusicCatalogue
 import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
@@ -63,7 +63,7 @@ class AudioLibraryBrowserTest {
 
     private val mediaRepository: MediaRepository = mockk(relaxed = true)
     private val musicCatalogue: MusicCatalogue = mockk(relaxed = true)
-    private val mediaCollectionReads: MediaCollectionReads = mockk(relaxed = true)
+    private val libraryApiClient: LibraryApiClient = mockk(relaxed = true)
     private val playlistRepository: PlaylistRepository = mockk(relaxed = true)
     private val downloadRepository: DownloadRepository = mockk(relaxed = true)
     private val playbackRepository: PlaybackRepository = mockk(relaxed = true)
@@ -81,7 +81,7 @@ class AudioLibraryBrowserTest {
         scope = scope,
         mediaRepository = mediaRepository,
         musicCatalogue = musicCatalogue,
-        mediaCollectionReads = mediaCollectionReads,
+        libraryApiClient = libraryApiClient,
         playlistRepository = playlistRepository,
         downloadRepository = downloadRepository,
         playbackRepository = playbackRepository,
@@ -226,7 +226,7 @@ class AudioLibraryBrowserTest {
 
     private fun stubCollectionReads(vararg items: MediaItem) {
         coEvery {
-            mediaCollectionReads.getMediaItems(any(), any(), any(), any(), any(), any())
+            libraryApiClient.getMediaItems(any(), any(), any(), any(), any(), any(), any())
         } returns Result.success(SearchResult(items = items.toList(), totalRecordCount = items.size, startIndex = 0))
     }
 
@@ -251,7 +251,7 @@ class AudioLibraryBrowserTest {
         val result = children(browser(), "RECENT")
 
         val filters = slot<LibraryFilters>()
-        coVerify { mediaCollectionReads.getMediaItems(any(), capture(filters), any(), any(), any(), any()) }
+        coVerify { libraryApiClient.getMediaItems(any(), capture(filters), any(), any(), any(), any(), any()) }
         assertEquals(listOf(MediaType.AUDIO), filters.captured.mediaTypes)
         assertEquals(SortOption.DATE_PLAYED, filters.captured.sortBy)
         assertEquals(listOf("TRACK_|r1"), result.value!!.map { it.mediaId })
@@ -264,7 +264,7 @@ class AudioLibraryBrowserTest {
         children(browser(), "RECENT_ALBUMS")
 
         val filters = slot<LibraryFilters>()
-        coVerify { mediaCollectionReads.getMediaItems(any(), capture(filters), any(), any(), any(), any()) }
+        coVerify { libraryApiClient.getMediaItems(any(), capture(filters), any(), any(), any(), any(), any()) }
         assertEquals(listOf(MediaType.ALBUM), filters.captured.mediaTypes)
         assertEquals(SortOption.DATE_ADDED, filters.captured.sortBy)
     }
@@ -282,7 +282,7 @@ class AudioLibraryBrowserTest {
 
         val tracks = children(browser, "GENRE_|g1")
         val filters = slot<LibraryFilters>()
-        coVerify { mediaCollectionReads.getMediaItems(any(), capture(filters), any(), any(), any(), any()) }
+        coVerify { libraryApiClient.getMediaItems(any(), capture(filters), any(), any(), any(), any(), any()) }
         assertEquals(listOf("Rock"), filters.captured.genres)
         assertEquals(listOf("TRACK_|x1"), tracks.value!!.map { it.mediaId })
     }
@@ -293,7 +293,7 @@ class AudioLibraryBrowserTest {
         // Relaxed fabrication of the generic Result returns miscasts — stub
         // real empties for every arm this test browses into.
         coEvery { musicCatalogue.getAlbumTracks(any(), any()) } returns Result.success(emptyList())
-        coEvery { musicCatalogue.getArtistAlbums(any(), any()) } returns Result.success(emptyList())
+        coEvery { libraryApiClient.getArtistAlbums(any(), any()) } returns Result.success(emptyList())
         coEvery { mediaRepository.getGenres(any(), any()) } returns Result.success(emptyList())
         coEvery { playlistRepository.getPlaylists(any()) } returns Result.success(emptyList())
         val browser = browser()
@@ -473,7 +473,7 @@ class AudioLibraryBrowserTest {
     fun `onSetMediaItems expands a tapped ARTIST node through the facade`() {
         // "Play <artist>" (voice search returns ARTIST_| nodes) must resolve
         // through the same expansion ladder as a browse-tree tap.
-        coEvery { musicCatalogue.getArtistAlbums("ar-1", 50) } returns Result.success(
+        coEvery { libraryApiClient.getArtistAlbums("ar-1", 50) } returns Result.success(
             listOf(
                 MediaItem(id = "al-1", name = "Album 1", mediaType = MediaType.ALBUM),
                 MediaItem(id = "al-2", name = "Album 2", mediaType = MediaType.ALBUM),

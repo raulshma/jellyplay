@@ -2,6 +2,8 @@ package com.raulshma.jellyplay.core.data.usecase
 
 import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionType
+import com.raulshma.jellyplay.core.model.home.ContinueWatchingRowRule
+import com.raulshma.jellyplay.core.model.home.HomeRowModules
 
 /**
  * Orders the freshly fetched home sections to match the user's configured
@@ -14,10 +16,15 @@ import com.raulshma.jellyplay.core.model.HomeSectionType
  * Rules:
  *  * Sections are sorted by their index in [order]; unknown types land last,
  *    preserving their original relative order.
- *  * When [mergeContinueWatchingAndNextUp] is true, Next Up items are appended
- *    to Continue Watching (de-duplicated by item id) and the Next Up section is
- *    dropped. If Continue Watching is absent but Next Up is present, Next Up is
- *    relabelled as Continue Watching. When false, sections pass through ordered.
+ *  * When [mergeContinueWatchingAndNextUp] is true, the merge donor — the row
+ *    whose [com.raulshma.jellyplay.core.model.home.HomeRowModule.mergesIntoContinueWatching]
+ *    flag is set (NEXT_UP, read from the home row registry, never spelled
+ *    here) — donates its items into the Continue Watching row (de-duplicated
+ *    by item id through [ContinueWatchingRowRule.mergeCwNextUp] — the
+ *    CW+NextUp merge's single owner, shared with the single-row refresh and
+ *    the offline mirror) and the donor section is dropped. If Continue
+ *    Watching is absent but a donor is present, the donor is relabelled as
+ *    Continue Watching. When false, sections pass through ordered.
  */
 class OrderHomeSectionsUseCase() {
 
@@ -38,25 +45,31 @@ class OrderHomeSectionsUseCase() {
 
         if (!mergeContinueWatchingAndNextUp) return ordered
 
+        // The merge's anchor (Continue Watching) and donor (the registry's
+        // mergesIntoContinueWatching flag — NEXT_UP) are the row registry's
+        // facts; the fold mechanics stay ContinueWatchingRowRule's.
         val cw = ordered.firstOrNull { it.type == HomeSectionType.CONTINUE_WATCHING }
-        val nextUp = ordered.firstOrNull { it.type == HomeSectionType.NEXT_UP }?.items.orEmpty()
+        val donor = ordered.firstOrNull { HomeRowModules[it.type].mergesIntoContinueWatching }
+        val donorItems = donor?.items.orEmpty()
         return if (cw != null) {
-            val seen = cw.items.mapTo(mutableSetOf()) { it.id }
-            val mergedItems = cw.items + nextUp.filter { seen.add(it.id) }
+            // The merge fold's single owner (ContinueWatchingRowRule) — the
+            // single-row refresh rebuilds this exact call, and the offline
+            // home mirror runs its offline twin.
+            val mergedItems = ContinueWatchingRowRule.mergeCwNextUp(cw.items, donorItems)
             ordered.mapNotNull { section ->
-                when (section.type) {
-                    HomeSectionType.CONTINUE_WATCHING -> section.copy(items = mergedItems)
-                    HomeSectionType.NEXT_UP -> null
+                when {
+                    HomeRowModules[section.type].mergesIntoContinueWatching -> null
+                    section.type == HomeSectionType.CONTINUE_WATCHING -> section.copy(items = mergedItems)
                     else -> section
                 }
             }
         } else {
-            val nextUpSection = ordered.firstOrNull { it.type == HomeSectionType.NEXT_UP }
-            if (nextUpSection != null) {
-                ordered.mapNotNull { section ->
-                    when (section.type) {
-                        HomeSectionType.NEXT_UP -> section.copy(type = HomeSectionType.CONTINUE_WATCHING)
-                        else -> section
+            if (donor != null) {
+                ordered.map { section ->
+                    if (HomeRowModules[section.type].mergesIntoContinueWatching) {
+                        section.copy(type = HomeSectionType.CONTINUE_WATCHING)
+                    } else {
+                        section
                     }
                 }
             } else {

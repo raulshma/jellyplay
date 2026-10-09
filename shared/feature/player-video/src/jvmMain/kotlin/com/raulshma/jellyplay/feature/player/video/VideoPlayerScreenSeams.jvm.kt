@@ -7,10 +7,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.window.FrameWindowScope
 import com.raulshma.jellyplay.core.model.SubtitleStyle
-import com.raulshma.jellyplay.core.ui.player.TranscodeReasonCatalog
-import com.raulshma.jellyplay.core.ui.player.normalizeReasonToken
 import com.raulshma.jellyplay.core.ui.platform.pickAwtFile
-import org.jetbrains.compose.resources.stringResource
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import java.io.File
 import java.text.DateFormat
@@ -232,38 +229,4 @@ private fun saveCapture(image: java.awt.image.BufferedImage, titleHint: String):
     val out = File(dir, name)
     javax.imageio.ImageIO.write(image, "png", out)
     return "Frame saved to ${out.absolutePath} (${image.width}×${image.height})"
-}
-
-// ── Transcode reasons ──────────────────────────────────────────────────────
-
-actual class PlatformTranscodeReason(
-    actual val raw: String,
-    actual val explanation: String,
-    actual val hint: String?,
-) {
-    actual val renderedText: String
-        get() = if (hint != null) "$explanation\n$hint" else explanation
-}
-
-@Composable
-internal actual fun rememberFormattedTranscodeReasons(
-    rawReasons: List<String>,
-): List<PlatformTranscodeReason> {
-    // Resolve through the commonMain TranscodeReasonCatalog (compose resources),
-    // so desktop localizes exactly like Android instead of echoing raw tokens.
-    // Unknown tokens keep the raw server text, same as Android's fallback.
-    val rows = remember(rawReasons) {
-        rawReasons
-            .filter { it.isNotBlank() }
-            .distinctBy { it.normalizeReasonToken() }
-            .map { raw -> raw to TranscodeReasonCatalog.lookup(raw) }
-    }
-    return rows.map { (raw, strings) ->
-        PlatformTranscodeReason(
-            raw = raw,
-            explanation = strings?.let { stringResource(it.explanation) }
-                ?: stringResource(TranscodeReasonCatalog.unknownTemplate, raw),
-            hint = strings?.hint?.let { stringResource(it) },
-        )
-    }
 }

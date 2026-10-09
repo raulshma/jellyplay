@@ -1,9 +1,9 @@
 package com.raulshma.jellyplay.feature.player.live
 
 import com.raulshma.jellyplay.core.data.playback.PlaybackIdentity
-import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
+import com.raulshma.jellyplay.core.network.api.LiveTvApiClient
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
-import com.raulshma.jellyplay.core.data.util.EpochMillisSource
+import com.raulshma.jellyplay.core.model.EpochMillisSource
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackSlice
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
 import com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeState
@@ -78,7 +78,7 @@ class LiveTvPlayerEnginePolicyTest {
      */
     private val scheduler = TestCoroutineScheduler()
 
-    private lateinit var liveTvRepo: LiveTvRepository
+    private lateinit var liveTvRepo: LiveTvApiClient
     private lateinit var playbackRepo: PlaybackRepository
     private lateinit var playbackIdentity: PlaybackIdentity
     private lateinit var appRuntimeStateStore: AppRuntimeStateStore

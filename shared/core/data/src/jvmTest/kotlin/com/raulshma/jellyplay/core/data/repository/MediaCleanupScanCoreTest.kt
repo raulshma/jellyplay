@@ -2,7 +2,7 @@ package com.raulshma.jellyplay.core.data.repository
 
 import androidx.room3.Room
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
-import com.raulshma.jellyplay.core.data.util.TimeSource
+import com.raulshma.jellyplay.core.model.TimeSource
 import com.raulshma.jellyplay.core.database.JellyPlayDatabase
 import com.raulshma.jellyplay.core.database.entity.ScanStateEntity
 import com.raulshma.jellyplay.core.model.MediaItemStub

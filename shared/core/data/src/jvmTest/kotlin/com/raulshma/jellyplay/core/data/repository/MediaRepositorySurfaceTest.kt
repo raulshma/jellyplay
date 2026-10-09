@@ -51,9 +51,9 @@ class MediaRepositorySurfaceTest {
      * (toggleFavorite, markUnplayed, markSeasonPlayed, markSeasonUnplayed)
      * retired off the union. 31 after the uncached browse-read split: the nine
      * members the impl never cached moved to their own seams over the
-     * [MediaUncachedReadsImpl] single — MediaExtrasReads (getIntros,
-     * getSpecialFeatures), MediaBrowseReads (getPeople, getItemsByPerson,
-     * getTags) and MediaCollectionReads (getMediaItems, getFavorites,
+     * the MediaUncachedReadsImpl single — LibraryApiClient (getIntros,
+     * getSpecialFeatures), LibraryApiClient (getPeople, getItemsByPerson,
+     * getTags) and LibraryApiClient (getMediaItems, getFavorites,
      * getSearchSuggestions) — and getItemsByStudio retired outright (zero
      * repo-typed callers; the network layer's own HomeSectionsFetcher keeps
      * its private studio drill-down). The repository's paged projections
@@ -79,7 +79,7 @@ class MediaRepositorySurfaceTest {
      * background home-sections refetchers, the widget, the discover-row
      * editor) keep the union for their non-home members.
      */
-    private val maxInterfaceMembers = 23
+    private val maxInterfaceMembers = 21
 
     /** Walks up from the working dir to the module root that owns src/commonMain/kotlin. */
     private fun moduleRoot(): File {
