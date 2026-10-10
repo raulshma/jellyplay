@@ -465,6 +465,8 @@
     <string name="ss_auto_lock_timer_subtitle">Zeit, bis die App nach dem Verlassen sperrt</string>
     <string name="ss_backup_export_title">Einstellungs-Backup exportieren</string>
     <string name="ss_backup_export_subtitle">Aktuelle Konfigurationseinstellungen in eine JSON-Datei exportieren</string>
+    <string name="ss_backup_export_secrets_title">Backup mit Secrets exportieren</string>
+    <string name="ss_backup_export_secrets_subtitle">Einstellungen plus verschlüsselte API-Schlüssel und die gespeicherte Serverliste exportieren</string>
     <string name="ss_backup_import_title">Einstellungs-Backup importieren</string>
     <string name="ss_backup_import_subtitle">Konfigurationen aus einem zuvor exportierten Einstellungs-Backup wiederherstellen</string>
     <string name="ss_factory_reset_title">Werkseinstellungen</string>

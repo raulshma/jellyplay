@@ -465,6 +465,8 @@
     <string name="ss_auto_lock_timer_subtitle">離脱後にアプリをロックするまでの時間</string>
     <string name="ss_backup_export_title">設定バックアップをエクスポート</string>
     <string name="ss_backup_export_subtitle">現在の設定を JSON ファイルにエクスポートします</string>
+    <string name="ss_backup_export_secrets_title">シークレット付きバックアップをエクスポート</string>
+    <string name="ss_backup_export_secrets_subtitle">設定に加えて、パスフレーズで暗号化した API キーと保存済みサーバーリストをエクスポートします</string>
     <string name="ss_backup_import_title">設定バックアップをインポート</string>
     <string name="ss_backup_import_subtitle">以前にエクスポートした設定バックアップから設定を復元します</string>
     <string name="ss_factory_reset_title">工場出荷時にリセット</string>

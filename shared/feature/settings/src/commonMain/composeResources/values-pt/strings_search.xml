@@ -465,6 +465,8 @@
     <string name="ss_auto_lock_timer_subtitle">Tempo até a aplicação bloquear após sair</string>
     <string name="ss_backup_export_title">Exportar Cópia de Segurança das Definições</string>
     <string name="ss_backup_export_subtitle">Exportar as definições de configuração atuais para um ficheiro JSON</string>
+    <string name="ss_backup_export_secrets_title">Exportar cópia de segurança com segredos</string>
+    <string name="ss_backup_export_secrets_subtitle">Exporta as definições mais as chaves de API cifradas com frase-passe e a lista de servidores guardada</string>
     <string name="ss_backup_import_title">Importar Cópia de Segurança das Definições</string>
     <string name="ss_backup_import_subtitle">Restaurar configurações a partir de uma cópia de segurança exportada anteriormente</string>
     <string name="ss_factory_reset_title">Reposição de Fábrica</string>

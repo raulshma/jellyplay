@@ -465,6 +465,8 @@
     <string name="ss_auto_lock_timer_subtitle">앱을 떠난 후 잠금될 때까지의 시간입니다</string>
     <string name="ss_backup_export_title">설정 백업 내보내기</string>
     <string name="ss_backup_export_subtitle">현재 구성 설정을 JSON 파일로 내보냅니다</string>
+    <string name="ss_backup_export_secrets_title">시크릿 포함 백업 내보내기</string>
+    <string name="ss_backup_export_secrets_subtitle">설정과 함께 암호 문구로 암호화된 API 키 및 저장된 서버 목록을 내보냅니다</string>
     <string name="ss_backup_import_title">설정 백업 가져오기</string>
     <string name="ss_backup_import_subtitle">이전에 내보낸 설정 백업에서 구성을 복원합니다</string>
     <string name="ss_factory_reset_title">공장 초기화</string>

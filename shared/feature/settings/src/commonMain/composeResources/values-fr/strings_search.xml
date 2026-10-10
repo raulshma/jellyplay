@@ -465,6 +465,8 @@
     <string name="ss_auto_lock_timer_subtitle">Délai avant le verrouillage de l'application après l'avoir quittée</string>
     <string name="ss_backup_export_title">Exporter la sauvegarde des paramètres</string>
     <string name="ss_backup_export_subtitle">Exporter les paramètres de configuration actuels vers un fichier JSON</string>
+    <string name="ss_backup_export_secrets_title">Exporter la sauvegarde avec les secrets</string>
+    <string name="ss_backup_export_secrets_subtitle">Exporte les paramètres plus les clés d’API chiffrées par phrase de passe et la liste des serveurs enregistrés</string>
     <string name="ss_backup_import_title">Importer la sauvegarde des paramètres</string>
     <string name="ss_backup_import_subtitle">Restaurer les configurations depuis une sauvegarde de paramètres précédemment exportée</string>
     <string name="ss_factory_reset_title">Réinitialisation d'usine</string>

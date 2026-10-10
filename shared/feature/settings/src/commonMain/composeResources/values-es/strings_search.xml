@@ -465,6 +465,8 @@
     <string name="ss_auto_lock_timer_subtitle">Tiempo antes de que la app se bloquee al salir</string>
     <string name="ss_backup_export_title">Exportar copia de seguridad de ajustes</string>
     <string name="ss_backup_export_subtitle">Exporta los ajustes de configuración actuales a un archivo JSON</string>
+    <string name="ss_backup_export_secrets_title">Exportar copia de seguridad con secretos</string>
+    <string name="ss_backup_export_secrets_subtitle">Exporta los ajustes más las claves de API cifradas con frase de contraseña y la lista de servidores guardada</string>
     <string name="ss_backup_import_title">Importar copia de seguridad de ajustes</string>
     <string name="ss_backup_import_subtitle">Restaura configuraciones desde una copia de seguridad de ajustes exportada previamente</string>
     <string name="ss_factory_reset_title">Restablecer de fábrica</string>

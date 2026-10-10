@@ -260,7 +260,7 @@
     <string name="settings_import_preview_security_option">Also restore PIN / biometric lock</string>
     <string name="settings_import_preview_version_warning">Backup was exported from a newer app version (%1$d). Some settings may be ignored.</string>
     <!-- Wave-2 external backup slices (Integrations / item prefs / playlists / widget config cards).
-         Default locale only, like the diff_* residue — untranslated locales fall back. -->
+         Translated in every locale; the I18nParityRatchetTest guards against drift. -->
     <string name="settings_import_slice_integrations">Integrations</string>
     <string name="settings_import_slice_item_prefs">Per-Item Playback Preferences</string>
     <string name="settings_import_slice_playlists">Smart &amp; Mood Playlists</string>
@@ -268,7 +268,7 @@
     <string name="settings_import_slice_entry_absent">Not backed up</string>
     <string name="settings_import_slice_entry_removed">Removed on import</string>
     <!-- Wave-3 passphrase-encrypted secrets block (local file backup only).
-         Default locale only, like the diff_* residue — untranslated locales fall back. -->
+         Translated in every locale; the I18nParityRatchetTest guards against drift. -->
     <string name="settings_export_settings_secrets">Export with Secrets</string>
     <string name="settings_export_settings_secrets_subtitle">Include API keys and the saved server list, encrypted with a passphrase</string>
     <string name="settings_backup_passphrase_export_title">Encrypt Backup Secrets</string>
@@ -296,7 +296,7 @@
     <string name="settings_import_secrets_counts_seerr_no">No Seerr credentials</string>
 
     <!-- RestoreWizardScreen.kt — the unified restore wizard (file + server restore points).
-         Default locale only, like the diff_* residue — untranslated locales fall back. -->
+         Translated in every locale; the I18nParityRatchetTest guards against drift. -->
     <string name="wizard_title">Restore</string>
     <string name="wizard_source_server_title">Server restore point</string>
     <string name="wizard_source_server_subtitle">Roll back to a synced snapshot held on the server</string>

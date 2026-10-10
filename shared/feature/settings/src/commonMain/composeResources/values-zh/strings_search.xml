@@ -465,6 +465,8 @@
     <string name="ss_auto_lock_timer_subtitle">离开后应用锁定前的时间</string>
     <string name="ss_backup_export_title">导出设置备份</string>
     <string name="ss_backup_export_subtitle">将当前配置设置导出到 JSON 文件</string>
+    <string name="ss_backup_export_secrets_title">导出包含机密的备份</string>
+    <string name="ss_backup_export_secrets_subtitle">导出设置以及经密码短语加密的 API 密钥和已保存的服务器列表</string>
     <string name="ss_backup_import_title">导入设置备份</string>
     <string name="ss_backup_import_subtitle">从之前导出的设置备份还原配置</string>
     <string name="ss_factory_reset_title">恢复出厂设置</string>
