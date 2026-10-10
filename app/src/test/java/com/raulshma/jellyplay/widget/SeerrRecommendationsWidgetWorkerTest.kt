@@ -153,7 +153,7 @@ class SeerrRecommendationsWidgetWorkerTest {
         val result = createWorker().doWork()
 
         assertTrue(result is WorkResult.Success)
-        coVerify(exactly = 1) { seerrRepository.getDiscoverTv(page = 1, firstAirDateGte = null) }
+        coVerify(exactly = 1) { seerrRepository.getDiscoverTv(page = 1, params = null) }
         coVerify(exactly = 0) { seerrRepository.getTrending(any()) }
     }
 
@@ -168,8 +168,8 @@ class SeerrRecommendationsWidgetWorkerTest {
         createWorker().doWork()
 
         coVerify {
-            seerrRepository.getDiscoverTv(page = eq(1), firstAirDateGte = match { date ->
-                Regex("""\d{4}-\d{2}-\d{2}""").matches(date)
+            seerrRepository.getDiscoverTv(page = eq(1), params = match { p ->
+                p?.releaseDateGte?.let { Regex("""\d{4}-\d{2}-\d{2}""").matches(it) } == true
             })
         }
     }

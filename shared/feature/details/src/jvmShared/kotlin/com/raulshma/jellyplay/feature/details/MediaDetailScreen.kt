@@ -505,6 +505,11 @@ fun MediaDetailScreen(
                     downloadedEpisodeIds = downloads.downloadedEpisodeIds,
                     downloadPicker = downloads.downloadPicker,
                     book = uiState.book,
+                    pluginRatings = uiState.pluginRatings,
+                    pluginSimilarItems = uiState.pluginSimilarItems,
+                    pluginSimilarSuppressesStock = uiState.pluginSimilarSuppressesStock,
+                    animeMarkers = uiState.animeMarkers,
+                    seasonRatings = uiState.seasonRatings,
                 )
 
                 val onVideoClick = rememberVideoClickHandler(

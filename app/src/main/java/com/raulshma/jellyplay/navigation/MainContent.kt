@@ -51,7 +51,6 @@ import com.raulshma.jellyplay.core.ui.tv.isTv
 import com.raulshma.jellyplay.core.designsystem.theme.TvTypography
 import com.raulshma.jellyplay.feature.home.navigation.HomePlayOnRedirect
 import com.raulshma.jellyplay.feature.shell.navigation.ShellAdminHooks
-import com.raulshma.jellyplay.feature.shell.navigation.ShellAudioSource
 import com.raulshma.jellyplay.feature.shell.navigation.ShellHomeHooks
 import com.raulshma.jellyplay.feature.shell.navigation.ShellSearchHooks
 import com.raulshma.jellyplay.feature.shell.navigation.ShellSettingsHooks
@@ -60,7 +59,6 @@ import com.raulshma.jellyplay.feature.shell.navigation.rememberShellAudioClicks
 import com.raulshma.jellyplay.feature.shell.navigation.rememberShellHost
 import com.raulshma.jellyplay.feature.shell.rememberShellUserMessages
 import com.raulshma.jellyplay.shell.ShellInfra
-import kotlinx.coroutines.flow.StateFlow
 
 @Composable
 internal fun MainContent(
@@ -98,7 +96,9 @@ internal fun MainContent(
     // ActivityResultLauncher, plus the no-player-found message path) —
     // constructed by its own holder (ExternalPlayerLauncherHost.kt); the
     // remembered NavRequestController below takes both members as seams.
-    val externalPlayer = rememberExternalPlayerLauncherHost(model)
+    // The reporting contract resolves through the ShellInfra bundle — the
+    // authenticated branch only, like every other lazy provider here.
+    val externalPlayer = rememberExternalPlayerLauncherHost(infra.externalPlayerReportsLazy.value)
 
     // The request-dispatch half of this composable (NavRequestController): the
     // playback-host navigateFilter + its ONE identity-stable Navigator, the
@@ -365,16 +365,14 @@ internal fun MainContent(
             // instead of allocating fresh lambdas per call site. Built through the shared
             // rememberShellAudioClicks — the ONE construction site for the pair (its KDoc
             // owns the remember-key discipline and the blank-art→null normalization):
-            // this shell adapts its audio core (AudioPlaybackManager) to ShellAudioSource,
-            // remembered on the manager, and the helper reads the manager's flows at
+            // this shell's audio core (AudioPlaybackManager) IS the shared
+            // NowPlayingSurface — passed straight in, and the helper reads the
+            // manager's flows at
             // CLICK time — the desktop hooks' pattern. Capturing the composed
             // `audioItemId` instead would either go stale (keyed on the navigator
             // alone) or rebuild the shellHost graph on every song change (keyed on
             // the item). Equivalent while resumed, which is the only time a click can land.
-            val audioSource = remember(audioPlaybackManager) {
-                AudioPlaybackShellAudioSource(audioPlaybackManager)
-            }
-            val audioClicks = rememberShellAudioClicks(navigator, audioSource)
+            val audioClicks = rememberShellAudioClicks(navigator, audioPlaybackManager)
 
             // Play On (cast-to-Jellyfin-session) controller — the ONE
             // construction site for the whole Play On surface family, hoisted
@@ -505,6 +503,7 @@ internal fun MainContent(
                     tvDrawerState = tvDrawerState,
                     tvDrawerListState = tvDrawerListState,
                     libraryFolders = libraryFolders,
+                    tvOverscan = preferences.tvOverscan,
                     hiddenNavItems = preferences.hiddenNavItems,
                     navItemOrder = preferences.navItemOrder,
                     nowPlayingEnabled = audioItemId != null,
@@ -567,21 +566,4 @@ internal fun MainContent(
             }
         }
     }
-}
-
-/**
- * This shell's [ShellAudioSource] over [AudioPlaybackManager] — the manager's
- * four StateFlow members forwarded verbatim (the desktop twin adapts
- * DesktopAudioQueueManager the same way beside its scaffold). Remembered on
- * the manager at the call site: a fresh-per-recomposition adapter would churn
- * the rememberShellAudioClicks helper's remember keys (the discipline its
- * KDoc owns).
- */
-private class AudioPlaybackShellAudioSource(
-    private val manager: AudioPlaybackManager,
-) : ShellAudioSource {
-    override val currentPlayingItemId: StateFlow<String?> get() = manager.currentPlayingItemId
-    override val albumArtUrl: StateFlow<String> get() = manager.albumArtUrl
-    override val title: StateFlow<String> get() = manager.title
-    override val artist: StateFlow<String> get() = manager.artist
 }

@@ -125,6 +125,13 @@ class UserPreferencesStore constructor(
     // watch-later playlist, onboarding flag, recent DLNA devices). Injected here
     // so backup export/import can fan out to it alongside the 19 domain stores.
     private val appRuntimeStateStore: com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeStateStore,
+    // Wave 2: backup slices contributed OUTSIDE the domain-store fan-out (Room
+    // config, integration settings, widget config) — see
+    // settings.ExternalBackupSlice. Core:datastore cannot depend on Room, so
+    // the concrete sources are injected from core:data's Koin module; the
+    // default keeps every direct construction (tests, standalone graphs)
+    // working without them — the backup then simply carries no external slices.
+    private val externalSlices: List<com.raulshma.jellyplay.core.datastore.settings.ExternalBackupSlice> = emptyList(),
 ) {
     private val scope = externalScope
 
@@ -507,6 +514,12 @@ class UserPreferencesStore constructor(
             for (binding in sliceBindings) jobs[binding.key] = async { binding.snapshotElement() }
             for (binding in sliceBindings) slices[binding.key] = jobs.getValue(binding.key).await()
         }
+        // External slices (Room-backed config, integration/widget settings) ride
+        // after the domain fan-out: `null` read = nothing to back up, slice
+        // omitted (see ExternalBackupSlice.read).
+        for (slice in externalSlices) {
+            (slice.read() ?: continue).let { slices[slice.key] = it }
+        }
         return SettingsBackupSnapshot(slices, appRuntimeStateStore.state.first())
     }
 
@@ -531,6 +544,7 @@ class UserPreferencesStore constructor(
         for (binding in sliceBindings) {
             binding.restoreFromBackup(slices, json, restoreSecuritySensitive)
         }
+        restoreExternalSlices(slices)
         appRuntimeStateStore.restore(backup.extras, clearNullIds = true)
     }
 
@@ -562,6 +576,13 @@ class UserPreferencesStore constructor(
      * `AUDIO` fields and vice-versa. Exclusive slices are still wholesale-
      * restored when their single owning category is selected.
      *
+     * The external slices (Room-backed config, integration/widget settings) are
+     * NOT category-bound — no `PreferenceResetCategory` owns them, so a
+     * category selection must never touch them (a per-category import may not
+     * silently wipe playlists or item prefs). They ride the Import-All-grade
+     * opt-in [includeExtras] (with the extras block), and the import preview
+     * reaches them individually via [restoreExternalSlice].
+     *
      * Extras are written only when [includeExtras] is true (Import All).
      */
     suspend fun restoreV2Categories(
@@ -577,7 +598,10 @@ class UserPreferencesStore constructor(
             if (binding.categories.none { it in categories }) continue
             binding.restoreFromBackupForCategories(slices, json, categories, restoreSecuritySensitive)
         }
-        if (includeExtras) appRuntimeStateStore.restore(backup.extras, clearNullIds = true)
+        if (includeExtras) {
+            appRuntimeStateStore.restore(backup.extras, clearNullIds = true)
+            restoreExternalSlices(slices)
+        }
     }
 
     /**
@@ -586,6 +610,37 @@ class UserPreferencesStore constructor(
      */
     suspend fun restoreExtras(backup: SettingsBackup) {
         appRuntimeStateStore.restore(backup.extras, clearNullIds = true)
+    }
+
+    // ----------------------------------------------------------------------
+    // External backup slices (Wave 2) — Room-backed config + integration /
+    // widget settings contributed from core:data. Not category-bound; the
+    // import preview renders them through their own cards.
+    // ----------------------------------------------------------------------
+
+    /**
+     * One-shot read of every external slice for the import-preview's current
+     * side: key → live element, or `null` when the domain has nothing to back
+     * up (the slice would be omitted from an export).
+     */
+    suspend fun externalSliceSnapshot(): Map<String, kotlinx.serialization.json.JsonElement?> =
+        externalSlices.associate { it.key to it.read() }
+
+    /**
+     * Restores just the named external slice from [backup] (the import
+     * preview's per-card action). Unknown keys and missing slices are no-ops
+     * — the same forward-compat tolerance as [restoreV2].
+     */
+    suspend fun restoreExternalSlice(backup: SettingsBackup, key: String) {
+        val slice = externalSlices.firstOrNull { it.key == key } ?: return
+        backup.slices[key]?.let { slice.restore(it) }
+    }
+
+    /** The shared fan-out behind [restoreV2] and the `includeExtras` arm of [restoreV2Categories]. */
+    private suspend fun restoreExternalSlices(slices: Map<String, kotlinx.serialization.json.JsonElement>) {
+        for (slice in externalSlices) {
+            slices[slice.key]?.let { slice.restore(it) }
+        }
     }
 
     suspend fun updateNotificationPreferences(transform: (NotificationPreferences) -> NotificationPreferences) {

@@ -66,7 +66,8 @@ fun desktopDetailsPlatformModule(dataDir: Path): Module = module {
             storageProbe = get(),
             strings = get(),
             mediaRepository = get(),
-            mediaExtrasReads = get(),
+            libraryApiClient = get(),
+            collectionApiClient = get(),
             userDataMutator = get(),
             mediaDetailProvider = get(),
             playbackRepository = get(),
@@ -81,6 +82,14 @@ fun desktopDetailsPlatformModule(dataDir: Path): Module = module {
             bookTocCacheRepository = get(),
             readerAnnotationsRepository = getOrNull(),
             bookTocProber = getOrNull(),
+            // ADR 0010 companion-plugin seams — registered core:data /
+            // core:network singles (DataSessionPlaybackKoinModule /
+            // NetworkKoinModules); the VM null-guards everything anyway.
+            pluginStatusStore = get(),
+            pluginRatingsApi = get(),
+            pluginRecommendationsApi = get(),
+            pluginMarkersApi = get(),
+            jellyPlayFeatureGate = get(),
         )
     }
     // #147 merge: Collection/Person VMs left commonMain when their closure
@@ -97,7 +106,7 @@ fun desktopDetailsPlatformModule(dataDir: Path): Module = module {
     viewModel {
         PersonDetailViewModel(
             mediaRepository = get(),
-            mediaBrowseReads = get(),
+            libraryApiClient = get(),
             userDataMutator = get(),
             imageUrlProvider = get(),
             mediaDownloadActions = get(),

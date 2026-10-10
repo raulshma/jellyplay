@@ -6,8 +6,8 @@ import com.raulshma.jellyplay.core.model.PlayMethod
 /**
  * Which URL builder must produce the stream URL for a
  * [PlaybackMethodSelection] — the decision is split from the building so the
- * ladder stays pure: [PlaybackRepositoryImpl.resolvePlayback] maps each arm
- * onto exactly one choreography,
+ * ladder stays pure: [PlaybackRepositoryImpl.resolvePlaybackInternal] maps
+ * each arm onto exactly one choreography,
  *  - [LIVE_STREAM] / [STATIC_STREAM]: the client-constructed
  *    `/Videos/{id}/stream` URL (its `getStreamUrl`), the live one echoing the
  *    server-issued `MediaSource.liveStreamId`;

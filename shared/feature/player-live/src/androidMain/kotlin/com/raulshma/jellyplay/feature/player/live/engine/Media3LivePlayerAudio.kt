@@ -9,13 +9,14 @@ import com.raulshma.jellyplay.feature.player.live.LiveTvPlayerViewModel
 /**
  * Android actual of the [LivePlayerAudio] seam (player-live conveyor): the
  * becoming-noisy receiver half of the deleted `PlayerAudioLifecycle` wrapper
- * (plus the raw-player volume access behind `toggleMute`), with the focus
+ * (plus the raw-player volume access), with the focus
  * surface binding the video slice added — the current engine's Media3 player
  * is bound into the focus module's [VideoPlaybackSurface] singleton as a
  * [FocusCommandTarget], so the module's OS-loss commands (pause / duck /
  * restore) reach the live stream exactly where the legacy duck/restore
- * listener used to. Mute is re-asserted as `volume = 0f` — live has no
- * `setMuted`, and no resume-skip hook (the legacy live wiring passed
+ * listener used to. Its mute command routes to the engine's real
+ * [LivePlayerEngine.setMuted] — mute is engine state since the volume-zero
+ * hack died; no resume-skip hook (the legacy live wiring passed
  * `onRegain = null`). The broadcast chassis lives in core:data's
  * [BecomingNoisyPauseReceiver] (one home, shared with the VOD player); this
  * class supplies the raw-player pause target.
@@ -47,8 +48,17 @@ internal class Media3LivePlayerAudio(
         becomingNoisyReceiver.register()
         videoFocusSurface?.bind(
             target = {
-                player()?.let { player ->
-                    Media3LiveFocusTarget(player) { owner?.state?.value?.isMuted ?: false }
+                (owner?.engineForRendering() as? Media3LivePlayerEngine)?.let { engine ->
+                    engine.media3Player?.let { player ->
+                        Media3LiveFocusTarget(
+                            player = player,
+                            isMutedState = { owner?.state?.value?.isMuted ?: false },
+                            // Real mute: both directions ride the engine's
+                            // setMuted (unmute restores the pre-mute level),
+                            // never a one-way volume-0 write.
+                            setMutedState = engine::setMuted,
+                        )
+                    }
                 }
             },
         )
@@ -65,22 +75,21 @@ internal class Media3LivePlayerAudio(
 
 /**
  * The live focus-surface command target over the raw Media3 player (the
- * legacy `PlaybackControl` adapter's shape): volume/mute read the player
- * directly, [isMuted] stays the VM's uiState mirror (the same surface
- * [LiveTvPlayerViewModel.toggleMute] writes), and mute is re-asserted as
- * `volume = 0f` — live has no separate mute lever.
+ * legacy `PlaybackControl` adapter's shape): volume/isPlaying read the player
+ * directly, [isMuted] stays the VM's uiState mirror, and mute routes to the
+ * engine's real [LivePlayerEngine.setMuted] (the same surface
+ * [LiveTvPlayerViewModel.toggleMute] drives).
  */
 private class Media3LiveFocusTarget(
     private val player: androidx.media3.common.Player,
     private val isMutedState: () -> Boolean,
+    private val setMutedState: (Boolean) -> Unit,
 ) : FocusCommandTarget {
     override val isPlaying: Boolean get() = player.isPlaying
     override val volume: Float get() = player.volume
     override val isMuted: Boolean get() = isMutedState()
     override fun pause() = player.pause()
-    override fun setMuted(muted: Boolean) {
-        if (muted) player.volume = 0f
-    }
+    override fun setMuted(muted: Boolean) = setMutedState(muted)
     override fun setVolume(volume: Float, isUserChange: Boolean) {
         player.volume = volume
     }

@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.network
 
+import com.raulshma.jellyplay.core.concurrency.withDeadlineMs
 import com.raulshma.jellyplay.core.model.DiscoveredServer
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -7,7 +8,6 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeoutOrNull
 import org.jellyfin.sdk.Jellyfin
 import org.jellyfin.sdk.discovery.RecommendedServerInfo
 import org.jellyfin.sdk.discovery.RecommendedServerInfoScore
@@ -71,9 +71,10 @@ class ServerDiscoveryService(
         try {
             // The SDK's `timeout` is a per-receive socket timeout, not a scan
             // window — a silent LAN would otherwise spin maxServers+1 receive
-            // timeouts before the flow completes. Bound the whole collection
-            // to the caller's scan duration instead.
-            withTimeoutOrNull(timeoutMs) {
+            // timeouts before the flow completes. The whole collection runs
+            // under the governor's deadline envelope instead (withTimeoutOrNull
+            // semantics; the whole-scan window 28e954187 bounded by hand).
+            withDeadlineMs(timeoutMs) {
                 jellyfin.discovery.discoverLocalServers(
                     timeout = timeoutMs.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(),
                     maxServers = maxServers,

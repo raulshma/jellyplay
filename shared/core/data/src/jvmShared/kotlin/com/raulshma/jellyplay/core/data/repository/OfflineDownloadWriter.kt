@@ -1,9 +1,12 @@
 package com.raulshma.jellyplay.core.data.repository
 
+import com.raulshma.jellyplay.core.model.DownloadFileInventory
 import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.MediaSegment
 import com.raulshma.jellyplay.core.model.MediaStream
+import com.raulshma.jellyplay.core.model.OfflineSubtitleManifest
 import com.raulshma.jellyplay.core.model.TrickplayInfo
 
 /**
@@ -65,6 +68,13 @@ data class DownloadStartRequest(
  * [DownloadRepository] extends this interface so every existing consumer keeps
  * compiling unchanged; only `DownloadDelegate` narrows to this type. The
  * implementation lives in [DownloadRepositoryImpl].
+ *
+ * The port carries reads too: the local sidecar reads the writer's own
+ * artifacts back (`loadLocalSubtitleManifest`, `loadLocalSegments`,
+ * `getDownloadFileInventory` — the offline playback, detail and resync readers
+ * consume them through the same port), so a reader of the artifacts couples to
+ * this ONE interface rather than to the lifecycle union. (The historical name
+ * says "writer" and stays — the reads were folded in, not renamed out.)
  *
  * **Depth**: a focused write surface behind a narrow interface. The artifact
  * bundle recipe sits one layer up in `DownloadDelegate`; the writers themselves
@@ -155,4 +165,21 @@ interface OfflineDownloadWriter {
     suspend fun markSubtitlesPending(itemId: String)
 
     fun enqueueDownload(downloadId: String)
+
+    // ── Local artifact reads (the port's read side) ────────────────────────
+
+    /** Returns the locally-cached subtitle manifest for a downloaded item, if any. */
+    suspend fun loadLocalSubtitleManifest(downloadPath: String, itemId: String? = null): OfflineSubtitleManifest?
+
+    /** Returns locally-cached media segments for a downloaded item, if any. */
+    suspend fun loadLocalSegments(itemId: String): List<MediaSegment>?
+
+    /**
+     * Enumerates every on-disk file belonging to a downloaded item — the media
+     * file plus all sidecar artifacts (subtitles, trickplay, segments, images)
+     * — each with its absolute path and actual on-disk byte size. Sidecar sizes
+     * are not persisted, so they are read live from the filesystem. Returns
+     * [DownloadFileInventory.EMPTY] when the item has no resolvable download path.
+     */
+    suspend fun getDownloadFileInventory(itemId: String): DownloadFileInventory
 }

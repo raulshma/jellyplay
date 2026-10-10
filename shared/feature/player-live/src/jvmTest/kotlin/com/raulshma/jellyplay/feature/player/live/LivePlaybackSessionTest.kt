@@ -1,12 +1,13 @@
 package com.raulshma.jellyplay.feature.player.live
 
 import com.raulshma.jellyplay.core.data.playback.PlaybackIdentity
-import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
+import com.raulshma.jellyplay.core.network.api.LiveTvApiClient
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackSlice
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.PlayMethod
+import com.raulshma.jellyplay.core.model.PlaybackResolution
 import com.raulshma.jellyplay.core.model.ResolvedPlayback
 import com.raulshma.jellyplay.feature.player.live.data.LastChannelStore
 import com.raulshma.jellyplay.feature.player.live.engine.LiveEngineFactory
@@ -52,7 +53,7 @@ class LivePlaybackSessionTest {
 
     private val scheduler = TestCoroutineScheduler()
 
-    private val liveTvRepo: LiveTvRepository = mockk(relaxed = true)
+    private val liveTvRepo: LiveTvApiClient = mockk(relaxed = true)
     private val playbackRepo: PlaybackRepository = mockk(relaxed = true)
     private val playbackStore: PlaybackStore = mockk(relaxed = true)
     private val playbackIdentity: PlaybackIdentity = mockk(relaxed = true)
@@ -120,13 +121,15 @@ class LivePlaybackSessionTest {
 
     private fun stubResolve() {
         coEvery {
-            playbackRepo.resolvePlayback(any(), any(), any(), any(), any(), any(), any(), any(), any())
-        } returns ResolvedPlayback(
-            mediaSourceId = "src",
-            streamUrl = "https://srv/Videos/x/stream",
-            playMethod = PlayMethod.DIRECT_STREAM,
-            playSessionId = "psid",
-            maxStreamingBitrate = null,
+            playbackRepo.resolvePlayable(any())
+        } returns PlaybackResolution.Resolved(
+            ResolvedPlayback(
+                mediaSourceId = "src",
+                streamUrl = "https://srv/Videos/x/stream",
+                playMethod = PlayMethod.DIRECT_STREAM,
+                playSessionId = "psid",
+                maxStreamingBitrate = null,
+            ),
         )
     }
 
@@ -173,14 +176,13 @@ class LivePlaybackSessionTest {
     }
 
     @Test
-    fun `resolve failure emits TuneFailed carrying the channel name`() = runTest(scheduler) {
+    fun `resolve failure emits TuneFailed carrying the channel name`() = runTest {
         stubChannels(1)
+        // The whole resolution misses (resolve verdict and the forced
+        // fallback both).
         coEvery {
-            playbackRepo.resolvePlayback(any(), any(), any(), any(), any(), any(), any(), any(), any())
-        } returns null
-        coEvery {
-            playbackRepo.fetchPlaybackInfo(any(), any(), any(), any(), any(), any(), any(), any(), any())
-        } returns Result.failure(RuntimeException("offline"))
+            playbackRepo.resolvePlayable(any())
+        } returns PlaybackResolution.Unplayable
         val session = createSession()
 
         session.initialize("ch-0", null, null)
@@ -311,11 +313,8 @@ class LivePlaybackSessionTest {
         session.initialize("ch-0", null, null)
 
         coEvery {
-            playbackRepo.resolvePlayback(any(), any(), any(), any(), any(), any(), any(), any(), any())
-        } returns null
-        coEvery {
-            playbackRepo.fetchPlaybackInfo(any(), any(), any(), any(), any(), any(), any(), any(), any())
-        } returns Result.failure(RuntimeException("no transcode"))
+            playbackRepo.resolvePlayable(any())
+        } returns PlaybackResolution.Unplayable
         engineErrorDetailFlow.value = "boom"
 
         onTranscodeFallback!!.invoke()

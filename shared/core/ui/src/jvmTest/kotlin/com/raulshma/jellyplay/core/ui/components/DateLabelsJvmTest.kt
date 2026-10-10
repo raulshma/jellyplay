@@ -66,14 +66,6 @@ class DateLabelsJvmTest {
     }
 
     @Test
-    fun `one decimal keeps the percent-one-f contract`() {
-        assertEquals("4.0", oneDecimal(4.0))
-        assertEquals("12.3", oneDecimal(12.34))
-        assertEquals("1.3", oneDecimal(1.25)) // HALF_UP at the first decimal
-        assertEquals("-1.3", oneDecimal(-1.25)) // sign symmetric
-    }
-
-    @Test
     fun `relative instant label renders older entries with the default-locale MMM d`() {
         // Mirror the newsletter test's expectation construction: the expected
         // string comes from DateTimeFormatter at the (pinned) default locale.

@@ -26,13 +26,26 @@ import com.composables.icons.tabler.outline.ShieldLock
 import com.composables.icons.tabler.outline.Subtitles
 import com.composables.icons.tabler.outline.Volume
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
+import com.raulshma.jellyplay.core.datastore.BackupSliceKey
 import com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeState
 import com.raulshma.jellyplay.core.datastore.settings.PreferenceSliceSnapshot
+import com.composables.icons.tabler.outline.AdjustmentsHorizontal
+import com.composables.icons.tabler.outline.LayoutGrid
+import com.composables.icons.tabler.outline.Plug
+import com.composables.icons.tabler.outline.Playlist
+import com.raulshma.jellyplay.core.model.CheckFrequency
 import com.raulshma.jellyplay.core.model.EqualizerSettings
+import com.raulshma.jellyplay.core.model.GestureIndicatorSide
+import com.raulshma.jellyplay.core.model.GestureMode
 import com.raulshma.jellyplay.core.model.HasDisplayName
+import com.raulshma.jellyplay.core.model.OrientationMode
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import com.raulshma.jellyplay.core.model.SegmentBehavior
 import com.raulshma.jellyplay.core.model.SubtitleStyle
+import com.raulshma.jellyplay.core.model.SubtitleStylePreset
+import com.raulshma.jellyplay.core.ui.components.formatOneDecimal
+import com.raulshma.jellyplay.core.ui.model.labelResource
+import com.raulshma.jellyplay.core.ui.model.preferenceEnumLabelResources
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.getString
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
@@ -88,14 +101,27 @@ class PreferenceDiffSnapshot(
  * @param read the field off [PreferenceSliceSnapshot]; the same slice field
  *   the corresponding screen consumes.
  * @param format the value rendering, ported verbatim from the former rows.
+ * @param enumLabel the enum-label seam for enum-valued rows
+ *   (`PreferenceEnumNames.labelResource`): the value maps to a localized
+ *   resource instead of the [format] fallback, so the review screens show the
+ *   same localized wording as the settings rows. When set, [format] is
+ *   unused — declare the row with the read and the seam reference only.
  */
 class DiffField<V>(
     val labelRes: StringResource,
     private val read: (PreferenceSliceSnapshot) -> V,
-    private val format: (V) -> String,
+    private val format: (V) -> String = { it.toString() },
+    private val enumLabel: ((V) -> StringResource)? = null,
 ) {
-    /** The formatted value for [slices] — the diff compares these strings. */
-    fun value(slices: PreferenceSliceSnapshot): String = format(read(slices))
+    /**
+     * The formatted value for [slices] — the diff compares these strings.
+     * Seam-covered enum rows resolve [enumLabel] through [resolve]; every
+     * other row runs the ported [format]. [resolve] defaults to the same
+     * resource-`toString` fallback a label-table miss produces, so pure
+     * tests can call this without a resolved table.
+     */
+    fun value(slices: PreferenceSliceSnapshot, resolve: (StringResource) -> String = { it.toString() }): String =
+        enumLabel?.let { resolve(it(read(slices))) } ?: format(read(slices))
 }
 
 /**
@@ -106,7 +132,7 @@ class DiffField<V>(
  * omitted even though the store's reset key list still covers them.
  *
  * Callers pass the current and baseline [PreferenceDiffSnapshot]s once (the
- * [FactoryResetViewModel] / [ImportPreviewViewModel] expose them) so labels
+ * [FactoryResetViewModel] / [RestoreWizardViewModel] expose them) so labels
  * aren't re-resolved per field; use [changedFields] for the diff subset and
  * [totalFields] for the full count.
  */
@@ -118,7 +144,8 @@ class PreferenceCategoryView(
     internal val diffFields: List<DiffField<*>>,
 ) {
     /** The label resources this category resolves — the snapshot's label-table workload. */
-    val labelResources: List<StringResource> = diffFields.map { it.labelRes }
+    val labelResources: List<StringResource> =
+        (diffFields.map { it.labelRes } + preferenceEnumLabelResources).distinct()
 
     /** Rows whose current value differs from the baseline. */
     fun changedFields(prefs: PreferenceDiffSnapshot, baseline: PreferenceDiffSnapshot): List<PreferenceField> =
@@ -136,8 +163,8 @@ class PreferenceCategoryView(
         diffFields.map { field ->
             PreferenceField(
                 label = prefs.label(field.labelRes),
-                currentValue = field.value(prefs.slices),
-                factoryValue = field.value(baseline.slices),
+                currentValue = field.value(prefs.slices, prefs.label),
+                factoryValue = field.value(baseline.slices, prefs.label),
             )
         }
 }
@@ -149,7 +176,11 @@ class PreferenceCategoryView(
 
 private fun Boolean.onOff(): String = if (this) "On" else "Off"
 
-/** Prettify an enum without a `displayName` (e.g. `HW_PREFERRED` → `Hw Preferred`). */
+/**
+ * Prettify an enum without a `displayName` (e.g. `HW_PREFERRED` → `Hw Preferred`).
+ * Fallback only: the enums on the PreferenceEnumNames seam bypass this via
+ * their row's [DiffField.enumLabel] and render localized text instead.
+ */
 private fun Enum<*>.pretty(): String =
     name.split('_').joinToString(" ") { word ->
         word.lowercase().replaceFirstChar { it.titlecase() }
@@ -181,6 +212,10 @@ private fun SubtitleStyle.summary(): String =
         if (bold) "Bold" else null,
         if (italic) "Italic" else null,
     ).joinToString(", ")
+
+/** Short, stable summary of the user-named subtitle style preset list. */
+private fun List<SubtitleStylePreset>.presetsSummary(): String =
+    if (isEmpty()) "None" else joinToString(", ") { it.name }
 
 private fun EqualizerSettings.summary(): String =
     "Preset bands: ${bandLevels.joinToString(",") { formatSignedInt(it) }}"
@@ -224,10 +259,10 @@ private val playbackDiffFields: List<DiffField<*>> = listOf(
     DiffField(Res.string.ss_decoder_title, { it.playback.decoderMode }, { v -> v.enumDisplay() }),
     DiffField(Res.string.ss_audio_passthrough_title, { it.playback.audioPassthrough }, Boolean::onOff),
     DiffField(Res.string.ss_frame_rate_matching_title, { it.playback.frameRateMatching }, Boolean::onOff),
-    DiffField(Res.string.ss_orientation_title, { it.videoPlayer.videoDefaultOrientation }, { v -> v.enumDisplay() }),
+    DiffField(Res.string.ss_orientation_title, { it.videoPlayer.videoDefaultOrientation }, enumLabel = OrientationMode::labelResource),
     DiffField(Res.string.ss_default_aspect_title, { it.videoPlayer.videoDefaultAspectRatio }, ::identity),
     DiffField(Res.string.ss_preload_buffer_title, { it.videoPlayer.videoPreloadBufferSize }, { v -> v.enumDisplay() }),
-    DiffField(Res.string.ss_gestures_title, { it.videoPlayer.videoGestureMode }, { v -> v.enumDisplay() }),
+    DiffField(Res.string.ss_gestures_title, { it.videoPlayer.videoGestureMode }, enumLabel = GestureMode::labelResource),
     DiffField(Res.string.ss_pass_out_protection_title, { it.videoPlayer.videoPassOutProtectionHours }, Int::toString),
     DiffField(Res.string.ss_skip_back_on_resume_title, { it.videoPlayer.videoSkipBackOnResumeMs }, Long::millisToSeconds),
     DiffField(Res.string.diff_hold_to_speed, { it.videoPlayer.videoHoldSpeedEnabled }, Boolean::onOff),
@@ -242,7 +277,7 @@ private val playbackDiffFields: List<DiffField<*>> = listOf(
     DiffField(Res.string.diff_auto_skip_outro, { it.videoPlayer.videoAutoSkipOutro }, Boolean::onOff),
     DiffField(Res.string.diff_remember_muted, { it.videoPlayer.videoRememberMuted }, Boolean::onOff),
     DiffField(Res.string.diff_default_muted, { it.videoPlayer.videoMuted }, Boolean::onOff),
-    DiffField(Res.string.ss_gesture_indicator_side_title, { it.videoPlayer.videoGestureIndicatorSide }, { v -> v.enumDisplay() }),
+    DiffField(Res.string.ss_gesture_indicator_side_title, { it.videoPlayer.videoGestureIndicatorSide }, enumLabel = GestureIndicatorSide::labelResource),
     DiffField(Res.string.ss_seek_duration_title, { it.videoPlayer.videoSeekDurationMs }, Long::millisToSeconds),
     DiffField(Res.string.ss_controls_timeout_title, { it.videoPlayer.videoControlsTimeoutMs }, Long::millisToSeconds),
     DiffField(Res.string.ss_swipe_seek_range_title, { it.videoPlayer.videoSwipeSeekMaxMs }, Long::millisToSeconds),
@@ -307,6 +342,7 @@ private val subtitlesLanguageDiffFields: List<DiffField<*>> = listOf(
     DiffField(Res.string.ss_subtitle_forced_only_title, { it.subtitle.subtitlesForcedOnly }, Boolean::onOff),
     DiffField(Res.string.diff_subtitle_preview, { it.subtitle.subtitlePreviewInSettings }, Boolean::onOff),
     DiffField(Res.string.diff_subtitle_style, { it.subtitle.subtitleStyle }, SubtitleStyle::summary),
+    DiffField(Res.string.diff_subtitle_style_presets, { it.subtitle.userStylePresets }, List<SubtitleStylePreset>::presetsSummary),
     DiffField(Res.string.ss_high_contrast_subtitles_title, { it.subtitle.highContrastSubtitles }, Boolean::onOff),
     DiffField(Res.string.ss_pgs_direct_play_title, { it.playback.pgsSubtitleDirectPlay }, Boolean::onOff),
     DiffField(Res.string.ss_hdr_subtitle_style_title, { it.subtitle.hdrSubtitleStyleEnabled }, Boolean::onOff),
@@ -395,7 +431,7 @@ private val securityDiffFields: List<DiffField<*>> = listOf(
 
 private val notificationsDiffFields: List<DiffField<*>> = listOf(
     DiffField(Res.string.ss_notifications_enable_title, { it.notification.notificationPreferences.enabled }, Boolean::onOff),
-    DiffField(Res.string.ss_notification_check_frequency_title, { it.notification.notificationPreferences.checkFrequency }, { v -> v.enumDisplay() }),
+    DiffField(Res.string.ss_notification_check_frequency_title, { it.notification.notificationPreferences.checkFrequency }, enumLabel = CheckFrequency::labelResource),
     DiffField(Res.string.ss_quiet_hours_title, { it.notification.notificationPreferences.quietHoursEnabled }, Boolean::onOff),
     DiffField(Res.string.ss_quiet_start_title, { it.notification.notificationPreferences.quietHoursStart }, ::minutesSuffix),
     DiffField(Res.string.ss_quiet_end_title, { it.notification.notificationPreferences.quietHoursEnd }, ::minutesSuffix),
@@ -560,6 +596,91 @@ suspend fun resolveDiffLabels(resources: List<StringResource>): (StringResource)
         runCatchingRethrowingCancellation { getString(res) }.getOrElse { res.toString() }
     }
     return { res -> resolved[res] ?: res.toString() }
+}
+
+// ---------------------------------------------------------------------------
+// External backup slices (Wave 2) — the Room-backed / allowlisted-config
+// cards the import preview renders beside the category cards. Like the
+// app-runtime fields above, they live here because the presentation registry
+// is this file and the slice KEYS are stable wire contracts owned by
+// core:datastore (no UI dep).
+// ---------------------------------------------------------------------------
+
+/** Card presentation for one external slice: its wire [ExternalSliceCardView.key], icon and human label. */
+@Immutable
+data class ExternalSliceCardView(
+    val key: String,
+    val icon: ImageVector,
+    val nameRes: StringResource,
+)
+
+/**
+ * The four Wave-2 external slices in card order. A backup from an app version
+ * without them simply carries none of these keys — the preview renders no
+ * cards (the old-preview forward-compat rule: unknown/missing slice keys are
+ * ignored, never a crash).
+ */
+val ExternalSliceCardViews: List<ExternalSliceCardView> = listOf(
+    ExternalSliceCardView(BackupSliceKey.INTEGRATIONS, Tabler.Outline.Plug, Res.string.settings_import_slice_integrations),
+    ExternalSliceCardView(BackupSliceKey.ITEM_PREFS, Tabler.Outline.AdjustmentsHorizontal, Res.string.settings_import_slice_item_prefs),
+    ExternalSliceCardView(BackupSliceKey.PLAYLISTS, Tabler.Outline.Playlist, Res.string.settings_import_slice_playlists),
+    ExternalSliceCardView(BackupSliceKey.WIDGET, Tabler.Outline.LayoutGrid, Res.string.settings_import_slice_widget),
+)
+
+/** Every label resource the external-slice cards need (VM-side one-shot resolution workload). */
+val ExternalSliceLabelResources: List<StringResource> =
+    (ExternalSliceCardViews.map { it.nameRes } + listOf(
+        Res.string.settings_import_slice_entry_absent,
+        Res.string.settings_import_slice_entry_removed,
+    )).distinct()
+
+/** One rendered external-slice card: its identity, icon/label, and the entry diff rows. */
+@Immutable
+data class ExternalSliceDiff(
+    val view: ExternalSliceCardView,
+    val changed: List<PreferenceField>,
+    val total: Int,
+)
+
+/**
+ * Builds the external-slice cards for one staged backup: a card only for a
+ * slice the backup actually carries (absent = the exporting device had
+ * nothing — importing must not wipe, so nothing to preview), with one
+ * [PreferenceField] per entry key. Entry labels are the raw keys (item ids /
+ * allowlist names); values are primitives verbatim and non-primitives as
+ * compact JSON — the diff string comparison is then exactly element equality.
+ * [currentElement] null means the live domain has nothing to back up (every
+ * incoming entry is new); an entry missing from one side renders the
+ * localized absent/removed label.
+ */
+fun buildExternalSliceDiffs(
+    currentSlices: Map<String, kotlinx.serialization.json.JsonElement?>,
+    incomingSlices: Map<String, kotlinx.serialization.json.JsonElement?>,
+    resolve: (StringResource) -> String,
+): List<ExternalSliceDiff> = ExternalSliceCardViews.mapNotNull { view ->
+    val incoming = incomingSlices[view.key] as? kotlinx.serialization.json.JsonObject
+        ?: return@mapNotNull null
+    val current = currentSlices[view.key] as? kotlinx.serialization.json.JsonObject
+    val absentLabel = resolve(Res.string.settings_import_slice_entry_absent)
+    val removedLabel = resolve(Res.string.settings_import_slice_entry_removed)
+    val entryKeys = (current?.keys ?: emptySet()) + incoming.keys
+    val fields = entryKeys.sorted().map { entryKey ->
+        val incomingValue = incoming[entryKey]
+        val currentValue = current?.get(entryKey)
+        PreferenceField(
+            label = entryKey,
+            currentValue = currentValue.renderExternalEntry(removedLabel),
+            factoryValue = incomingValue.renderExternalEntry(absentLabel),
+        )
+    }
+    ExternalSliceDiff(view, fields.filter { it.changed }, fields.size)
+}
+
+/** Entry text: primitives verbatim, non-primitives as compact JSON, absent sides as the localized label. */
+private fun kotlinx.serialization.json.JsonElement?.renderExternalEntry(absentLabel: String): String = when (this) {
+    null -> absentLabel
+    is kotlinx.serialization.json.JsonPrimitive -> content
+    else -> toString()
 }
 
 // ---------------------------------------------------------------------------

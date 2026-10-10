@@ -76,7 +76,7 @@ internal class SeriesDownloadStateHolder(
         loadJob = scope.launch {
             try {
                 val snapshot = episodeCatalogue.loadSeriesEpisodes(series.id).getOrThrow()
-                val downloadedIds = seriesDownloads.getDownloadedEpisodeIdsForSeries(series.id)
+                val downloadedIds = seriesDownloads.episodeIdsForSeries(series.id)
                 if (_state.value?.seriesId != series.id) return@launch
                 _state.value = HomeSeriesDownloadState(
                     seriesId = series.id,

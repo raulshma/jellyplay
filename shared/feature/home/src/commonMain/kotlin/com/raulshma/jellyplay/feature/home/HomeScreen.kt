@@ -73,6 +73,7 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.MediaQuickActionScope
 import com.raulshma.jellyplay.core.model.SortOption
+import com.raulshma.jellyplay.core.model.hasPlaybackPosition
 import com.raulshma.jellyplay.core.model.quickActions
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.model.UserInfo
@@ -420,17 +421,23 @@ private fun MainHomeContent(
     // card. Provided to every PosterCard in scope via
     // CompositionLocal — the cards wire their own long-press.
     val quickActionController = rememberMediaQuickActionController(
-        resolveActions = remember(viewModel, downloadedIds, explicitOffline) {
+        resolveActions = remember(viewModel, downloadedIds, explicitOffline, state.hiddenCwItemIds) {
             { item: com.raulshma.jellyplay.core.model.MediaItem ->
                 // Download/Remove-download are gated by real download state
                 // (works online and off); the offline home additionally offers
                 // remove-download for series/seasons via includeRemoveDownload
                 // — Explicit offline only (pinned behaviour; see HomeSurface).
+                // The resume-row toggle (Remove/Show in Continue Watching)
+                // offers on in-progress video cards — the CW/Next Up rows'
+                // content — and resolves its side off the hidden overlay set
+                // (the same snapshot the section query rides).
                 item.quickActions(
                     MediaQuickActionScope.HOME,
                     includeDownload = true,
                     includeRemoveDownload = explicitOffline,
                     isDownloaded = item.id in downloadedIds,
+                    includeCwToggle = item.hasPlaybackPosition,
+                    isHiddenFromContinueWatching = item.id in state.hiddenCwItemIds,
                 )
             }
         },
@@ -461,6 +468,10 @@ private fun MainHomeContent(
                     is HomeQuickActionEffect.OpenSeriesDeleteSheet ->
                         viewModel.onEvent(HomeUiEvent.RequestSeriesDelete(effect.series))
                     is HomeQuickActionEffect.ConfirmDeleteDownload -> removeDownloadState.request(effect.item)
+                    is HomeQuickActionEffect.HideFromContinueWatching ->
+                        viewModel.onEvent(HomeUiEvent.HideFromContinueWatching(effect.item.id))
+                    is HomeQuickActionEffect.ShowFromContinueWatching ->
+                        viewModel.onEvent(HomeUiEvent.ShowFromContinueWatching(effect.item.id))
                     HomeQuickActionEffect.None -> Unit
                 }
             }
@@ -796,6 +807,9 @@ private fun HomeSurfaceContent(
                     // The dice-roll in-flight mirror: tumbles the
                     // matching row's dice icon while the re-fetch runs.
                     rollingDiscoverRowIds = state.rollingDiscoverRowIds,
+                    // The edge-pull in-flight mirror: spins the matching
+                    // row's edge chip while its single-row refetch runs.
+                    refreshingSectionIds = state.refreshingSectionIds,
                     statusBanner = implicitOfflineBanner,
                 ),
                 callbacks = HomeContentCallbacks(
@@ -815,6 +829,7 @@ private fun HomeSurfaceContent(
                     onSeeAllClick = remember(callbacks) { { type, libraryId, collectionType, title -> callbacks.onSeeAllClick(type, libraryId, collectionType, title) } },
                     onFocusedMediaItem = onFocusedMediaItem,
                     onRollDiscoverRow = remember(viewModel) { { rowId: String -> viewModel.onEvent(HomeUiEvent.RollDiscoverRow(rowId)) } },
+                    onRefreshSection = remember(viewModel) { { sectionId: String -> viewModel.onEvent(HomeUiEvent.RefreshSection(sectionId)) } },
                 ),
                 renderInputs = renderInputs,
                 listState = listState,

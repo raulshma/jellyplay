@@ -38,6 +38,11 @@ import kotlin.io.path.nameWithoutExtension
  *    single-instance protocol exists on this shell — no associations, no
  *    named-pipe handshake); a second launch just exits. Windows users get
  *    the taskbar's existing window; this note records that boundary.
+ *    (The one argv-shaped exception: a contended launch
+ *    carrying parsable LINK arguments drops them into
+ *    [DesktopOpenRequestChannel]'s drop file before exiting, and the
+ *    running instance's watcher routes them — the guard itself stays
+ *    lock-only; the channel is the message half, not this file.)
  *  - Throws [java.io.IOException] only for unexpected filesystem failures
  *    (a config dir that cannot even be created) — Main.kt treats those as
  *    fatal, since DesktopPaths' stores could not open there either.

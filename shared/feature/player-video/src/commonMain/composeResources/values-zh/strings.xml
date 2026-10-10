@@ -6,6 +6,8 @@
     <string name="player_reset_to_auto">重置为自动</string>
     <string name="player_track_default">默认</string>
     <string name="player_track_none">无</string>
+    <string name="player_capturing_frame">正在捕获帧…</string>
+    <string name="player_not_ready">播放器未就绪</string>
 
     <string name="track_badge_forced">强制</string>
     <string name="track_badge_sdh">SDH</string>
@@ -35,10 +37,8 @@
     <string name="player_video_open_tester">打开测试器</string>
     <string name="player_video_reset">重置</string>
     <string name="player_video_reset_all">全部重置</string>
-    <string name="player_video_pick_color">选择颜色</string>
     <string name="player_video_hue">色相</string>
     <string name="player_video_saturation">饱和度</string>
-    <string name="player_video_value">明度</string>
     <string name="player_video_apply">应用</string>
     <string name="player_video_cancel">取消</string>
     <string name="player_video_override_subtitle_styles">覆盖字幕样式</string>
@@ -56,6 +56,14 @@
     <string name="player_video_ass_force">强制</string>
     <string name="player_video_ass_scale_hint">保留嵌入样式；仅应用您的大小和位置</string>
     <string name="player_video_ass_force_hint">使用您的颜色、字体和边框覆盖嵌入样式</string>
+    <string name="player_video_mpv_config_notice_title">您的 mpv 配置覆盖部分字幕设置</string>
+    <string name="player_video_mpv_config_owned_keys_intro">您的配置对以下键优先 — 此处对应的控件不会更改它们：</string>
+    <string name="player_video_mpv_config_case_srt">普通（SRT）字幕始终使用配置中的颜色、边框和字体。</string>
+    <string name="player_video_mpv_config_case_ass">ASS/SSA 字幕会保留嵌入样式 — 如需应用您的样式，请使用下方的“ASS 样式”选择。</string>
+    <string name="player_video_mpv_config_ass_override_owned">您的配置设置了 sub-ass-override——此处的“保留/强制”选择无效。</string>
+    <string name="player_video_mpv_config_app_owned_keys">字幕开关和字幕延迟始终由应用控制 — 您的配置无法更改这些。</string>
+    <string name="player_video_mpv_config_dropped_keys">mpv 无法从其 mpv.conf 文件读取 %1$s——未加引号的 # 会被视为注释开始。在该文件中请为值加引号（sub-color="#FF0000"）。应用的高级 MPV 配置输入框中规则相反：直接写 sub-color=#FF0000 即可——加引号反而会成为值的一部分。</string>
+    <string name="player_video_mpv_config_chip">自定义 mpv 配置</string>
     <string name="player_video_font_color">字体颜色</string>
     <string name="player_video_background_color">背景色</string>
     <string name="player_video_background_opacity">背景不透明度：%1$d%</string>
@@ -79,6 +87,11 @@
     <string name="player_video_sleep_timer">睡眠定时器</string>
     <string name="player_video_sleep_timer_on">睡眠定时器 \u00B7 %1$s</string>
     <string name="player_video_cancel_sleep_timer">取消睡眠定时器 (剩余 %1$s)</string>
+    <string name="player_video_sleep_timer_stops_at">%1$s 停止</string>
+    <string name="player_video_cancel_sleep_timer_confirm_title">取消睡眠定时器？</string>
+    <string name="player_video_cancel_sleep_timer_confirm_message">定时器还剩 %1$s，要取消吗？</string>
+    <string name="player_video_cancel_timer">取消定时器</string>
+    <string name="player_video_keep_sleep_timer">保留定时器</string>
     <string name="player_video_custom_duration">自定义时长</string>
     <string name="player_video_custom_ellipsis">自定义…</string>
     <string name="player_video_end_of_episode">剧集结尾</string>
@@ -155,6 +168,8 @@
     <string name="player_video_normalization_on">标准化 \u00B7 %1$s</string>
     <string name="player_video_channel_mixing">声道混音</string>
     <string name="player_video_channel_mix_on">混音 \u00B7 %1$s</string>
+    <string name="player_video_gestures">手势</string>
+    <string name="player_video_gestures_on">手势 \u00B7 %1$d/%2$d</string>
     <string name="player_video_av_sync">A/V 同步</string>
     <string name="player_video_playback_mode">播放模式</string>
     <string name="player_video_playback_mode_on">%1$s \u00B7 开启</string>
@@ -342,4 +357,21 @@
     <string name="player_video_source_label">来源</string>
     <string name="player_video_version">版本</string>
     <string name="player_video_remember_version">记住此版本</string>
+
+    <!-- Subtitle style presets -->
+    <string name="player_video_presets_title">预设</string>
+    <string name="player_video_preset_subtle">简约</string>
+    <string name="player_video_preset_big_bold">大号加粗</string>
+    <string name="player_video_preset_classic_yellow">经典黄色</string>
+    <string name="player_video_preset_netflixish">奈飞风格</string>
+    <string name="player_video_preset_save">保存当前</string>
+    <string name="player_video_preset_save_dialog_title">保存预设</string>
+    <string name="player_video_preset_name_label">预设名称</string>
+    <string name="player_video_preset_delete_a11y">删除预设 %1$s</string>
+
+    <!-- The JellyPlay sync / details-badges / player-notice strings
+         (ADR 0010 wave), translated together with the default file. -->
+    <string name="player_video_transcode_switched">已切换到转码流 — 正在重新缓冲</string>
+    <string name="player_video_direct_play_unavailable">此项目不支持直接播放 — 将回退到转码</string>
+    <string name="player_video_vlc_client_cert_unsupported">VLC 引擎不支持客户端证书 — mTLS 服务器请改用 ExoPlayer 或 mpv</string>
 </resources>

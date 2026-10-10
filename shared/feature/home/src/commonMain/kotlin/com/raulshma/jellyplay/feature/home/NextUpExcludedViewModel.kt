@@ -6,6 +6,7 @@ import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
 import com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.ui.viewmodel.IdEnricher
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -66,10 +67,33 @@ class NextUpExcludedViewModel(
     /** Metadata resolved so far, id → item (excluded ids prune it). */
     private val resolvedItems = mutableMapOf<String, MediaItem>()
 
-    /** Ids whose fetch already failed this screen lifetime — no retry storm. */
-    private val failedIds = mutableSetOf<String>()
+    /**
+     * The id set of the latest store emission — the rows [publish] renders.
+     * A hydration merge landing after a reconcile reads THIS set, so a late
+     * write can only update [resolvedItems], never the published rows.
+     */
+    private var publishedIds: Set<String> = emptySet()
 
     private var hydrateJob: Job? = null
+
+    /**
+     * The hydration pass (the hand-copied sequential for-loop, now the
+     * [IdEnricher] core): one detail fetch at a time (concurrency 1), the
+     * merge folds the resolved item into [resolvedItems] and re-publishes,
+     * and [Retry.NEVER] carries the failed-id latch — a flaky fetch is never
+     * re-fetched inside one screen lifetime (no retry storm on every
+     * recomposition-driven reconcile); the row falls back to its placeholder.
+     */
+    private val hydrater = IdEnricher<String, MediaItem>(
+        scope = scope,
+        concurrency = 1,
+        retry = IdEnricher.Retry.NEVER,
+        fetch = { id -> mediaRepository.getMediaDetail(id).getOrNull()?.item },
+        merge = { id, item ->
+            resolvedItems[id] = item
+            publish(publishedIds, loading = false)
+        },
+    )
 
     init {
         scope.launch {
@@ -83,30 +107,24 @@ class NextUpExcludedViewModel(
     /**
      * Re-publishes the rows for the current excluded-id set (persisted order —
      * the store's JSON array order, i.e. exclusion order) and fetches metadata
-     * for every id not yet resolved or known-failed. Cancels the previous
-     * fetch pass so a rapid exclude→restore pair cannot leave a stray fetch
-     * writing into state after its id left the list (a late write would only
-     * update the resolved map — never the published rows).
+     * for every id not yet resolved or known-failed (the enricher's
+     * [IdEnricher.Retry.NEVER] latch). Cancels the previous fetch pass so a
+     * rapid exclude→restore pair cannot leave a stray fetch writing into state
+     * after its id left the list (a late write would only update the resolved
+     * map — never the published rows).
      */
     private fun reconcile(ids: Set<String>) {
         prune(ids)
+        publishedIds = ids
         publish(ids, loading = false)
-        val missing = ids.filter { it !in resolvedItems && it !in failedIds }
+        val missing = ids.filter { it !in resolvedItems && !hydrater.hasFailed(it) }
         if (missing.isEmpty()) return
         publish(ids, loading = true)
         hydrateJob?.cancel()
-        hydrateJob = scope.launch {
-            for (id in missing) {
-                val detail = mediaRepository.getMediaDetail(id).getOrNull()
-                if (detail != null) {
-                    resolvedItems[id] = detail.item
-                    failedIds.remove(id)
-                } else {
-                    failedIds.add(id)
-                }
-                publish(ids, loading = false)
-            }
-        }
+        hydrateJob = hydrater.enrich(
+            ids = missing,
+            onSettled = { publish(publishedIds, loading = false) },
+        )
     }
 
     private fun publish(ids: Set<String>, loading: Boolean) {
@@ -116,10 +134,10 @@ class NextUpExcludedViewModel(
         )
     }
 
-    /** Drops resolved/failed bookkeeping for ids no longer excluded. */
+    /** Drops resolved bookkeeping for ids no longer excluded (the enricher owns the failed latch's prune). */
     private fun prune(ids: Set<String>) {
         resolvedItems.keys.retainAll(ids)
-        failedIds.retainAll(ids)
+        hydrater.pruneFailures(ids)
     }
 
     /** Restores one series (the row's action) — the store's RMW command. */

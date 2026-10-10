@@ -14,21 +14,15 @@ import com.raulshma.jellyplay.feature.home.generated.resources.home_series
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionType
-import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.OfflineMediaTypeGroup
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
-import com.raulshma.jellyplay.core.model.hasPlaybackPosition
-import com.raulshma.jellyplay.core.model.isFinishedOffline
-import com.raulshma.jellyplay.core.model.sortedWithCachedKey
+import com.raulshma.jellyplay.core.model.home.ContinueWatchingRowRule
+import com.raulshma.jellyplay.core.model.home.HomeRowModules
+import com.raulshma.jellyplay.core.model.home.OfflineDownloadedGroups
+import com.raulshma.jellyplay.core.model.home.OfflineMirrorContext
+import com.raulshma.jellyplay.core.model.home.OfflineMirrorRow
 import com.raulshma.jellyplay.core.model.toMediaItem
 import com.raulshma.jellyplay.core.model.typeGroup
-import com.raulshma.jellyplay.core.model.wallNowMillis
-import kotlinx.datetime.format.DateTimeComponents
-import kotlinx.datetime.LocalDate
-import kotlinx.datetime.LocalDateTime
-import kotlinx.datetime.TimeZone
-import kotlinx.datetime.atStartOfDayIn
-import kotlinx.datetime.toInstant
 
 /**
  * Everything the offline home renders, derived in one place. The screen
@@ -162,69 +156,6 @@ data class OfflineHomeSectionPrefs(
     val nextUpMaxDays: Int = 0,
 )
 
-/** Number of items shown in the "Recently Downloaded" row. */
-private const val RECENT_LIMIT = 10
-
-/**
- * The minimum-progress rule a resume row applies: the video row's MinResumePct
- * analog (a few scrubbed seconds are not a resume point), or no floor at all.
- */
-private enum class ResumeRowFloor {
-    /** Video resume rows: drop items under the minimum-progress floor. */
-    VIDEO_MIN_PERCENT,
-
-    /**
-     * Book resume rows: no floor — books carry no runTimeTicks, so their
-     * stored playedPercentage stays 0.0 until the played flag flips, and the
-     * video floor would drop every real book.
-     */
-    NONE,
-}
-
-/**
- * Row cap for the offline Next Up section — mirrors the network layer's
- * default `getNextUp(limit = 20)`.
- */
-private const val NEXT_UP_LIMIT = 20
-
-/**
- * Row cap for the offline Continue Watching section — mirrors the network
- * layer's default `getResumeItems(limit = 20)`.
- */
-private const val CONTINUE_WATCHING_LIMIT = 20
-
-/**
- * Row cap for the offline Continue Reading section — mirrors the network
- * layer's default `getContinueReading(limit = 20)`.
- */
-private const val CONTINUE_READING_LIMIT = 20
-
-/**
- * The shared resume-row shape of the offline Continue Watching / Continue
- * Reading rows: position > 0, not played (the #157 rule — the server never
- * resets a finished item's lingering position), not finished by the local
- * watched threshold, not user-hidden, most recently played first, capped.
- *
- * [floor] selects the row's minimum-progress rule — see [ResumeRowFloor].
- */
-private fun offlineResumeRow(
-    candidates: Sequence<OfflineMediaItem>,
-    floor: ResumeRowFloor,
-    prefs: OfflineHomeSectionPrefs,
-    limit: Int,
-): List<OfflineMediaItem> =
-    candidates
-        .filter { it.hasPlaybackPosition }
-        .filter { (floor != ResumeRowFloor.VIDEO_MIN_PERCENT || it.playedPercentage >= 1.0) && !it.isPlayed && !it.isFinishedOffline }
-        .filter { it.id !in prefs.hiddenCwItemIds }
-        .toList()
-        .sortedWithCachedKey(
-            keySelector = { isoEpochMillis(it.lastPlayedDate) ?: Long.MIN_VALUE },
-            comparator = compareByDescending<Pair<OfflineMediaItem, Long>> { (_, lastPlayedMillis) -> lastPlayedMillis }
-                .thenByDescending { (item, _) -> item.createdAt },
-        )
-        .take(limit)
-
 /**
  * Derives the home sections shown while offline from the (mode-filtered)
  * offline library and its downloaded episodes. Two shapes, in precedence
@@ -255,18 +186,18 @@ private fun offlineResumeRow(
  *  - Continue Watching — downloaded movies + episodes with a resume position
  *    (the server's `IsResumable` rule: position > 0, under the watched
  *    threshold), most recently played first, minus the user's hidden CW
- *    items, capped at [CONTINUE_WATCHING_LIMIT].
+ *    items, capped at the module's Continue Watching row cap.
  *  - Continue Reading — downloaded books with reading progress (the same
- *    rules and ordering), capped at [CONTINUE_READING_LIMIT].
+ *    rules and ordering), capped at the module's Continue Reading row cap.
  *  - Next Up — the local mirror of Jellyfin's server-side rule over the
- *    downloaded episodes (see [computeOfflineNextUp]): per series with watch
+ *    downloaded episodes (the NEXT_UP module's offline projection): per series with watch
  *    activity, the first unplayed episode strictly after the highest played
  *    one; mid-watch (resumable) episodes stay in Continue Watching instead.
  *    When [OfflineHomeSectionPrefs.mergeCwAndNextUp] is set, Next Up items
  *    are appended into the Continue Watching row instead (deduplicated),
  *    mirroring the online
  *    [com.raulshma.jellyplay.core.data.usecase.OrderHomeSectionsUseCase].
- *  - Recently Downloaded (newest [RECENT_LIMIT] by download date), then
+ *  - Recently Downloaded (newest items by download date), then
  *    Movies / Series / Music.
  *
  * All rows — mirrored and fallback alike — sort by the user's global section
@@ -287,94 +218,52 @@ internal fun buildOfflineHomeSections(
 ): List<HomeSection> {
     if (library.isEmpty() && episodes.isEmpty()) return emptyList()
 
-    // Single pass over the library: partition by type and track the newest
-    // RECENT_LIMIT items via a bounded keeper — the same top-k selection
-    // the former java.util.PriorityQueue min-heap made (an
-    // item enters only if it beats the current oldest; O(n·k) with k =
-    // RECENT_LIMIT, a handful — the heap's tie-breaking at equal createdAt
-    // was arbitrary either way).
-    val movies = ArrayList<OfflineMediaItem>()
-    val series = ArrayList<OfflineMediaItem>()
-    val music = ArrayList<OfflineMediaItem>()
-    val recentKept = ArrayList<OfflineMediaItem>(RECENT_LIMIT)
-    for (item in library) {
-        when (item.mediaType) {
-            MediaType.MOVIE -> movies += item
-            MediaType.SERIES -> series += item
-            MediaType.AUDIO, MediaType.MUSIC, MediaType.ALBUM -> music += item
-            // Other types (PHOTO, PHOTO_FOLDER, …) have no home row here.
-            else -> Unit
-        }
-        if (recentKept.size < RECENT_LIMIT) {
-            recentKept.add(item)
-        } else {
-            var oldestIndex = 0
-            var oldestCreatedAt = Long.MAX_VALUE
-            for ((index, kept) in recentKept.withIndex()) {
-                if (kept.createdAt < oldestCreatedAt) {
-                    oldestCreatedAt = kept.createdAt
-                    oldestIndex = index
-                }
-            }
-            if (item.createdAt > oldestCreatedAt) {
-                recentKept[oldestIndex] = item
-            }
-        }
-    }
-    val recent = recentKept.sortedByDescending { it.createdAt }
+    // The per-type compute lives on the row modules' offline projections
+    // (core/model/home — see HomeRowOfflineRules): the library partition into
+    // the DOWNLOADED rows' groups, and the locally derived resume rows whose
+    // rules route through ContinueWatchingRowRule. This orchestrator owns the
+    // prefs plumbing and the once-per-emission derived values only.
+    val downloaded = HomeRowModules[HomeSectionType.DOWNLOADED].offline
+        .downloadedGroups(library) ?: OfflineDownloadedGroups(emptyList(), emptyList(), emptyList(), emptyList())
 
     // Continue Watching mirrors the server's resume query
     // (ItemsController.GetResumeItems → IsResumable): non-folder items with a
-    // playback position, sorted DatePlayed-desc. Downloaded SERIES rows are
-    // dropped: their aggregate progress is a hierarchy echo, not a resume
-    // point — the episodes themselves carry the real progress. BOOK rows are
-    // dropped too: reading position surfaces in the offline Continue Reading
-    // row below, mirroring the online split (ResumeRowFilter's resumable
-    // halves). The server zeroes the position once an item is played
-    // (UserDataManager marks MaxResumePct-crossing plays complete), so the
-    // local mirrors of those rules are `position > 0`, the app's 95% watched
-    // threshold, and a small minimum-progress floor (the server's
-    // MinResumePct analog — a few seconds scrubbed into a file is not a
-    // resume point).
+    // playback position, sorted DatePlayed-desc — the module's projection.
     val continueWatching = if (prefs.continueWatchingEnabled) {
-        offlineResumeRow(
-            candidates = library.asSequence().filter { it.mediaType != MediaType.SERIES && it.mediaType != MediaType.BOOK } + episodes.asSequence(),
-            floor = ResumeRowFloor.VIDEO_MIN_PERCENT,
-            prefs = prefs,
-            limit = CONTINUE_WATCHING_LIMIT,
-        )
+        HomeRowModules[HomeSectionType.CONTINUE_WATCHING].offline
+            .resumeItems(library, episodes, prefs.hiddenCwItemIds)
     } else {
         emptyList()
     }
 
-    // Continue Reading: the books half of the same resume query — downloaded
-    // books with reading progress (the identical position > 0 / played /
-    // hidden-item rules as Continue Watching above), most recently read first,
-    // capped at CONTINUE_READING_LIMIT. No percentage floor — see
-    // [ResumeRowFloor.NONE]. Mirrors the online split's
-    // `readingResumableOnly`, which keys on played + position only.
+    // Continue Reading: the books half of the same resume query — the
+    // module's projection (the identical position > 0 / played / hidden-item
+    // rules, no percentage floor).
     val continueReading = if (prefs.continueReadingEnabled) {
-        offlineResumeRow(
-            candidates = library.asSequence().filter { it.mediaType == MediaType.BOOK },
-            floor = ResumeRowFloor.NONE,
-            prefs = prefs,
-            limit = CONTINUE_READING_LIMIT,
-        )
+        HomeRowModules[HomeSectionType.CONTINUE_READING].offline
+            .resumeItems(library, episodes, prefs.hiddenCwItemIds)
     } else {
         emptyList()
     }
 
     val nextUp = if (prefs.nextUpEnabled) {
-        computeOfflineNextUp(episodes, prefs)
+        HomeRowModules[HomeSectionType.NEXT_UP].offline.nextUpItems(
+            episodes,
+            excludedSeriesIds = prefs.nextUpExcludedSeriesIds,
+            maxDays = prefs.nextUpMaxDays,
+            rewatching = prefs.nextUpRewatching,
+        )
     } else {
         emptyList()
     }
 
     // Merge mode folds Next Up into the Continue Watching row (deduped) and
-    // drops the separate row — the offline mirror of the online merge pref.
+    // drops the separate row — the offline mirror of the online merge pref,
+    // through the same fold owner as the online paths
+    // (ContinueWatchingRowRule.mergeCwNextUp; the offline item type maps in
+    // through the id accessor).
     val mergedContinueWatching = if (prefs.mergeCwAndNextUp && nextUp.isNotEmpty()) {
-        val seen = continueWatching.mapTo(HashSet()) { it.id }
-        continueWatching + nextUp.filter { it.id !in seen }
+        ContinueWatchingRowRule.mergeCwNextUp(continueWatching, nextUp, id = { it.id })
     } else {
         continueWatching
     }
@@ -411,43 +300,43 @@ internal fun buildOfflineHomeSections(
                 )
             )
         }
-        if (recent.isNotEmpty()) {
+        if (downloaded.recent.isNotEmpty()) {
             add(
                 HomeSection(
                     id = "offline_recently_downloaded",
                     title = titles.recentlyDownloaded,
                     type = HomeSectionType.DOWNLOADED,
-                    items = recent.map { it.toMediaItem() },
+                    items = downloaded.recent.map { it.toMediaItem() },
                 )
             )
         }
-        if (movies.isNotEmpty()) {
+        if (downloaded.movies.isNotEmpty()) {
             add(
                 HomeSection(
                     id = "offline_movies",
                     title = titles.movies,
                     type = HomeSectionType.DOWNLOADED,
-                    items = movies.map { it.toMediaItem() },
+                    items = downloaded.movies.map { it.toMediaItem() },
                 )
             )
         }
-        if (series.isNotEmpty()) {
+        if (downloaded.series.isNotEmpty()) {
             add(
                 HomeSection(
                     id = "offline_series",
                     title = titles.series,
                     type = HomeSectionType.DOWNLOADED,
-                    items = series.map { it.toMediaItem() },
+                    items = downloaded.series.map { it.toMediaItem() },
                 )
             )
         }
-        if (music.isNotEmpty()) {
+        if (downloaded.music.isNotEmpty()) {
             add(
                 HomeSection(
                     id = "offline_music",
                     title = titles.music,
                     type = HomeSectionType.DOWNLOADED,
-                    items = music.map { it.toMediaItem() },
+                    items = downloaded.music.map { it.toMediaItem() },
                 )
             )
         }
@@ -529,22 +418,26 @@ private fun offlineResumeSection(
 
 /**
  * Mirrors the cached online layout onto the offline home: each snapshot row
- * survives with its type/title/libraryId intact, its items filtered to
- * the downloaded [itemsById] originals. CW / Next Up swap in the locally
- * derived lists (local progress beats the snapshot). Rows drop when the
- * CURRENT prefs disable their type (or the per-library override for a
- * LATEST_MEDIA row), when nothing in them is downloaded, or when unplayable
- * offline (LIVE_TV). Row order is re-normalized by the caller against the
- * user's CURRENT section order — the snapshot is persisted in fetch order
- * (before [com.raulshma.jellyplay.core.data.usecase.OrderHomeSectionsUseCase]
- * runs online), so same-type rows keep their snapshot relative order via the
+ * is dispatched to ITS row module's offline projection
+ * ([HomeRowModules]/offline/mirrorRow — the per-type arms: the locally
+ * derived resume rows swap in, LIVE TV drops unplayable, DOWNLOADED never
+ * appears in a snapshot, everything else takes the generic filter), and the
+ * outcome is turned into the rendered section here — the ids/titles/types
+ * and the item lift are the hand-written emission this site owns. Rows drop
+ * when the CURRENT prefs disable their type (or the per-library override for
+ * a LATEST_MEDIA row), when nothing in them is downloaded, or when
+ * unplayable offline (LIVE_TV). Row order is re-normalized by the caller
+ * against the user's CURRENT section order — the snapshot is persisted in
+ * fetch order (before
+ * [com.raulshma.jellyplay.core.data.usecase.OrderHomeSectionsUseCase] runs
+ * online), so same-type rows keep their snapshot relative order via the
  * stable sort, but the rows themselves do NOT keep the snapshot's raw order.
  *
  * Coverage: rows whose content the mirror cannot surface are not lost —
  * [buildOfflineHomeSections] appends the generic fallback rows for any item
- * id the mirrored rows do not already show, so every download stays reachable
- * while offline even when its snapshot row dropped or its type was absent
- * from the snapshot.
+ * id the mirrored rows do not already show, so every download stays
+ * reachable while offline even when its snapshot row dropped or its type was
+ * absent from the snapshot.
  */
 private fun mirrorCachedLayoutSections(
     cachedLayout: List<HomeSection>,
@@ -552,70 +445,65 @@ private fun mirrorCachedLayoutSections(
     prefs: OfflineHomeSectionPrefs,
     titles: OfflineHomeSectionTitles,
     cwNextUp: DerivedCwNextUp,
-): List<HomeSection> = buildList {
-    for (cached in cachedLayout) {
-        when (cached.type) {
-            HomeSectionType.CONTINUE_WATCHING -> {
-                if (prefs.continueWatchingEnabled && cwNextUp.mergedContinueWatching.isNotEmpty()) {
-                    add(
-                        offlineResumeSection(
-                            id = "offline_continue_watching",
-                            title = titles.continueWatching,
-                            type = HomeSectionType.CONTINUE_WATCHING,
-                            items = cwNextUp.mergedContinueWatching,
-                        )
+): List<HomeSection> {
+    val ctx = OfflineMirrorContext(
+        enabledSectionTypes = prefs.enabledSectionTypes,
+        libraryOverrides = prefs.libraryOverrides,
+        itemsById = itemsById,
+        continueWatchingEnabled = prefs.continueWatchingEnabled,
+        continueWatching = cwNextUp.mergedContinueWatching,
+        continueReadingEnabled = prefs.continueReadingEnabled,
+        continueReading = cwNextUp.continueReading,
+        nextUp = cwNextUp.nextUp,
+        showNextUpRow = cwNextUp.showNextUpRow,
+    )
+    return buildList {
+        for (cached in cachedLayout) {
+            when (val outcome = HomeRowModules[cached.type].offline.mirrorRow(cached, ctx)) {
+                // Locally derived rows: local progress beats the snapshot —
+                // the offline resume identity (module-supplied id), localized
+                // title, the row's own type.
+                is OfflineMirrorRow.Derived -> add(
+                    offlineResumeSection(
+                        id = outcome.sectionId,
+                        title = offlineDerivedTitle(cached.type, titles),
+                        type = cached.type,
+                        items = outcome.items,
                     )
-                }
-            }
-            HomeSectionType.CONTINUE_READING -> {
-                if (prefs.continueReadingEnabled && cwNextUp.continueReading.isNotEmpty()) {
-                    add(
-                        offlineResumeSection(
-                            id = "offline_continue_reading",
-                            title = titles.continueReading,
-                            type = HomeSectionType.CONTINUE_READING,
-                            items = cwNextUp.continueReading,
-                        )
+                )
+                // Generic filter: the snapshot row's identity (id / title /
+                // type / libraryId / collectionType) with items filtered to
+                // what is downloaded.
+                is OfflineMirrorRow.Mirrored -> add(
+                    HomeSection(
+                        id = "offline_${cached.id}",
+                        title = cached.title,
+                        type = cached.type,
+                        items = outcome.items.map { it.toMediaItem() },
+                        seedItem = if (outcome.keepSeedItem) cached.seedItem else null,
+                        libraryId = cached.libraryId,
+                        collectionType = cached.collectionType,
                     )
-                }
-            }
-            HomeSectionType.NEXT_UP -> {
-                if (cwNextUp.showNextUpRow) {
-                    add(
-                        offlineResumeSection(
-                            id = "offline_next_up",
-                            title = titles.nextUp,
-                            type = HomeSectionType.NEXT_UP,
-                            items = cwNextUp.nextUp,
-                        )
-                    )
-                }
-            }
-            // Unplayable offline; DOWNLOADED never appears in an online snapshot.
-            HomeSectionType.LIVE_TV, HomeSectionType.DOWNLOADED -> Unit
-            else -> {
-                // Configurable types honor the CURRENT enablement (the snapshot
-                // reflects prefs at fetch time; a toggle made while offline wins).
-                if (cached.type.isConfigurable && cached.type !in prefs.enabledSectionTypes) continue
-                val libraryId = cached.libraryId
-                if (libraryId != null && cached.type in prefs.libraryOverrides[libraryId].orEmpty()) continue
-                val downloaded = cached.items.mapNotNull { itemsById[it.id] }
-                if (downloaded.isNotEmpty()) {
-                    add(
-                        HomeSection(
-                            id = "offline_${cached.id}",
-                            title = cached.title,
-                            type = cached.type,
-                            items = downloaded.map { it.toMediaItem() },
-                            seedItem = if (cached.type == HomeSectionType.RECOMMENDATIONS) cached.seedItem else null,
-                            libraryId = libraryId,
-                            collectionType = cached.collectionType,
-                        )
-                    )
-                }
+                )
+                OfflineMirrorRow.Dropped -> Unit
             }
         }
     }
+}
+
+/**
+ * The localized header for a derived offline resume row — the title
+ * emission stays at this layer (strings are composable resources; the row
+ * module carries no UI strings).
+ */
+private fun offlineDerivedTitle(
+    type: HomeSectionType,
+    titles: OfflineHomeSectionTitles,
+): String = when (type) {
+    HomeSectionType.CONTINUE_WATCHING -> titles.continueWatching
+    HomeSectionType.CONTINUE_READING -> titles.continueReading
+    HomeSectionType.NEXT_UP -> titles.nextUp
+    else -> error("No derived offline title for $type")
 }
 
 /**
@@ -637,174 +525,3 @@ internal fun orderOfflineSections(
     val index = sectionOrder.indexOf(section.type)
     if (index >= 0) index else sectionOrder.size
 }
-
-/**
- * Offline Next Up — the local mirror of Jellyfin's server-side rule
- * (TVSeriesManager + NextUpService), restricted to what is downloaded:
- *
- *  1. **Series selection** — only series with watch activity (any downloaded
- *     episode carrying a parseable `lastPlayedDate`); ordered by most recent activity,
- *     capped, and dropped entirely when older than the user's Next Up date
- *     cutoff (`nextUpMaxDays`, the `nextUpDateCutoff` param the online fetch
- *     sends).
- *  2. **Anchor** — the highest (season, episode) PLAYED episode (specials
- *     excluded, matching the server's `ParentIndexNumber != 0` filter).
- *  3. **Next episode** — the first UNPLAYED episode strictly AFTER the
- *     anchor in (season, episode) order; with no played episode yet, the
- *     first unplayed episode of the series. A candidate that already has a
- *     resume position is skipped (server: `EnableResumable = false` —
- *     mid-watch episodes live in Continue Watching, not Next Up).
- *  4. **Rewatching** — with the pref on (the online `enableRewatching`
- *     param), a second per-series pass picks the first PLAYED episode after
- *     the most-recently-played one, appended alongside the regular entry.
- *
- * Entries sort by their series' most recent watch activity (most recent
- * first), then series id for stability; the row is capped at [NEXT_UP_LIMIT].
- * Sorting by the series activity — not the anchor episode's date — keeps a
- * series whose only activity is a resumable (unplayed) episode ranked by
- * when that watch happened instead of sinking to the row's tail.
- *
- * Stored `lastPlayedDate` strings mix server-synced ISO stamps (UTC `Z`,
- * nanosecond fraction) with local `OffsetDateTime.now().toString()` writes
- * (host-zone offset, variable precision), so every date ordering and the
- * cutoff compare go through [isoEpochMillis] — those forms are NOT
- * lexicographically comparable (a `+02:00` stamp vs a `Z` stamp mis-orders
- * by hours).
- *
- * Named divergence: the server additionally interleaves specials
- * (`DisplaySpecialsWithinSeasons`) via aired-before/after ordering — the
- * offline row does not persist that metadata, so specials (season 0) are
- * excluded here, matching the server's base season/episode order.
- */
-private fun computeOfflineNextUp(
-    episodes: List<OfflineMediaItem>,
-    prefs: OfflineHomeSectionPrefs,
-): List<OfflineMediaItem> {
-    if (episodes.isEmpty()) return emptyList()
-
-    /** One next-up row entry: the episode plus its sort key (series activity, epoch millis). */
-    data class NextUpEntry(
-        val episode: OfflineMediaItem,
-        val lastWatched: Long,
-        val seriesId: String,
-    )
-
-    // Specials (season 0) and unsighted episodes (null season) are not
-    // Next Up material — the server's `ParentIndexNumber != 0` filter.
-    val nonSpecials = episodes.filter { it.seasonNumber != null && it.seasonNumber != 0 }
-
-    val bySeries = LinkedHashMap<String, MutableList<OfflineMediaItem>>()
-    for (episode in nonSpecials) {
-        val seriesId = episode.seriesId ?: continue
-        if (seriesId in prefs.nextUpExcludedSeriesIds) continue
-        bySeries.getOrPut(seriesId) { ArrayList() }.add(episode)
-    }
-
-    // Same cutoff the online fetch sends as `nextUpDateCutoff`: now - maxDays.
-    val cutoffMillis = prefs.nextUpMaxDays.takeIf { it > 0 }
-        ?.let { wallNowMillis() - it.toLong() * MILLIS_PER_DAY }
-
-    val entries = ArrayList<NextUpEntry>(bySeries.size)
-    for ((seriesId, group) in bySeries) {
-        // Season/episode order; nulls first (mirrors the DAO query's ASC sort).
-        val ordered = group.sortedWith(seasonEpisodeOrder)
-
-        // Series eligibility: any watch activity, within the date cutoff.
-        val lastActivityMillis =
-            ordered.mapNotNull { isoEpochMillis(it.lastPlayedDate) }.maxOrNull() ?: continue
-        if (cutoffMillis != null && lastActivityMillis < cutoffMillis) continue
-
-        // Anchor: the highest played episode by (season, episode).
-        val anchor = ordered.lastOrNull { it.isPlayed }
-
-        // First unplayed episode strictly after the anchor (all unplayed
-        // when nothing is played yet). Resumable candidates are skipped —
-        // they render in Continue Watching instead.
-        val unplayed = ordered.asSequence().filter { !it.isPlayed }
-        val regularCandidate =
-            (if (anchor != null) unplayed.filter { isAfter(it, anchor) } else unplayed)
-                .filter { !it.hasPlaybackPosition }
-                .firstOrNull()
-        if (regularCandidate != null) {
-            entries += NextUpEntry(regularCandidate, lastActivityMillis, seriesId)
-        }
-
-        // Rewatch pass: the first PLAYED episode after the most-recently
-        // played one (server keys the rewatch anchor by date, not position).
-        if (prefs.nextUpRewatching) {
-            val played = ordered.filter { it.isPlayed }
-            val dateAnchor =
-                played.maxByOrNull { isoEpochMillis(it.lastPlayedDate) ?: Long.MIN_VALUE }
-            if (dateAnchor != null) {
-                val rewatchCandidate = played
-                    .filter { isAfter(it, dateAnchor) }
-                    .filter { !it.hasPlaybackPosition }
-                    .minWithOrNull(seasonEpisodeOrder)
-                if (rewatchCandidate != null) {
-                    entries += NextUpEntry(rewatchCandidate, lastActivityMillis, seriesId)
-                }
-            }
-        }
-    }
-
-    return entries
-        .sortedWith(
-            compareByDescending<NextUpEntry> { it.lastWatched }
-                .thenBy { it.seriesId }
-        )
-        .take(NEXT_UP_LIMIT)
-        .map { it.episode }
-}
-
-/** (season, episode) order with nulls first — the one ordering every Next Up pass shares. */
-private val seasonEpisodeOrder: Comparator<OfflineMediaItem> = compareBy(
-    { it.seasonNumber ?: Int.MIN_VALUE },
-    { it.episodeNumber ?: Int.MIN_VALUE },
-)
-
-/** True when [episode] sits strictly after [anchor] in (season, episode) order. */
-private fun isAfter(
-    episode: OfflineMediaItem,
-    anchor: OfflineMediaItem?,
-): Boolean = anchor == null || seasonEpisodeOrder.compare(episode, anchor) > 0
-
-/** Milliseconds in one day — the `nextUpMaxDays` cutoff unit. */
-private const val MILLIS_PER_DAY = 86_400_000L
-
-/**
- * Parses the `lastPlayedDate` forms the offline store carries into comparable
- * epoch millis: server-synced ISO stamps (offset / `Z`, up to nanosecond
- * fraction), local `OffsetDateTime.now().toString()` writes (host-zone
- * offset, variable precision) and bare local dates. Null when blank or
- * unparseable — callers treat null as "no activity".
- *
- * kotlinx-datetime replaces the former java.time trio. Honest
- * deltas vs `OffsetDateTime.parse` (ISO_OFFSET_DATE_TIME): kotlinx's
- * ISO_DATE_TIME_OFFSET requires SECONDS in the offset where java accepted
- * their absence, and accepts bare-hours offsets ("+02") where java
- * rejected them — the offline store's writes always carry full ±HH:MM
- * offsets, so no real payload moves legs.
- */
-private fun isoEpochMillis(value: String?): Long? {
-    if (value.isNullOrBlank()) return null
-    val zone = TimeZone.currentSystemDefault()
-    // The swallow is parse-scoped by construction: all three legs can only
-    // throw on malformed input (IllegalArgumentException family). A null
-    // return renders as "no activity" for that day — the pre-port behavior
-    // for DateTimeParseException.
-    return runCatching {
-        when {
-            value.length == 10 -> // bare local date (`2026-01-05`)
-                LocalDate.parse(value).atStartOfDayIn(zone).toEpochMilliseconds()
-            ISO_OFFSET_SUFFIX.containsMatchIn(value) -> {
-                val parsed = DateTimeComponents.Formats.ISO_DATE_TIME_OFFSET.parse(value)
-                parsed.toLocalDateTime().toInstant(parsed.toUtcOffset()).toEpochMilliseconds()
-            }
-            else -> // bare local date-time, no offset
-                LocalDateTime.parse(value).toInstant(zone).toEpochMilliseconds()
-        }
-    }.getOrNull()
-}
-
-/** Trailing `Z` / `±HH:mm` offset on a stored ISO timestamp. */
-private val ISO_OFFSET_SUFFIX = Regex("(?:Z|[+-]\\d{2}:\\d{2})$")

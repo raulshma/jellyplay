@@ -4,6 +4,7 @@ import com.raulshma.jellyplay.core.data.download.DownloadIntake
 import com.raulshma.jellyplay.core.data.download.TrackFlipResult
 import com.raulshma.jellyplay.core.data.download.TrackDownloadStatusWindow
 import com.raulshma.jellyplay.core.data.playback.AudioQueueItem
+import com.raulshma.jellyplay.core.data.playback.AudioQueueOutcome
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.MusicCatalogue
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
@@ -13,7 +14,6 @@ import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.feature.music.MixErrorMessage
-import com.raulshma.jellyplay.feature.music.MusicQueueOutcome
 import com.raulshma.jellyplay.feature.music.MusicQueuePlayer
 import com.raulshma.jellyplay.feature.music.generated.resources.Res
 import com.raulshma.jellyplay.feature.music.generated.resources.music_mix_unavailable
@@ -105,7 +105,7 @@ class AlbumDetailViewModelTest {
     fun startInstantMix_started_setsMixFirstTrackIdFromOutcomeQueue() = runTest(mainDispatcher) {
         loadAlbum()
         advanceUntilIdle()
-        coEvery { audioQueueFacade.startInstantMix(any(), any(), any()) } returns MusicQueueOutcome.Started(
+        coEvery { audioQueueFacade.startInstantMix(any(), any(), any()) } returns AudioQueueOutcome.Started(
             listOf(
                 AudioQueueItem(id = "m1", name = "Mix 1", artist = "A", album = null, imageUrl = null, mediaSourceId = null),
                 AudioQueueItem(id = "m2", name = "Mix 2", artist = "A", album = null, imageUrl = null, mediaSourceId = null),
@@ -126,7 +126,7 @@ class AlbumDetailViewModelTest {
     fun startInstantMix_empty_setsSharedMixUnavailableError() = runTest(mainDispatcher) {
         loadAlbum()
         advanceUntilIdle()
-        coEvery { audioQueueFacade.startInstantMix(any(), any(), any()) } returns MusicQueueOutcome.Empty
+        coEvery { audioQueueFacade.startInstantMix(any(), any(), any()) } returns AudioQueueOutcome.Empty
 
         viewModel.startInstantMix("album1")
         advanceUntilIdle()
@@ -141,7 +141,7 @@ class AlbumDetailViewModelTest {
         loadAlbum()
         advanceUntilIdle()
         coEvery { audioQueueFacade.startInstantMix(any(), any(), any()) } returns
-            MusicQueueOutcome.Failed(RuntimeException("boom"))
+            AudioQueueOutcome.Failed(RuntimeException("boom"))
 
         viewModel.startInstantMix("album1")
         advanceUntilIdle()
@@ -155,7 +155,7 @@ class AlbumDetailViewModelTest {
     fun startInstantMix_suppressed_isSilent() = runTest(mainDispatcher) {
         loadAlbum()
         advanceUntilIdle()
-        coEvery { audioQueueFacade.startInstantMix(any(), any(), any()) } returns MusicQueueOutcome.Suppressed
+        coEvery { audioQueueFacade.startInstantMix(any(), any(), any()) } returns AudioQueueOutcome.Suppressed
 
         viewModel.startInstantMix("album1")
         advanceUntilIdle()
@@ -171,7 +171,7 @@ class AlbumDetailViewModelTest {
         advanceUntilIdle()
         coEvery {
             audioQueueFacade.playTracks(any(), any(), any(), any(), any())
-        } returns MusicQueueOutcome.Started(emptyList(), 0)
+        } returns AudioQueueOutcome.Started(emptyList(), 0)
 
         viewModel.playAlbum(albumTracks, startIndex = 2)
         advanceUntilIdle()
@@ -187,7 +187,7 @@ class AlbumDetailViewModelTest {
         loadAlbum()
         advanceUntilIdle()
         coEvery { audioQueueFacade.enqueueTrack(any(), any(), any()) } returns
-            MusicQueueOutcome.Started(emptyList(), -1)
+            AudioQueueOutcome.Started(emptyList(), -1)
 
         viewModel.addToQueue(albumTracks.first())
         advanceUntilIdle()
@@ -311,7 +311,7 @@ class AlbumDetailViewModelTest {
         // must key on LOAD failures only, or every re-entry after a failed
         // mix would flash a loud reload over loaded content.
         coEvery { audioQueueFacade.startInstantMix(any(), any(), any()) } returns
-            MusicQueueOutcome.Failed(RuntimeException("mix boom"))
+            AudioQueueOutcome.Failed(RuntimeException("mix boom"))
         viewModel.startInstantMix("album1")
         advanceUntilIdle()
         assertEquals("mix boom", (viewModel.error as UiMessage.Raw).text)
@@ -481,7 +481,7 @@ class AlbumDetailViewModelTest {
     fun consumeMixEvent_clearsMixFirstTrackId() = runTest(mainDispatcher) {
         loadAlbum()
         advanceUntilIdle()
-        coEvery { audioQueueFacade.startInstantMix(any(), any(), any()) } returns MusicQueueOutcome.Started(
+        coEvery { audioQueueFacade.startInstantMix(any(), any(), any()) } returns AudioQueueOutcome.Started(
             listOf(AudioQueueItem(id = "m1", name = "Mix 1", artist = "A", album = null, imageUrl = null, mediaSourceId = null)),
             startIndex = 0,
         )

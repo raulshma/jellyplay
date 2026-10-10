@@ -7,7 +7,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.raulshma.jellyplay.MainViewModel
 import com.raulshma.jellyplay.core.ui.message.LocalUserMessageBus
 import com.raulshma.jellyplay.core.ui.tv.isTv
 import com.raulshma.jellyplay.feature.onboarding.OnboardingScreen
@@ -20,6 +19,9 @@ import com.raulshma.jellyplay.shell.ShellInfra
  * (ADR 0001 — the session policy lives HERE, per shell, never in shared):
  * restoring / onboarding gate / authenticated [MainContent] / signed-out
  * [SignedOutAuthHost], with the update sheet overlaid above every branch.
+ * The `viewModel` parameter is the [ShellGateModel] slice — the gate's view
+ * of the activity-scoped ViewModel; the layout subtree receives the
+ * [MainShellModel] slice through [MainContent].
  *
  * The former 1.6k-line single file is split per concern, same package:
  * [MainContent] (MainContent.kt), the request-dispatch holder
@@ -34,8 +36,8 @@ import com.raulshma.jellyplay.shell.ShellInfra
  * shared/feature/shell and core/ui navigation).
  */
 @Composable
-fun JellyPlayApp(
-    viewModel: MainViewModel,
+internal fun JellyPlayApp(
+    viewModel: ShellGateModel,
     infra: ShellInfra,
 ) {
     // The shell coordinators ride the infra bundle — the composition's ONE

@@ -9,11 +9,12 @@ import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
 import com.raulshma.jellyplay.core.data.repository.NoopBookTocCacheRepository
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.HomeFeed
 import com.raulshma.jellyplay.core.data.repository.OfflineFirstItemResolver
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
+import com.raulshma.jellyplay.core.data.repository.UserDataChanges
 import com.raulshma.jellyplay.core.data.repository.AppliedMutation
 import com.raulshma.jellyplay.core.data.repository.UserDataContainer
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
@@ -123,7 +124,8 @@ class HomeViewModelTest {
     // has no access to that module (search/music/livetv conveyor port pattern).
     private val mainDispatcher = StandardTestDispatcher()
 
-    private lateinit var mediaRepository: MediaRepository
+    private lateinit var homeFeed: HomeFeed
+    private lateinit var userDataChanges: UserDataChanges
     private lateinit var episodeCatalogue: EpisodeCatalogue
     private lateinit var userDataMutator: FakeUserDataMutator
     private lateinit var imageUrlProvider: ImageUrlProvider
@@ -216,8 +218,8 @@ class HomeViewModelTest {
     }
 
     /**
-     * Backing flow for mediaRepository.userDataChanges — the refresher inside
-     * the VM collects it from init, so it must be a real flow, not a relaxed
+     * Backing flow for the [UserDataChanges] seam — the refresher inside the
+     * VM collects it from init, so it must be a real flow, not a relaxed
      * mock. Emission behaviour itself is covered by HomeRefresherTest.
      */
     private val userDataEvents = MutableSharedFlow<UserDataChange>(extraBufferCapacity = 64)
@@ -242,7 +244,8 @@ class HomeViewModelTest {
     @BeforeTest
     fun setUp() {
         Dispatchers.setMain(mainDispatcher)
-        mediaRepository = mockk(relaxed = true)
+        homeFeed = mockk(relaxed = true)
+        userDataChanges = mockk(relaxed = true)
         episodeCatalogue = mockk(relaxed = true)
         userDataMutator = FakeUserDataMutator()
         imageUrlProvider = mockk(relaxed = true)
@@ -279,7 +282,7 @@ class HomeViewModelTest {
 
         every { authRepository.currentUser } returns userFlow
         every { sessionApiClient.session } returns sessionFlow
-        every { mediaRepository.userDataChanges } returns userDataEvents
+        every { userDataChanges.userDataChanges } returns userDataEvents
         every { homeDiscoveryStore.homeDiscovery } returns homeDiscoveryFlow
         every { appearanceStore.appearance } returns appearanceFlow
         every { experimentalStore.experimental } returns experimentalFlow
@@ -291,7 +294,7 @@ class HomeViewModelTest {
         every { offlineModeManager.goingOnline } returns goingOnlineFlow
         every { offlineRepository.getOfflineLibrary() } returns flowOf(emptyList())
         every { offlineRepository.getOfflineEpisodes() } returns flowOf(emptyList())
-        coEvery { mediaRepository.getOfflineHomeLayout() } returns null
+        coEvery { homeFeed.getOfflineHomeLayout() } returns null
         every { newsletterTriggerManager.shouldShowBanner() } returns flowOf(false)
     }
 
@@ -304,7 +307,7 @@ class HomeViewModelTest {
         episodeCatalogue = episodeCatalogue,
         userDataMutator = userDataMutator,
         mediaSearchEngine = mediaSearchEngine,
-        mediaRepository = mediaRepository,
+        homeFeed = homeFeed,
         imageUrlProvider = imageUrlProvider,
         photoFolderPrefetcher = photoFolderPrefetcher,
         downloadIntake = downloadIntake,
@@ -327,7 +330,8 @@ class HomeViewModelTest {
         settingsSearchProvider = fakeSettingsSearchProvider,
         homeRefresherFactory = HomeRefresherFactory(
             clock = fakeTimeSource,
-            mediaRepository = mediaRepository,
+            homeFeed = homeFeed,
+            userDataChanges = userDataChanges,
             seerrRepository = seerrRepository,
             arrRepository = arrRepository,
             orderHomeSections = OrderHomeSectionsUseCase(),
@@ -382,7 +386,7 @@ class HomeViewModelTest {
     @Test
     fun signIn_fetchesSections_andOrdersThem() = vmTest {
         coEvery {
-            mediaRepository.getHomeSections(any(), any<Boolean>())
+            homeFeed.getHomeSections(any(), any<Boolean>())
         } returns Result.success(
             HomeSectionsResult(
                 sections = listOf(
@@ -416,7 +420,7 @@ class HomeViewModelTest {
         val shared = item("cw1").copy(playbackPositionTicks = 5_000_000_000L)
         val other = item("other")
         coEvery {
-            mediaRepository.getHomeSections(any(), any<Boolean>())
+            homeFeed.getHomeSections(any(), any<Boolean>())
         } returns Result.success(
             HomeSectionsResult(
                 sections = listOf(
@@ -448,7 +452,7 @@ class HomeViewModelTest {
     @Test
     fun signOut_clearsSections() = vmTest {
         coEvery {
-            mediaRepository.getHomeSections(any(), any<Boolean>())
+            homeFeed.getHomeSections(any(), any<Boolean>())
         } returns Result.success(
             HomeSectionsResult(sections = listOf(section(HomeSectionType.CONTINUE_WATCHING))),
         )
@@ -475,7 +479,7 @@ class HomeViewModelTest {
         val fetchGate = CompletableDeferred<Unit>()
         var fetchCalls = 0
         coEvery {
-            mediaRepository.getHomeSections(any(), any<Boolean>())
+            homeFeed.getHomeSections(any(), any<Boolean>())
         } coAnswers {
             fetchCalls++
             if (fetchCalls == 1) Result.success(HomeSectionsResult(sections = emptyList()))
@@ -525,7 +529,7 @@ class HomeViewModelTest {
         // run on the repository's withContext(Dispatchers.Default) and block a
         // worker thread for the full timeout, leaking past test teardown.
         coEvery {
-            mediaRepository.getHomeSections(any(), any<Boolean>())
+            homeFeed.getHomeSections(any(), any<Boolean>())
         } coAnswers { CompletableDeferred<Result<HomeSectionsResult>>().await() }
         viewModel = buildViewModel()
         signIn("u1")
@@ -570,16 +574,16 @@ class HomeViewModelTest {
     @Test
     fun prefChange_withUnrelatedPrefs_doesNotRefetch() = vmTest {
         coEvery {
-            mediaRepository.getHomeSections(any(), any<Boolean>())
+            homeFeed.getHomeSections(any(), any<Boolean>())
         } returns Result.success(HomeSectionsResult(sections = emptyList()))
         viewModel = buildViewModel()
         signIn("u1")
         runCurrent()
 
         // Reset invocation count after the sign-in fetch.
-        io.mockk.clearMocks(mediaRepository, answers = false, recordedCalls = true, childMocks = false)
+        io.mockk.clearMocks(homeFeed, answers = false, recordedCalls = true, childMocks = false)
         coEvery {
-            mediaRepository.getHomeSections(any(), any<Boolean>())
+            homeFeed.getHomeSections(any(), any<Boolean>())
         } returns Result.success(HomeSectionsResult(sections = emptyList()))
 
         // Toggle a pref that is NOT in the home-section diff set (oledMode).
@@ -587,7 +591,7 @@ class HomeViewModelTest {
         runCurrent()
 
         coVerify(exactly = 0) {
-            mediaRepository.getHomeSections(any(), any<Boolean>())
+            homeFeed.getHomeSections(any(), any<Boolean>())
         }
     }
 
@@ -643,7 +647,7 @@ class HomeViewModelTest {
     @Test
     fun refresh_resetsScrollAndFetchesSections() = vmTest {
         coEvery {
-            mediaRepository.getHomeSections(any(), any())
+            homeFeed.getHomeSections(any(), any())
         } returns Result.success(HomeSectionsResult(sections = emptyList()))
         viewModel = buildViewModel()
         viewModel.saveHomeScrollPosition(5, 100)
@@ -655,13 +659,13 @@ class HomeViewModelTest {
         assertEquals(0, pos.firstVisibleItemIndex)
         assertEquals(0, pos.firstVisibleItemScrollOffset)
         // Manual refresh bypasses the home-sections cache (force read).
-        coVerify { mediaRepository.getHomeSections(any(), force = true) }
+        coVerify { homeFeed.getHomeSections(any(), force = true) }
     }
 
     @Test
     fun pullToRefresh_invalidatesDiscoverCache_andRefetches() = vmTest {
         coEvery {
-            mediaRepository.getHomeSections(any(), any())
+            homeFeed.getHomeSections(any(), any())
         } returns Result.success(HomeSectionsResult(sections = emptyList()))
         viewModel = buildViewModel()
 
@@ -670,7 +674,7 @@ class HomeViewModelTest {
 
         assertFalse(viewModel.uiState.value.isRefreshing)
         // Pull-to-refresh bypasses the home-sections cache (force read).
-        coVerify { mediaRepository.getHomeSections(any(), force = true) }
+        coVerify { homeFeed.getHomeSections(any(), force = true) }
     }
 
     @Test
@@ -686,7 +690,7 @@ class HomeViewModelTest {
     @Test
     fun fetchAndUpdateSections_onFailure_setsErrorState() = vmTest {
         coEvery {
-            mediaRepository.getHomeSections(any(), any<Boolean>())
+            homeFeed.getHomeSections(any(), any<Boolean>())
         } returns Result.failure(RuntimeException("Connection timeout"))
         viewModel = buildViewModel()
 
@@ -702,7 +706,7 @@ class HomeViewModelTest {
     @Test
     fun offlineLibraryCollection_onlineFetchSuccess_neverCollected() = vmTest {
         coEvery {
-            mediaRepository.getHomeSections(any(), any<Boolean>())
+            homeFeed.getHomeSections(any(), any<Boolean>())
         } returns Result.success(
             HomeSectionsResult(sections = listOf(section(HomeSectionType.LATEST_MEDIA, listOf(item("m1"))))),
         )
@@ -728,7 +732,7 @@ class HomeViewModelTest {
         every { offlineRepository.getOfflineLibrary() } returns libraryFlow
         every { offlineRepository.getOfflineEpisodes() } returns flowOf(episodes)
         coEvery {
-            mediaRepository.getHomeSections(any(), any<Boolean>())
+            homeFeed.getHomeSections(any(), any<Boolean>())
         } returns Result.failure(RuntimeException("Connection timeout"))
         viewModel = buildViewModel()
 
@@ -898,7 +902,7 @@ class HomeViewModelTest {
         // actually exist — the render-source fold treats a failed fetch over a
         // confirmed-empty offline library as the hard-error screen (Online),
         // where no card can fire a play at all.
-        coEvery { mediaRepository.getHomeSections(any(), any<Boolean>()) } returns
+        coEvery { homeFeed.getHomeSections(any(), any<Boolean>()) } returns
             Result.failure(IOException("server down"))
         every { offlineRepository.getOfflineLibrary() } returns flowOf(
             listOf(OfflineMediaItem(id = "dl-1", name = "Downloaded", mediaType = MediaType.MOVIE)),

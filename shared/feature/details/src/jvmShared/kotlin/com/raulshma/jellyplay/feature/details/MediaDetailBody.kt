@@ -326,6 +326,13 @@ internal fun DetailSectionRenderer(
                 bodyContentPad = bodyContentPad,
             )
 
+        DetailSectionKind.PLUGIN_RATINGS ->
+            DetailPluginRatingsSection(
+                delayIndex = section.delayIndex,
+                state = state,
+                bodyContentPad = bodyContentPad,
+            )
+
         DetailSectionKind.CHAPTERS_OR_TOC ->
             DetailChaptersSection(
                 delayIndex = section.delayIndex,
@@ -395,6 +402,14 @@ internal fun DetailSectionRenderer(
                 state = state,
                 callbacks = callbacks,
                 isLocalOrigin = isLocalOrigin,
+                bodyContentPad = bodyContentPad,
+            )
+
+        DetailSectionKind.JELLYPLAY_SIMILAR ->
+            DetailJellyPlaySimilarSection(
+                delayIndex = section.delayIndex,
+                state = state,
+                callbacks = callbacks,
                 bodyContentPad = bodyContentPad,
             )
 

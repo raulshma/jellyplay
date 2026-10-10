@@ -35,6 +35,8 @@
     <string name="settings_auto_play_countdown_subtitle">Duração da contagem decrescente antes de reproduzir o próximo episódio</string>
     <string name="settings_controls_timeout">Limite de tempo dos controlos</string>
     <string name="settings_controls_timeout_subtitle">Ocultar automaticamente os controlos do reprodutor</string>
+    <string name="settings_hide_osd_on_pause">Ocultar OSD ao pausar</string>
+    <string name="settings_hide_osd_on_pause_subtitle">Manter os controles ocultos ao pausar</string>
     <string name="settings_streaming_quality_auto_adaptive">Automático (adaptável)</string>
     <string name="settings_streaming_quality_auto">Automático</string>
     <string name="settings_b_frames_none_best">Nenhum (melhor qualidade)</string>
@@ -84,6 +86,8 @@
     <string name="settings_preferred_player">Reprodutor preferido</string>
     <string name="settings_double_tap_seek_duration">Duração de salto de duplo toque</string>
     <string name="settings_gesture_indicator_side">Lado do indicador de gesto</string>
+    <string name="settings_double_tap_hold_seek">Toque duplo e segurar para buscar</string>
+    <string name="settings_double_tap_hold_seek_subtitle">Continua buscando enquanto segurar apos o toque duplo</string>
     <string name="settings_gesture_indicator_opposite">Mostrar barra de brilho/volume no lado oposto ao gesto</string>
     <string name="settings_gesture_indicator_same">Mostrar barra no mesmo lado do gesto</string>
     <string name="settings_countdown_immediate">Reproduzir o próximo item imediatamente</string>
@@ -132,6 +136,8 @@
     <string name="settings_pause_on_focus_loss">Pausar ao perder foco</string>
     <string name="settings_pause_on_focus_loss_on">Pausar quando o sistema reporta perda de foco</string>
     <string name="settings_pause_on_focus_loss_off">Continuar a reprodução ao perder foco</string>
+    <string name="settings_resume_headset_plug">Retomar ao religar os auscultadores</string>
+    <string name="settings_resume_headset_plug_subtitle">Retomar a reprodução quando os auscultadores forem religados após a pausa automática</string>
     <string name="settings_decoder_summary">Descodificador: %1$s</string>
     <string name="settings_decoder">Descodificador</string>
     <string name="settings_refresh_rate_match">Correspondência de taxa de refrescamento</string>
@@ -161,7 +167,12 @@
     <string name="settings_skip_loop_filter">Skip Loop Filter</string>
     <string name="settings_frame_drop">Frame Drop</string>
     <string name="settings_raw_mpv_options">Opções raw do mpv (estilo mpv.conf)</string>
-    <string name="settings_mpv_helper_text">Uma opção por linha (chave=valor). Aplicada após as definições acima, um valor aqui substitui a sua contraparte estruturada. Linhas em branco e comentários # são ignorados.</string>
+    <string name="settings_mpv_helper_text">Uma opção do mpv por linha (chave=valor). São aplicadas depois das definições acima e substituem-nas.
+
+• Linhas em branco e linhas que começam com # são ignoradas; uma chave sem valor (ex.: hr-seek) equivale a yes.
+• Chaves de legendas (sub-color, sub-pos, …) também substituem as definições de legendas da app.
+• Não use aspas nos valores — eles chegam ao mpv exatamente como escritos, então as aspas fariam parte do valor (sub-color=#FF0000 funciona; sub-color="#FF0000" não). Um # dentro de um valor funciona aqui.</string>
+    <string name="settings_mpv_config_placeholder">scale=ewa_lanczossharp\ncache-secs=120</string>
     <string name="settings_reset_mpv">Restaurar todas as definições do MPV</string>
     <string name="settings_network_caching">Cache de rede</string>
     <string name="settings_skip_frames">Saltar frames</string>

@@ -15,8 +15,6 @@ import java.util.Calendar
 /** The verbatim `String.format` body the settings/editor twins shipped (host locale). */
 actual fun formatIntPattern(pattern: String, value: Int): String = pattern.format(value)
 
-internal actual fun formatOneDecimal(value: Double): String = "%.1f".format(value)
-
 internal actual fun currentYear(): Int = Calendar.getInstance().get(Calendar.YEAR)
 
 internal actual fun hourOfDayAt(epochMillis: Long?): Int {

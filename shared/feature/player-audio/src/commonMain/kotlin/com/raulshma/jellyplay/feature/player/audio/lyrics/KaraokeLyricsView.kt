@@ -19,6 +19,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -81,13 +82,25 @@ fun KaraokeLyricsView(
                     animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
                     label = "karaokeLineAlpha_$index",
                 )
+                // Active line breathes up slightly; the weight flip alone reads
+                // abrupt. Snap spec under reduced motion via the motionScheme.
+                val lineScale by animateFloatAsState(
+                    targetValue = if (isCurrent) 1.04f else 1f,
+                    animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
+                    label = "karaokeLineScale_$index",
+                )
                 if (isCurrent && line.words.isNotEmpty()) {
                     KaraokeLine(
                         line = line,
                         // Pass the state itself: only this leaf re-executes on
                         // the position tick, not the LazyColumn above.
                         positionMs = currentPositionMs,
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .graphicsLayer {
+                                scaleX = lineScale
+                                scaleY = lineScale
+                            },
                     )
                 } else {
                     val display = if (line.text.isBlank()) "♪" else line.text
@@ -99,6 +112,10 @@ fun KaraokeLyricsView(
                         ),
                         color = Color.White.copy(alpha = lineAlpha),
                         textAlign = TextAlign.Center,
+                        modifier = Modifier.graphicsLayer {
+                            scaleX = lineScale
+                            scaleY = lineScale
+                        },
                     )
                 }
             }

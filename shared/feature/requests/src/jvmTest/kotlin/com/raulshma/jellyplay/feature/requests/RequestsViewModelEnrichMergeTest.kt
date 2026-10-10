@@ -75,7 +75,6 @@ class RequestsViewModelEnrichMergeTest {
         experimentalStore = mockk()
         every { experimentalStore.experimental } returns MutableStateFlow(ExperimentalSlice())
         every { seerrRepository.currentUser } returns MutableStateFlow(null)
-        every { seerrRepository.isAdmin() } returns MutableStateFlow(false)
         every { seerrRepository.pendingRequestCount } returns MutableStateFlow(0)
         every { seerrRepository.startPolling() } just Runs
         every { seerrRepository.stopPolling() } just Runs

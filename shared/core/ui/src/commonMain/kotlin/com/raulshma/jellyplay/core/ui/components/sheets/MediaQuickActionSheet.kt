@@ -5,9 +5,11 @@ import com.raulshma.jellyplay.core.ui.generated.resources.core_action_delete
 import com.raulshma.jellyplay.core.ui.generated.resources.core_action_details
 import com.raulshma.jellyplay.core.ui.generated.resources.core_action_download
 import com.raulshma.jellyplay.core.ui.generated.resources.core_action_favorite
+import com.raulshma.jellyplay.core.ui.generated.resources.core_action_hide_from_continue_watching
 import com.raulshma.jellyplay.core.ui.generated.resources.core_action_mark_unwatched
 import com.raulshma.jellyplay.core.ui.generated.resources.core_action_mark_watched
 import com.raulshma.jellyplay.core.ui.generated.resources.core_action_play
+import com.raulshma.jellyplay.core.ui.generated.resources.core_action_show_from_continue_watching
 import com.raulshma.jellyplay.core.ui.generated.resources.core_action_unfavorite
 
 import androidx.compose.foundation.clickable
@@ -70,6 +72,8 @@ val QuickAction.labelRes: org.jetbrains.compose.resources.StringResource
         QuickAction.DOWNLOAD -> Res.string.core_action_download
         QuickAction.ADD_TO_PLAYLIST -> Res.string.core_action_add_to_playlist
         QuickAction.REMOVE_DOWNLOAD -> Res.string.core_action_delete
+        QuickAction.HIDE_FROM_CONTINUE_WATCHING -> Res.string.core_action_hide_from_continue_watching
+        QuickAction.SHOW_FROM_CONTINUE_WATCHING -> Res.string.core_action_show_from_continue_watching
         QuickAction.DETAILS -> Res.string.core_action_details
     }
 
@@ -85,6 +89,10 @@ val QuickAction.icon: ImageVector
         QuickAction.DOWNLOAD -> Tabler.Outline.Download
         QuickAction.ADD_TO_PLAYLIST -> Tabler.Outline.Bookmark
         QuickAction.REMOVE_DOWNLOAD -> Tabler.Outline.DownloadOff
+        // The resume-row toggle mirrors the detail ⋮ menu's icons: EyeOff =
+        // currently visible, hide it; Eye = currently hidden, show it.
+        QuickAction.HIDE_FROM_CONTINUE_WATCHING -> Tabler.Outline.EyeOff
+        QuickAction.SHOW_FROM_CONTINUE_WATCHING -> Tabler.Outline.Eye
         QuickAction.DETAILS -> Tabler.Outline.InfoCircle
     }
 

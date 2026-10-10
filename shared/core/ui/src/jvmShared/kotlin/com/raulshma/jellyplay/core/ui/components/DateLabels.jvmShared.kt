@@ -8,7 +8,9 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalTime
 import kotlinx.datetime.toJavaLocalDate
+import kotlinx.datetime.toJavaLocalTime
 import kotlinx.datetime.toKotlinLocalDate
 
 /**
@@ -40,6 +42,9 @@ actual fun monthYear(year: Int, monthNumber: Int): String =
     YearMonth.of(year, monthNumber).format(cachedFormatter("MMMM yyyy", Locale.getDefault()))
 
 actual fun weekdayShortMonthDay(date: LocalDate): String = date.formatWith("EEE, MMM d")
+
+actual fun clockTime(time: LocalTime): String =
+    time.toJavaLocalTime().format(cachedFormatter("HH:mm", Locale.getDefault()))
 
 /** The verbatim `OffsetDateTime.parse` + `Duration.between` body requests shipped. */
 actual fun isoOffsetMinutesAgo(stamp: String): Long? = try {

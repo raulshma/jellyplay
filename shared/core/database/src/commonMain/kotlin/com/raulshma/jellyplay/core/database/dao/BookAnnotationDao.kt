@@ -26,6 +26,15 @@ interface BookAnnotationDao {
     @Query("SELECT * FROM book_annotations WHERE itemId = :itemId ORDER BY createdAt ASC")
     fun observeByItemId(itemId: String): Flow<List<BookAnnotationEntity>>
 
+    /**
+     * Every stored annotation across all items, ordered for stable grouping —
+     * the sync adapter's snapshot read (JellyPlayReaderSyncAdapter groups by
+     * `itemId` into one wire value per book). Suspend (one read, no
+     * observation) like the rest of the write-side queries here.
+     */
+    @Query("SELECT * FROM book_annotations ORDER BY itemId ASC, createdAt ASC")
+    suspend fun getAll(): List<BookAnnotationEntity>
+
     @Query("SELECT * FROM book_annotations WHERE id = :id")
     suspend fun getById(id: Long): BookAnnotationEntity?
 

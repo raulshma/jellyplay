@@ -60,6 +60,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.components.EpisodeWatchedTag
 import com.raulshma.jellyplay.core.ui.components.ExpandableText
 import com.raulshma.jellyplay.core.ui.components.PosterCard
+import com.raulshma.jellyplay.core.ui.components.formatOneDecimal
 import com.raulshma.jellyplay.core.ui.components.formatRuntimeLabelFromTicks
 import com.raulshma.jellyplay.core.ui.components.formatDurationFromTicks
 import com.raulshma.jellyplay.core.ui.components.OfflinePersonItem
@@ -90,6 +91,8 @@ import com.raulshma.jellyplay.feature.details.generated.resources.detail_see_all
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_time_left_format
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_up_next
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_watched_badge
+import com.raulshma.jellyplay.feature.details.generated.resources.jellyplay_det_ratings_title
+import com.raulshma.jellyplay.feature.details.generated.resources.jellyplay_det_similar_badge
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
@@ -437,7 +440,12 @@ internal fun DetailHeaderSection(
                         }
                     }
                     item.communityRating?.let { rating ->
-                        val ratingText = remember(rating) { String.format("%.1f", rating) }
+                        // The "%.1f" route (core/ui's formatOneDecimal): the
+                        // exact String.format("%.1f", …) rendering this site
+                        // shipped — HALF_UP at the first decimal, host-locale
+                        // separator (Float.toDouble() is exact, so the pinned
+                        // rounding inputs are unaffected).
+                        val ratingText = remember(rating) { formatOneDecimal(rating.toDouble()) }
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
                                 Tabler.Outline.Heart,
@@ -1009,6 +1017,8 @@ internal fun DetailSeasonsSection(
                     persistedSeasonId = state.persistedSeasonId,
                     getImageUrl = callbacks.artwork.getImageUrl,
                     callbacks = sectionCallbacks,
+                    animeMarkers = state.animeMarkers,
+                    seasonRatings = state.seasonRatings,
                 )
             }
         }
@@ -1233,6 +1243,134 @@ internal fun DetailMoreLikeThisSection(
                         modifier = focusModifier.width(relatedCardWidth),
                     )
                 }
+            }
+        }
+    }
+}
+
+// ── JellyPlay plugin sections (ADR 0010): ratings chips + scored similar ──
+
+/**
+ * The companion plugin's aggregated external-ratings row (mdblist): one
+ * non-clickable chip per source the server sent, rendered verbatim
+ * ("Source Score"). Silent absence is the plugin contract — the admission
+ * gate (state.pluginRatings non-empty) means a failed/null probe simply
+ * never admits this slot; there is no error or loading state by design.
+ */
+@Composable
+internal fun DetailPluginRatingsSection(
+    delayIndex: Int,
+    state: DetailContentState,
+    bodyContentPad: Dp,
+) {
+    val ratings = state.pluginRatings
+    StaggeredDetailSection(visible = ratings.isNotEmpty(), delayIndex = delayIndex) {
+        Column(modifier = Modifier.padding(horizontal = bodyContentPad)) {
+            FadingItem {
+                Text(
+                    text = stringResource(Res.string.jellyplay_det_ratings_title),
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+                    modifier = Modifier.semantics { heading() },
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+            Spacer(Modifier.height(10.dp))
+            FadingItem {
+                // Chips wrap (the header metadata row's FlowRow shape) — the
+                // source set is small (≤6) and reads as one line on every
+                // width that matters.
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    ratings.forEach { entry ->
+                        val score = entry.score ?: return@forEach
+                        TagChip(
+                            label = "${entry.source} ${formatPluginScore(score)}",
+                            containerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f),
+                            contentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.95f),
+                            enabled = false,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Score rendering for a plugin rating chip: whole scores stay integers
+ * ("86"), fractional ones keep exactly one decimal ("8.5") — mdblist mixes
+ * 0–100 percent sources (RT/Metacritic/Trakt) with 0–10 star sources
+ * (IMDb/TMDB/Letterboxd), and a uniform "%.1f" would pin a fake ".0" onto
+ * every percentage.
+ */
+internal fun formatPluginScore(score: Double): String =
+    if (score % 1.0 == 0.0) score.toLong().toString() else formatOneDecimal(score)
+
+/**
+ * The companion plugin's server-scored "More like this" row (ADR 0010):
+ * mirrors [DetailMoreLikeThisSection]'s poster-row scaffolding exactly —
+ * same geometry, same click/focus wiring — with the plugin's score-ordered
+ * hydration in place of the stock list and a distinguishing source badge
+ * beside the shared title. Replaces the stock row while non-empty (the
+ * admission fold suppresses MORE_LIKE_THIS on hasPluginSimilar); empty
+ * hydration falls back to the stock row.
+ */
+@Composable
+internal fun DetailJellyPlaySimilarSection(
+    delayIndex: Int,
+    state: DetailContentState,
+    callbacks: DetailContentCallbacks,
+    bodyContentPad: Dp,
+) {
+    val similar = state.pluginSimilarItems
+    StaggeredDetailSection(visible = similar.isNotEmpty(), delayIndex = delayIndex) {
+        Column {
+            FadingItem {
+                androidx.compose.foundation.layout.Row(
+                    modifier = Modifier.padding(horizontal = bodyContentPad),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text(
+                        text = stringResource(Res.string.detail_section_more_like_this),
+                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+                        modifier = Modifier.semantics { heading() },
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        text = stringResource(Res.string.jellyplay_det_similar_badge),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier
+                            .clip(ShapeCache.smooth16)
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                            .padding(horizontal = 8.dp, vertical = 2.dp),
+                    )
+                }
+            }
+            Spacer(Modifier.height(16.dp))
+            // Card width resolved once per slot (the DetailMoreLikeThisSection note).
+            val adaptiveInfo = LocalAdaptiveInfo.current
+            val similarCardWidth = if (adaptiveInfo.windowSizeClass != WindowSizeClass.Compact) 200.dp else 160.dp
+            TvFocusableItemRow(
+                items = similar,
+                key = { "plugin_sim_${it.id}" },
+                contentPadding = PaddingValues(horizontal = bodyContentPad),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                onFocusedIndexChange = { index ->
+                    similar.getOrNull(index)?.let(callbacks.screen.onFocusedMediaItem)
+                },
+            ) { _, similarItem, focusModifier ->
+                val similarClick = remember(similarItem.id) { { callbacks.navigation.onItemClick(similarItem.id) } }
+                val similarImageUrl = remember(similarItem.id) { callbacks.artwork.getImageUrl(similarItem.id) }
+                PosterCard(
+                    item = similarItem,
+                    imageUrl = similarImageUrl,
+                    onClick = similarClick,
+                    modifier = focusModifier.width(similarCardWidth),
+                )
             }
         }
     }

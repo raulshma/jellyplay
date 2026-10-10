@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.feature.player.video
 
-import com.raulshma.jellyplay.core.data.repository.MediaExtrasReads
+import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.data.repository.OfflinePlaybackFacade
 import com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager
 import com.raulshma.jellyplay.core.datastore.network.NetworkOfflineStore
@@ -46,7 +46,8 @@ sealed interface LoadOutcome {
 /**
  * The ui-state → ui-state transform [SessionLoadOutputs.onPrefsProjected]
  * carries. Internal alias so implementers of the outputs seam (formerly the
- * deleted [VideoSessionHost]; today [PlayerWiring], the composition builder
+ * deleted [VideoSessionHost]; then the deleted `PlayerWiring` builder; today
+ * [PlaybackSession], the composition root the builder collapsed into
  * that implements it) can take the transform through the command-lambda
  * split: ControllerOwnershipTest's migrated-controller ratchet forbids the
  * literal type name in the migrated controllers (KDoc prose is exempt; the
@@ -60,10 +61,10 @@ sealed interface LoadOutcome {
 internal typealias PrefsProjection = VideoPlayerUiState.() -> VideoPlayerUiState
 
 /**
- * UiState-shaped load outputs. Implemented by [PlayerWiring] (the
- * composition builder that owns the collaborator graph — the ViewModel's
- * former object-literal, then the deleted VideoSessionHost) — uiState
- * ownership stays with the ViewModel. Each method is called at a
+ * UiState-shaped load outputs. Implemented by [PlaybackSession] (the
+ * composition root that owns the collaborator graph — the ViewModel's
+ * former object-literal, then the deleted VideoSessionHost, then the deleted
+ * `PlayerWiring` builder) — uiState ownership stays with the ViewModel. Each method is called at a
  * defined point of the [SessionLoadPipeline] spine; the interface exists so
  * the *order* of the stages is testable against a fake.
  */
@@ -164,14 +165,14 @@ class SessionLoadHooks(
  * returns the launched [Job] which the VM assigns to its `loadJob` and
  * cancels before the next load's `releaseInternals()`.
  */
-class SessionLoadPipeline(
+internal class SessionLoadPipeline(
     private val sessionManager: PlayerSessionManager,
     /**
      * The item-attached extras seam — the pipeline's one repository read is the
      * Cinema Mode intros lookup, which left the wide union for
-     * [MediaExtrasReads] (uncached forward, no cache state).
+     * [LibraryApiClient] (uncached forward, no cache state).
      */
-    private val mediaExtrasReads: MediaExtrasReads,
+    private val libraryApiClient: LibraryApiClient,
     private val aggregateStore: VideoPlayerAggregateStore,
     private val networkOfflineStore: NetworkOfflineStore,
     /**
@@ -243,7 +244,7 @@ class SessionLoadPipeline(
         if (request.allowCinemaMode &&
             shouldAttemptCinemaMode(agg, request.itemId, request.startPositionTicks)
         ) {
-            val intros = mediaExtrasReads.getIntros(request.itemId).getOrDefault(emptyList())
+            val intros = libraryApiClient.getIntros(request.itemId).getOrDefault(emptyList())
             if (intros.isNotEmpty()) {
                 hooks.beginCinemaMode(intros, request)
                 hooks.onOutcome(LoadOutcome.CinemaIntro(intros.first().id))

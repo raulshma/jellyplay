@@ -1,6 +1,6 @@
-# Desktop native-dialog flows — verification ledger (wave 22F, audit finding F9)
+# Desktop native-dialog flows — verification ledger (wave 22F)
 
-**Verdict: the settings backup export/import dialog flow is now a committed,
+**Result: the settings backup export/import dialog flow is now a committed,
 re-runnable, green automated lane (3/3 PASS runs on 2026-08-30); the other
 wave-20 native-dialog flows stay checklist-only this round, with the shared
 dialog mechanics now indirectly evidenced by the automated lane.** The
@@ -21,7 +21,7 @@ away) is a named manual checklist, not a fake green.
 > boundary" and "Why items 3–6 stayed checklist" sections describe the
 > wave-22F state, not the current one.
 
-## What wave 20 left unverified (the F9 backlog)
+## What wave 20 left unverified
 
 Wave 20A/20C landed real AWT `FileDialog` flows on desktop and their commit
 messages carried the honest cut: *"the native dialog halves (modal AWT
@@ -72,7 +72,7 @@ workspace `shots/` dir):
 | `DIALOG_EXPORT_SAVE` | the production `pickAwtFile` SAVE call (same title "Export settings", same `jellyplay-settings.json` prefill, shown **on the EDT** exactly like a click handler) opens the native dialog; the Robot driver clears the name box (Ctrl+A), types the full absolute workspace path, presses Enter; the dialog closes and returns exactly the typed file |
 | `EXPORT_VM_WRITES` | the production callback body `SettingsViewModel.exportSettings(uri)` writes the file through `DesktopSettingsBackupIo`'s `file:` URI → JDK stream mapping; asserted from OUTSIDE the process: file exists, non-empty, JSON `schemaVersion == 2`, non-empty slices (measured: 14,901 bytes, 18 slice keys) + VM status "Settings exported successfully" |
 | `DIALOG_IMPORT_LOAD` | the LOAD dialog picks the very file the export wrote (same Robot mechanism) |
-| `IMPORT_VM_STAGE_CONFIRM` | `importSettings` stages a v2 pending import (not legacy, no version mismatch, dialog-produced URI) and `confirmImport(false)` lands "Settings imported successfully" |
+| `IMPORT_VM_STAGE_CONFIRM` | `importSettings` stages the dialog-produced URI (stage-and-navigate signal) and the production import path — `ImportPreviewViewModel.loadBackup` + `importAll` — re-parses it through `BackupParser` (v2, not legacy, no version mismatch) and lands the `AllImported` event |
 | `DIALOG_CANCEL_ESC` | ESC on the native dialog = cancel: `pickAwtFile` returns null, no callback fires, VM state untouched — the live twin of the wave-21D `pickedAwtFile` cancel unit test |
 
 Status: **PASS 3/3 runs, every dialog on attempt 1** (2026-08-30, Windows 11,
@@ -130,7 +130,7 @@ per-flow click wiring and the flow-specific post-condition.
    choose a location → Save. EXPECT "Settings exported successfully" toast +
    the file on disk with `"schemaVersion": 2`. STATUS: dialog + VM verified
    by automation (2026-08-30); the row click itself last exercised manually
-   in wave 20C's review round — re-verify on next touch.
+   in wave 20C — re-verify on next touch.
 2. **Settings backup import — row wiring.** Same screen, "Import settings"
    row → LOAD dialog → pick a previously exported file → EXPECT the
    staged-import confirmation (schema/version summary) → confirm. EXPECT
@@ -199,7 +199,7 @@ bridge) or accepts screen-specific pixel maps validated per machine.
 
 ## Wave 23 (2026-09-12): items 3–6 green — the flows lane
 
-**Verdict: `tools/e2e/desktop-native-dialog-flows-pass.sh` — overallPass
+**Result: `tools/e2e/desktop-native-dialog-flows-pass.sh` — overallPass
 2/2 runs (2026-09-12, Windows 11, 150% display scale, JDK 21.0.7 app
 runtime), every flow on attempt 1 in both runs.** Drives the REAL windowed
 app against the real Docker Jellyfin fixture (`bootstrap-jellyfin.sh`, the

@@ -1,15 +1,15 @@
 package com.raulshma.jellyplay.feature.music.artistdetail
 
 import com.raulshma.jellyplay.core.data.playback.AudioQueueItem
+import com.raulshma.jellyplay.core.data.playback.AudioQueueOutcome
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
-import com.raulshma.jellyplay.core.data.repository.MusicCatalogue
+import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.UserDataChange
 import com.raulshma.jellyplay.feature.music.MixErrorMessage
-import com.raulshma.jellyplay.feature.music.MusicQueueOutcome
 import com.raulshma.jellyplay.feature.music.MusicQueuePlayer
 import com.raulshma.jellyplay.feature.music.generated.resources.Res
 import com.raulshma.jellyplay.feature.music.generated.resources.music_mix_unavailable
@@ -51,7 +51,7 @@ class ArtistDetailViewModelTest {
     private val mainDispatcher = StandardTestDispatcher()
 
     private val mediaRepository: MediaRepository = mockk()
-    private val musicCatalogue: MusicCatalogue = mockk()
+    private val libraryApiClient: LibraryApiClient = mockk()
     private val imageUrlProvider: ImageUrlProvider = mockk(relaxed = true)
     private val audioQueueFacade: MusicQueuePlayer = mockk()
 
@@ -72,7 +72,7 @@ class ArtistDetailViewModelTest {
         every { mediaRepository.userDataChanges } returns userDataEvents
         viewModel = ArtistDetailViewModel(
             mediaRepository = mediaRepository,
-            musicCatalogue = musicCatalogue,
+            libraryApiClient = libraryApiClient,
             imageUrlProvider = imageUrlProvider,
             audioQueueFacade = audioQueueFacade,
         )
@@ -88,7 +88,7 @@ class ArtistDetailViewModelTest {
         coEvery { mediaRepository.getMediaDetail("ar1", any()) } returns Result.success(
             MediaDetail(item = MediaItem(id = "ar1", name = artistName, mediaType = MediaType.ARTIST)),
         )
-        coEvery { musicCatalogue.getArtistAlbums("ar1", any()) } returns Result.success(albums)
+        coEvery { libraryApiClient.getArtistAlbums("ar1", any()) } returns Result.success(albums)
         viewModel.loadArtist("ar1")
     }
 
@@ -108,7 +108,7 @@ class ArtistDetailViewModelTest {
     fun loadArtist_detailFailure_setsRawErrorOverNoContent() = runTest(mainDispatcher) {
         coEvery { mediaRepository.getMediaDetail("ar1", any()) } returns
             Result.failure(RuntimeException("no artist"))
-        coEvery { musicCatalogue.getArtistAlbums("ar1", any()) } returns Result.success(albums)
+        coEvery { libraryApiClient.getArtistAlbums("ar1", any()) } returns Result.success(albums)
 
         viewModel.loadArtist("ar1")
         advanceUntilIdle()
@@ -130,7 +130,7 @@ class ArtistDetailViewModelTest {
         coEvery { mediaRepository.getMediaDetail("ar1", any()) } returns Result.success(
             MediaDetail(item = MediaItem(id = "ar1", name = "Artist", mediaType = MediaType.ARTIST)),
         )
-        coEvery { musicCatalogue.getArtistAlbums("ar1", any()) } returns
+        coEvery { libraryApiClient.getArtistAlbums("ar1", any()) } returns
             Result.failure(RuntimeException("albums gone"))
 
         viewModel.loadArtist("ar1")
@@ -146,7 +146,7 @@ class ArtistDetailViewModelTest {
     fun startInstantMix_started_setsMixFirstTrackIdFromOutcomeQueue() = runTest(mainDispatcher) {
         loadArtist()
         advanceUntilIdle()
-        coEvery { audioQueueFacade.startInstantMix(any(), any(), any()) } returns MusicQueueOutcome.Started(
+        coEvery { audioQueueFacade.startInstantMix(any(), any(), any()) } returns AudioQueueOutcome.Started(
             listOf(
                 AudioQueueItem(id = "m1", name = "Mix 1", artist = "A", album = null, imageUrl = null, mediaSourceId = null),
                 AudioQueueItem(id = "m2", name = "Mix 2", artist = "A", album = null, imageUrl = null, mediaSourceId = null),
@@ -169,7 +169,7 @@ class ArtistDetailViewModelTest {
     fun startInstantMix_empty_setsSharedMixUnavailableError() = runTest(mainDispatcher) {
         loadArtist()
         advanceUntilIdle()
-        coEvery { audioQueueFacade.startInstantMix(any(), any(), any()) } returns MusicQueueOutcome.Empty
+        coEvery { audioQueueFacade.startInstantMix(any(), any(), any()) } returns AudioQueueOutcome.Empty
 
         viewModel.startInstantMix("ar1")
         advanceUntilIdle()
@@ -184,7 +184,7 @@ class ArtistDetailViewModelTest {
         loadArtist()
         advanceUntilIdle()
         coEvery { audioQueueFacade.startInstantMix(any(), any(), any()) } returns
-            MusicQueueOutcome.Failed(RuntimeException("boom"))
+            AudioQueueOutcome.Failed(RuntimeException("boom"))
 
         viewModel.startInstantMix("ar1")
         advanceUntilIdle()
@@ -198,7 +198,7 @@ class ArtistDetailViewModelTest {
     fun startInstantMix_suppressed_isSilent() = runTest(mainDispatcher) {
         loadArtist()
         advanceUntilIdle()
-        coEvery { audioQueueFacade.startInstantMix(any(), any(), any()) } returns MusicQueueOutcome.Suppressed
+        coEvery { audioQueueFacade.startInstantMix(any(), any(), any()) } returns AudioQueueOutcome.Suppressed
 
         viewModel.startInstantMix("ar1")
         advanceUntilIdle()
@@ -212,7 +212,7 @@ class ArtistDetailViewModelTest {
     fun consumeMixEvent_clearsMixFirstTrackId() = runTest(mainDispatcher) {
         loadArtist()
         advanceUntilIdle()
-        coEvery { audioQueueFacade.startInstantMix(any(), any(), any()) } returns MusicQueueOutcome.Started(
+        coEvery { audioQueueFacade.startInstantMix(any(), any(), any()) } returns AudioQueueOutcome.Started(
             listOf(
                 AudioQueueItem(id = "m1", name = "Mix 1", artist = "A", album = null, imageUrl = null, mediaSourceId = null),
             ),
@@ -241,7 +241,7 @@ class ArtistDetailViewModelTest {
         advanceUntilIdle()
 
         coVerify(exactly = 1) { mediaRepository.getMediaDetail("ar1") }
-        coVerify(exactly = 1) { musicCatalogue.getArtistAlbums("ar1", 50) }
+        coVerify(exactly = 1) { libraryApiClient.getArtistAlbums("ar1", 50) }
         assertFalse(viewModel.isLoading)
     }
 
@@ -253,7 +253,7 @@ class ArtistDetailViewModelTest {
         // must key on LOAD failures only, or every re-entry after a failed
         // mix would flash a loud reload over loaded content.
         coEvery { audioQueueFacade.startInstantMix(any(), any(), any()) } returns
-            MusicQueueOutcome.Failed(RuntimeException("mix boom"))
+            AudioQueueOutcome.Failed(RuntimeException("mix boom"))
         viewModel.startInstantMix("ar1")
         advanceUntilIdle()
         assertEquals("mix boom", (viewModel.error as UiMessage.Raw).text)
@@ -262,7 +262,7 @@ class ArtistDetailViewModelTest {
         advanceUntilIdle()
 
         coVerify(exactly = 1) { mediaRepository.getMediaDetail("ar1") }
-        coVerify(exactly = 1) { musicCatalogue.getArtistAlbums("ar1", 50) }
+        coVerify(exactly = 1) { libraryApiClient.getArtistAlbums("ar1", 50) }
         assertFalse(viewModel.isLoading)
         // The mix error survives the skipped re-entry.
         assertEquals("mix boom", (viewModel.error as UiMessage.Raw).text)
@@ -271,7 +271,7 @@ class ArtistDetailViewModelTest {
     @Test
     fun loadArtist_thrownRepoFailure_clearsSpinnerSetsErrorAndReloadsOnReEntry() = runTest(mainDispatcher) {
         coEvery { mediaRepository.getMediaDetail("ar1", any()) } throws IllegalStateException("engine blew up")
-        coEvery { musicCatalogue.getArtistAlbums("ar1", any()) } returns Result.success(albums)
+        coEvery { libraryApiClient.getArtistAlbums("ar1", any()) } returns Result.success(albums)
 
         viewModel.loadArtist("ar1")
         advanceUntilIdle()
@@ -303,19 +303,19 @@ class ArtistDetailViewModelTest {
         coEvery { mediaRepository.getMediaDetail("ar1", any()) } returns Result.success(
             MediaDetail(item = MediaItem(id = "ar1", name = "Artist", mediaType = MediaType.ARTIST)),
         )
-        coEvery { musicCatalogue.getArtistAlbums("ar1", any()) } returns
+        coEvery { libraryApiClient.getArtistAlbums("ar1", any()) } returns
             Result.failure(RuntimeException("albums gone"))
         viewModel.loadArtist("ar1")
         advanceUntilIdle()
         assertEquals("albums gone", (viewModel.error as UiMessage.Raw).text)
 
         // Re-entry retries the loud load and heals the failed half.
-        coEvery { musicCatalogue.getArtistAlbums("ar1", any()) } returns Result.success(albums)
+        coEvery { libraryApiClient.getArtistAlbums("ar1", any()) } returns Result.success(albums)
         viewModel.loadArtist("ar1")
         advanceUntilIdle()
 
         coVerify(exactly = 2) { mediaRepository.getMediaDetail("ar1") }
-        coVerify(exactly = 2) { musicCatalogue.getArtistAlbums("ar1", 50) }
+        coVerify(exactly = 2) { libraryApiClient.getArtistAlbums("ar1", 50) }
         assertNull(viewModel.error)
         assertEquals(albums, viewModel.albums)
     }
@@ -327,7 +327,7 @@ class ArtistDetailViewModelTest {
         coEvery { mediaRepository.getMediaDetail("ar1", any()) } returns Result.success(
             MediaDetail(item = MediaItem(id = "ar1", name = "Artist", mediaType = MediaType.ARTIST)),
         )
-        coEvery { musicCatalogue.getArtistAlbums("ar1", any()) } returns
+        coEvery { libraryApiClient.getArtistAlbums("ar1", any()) } returns
             Result.failure(RuntimeException("albums gone"))
         viewModel.loadArtist("ar1")
         advanceUntilIdle()
@@ -338,7 +338,7 @@ class ArtistDetailViewModelTest {
         coEvery { mediaRepository.getMediaDetail("ar1", true) } returns Result.success(
             MediaDetail(item = MediaItem(id = "ar1", name = "Artist", mediaType = MediaType.ARTIST)),
         )
-        coEvery { musicCatalogue.getArtistAlbums("ar1", any()) } returns Result.success(albums)
+        coEvery { libraryApiClient.getArtistAlbums("ar1", any()) } returns Result.success(albums)
         userDataEvents.emit(UserDataChange("user-1", listOf("al1")))
         advanceUntilIdle()
         viewModel.deferredRefresher.onScreenActiveChanged(true)
@@ -370,7 +370,7 @@ class ArtistDetailViewModelTest {
         coEvery { mediaRepository.getMediaDetail("ar1", true) } returns Result.success(
             MediaDetail(item = MediaItem(id = "ar1", name = "Artist 2", mediaType = MediaType.ARTIST)),
         )
-        coEvery { musicCatalogue.getArtistAlbums("ar1", any()) } returns Result.success(albums)
+        coEvery { libraryApiClient.getArtistAlbums("ar1", any()) } returns Result.success(albums)
         userDataEvents.emit(UserDataChange("user-1", listOf("al1")))
         advanceUntilIdle()
 
@@ -392,7 +392,7 @@ class ArtistDetailViewModelTest {
 
         viewModel.deferredRefresher.onScreenActiveChanged(false)
         coEvery { mediaRepository.getMediaDetail("ar1", true) } returns Result.failure(RuntimeException("offline blip"))
-        coEvery { musicCatalogue.getArtistAlbums("ar1", any()) } returns Result.success(albums)
+        coEvery { libraryApiClient.getArtistAlbums("ar1", any()) } returns Result.success(albums)
         userDataEvents.emit(UserDataChange("user-1", listOf("al1")))
         advanceUntilIdle()
         viewModel.deferredRefresher.onScreenActiveChanged(true)
@@ -429,7 +429,7 @@ class ArtistDetailViewModelTest {
         coEvery { mediaRepository.getMediaDetail("ar1", true) } returns Result.success(
             MediaDetail(item = MediaItem(id = "ar1", name = "Artist 2", mediaType = MediaType.ARTIST)),
         )
-        coEvery { musicCatalogue.getArtistAlbums("ar1", any()) } returns
+        coEvery { libraryApiClient.getArtistAlbums("ar1", any()) } returns
             Result.failure(RuntimeException("albums blip"))
         userDataEvents.emit(UserDataChange("user-1", listOf("al1")))
         advanceUntilIdle()
@@ -453,7 +453,7 @@ class ArtistDetailViewModelTest {
         coEvery { mediaRepository.getMediaDetail("ar1", true) } returns Result.success(
             MediaDetail(item = MediaItem(id = "ar1", name = "Artist", mediaType = MediaType.ARTIST)),
         )
-        coEvery { musicCatalogue.getArtistAlbums("ar1", any()) } returns Result.success(albums)
+        coEvery { libraryApiClient.getArtistAlbums("ar1", any()) } returns Result.success(albums)
 
         viewModel.refreshArtist("ar1")
         advanceUntilIdle()

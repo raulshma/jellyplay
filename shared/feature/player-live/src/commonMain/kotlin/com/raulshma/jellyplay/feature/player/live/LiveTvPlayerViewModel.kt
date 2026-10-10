@@ -9,9 +9,9 @@ import com.raulshma.jellyplay.core.data.playback.reArmPipTransport
 import com.raulshma.jellyplay.core.data.playback.PlaybackIdentity
 import com.raulshma.jellyplay.core.data.playback.focus.PlaybackSurfaceId
 import com.raulshma.jellyplay.core.data.playback.focus.claimOnPlayEdge
-import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
+import com.raulshma.jellyplay.core.network.api.LiveTvApiClient
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
-import com.raulshma.jellyplay.core.data.util.EpochMillisSource
+import com.raulshma.jellyplay.core.model.EpochMillisSource
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
 import com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeStateStore
@@ -29,7 +29,6 @@ import com.raulshma.jellyplay.feature.player.live.generated.resources.live_recor
 import com.raulshma.jellyplay.feature.player.live.generated.resources.live_record_success
 import com.raulshma.jellyplay.feature.player.live.engine.LiveEngineFactory
 import com.raulshma.jellyplay.feature.player.live.engine.LiveEngineState
-import com.raulshma.jellyplay.feature.player.live.engine.LiveMuteMemory
 import com.raulshma.jellyplay.feature.player.live.engine.LivePlayerAudio
 import com.raulshma.jellyplay.feature.player.live.engine.LivePlayerEngine
 import com.raulshma.jellyplay.feature.player.live.engine.TranscodeReasonsRenderer
@@ -79,7 +78,9 @@ private const val PROGRAM_LOOKAHEAD_HOURS = 12L
  * stays behind the androidMain `Media3LivePlayerEngine` cast),
  * [LivePlayerAudio] (audio-focus/becoming-noisy + raw player volume; the
  * legacy `PlayerAudioLifecycle` wrapper and its `@ApplicationContext Context`
- * died with it) and [TranscodeReasonsRenderer] (legacy core:ui formatter).
+ * died with it) and [TranscodeReasonsRenderer] (the commonMain
+ * `CatalogTranscodeReasonsRenderer` over core:ui's transcode-reason catalog;
+ * the legacy core:ui `TranscodeReasonsFormatter` died with it).
  * The `UserMessageBus`/`UiText` ctor dep died too: record/cancel feedback
  * now flows through [events] as [LivePlayerEvent.Message] values (livetv's
  * LiveTvUserMessage screen-forward seam) and localized error state stays
@@ -101,7 +102,7 @@ private const val PROGRAM_LOOKAHEAD_HOURS = 12L
  * former strict `Instant.parse` ladder died with it).
  */
 class LiveTvPlayerViewModel(
-    private val liveTvRepository: LiveTvRepository,
+    private val liveTvRepository: LiveTvApiClient,
     playbackRepository: PlaybackRepository,
     playbackIdentity: PlaybackIdentity,
     private val appRuntimeStateStore: AppRuntimeStateStore,
@@ -176,12 +177,6 @@ class LiveTvPlayerViewModel(
     )
 
     /**
-     * The mute toggle's pre-mute memory (the [LiveMuteMemory] policy chip —
-     * remember/restore/stale-clear semantics live there, this VM applies).
-     */
-    private var muteMemory = LiveMuteMemory()
-
-    /**
      * The route's preferred stream overrides, captured at [initialize] so the
      * PiP transport's channel-zap mapping re-resolves with the same preferred
      * tracks the screen passes on its D-pad/button zaps (the transport has no
@@ -194,9 +189,9 @@ class LiveTvPlayerViewModel(
      * Becoming-noisy auto-pause + raw player volume seam; the androidMain
      * actual also binds the current player as the focus module's VIDEO
      * surface target (the video focus slice — the OS-loss pause/duck
-     * commands land there). Its volume access re-asserts mute as
-     * `volume = 0f` (the same surface [toggleMute] uses — live has no
-     * `setMuted`). Live has no resume-skip, so no restore hook.
+     * commands land there, and its mute command routes to the engine's real
+     * [LivePlayerEngine.setMuted]). Live has no resume-skip, so no restore
+     * hook.
      */
     private val playerAudioLifecycle: LivePlayerAudio? = audio
 
@@ -557,27 +552,21 @@ class LiveTvPlayerViewModel(
     }
 
     /**
-     * Toggles mute on the underlying platform player. Preserves the pre-mute
-     * volume so unmute restores it (per project convention). No-op if there
-     * is no audio seam / attached platform player (e.g. a future non-Exo
-     * engine, or a platform without one).
+     * Toggles real mute on the live engine ([LivePlayerEngine.setMuted] —
+     * engine state, not a volume write). The engine hosts the shared
+     * volume/mute template: mute captures the pre-mute level and silences
+     * the native handle; unmute restores that exact level. Live's declared
+     * divergences ride the template call as data — no system-stream sync, no
+     * persistence (the engine instance's lifetime is the memory's), and —
+     * the fix over the former volume-0 hack — mute now survives engine/track
+     * volume resets because it is real state. No-op before the first tune /
+     * after [stop] releases the engine.
      */
     private fun toggleMute() {
-        val audio = playerAudioLifecycle ?: return
-        val currentVolume = audio.playerVolume() ?: return
-        if (_state.value.isMuted) {
-            // Restore the pre-mute level captured when muting; never slam to a
-            // fixed default. Null (e.g. mute set externally, or player swapped)
-            // means leave the current volume untouched.
-            muteMemory.restorationVolume()?.let(audio::setPlayerVolume)
-            muteMemory = muteMemory.onUnmute()
-            _state.value = _state.value.copy(isMuted = false)
-        } else {
-            // Capture the raw player volume so unmute restores it exactly.
-            muteMemory = muteMemory.onMute(currentVolume)
-            audio.setPlayerVolume(0f)
-            _state.value = _state.value.copy(isMuted = true)
-        }
+        val engine = playbackSession.engineForRendering() ?: return
+        val muted = !_state.value.isMuted
+        engine.setMuted(muted)
+        _state.value = _state.value.copy(isMuted = muted)
     }
 
     /**
@@ -647,12 +636,11 @@ class LiveTvPlayerViewModel(
         playerAudioLifecycle?.onReleased()
         // Session teardown: engine-event shell disposed before the engine
         // release, the engine released, the deferred-zap and position mirrors
-        // reset (see LivePlaybackSession.release).
+        // reset (see LivePlaybackSession.release). The engine's mute state
+        // (real setMuted + its pre-mute memory) dies with the released
+        // engine, so a fresh entry never inherits a stale level — and
+        // isMuted is reset via the fresh uiState below.
         playbackSession.release()
-        // Clear the captured pre-mute volume so a stale value from the previous
-        // player is never restored on a later unmute (e.g. mute → leave screen →
-        // return to a fresh engine). isMuted is reset via the fresh uiState below.
-        muteMemory = muteMemory.onStopped()
         // Full PiP teardown: nulls the transport, disarms auto-enter and drops
         // the aspect/playing mirrors so a stale armed flag can't float the next
         // screen's window into PiP. The transport re-arms in the EngineCreated

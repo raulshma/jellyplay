@@ -45,6 +45,8 @@ import com.raulshma.jellyplay.feature.player.video.generated.resources.player_vi
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_capture_frame
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_channel_mix_on
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_channel_mixing
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_gestures
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_gestures_on
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_clear_ab_repeat
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_deinterlace
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_decoder
@@ -113,6 +115,19 @@ import com.raulshma.jellyplay.feature.player.video.formatDuration
 
 /** Stand-in for callers with no sleep timer; hoisted so the default doesn't allocate per invocation. */
 private val NoSleepTimerRemainingFlow: StateFlow<Long> = MutableStateFlow(0L)
+
+/**
+ * One tap-to-flip row of the overflow menu's input-binding quick toggles
+ * (issue #171's mid-playback use case: kill the brightness swipe without
+ * leaving the player). [bindingId] is the stable row id from the persisted
+ * [com.raulshma.jellyplay.core.model.PlayerInputMap].
+ */
+internal data class PlayerOverflowMenuInputToggle(
+    val bindingId: String,
+    /** Pre-resolved label (core:ui's input-label seam resolves the resource). */
+    val labelText: String,
+    val enabled: Boolean,
+)
 
 /**
  * The three-dot overflow menu in [PlayerControls]: subtitle style, dialogue
@@ -211,6 +226,13 @@ internal fun BoxScope.PlayerOverflowMenu(
     supportsDeinterlace: Boolean = false,
     deinterlaceMode: com.raulshma.jellyplay.core.model.DeinterlaceMode? = null,
     onDeinterlaceCycle: () -> Unit = {},
+    // The input-binding quick toggles: grouped behind one "Gestures" entry
+    // (expands like the normalization submenu). The collapsed row shows the
+    // enabled count; inside, "✓ <input>" = enabled, bare label = disabled.
+    // Flipping emits through [onInputQuickToggle] (persisted via the
+    // ViewModel), no dismissal.
+    inputQuickToggles: List<PlayerOverflowMenuInputToggle> = emptyList(),
+    onInputQuickToggle: (bindingId: String, enabled: Boolean) -> Unit = { _, _ -> },
 ) {
     if (!expanded) return
     val sleepTimerRemainingMs by sleepTimerRemainingFlow.collectAsStateWithLifecycle()
@@ -219,6 +241,7 @@ internal fun BoxScope.PlayerOverflowMenu(
     var showNightModeSubmenu by remember { mutableStateOf(false) }
     var showAudioNormalizationSubmenu by remember { mutableStateOf(false) }
     var showChannelMixSubmenu by remember { mutableStateOf(false) }
+    var showGesturesSubmenu by remember { mutableStateOf(false) }
 
     val isTv = LocalTvMode.current
 
@@ -226,11 +249,13 @@ internal fun BoxScope.PlayerOverflowMenu(
     val nightModeFocusRequester = remember { FocusRequester() }
     val audioNormalizationFocusRequester = remember { FocusRequester() }
     val channelMixFocusRequester = remember { FocusRequester() }
+    val gesturesFocusRequester = remember { FocusRequester() }
 
     var isFirstDialogueBoostRender by remember { mutableStateOf(true) }
     var isFirstNightModeRender by remember { mutableStateOf(true) }
     var isFirstAudioNormalizationRender by remember { mutableStateOf(true) }
     var isFirstChannelMixRender by remember { mutableStateOf(true) }
+    var isFirstGesturesRender by remember { mutableStateOf(true) }
 
     LaunchedEffect(showDialogueBoostSubmenu) {
         if (isFirstDialogueBoostRender) {
@@ -268,6 +293,16 @@ internal fun BoxScope.PlayerOverflowMenu(
         } else {
             if (isTv) {
                 channelMixFocusRequester.tryRequestFocus()
+            }
+        }
+    }
+
+    LaunchedEffect(showGesturesSubmenu) {
+        if (isFirstGesturesRender) {
+            isFirstGesturesRender = false
+        } else {
+            if (isTv) {
+                gesturesFocusRequester.tryRequestFocus()
             }
         }
     }
@@ -311,6 +346,43 @@ internal fun BoxScope.PlayerOverflowMenu(
                 label = stringResource(Res.string.player_video_subtitles),
                 onClick = onSubtitleHubClick,
             )
+
+            // Input-binding quick toggles (issue #171): grouped behind one
+            // "Gestures" entry like the audio normalization submenu — the
+            // collapsed row shows the enabled count, expanding it reveals the
+            // tap-to-flip rows. Flipping stays in place (persisted), the
+            // submenu stays open so several gates can be flipped in one visit.
+            if (inputQuickToggles.isNotEmpty()) {
+                if (showGesturesSubmenu) {
+                    OverflowMenuItem(
+                        icon = Tabler.Outline.ArrowLeft,
+                        label = stringResource(Res.string.player_video_gestures),
+                        onClick = { showGesturesSubmenu = false },
+                        modifier = Modifier.focusRequester(gesturesFocusRequester),
+                    )
+                    inputQuickToggles.forEach { toggle ->
+                        OverflowMenuItem(
+                            icon = Tabler.Outline.HandMove,
+                            label = toggle.labelText,
+                            checked = toggle.enabled,
+                            onClick = { onInputQuickToggle(toggle.bindingId, !toggle.enabled) },
+                        )
+                    }
+                } else {
+                    val enabledCount = inputQuickToggles.count { it.enabled }
+                    OverflowMenuItem(
+                        icon = Tabler.Outline.HandMove,
+                        label = if (enabledCount > 0) {
+                            stringResource(Res.string.player_video_gestures_on, enabledCount, inputQuickToggles.size)
+                        } else {
+                            stringResource(Res.string.player_video_gestures)
+                        },
+                        onClick = { showGesturesSubmenu = true },
+                        tint = if (enabledCount > 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.focusRequester(gesturesFocusRequester),
+                    )
+                }
+            }
 
             if (supportsDialogueBoost) {
                 if (showDialogueBoostSubmenu) {
@@ -638,6 +710,7 @@ private fun OverflowMenuItem(
     onClick: () -> Unit,
     tint: Color = Color.Unspecified,
     enabled: Boolean = true,
+    checked: Boolean? = null,
     modifier: Modifier = Modifier,
 ) {
     val effectiveTint = if (tint != Color.Unspecified) tint else MaterialTheme.colorScheme.onSurface
@@ -658,6 +731,20 @@ private fun OverflowMenuItem(
                 tint = if (enabled) effectiveTint else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
                 modifier = Modifier.size(20.dp),
             )
+        },
+        // A non-null [checked] renders the input-toggle state as a trailing
+        // check icon (null = no state, a plain action row).
+        trailingIcon = if (checked != null) {
+            {
+                Icon(
+                    Tabler.Outline.Check,
+                    contentDescription = null,
+                    tint = if (checked) MaterialTheme.colorScheme.primary else Color.Transparent,
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+        } else {
+            null
         },
         modifier = modifier,
     )

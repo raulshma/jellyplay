@@ -30,11 +30,22 @@ import org.jetbrains.compose.resources.StringResource
  * The diff-row labels resolve ONCE per entry ([resolveDiffLabels] over the
  * registry's declared resources) and are shared by both snapshots; `factory`
  * and `preferences` therefore always speak the same locale.
+ *
+ * Wave 6: every confirmed reset (all or per-category) captures a best-effort
+ * safety restore point FIRST ([captureSafetySnapshot] — the one helper shared
+ * with the wizard apply and the sync namespace reset). The seams are
+ * nullable-with-default (the sync-screen idiom): graphs without the plugin
+ * resolve nulls, the gate re-check runs inside the helper, and a missed
+ * capture only raises [safetySnapshotMissed] — it never blocks the reset.
  */
 class FactoryResetViewModel(
     private val snapshotReader: PreferenceSnapshotReader,
     private val editor: PreferencesEditor,
     private val diffLabelResolver: suspend (List<StringResource>) -> (StringResource) -> String = ::resolveDiffLabels,
+    /** The plugin's sync routes — the safety capture's api (null = the arm is off). */
+    private val pluginApiClient: com.raulshma.jellyplay.core.network.api.JellyPlaySettingsSyncRoutes? = null,
+    /** The ONE gate seam the capture re-checks (ADR 0010's gating rule). */
+    private val statusStore: com.raulshma.jellyplay.core.data.session.JellyPlayPluginStatusStore? = null,
 ) : JellyPlayViewModel() {
 
     /** Resolved label lookup shared by both snapshots; swapped in once on entry. */
@@ -47,6 +58,23 @@ class FactoryResetViewModel(
     val factory: PreferenceDiffSnapshot = diffSnapshot(PreferenceSliceSnapshot.FACTORY)
 
     var preferences by composeState(diffSnapshot(PreferenceSliceSnapshot.FACTORY))
+        private set
+
+    /**
+     * One-shot Wave-6 face: the pre-reset safety capture failed. The screen
+     * warns through the bus and acknowledges via [clearSafetySnapshotMissed].
+     */
+    var safetySnapshotMissed by composeState(false)
+        private set
+
+    /**
+     * True between a confirmed reset's safety capture and the reset settling
+     * (the seam-present, suspend path only — the seam-absent path stays
+     * synchronous and never raises this). The screen gates back navigation on
+     * it: backing out mid-capture must not look like the reset was abandoned
+     * (and a second confirmed reset is refused while one is running).
+     */
+    var resetRunning by composeState(false)
         private set
 
     init {
@@ -64,13 +92,53 @@ class FactoryResetViewModel(
     private suspend fun buildFromSlices(): PreferenceDiffSnapshot =
         diffSnapshot(snapshotReader.snapshotOnce())
 
-    /** Resets every preference in [category] to its factory default. */
-    fun resetCategory(category: PreferenceResetCategory) {
-        editor.resetCategory(category)
+    /** Wave-6 hook #3: best-effort pre-reset restore point; a miss only warns. */
+    private suspend fun captureSafetySnapshotBestEffort() {
+        val client = pluginApiClient
+        val store = statusStore
+        if (client == null || store == null) return
+        if (!captureSafetySnapshot(client, store)) safetySnapshotMissed = true
     }
 
-    /** Resets the entire preferences DataStore to factory defaults. */
-    fun resetAll() {
-        editor.clearAllPreferences()
+    /** Acknowledges the one-shot Wave-6 warning (the screen surfaced it). */
+    fun clearSafetySnapshotMissed() {
+        safetySnapshotMissed = false
+    }
+
+    /**
+     * Resets every preference in [category] to its factory default. With the
+     * Wave-6 seams absent (direct-construction harnesses, plugin-less graphs)
+     * the reset stays SYNCHRONOUS — exactly the pre-Wave-6 behavior; the
+     * capture only becomes worth a suspension when it can actually run. With
+     * the seams present the capture+reset runs guarded by [resetRunning] so a
+     * second confirmation mid-capture cannot queue a second destructive pass.
+     */
+    fun resetCategory(category: PreferenceResetCategory) =
+        guardedReset { editor.resetCategory(category) }
+
+    /** Resets the entire preferences DataStore to factory defaults (see [resetCategory]'s sync note). */
+    fun resetAll() =
+        guardedReset { editor.clearAllPreferences() }
+
+    /**
+     * The one reset choreography both confirmed resets run: the seam-absent
+     * path resets synchronously, the seam-present path captures the Wave-6
+     * safety restore point first, guarded by [resetRunning].
+     */
+    private fun guardedReset(reset: () -> Unit) {
+        if (pluginApiClient == null || statusStore == null) {
+            reset()
+            return
+        }
+        if (resetRunning) return
+        launch {
+            resetRunning = true
+            try {
+                captureSafetySnapshotBestEffort()
+                reset()
+            } finally {
+                resetRunning = false
+            }
+        }
     }
 }

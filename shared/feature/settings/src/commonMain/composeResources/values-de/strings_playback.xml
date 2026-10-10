@@ -35,6 +35,8 @@
     <string name="settings_auto_play_countdown_subtitle">Countdown-Dauer vor automatischer Wiedergabe der nächsten Episode</string>
     <string name="settings_controls_timeout">Steuerungs-Timeout</string>
     <string name="settings_controls_timeout_subtitle">Player-Steuerung automatisch ausblenden</string>
+    <string name="settings_hide_osd_on_pause">OSD beim Pausieren ausblenden</string>
+    <string name="settings_hide_osd_on_pause_subtitle">Steuerelemente beim Pausieren ausgeblendet lassen</string>
     <string name="settings_streaming_quality_auto_adaptive">Auto (adaptiv)</string>
     <string name="settings_streaming_quality_auto">Auto</string>
     <string name="settings_b_frames_none_best">Keine (beste Qualität)</string>
@@ -84,6 +86,8 @@
     <string name="settings_preferred_player">Bevorzugter Player</string>
     <string name="settings_double_tap_seek_duration">Doppel-Tipp Sprung-Dauer</string>
     <string name="settings_gesture_indicator_side">Gesten-Indikator-Seite</string>
+    <string name="settings_double_tap_hold_seek">Doppeltipp und halten zum Spulen</string>
+    <string name="settings_double_tap_hold_seek_subtitle">Spult weiter, solange nach dem Doppeltipp gehalten wird</string>
     <string name="settings_gesture_indicator_opposite">Helligkeits-/Lautstärkebalken auf der gegenüberliegenden Seite der Geste zeigen</string>
     <string name="settings_gesture_indicator_same">Balken auf der gleichen Seite wie die Geste zeigen</string>
     <string name="settings_countdown_immediate">Nächstes Element sofort abspielen</string>
@@ -132,6 +136,8 @@
     <string name="settings_pause_on_focus_loss">Bei Fokusverlust pausieren</string>
     <string name="settings_pause_on_focus_loss_on">Wiedergabe pausieren, wenn das System Fokusverlust meldet</string>
     <string name="settings_pause_on_focus_loss_off">Wiedergabe bei Fokusverlust fortsetzen</string>
+    <string name="settings_resume_headset_plug">Fortsetzen bei erneut angeschlossenen Kopfhörern</string>
+    <string name="settings_resume_headset_plug_subtitle">Wiedergabe fortsetzen, wenn Kopfhörer nach der Automatischen Pause beim Abziehen wieder angeschlossen werden</string>
     <string name="settings_decoder_summary">Decoder: %1$s</string>
     <string name="settings_decoder">Decoder</string>
     <string name="settings_refresh_rate_match">Bildwiederholraten-Anpassung</string>
@@ -161,7 +167,12 @@
     <string name="settings_skip_loop_filter">Skip Loop Filter</string>
     <string name="settings_frame_drop">Frame Drop</string>
     <string name="settings_raw_mpv_options">Raw mpv-Optionen (mpv.conf-Stil)</string>
-    <string name="settings_mpv_helper_text">Eine Option pro Zeile (Schlüssel=Wert). Wird nach den obigen Einstellungen angewendet, sodass ein Wert hier sein strukturiertes Gegenstück überschreibt. Leerzeilen und #-Kommentare werden ignoriert.</string>
+    <string name="settings_mpv_helper_text">Eine mpv-Option pro Zeile (Schlüssel=Wert). Diese werden nach den Einstellungen oben angewendet und überschreiben sie.
+
+• Leerzeilen und Zeilen, die mit # beginnen, werden ignoriert; ein Schlüssel ohne Wert (z. B. hr-seek) steht für yes.
+• Untertitel-Schlüssel (sub-color, sub-pos, …) überschreiben auch die Untertiteleinstellungen der App.
+• Werte nicht in Anführungszeichen setzen — sie werden unverändert an mpv übergeben, Anführungszeichen würden Teil des Werts (sub-color=#FF0000 funktioniert; sub-color="#FF0000" nicht). Ein # innerhalb eines Werts ist hier in Ordnung.</string>
+    <string name="settings_mpv_config_placeholder">scale=ewa_lanczossharp\ncache-secs=120</string>
     <string name="settings_reset_mpv">Alle MPV-Einstellungen wiederherstellen</string>
     <string name="settings_network_caching">Netzwerk-Caching</string>
     <string name="settings_skip_frames">Frames überspringen</string>

@@ -1,13 +1,13 @@
 package com.raulshma.jellyplay.feature.photos
 
 import androidx.paging.PagingData
-import androidx.paging.cachedIn
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.SortOption
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
+import com.raulshma.jellyplay.core.ui.viewmodel.PagedMediaGridHost
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -34,18 +34,32 @@ class PhotoAlbumViewModel(
         scrollPosition = index to offset
     }
 
+    /**
+     * The photo grid, wired through the shared [PagedMediaGridHost] — pager +
+     * cachedIn only. This host has NO deferred-refresh trigger (folder and
+     * sort changes are user-driven, not user-data-driven), so the host is
+     * built without a change feed: no refresher exists and [refresh] is never
+     * routed — the source deliberately ignores the generation flow.
+     */
     @OptIn(ExperimentalCoroutinesApi::class)
-    val pagedItems: Flow<PagingData<MediaItem>> = combine(_parentId.flow, _sortOption.flow) { parentId, sort ->
-        parentId to sort
-    }.flatMapLatest { (parentId, sort) ->
-        mediaRepository.getMediaItemsPaged(
-            parentId = parentId,
-            filters = com.raulshma.jellyplay.core.model.LibraryFilters(
-                mediaTypes = listOf(MediaType.PHOTO),
-                sortBy = sort.option,
-            ),
-        )
-    }.cachedIn(scope)
+    private val pagedGrid = PagedMediaGridHost(
+        scope = scope,
+        source = { _ ->
+            combine(_parentId.flow, _sortOption.flow) { parentId, sort ->
+                parentId to sort
+            }.flatMapLatest { (parentId, sort) ->
+                mediaRepository.getMediaItemsPaged(
+                    parentId = parentId,
+                    filters = com.raulshma.jellyplay.core.model.LibraryFilters(
+                        mediaTypes = listOf(MediaType.PHOTO),
+                        sortBy = sort.option,
+                    ),
+                )
+            }
+        },
+    )
+
+    val pagedItems: Flow<PagingData<MediaItem>> get() = pagedGrid.items
 
     val sortOption = _sortOption.flow
 

@@ -4,6 +4,7 @@ import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueSnapshot
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
 import com.raulshma.jellyplay.core.data.repository.AutoDownloadSweepResult
+import com.raulshma.jellyplay.core.data.repository.DownloadCoverage
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsSlice
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
@@ -15,6 +16,7 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -44,7 +46,8 @@ class AutoDownloadPolicyTest {
     fun setup() {
         every { downloadsStore.downloads } answers { MutableStateFlow(slice) }
         coEvery { downloadRepository.sweepExpiredAutoDownloads() } returns AutoDownloadSweepResult.EMPTY
-        coEvery { downloadRepository.getDownloadedSeriesIds() } returns listOf("s1")
+        coEvery { downloadRepository.downloadCoverage() } returns
+            flowOf(DownloadCoverage(completedItemIds = emptySet(), seriesIds = setOf("s1")))
         coEvery { downloadRepository.getDownloadedEpisodeIdsBySeries() } returns emptyMap()
         coEvery { downloadIntake.startSeries(any(), any()) } returns Result.success(emptyList())
         every { serverIdentityStore.activeServerId } returns MutableStateFlow("srv-1")
@@ -231,7 +234,8 @@ class AutoDownloadPolicyTest {
         )
         // A second series behind the first — the spent budget must stop the
         // pass before it (remaining series next pass).
-        coEvery { downloadRepository.getDownloadedSeriesIds() } returns listOf("s1", "s2")
+        coEvery { downloadRepository.downloadCoverage() } returns
+            flowOf(DownloadCoverage(completedItemIds = emptySet(), seriesIds = setOf("s1", "s2")))
 
         val outcome = check().checkOnce(attempt = 0)
 
@@ -245,7 +249,8 @@ class AutoDownloadPolicyTest {
     @Test
     fun `max-per-pass carries the remaining budget across series`() = runTest {
         slice = DownloadsSlice(autoDownloadNewEpisodes = true, autoDownloadLookahead = 0, autoDownloadMaxPerPass = 3)
-        coEvery { downloadRepository.getDownloadedSeriesIds() } returns listOf("s1", "s2")
+        coEvery { downloadRepository.downloadCoverage() } returns
+            flowOf(DownloadCoverage(completedItemIds = emptySet(), seriesIds = setOf("s1", "s2")))
         coEvery { episodeCatalogue.loadSeriesEpisodes("s1", any()) } returns Result.success(
             EpisodeCatalogueSnapshot(
                 seriesId = "s1",
@@ -309,7 +314,7 @@ class AutoDownloadPolicyTest {
 
         assertEquals(AutoDownloadCheck.Outcome.Complete, outcome)
         coVerify(exactly = 0) { downloadRepository.sweepExpiredAutoDownloads() }
-        coVerify(exactly = 0) { downloadRepository.getDownloadedSeriesIds() }
+        coVerify(exactly = 0) { downloadRepository.downloadCoverage() }
         coVerify(exactly = 0) { downloadIntake.startSeries(any(), any()) }
     }
 
@@ -350,9 +355,9 @@ class AutoDownloadPolicyTest {
             callOrder += "sweep"
             AutoDownloadSweepResult(deletedCount = 2, bytesReclaimed = 4_000L)
         }
-        coEvery { downloadRepository.getDownloadedSeriesIds() } coAnswers {
+        coEvery { downloadRepository.downloadCoverage() } coAnswers {
             callOrder += "seriesQuery"
-            listOf("s1")
+            flowOf(DownloadCoverage(completedItemIds = emptySet(), seriesIds = setOf("s1")))
         }
         givenSnapshot(episodeInSeason("ep-1", "season-1", 1))
 

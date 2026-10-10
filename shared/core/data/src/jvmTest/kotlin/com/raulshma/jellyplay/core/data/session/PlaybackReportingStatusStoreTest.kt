@@ -174,4 +174,38 @@ class PlaybackReportingStatusStoreTest {
         assertEquals(PlaybackReportingStatus.UNAVAILABLE, store.status.value)
         assertEquals(PlaybackReportingStatus.UNAVAILABLE, store.status.first())
     }
+
+    // ── the lifted plugin-gate fold (gatedWith) ─────────────────────────
+
+    /**
+     * The one table for the fold AdminStatisticsRepositoryImpl's `whenPlugin`
+     * and WatchHistoryRepositoryImpl's two inline ladders were collapsed
+     * into: AVAILABLE runs the call (success verbatim, failure → emptyList),
+     * every other captured status (UNAVAILABLE, UNKNOWN) short-circuits to
+     * emptyList WITHOUT calling.
+     */
+    @Test
+    fun `gatedWith folds the plugin gate over call success and failure`() = runTest {
+        data class Case(
+            val captured: PlaybackReportingStatus,
+            val callResult: Result<List<String>>,
+            val expected: List<String>,
+            val expectCall: Boolean,
+        )
+
+        listOf(
+            Case(PlaybackReportingStatus.AVAILABLE, Result.success(listOf("a")), listOf("a"), expectCall = true),
+            Case(PlaybackReportingStatus.AVAILABLE, Result.failure(IllegalStateException("down")), emptyList(), expectCall = true),
+            Case(PlaybackReportingStatus.UNAVAILABLE, Result.success(listOf("a")), emptyList(), expectCall = false),
+            Case(PlaybackReportingStatus.UNKNOWN, Result.failure(IllegalStateException("down")), emptyList(), expectCall = false),
+        ).forEach { case ->
+            var called = false
+            val result = store.gatedWith(case.captured) {
+                called = true
+                case.callResult
+            }
+            assertEquals(case.expected, result, "captured=${case.captured} call=${case.callResult}")
+            assertEquals(case.expectCall, called, "captured=${case.captured}")
+        }
+    }
 }

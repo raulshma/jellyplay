@@ -27,9 +27,9 @@ import com.raulshma.jellyplay.core.model.ExternalPlayerApp
  *    cancelled at the start position. A foreign player reporting nothing must
  *    NOT credit completion, so the "absent = completed" MPV reading applies
  *    only when the launch actually targeted MPV/mpvKt.
- * Public: it rides the public `MainViewModel.reportExternalPlaybackStopped`
- * override (the implementing member cannot narrow the interface member's
- * visibility, and the internal MainShellModel seam still gates consumption).
+ * Public: it rides the public `ExternalPlayerReports.reportExternalPlaybackStopped`
+ * member (the internal class keeps consumption gated to the shell's
+ * external-player launcher wiring).
  */
 sealed interface ExternalPlaybackOutcome {
     /**

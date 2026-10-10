@@ -26,6 +26,8 @@
     <string name="settings_library_view_mode">Modalità vista libreria</string>
     <string name="settings_layout_mode">Layout</string>
     <string name="settings_layout_mode_subtitle">Scegli layout automatico, telefono o tablet</string>
+    <string name="settings_screen_fit">Adattamento schermo</string>
+    <string name="settings_screen_fit_subtitle">Adatta l'immagine all'area sicura del TV così niente viene tagliato ai bordi</string>
     <string name="settings_library_view_grid">Mostra gli elementi in una griglia</string>
     <string name="settings_library_view_list">Mostra gli elementi in un elenco</string>
     <string name="settings_library_view_thumb">Mostra gli elementi come miniature in paesaggio</string>

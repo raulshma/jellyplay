@@ -280,4 +280,130 @@
          for PosterCard/WideMediaCard). -->
     <string name="core_ui_card_percent_complete">%1$d% 완료</string>
     <string name="core_ui_card_time_left">%1$s 남음</string>
+
+    <!-- SubtitleFreeFormColorPickerDialog (matches the default-locale grouping) -->
+    <string name="core_ui_color_picker_title">색상 선택</string>
+    <string name="core_ui_color_hex">HEX</string>
+    <string name="core_ui_color_hue">색조</string>
+    <string name="core_ui_color_saturation">채도</string>
+    <string name="core_ui_color_value">밝기</string>
+    <string name="core_ui_color_invalid_hex">잘못된 HEX 색상</string>
+    <string name="core_ui_color_apply">적용</string>
+    <string name="core_ui_color_cancel">취소</string>
+
+    <!-- PreferenceEnumNames enum labels (gesture mode, orientation, gesture
+         indicator side, check frequency) + player input mapping labels
+         (actions / patterns / keys / D-pad), matching the default-locale
+         grouping. -->
+    <string name="core_gesture_mode_all">모든 제스처</string>
+    <string name="core_gesture_mode_tap_only">탭만</string>
+    <string name="core_gesture_mode_none">끔</string>
+    <string name="core_orientation_sensor_landscape">가로</string>
+    <string name="core_orientation_sensor_portrait">세로</string>
+    <string name="core_orientation_sensor">자동 회전</string>
+    <string name="core_orientation_locked_landscape">가로(고정)</string>
+    <string name="core_orientation_locked_portrait">세로(고정)</string>
+    <string name="core_gesture_indicator_opposite">반대쪽</string>
+    <string name="core_gesture_indicator_same">같은 쪽</string>
+    <string name="core_check_frequency_every_hour">매시간</string>
+    <string name="core_check_frequency_every_3_hours">3시간마다</string>
+    <string name="core_check_frequency_every_6_hours">6시간마다</string>
+    <string name="core_check_frequency_every_12_hours">12시간마다</string>
+    <string name="core_check_frequency_every_24_hours">매일</string>
+    <string name="core_input_action_toggle_play_pause">재생 / 일시정지</string>
+    <string name="core_input_action_play">재생</string>
+    <string name="core_input_action_pause">일시정지</string>
+    <string name="core_input_action_seek_forward">앞으로 탐색</string>
+    <string name="core_input_action_seek_back">뒤로 탐색</string>
+    <string name="core_input_action_toggle_controls">컨트롤 전환</string>
+    <string name="core_input_action_back_or_hide">뒤로 / 컨트롤 숨기기</string>
+    <string name="core_input_action_exit_player">재생기 종료</string>
+    <string name="core_input_action_volume_up">볼륨 높이기</string>
+    <string name="core_input_action_volume_down">볼륨 낮추기</string>
+    <string name="core_input_action_toggle_mute">음소거 전환</string>
+    <string name="core_input_action_brightness_up">밝기 높이기</string>
+    <string name="core_input_action_brightness_down">밝기 낮추기</string>
+    <string name="core_input_action_swipe_seek">탐색(드래그)</string>
+    <string name="core_input_action_swipe_volume">볼륨(드래그)</string>
+    <string name="core_input_action_swipe_brightness">밝기(드래그)</string>
+    <string name="core_input_action_toggle_subtitles">자막 전환</string>
+    <string name="core_input_action_lock_controls">컨트롤 잠금</string>
+    <string name="core_input_action_sub_delay_decrease">자막 지연 -</string>
+    <string name="core_input_action_sub_delay_increase">자막 지연 +</string>
+    <string name="core_input_action_audio_delay_decrease">오디오 지연 -</string>
+    <string name="core_input_action_audio_delay_increase">오디오 지연 +</string>
+    <string name="core_input_action_cycle_speed">재생 속도 전환</string>
+    <string name="core_input_action_hold_speed">길게 눌러 배속</string>
+    <string name="core_input_action_zoom">핀치 줌</string>
+    <string name="core_input_action_toggle_orientation">화면 회전</string>
+    <string name="core_input_action_screenshot">스크린샷</string>
+    <string name="core_input_action_next_episode">다음 에피소드</string>
+    <string name="core_input_action_previous_episode">이전 에피소드</string>
+    <string name="core_input_action_none">지정 안 됨</string>
+    <string name="core_input_pattern_tap">한 번 탭</string>
+    <string name="core_input_pattern_double_tap_left">왼쪽 두 번 탭</string>
+    <string name="core_input_pattern_double_tap_center">가운데 두 번 탭</string>
+    <string name="core_input_pattern_double_tap_right">오른쪽 두 번 탭</string>
+    <string name="core_input_pattern_double_tap_hold_left">왼쪽 두 번 탭 후 길게 누르기</string>
+    <string name="core_input_pattern_double_tap_hold_right">오른쪽 두 번 탭 후 길게 누르기</string>
+    <string name="core_input_pattern_long_press">길게 누르기</string>
+    <string name="core_input_pattern_vertical_swipe_left">왼쪽을 위/아래로 스와이프(%1$s)</string>
+    <string name="core_input_pattern_vertical_swipe_right">오른쪽을 위/아래로 스와이프(%1$s)</string>
+    <string name="core_input_action_short_brightness">밝기</string>
+    <string name="core_input_action_short_volume">볼륨</string>
+    <string name="core_input_pattern_horizontal_swipe">왼쪽/오른쪽으로 스와이프(탐색)</string>
+    <string name="core_input_edge_left">가장자리 스와이프(왼쪽)</string>
+    <string name="core_input_edge_right">가장자리 스와이프(오른쪽)</string>
+    <string name="core_input_pattern_pinch">핀치</string>
+    <string name="core_input_pattern_wheel_volume">스크롤 휠</string>
+    <string name="core_input_pattern_wheel_seek">스크롤 휠(Shift / 가로)</string>
+    <string name="core_input_key_ctrl">Ctrl</string>
+    <string name="core_input_key_shift">Shift</string>
+    <string name="core_input_key_alt">Alt</string>
+    <string name="core_input_key_space">스페이스</string>
+    <string name="core_input_key_k">K</string>
+    <string name="core_input_key_m">M</string>
+    <string name="core_input_key_v">V</string>
+    <string name="core_input_key_f">F</string>
+    <string name="core_input_key_g">G</string>
+    <string name="core_input_key_h">H</string>
+    <string name="core_input_key_j">J</string>
+    <string name="core_input_key_l">L</string>
+    <string name="core_input_key_bracket_left">[</string>
+    <string name="core_input_key_bracket_right">]</string>
+    <string name="core_input_key_f1">F1</string>
+    <string name="core_input_key_f2">F2</string>
+    <string name="core_input_key_f3">F3</string>
+    <string name="core_input_key_f4">F4</string>
+    <string name="core_input_key_escape">Esc</string>
+    <string name="core_input_key_back">뒤로</string>
+    <string name="core_input_key_dpad_left">왼쪽 화살표</string>
+    <string name="core_input_key_dpad_right">오른쪽 화살표</string>
+    <string name="core_input_key_dpad_up">위쪽 화살표</string>
+    <string name="core_input_key_dpad_down">아래쪽 화살표</string>
+    <string name="core_input_key_volume_up">볼륨 높이기 키</string>
+    <string name="core_input_key_volume_down">볼륨 낮추기 키</string>
+    <string name="core_input_key_page_up">Page up</string>
+    <string name="core_input_key_page_down">Page down</string>
+    <string name="core_input_key_home">Home</string>
+    <string name="core_input_key_end">End</string>
+    <string name="core_input_key_media_play">미디어 재생</string>
+    <string name="core_input_key_media_pause">미디어 일시정지</string>
+    <string name="core_input_key_media_play_pause">미디어 재생/일시정지</string>
+    <string name="core_input_key_media_ff">미디어 빨리 감기</string>
+    <string name="core_input_key_media_rew">미디어 되감기</string>
+    <string name="core_input_dpad_left">방향 패드 왼쪽</string>
+    <string name="core_input_dpad_right">방향 패드 오른쪽</string>
+    <string name="core_input_dpad_up">방향 패드 위</string>
+    <string name="core_input_dpad_down">방향 패드 아래</string>
+    <string name="core_input_dpad_select">방향 패드 가운데</string>
+    <string name="core_input_dpad_back">뒤로</string>
+    <string name="core_input_dpad_play_pause">재생/일시정지</string>
+    <string name="core_input_dpad_fast_forward">빨리 감기</string>
+    <string name="core_input_dpad_rewind">되감기</string>
+
+    <!-- The JellyPlay sync / details-badges / player-notice strings
+         (ADR 0010 wave), translated together with the default file. -->
+    <string name="core_action_hide_from_continue_watching">이어보기에서 제거</string>
+    <string name="core_action_show_from_continue_watching">이어보기에 표시</string>
 </resources>

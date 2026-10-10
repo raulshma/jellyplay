@@ -14,13 +14,11 @@ import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.DownloadEnqueueCoordinator
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.DownloadStorageLayoutContract
+import com.raulshma.jellyplay.core.data.repository.HomeFeed
 import com.raulshma.jellyplay.core.data.repository.LyricsRepository
 import com.raulshma.jellyplay.core.data.repository.LyricsRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.LocalStreamProbe
-import com.raulshma.jellyplay.core.data.repository.MediaBrowseReads
-import com.raulshma.jellyplay.core.data.repository.MediaCollectionReads
 import com.raulshma.jellyplay.core.data.repository.MediaDetailProvider
-import com.raulshma.jellyplay.core.data.repository.MediaExtrasReads
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryAccess
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryCacheInvalidation
@@ -42,6 +40,7 @@ import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.repository.SelfSignedTrustRepository
 import com.raulshma.jellyplay.core.data.repository.StoragePolicy
 import com.raulshma.jellyplay.core.data.repository.UnifiedMediaDetailProviderImpl
+import com.raulshma.jellyplay.core.data.repository.UserDataChanges
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.data.search.MediaSearchEngine
 import com.raulshma.jellyplay.core.data.session.HomeSession
@@ -172,10 +171,10 @@ class DataKoinModulesTest {
             )
             // The family seams of the two widest repository interfaces follow
             // the same alias contract: MediaRepository's music-catalogue and
-            // user-data-write families, and SeerrRepository's
-            // service-directory / request-lifecycle / auth families — each
-            // resolves to the SAME impl single as its union, never a second
-            // repository instance.
+            // user-data-write families, its home-feed and user-data-change
+            // families, and SeerrRepository's service-directory /
+            // request-lifecycle / auth families — each resolves to the SAME
+            // impl single as its union, never a second repository instance.
             assertTrue(
                 koin.get<MusicCatalogue>() === koin.get<MediaRepository>(),
                 "MusicCatalogue must alias the MediaRepositoryImpl single (one impl, two seams)",
@@ -184,16 +183,13 @@ class DataKoinModulesTest {
                 koin.get<UserDataWriteOperations>() === koin.get<MediaRepository>(),
                 "UserDataWriteOperations must alias the MediaRepositoryImpl single (one impl, two seams)",
             )
-            // The uncached browse-read families are their OWN impl single
-            // (MediaUncachedReadsImpl over LibraryApiClient — not a view of the
-            // media single), with the three seams aliasing it.
-            assertResolves<MediaExtrasReads>(koin)
-            assertResolves<MediaBrowseReads>(koin)
-            assertResolves<MediaCollectionReads>(koin)
             assertTrue(
-                koin.get<MediaExtrasReads>() === koin.get<MediaBrowseReads>() &&
-                    koin.get<MediaBrowseReads>() === koin.get<MediaCollectionReads>(),
-                "the three uncached-read seams must alias the MediaUncachedReadsImpl single (one impl, three seams)",
+                koin.get<HomeFeed>() === koin.get<MediaRepository>(),
+                "HomeFeed must alias the MediaRepositoryImpl single (one impl, two seams)",
+            )
+            assertTrue(
+                koin.get<UserDataChanges>() === koin.get<MediaRepository>(),
+                "UserDataChanges must alias the MediaRepositoryImpl single (one impl, two seams)",
             )
             assertTrue(
                 koin.get<SeerrServiceDirectory>() === koin.get<SeerrRepository>(),
@@ -319,6 +315,12 @@ class DataKoinModulesTest {
             assertResolves<AdminStatisticsRepository>(koin)
             assertResolves<PluginAdminRepository>(koin)
 
+            // ── Companion-plugin bookmark sync ───────────────────
+            // The reader-marks sync binding shares the BookBookmarkDao single
+            // and its ctor deps cross this aggregate (api client from
+            // networkJvmModule, status store from dataSessionPlaybackModule).
+            assertResolves<com.raulshma.jellyplay.core.data.repository.BookmarksSyncRepository>(koin)
+
             // ── AppUpdate split ──────────────────────────────────
             // NOT asserted anymore: core:data's desktop data module ships no
             // update family. The desktop AppUpdateRepository definition is
@@ -336,6 +338,20 @@ class DataKoinModulesTest {
             // ExperimentalStore from datastoreCommonModule, and the shared
             // application scope.
             assertResolves<com.raulshma.jellyplay.core.data.whatsnew.WhatsNewRepository>(koin)
+
+            // ── Wave-2 settings-backup slice sources ────────────
+            // The four ExternalBackupSlice impls (integrations / itemprefs /
+            // playlists / widget) resolve as a set from
+            // dataSettingsBackupSlicesModule, and the UserPreferencesStore
+            // single (datastoreCommonModule) folds them in via getAll — the
+            // core:data → core:datastore backup crossing, verified end to end
+            // in the production graph shape.
+            assertEquals(
+                4,
+                koin.getAll<com.raulshma.jellyplay.core.datastore.settings.ExternalBackupSlice>().size,
+                "the four wave-2 backup slice sources must resolve as one set",
+            )
+            assertResolves<com.raulshma.jellyplay.core.datastore.UserPreferencesStore>(koin)
         } finally {
             database.close()
             stopKoin()

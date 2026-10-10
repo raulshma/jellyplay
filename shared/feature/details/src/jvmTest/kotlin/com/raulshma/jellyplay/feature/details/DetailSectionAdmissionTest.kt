@@ -78,6 +78,9 @@ class DetailSectionAdmissionTest {
         hasSpecialFeatures: Boolean = true,
         hasTmdbReviews: Boolean = true,
         hasAttachedDownload: Boolean = false,
+        hasPluginRatings: Boolean = false,
+        hasPluginSimilar: Boolean = false,
+        suppressStockSimilar: Boolean = false,
     ): List<DetailSectionKind> = DetailSectionAdmission(
         mediaType = mediaType,
         isLocalOrigin = isLocalOrigin,
@@ -96,6 +99,9 @@ class DetailSectionAdmissionTest {
         hasSpecialFeatures = hasSpecialFeatures,
         hasTmdbReviews = hasTmdbReviews,
         hasAttachedDownload = hasAttachedDownload,
+        hasPluginRatings = hasPluginRatings,
+        hasPluginSimilar = hasPluginSimilar,
+        suppressStockSimilar = suppressStockSimilar,
     ).admit()
 
     private fun List<DetailSectionKind>.indices(): List<Int> = map { it.delayIndex }
@@ -478,6 +484,7 @@ class DetailSectionAdmissionTest {
             DetailSectionKind.BOOK_READING_CARD to 2,
             DetailSectionKind.MEDIA_INFO to 2,
             DetailSectionKind.OVERVIEW to 3,
+            DetailSectionKind.PLUGIN_RATINGS to 3,
             DetailSectionKind.CHAPTERS_OR_TOC to 4,
             DetailSectionKind.ALBUM_TRACKS to 5,
             DetailSectionKind.UP_NEXT to 6,
@@ -486,6 +493,7 @@ class DetailSectionAdmissionTest {
             DetailSectionKind.CAST to 8,
             DetailSectionKind.RELATED_VIDEOS to 9,
             DetailSectionKind.MORE_LIKE_THIS to 10,
+            DetailSectionKind.JELLYPLAY_SIMILAR to 10,
             DetailSectionKind.SEERR_RECOMMENDATIONS to 11,
             DetailSectionKind.SEERR_SIMILAR to 12,
             DetailSectionKind.SPECIAL_FEATURES to 13,
@@ -588,6 +596,54 @@ class DetailSectionAdmissionTest {
                 "origin $origin",
             )
         }
+    }
+
+    // ── JellyPlay plugin sections (ADR 0010) ────────────────────────────
+
+    @Test
+    fun pluginSections_admitOnlyWhenTheirContentArrived() {
+        // Silent absence: no plugin data → neither section in the body at all.
+        val bare = admission(MediaType.MOVIE)
+        assertFalse(bare.contains(DetailSectionKind.PLUGIN_RATINGS))
+        assertFalse(bare.contains(DetailSectionKind.JELLYPLAY_SIMILAR))
+
+        // Ratings present → admitted right after OVERVIEW (same slot 3).
+        val withRatings = admission(MediaType.MOVIE, hasPluginRatings = true)
+        assertTrue(withRatings.contains(DetailSectionKind.PLUGIN_RATINGS))
+        val ratingsIdx = withRatings.indexOf(DetailSectionKind.PLUGIN_RATINGS)
+        val overviewIdx = withRatings.indexOf(DetailSectionKind.OVERVIEW)
+        assertEquals(overviewIdx + 1, ratingsIdx, "ratings row follows the overview")
+        assertEquals(3, DetailSectionKind.PLUGIN_RATINGS.delayIndex)
+
+        // Scored similar present → the plugin row admits (same slot 10 as the
+        // stock row), but suppression is NOT tied to its presence: on hosts
+        // where the plugin's scorer did NOT register into the stock pipeline
+        // (pre-Jellyfin-12 / older plugin) the two lists differ and BOTH rows
+        // render.
+        val withSimilar = admission(MediaType.MOVIE, hasPluginSimilar = true)
+        assertTrue(withSimilar.contains(DetailSectionKind.JELLYPLAY_SIMILAR))
+        assertTrue(withSimilar.contains(DetailSectionKind.MORE_LIKE_THIS), "no pipeline → stock row stays")
+        assertEquals(10, DetailSectionKind.JELLYPLAY_SIMILAR.delayIndex)
+
+        // Pipeline host (capabilities said the plugin registered into the
+        // host's similar-items pipeline) → the stock endpoint returns the
+        // SAME scored list; the stock row stands down to avoid the duplicate.
+        val withSimilarOnPipeline = admission(MediaType.MOVIE, hasPluginSimilar = true, suppressStockSimilar = true)
+        assertTrue(withSimilarOnPipeline.contains(DetailSectionKind.JELLYPLAY_SIMILAR))
+        assertFalse(withSimilarOnPipeline.contains(DetailSectionKind.MORE_LIKE_THIS), "pipeline host → stock row suppressed")
+
+        // Suppression never suppresses the plugin row itself (an odd
+        // capability/empty-list combination just reverts to stock).
+        assertTrue(admission(MediaType.MOVIE, suppressStockSimilar = true).contains(DetailSectionKind.MORE_LIKE_THIS))
+
+        // Empty plugin hydration → the stock row stays admitted (bare above
+        // already contains MORE_LIKE_THIS — re-asserted here against the
+        // plugin row's absence).
+        assertTrue(bare.contains(DetailSectionKind.MORE_LIKE_THIS))
+
+        // The two are independent.
+        assertFalse(withRatings.contains(DetailSectionKind.JELLYPLAY_SIMILAR))
+        assertFalse(withSimilar.contains(DetailSectionKind.PLUGIN_RATINGS))
     }
 }
 

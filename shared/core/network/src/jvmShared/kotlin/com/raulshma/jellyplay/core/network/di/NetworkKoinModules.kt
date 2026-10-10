@@ -26,6 +26,21 @@ import com.raulshma.jellyplay.core.network.api.LibraryApiClientImpl
 import com.raulshma.jellyplay.core.network.api.LiveTvApiClient
 import com.raulshma.jellyplay.core.network.api.LiveTvApiClientImpl
 import com.raulshma.jellyplay.core.network.api.MediaInfoApiClient
+import com.raulshma.jellyplay.core.network.api.JellyPlayPluginApiClient
+import com.raulshma.jellyplay.core.network.api.JellyPlayAnalyticsRoutes
+import com.raulshma.jellyplay.core.network.api.JellyPlayCapabilitiesRoutes
+import com.raulshma.jellyplay.core.network.api.JellyPlayDeviceRegistryRoutes
+import com.raulshma.jellyplay.core.network.api.JellyPlayEventsRoutes
+import com.raulshma.jellyplay.core.network.api.JellyPlayMarkersRoutes
+import com.raulshma.jellyplay.core.network.api.JellyPlayRecommendationsRoutes
+import com.raulshma.jellyplay.core.network.api.JellyPlayRatingsRoutes
+import com.raulshma.jellyplay.core.network.api.JellyPlayRowsRoutes
+import com.raulshma.jellyplay.core.network.api.JellyPlaySeerrRoutes
+import com.raulshma.jellyplay.core.network.api.JellyPlaySettingsSyncRoutes
+import com.raulshma.jellyplay.core.network.api.JellyPlayTranscodesRoutes
+import com.raulshma.jellyplay.core.network.api.JellyPlayUserDataRoutes
+import com.raulshma.jellyplay.core.network.seerr.SeerrBridge
+import com.raulshma.jellyplay.core.network.api.JellyPlayPluginApiClientImpl
 import com.raulshma.jellyplay.core.network.api.MediaInfoApiClientImpl
 import com.raulshma.jellyplay.core.network.api.MetadataApiClient
 import com.raulshma.jellyplay.core.network.api.MetadataApiClientImpl
@@ -52,6 +67,7 @@ import com.raulshma.jellyplay.core.network.failover.ServerAddressRouter
 import com.raulshma.jellyplay.core.network.failover.ServerFailoverInterceptor
 import com.raulshma.jellyplay.core.network.github.GitHubReleasesApi
 import com.raulshma.jellyplay.core.network.github.GitHubReleasesApiImpl
+import com.raulshma.jellyplay.core.network.library.JellyPlayHomeSectionSources
 import com.raulshma.jellyplay.core.network.library.SeerrHomeSectionSources
 import com.raulshma.jellyplay.core.network.library.HomeSectionsCachePort
 import com.raulshma.jellyplay.core.network.interceptor.BandwidthInterceptor
@@ -118,6 +134,7 @@ val networkJvmModule: Module = module {
             adminClient = get(),
             metadataClient = get(),
             mediaInfoClient = get(),
+            jellyPlayPluginClient = get(),
             pluginClient = get(),
             userClient = get(),
         )
@@ -133,7 +150,22 @@ val networkJvmModule: Module = module {
     // (SeerrHomeSectionSourcesImpl below — session-aware, built here because
     // only this module's jvmShared sees both the Seerr transport and the
     // datastore-layer session stores).
-    single { LibraryApiClientImpl(get(), get(), get(), SeerrHomeSectionSourcesImpl(get(), get(), get())) }
+    // The 5th arg is the plugin-row leaf source (JellyPlayHomeSectionSources —
+    // the companion plugin's seasonal row for the home fetcher): DECLARED by
+    // dataJvmModule's plugin cluster (its capability probe,
+    // JellyPlayPluginStatusStore, is a core:data single), so this module —
+    // which cannot see core:data — resolves it cross-module and ABSENT in
+    // graphs that load only the network stack (unit-test graphs fetch no
+    // plugin rows; getOrNull, not get, is the whole contract).
+    single {
+        LibraryApiClientImpl(
+            get(),
+            get(),
+            get(),
+            SeerrHomeSectionSourcesImpl(get(), get(), get()),
+            jellyPlayHomeSectionSources = getOrNull<JellyPlayHomeSectionSources>(),
+        )
+    }
     single<LibraryApiClient> { get<LibraryApiClientImpl>() }
     // The two library family seams over the same impl single (the
     // one-impl-many-seams idiom): single-family consumers (PlaylistRepositoryImpl,
@@ -161,10 +193,43 @@ val networkJvmModule: Module = module {
     single<MetadataApiClient> { get<MetadataApiClientImpl>() }
     single { MediaInfoApiClientImpl(get(), get()) }
     single<MediaInfoApiClient> { get<MediaInfoApiClientImpl>() }
+    single { JellyPlayPluginApiClientImpl(get()) }
+    single<JellyPlayPluginApiClient> { get<JellyPlayPluginApiClientImpl>() }
+    // The plugin roles (ADR 0010 §5, the roles split): the ONE impl instance
+    // satisfies every contract-area role, so each binding just re-exposes the
+    // same singleton under its role type — consumers depend on the single
+    // role they read, never on the whole family.
+    single<JellyPlayCapabilitiesRoutes> { get<JellyPlayPluginApiClientImpl>() }
+    single<JellyPlaySettingsSyncRoutes> { get<JellyPlayPluginApiClientImpl>() }
+    single<JellyPlayDeviceRegistryRoutes> { get<JellyPlayPluginApiClientImpl>() }
+    single<JellyPlayEventsRoutes> { get<JellyPlayPluginApiClientImpl>() }
+    single<JellyPlaySeerrRoutes> { get<JellyPlayPluginApiClientImpl>() }
+    single<JellyPlayRatingsRoutes> { get<JellyPlayPluginApiClientImpl>() }
+    single<JellyPlayRecommendationsRoutes> { get<JellyPlayPluginApiClientImpl>() }
+    single<JellyPlayMarkersRoutes> { get<JellyPlayPluginApiClientImpl>() }
+    single<JellyPlayRowsRoutes> { get<JellyPlayPluginApiClientImpl>() }
+    single<JellyPlayUserDataRoutes> { get<JellyPlayPluginApiClientImpl>() }
+    single<JellyPlayTranscodesRoutes> { get<JellyPlayPluginApiClientImpl>() }
+    single<JellyPlayAnalyticsRoutes> { get<JellyPlayPluginApiClientImpl>() }
     single { PluginApiClientImpl(get()) }
     single<PluginApiClient> { get<PluginApiClientImpl>() }
 
-    single { SeerrApiClientImpl(get()) }
+    // Seerr bridge (ADR 0010): when the user's Seerr mode is "via JellyPlay
+    // server", every Seerr request rewrites to the plugin proxy with the
+    // JELLYFIN token (the Seerr API key never leaves the server). Reads are
+    // sync StateFlow.value — safe inside an OkHttp interceptor.
+    single {
+        val engine = get<JellyfinApiEngine>()
+        val seerrStore = get<com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore>()
+        SeerrApiClientImpl(
+            okHttpClient = get(),
+            bridge = SeerrBridge(
+                isActive = { seerrStore.preferences.value.useServerBridge },
+                jellyfinBaseUrl = { engine.activeServerAddress ?: engine.session.value?.server?.address },
+                jellyfinToken = { engine.session.value?.user?.accessToken },
+            ),
+        )
+    }
     single<SeerrApiClient> { get<SeerrApiClientImpl>() }
     single { TmdbApiClientImpl(get()) }
     single<TmdbApiClient> { get<TmdbApiClientImpl>() }

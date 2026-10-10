@@ -8,12 +8,14 @@ equalizer, here's how to get the most out of your music library.
 
 The **Music** home section is a Spotify-style browse experience with:
 
-- **Continue listening** — pick up where you left off in long mixes
-- **Recently played** — quick access to your last 50 albums and tracks
-- **Frequent artists** — surface the artists you actually listen to
-- **Recommended albums** — based on your top genres and play history
-- **Mood playlists** — 10 curated presets (see below)
-- **Smart playlists** — criteria-based playlists you can fully customise
+- **Favorite Artists** — the artists you actually listen to
+- **Latest Albums** — newest additions to your music library
+- **Recently played** — quick access to what you last streamed
+- **Top Rated Albums** — your highest-rated records
+- **Favorite Tracks** — the songs you've hearted
+
+Mood and smart playlists live on their own screens, reachable from the
+music browse tabs (see below).
 
 To switch the home to **music-first** layout, open
 **Settings → Onboarding → Home Layout** (or in
@@ -37,21 +39,17 @@ library:
 | 😴 Sleep | Ambient, classical, <60 BPM |
 | 🌃 Late Night Drive | Synthwave, lo-fi, chillhop |
 
-You can edit any of these in **Music → Mood Playlists → ⋯ → Edit**
-to add / remove tracks or change the seed criteria.
-
 ## Smart playlists
 
 Build your own playlists with rule-based criteria:
 
-- **Match all** of: Genre is *Rock* AND Year is *≥ 2010*
-- **Match any** of: Tag is *workout* OR Tag is *cardio*
+- **Criteria** — combine rules like Genre is *Rock*, Year is
+  *≥ 2010*, or Tag is *workout*; every rule must match
 - **Sort by**: Play count (descending), Recently added, Random shuffle
-- **Limit**: Top 50, 100, 250, or unlimited
-- **Auto-refresh**: rebuild on app launch, on library scan, or manually
+- **Limit**: cap the result count (50 by default)
 
-Smart playlists update in real time when you import new music or
-JellyPlay detects a library scan.
+Results are computed from your live library, so a smart playlist always
+reflects the music currently on your server.
 
 ## Endless radio (auto-mix)
 
@@ -94,22 +92,22 @@ Open **Settings → Audio** to access:
 
 ### 10-band equalizer
 
-- 10 frequency bands (32 Hz to 16 kHz)
-- 12 presets: Flat, Bass Boost, Treble Boost, Vocal, Rock, Pop, Jazz,
-  Classical, Electronic, Hip-Hop, Acoustic, Vocal Booster
+- 10 frequency bands (60 Hz to 16 kHz)
+- 13 presets: Flat, Bass Boost, Treble Boost, Rock, Pop, Jazz,
+  Classical, Electronic, Hip Hop, Vocal, Acoustic, Podcast, Latin
 - **Save as custom** — name your own preset
 
 ### Night Mode
 
 `LoudnessEnhancer`-based compression that makes quiet sections louder
 and loud sections quieter. Ideal for late-night listening when you
-don't want to wake the house. Strength: Low / Medium / High.
+don't want to wake the house. Strength: Off / Low / Moderate / High.
 
 ### Dialogue Boost
 
 Equalizer pre-shape that emphasizes vocal frequencies (1-4 kHz) to
-make podcasts and audiobooks more intelligible. Strength: Low / Medium
-/ High.
+make podcasts and audiobooks more intelligible. Toggle it from the
+audio player's menu. Strength: Off / Low / Moderate / High.
 
 ### Audio normalization (ReplayGain)
 
@@ -126,15 +124,16 @@ a fallback to computed loudness analysis.
 
 ### Virtualizer & Reverb
 
-3D-audio virtualizer with 5 strength levels, plus 4 reverb presets
-(Room, Hall, Cathedral, Outdoor) for headphones.
+3D-audio virtualizer (Off / Low / Moderate / High strength), plus six
+reverb presets (Small Room, Medium Room, Large Room, Medium Hall,
+Large Hall, Plate) for headphones.
 
 ### Gapless playback & crossfade
 
 - **Gapless** — for classical and concept albums where silence
   between tracks is wrong. JellyPlay pre-buffers the next track.
 - **Crossfade** — fade-out the current track while fading-in the
-  next, with a configurable duration (1-12 seconds)
+  next, with a duration of Off, 2, 3, 5, 8, or 12 seconds
 
 ## Ambient Mode
 
@@ -147,21 +146,20 @@ party or focus backgrounds. Tap anywhere to exit.
 
 From the audio player, tap the moon icon to set a sleep timer:
 
-- 5, 10, 15, 30, 45, 60 minutes
-- End of current track
-- End of current album
-- Custom duration
+- 15, 30, 45, 60, or 90 minutes
+- End of episode
 
 JellyPlay fades out smoothly in the last 10 seconds.
 
 ## Widgets & shortcuts
 
-JellyPlay adds two home-screen widgets:
+JellyPlay adds four home-screen widgets:
 
-- **Now Playing** — large album art + title / artist / playback
-  controls (4x2 size)
-- **Continue Listening** — 4 most recently played tracks, tap to
-  resume
+- **Now Playing** — album art + title / artist / playback controls
+  (4x1 size)
+- **Continue Watching** — video items you're mid-watch on (4x2 size)
+- **Library Recommendations** — suggested picks from your library
+- **Seerr Recommendations** — trending picks via your Seerr instance
 
 App shortcuts (long-press the launcher icon):
 
@@ -169,10 +167,13 @@ App shortcuts (long-press the launcher icon):
 - Search
 - Play music
 - Downloads
-- Continue listening
+- Surprise me
+- Settings
+
+After you listen, a dynamic **Continue listening** shortcut appears
+too, resuming your last audio session.
 
 ## Next steps
 
 - 🎬 [Configure the video player engines →](./player-engines.md)
 - ⬇️ [Download music for offline listening →](./offline-downloads.md)
-- ⚖️ [JellyPlay vs Plex vs Emby vs Kodi →](./why-jellyplay-vs-plex-emby.md)

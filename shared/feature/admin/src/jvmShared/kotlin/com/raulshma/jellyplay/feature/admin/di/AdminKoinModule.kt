@@ -5,6 +5,7 @@ import com.raulshma.jellyplay.core.data.repository.AdminRepository
 import com.raulshma.jellyplay.core.data.repository.AdminStatisticsRepository
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.PluginAdminRepository
+import com.raulshma.jellyplay.feature.admin.analytics.JellyPlayAnalyticsViewModel
 import com.raulshma.jellyplay.feature.admin.backups.AdminBackupsViewModel
 import com.raulshma.jellyplay.feature.admin.dashboard.AdminDashboardViewModel
 import com.raulshma.jellyplay.feature.admin.devices.DevicesViewModel
@@ -15,6 +16,7 @@ import com.raulshma.jellyplay.feature.admin.stalemedia.StaleMediaViewModel
 import com.raulshma.jellyplay.feature.admin.statistics.UserStatisticsViewModel
 import com.raulshma.jellyplay.feature.admin.statistics.detail.UserStatisticsDetailViewModel
 import com.raulshma.jellyplay.feature.admin.tasks.ScheduledTasksViewModel
+import com.raulshma.jellyplay.feature.admin.transcodes.JellyPlayTranscodesViewModel
 import com.raulshma.jellyplay.feature.admin.users.UsersViewModel
 import com.raulshma.jellyplay.feature.admin.users.detail.UserDetailViewModel
 import com.raulshma.jellyplay.feature.admin.watchedremoval.WatchedMediaCleanupViewModel
@@ -41,6 +43,25 @@ val adminModule: Module = module {
     viewModel {
         AdminDashboardViewModel(
             adminRepository = get(),
+            jellyPlayStatusStore = get(),
+            jellyPlayFeatureGate = get(),
+            // The broadcast composer's api seam (ADR 0010, the `events`
+            // family's POST jellyplay/broadcast).
+            jellyPlayPluginApiClient = get(),
+        )
+    }
+    viewModel {
+        JellyPlayTranscodesViewModel(
+            pluginApiClient = get(),
+            statusStore = get(),
+            featureGate = get(),
+        )
+    }
+    viewModel {
+        JellyPlayAnalyticsViewModel(
+            pluginApiClient = get(),
+            statusStore = get(),
+            featureGate = get(),
         )
     }
     viewModel {

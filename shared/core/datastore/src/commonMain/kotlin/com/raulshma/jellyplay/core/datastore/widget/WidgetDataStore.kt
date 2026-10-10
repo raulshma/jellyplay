@@ -7,6 +7,8 @@ import androidx.datastore.preferences.core.edit
 import com.raulshma.jellyplay.core.datastore.CachedJsonNullPolicy
 import com.raulshma.jellyplay.core.datastore.ParsedCache
 import com.raulshma.jellyplay.core.datastore.PreferenceCodec
+import com.raulshma.jellyplay.core.datastore.SyncAllowlist
+import com.raulshma.jellyplay.core.datastore.stringEntry
 import com.raulshma.jellyplay.core.model.LibraryWidgetItem
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.SeerrWidgetItem
@@ -15,6 +17,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.serialization.json.Json
@@ -185,6 +188,69 @@ class WidgetDataStore constructor(
     /** Persists the current continue-watching shelf so widgets can render it offline / on cold start. */
     suspend fun setContinueWatching(items: List<MediaItem>) {
         dataStore.edit { it[Keys.CONTINUE_WATCHING] = json.encodeToString(items) }
+    }
+
+    // ------------------------------------------------------------------
+    // CONFIG-ONLY BACKUP SURFACE (the local settings backup's `widget`
+    // slice): the same allowlisted raw-string read/apply shape the
+    // integration stores' sync-only surfaces use (SeerrPreferencesStore et
+    // al.) — but this is NOT a server-sync face; it exists so the LOCAL
+    // backup can carry the user's widget CONFIG. The payload-cache keys
+    // (`continue_watching` / `library_widget_items` / `seerr_widget_items`)
+    // are deliberately absent from the allowlist: they are an I/O buffer
+    // between the refresh workers and the AppWidget providers (derived
+    // state), never a setting, so they can never enter a backup.
+    // ------------------------------------------------------------------
+
+    /**
+     * The config allowlist: raw key name → typed entry (the integration
+     * stores' shared [com.raulshma.jellyplay.core.datastore.SyncEntry] idiom —
+     * renames land here). The entries' `default` is unused by this surface:
+     * its reset REMOVES the key (absent = default config) rather than writing
+     * a default.
+     */
+    private val ConfigTypedKeys = SyncAllowlist(
+        mapOf(
+            "widget_config" to stringEntry(Keys.WIDGET_CONFIG, default = ""),
+            "widget_configs" to stringEntry(Keys.WIDGET_CONFIGS, default = ""),
+        ),
+    )
+
+    /**
+     * The raw key names [configSnapshot]/[configApply] may ever touch — the
+     * config allowlist (see the surface KDoc above).
+     */
+    val ConfigKeys: Set<String> get() = ConfigTypedKeys.keys
+
+    /**
+     * The raw stored value per allowlisted key (`null` = the key is absent —
+     * readers fall back to the default config). The backup slice source's
+     * snapshot face; the values are the persisted JSON blobs verbatim.
+     */
+    suspend fun configSnapshot(): Map<String, String?> {
+        val prefs = sharedPrefs.first()
+        return ConfigTypedKeys.snapshot(prefs)
+    }
+
+    /**
+     * Writes one allowlisted raw value (the backup slice source's adopt
+     * face), or resets the key when [value] is `null` — the entry is removed
+     * so readers fall back to the default config (the same "absent = default"
+     * the read paths above implement). Unallowlisted keys are ignored in BOTH
+     * directions — a payload-cache key can never be written here, and a
+     * hostile backup slice can never smuggle one in.
+     */
+    suspend fun configApply(key: String, value: String?) {
+        val entry = ConfigTypedKeys.entry(key) ?: return
+        dataStore.edit { prefs ->
+            if (value == null) {
+                // Removal is name-based: the entry goes whatever kind is
+                // stored under the name.
+                prefs.remove(stringPreferencesKey(key))
+                return@edit
+            }
+            entry.write(prefs, value)
+        }
     }
 
     private companion object {

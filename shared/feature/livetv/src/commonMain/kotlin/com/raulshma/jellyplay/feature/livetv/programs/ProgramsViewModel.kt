@@ -1,9 +1,9 @@
 package com.raulshma.jellyplay.feature.livetv.programs
 
 import androidx.compose.runtime.Immutable
-import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
+import com.raulshma.jellyplay.core.network.api.LiveTvApiClient
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
-import com.raulshma.jellyplay.core.data.util.EpochMillisSource
+import com.raulshma.jellyplay.core.model.EpochMillisSource
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.model.LiveTvProgram
 import com.raulshma.jellyplay.core.model.ProgramFilters
@@ -57,7 +57,7 @@ data class ProgramsUiState(
  * [LIVE_TV_STALENESS_INTERVAL_MS] only refreshes the "On Now" row.
  */
 class ProgramsViewModel(
-    private val mediaRepository: LiveTvRepository,
+    private val mediaRepository: LiveTvApiClient,
     private val imageUrlProvider: ImageUrlProvider,
     private val timeSource: EpochMillisSource,
 ) : JellyPlayViewModel() {

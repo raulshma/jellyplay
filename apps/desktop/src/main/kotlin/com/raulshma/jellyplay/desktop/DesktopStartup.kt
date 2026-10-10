@@ -83,6 +83,11 @@ internal fun launchDesktopStartup(
             // shared jvmShared — previously desktop staged outbox rows
             // that nothing ever drained.
             koinApp.koin.get<DesktopPlaybackSyncScheduler>().start()
+            // Settings/profile sync flush (startup pass + Offline→Online
+            // transition observer + the window-focus edge Main.kt's AWT
+            // listener feeds): the desktop actual of Android's
+            // SettingsSyncWorker/SettingsSyncBackgroundTrigger pair.
+            koinApp.koin.get<com.raulshma.jellyplay.core.data.worker.DesktopSettingsSyncScheduler>().start()
 
             // Extract the bundled Anime4K chains into the user's
             // shaders dir (idempotent; re-runs only on a version bump).

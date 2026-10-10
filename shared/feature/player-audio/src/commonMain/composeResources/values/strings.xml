@@ -71,6 +71,11 @@
     <string name="audio_sleep_timer_title">Sleep Timer</string>
     <string name="audio_sleep_timer_end_of_episode">End of episode</string>
     <string name="audio_sleep_timer_duration">Duration</string>
+    <string name="audio_sleep_timer_stops_at">Stops at %1$s</string>
+    <string name="audio_sleep_timer_cancel_title">Cancel sleep timer?</string>
+    <string name="audio_sleep_timer_cancel_message">The timer still has %1$s left. Cancel it?</string>
+    <string name="audio_cancel_timer">Cancel timer</string>
+    <string name="audio_sleep_timer_keep">Keep timer</string>
 
     <!-- Equalizer -->
     <string name="audio_equalizer_title">Equalizer</string>
@@ -96,6 +101,11 @@
     <string name="audio_queue_title">Queue</string>
     <string name="audio_queue_remove">Remove from queue</string>
     <string name="audio_queue_position">%1$d of %2$d</string>
+
+    <!-- Queue drag-reorder -->
+    <string name="audio_queue_reorder_handle">Drag to reorder</string>
+    <string name="audio_queue_move_up">Move up</string>
+    <string name="audio_queue_move_down">Move down</string>
 
     <!-- Add to playlist picker -->
     <string name="audio_playlist_picker_title">Add to playlist</string>

@@ -84,7 +84,6 @@ class RequestsViewModelQueryGapsTest {
         currentUserFlow = MutableStateFlow(null)
         every { experimentalStore.experimental } returns MutableStateFlow(ExperimentalSlice())
         every { seerrRepository.currentUser } returns currentUserFlow
-        every { seerrRepository.isAdmin() } returns MutableStateFlow(false)
         every { seerrRepository.pendingRequestCount } returns MutableStateFlow(0)
         every { seerrRepository.startPolling() } just Runs
         every { seerrRepository.stopPolling() } just Runs
@@ -204,7 +203,7 @@ class RequestsViewModelQueryGapsTest {
             filter = SeerrRequestFilter.APPROVED,
             mediaType = "tv",
             sort = SeerrRequestSort.MODIFIED,
-            sortDirection = "asc",
+            sortDirection = RequestsSortDirection.ASC,
             showMyRequestsOnly = true,
             searchQuery = "dune",
         )
@@ -213,7 +212,7 @@ class RequestsViewModelQueryGapsTest {
                 filter = SeerrRequestFilter.APPROVED,
                 mediaType = "tv",
                 sort = SeerrRequestSort.MODIFIED,
-                sortDirection = "asc",
+                sortDirection = RequestsSortDirection.ASC,
                 showMyRequestsOnly = true,
                 searchQuery = "dune",
             ),

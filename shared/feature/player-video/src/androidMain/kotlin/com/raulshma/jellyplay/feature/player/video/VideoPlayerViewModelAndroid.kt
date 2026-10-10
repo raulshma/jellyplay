@@ -31,4 +31,4 @@ val VideoPlayerViewModel.androidFontProvider: AndroidFontProvider
  * CastSessionEvent flow) that stay off the commonMain interface.
  */
 internal val VideoPlayerViewModel.androidCast: AndroidPlayerCastController
-    get() = cast as AndroidPlayerCastController
+    get() = playbackSession.cast as AndroidPlayerCastController

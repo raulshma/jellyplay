@@ -3,7 +3,9 @@ package com.raulshma.jellyplay.feature.subtitle.tester
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.raulshma.jellyplay.core.datastore.subtitle.SubtitleLanguageStore
+import com.raulshma.jellyplay.core.datastore.engine.PlayerEngineStore
 import com.raulshma.jellyplay.core.model.AssOverrideMode
+import com.raulshma.jellyplay.core.model.EngineSpecificConfig
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.feature.player.video.engine.EngineConfig
@@ -25,10 +27,10 @@ import kotlinx.coroutines.launch
  * V3 conveyor stripped the Hilt annotations; one framework per type). Ctor
  * deps: [PlayerEngineFactory] and [FontProvider] are Koin-owned definitions
  * in shared/feature/player-video's androidPlayerVideoModule (they moved there
- * with the player-video migration), [SubtitleLanguageStore] is
- * Koin-native (datastoreCommonModule), and [PlaybackRequestFactory] is
- * constructed by the Koin module with the application context — the
- * ViewModel no longer touches Context itself.
+ * with the player-video migration), [SubtitleLanguageStore] and
+ * [PlayerEngineStore] are Koin-native (datastoreCommonModule), and
+ * [PlaybackRequestFactory] is constructed by the Koin module with the
+ * application context — the ViewModel no longer touches Context itself.
  *
  * State mutations delegate to [SubtitleTesterStateReducer] (commonMain) so
  * the state machine is JVM-unit-tested; this class keeps only the engine
@@ -37,6 +39,7 @@ import kotlinx.coroutines.launch
 class SubtitleTesterViewModel(
     private val engineFactory: PlayerEngineFactory,
     private val subtitleLanguageStore: com.raulshma.jellyplay.core.datastore.subtitle.SubtitleLanguageStore,
+    private val playerEngineStore: PlayerEngineStore,
     private val fontProvider: FontProvider,
     private val playbackRequestFactory: PlaybackRequestFactory,
 ) : ViewModel() {
@@ -182,7 +185,19 @@ class SubtitleTesterViewModel(
     private fun pushConfigToEngine() {
         val state = _uiState.value
         val resolved = state.activeWorkingStyle.copy(applyCustomStyle = true)
-        val config = EngineConfig(subtitleStyle = resolved)
+        // Same per-engine slice the real player resolves
+        // (PlayerSessionManager.resolveEngineConfig): the preview engine's
+        // ownership snapshot must see the user's in-app Advanced MPV
+        // Configuration, or the tester's notice would disagree with the
+        // keys real engines actually skip.
+        val engineSlice = playerEngineStore.playerEngine.value
+        val engineSpecific: EngineSpecificConfig? = when (state.previewEngine) {
+            PlayerType.MPV -> engineSlice.mpvConfig
+            PlayerType.LIBVLC -> engineSlice.libVlcConfig
+            PlayerType.EXO_PLAYER -> engineSlice.exoPlayerConfig
+            PlayerType.EXTERNAL -> null
+        }
+        val config = EngineConfig(subtitleStyle = resolved, engineSpecific = engineSpecific)
         engine?.updateConfig(config)
     }
 

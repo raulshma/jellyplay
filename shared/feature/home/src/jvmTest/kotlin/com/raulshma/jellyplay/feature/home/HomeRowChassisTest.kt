@@ -279,4 +279,35 @@ class HomeRowChassisTest {
             }
         }
     }
+
+    @Test
+    fun isEdgeRefreshable_matchesSingleRowFetchSupport_andExcludesSeerrRows() {
+        // Every type the single-row fetch supports arms the gesture…
+        val refreshable = setOf(
+            HomeSectionType.CONTINUE_WATCHING,
+            HomeSectionType.CONTINUE_READING,
+            HomeSectionType.NEXT_UP,
+            HomeSectionType.RECENTLY_ADDED,
+            HomeSectionType.LATEST_MEDIA,
+            HomeSectionType.PINNED,
+            HomeSectionType.DISCOVER,
+            // The plugin rows (companion plugin, ADR 0010) ride the fetcher's
+            // single-row PLUGIN_ROW arm like the pins do.
+            HomeSectionType.PLUGIN_ROW,
+        )
+        for (type in HomeSectionType.entries) {
+            val armed = isEdgeRefreshableSection(section(type))
+            assertEquals(type in refreshable, armed, "sectionType=$type")
+        }
+
+        // …except a Seerr-sourced discover row, which rides the batch group gate.
+        val seerrRow = HomeSection(
+            id = "discover_seerr",
+            title = "Seerr",
+            type = HomeSectionType.DISCOVER,
+            items = emptyList(),
+            seerrItems = listOf(com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem(id = 1, mediaType = "movie", title = "T")),
+        )
+        assertEquals(false, isEdgeRefreshableSection(seerrRow), "Seerr rows stay gesture-off")
+    }
 }

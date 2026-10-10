@@ -195,4 +195,19 @@ class EngineCapabilityMatrixTest {
         assertFalse(c.supportsFreeFormColors)
         assertFalse(c.supportsBorderStyles)
     }
+
+    // ── Custom subtitle color picker gate ──
+
+    @Test
+    fun customSubtitleColors_mpvOnly() {
+        // The free-form picker gates on supportsCustomSubtitleColors =
+        // supportsFreeFormColors && supportsAssStyleOverride: ExoPlayer can
+        // take hex colors but cannot hold them on ASS tracks (no style
+        // override), so the picker is offered on mpv only — see the
+        // "Subtitle nuance" paragraph in docs/player-engines.md.
+        assertTrue(EngineCapabilityMatrix.MPV.supportsCustomSubtitleColors)
+        assertFalse(EngineCapabilityMatrix.EXO_PLAYER.supportsCustomSubtitleColors)
+        assertFalse(EngineCapabilityMatrix.LIBVLC.supportsCustomSubtitleColors)
+        assertFalse(EngineCapabilityMatrix.EXTERNAL.supportsCustomSubtitleColors)
+    }
 }

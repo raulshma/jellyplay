@@ -1,7 +1,5 @@
 package com.raulshma.jellyplay.feature.player.video
 
-import com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager
-import com.raulshma.jellyplay.core.testfixtures.FakePositionStore
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflinePlaybackFacade
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
@@ -16,13 +14,13 @@ import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.ResolvedPlayback
 import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.testfixtures.FakeMediaEngine
+import com.raulshma.jellyplay.core.testfixtures.FakePositionStore
 import com.raulshma.jellyplay.feature.player.video.engine.EngineError
 import com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
-import io.mockk.mockk
 import io.mockk.verify
 import kotlin.test.AfterTest
 import kotlin.test.assertEquals
@@ -32,14 +30,10 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.test.Test
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -69,109 +63,75 @@ import kotlinx.coroutines.test.runTest
  * Conventions match [PlaybackSessionReportingTest]: the session's injected
  * scope is unconfined on the test scheduler (synchronous launches + a virtual
  * clock for the 500 ms seek coalescing), repositories are relaxed mocks,
- * VM-facing seams are recording fakes. The session's injected
- * [PlaybackSession.releaseScope] (a real IO scope, built by the test like the
- * production VM does) is cancelled in the per-test teardown via that injected
- * instance.
+ * VM-facing seams are recording fakes. The whole construction graph comes
+ * from [PlaybackSessionTestGraph] (the C6 collapse made the session its own
+ * composition root): the session's release scope is built internally
+ * ([PlaybackSession.releaseScope]) — the per-test teardown cancels it via
+ * that instance, the owner's cancel-after-release ordering.
+ *
+ * The ui-mirror seams the session used to receive as constructor lambdas are
+ * session-derived over the graph's [PlayerStateHandles] now; the suite
+ * observes them at their single home (the real handle state): the
+ * cinema-intro mirror via `uiState.cinemaIntroState`, the playback-mode
+ * mirror via `uiState.uiPrefs.playbackMode` (the test writes the fallback
+ * latch's precondition the same way), the playhead seed via
+ * `handles.positionMs`, and the pending stream selection through the
+ * track-selection helper's consumption semantics (pinned helper-side in
+ * [TrackSelectionHelperTest] and order-wise source-side in
+ * [PlaybackSessionCompositionTest]).
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class PlaybackSessionLifecycleTest {
 
+    private lateinit var graph: PlaybackSessionTestGraph
     private lateinit var session: PlaybackSession
-    private lateinit var releaseScope: CoroutineScope
     private lateinit var playerSessionManager: PlayerSessionManager
     private lateinit var sessionStateFlow: MutableStateFlow<PlayerSessionState>
-    private lateinit var engineFlow: MutableStateFlow<MediaEngine?>
     private lateinit var engine: FakeMediaEngine
     private lateinit var playbackRepository: PlaybackRepository
     private lateinit var offlinePlaybackFacade: OfflinePlaybackFacade
     private lateinit var playbackStore: PlaybackStore
-    private lateinit var adaptiveBitrateManager: AdaptiveBitrateManager
     private lateinit var progressReporter: PlaybackProgressReporter
     private lateinit var mediaSessionController: MediaSessionController
     private lateinit var pipeline: SessionLoadPipeline
     private lateinit var hooks: RecordingHooks
     private lateinit var positionStore: FakePositionStore
     private lateinit var mediaRepository: MediaRepository
-    private lateinit var sessionScope: CoroutineScope
 
-    private val uiPlaybackModes = mutableListOf<PlaybackMode>()
-    private val pendingStreams = mutableListOf<MediaStreamSelection?>()
-    private val cinemaStates = mutableListOf<CinemaIntroUiState?>()
-    private val seededPlayheadMs = mutableListOf<Long>()
     private val events = mutableListOf<SessionEvent>()
     private val startedRequests = mutableListOf<LoadRequest>()
 
     private var wasInSyncPlay = false
-    private var playbackMode: PlaybackMode = PlaybackMode.AUTO
 
     private fun TestScope.buildSession(currentItemId: String? = null, playSessionId: String? = null) {
-        sessionScope = CoroutineScope(SupervisorJob() + UnconfinedTestDispatcher(testScheduler))
-        releaseScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-        engine = FakeMediaEngine().apply {
-            durationValue = 100_000L
-            advanceTo(30_000L)
-        }
-        sessionStateFlow = MutableStateFlow(
-            PlayerSessionState(
-                currentItemId = currentItemId,
-                playSessionId = playSessionId,
-                title = "Test Movie",
-                subtitle = "2024",
-            ),
-        )
-        engineFlow = MutableStateFlow<MediaEngine?>(engine)
-        playerSessionManager = mockk(relaxed = true)
-        every { playerSessionManager.sessionState } returns sessionStateFlow
-        every { playerSessionManager.engineFlow } returns engineFlow
-        every { playerSessionManager.engine } returns engine
-        playbackRepository = mockk(relaxed = true)
-        offlinePlaybackFacade = mockk(relaxed = true)
-        playbackStore = mockk(relaxed = true)
-        adaptiveBitrateManager = mockk(relaxed = true)
-        every { adaptiveBitrateManager.resolveMaxBitrate(any()) } returns 8_000_000L
-        progressReporter = mockk(relaxed = true)
-        mediaSessionController = mockk(relaxed = true)
-        mediaRepository = mockk(relaxed = true)
         hooks = RecordingHooks(
             routeToRemote = { false },
             reclaimEngine = { null },
             syncPlayProbe = { wasInSyncPlay },
         )
-        positionStore = FakePositionStore()
-        pipeline = mockk(relaxed = true)
+        graph = PlaybackSessionTestGraph(
+            testScope = this,
+            hooks = hooks,
+            initialItem = currentItemId,
+            initialPlaySessionId = playSessionId,
+        )
+        session = graph.session
+        playerSessionManager = graph.playerSessionManager
+        sessionStateFlow = graph.sessionStateFlow
+        engine = graph.engine
+        playbackRepository = graph.playbackRepository
+        offlinePlaybackFacade = graph.offlinePlaybackFacade
+        playbackStore = graph.playbackStore
+        progressReporter = graph.progressReporter
+        mediaSessionController = graph.mediaSessionController
+        mediaRepository = graph.mediaRepository
+        positionStore = graph.positionStore
+        pipeline = graph.pipeline
         every { pipeline.start(any(), any()) } answers {
             startedRequests += secondArg<LoadRequest>()
             hooks.calls += "startPipeline"
             Job()
         }
-
-        session = PlaybackSession(
-            scope = sessionScope,
-            upgradesPassOutToOverlay = { false },
-            releaseScope = releaseScope,
-            playerSessionManager = playerSessionManager,
-            progressReporter = progressReporter,
-            sessionLoadPipeline = pipeline,
-            hooks = hooks,
-            mediaSessionController = mediaSessionController,
-            playbackStore = playbackStore,
-            adaptiveBitrateManager = adaptiveBitrateManager,
-            playbackRepository = playbackRepository,
-            offlinePlaybackFacade = offlinePlaybackFacade,
-            mediaRepository = mediaRepository,
-            setCinemaIntroState = { cinemaStates += it },
-            seedDisplayedPositionMs = { seededPlayheadMs += it },
-            positionStore = positionStore,
-            getStreamingQuality = { StreamingQuality.AUTO },
-            setUiPlaybackMode = { uiPlaybackModes += it },
-            getIncognitoModeEnabled = { false },
-            setPendingStreams = { pendingStreams += it },
-            getPlaybackMode = { playbackMode },
-            directPlayFallbackNotice = { it },
-            passOutHours = flowOf(0),
-            onEngineEventCoordinatorRearmed = { hooks.calls += "coordinatorRearmed" },
-        )
 
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
             session.events.collect { events += it }
@@ -181,10 +141,13 @@ class PlaybackSessionLifecycleTest {
 
     @AfterTest
     fun tearDown() {
-        // Cancel the injected release scope AFTER the session's work was
-        // verified — the owner's teardown path, as in the VM's onCleared.
-        if (this::releaseScope.isInitialized) releaseScope.cancel()
-        if (this::sessionScope.isInitialized) sessionScope.cancel()
+        // Cancel the session's internally-built release scope AFTER its work
+        // was verified, then the session scope — the owner's teardown path,
+        // as in the VM's onCleared (cancel-after-release ordering).
+        if (this::graph.isInitialized) {
+            session.releaseScope.cancel()
+            graph.sessionScope.cancel()
+        }
     }
 
     private fun request(
@@ -402,7 +365,18 @@ class PlaybackSessionLifecycleTest {
             session.engineEventCoordinator.disposed,
             "the Activity-scoped VM is reused across media — every load re-arms the coordinator",
         )
-        assertTrue("coordinatorRearmed" in hooks.calls)
+        // The re-arm's VM-side poke is session-internal now (the shell's
+        // onRearmed restarts the session's mirror collectors), so the
+        // observable equivalent of the old recording hook fires here: the
+        // RE-ARMED coordinator is live — its decisions reach the session's
+        // event pipe again.
+        engine.errorEmissions.tryEmit(EngineError.Network(null))
+        testScheduler.runCurrent()
+        assertEquals(
+            listOf<SessionEvent>(SessionEvent.ShowError(EngineError.Network(null).message, true, false)),
+            events,
+            "the re-armed coordinator's decisions still reach the session's event pipe",
+        )
     }
 
     @Test
@@ -523,8 +497,12 @@ class PlaybackSessionLifecycleTest {
 
         session.reloadForStreamChange(MediaStreamSelection(audioStreamIndex = 0, subtitleStreamIndex = null))
 
+        // The engine gate short-circuits BEFORE the load coroutine launches:
+        // no reload, and (the pending-stream seed being session-internal now,
+        // observable helper-side via TrackSelectionHelperTest) no pending
+        // selection can have been armed for a reload that never happens —
+        // nothing on the session side ran at all.
         coVerify(exactly = 0) { playerSessionManager.reloadForStreamChange(any(), any()) }
-        assertTrue(pendingStreams.isEmpty())
     }
 
     @Test
@@ -535,9 +513,11 @@ class PlaybackSessionLifecycleTest {
 
         session.reloadForStreamChange(selection)
 
-        // The pending selection is seeded BEFORE the reload so the ladder can
-        // restore the pick on the new engine's first track emissions.
-        assertEquals(listOf<MediaStreamSelection?>(selection), pendingStreams)
+        // The pending selection is seeded inside the load coroutine BEFORE
+        // the reload (source-pinned by PlaybackSessionCompositionTest; the seed's
+        // consumption semantics are pinned helper-side by
+        // TrackSelectionHelperTest) so the ladder can restore the pick on the
+        // new engine's first track emissions.
         coVerify(exactly = 1) { playerSessionManager.reloadForStreamChange(selection, 45_000L) }
     }
 
@@ -604,7 +584,9 @@ class PlaybackSessionLifecycleTest {
     fun forcedDirectPlayError_runsTheTranscodeFallbackChain() = runTest {
         buildSession(currentItemId = "item-1", playSessionId = "server-1")
         engine.advanceTo(15_000L)
-        playbackMode = PlaybackMode.FORCE_DIRECT_PLAY
+        // The coordinator's fallback-latch policy reads the playback-mode
+        // mirror live from the ui state now (the session-derived seam).
+        graph.uiState.update { it.copy(uiPrefs = it.uiPrefs.copy(playbackMode = PlaybackMode.FORCE_DIRECT_PLAY)) }
         coEvery {
             playerSessionManager.reloadPlayback(any(), any(), any(), any())
         } returns resolved(PlayMethod.TRANSCODE)
@@ -620,7 +602,11 @@ class PlaybackSessionLifecycleTest {
 
         // Decision 2 executed session-side: persist FORCE_TRANSCODE,
         // stop-report the failed session, and re-resolve at the engine position.
-        assertEquals(listOf(PlaybackMode.FORCE_TRANSCODE), uiPlaybackModes)
+        assertEquals(
+            PlaybackMode.FORCE_TRANSCODE,
+            graph.uiState.value.uiPrefs.playbackMode,
+            "the fallback writes the in-memory playback-mode mirror",
+        )
         coVerify(exactly = 1) { playbackStore.setPlaybackMode(PlaybackMode.FORCE_TRANSCODE) }
         coVerify(exactly = 1) {
             playbackRepository.reportPlaybackStopped("item-1", "server-1", 150_000_000L)
@@ -660,8 +646,8 @@ class PlaybackSessionLifecycleTest {
         session.beginCinemaMode(intros, request(itemId = "main"))
 
         assertEquals(
-            listOf<CinemaIntroUiState?>(CinemaIntroUiState(title = "Previously On", currentIndex = 1, totalCount = 2)),
-            cinemaStates,
+            CinemaIntroUiState(title = "Previously On", currentIndex = 1, totalCount = 2),
+            graph.uiState.value.cinemaIntroState,
         )
         coVerify(exactly = 1) { playerSessionManager.loadMedia("intro-1", null, 0L) }
     }
@@ -673,8 +659,8 @@ class PlaybackSessionLifecycleTest {
         session.beginCinemaMode(listOf(intro("intro-1", "  ")), request(itemId = "main"))
 
         assertEquals(
-            listOf<CinemaIntroUiState?>(CinemaIntroUiState(title = "Intro", currentIndex = 1, totalCount = 1)),
-            cinemaStates,
+            CinemaIntroUiState(title = "Intro", currentIndex = 1, totalCount = 1),
+            graph.uiState.value.cinemaIntroState,
         )
     }
 
@@ -700,13 +686,12 @@ class PlaybackSessionLifecycleTest {
         buildSession()
         val intros = listOf(intro("intro-1", "One"), intro("intro-2", "Two"))
         session.beginCinemaMode(intros, request(itemId = "main"))
-        cinemaStates.clear()
 
         session.advanceCinemaIntro()
 
         assertEquals(
-            listOf<CinemaIntroUiState?>(CinemaIntroUiState(title = "Two", currentIndex = 2, totalCount = 2)),
-            cinemaStates,
+            CinemaIntroUiState(title = "Two", currentIndex = 2, totalCount = 2),
+            graph.uiState.value.cinemaIntroState,
         )
         coVerify(exactly = 1) { playerSessionManager.loadMedia("intro-2", null, 0L) }
         coVerify(exactly = 0) { pipeline.start(any(), any()) }
@@ -716,18 +701,17 @@ class PlaybackSessionLifecycleTest {
     fun advanceCinemaIntro_exhausted_resumesTheMainFeature_withoutCinema() = runTest {
         buildSession()
         session.beginCinemaMode(listOf(intro("intro-1", "One")), request(itemId = "main"))
+        assertEquals(
+            CinemaIntroUiState(title = "One", currentIndex = 1, totalCount = 1),
+            graph.uiState.value.cinemaIntroState,
+        )
 
         session.advanceCinemaIntro()
 
-        // The intro ui state clears BEFORE the recursive initialize so the
+        // The intro ui state clears on the exhausted advance (the write pair
+        // the old lambda recording pinned as [set("One"), clear]) so the
         // re-entrant load cannot re-enter cinema mode.
-        assertEquals(
-            listOf<CinemaIntroUiState?>(
-                CinemaIntroUiState(title = "One", currentIndex = 1, totalCount = 1),
-                null,
-            ),
-            cinemaStates,
-        )
+        assertNull(graph.uiState.value.cinemaIntroState)
         // Two cancelJobs: the explicit pre-resume cancel, plus the one inside
         // the re-entrant initialize's session teardown half.
         verify(exactly = 2) { progressReporter.cancelJobs() }
@@ -744,7 +728,7 @@ class PlaybackSessionLifecycleTest {
 
         session.advanceCinemaIntro()
 
-        assertTrue(cinemaStates.isEmpty())
+        assertNull(graph.uiState.value.cinemaIntroState, "no intro state was ever published")
         coVerify(exactly = 0) { playerSessionManager.loadMedia(any(), any(), any()) }
     }
 
@@ -757,7 +741,9 @@ class PlaybackSessionLifecycleTest {
         session.preSeedPlayhead(0L)
         session.preSeedPlayhead(30_000_000L)
 
-        assertEquals(listOf<Long>(3_000L), seededPlayheadMs)
+        // The zero write must not disturb the display flow (it starts at 0
+        // and only the positive seed moves it, ticks → ms).
+        assertEquals(3_000L, graph.handles.positionMs.value)
     }
 
     @Test

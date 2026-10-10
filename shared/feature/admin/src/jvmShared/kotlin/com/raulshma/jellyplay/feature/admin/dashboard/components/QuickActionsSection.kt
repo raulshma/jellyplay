@@ -32,9 +32,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Archive
+import com.composables.icons.tabler.outline.Broadcast
 import com.composables.icons.tabler.outline.DeviceDesktop
 import com.composables.icons.tabler.outline.FileText
+import com.composables.icons.tabler.outline.Graph
 import com.composables.icons.tabler.outline.PlayerPlay
+import com.composables.icons.tabler.outline.Transform
 import com.composables.icons.tabler.outline.Users
 import com.composables.icons.tabler.outline.Trash
 import com.composables.icons.tabler.outline.EyeOff
@@ -52,6 +55,9 @@ import com.raulshma.jellyplay.feature.admin.generated.resources.admin_qa_watched
 import com.raulshma.jellyplay.feature.admin.generated.resources.admin_quick_access
 import com.raulshma.jellyplay.feature.admin.generated.resources.admin_stale_media_title
 import com.raulshma.jellyplay.feature.admin.generated.resources.admin_users_title
+import com.raulshma.jellyplay.feature.admin.generated.resources.jellyplay_an_title
+import com.raulshma.jellyplay.feature.admin.generated.resources.jellyplay_bc_title
+import com.raulshma.jellyplay.feature.admin.generated.resources.jellyplay_tr_title
 
 @Composable
 fun QuickActionsSection(
@@ -64,6 +70,29 @@ fun QuickActionsSection(
     onPlugins: () -> Unit = {},
     onUsers: () -> Unit = {},
     onBackups: () -> Unit = {},
+    /**
+     * The JellyPlay companion-plugin transcodes monitor (ADR 0010). [showTranscodes]
+     * is the plugin gate (AVAILABLE + `transcodes` feature) — when off the tile
+     * does not render and the row stays exactly as it was on a stock server.
+     */
+    showTranscodes: Boolean = false,
+    onTranscodes: () -> Unit = {},
+    /**
+     * The JellyPlay companion-plugin broadcast composer (ADR 0010).
+     * [showBroadcast] is the plugin gate (AVAILABLE + `events` feature —
+     * broadcasts ride the events stream); when off the tile does not render.
+     * The plugin tiles share their own trailing row so a stock server's
+     * three-tile rows stay untouched.
+     */
+    showBroadcast: Boolean = false,
+    onBroadcast: () -> Unit = {},
+    /**
+     * The JellyPlay companion-plugin analytics dashboard (ADR 0010).
+     * [showAnalytics] is the plugin gate (AVAILABLE + `analytics` feature);
+     * when off the tile does not render.
+     */
+    showAnalytics: Boolean = false,
+    onAnalytics: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
@@ -162,6 +191,47 @@ fun QuickActionsSection(
                 onClick = onBackups,
                 modifier = Modifier.weight(1f),
             )
+        }
+        // The JellyPlay companion-plugin tiles (ADR 0010) — each gated by its
+        // own feature key, so the row composes only where the plugin exposes
+        // at least one of them (a stock server never renders it).
+        if (showTranscodes || showBroadcast || showAnalytics) {
+            Spacer(Modifier.height(10.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                if (showTranscodes) {
+                    QuickActionButton(
+                        icon = Tabler.Outline.Transform,
+                        label = stringResource(Res.string.jellyplay_tr_title),
+                        iconBackgroundColor = MaterialTheme.colorScheme.primaryContainer,
+                        iconTint = MaterialTheme.colorScheme.onPrimaryContainer,
+                        onClick = onTranscodes,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                if (showBroadcast) {
+                    QuickActionButton(
+                        icon = Tabler.Outline.Broadcast,
+                        label = stringResource(Res.string.jellyplay_bc_title),
+                        iconBackgroundColor = MaterialTheme.colorScheme.secondaryContainer,
+                        iconTint = MaterialTheme.colorScheme.onSecondaryContainer,
+                        onClick = onBroadcast,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                if (showAnalytics) {
+                    QuickActionButton(
+                        icon = Tabler.Outline.Graph,
+                        label = stringResource(Res.string.jellyplay_an_title),
+                        iconBackgroundColor = MaterialTheme.colorScheme.tertiaryContainer,
+                        iconTint = MaterialTheme.colorScheme.onTertiaryContainer,
+                        onClick = onAnalytics,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
         }
     }
 }

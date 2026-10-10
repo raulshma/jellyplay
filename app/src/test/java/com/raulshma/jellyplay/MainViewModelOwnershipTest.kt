@@ -18,19 +18,17 @@ import org.junit.Test
  * What's New and SyncPlay-open state all live in the coordinators the
  * composition resolves through ShellInfra, not here.
  *
- * Baseline: the 2026-09-27 post-decoupling state — 28 members (10 vals +
- * 18 funs), pinned exactly by name and kind below. Never add an entry:
- * new shell state belongs in a coordinator consumed via ShellInfra, new
- * shell commands in [MainShellModel], new intents in the existing
- * intent/shortcut folds. Shrink the baseline when members are deleted;
- * never raise it to admit new ones.
+ * Baseline: 25 members (10 vals + 15 funs), pinned exactly by name and kind
+ * below. Never add an entry: new shell state belongs in a coordinator
+ * consumed via ShellInfra, new shell commands in [MainShellModel], new
+ * intents in the existing intent/shortcut folds. Shrink the baseline when
+ * members are deleted; never raise it to admit new ones.
  */
 class MainViewModelOwnershipTest {
 
     /**
-     * The exact public surface at the 2026-09-27 post-decoupling baseline,
-     * as "kind name" pairs. Remove entries when members are deleted; never
-     * add entries.
+     * The exact pinned public surface, as "kind name" pairs. Remove entries
+     * when members are deleted; never add entries.
      */
     private val baselineMembers = setOf(
         // MainShellModel flows (the seam the main shell renders through).
@@ -50,9 +48,6 @@ class MainViewModelOwnershipTest {
         "fun refreshAdminStatus",
         "fun consumePendingRoute",
         "fun consumePendingSearchQuery",
-        "fun buildExternalPlayerLaunch",
-        "fun reportExternalPlaybackStart",
-        "fun reportExternalPlaybackStopped",
         // Read side beyond the interface: the merged preference pipeline and
         // the one-shot signals the shell composition consumes.
         "val preferences",

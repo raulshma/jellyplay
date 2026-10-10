@@ -8,15 +8,13 @@ import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalFeatureGate
 import com.raulshma.jellyplay.core.model.arr.ArrCalendarItem
 import com.raulshma.jellyplay.core.model.arr.ArrMediaType
+import com.raulshma.jellyplay.core.model.seerr.buildPosterUrl
+import com.raulshma.jellyplay.core.ui.viewmodel.IdEnricher
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.core.ui.viewmodel.loadInto
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.sync.Semaphore
-import kotlinx.coroutines.sync.withPermit
-import kotlinx.coroutines.withContext
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
@@ -61,11 +59,32 @@ class UpcomingCalendarViewModel(
     val featureEnabled: StateFlow<Boolean> = experimentalGate.directArrEnabled
 
     /**
-     * Bounds the number of concurrent Seerr enrichment lookups so a month with
-     * many items doesn't fan out into dozens of parallel HTTP calls. Matches
-     * the semaphore used by `ArrRepositoryImpl`.
+     * The poster enrichment fan-out (the former hand-copied semaphore ladder,
+     * now the [IdEnricher] core): Semaphore(4)-bounded Seerr lookups, per-item
+     * failures swallowed, and the merge is this screen's append-only rule —
+     * existing entries are never clobbered — written inside the enricher's
+     * snapshot-atomic block (the declared fix for the unsynchronized
+     * read-then-write the hand-rolled version did). The fetch resolves the
+     * TMDB poster path through the right details endpoint and flattens it to
+     * a URL via [buildPosterUrl] (blank paths → null → swallowed, so the *arr
+     * poster URL remains the card's primary source).
      */
-    private val enrichSemaphore = Semaphore(4)
+    private val posterEnricher = IdEnricher<Pair<Int, ArrMediaType>, String>(
+        scope = scope,
+        fetch = { (tmdbId, mediaType) ->
+            val posterPath = when (mediaType) {
+                ArrMediaType.MOVIE -> seerrRepository.getMovieDetails(tmdbId).getOrNull()?.posterPath
+                ArrMediaType.SERIES -> seerrRepository.getTvDetails(tmdbId).getOrNull()?.posterPath
+            }
+            posterPath?.let { buildPosterUrl(it) }
+        },
+        merge = { (tmdbId, _), url ->
+            val current = _state.value.enrichedPosters
+            if (tmdbId !in current) {
+                _state.value = _state.value.copy(enrichedPosters = current + (tmdbId to url))
+            }
+        },
+    )
 
     /**
      * The active month collector, cancelled + re-launched whenever the visible
@@ -114,41 +133,17 @@ class UpcomingCalendarViewModel(
      * Resolves TMDB posters for any items lacking an enriched entry.
      * Fire-and-forget: failures are swallowed (the *arr poster URL remains the
      * primary source on the card). Append-only: existing entries are never
-     * clobbered.
+     * clobbered. The already-enriched check reads the map once at fan-out
+     * time (the hand-rolled ladder's frozen snapshot), so a same-month
+     * re-emission re-fetches nothing.
      */
-    private suspend fun enrichMissing(items: List<ArrCalendarItem>) {
+    private fun enrichMissing(items: List<ArrCalendarItem>) {
         val already = _state.value.enrichedPosters
-        val toEnrich = items.filter { it.tmdbId != null && it.tmdbId !in already }
+        val toEnrich = items
+            .mapNotNull { item -> item.tmdbId?.let { it to item.mediaType } }
+            .filter { (tmdbId, _) -> tmdbId !in already }
         if (toEnrich.isEmpty()) return
-        // Fan out on Default so we never block the collector.
-        withContext(Dispatchers.Default) {
-            toEnrich.forEach { item ->
-                val tmdbId = item.tmdbId ?: return@forEach
-                launch {
-                    // Each branch resolves to its own Details type; flatten to
-                    // a Result<String?> (the TMDB poster path) so the two
-                    // results share a common type.
-                    val posterPathResult: Result<String?> = enrichSemaphore.withPermit {
-                        when (item.mediaType) {
-                            ArrMediaType.MOVIE ->
-                                seerrRepository.getMovieDetails(tmdbId).map { it.posterPath }
-                            ArrMediaType.SERIES ->
-                                seerrRepository.getTvDetails(tmdbId).map { it.posterPath }
-                        }
-                    }
-                    posterPathResult.onSuccess { path ->
-                        if (path.isNullOrBlank()) return@onSuccess
-                        val url = "${com.raulshma.jellyplay.core.model.seerr.TmdbImageUrls.POSTER_W500}$path"
-                        val current = _state.value.enrichedPosters
-                        if (tmdbId !in current) {
-                            _state.value = _state.value.copy(
-                                enrichedPosters = current + (tmdbId to url),
-                            )
-                        }
-                    }
-                }
-            }
-        }
+        posterEnricher.enrich(toEnrich)
     }
 
     /** Re-fetches the calendar for the visible month. Never throws. */

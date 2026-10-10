@@ -6,6 +6,8 @@
     <string name="player_reset_to_auto">自動にリセット</string>
     <string name="player_track_default">デフォルト</string>
     <string name="player_track_none">なし</string>
+    <string name="player_capturing_frame">フレームをキャプチャしています…</string>
+    <string name="player_not_ready">プレーヤーの準備ができていません</string>
 
     <string name="track_badge_forced">強制</string>
     <string name="track_badge_sdh">SDH</string>
@@ -35,10 +37,8 @@
     <string name="player_video_open_tester">テスターを開く</string>
     <string name="player_video_reset">リセット</string>
     <string name="player_video_reset_all">すべてリセット</string>
-    <string name="player_video_pick_color">色を選択</string>
     <string name="player_video_hue">色相</string>
     <string name="player_video_saturation">彩度</string>
-    <string name="player_video_value">明度</string>
     <string name="player_video_apply">適用</string>
     <string name="player_video_cancel">キャンセル</string>
     <string name="player_video_override_subtitle_styles">字幕スタイルを上書き</string>
@@ -56,6 +56,14 @@
     <string name="player_video_ass_force">強制</string>
     <string name="player_video_ass_scale_hint">埋め込みスタイルを保持、サイズと位置のみ適用</string>
     <string name="player_video_ass_force_hint">埋め込みスタイルを独自の色、フォント、縁取りで上書き</string>
+    <string name="player_video_mpv_config_notice_title">mpv 設定が一部の字幕設定を上書きしています</string>
+    <string name="player_video_mpv_config_owned_keys_intro">設定が優先されるキー — ここにある該当するコントロールでは変更できません:</string>
+    <string name="player_video_mpv_config_case_srt">通常の字幕(SRT)は常に設定の色・縁取り・フォントを使用します。</string>
+    <string name="player_video_mpv_config_case_ass">ASS/SSA 字幕は埋め込みスタイルを保持します — 自分のスタイルを適用するには、下の「ASS スタイル」の選択を使用してください。</string>
+    <string name="player_video_mpv_config_ass_override_owned">設定が sub-ass-override を指定しているため、ここでの「尊重/強制」の選択は無効です。</string>
+    <string name="player_video_mpv_config_app_owned_keys">字幕のオン/オフと字幕の遅延は常にアプリに従います — 設定では変更できません。</string>
+    <string name="player_video_mpv_config_dropped_keys">mpv は mpv.conf ファイル内の %1$s を読み取れません。引用符のない # はコメントの開始とみなされます。ファイル内では値を引用符で囲んでください (sub-color="#FF0000")。アプリの高度な MPV 設定では逆で、引用符を付けずにそのまま入力します (sub-color=#FF0000)。引用符は値の一部になります。</string>
+    <string name="player_video_mpv_config_chip">カスタム mpv 設定</string>
     <string name="player_video_font_color">フォントの色</string>
     <string name="player_video_background_color">背景色</string>
     <string name="player_video_background_opacity">背景の不透明度: %1$d%</string>
@@ -79,6 +87,11 @@
     <string name="player_video_sleep_timer">スリープタイマー</string>
     <string name="player_video_sleep_timer_on">スリープタイマー \u00B7 %1$s</string>
     <string name="player_video_cancel_sleep_timer">スリープタイマーをキャンセル (残り %1$s)</string>
+    <string name="player_video_sleep_timer_stops_at">%1$s に停止</string>
+    <string name="player_video_cancel_sleep_timer_confirm_title">スリープタイマーをキャンセルしますか？</string>
+    <string name="player_video_cancel_sleep_timer_confirm_message">タイマーの残りはまだ %1$s です。キャンセルしますか？</string>
+    <string name="player_video_cancel_timer">タイマーをキャンセル</string>
+    <string name="player_video_keep_sleep_timer">タイマーを継続</string>
     <string name="player_video_custom_duration">カスタム時間</string>
     <string name="player_video_custom_ellipsis">カスタム…</string>
     <string name="player_video_end_of_episode">エピソードの終わり</string>
@@ -155,6 +168,8 @@
     <string name="player_video_normalization_on">ノーマライズ \u00B7 %1$s</string>
     <string name="player_video_channel_mixing">チャンネルミックス</string>
     <string name="player_video_channel_mix_on">チャンネルミックス \u00B7 %1$s</string>
+    <string name="player_video_gestures">ジェスチャー</string>
+    <string name="player_video_gestures_on">ジェスチャー \u00B7 %1$d/%2$d</string>
     <string name="player_video_av_sync">A/V 同期</string>
     <string name="player_video_playback_mode">再生モード</string>
     <string name="player_video_playback_mode_on">%1$s \u00B7 オン</string>
@@ -342,4 +357,21 @@
     <string name="player_video_source_label">ソース</string>
     <string name="player_video_version">バージョン</string>
     <string name="player_video_remember_version">このバージョンを記憶</string>
+
+    <!-- Subtitle style presets -->
+    <string name="player_video_presets_title">プリセット</string>
+    <string name="player_video_preset_subtle">控えめ</string>
+    <string name="player_video_preset_big_bold">大きめ太字</string>
+    <string name="player_video_preset_classic_yellow">クラシックイエロー</string>
+    <string name="player_video_preset_netflixish">Netflix風</string>
+    <string name="player_video_preset_save">現在の設定を保存</string>
+    <string name="player_video_preset_save_dialog_title">プリセットを保存</string>
+    <string name="player_video_preset_name_label">プリセット名</string>
+    <string name="player_video_preset_delete_a11y">プリセット %1$s を削除</string>
+
+    <!-- The JellyPlay sync / details-badges / player-notice strings
+         (ADR 0010 wave), translated together with the default file. -->
+    <string name="player_video_transcode_switched">トランスコードされたストリームに切り替えました — バッファリングし直しています</string>
+    <string name="player_video_direct_play_unavailable">このアイテムはダイレクト再生できません — トランスコードに切り替えます</string>
+    <string name="player_video_vlc_client_cert_unsupported">クライアント証明書は VLC エンジンでサポートされていません — mTLS サーバーには ExoPlayer または mpv に切り替えてください</string>
 </resources>

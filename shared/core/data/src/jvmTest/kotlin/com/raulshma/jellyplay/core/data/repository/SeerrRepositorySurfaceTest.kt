@@ -40,6 +40,15 @@ import kotlin.test.assertTrue
  * stays on the core's connection/prefs family with zero callers today — the
  * next retirement candidate.
  *
+ * 32 after the preference-lens collapse: the six boolean lenses
+ * (`isConnected`, `isEnabled`, `isSearchEnabled`, `isRecommendationsEnabled`,
+ * `isDiscoverEnabled`, `isAdmin`) folded onto the single
+ * `val preferences: StateFlow<SeerrPreferences>` (+1), every one of them a
+ * `.map` over that flow or over `currentUser` in the impl. The discover date twin
+ * (`getDiscoverMovies`/`getDiscoverTv`'s standalone `primaryReleaseDateGte` /
+ * `firstAirDateGte` params) folded into the `SeerrDiscoverParams` bundle
+ * without changing the member count.
+ *
  * Lower [maxInterfaceMembers] when a pair folds or a member retires; never
  * raise it. A genuinely new Seerr capability should land as a narrow
  * collaborator rather than growing this surface.
@@ -47,7 +56,7 @@ import kotlin.test.assertTrue
 class SeerrRepositorySurfaceTest {
 
     /** The maximum allowed member count of [SeerrRepository] (see class KDoc). */
-    private val maxInterfaceMembers = 37
+    private val maxInterfaceMembers = 31
 
     /** Members folded away from the interface; their re-addition must fail this suite. */
     private val retiredMembers = listOf(

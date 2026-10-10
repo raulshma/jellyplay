@@ -18,7 +18,7 @@ class RequestsFilterStateTest {
         filter = SeerrRequestFilter.APPROVED,
         mediaType = "movie",
         sort = SeerrRequestSort.MODIFIED,
-        sortDirection = "asc",
+        sortDirection = RequestsSortDirection.ASC,
         showMyRequestsOnly = true,
         searchQuery = "alien",
     )
@@ -41,10 +41,18 @@ class RequestsFilterStateTest {
 
     @Test
     fun withSortDirectionToggled_flips_both_ways() {
-        assertEquals(state.copy(sortDirection = "desc"), state.withSortDirectionToggled())
+        assertEquals(state.copy(sortDirection = RequestsSortDirection.DESC), state.withSortDirectionToggled())
         assertEquals(
-            state.copy(sortDirection = "asc"),
+            state.copy(sortDirection = RequestsSortDirection.ASC),
             state.withSortDirectionToggled().withSortDirectionToggled(),
+        )
+    }
+
+    @Test
+    fun withSortDirectionToggled_flips_the_desc_default_to_asc() {
+        assertEquals(
+            RequestsSortDirection.ASC,
+            RequestsFilterState().withSortDirectionToggled().sortDirection,
         )
     }
 
@@ -93,7 +101,7 @@ class RequestsFilterStateTest {
             filter = SeerrRequestFilter.APPROVED,
             mediaType = "movie",
             sort = SeerrRequestSort.MODIFIED,
-            sortDirection = "asc",
+            sortDirection = RequestsSortDirection.ASC,
             showMyRequestsOnly = true,
             searchQuery = "alien",
         )

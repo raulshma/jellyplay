@@ -2,14 +2,13 @@ package com.raulshma.jellyplay.core.data.catalogue
 
 import com.raulshma.jellyplay.core.concurrency.mapConcurrent
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
-import com.raulshma.jellyplay.core.data.concurrency.SingleFlightFetcher
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.session.HomeSession
 import com.raulshma.jellyplay.core.data.session.SessionCacheRegistry
+import com.raulshma.jellyplay.core.data.session.SessionScopedCache
 import com.raulshma.jellyplay.core.model.CacheIdentity
 import com.raulshma.jellyplay.core.model.FreshnessCeilings
 import com.raulshma.jellyplay.core.model.MediaItem
-import com.raulshma.jellyplay.core.model.TtlCache
 import com.raulshma.jellyplay.core.model.toMediaItem
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import kotlinx.coroutines.coroutineScope
@@ -18,7 +17,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
-import java.util.concurrent.atomic.AtomicLong
 
 /**
  * The single owner of the seasons → per-season episodes → playback-ordered
@@ -27,9 +25,10 @@ import java.util.concurrent.atomic.AtomicLong
  *
  * ## Concurrency model
  *
- * Every `loadSeriesEpisodes` is single-flight + epoch-guarded via
- * [SingleFlightFetcher] (extracted from the pattern this class and
- * `MediaRepositoryImpl` used to duplicate inline):
+ * Every `loadSeriesEpisodes` is single-flight + epoch-guarded via the
+ * [SessionScopedCache] chassis (whose SingleFlightFetcher core was extracted
+ * from the pattern this class and `MediaRepositoryImpl` used to duplicate
+ * inline):
  *  - concurrent loads of one series await the same in-flight fetch, keyed
  *    `"${source}::$seriesId"` so an online and an offline load never share
  *    a result;
@@ -59,7 +58,8 @@ import java.util.concurrent.atomic.AtomicLong
  *
  * ## Caching shape
  *
- * One `TtlCache<EpisodeCatalogueSnapshot>` per series, identity-keyed so a user
+ * One [SessionScopedCache]<EpisodeCatalogueSnapshot> (the identity-keyed
+ * TtlCache + epoch + single-flight chassis), so a user
  * switch is a guaranteed miss. `loadSeasonEpisodes` reads/writes the SAME
  * per-series snapshot as `loadSeriesEpisodes` (it slices the season out of the
  * grouped map if present, else fetches the one season and merges it back) —
@@ -83,10 +83,10 @@ class EpisodeCatalogueImpl(
     private val homeSession: HomeSession,
     /**
      * The single home for identity reactions (see [SessionCacheRegistry]).
-     * The catalogue registers an ACTION (not just its TtlCache) because
-     * [invalidateAll] also bumps the in-flight epoch — a bare cache clear
-     * would let a fetch captured before the switch re-insert a snapshot
-     * after it.
+     * The snapshot cache's identity reaction is the "episode-catalogue"
+     * action its [SessionScopedCache] chassis registers — an epoch bump plus
+     * wholesale clear, because a bare cache clear would let a fetch captured
+     * before the switch re-insert a snapshot after it.
      */
     private val sessionCacheRegistry: SessionCacheRegistry,
     /**
@@ -100,30 +100,22 @@ class EpisodeCatalogueImpl(
     private val showMissingEpisodes: suspend () -> Boolean = { false },
 ) : EpisodeCatalogue {
 
-    private val cache = TtlCache<EpisodeCatalogueSnapshot>(
+    // The snapshot cache — the ONE identity-cache chassis instance (see
+    // [SessionScopedCache]): the TtlCache + epoch + SingleFlightFetcher trio
+    // plus the "episode-catalogue" registry action this class used to register
+    // by hand (invalidateAll() = epoch bump + wholesale clear on every
+    // non-SignedIn transition — the same bump-then-clear section the chassis
+    // registers). Identity-keyed so a user/server switch is a guaranteed
+    // miss; the chassis cites the named detail-cluster policy
+    // (FreshnessCeilings.DETAIL_TTL_MS, core:model) — the same home
+    // MediaRepositoryImpl's detail caches cite.
+    private val cache = SessionScopedCache<EpisodeCatalogueSnapshot>(
+        owner = "episode-catalogue",
         maxSize = CACHE_MAX_ENTRIES,
-        // Cites the named detail-cluster policy (FreshnessCeilings.DETAIL_TTL_MS,
-        // core:model) — the same home MediaRepositoryImpl's detail caches cite.
-        // The old hand-synced comment ("Matches MediaRepositoryImpl
-        // DETAIL_CACHE_TTL_MS") is replaced by the shared constant itself.
         ttlMs = FreshnessCeilings.DETAIL_TTL_MS,
+        registry = sessionCacheRegistry,
+        identity = { homeSession.cacheIdentity() },
     )
-
-    init {
-        // Self-invalidate on identity change so a user/server switch can't
-        // serve the previous identity's catalogue for up to the TTL. SignedIn
-        // (session restore / first login) does NOT invalidate — the registry
-        // skips it wholesale, and anything cached under the pre-login
-        // (UNKNOWN) identity misses by construction anyway. User switch,
-        // server switch and sign-out each drop the whole catalogue.
-        sessionCacheRegistry.registerAction("episode-catalogue") { invalidateAll() }
-    }
-
-    // Single-flight coordination: the fetcher owns the in-flight dedup over
-    // [cache]; [epoch] is shared so the merge paths and the per-season fan-out
-    // below guard against the same invalidation stream the fetcher bumps.
-    private val epoch = AtomicLong(0L)
-    private val fetcher = SingleFlightFetcher(cache, epoch)
 
     // Serializes the merge paths (season merge + optimistic season rewrite)
     // against each other — see the class KDoc's concurrency model.
@@ -136,8 +128,7 @@ class EpisodeCatalogueImpl(
         seriesId: String,
         offline: Boolean,
     ): Result<EpisodeCatalogueSnapshot> {
-        return fetcher.getOrFetch(
-            identity = { homeSession.cacheIdentity() },
+        return cache.getOrFetch(
             key = cacheKey(seriesId),
             flightKey = flightKey(offline, seriesId),
             fetch = { epochAtStart ->
@@ -168,7 +159,7 @@ class EpisodeCatalogueImpl(
                 offlineRepository.getEpisodesForSeason(seasonId).first().map { it.toMediaItem() }
             }
         } else {
-            val epochAtStart = epoch.get()
+            val epochAtStart = cache.currentEpoch()
             libraryApiClient.getEpisodes(seriesId, seasonId, isMissing = missingEpisodesFilter()).mapCatching { episodes ->
                 mergeSeasonIntoSnapshot(identity, cacheKey, seriesId, seasonId, episodes, epochAtStart)
                 episodes
@@ -190,9 +181,9 @@ class EpisodeCatalogueImpl(
         episodes: List<MediaItem>,
         epochAtStart: Long,
     ) {
-        if (epoch.get() != epochAtStart) return
+        if (cache.currentEpoch() != epochAtStart) return
         mergeMutex.withLock {
-            if (epoch.get() != epochAtStart) return@withLock
+            if (cache.currentEpoch() != epochAtStart) return@withLock
             val current = cache.get(identity, cacheKey)
             val updated = if (current == null) {
                 buildSnapshot(seriesId, seasons = emptyList(), mapOf(seasonId to episodes), epochAtStart)
@@ -227,11 +218,11 @@ class EpisodeCatalogueImpl(
     }
 
     override fun invalidateSeries(seriesId: String) {
-        fetcher.invalidate(homeSession.cacheIdentitySnapshot(), cacheKey(seriesId))
+        cache.invalidate(homeSession.cacheIdentitySnapshot(), cacheKey(seriesId))
     }
 
     override fun invalidateAll() {
-        fetcher.invalidateAll()
+        cache.invalidateAll()
     }
 
     // ── online assemble ─────────────────────────────────────────────────
@@ -282,7 +273,7 @@ class EpisodeCatalogueImpl(
     ): EpisodeCatalogueSnapshot {
         val grouped = seasonSemaphore.mapConcurrent(seasons) { season ->
             val episodesResult = libraryApiClient.getEpisodes(seriesId, season.id, isMissing = missingEpisodesFilter())
-            if (epoch.get() == epochAtStart) {
+            if (cache.currentEpoch() == epochAtStart) {
                 episodesResult.getOrNull()?.let { season.id to it }
             } else {
                 null

@@ -19,6 +19,15 @@ object AnimationTokens {
     const val ScaleEntranceInitial = 0.92f
 
     const val BottomSheetPredictiveBackMinScale = 0.85f
+
+    /** Desktop hover rise for card-sized surfaces (see Modifier.hoverScale). */
+    const val HoverScale = 1.02f
+
+    /** SwipeActionBox: fling velocity (dp/s) past which the gesture settles immediately. */
+    const val SwipeVelocityThresholdDp = 125
+
+    /** SwipeActionBox: end padding of the revealed action icon. */
+    const val SwipeActionIconEndPaddingDp = 20
 }
 
 /**

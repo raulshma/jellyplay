@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.core.data.tv
 
 import android.content.Context
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.HomeFeed
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
@@ -17,13 +17,13 @@ import org.junit.Test
 class TvWatchNextPublisherTest {
 
     private lateinit var context: Context
-    private lateinit var mediaRepository: MediaRepository
+    private lateinit var homeFeed: HomeFeed
     private lateinit var imageUrlProvider: ImageUrlProvider
 
     @Before
     fun setUp() {
         context = mockk(relaxed = true)
-        mediaRepository = mockk(relaxed = true)
+        homeFeed = mockk(relaxed = true)
         imageUrlProvider = mockk(relaxed = true)
 
         // Default to non-TV environment (no leanback feature)
@@ -32,7 +32,7 @@ class TvWatchNextPublisherTest {
 
     @Test
     fun publish_onNonTvDevice_returnsSuccessWithoutProcessing() = runTest {
-        val publisher = TvWatchNextPublisher(context, mediaRepository, imageUrlProvider, SystemTimeSource())
+        val publisher = TvWatchNextPublisher(context, homeFeed, imageUrlProvider, SystemTimeSource())
         val result = publisher.publish()
 
         assertTrue(result.isSuccess)
@@ -40,7 +40,7 @@ class TvWatchNextPublisherTest {
 
     @Test
     fun clear_onNonTvDevice_returnsSuccessWithoutProcessing() = runTest {
-        val publisher = TvWatchNextPublisher(context, mediaRepository, imageUrlProvider, SystemTimeSource())
+        val publisher = TvWatchNextPublisher(context, homeFeed, imageUrlProvider, SystemTimeSource())
         val result = publisher.clear()
 
         assertTrue(result.isSuccess)

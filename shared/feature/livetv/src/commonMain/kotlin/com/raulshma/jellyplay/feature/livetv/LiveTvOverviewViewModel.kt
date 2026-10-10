@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.feature.livetv
 
 import androidx.compose.runtime.Immutable
-import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
+import com.raulshma.jellyplay.core.network.api.LiveTvApiClient
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -33,7 +33,7 @@ data class LiveTvBadges(
  * page is visible.
  */
 class LiveTvOverviewViewModel(
-    private val mediaRepository: LiveTvRepository,
+    private val mediaRepository: LiveTvApiClient,
 ) : JellyPlayViewModel() {
 
     private val _badges = stateFlow(LiveTvBadges())

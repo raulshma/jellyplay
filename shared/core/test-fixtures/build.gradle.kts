@@ -10,8 +10,8 @@ kotlin {
     sourceSets {
         // ── what this module is ──────────────────────────────────────────
         // Test doubles needed by MORE THAN ONE module's test lane — today
-        // FakeTimeSource (livetv; core:data keeps its own same-shaped local
-        // copy until a touch migrates its 14 consumers),
+        // FakeTimeSource (livetv + core:data — the per-module copies were
+        // single-homed here),
         // FakeUserDataMutator (details + home) and FakeMediaEngine (the one
         // MediaEngine double for the session + audio-queue jvmTest suites;
         // apps/desktop's app-side copy was adopted in the fake-twin merge —

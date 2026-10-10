@@ -38,6 +38,10 @@ import okhttp3.OkHttpClient
  *  - On a [PlaybackException] while the current method is direct, the
  *    engine invokes [onTranscodeFallbackNeeded] so the ViewModel can
  *    re-resolve via `PlaybackRepository` with direct disabled.
+ *  - Mute is real engine state ([LiveMuteController] hosting the shared
+ *    volume/mute template over this player's native volume), not volume-0 —
+ *    a reload re-asserts silence and unmute restores the exact pre-mute
+ *    level.
  */
 class ExoLiveEngine(
     context: Context,
@@ -121,6 +125,17 @@ class ExoLiveEngine(
         .build()
         .also { it.addListener(PlayerListener()) }
 
+    /**
+     * Real mute (the former ViewModel volume-0 hack): the shared
+     * [VolumeCommandTemplates] mute template hosted over this player's
+     * native volume handle. Declared after [exoPlayer] so the read/write
+     * lambdas capture the built instance.
+     */
+    private val muteController = LiveMuteController(
+        readVolume = { if (released) null else exoPlayer.volume },
+        writeVolume = { exoPlayer.volume = it },
+    )
+
     /** Underlying ExoPlayer for [androidx.media3.ui.PlayerView] attachment. */
     override val media3Player: Player get() = exoPlayer
 
@@ -149,6 +164,9 @@ class ExoLiveEngine(
         // Live streams start at the live edge; never seek to a resume position.
         exoPlayer.prepare()
         exoPlayer.play()
+        // The declared mute fix: a zap / fallback reload reuses this engine,
+        // so a muted engine re-asserts silence instead of surfacing loud.
+        muteController.reassertAfterLoad()
     }
 
     override fun play() = runIfNotReleased { exoPlayer.play() }
@@ -176,6 +194,13 @@ class ExoLiveEngine(
             duration <= 0L ||
             (duration - exoPlayer.currentPosition) <= LIVE_EDGE_TOLERANCE_MS
     }
+
+    override fun volume(): Float? {
+        if (released) return null
+        return exoPlayer.volume
+    }
+
+    override fun setMuted(muted: Boolean) = runIfNotReleased { muteController.setMuted(muted) }
 
     override fun release() {
         if (released) return

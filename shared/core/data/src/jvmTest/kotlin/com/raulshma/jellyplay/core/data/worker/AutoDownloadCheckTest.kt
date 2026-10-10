@@ -5,6 +5,7 @@ import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueSnapshot
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.AutoDownloadSweepResult
+import com.raulshma.jellyplay.core.data.repository.DownloadCoverage
 import com.raulshma.jellyplay.core.data.worker.AutoDownloadCheck.Outcome
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsSlice
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
@@ -14,6 +15,7 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -44,7 +46,8 @@ class AutoDownloadCheckTest {
             DownloadsSlice(autoDownloadNewEpisodes = true, autoDownloadLookahead = 0),
         )
         coEvery { downloadRepository.sweepExpiredAutoDownloads() } returns AutoDownloadSweepResult.EMPTY
-        coEvery { downloadRepository.getDownloadedSeriesIds() } returns listOf("s1")
+        coEvery { downloadRepository.downloadCoverage() } returns
+            flowOf(DownloadCoverage(completedItemIds = emptySet(), seriesIds = setOf("s1")))
         coEvery { downloadRepository.getDownloadedEpisodeIdsBySeries() } returns emptyMap()
         coEvery { episodeCatalogue.loadSeriesEpisodes(any(), any()) } returns Result.success(snapshot())
         coEvery { downloadIntake.startSeries(any(), any()) } returns Result.success(emptyList())
@@ -111,7 +114,8 @@ class AutoDownloadCheckTest {
             stop = true
             Result.success(emptyList())
         }
-        coEvery { downloadRepository.getDownloadedSeriesIds() } returns listOf("s1", "s2")
+        coEvery { downloadRepository.downloadCoverage() } returns
+            flowOf(DownloadCoverage(completedItemIds = emptySet(), seriesIds = setOf("s1", "s2")))
 
         val outcome = check(isStopped = { stop }).checkOnce(attempt = 0)
 

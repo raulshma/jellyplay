@@ -2,13 +2,20 @@ package com.raulshma.jellyplay.feature.player.video.components
 
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextInput
 import com.raulshma.jellyplay.core.model.SubtitleColor
 import com.raulshma.jellyplay.core.model.SubtitleEdgeType
 import com.raulshma.jellyplay.core.model.SubtitleStyle
+import com.raulshma.jellyplay.core.model.SubtitleStylePreset
 import com.raulshma.jellyplay.feature.player.video.engine.EngineCapabilities
+import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvSubtitleOwnership
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -348,5 +355,203 @@ class SubtitleStyleSheetTest {
             }
         }
         composeTestRule.onNodeWithText("Border Style").assertDoesNotExist()
+    }
+
+    // ─── named style presets: apply / save / delete ─────────────────────
+
+    private fun setContentWith(
+        currentStyle: SubtitleStyle = SubtitleStyle(),
+        userPresets: List<SubtitleStylePreset> = emptyList(),
+        onSavePreset: (String) -> Unit = {},
+        onDeletePreset: (String) -> Unit = {},
+        onStyleChange: (SubtitleStyle) -> Unit = {},
+    ) {
+        composeTestRule.setContent {
+            MaterialTheme {
+                SubtitleStyleSheet(
+                    currentStyle = currentStyle,
+                    onStyleChange = onStyleChange,
+                    onDismiss = {},
+                    userPresets = userPresets,
+                    onSavePreset = onSavePreset,
+                    onDeletePreset = onDeletePreset,
+                )
+            }
+        }
+    }
+
+    @Test
+    fun subtitleStyleSheet_displaysPresetsSectionWithBuiltIns() {
+        setContentWith()
+        composeTestRule.onNodeWithText("Presets").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Subtle").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Big bold").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Classic yellow").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Netflix-ish").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Save current").assertIsDisplayed()
+    }
+
+    @Test
+    fun subtitleStyleSheet_builtinPresetChip_appliesPresetStyle() {
+        var received: SubtitleStyle? = null
+        // The current per-item sync delay must survive the apply.
+        setContentWith(
+            currentStyle = SubtitleStyle(offsetMs = 2000L),
+            onStyleChange = { received = it },
+        )
+        composeTestRule.onNodeWithText("Classic yellow").performClick()
+        val applied = received!!
+        assertEquals(SubtitleColor.YELLOW, applied.fontColor)
+        assertEquals(SubtitleEdgeType.OUTLINE, applied.edgeType)
+        assertTrue("applying a preset must force the override on", applied.applyCustomStyle)
+        assertEquals("the per-item delay never travels with a look", 2000L, applied.offsetMs)
+    }
+
+    @Test
+    fun subtitleStyleSheet_userPresetChip_appliesPresetStyle() {
+        var received: SubtitleStyle? = null
+        setContentWith(
+            userPresets = listOf(
+                SubtitleStylePreset("Mine", SubtitleStyle(fontSize = 40, bold = true)),
+            ),
+            onStyleChange = { received = it },
+        )
+        composeTestRule.onNodeWithText("Mine").performClick()
+        val applied = received!!
+        assertEquals(40, applied.fontSize)
+        assertTrue(applied.bold)
+        assertTrue(applied.applyCustomStyle)
+    }
+
+    @Test
+    fun subtitleStyleSheet_userPresetDelete_callsOnDelete() {
+        var deleted: String? = null
+        setContentWith(
+            userPresets = listOf(
+                SubtitleStylePreset("Mine", SubtitleStyle(fontSize = 40)),
+            ),
+            onDeletePreset = { deleted = it },
+        )
+        composeTestRule
+            .onNodeWithContentDescription("Delete preset Mine")
+            .performClick()
+        assertEquals("Mine", deleted)
+    }
+
+    @Test
+    fun subtitleStyleSheet_saveCurrent_opensDialog_andSavesNamedPreset() {
+        var saved: String? = null
+        setContentWith(onSavePreset = { saved = it })
+
+        composeTestRule.onNodeWithText("Save current").performClick()
+        composeTestRule.onNodeWithText("Save preset").assertIsDisplayed()
+
+        // Confirm follows the module's dialog idiom ("Apply"/"Cancel") and is
+        // disabled while the name is blank. Exact "Apply" matches only the
+        // dialog's confirm button.
+        val confirm = composeTestRule.onNodeWithText("Apply")
+        confirm.assertIsNotEnabled()
+
+        composeTestRule.onNodeWithTag("subtitle-preset-name").performTextInput("Mine")
+        confirm.assertIsEnabled().performClick()
+
+        assertEquals("Mine", saved)
+    }
+
+    // ─── custom mpv config ownership notice (issue #165, UI half) ───────────
+    // The card spells out every custom-config/sub-style interaction case;
+    // these pin each case's visibility so an edit can't silently no-op.
+
+    @Test
+    fun subtitleStyleSheet_mpvOwnedKeys_showConfigNotice() {
+        composeTestRule.setContent {
+            MaterialTheme {
+                SubtitleStyleSheet(
+                    currentStyle = SubtitleStyle(),
+                    onStyleChange = {},
+                    onDismiss = {},
+                    subtitleOwnership = MpvSubtitleOwnership(
+                        ownedStyleKeys = setOf("sub-color", "sub-pos"),
+                    ),
+                )
+            }
+        }
+        composeTestRule.onNodeWithText("Your mpv config overrides some subtitle settings")
+            .assertIsDisplayed()
+        // Owned keys render as monospace pills — one node per key, exactly the
+        // keys the engine yields.
+        composeTestRule.onNodeWithText("sub-color").assertIsDisplayed()
+        composeTestRule.onNodeWithText("sub-pos").assertIsDisplayed()
+        // SRT/ASS case rows + app-owned functional keys are part of the same card.
+        composeTestRule
+            .onNodeWithText("Plain text (SRT) subtitles always use the colors", substring = true)
+            .assertIsDisplayed()
+        composeTestRule
+            .onNodeWithText("ASS/SSA subtitles keep their embedded styling", substring = true)
+            .assertIsDisplayed()
+        composeTestRule
+            .onNodeWithText("Subtitle on/off and subtitle delay always follow the app", substring = true)
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun subtitleStyleSheet_noMpvOwnership_hidesConfigNotice() {
+        composeTestRule.setContent {
+            MaterialTheme {
+                SubtitleStyleSheet(
+                    currentStyle = SubtitleStyle(),
+                    onStyleChange = {},
+                    onDismiss = {},
+                )
+            }
+        }
+        composeTestRule.onNodeWithText("Your mpv config overrides some subtitle settings")
+            .assertDoesNotExist()
+    }
+
+    @Test
+    fun subtitleStyleSheet_ownedAssOverride_showsChipsDeadNotice() {
+        composeTestRule.setContent {
+            MaterialTheme {
+                SubtitleStyleSheet(
+                    currentStyle = SubtitleStyle(),
+                    onStyleChange = {},
+                    onDismiss = {},
+                    subtitleOwnership = MpvSubtitleOwnership(
+                        ownedStyleKeys = setOf("sub-ass-override"),
+                    ),
+                )
+            }
+        }
+        composeTestRule
+            .onNodeWithText("the Respect/Force choice here has no effect", substring = true)
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun subtitleStyleSheet_droppedConfKeys_showQuotingHint() {
+        composeTestRule.setContent {
+            MaterialTheme {
+                SubtitleStyleSheet(
+                    currentStyle = SubtitleStyle(),
+                    onStyleChange = {},
+                    onDismiss = {},
+                    subtitleOwnership = MpvSubtitleOwnership(
+                        confKeysDroppedByParser = setOf("sub-color"),
+                    ),
+                )
+            }
+        }
+        composeTestRule
+            .onNodeWithText("mpv cannot read sub-color from its mpv.conf file", substring = true)
+            .assertIsDisplayed()
+        // The hint must spell out both surfaces: quoting fixes the conf FILE,
+        // while the in-app config box takes the value plain.
+        composeTestRule
+            .onNodeWithText("In that file, quote the value", substring = true)
+            .assertIsDisplayed()
+        composeTestRule
+            .onNodeWithText("the opposite applies", substring = true)
+            .assertIsDisplayed()
     }
 }

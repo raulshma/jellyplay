@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.feature.livetv.series
 
-import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
+import com.raulshma.jellyplay.core.network.api.LiveTvApiClient
 import com.raulshma.jellyplay.core.model.DvrSeriesTimer
 import com.raulshma.jellyplay.core.ui.message.UiMessage
 import io.mockk.coEvery
@@ -28,7 +28,7 @@ class SeriesViewModelTest {
     // has no access to that module (search/music conveyor port pattern).
     private val mainDispatcher = StandardTestDispatcher()
 
-    private lateinit var mediaRepository: LiveTvRepository
+    private lateinit var mediaRepository: LiveTvApiClient
     private lateinit var viewModel: SeriesViewModel
 
     @BeforeTest

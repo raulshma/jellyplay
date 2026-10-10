@@ -7,7 +7,8 @@ import com.raulshma.jellyplay.core.ui.navigation.Navigator
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.feature.settings.AboutScreen
 import com.raulshma.jellyplay.feature.settings.ArrSettingsScreen
-import com.raulshma.jellyplay.feature.settings.ImportPreviewScreen
+import com.raulshma.jellyplay.feature.settings.RestoreWizardScreen
+import com.raulshma.jellyplay.feature.settings.InputBindingsScreen
 import com.raulshma.jellyplay.feature.settings.SubtitleProviderSettingsScreen
 import com.raulshma.jellyplay.feature.settings.AppearanceSettingsScreen
 import com.raulshma.jellyplay.feature.settings.AudioSettingsScreen
@@ -30,6 +31,10 @@ import com.raulshma.jellyplay.feature.settings.SeerrSettingsScreen
 import com.raulshma.jellyplay.feature.settings.SecuritySettingsScreen
 import com.raulshma.jellyplay.feature.settings.ServerManagementScreen
 import com.raulshma.jellyplay.feature.settings.SettingsNavActions
+import com.raulshma.jellyplay.feature.settings.JellyPlayMessagesScreen
+import com.raulshma.jellyplay.feature.settings.JellyPlaySyncScreen
+import com.raulshma.jellyplay.feature.settings.JellyPlayUserRatingsScreen
+import com.raulshma.jellyplay.feature.settings.JellyPlayYourWatchingScreen
 import com.raulshma.jellyplay.feature.settings.SettingsScreen
 import com.raulshma.jellyplay.feature.settings.StorageSettingsScreen
 import com.raulshma.jellyplay.feature.settings.UserManagementScreen
@@ -146,9 +151,22 @@ fun EntryProviderScope<NavKey>.settingsSection(
     }
 
     entry<Route.PlaybackSettings> { entry ->
+        // Same navigator-backed facade as the Settings/Home entries, so the
+        // playback screen's drill-ins (the input-binding editor) navigate
+        // through the one onNavigate seam instead of a per-callback field.
+        val navActions = remember(navigator) {
+            SettingsNavActions(onNavigate = { route -> navigator.navigate(route) })
+        }
         PlaybackSettingsScreen(
             onBack = { navigator.goBack() },
             highlightSettingId = entry.highlightSettingId,
+            navActions = navActions,
+        )
+    }
+
+    entry<Route.InputBindings> {
+        InputBindingsScreen(
+            onBack = { navigator.goBack() },
         )
     }
 
@@ -199,7 +217,7 @@ fun EntryProviderScope<NavKey>.settingsSection(
         BackupSettingsScreen(
             onBack = { navigator.goBack() },
             onFactoryReset = { navigator.navigate(Route.FactoryReset()) },
-            onImportPreview = { uri -> navigator.navigate(Route.ImportPreview(uri)) },
+            onRestoreWizard = { uri -> navigator.navigate(Route.RestoreWizard(uri = uri)) },
             highlightSettingId = entry.highlightSettingId,
         )
     }
@@ -211,10 +229,11 @@ fun EntryProviderScope<NavKey>.settingsSection(
         )
     }
 
-    entry<Route.ImportPreview> { entry ->
-        ImportPreviewScreen(
+    entry<Route.RestoreWizard> { entry ->
+        RestoreWizardScreen(
             onBack = { navigator.goBack() },
             uri = entry.uri,
+            snapshotId = entry.snapshotId,
         )
     }
 
@@ -246,6 +265,33 @@ fun EntryProviderScope<NavKey>.settingsSection(
         SubtitleProviderSettingsScreen(
             onBack = { navigator.goBack() },
             highlightSettingId = entry.highlightSettingId,
+        )
+    }
+
+    entry<Route.JellyPlayMessages> {
+        JellyPlayMessagesScreen(
+            onBack = { navigator.goBack() },
+        )
+    }
+
+    entry<Route.JellyPlaySync> {
+        JellyPlaySyncScreen(
+            onBack = { navigator.goBack() },
+            onRestoreWizard = { navigator.navigate(Route.RestoreWizard()) },
+            onRestoreSnapshot = { id -> navigator.navigate(Route.RestoreWizard(snapshotId = id)) },
+        )
+    }
+
+    entry<Route.JellyPlayUserRatings> {
+        JellyPlayUserRatingsScreen(
+            onBack = { navigator.goBack() },
+            onOpenItem = { itemId -> navigator.navigate(Route.MediaDetail(itemId)) },
+        )
+    }
+
+    entry<Route.JellyPlayYourWatching> {
+        JellyPlayYourWatchingScreen(
+            onBack = { navigator.goBack() },
         )
     }
 

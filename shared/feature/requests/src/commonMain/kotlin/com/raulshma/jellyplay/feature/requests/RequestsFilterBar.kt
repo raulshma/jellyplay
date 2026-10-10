@@ -204,7 +204,7 @@ fun RequestsFilterBar(
                     .focusIndicator(CircleShape),
             ) {
                 Icon(
-                    if (currentSortDirection == "desc") Tabler.Outline.ArrowDown else Tabler.Outline.ArrowUp,
+                    if (currentSortDirection == RequestsSortDirection.DESC) Tabler.Outline.ArrowDown else Tabler.Outline.ArrowUp,
                     contentDescription = stringResource(Res.string.requests_cd_sort_direction),
                     modifier = Modifier.size(16.dp),
                     tint = colorScheme.onSurfaceVariant,

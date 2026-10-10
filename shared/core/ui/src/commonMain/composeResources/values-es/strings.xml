@@ -280,4 +280,132 @@
          for PosterCard/WideMediaCard). -->
     <string name="core_ui_card_percent_complete">%1$d% completado</string>
     <string name="core_ui_card_time_left">%1$s restantes</string>
+
+    <!-- SubtitleFreeFormColorPickerDialog (matches the default-locale grouping) -->
+    <string name="core_ui_color_picker_title">Elegir un color</string>
+    <string name="core_ui_color_hex">Hex</string>
+    <string name="core_ui_color_hue">Matiz</string>
+    <string name="core_ui_color_saturation">Saturación</string>
+    <string name="core_ui_color_value">Brillo</string>
+    <string name="core_ui_color_invalid_hex">Color hexadecimal no válido</string>
+    <string name="core_ui_color_apply">Aplicar</string>
+    <string name="core_ui_color_cancel">Cancelar</string>
+
+    <!-- Localizable labels for the enum-valued preference rows rendered from
+         PreferenceEnumNames.kt (gesture mode, orientation lock, gesture
+         indicator side, notification check frequency). -->
+    <string name="core_gesture_mode_all">Todos los gestos</string>
+    <string name="core_gesture_mode_tap_only">Solo toques</string>
+    <string name="core_gesture_mode_none">Ninguno</string>
+    <string name="core_orientation_sensor_landscape">Horizontal</string>
+    <string name="core_orientation_sensor_portrait">Vertical</string>
+    <string name="core_orientation_sensor">Rotación automática</string>
+    <string name="core_orientation_locked_landscape">Horizontal bloqueada</string>
+    <string name="core_orientation_locked_portrait">Vertical bloqueada</string>
+    <string name="core_gesture_indicator_opposite">Lado opuesto</string>
+    <string name="core_gesture_indicator_same">Mismo lado</string>
+    <string name="core_check_frequency_every_hour">Cada hora</string>
+    <string name="core_check_frequency_every_3_hours">Cada 3 horas</string>
+    <string name="core_check_frequency_every_6_hours">Cada 6 horas</string>
+    <string name="core_check_frequency_every_12_hours">Cada 12 horas</string>
+    <string name="core_check_frequency_every_24_hours">Cada día</string>
+
+    <!-- Player input mapping (issue #171 generalized): action / pattern / key labels -->
+    <string name="core_input_action_toggle_play_pause">Reproducir / pausar</string>
+    <string name="core_input_action_play">Reproducir</string>
+    <string name="core_input_action_pause">Pausar</string>
+    <string name="core_input_action_seek_forward">Avanzar</string>
+    <string name="core_input_action_seek_back">Retroceder</string>
+    <string name="core_input_action_toggle_controls">Mostrar/ocultar controles</string>
+    <string name="core_input_action_back_or_hide">Atrás / ocultar controles</string>
+    <string name="core_input_action_exit_player">Salir del reproductor</string>
+    <string name="core_input_action_volume_up">Subir volumen</string>
+    <string name="core_input_action_volume_down">Bajar volumen</string>
+    <string name="core_input_action_toggle_mute">Silenciar</string>
+    <string name="core_input_action_brightness_up">Subir brillo</string>
+    <string name="core_input_action_brightness_down">Bajar brillo</string>
+    <string name="core_input_action_swipe_seek">Avanzar/retroceder (arrastrar)</string>
+    <string name="core_input_action_swipe_volume">Volumen (arrastrar)</string>
+    <string name="core_input_action_swipe_brightness">Brillo (arrastrar)</string>
+    <string name="core_input_action_toggle_subtitles">Mostrar/ocultar subtítulos</string>
+    <string name="core_input_action_lock_controls">Bloquear controles</string>
+    <string name="core_input_action_sub_delay_decrease">Retraso de subtítulos -</string>
+    <string name="core_input_action_sub_delay_increase">Retraso de subtítulos +</string>
+    <string name="core_input_action_audio_delay_decrease">Retraso de audio -</string>
+    <string name="core_input_action_audio_delay_increase">Retraso de audio +</string>
+    <string name="core_input_action_cycle_speed">Cambiar velocidad</string>
+    <string name="core_input_action_hold_speed">Mantener para acelerar</string>
+    <string name="core_input_action_zoom">Zoom con pellizco</string>
+    <string name="core_input_action_toggle_orientation">Girar pantalla</string>
+    <string name="core_input_action_screenshot">Captura de pantalla</string>
+    <string name="core_input_action_next_episode">Siguiente episodio</string>
+    <string name="core_input_action_previous_episode">Episodio anterior</string>
+    <string name="core_input_action_none">Sin asignar</string>
+    <string name="core_input_pattern_tap">Un toque</string>
+    <string name="core_input_pattern_double_tap_left">Doble toque a la izquierda</string>
+    <string name="core_input_pattern_double_tap_center">Doble toque al centro</string>
+    <string name="core_input_pattern_double_tap_right">Doble toque a la derecha</string>
+    <string name="core_input_pattern_double_tap_hold_left">Doble toque y mantener a la izquierda</string>
+    <string name="core_input_pattern_double_tap_hold_right">Doble toque y mantener a la derecha</string>
+    <string name="core_input_pattern_long_press">Mantener pulsado</string>
+    <string name="core_input_pattern_vertical_swipe_left">Deslizar arriba/abajo en el lado izquierdo (%1$s)</string>
+    <string name="core_input_pattern_vertical_swipe_right">Deslizar arriba/abajo en el lado derecho (%1$s)</string>
+    <!-- Short action words filling the vertical-swipe placeholders. -->
+    <string name="core_input_action_short_brightness">brillo</string>
+    <string name="core_input_action_short_volume">volumen</string>
+    <string name="core_input_pattern_horizontal_swipe">Deslizar a izquierda/derecha (avanzar/retroceder)</string>
+    <string name="core_input_edge_left">Deslizar desde el borde (izquierda)</string>
+    <string name="core_input_edge_right">Deslizar desde el borde (derecha)</string>
+    <string name="core_input_pattern_pinch">Pellizco</string>
+    <string name="core_input_pattern_wheel_volume">Rueda del ratón</string>
+    <string name="core_input_pattern_wheel_seek">Rueda del ratón (Mayús / horizontal)</string>
+    <string name="core_input_key_ctrl">Ctrl</string>
+    <string name="core_input_key_shift">Mayús</string>
+    <string name="core_input_key_alt">Alt</string>
+    <string name="core_input_key_space">Espacio</string>
+    <string name="core_input_key_k">K</string>
+    <string name="core_input_key_m">M</string>
+    <string name="core_input_key_v">V</string>
+    <string name="core_input_key_f">F</string>
+    <string name="core_input_key_g">G</string>
+    <string name="core_input_key_h">H</string>
+    <string name="core_input_key_j">J</string>
+    <string name="core_input_key_l">L</string>
+    <string name="core_input_key_bracket_left">[</string>
+    <string name="core_input_key_bracket_right">]</string>
+    <string name="core_input_key_f1">F1</string>
+    <string name="core_input_key_f2">F2</string>
+    <string name="core_input_key_f3">F3</string>
+    <string name="core_input_key_f4">F4</string>
+    <string name="core_input_key_escape">Esc</string>
+    <string name="core_input_key_back">Atrás</string>
+    <string name="core_input_key_dpad_left">Flecha izquierda</string>
+    <string name="core_input_key_dpad_right">Flecha derecha</string>
+    <string name="core_input_key_dpad_up">Flecha arriba</string>
+    <string name="core_input_key_dpad_down">Flecha abajo</string>
+    <string name="core_input_key_volume_up">Tecla de subir volumen</string>
+    <string name="core_input_key_volume_down">Tecla de bajar volumen</string>
+    <string name="core_input_key_page_up">Av Pág</string>
+    <string name="core_input_key_page_down">Re Pág</string>
+    <string name="core_input_key_home">Inicio</string>
+    <string name="core_input_key_end">Fin</string>
+    <string name="core_input_key_media_play">Multimedia: reproducir</string>
+    <string name="core_input_key_media_pause">Multimedia: pausa</string>
+    <string name="core_input_key_media_play_pause">Multimedia: reproducir/pausar</string>
+    <string name="core_input_key_media_ff">Multimedia: avance rápido</string>
+    <string name="core_input_key_media_rew">Multimedia: retroceso</string>
+    <string name="core_input_dpad_left">Cruceta izquierda</string>
+    <string name="core_input_dpad_right">Cruceta derecha</string>
+    <string name="core_input_dpad_up">Cruceta arriba</string>
+    <string name="core_input_dpad_down">Cruceta abajo</string>
+    <string name="core_input_dpad_select">Centro de la cruceta</string>
+    <string name="core_input_dpad_back">Atrás</string>
+    <string name="core_input_dpad_play_pause">Reproducir/Pausar</string>
+    <string name="core_input_dpad_fast_forward">Avance rápido</string>
+    <string name="core_input_dpad_rewind">Retroceso</string>
+
+    <!-- The JellyPlay sync / details-badges / player-notice strings
+         (ADR 0010 wave), translated together with the default file. -->
+    <string name="core_action_hide_from_continue_watching">Quitar de Seguir viendo</string>
+    <string name="core_action_show_from_continue_watching">Mostrar en Seguir viendo</string>
 </resources>

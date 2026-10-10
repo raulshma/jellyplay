@@ -95,7 +95,7 @@ class SeriesDownloadStateHolderTest {
     @Test
     fun requestSeriesDownload_raisesLoadingSentinel_thenPublishesSnapshotAndDownloadedIds() = runTest {
         val holder = buildHolder()
-        coEvery { seriesDownloads.getDownloadedEpisodeIdsForSeries("s1") } returns setOf("e1", "e2")
+        coEvery { seriesDownloads.episodeIdsForSeries("s1") } returns setOf("e1", "e2")
         // Load resolves only after runCurrent — the sentinel window is real.
         val gate = kotlinx.coroutines.CompletableDeferred<Unit>()
         coEvery { episodeCatalogue.loadSeriesEpisodes("s1") } coAnswers {

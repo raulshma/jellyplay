@@ -1,6 +1,5 @@
 package com.raulshma.jellyplay.feature.admin.dashboard.components
 
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -38,6 +37,7 @@ import com.composables.icons.tabler.outline.Movie
 import com.composables.icons.tabler.outline.Video
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.ItemCounts
+import com.raulshma.jellyplay.core.ui.components.AnimatedNumber
 import com.raulshma.jellyplay.feature.admin.generated.resources.Res
 import com.raulshma.jellyplay.feature.admin.generated.resources.admin_library
 
@@ -112,7 +112,14 @@ private fun StatCard(stat: StatItem) {
                 tint = stat.tint,
             )
             Spacer(Modifier.height(8.dp))
-            AnimatedCount(target = stat.count)
+            // Shared count-up primitive (core:ui) — same motionScheme spec the
+            // old local AnimatedCount rode, minus the float-rounding detour.
+            // Long overload: no Int narrowing on the raw server count.
+            AnimatedNumber(
+                value = stat.count,
+                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onSurface,
+            )
             Spacer(Modifier.height(2.dp))
             Text(
                 stat.label,
@@ -121,21 +128,6 @@ private fun StatCard(stat: StatItem) {
             )
         }
     }
-}
-
-@Composable
-private fun AnimatedCount(target: Long) {
-    val animated by animateFloatAsState(
-        targetValue = target.toFloat(),
-        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
-        label = "statCount",
-    )
-    Text(
-        animated.toLong().toString(),
-        style = MaterialTheme.typography.headlineSmall,
-        fontWeight = FontWeight.Bold,
-        color = MaterialTheme.colorScheme.onSurface,
-    )
 }
 
 private data class StatItem(

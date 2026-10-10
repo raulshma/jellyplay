@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.core.data.repository
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.session.HomeSession
 import com.raulshma.jellyplay.core.data.session.SessionCacheRegistry
+import com.raulshma.jellyplay.core.data.session.SessionScopedCache
 import com.raulshma.jellyplay.core.model.CultureInfo
 import com.raulshma.jellyplay.core.model.FreshnessCeilings
 import com.raulshma.jellyplay.core.model.LiveStreamOption
@@ -10,11 +11,12 @@ import com.raulshma.jellyplay.core.model.MediaSegment
 import com.raulshma.jellyplay.core.model.PlaybackInfoResult
 import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.PlaybackProgress
+import com.raulshma.jellyplay.core.model.PlaybackResolution
+import com.raulshma.jellyplay.core.model.PlaybackResolveRequest
 import com.raulshma.jellyplay.core.model.PlaybackStartInfo
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
 import com.raulshma.jellyplay.core.model.ResolvedPlayback
-import com.raulshma.jellyplay.core.model.TtlCache
 import com.raulshma.jellyplay.core.network.api.AuthApiClient
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.network.api.MetadataApiClient
@@ -24,10 +26,8 @@ import com.raulshma.jellyplay.core.network.playback.buildBookDownloadUrl
 import com.raulshma.jellyplay.core.network.playback.resolveDeliveryUrl
 import com.raulshma.jellyplay.core.network.playback.resolveDeliveryUrlWithApiKey
 import com.raulshma.jellyplay.core.data.log.Log
-import com.raulshma.jellyplay.core.data.concurrency.SingleFlightFetcher
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
-import java.util.concurrent.atomic.AtomicLong
 
 class PlaybackRepositoryImpl(
     /** Telemetry, URL builders, PlaybackInfo, segments, subtitle delivery, trickplay. */
@@ -64,34 +64,23 @@ class PlaybackRepositoryImpl(
 ) : PlaybackRepository,
     com.raulshma.jellyplay.core.data.worker.PlaybackOutboxReplay {
 
-    private val segmentsCache = TtlCache<List<MediaSegment>>(
-        maxSize = MAX_CACHE_ENTRIES,
-        ttlMs = FreshnessCeilings.SEGMENTS_TTL_MS,
-    )
-
-    // Single-flight dedup for the segments read (the MediaRepositoryImpl
-    // detail-cache pattern): a player surface that opens the same item from
-    // two entry points near-simultaneously previously fired two full
-    // getMediaSegments + intro/credit fallback batches, because TtlCache's
-    // get-check-put is not atomic. The epoch is shared with
+    // The segments read — the ONE identity-cache chassis instance (see
+    // [SessionScopedCache]): the TtlCache + epoch + SingleFlightFetcher trio
+    // plus the registry registration this class used to hand-assemble in its
+    // init block (registerCaches("playback", ...) + the "playback-identity-
+    // clear" epoch-bump action). Single-flight dedup: a player surface that
+    // opens the same item from two entry points near-simultaneously previously
+    // fired two full getMediaSegments + intro/credit fallback batches, because
+    // TtlCache's get-check-put is not atomic. The epoch is shared with
     // [invalidateSegmentsCache] so a per-item invalidation mid-flight also
     // vetoes the racing fetch's write-back.
-    private val segmentsEpoch = AtomicLong(0L)
-    private val segmentsFetcher = SingleFlightFetcher(segmentsCache, segmentsEpoch)
-
-    init {
-        sessionCacheRegistry.registerCaches("playback", segmentsCache)
-        // Doctrine parity with MediaRepositoryImpl's DetailCacheGroup (see its
-        // registryCaches KDoc): the registry's plain wholesale clear reclaims
-        // the previous identity's segments entries, but only the epoch bump
-        // expressed here can stop an in-flight previous-identity fetch from
-        // writing its (now stale) result back into the just-cleared cache —
-        // where it would sit pinned for the full TTL if the user switches
-        // back to that identity.
-        sessionCacheRegistry.registerAction("playback-identity-clear") {
-            segmentsEpoch.incrementAndGet()
-        }
-    }
+    private val segmentsCache = SessionScopedCache<List<MediaSegment>>(
+        owner = "playback-segments",
+        maxSize = MAX_CACHE_ENTRIES,
+        ttlMs = FreshnessCeilings.SEGMENTS_TTL_MS,
+        registry = sessionCacheRegistry,
+        identity = { homeSession.cacheIdentity() },
+    )
 
     override suspend fun reportPlaybackStart(info: PlaybackStartInfo): Result<Unit> = reportOrStage(
         stage = {
@@ -258,15 +247,17 @@ class PlaybackRepositoryImpl(
     override suspend fun getItemImageBytes(itemId: String, imageType: String, maxWidth: Int): ByteArray? =
         playbackApiClient.getItemImageBytes(itemId, imageType, maxWidth)
 
-    override fun getStreamUrl(
-        itemId: String,
-        mediaSourceId: String,
-        startTimeTicks: Long,
-        liveStreamId: String?,
-    ): String =
-        playbackApiClient.getStreamUrl(itemId, mediaSourceId, startTimeTicks, liveStreamId = liveStreamId)
+    // The former getStreamUrl(itemId, mediaSourceId, startTimeTicks,
+    // liveStreamId) overload is gone from the surface: the merged single
+    // member below serves every caller (its 4th parameter had differed in
+    // type AND meaning from this one's — the trap the merge removes).
 
-    override suspend fun fetchPlaybackInfo(
+    /**
+     * Kept off the interface: `PlaybackInfo` is a resolution-ladder input,
+     * and the one public seam for it is [resolvePlayable]. The impl's ladder
+     * arms (and the platform clients' direct needs) read it here.
+     */
+    internal suspend fun fetchPlaybackInfo(
         itemId: String,
         mediaSourceId: String,
         startTimeTicks: Long,
@@ -288,36 +279,123 @@ class PlaybackRepositoryImpl(
         liveStreamOption = liveStreamOption,
     )
 
-    override suspend fun resolvePlayback(
-        itemId: String,
-        mediaSourceId: String,
-        startTimeTicks: Long,
-        audioStreamIndex: Int?,
-        subtitleStreamIndex: Int?,
-        maxStreamingBitrateBits: Long?,
-        mode: PlaybackMode,
-        playerType: PlayerType,
-        liveStreamOption: LiveStreamOption?,
-    ): ResolvedPlayback? {
+    override suspend fun resolvePlayable(request: PlaybackResolveRequest): PlaybackResolution {
+        if (!request.forceLiveStreamFallback) {
+            // Arm 1: the server's PlaybackInfo verdict (Direct Play / Direct
+            // Stream / Transcode).
+            resolvePlaybackInternal(request)?.let { return PlaybackResolution.Resolved(it) }
+            if (request.liveStreamOption == null) {
+                // Arm 2 (VOD): the static direct URL fold both players used
+                // to inline — `?: getStreamUrl(...)` with the DIRECT_PLAY
+                // default and no play session. Always returned, even when the
+                // builder yields its "" no-session sentinel, so the caller's
+                // behaviour is unchanged.
+                return PlaybackResolution.StaticFallback(
+                    getStreamUrl(
+                        itemId = request.itemId,
+                        mediaSourceId = request.mediaSourceId,
+                        startTimeTicks = request.startTimeTicks,
+                        liveStreamId = request.staticFallbackLiveStreamId,
+                    ),
+                )
+            }
+        }
+        // Arm 3 (live): the fetchPlaybackInfo → first source → liveStreamId
+        // ladder, on a null verdict or a forced re-request (the live caller's
+        // probe-override).
+        return resolveLiveFallback(request)
+    }
+
+    private suspend fun resolveLiveFallback(request: PlaybackResolveRequest): PlaybackResolution {
+        val info = fetchPlaybackInfo(
+            itemId = request.itemId,
+            mediaSourceId = request.mediaSourceId,
+            startTimeTicks = request.startTimeTicks,
+            audioStreamIndex = request.audioStreamIndex,
+            subtitleStreamIndex = request.subtitleStreamIndex,
+            maxStreamingBitrateBits = request.maxStreamingBitrateBits,
+            mode = request.mode,
+            playerType = request.playerType,
+            liveStreamOption = request.liveStreamOption,
+        ).getOrNull() ?: run {
+            Log.e(TAG, "PlaybackInfo fetch failed for item ${request.itemId}")
+            return PlaybackResolution.Unplayable
+        }
+
+        val source = info.mediaSources.firstOrNull() ?: run {
+            Log.e(TAG, "PlaybackInfo returned no media sources for item ${request.itemId}")
+            return PlaybackResolution.Unplayable
+        }
+        Log.i(
+            TAG,
+            "Live fallback source for ${request.itemId}: id=${source.id}, " +
+                "directPlay=${source.supportsDirectPlay}, " +
+                "directStream=${source.supportsDirectStream}, " +
+                "transcode=${source.supportsTranscoding}, " +
+                "transcodeUrl=${source.transcodeUrl != null}, " +
+                "liveStreamId=${source.liveStreamId != null}, " +
+                "requiresOpening=${source.requiresOpening}"
+        )
+
+        // Pure capability ladder + play-method fold (LiveStreamResolution,
+        // pinned by LiveStreamResolutionTest); the impl keeps only the URL
+        // call and the logging. The built URL is always a direct /stream URL,
+        // never the server's master.m3u8 — the onPlayerError → transcode
+        // fallback stays eligible.
+        val resolution = resolveLiveStreamResolution(source) { mediaSourceId, liveStreamId ->
+            getStreamUrl(
+                itemId = request.itemId,
+                mediaSourceId = mediaSourceId,
+                startTimeTicks = request.startTimeTicks,
+                liveStreamId = liveStreamId,
+            )
+        }
+        val stream = when (resolution) {
+            is LiveStreamResolution.Resolved -> resolution
+            LiveStreamResolution.NoPlayableMethod -> {
+                Log.e(TAG, "No playable method offered for item ${request.itemId}")
+                return PlaybackResolution.Unplayable
+            }
+        }
+        if (stream.via == LiveStreamResolution.Via.LIVE_STREAM_ID) {
+            Log.w(TAG, "All playability flags false for item ${request.itemId}; attempting direct stream via liveStreamId")
+        }
+        if (stream.url.isBlank()) {
+            Log.e(TAG, "Resolved URL is blank for item ${request.itemId}")
+            return PlaybackResolution.Unplayable
+        }
+        return PlaybackResolution.Resolved(
+            ResolvedPlayback(
+                mediaSourceId = source.id,
+                streamUrl = stream.url,
+                playMethod = stream.playMethod,
+                playSessionId = info.playSessionId,
+                maxStreamingBitrate = null,
+                container = source.container,
+            ),
+        )
+    }
+
+    private suspend fun resolvePlaybackInternal(request: PlaybackResolveRequest): ResolvedPlayback? {
         val result = fetchPlaybackInfo(
-            itemId = itemId,
-            mediaSourceId = mediaSourceId,
-            startTimeTicks = startTimeTicks,
-            audioStreamIndex = audioStreamIndex,
-            subtitleStreamIndex = subtitleStreamIndex,
-            maxStreamingBitrateBits = maxStreamingBitrateBits,
-            mode = mode,
-            playerType = playerType,
-            liveStreamOption = liveStreamOption,
+            itemId = request.itemId,
+            mediaSourceId = request.mediaSourceId,
+            startTimeTicks = request.startTimeTicks,
+            audioStreamIndex = request.audioStreamIndex,
+            subtitleStreamIndex = request.subtitleStreamIndex,
+            maxStreamingBitrateBits = request.maxStreamingBitrateBits,
+            mode = request.mode,
+            playerType = request.playerType,
+            liveStreamOption = request.liveStreamOption,
         ).getOrNull() ?: return null
 
-        val source = result.mediaSources.firstOrNull { it.id == mediaSourceId }
+        val source = result.mediaSources.firstOrNull { it.id == request.mediaSourceId }
             ?: result.mediaSources.firstOrNull()
             ?: return null
 
         Log.i(
             TAG,
-            "resolvePlayback: mode=$mode, liveOption=$liveStreamOption, " +
+            "resolvePlayback: mode=${request.mode}, liveOption=${request.liveStreamOption}, " +
                 "source=${source.id}, container=${source.container}, " +
                 "directPlay=${source.supportsDirectPlay}, " +
                 "directStream=${source.supportsDirectStream}, " +
@@ -332,9 +410,9 @@ class PlaybackRepositoryImpl(
         val selection = selectPlaybackMethod(source) ?: return null
         val url = when (selection.urlSource) {
             PlaybackUrlSource.LIVE_STREAM ->
-                getStreamUrl(itemId, source.id, startTimeTicks, liveStreamId = source.liveStreamId)
+                getStreamUrl(request.itemId, source.id, request.startTimeTicks, liveStreamId = source.liveStreamId)
             PlaybackUrlSource.STATIC_STREAM ->
-                getStreamUrl(itemId, source.id, startTimeTicks)
+                getStreamUrl(request.itemId, source.id, request.startTimeTicks)
             PlaybackUrlSource.TRANSCODE ->
                 resolveTranscodeUrl(source.transcodeUrl)
         }
@@ -345,7 +423,7 @@ class PlaybackRepositoryImpl(
             streamUrl = url,
             playMethod = selection.playMethod,
             playSessionId = result.playSessionId,
-            maxStreamingBitrate = maxStreamingBitrateBits,
+            maxStreamingBitrate = request.maxStreamingBitrateBits,
             container = source.container,
         )
     }
@@ -410,7 +488,7 @@ class PlaybackRepositoryImpl(
         playbackApiClient.fetchActiveTranscodeReasons(itemId).getOrDefault(emptyList())
 
     override suspend fun getMediaSegments(itemId: String): Result<List<MediaSegment>> =
-        segmentsFetcher.getOrFetchStorable({ homeSession.cacheIdentity() }, itemId) {
+        segmentsCache.getOrFetchStorable(itemId) {
             val segmentsResult = playbackApiClient.getMediaSegments(itemId)
             val segments = segmentsResult.getOrDefault(emptyList())
             if (segments.isNotEmpty()) {
@@ -448,7 +526,7 @@ class PlaybackRepositoryImpl(
         // via SessionCacheRegistry regardless of which identity an entry was
         // keyed under. invalidate() also bumps the epoch, so an in-flight
         // segments fetch cannot re-pin the evicted entry.
-        segmentsFetcher.invalidate(homeSession.cacheIdentitySnapshot(), itemId)
+        segmentsCache.invalidate(homeSession.cacheIdentitySnapshot(), itemId)
     }
 
     override suspend fun getRemoteSubtitles(itemId: String): Result<List<RemoteSubtitleInfo>> =

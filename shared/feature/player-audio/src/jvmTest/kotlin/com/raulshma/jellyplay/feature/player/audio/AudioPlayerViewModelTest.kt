@@ -414,6 +414,12 @@ class AudioPlayerViewModelTest {
     }
 
     @Test
+    fun moveQueueItem_delegatesToManager() {
+        viewModel.onEvent(AudioPlayerUiEvent.MoveQueueItem(fromIndex = 1, toIndex = 3))
+        verify { queueManager.moveQueueItem(1, 3) }
+    }
+
+    @Test
     fun cycleAbLoop_delegatesToManager() {
         viewModel.onEvent(AudioPlayerUiEvent.CycleAbLoop)
         verify { engine.cycleAbLoop() }

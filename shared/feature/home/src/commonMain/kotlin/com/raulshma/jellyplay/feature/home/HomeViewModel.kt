@@ -10,11 +10,11 @@ import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.BookTocCacheRepository
 import com.raulshma.jellyplay.core.data.repository.NoopBookTocCacheRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxEntry
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.HomeFeed
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.repository.SearchHistoryItem
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
-import com.raulshma.jellyplay.core.data.download.DownloadRequestResult
+import com.raulshma.jellyplay.core.data.download.DownloadOutcomeMessenger
 import com.raulshma.jellyplay.core.data.download.QuickDownloadActions
 import com.raulshma.jellyplay.core.ui.message.UiText
 import com.raulshma.jellyplay.feature.home.generated.resources.Res
@@ -57,7 +57,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onSubscription
 import kotlinx.coroutines.flow.onStart
@@ -67,7 +66,7 @@ internal class HomeViewModel(
     private val userDataMutator: UserDataMutator,
     private val mediaSearchEngine: MediaSearchEngine,
     /** Read here only for the offline home's cached-layout mirror (see [offlineHomeGate]). */
-    private val mediaRepository: MediaRepository,
+    private val homeFeed: HomeFeed,
     private val imageUrlProvider: ImageUrlProvider,
     private val photoFolderPrefetcher: PhotoFolderPrefetcher,
     private val downloadIntake: DownloadIntake,
@@ -128,7 +127,7 @@ internal class HomeViewModel(
      * downloads ∪ series ids (a series card flips once any episode of it is
      * downloaded; REMOVE_DOWNLOAD then opens the delete-episodes sheet). Read
      * from the shared [QuickDownloadActions.downloadedIds] flow (same union
-     * contract on [DownloadRepository.observeDownloadedIdsIncludingSeries])
+     * contract on [DownloadRepository.downloadCoverage])
      * that every quick-action host consumes — one eagerly-shared collector
      * serves all screens instead of a per-VM one. Collected unconditionally —
      * unlike [HomeUiState.offlineLibrary], which is gated to offline modes
@@ -235,7 +234,7 @@ internal class HomeViewModel(
         // generic offline rows instead of crashing the gate collector, while a
         // cancelled read still propagates.
         homeLayoutProvider = {
-            runCatchingRethrowingCancellation { mediaRepository.getOfflineHomeLayout()?.sections.orEmpty() }
+            runCatchingRethrowingCancellation { homeFeed.getOfflineHomeLayout()?.sections.orEmpty() }
                 .getOrDefault(emptyList())
         },
         bookTocCacheRepository = bookTocCacheRepository,
@@ -288,19 +287,14 @@ internal class HomeViewModel(
     private val photoFolderChildUrlsStore = PhotoFolderChildUrlsStore(scope, photoFolderPrefetcher)
 
     /**
-     * Per-item slice of the store's cached folder-id → child-image-URLs map.
-     * Lets each photo-folder card
-     * collect only its own urls so a prefetch merge (which produces a new Map
-     * reference) doesn't invalidate the entire home body — only the one card
-     * whose urls changed.
+     * Per-item slice of the store's cached folder-id → child-image-URLs map
+     * ([PhotoFolderChildUrlsStore.childUrlsFor] — the fold lives on the store
+     * now). Lets each photo-folder card collect only its own urls so a
+     * prefetch merge (which produces a new Map reference) doesn't invalidate
+     * the entire home body — only the one card whose urls changed.
      */
     fun photoFolderChildUrlsFor(itemId: String): Flow<List<String>> =
-        photoFolderChildUrlsStore.childUrls
-            .map { it[itemId].orEmpty() }
-            .distinctUntilChanged()
-
-    private fun prefetchPhotoFolderChildUrls(items: List<MediaItem>) =
-        photoFolderChildUrlsStore.prefetch(items)
+        photoFolderChildUrlsStore.childUrlsFor(itemId)
 
     /**
      * All users persisted for the current server. Backs the home app-bar quick
@@ -460,6 +454,10 @@ internal class HomeViewModel(
                         accentColorSwatch = prefs.appearance.accentColorSwatch,
                         performanceMode = prefs.appearance.performanceMode,
                     ),
+                    // The resume-row overlay mirror (quick-action toggle
+                    // resolution reads it; the same snapshot the section
+                    // query rides).
+                    hiddenCwItemIds = prefs.home.hiddenCwItemIds,
                     homeHeroEnabled = prefs.home.homeHeroEnabled,
                     homeBackdropEnabled = prefs.home.homeBackdropEnabled,
                     showClock = prefs.home.showClockOnHome,
@@ -600,6 +598,7 @@ internal class HomeViewModel(
                         discoverSections = refresh.discoverSections,
                         recentlyGrabbed = refresh.recentlyGrabbed,
                         rollingDiscoverRowIds = refresh.rollingDiscoverRowIds,
+                        refreshingSectionIds = refresh.refreshingSectionIds,
                         offlineMode = refresh.offlineMode,
                     )
                 }
@@ -652,6 +651,8 @@ internal class HomeViewModel(
             is HomeUiEvent.SwitchUser -> switchUser(event.userId)
             is HomeUiEvent.MarkItemPlayed -> setItemPlayed(event.item, played = true)
             is HomeUiEvent.MarkItemUnplayed -> setItemPlayed(event.item, played = false)
+            is HomeUiEvent.HideFromContinueWatching -> setHiddenFromContinueWatching(event.itemId, hidden = true)
+            is HomeUiEvent.ShowFromContinueWatching -> setHiddenFromContinueWatching(event.itemId, hidden = false)
             is HomeUiEvent.DeleteOfflineMedia -> deleteOfflineMedia(event.item)
             is HomeUiEvent.RequestSeriesDownload -> seriesDownloadStateHolder.requestSeriesDownload(event.series)
             is HomeUiEvent.LoadSeriesDownloadEpisodes -> seriesDownloadStateHolder.loadSeasonEpisodes(event.seasonId)
@@ -669,7 +670,8 @@ internal class HomeViewModel(
             is HomeUiEvent.MoveSection -> moveSection(event.type, event.up)
             is HomeUiEvent.SetLibrarySectionVisible -> setLibrarySectionVisible(event.libraryId, event.type, event.visible)
             is HomeUiEvent.RollDiscoverRow -> rollDiscoverRow(event.rowId)
-            is HomeUiEvent.PrefetchPhotoFolderChildUrls -> prefetchPhotoFolderChildUrls(event.items)
+            is HomeUiEvent.RefreshSection -> refresher.refreshSectionRow(event.sectionId)
+            is HomeUiEvent.PrefetchPhotoFolderChildUrls -> photoFolderChildUrlsStore.prefetch(event.items)
             is HomeUiEvent.EnsurePendingItemDetails -> ensurePendingItemDetails(event.itemIds)
             is HomeUiEvent.PlaySeries -> resolveSeriesPlay(event)
             is HomeUiEvent.DownloadItem -> downloadItem(event)
@@ -761,30 +763,32 @@ internal class HomeViewModel(
      * Long-press Download from an online home card — non-series items only.
      * Series cards never reach this method: [homeQuickActionEffect]
      * intercepts them and emits [HomeQuickActionEffect.OpenSeriesDownloadSheet]
-     * (the in-place series sheet) instead of StartDownload. Single-stream
-     * items (movie/episode/music track) start inline at the default quality;
-     * other non-inline types (season, album, ...) open the detail screen
-     * plainly via [HomeUiEvent.DownloadItem.onOpenDetail]. Failures surface
-     * on the message bus.
+     * (the in-place series sheet) instead of StartDownload. The outcome
+     * cascade is the shared [QuickDownloadActions.downloadAndReport] fold —
+     * Started/Failed ride [homeDownloadSink]'s home strings, the detail
+     * fallback routes plainly, and `seriesOpensSheet = null` keeps the
+     * unreachable series branch a silent no-op.
      */
     private fun downloadItem(event: HomeUiEvent.DownloadItem) {
         val (item, onOpenDetail) = event
         launch {
-            when (val result = downloadIntake.startFromItem(item)) {
-                DownloadRequestResult.Started ->
-                    userMessageBus.info(
-                        UiText.Resource(Res.string.home_download_started)
-                    )
-                is DownloadRequestResult.NeedsDetailScreen -> onOpenDetail(result.itemId, false)
-                is DownloadRequestResult.Failed ->
-                    userMessageBus.error(
-                        UiText.Resource(Res.string.home_download_start_failed)
-                    )
-                // Unreachable: [homeQuickActionEffect] never emits StartDownload
-                // for a series card. Listed only to keep the sealed `when`
-                // exhaustive — series downloads are handled by the series sheet.
-                is DownloadRequestResult.SeriesSelectionRequired -> Unit
-            }
+            quickDownloadActions.downloadAndReport(
+                item = item,
+                onOpenDetail = onOpenDetail,
+                seriesOpensSheet = null,
+                messenger = homeDownloadSink,
+            )
+        }
+    }
+
+    /** The fold's message sink: this host's exact home strings on the bus. */
+    private val homeDownloadSink = object : DownloadOutcomeMessenger {
+        override fun downloadStarted() {
+            userMessageBus.info(UiText.Resource(Res.string.home_download_started))
+        }
+
+        override fun downloadStartFailed() {
+            userMessageBus.error(UiText.Resource(Res.string.home_download_start_failed))
         }
     }
 
@@ -813,6 +817,19 @@ internal class HomeViewModel(
                 mode = UserDataMutator.FlipMode.Optimistic,
                 containers = listOf(sectionItemContainer),
             )
+        }
+    }
+
+    /**
+     * Quick-action hide/un-hide of a resume-row item: the home store's own
+     * write (the same seam the detail ⋮ menu's toggle uses). The prefs
+     * collector above re-filters the rows off the changed snapshot — the
+     * card leaves the row without an explicit refresh — and the hidden set
+     * roams via the `cw` sync namespace (ADR 0011).
+     */
+    private fun setHiddenFromContinueWatching(itemId: String, hidden: Boolean) {
+        launch {
+            if (hidden) prefs.homeDiscovery.hideCwItem(itemId) else prefs.homeDiscovery.unhideCwItem(itemId)
         }
     }
 

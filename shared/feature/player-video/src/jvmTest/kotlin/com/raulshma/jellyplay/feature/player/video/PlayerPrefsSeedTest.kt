@@ -9,6 +9,7 @@ import com.raulshma.jellyplay.core.model.MediaSegment
 import com.raulshma.jellyplay.core.model.MediaSegmentType
 import com.raulshma.jellyplay.core.model.OrientationMode
 import com.raulshma.jellyplay.core.model.PlaybackMode
+import com.raulshma.jellyplay.core.model.PlayerInputDefaults
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.RefreshRateMode
 import com.raulshma.jellyplay.core.model.SegmentBehavior
@@ -19,6 +20,7 @@ import com.raulshma.jellyplay.feature.player.video.state.AutoplayState
 import com.raulshma.jellyplay.feature.player.video.state.EpisodeBrowserState
 import com.raulshma.jellyplay.feature.player.video.state.GesturePrefsState
 import com.raulshma.jellyplay.feature.player.video.state.PlayerUiPrefsState
+import com.raulshma.jellyplay.feature.player.video.state.PlayerInputGates
 import com.raulshma.jellyplay.feature.player.video.state.SegmentState
 import com.raulshma.jellyplay.feature.player.video.state.VideoFxState
 import kotlin.test.Test
@@ -31,7 +33,7 @@ import kotlin.test.assertTrue
  * Pins the [PlayerPrefsSeed] aggregate → uiState mapping: which pref feeds
  * which seeded uiState leaf at session-load time. Extracted from
  * [SessionLoadPipeline]'s inline `onPrefsProjected { copy(...) }`; these tests
- * make the 30-leaf inventory explicit so a leaf cannot silently move, drop, or
+ * make the 32-leaf inventory explicit so a leaf cannot silently move, drop, or
  * change default without this file noticing (the change-time counterpart of
  * the same vocabulary lives in [SettingsProjector]).
  *
@@ -77,6 +79,7 @@ class PlayerPrefsSeedTest {
             defaultSpeed = 0.5f,
             swipeSeekMaxMs = 90_000L,
             seekDurationMs = 5_000L,
+            doubleTapHoldSeekEnabled = true,
             rememberBrightness = true,
             brightnessLevel = 0.1f,
             gestureIndicatorSide = GestureIndicatorSide.OPPOSITE,
@@ -136,6 +139,7 @@ class PlayerPrefsSeedTest {
         videoPlayer = VideoPlayerSlice(
             videoDefaultOrientation = OrientationMode.LOCKED_PORTRAIT,
             videoControlsTimeoutMs = 7_500L,
+            videoHideOsdOnPause = true,
             videoPassOutProtectionHours = 6,
             trickplayEnabled = false,
             trickplayOnSeekGesture = false,
@@ -143,6 +147,13 @@ class PlayerPrefsSeedTest {
             showClockInPlayer = true,
             showTimeRemaining = true,
             videoGestureMode = GestureMode.NONE,
+            videoDoubleTapHoldSeekEnabled = false,
+            // The slice carries the mapping consistent with its mode — what
+            // the store's derived read / atomic preset write always produce.
+            videoInputBindings = PlayerInputDefaults.applyGestureModePreset(
+                PlayerInputDefaults.defaultMap(),
+                GestureMode.NONE,
+            ),
             videoHoldSpeedEnabled = false,
             videoHoldSpeedMultiplier = 3.0f,
             videoDefaultSpeed = 1.25f,
@@ -174,16 +185,17 @@ class PlayerPrefsSeedTest {
     // ── Full-leaf inventory ──────────────────────────────────────────────────
 
     @Test
-    fun representativeAggregate_seedsAllThirtyLeaves_exactly() {
+    fun representativeAggregate_seedsAllThirtyTwoLeaves_exactly() {
         val base = baseState()
         val seeded = seed(representativeAgg())(base)
 
         // root (1)
         assertEquals(PlayerType.MPV, seeded.preferredPlayerType)
 
-        // uiPrefs (12)
+        // uiPrefs (13)
         assertEquals(OrientationMode.LOCKED_PORTRAIT, seeded.uiPrefs.defaultOrientation)
         assertEquals(7_500L, seeded.uiPrefs.controlsTimeoutMs)
+        assertTrue(seeded.uiPrefs.hideOsdOnPause)
         assertEquals(6, seeded.uiPrefs.passOutProtectionHours)
         assertFalse(seeded.uiPrefs.trickplayEnabled)
         assertFalse(seeded.uiPrefs.trickplayOnSeekGesture)
@@ -195,11 +207,15 @@ class PlayerPrefsSeedTest {
         assertTrue(seeded.uiPrefs.adaptiveBitrateEnabled)
         assertEquals(PlaybackMode.FORCE_DIRECT_PLAY, seeded.uiPrefs.playbackMode)
 
-        // gestures (12)
+        // gestures (13 + the input mapping)
         val g = seeded.gestures
-        assertFalse(g.tapGesturesEnabled)
-        assertFalse(g.swipeGesturesEnabled)
+        val gates = PlayerInputGates.of(g.inputMap)
+        assertFalse(gates.tap, "NONE-mode mapping seeds every touch row disabled")
+        assertFalse(gates.swipeBrightness)
+        assertFalse(gates.swipeVolume)
+        assertFalse(gates.swipeSeek)
         assertFalse(g.holdSpeedEnabled)
+        assertFalse(g.doubleTapHoldSeekEnabled)
         assertEquals(3.0f, g.holdSpeedMultiplier, 0.0001f)
         assertEquals(1.25f, g.defaultSpeed, 0.0001f)
         assertEquals(60_000L, g.swipeSeekMaxMs)
@@ -326,13 +342,20 @@ class PlayerPrefsSeedTest {
                 videoGestureMode = GestureMode.NONE,
                 videoHoldSpeedEnabled = false,
                 videoAutoplayNext = false,
+                videoInputBindings = PlayerInputDefaults.applyGestureModePreset(
+                    PlayerInputDefaults.defaultMap(),
+                    GestureMode.NONE,
+                ),
             ),
         )
 
         val seeded = seed(agg)(baseState())
 
-        assertFalse(seeded.gestures.tapGesturesEnabled)
-        assertFalse(seeded.gestures.swipeGesturesEnabled)
+        val gates = PlayerInputGates.of(seeded.gestures.inputMap)
+        assertFalse(gates.tap)
+        assertFalse(gates.swipeBrightness)
+        assertFalse(gates.swipeVolume)
+        assertFalse(gates.swipeSeek)
         assertFalse(seeded.gestures.holdSpeedEnabled)
         assertFalse(seeded.autoplay.videoAutoplayNext)
         assertEquals(PlaybackMode.FORCE_DIRECT_PLAY, seeded.uiPrefs.playbackMode)
@@ -342,13 +365,22 @@ class PlayerPrefsSeedTest {
     @Test
     fun tapOnlyMode_seedsTapOnSwipeOff() {
         val agg = VideoPlayerAggregate(
-            videoPlayer = VideoPlayerSlice(videoGestureMode = GestureMode.TAP_ONLY),
+            videoPlayer = VideoPlayerSlice(
+                videoGestureMode = GestureMode.TAP_ONLY,
+                videoInputBindings = PlayerInputDefaults.applyGestureModePreset(
+                    PlayerInputDefaults.defaultMap(),
+                    GestureMode.TAP_ONLY,
+                ),
+            ),
         )
 
         val seeded = seed(agg)(baseState())
 
-        assertTrue(seeded.gestures.tapGesturesEnabled, "TAP_ONLY keeps the tap tier")
-        assertFalse(seeded.gestures.swipeGesturesEnabled, "TAP_ONLY kills the swipe tier")
+        val gates = PlayerInputGates.of(seeded.gestures.inputMap)
+        assertTrue(gates.tap, "TAP_ONLY keeps the tap tier")
+        assertFalse(gates.swipeBrightness, "TAP_ONLY kills the swipe tier")
+        assertFalse(gates.swipeVolume, "TAP_ONLY kills the swipe tier")
+        assertFalse(gates.swipeSeek, "TAP_ONLY kills the swipe tier")
     }
 
     @Test
@@ -369,8 +401,9 @@ class PlayerPrefsSeedTest {
 
         val seeded = seed(agg)(offReceiver)
 
-        assertTrue(seeded.gestures.tapGesturesEnabled)
-        assertTrue(seeded.gestures.swipeGesturesEnabled)
+        val gates = PlayerInputGates.of(seeded.gestures.inputMap)
+        assertTrue(gates.tap)
+        assertTrue(gates.swipeBrightness && gates.swipeVolume && gates.swipeSeek)
         assertTrue(seeded.gestures.holdSpeedEnabled)
         assertTrue(seeded.autoplay.videoAutoplayNext)
         assertEquals(PlaybackMode.AUTO, seeded.uiPrefs.playbackMode)

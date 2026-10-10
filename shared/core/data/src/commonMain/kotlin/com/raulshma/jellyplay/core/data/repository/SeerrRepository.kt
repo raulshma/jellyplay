@@ -62,31 +62,44 @@ interface SeerrRepository {
      */
     suspend fun getServiceDetail(id: Int, kind: ArrServiceKind): Result<SeerrServiceDetail>
 
-    fun isConnected(): Flow<Boolean>
-
-    fun isEnabled(): Flow<Boolean>
-
-    fun isSearchEnabled(): Flow<Boolean>
-
-    fun isRecommendationsEnabled(): Flow<Boolean>
-
-    fun isDiscoverEnabled(): Flow<Boolean>
-
-    fun getPreferences(): Flow<SeerrPreferences>
+    /**
+     * The one Seerr preference store flow, warm from the moment the impl
+     * singleton is materialised (the backing store shares Eagerly). The six
+     * boolean lenses this used to carry — `isConnected`, `isEnabled`,
+     * `isSearchEnabled`, `isRecommendationsEnabled`, `isDiscoverEnabled`,
+     * `isAdmin` — folded onto it: every one was a `.map` over this flow (or
+     * over [currentUser], for `isAdmin`), so consumers now derive
+     * (`preferences.map { it.serverUrl.isNotBlank() }` for the old
+     * `isConnected`, `.map { it.enabled }` for `isEnabled`, etc.) with the
+     * same initial-value/timing semantics as before.
+     */
+    val preferences: StateFlow<SeerrPreferences>
 
     // ── Discover endpoints ──
 
     suspend fun getTrending(page: Int = 1): Result<List<SeerrSearchItem>>
 
+    /**
+     * One `/discover/movies` page. The release-date lower bound rides the
+     * [params][SeerrDiscoverParams] bundle's `releaseDateGte` (the former
+     * standalone `primaryReleaseDateGte` parameter folded in — the wire path
+     * builder already treated the two as one bound via
+     * `explicitGte ?: params.releaseDateGte`, so callers passing the bound
+     * through [SeerrDiscoverParams] produce byte-identical requests; the
+     * year-window fold's "explicit wins" precedence is unchanged, with the
+     * bundle's bound simply always being the explicit one).
+     */
     suspend fun getDiscoverMovies(
         page: Int = 1,
-        primaryReleaseDateGte: String? = null,
         params: com.raulshma.jellyplay.core.model.seerr.SeerrDiscoverParams? = null,
     ): Result<List<SeerrSearchItem>>
 
+    /**
+     * [getDiscoverMovies]' TV twin — the bundle's `releaseDateGte` folds onto
+     * the wire's `firstAirDateGte` bound (same precedence rule as there).
+     */
     suspend fun getDiscoverTv(
         page: Int = 1,
-        firstAirDateGte: String? = null,
         params: com.raulshma.jellyplay.core.model.seerr.SeerrDiscoverParams? = null,
     ): Result<List<SeerrSearchItem>>
 
@@ -116,8 +129,6 @@ interface SeerrRepository {
     suspend fun getRequestCount(): Result<SeerrRequestCount>
 
     suspend fun getCurrentUser(): Result<SeerrCurrentUser>
-
-    fun isAdmin(): Flow<Boolean>
 
     val currentUser: StateFlow<SeerrCurrentUser?>
 

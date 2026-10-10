@@ -4,6 +4,7 @@ import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue
 import com.raulshma.jellyplay.feature.home.testutil.FakeTimeSource
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueSnapshot
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
+import com.raulshma.jellyplay.core.data.download.DownloadOutcomeMessenger
 import com.raulshma.jellyplay.core.data.download.DownloadRequestResult
 import com.raulshma.jellyplay.core.data.download.QuickDownloadActions
 import com.raulshma.jellyplay.core.data.download.SeriesEpisodeDownloads
@@ -11,12 +12,13 @@ import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
 import com.raulshma.jellyplay.core.data.repository.NoopBookTocCacheRepository
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.HomeFeed
 import com.raulshma.jellyplay.core.data.repository.OfflineFirstItemResolver
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxRepository
 import com.raulshma.jellyplay.core.data.repository.AppliedMutation
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
+import com.raulshma.jellyplay.core.data.repository.UserDataChanges
 import com.raulshma.jellyplay.core.data.repository.UserDataContainer
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.data.search.MediaSearchEngine
@@ -125,7 +127,8 @@ class HomeViewModelEventsTest {
 
     private val mainDispatcher = StandardTestDispatcher()
 
-    private lateinit var mediaRepository: MediaRepository
+    private lateinit var homeFeed: HomeFeed
+    private lateinit var userDataChanges: UserDataChanges
     private lateinit var episodeCatalogue: EpisodeCatalogue
     private lateinit var userDataMutator: RecordingUserDataMutator
     private lateinit var imageUrlProvider: ImageUrlProvider
@@ -200,7 +203,8 @@ class HomeViewModelEventsTest {
     @BeforeTest
     fun setUp() {
         Dispatchers.setMain(mainDispatcher)
-        mediaRepository = mockk(relaxed = true)
+        homeFeed = mockk(relaxed = true)
+        userDataChanges = mockk(relaxed = true)
         episodeCatalogue = mockk(relaxed = true)
         userDataMutator = RecordingUserDataMutator()
         imageUrlProvider = mockk(relaxed = true)
@@ -209,6 +213,23 @@ class HomeViewModelEventsTest {
         downloadIntake = mockk(relaxed = true)
         quickDownloadActions = mockk(relaxed = true)
         every { quickDownloadActions.downloadedIds } returns MutableStateFlow(emptySet())
+        // The VM folds download outcomes through downloadAndReport (the shared
+        // cascade); mirror the real fold over the mocked intake so the
+        // per-test downloadIntake.startFromItem stubs keep driving it.
+        coEvery {
+            quickDownloadActions.downloadAndReport(any(), any(), any(), any())
+        } coAnswers {
+            val onOpenDetail = secondArg<(String, Boolean) -> Unit>()
+            val seriesOpensSheet = thirdArg<Boolean?>()
+            val messenger = arg<DownloadOutcomeMessenger?>(3)
+            when (val result = downloadIntake.startFromItem(firstArg())) {
+                DownloadRequestResult.Started -> messenger?.downloadStarted()
+                is DownloadRequestResult.SeriesSelectionRequired ->
+                    if (seriesOpensSheet != null) onOpenDetail(result.seriesId, seriesOpensSheet)
+                is DownloadRequestResult.NeedsDetailScreen -> onOpenDetail(result.itemId, false)
+                is DownloadRequestResult.Failed -> messenger?.downloadStartFailed()
+            }
+        }
         userMessageBus = mockk(relaxed = true)
         offlineRepository = mockk(relaxed = true)
         offlineModeManager = mockk(relaxed = true)
@@ -237,7 +258,7 @@ class HomeViewModelEventsTest {
 
         every { authRepository.currentUser } returns userFlow
         every { sessionApiClient.session } returns sessionFlow
-        every { mediaRepository.userDataChanges } returns userDataEvents
+        every { userDataChanges.userDataChanges } returns userDataEvents
         every { homeDiscoveryStore.homeDiscovery } returns homeDiscoveryFlow
         every { appearanceStore.appearance } returns appearanceFlow
         every { experimentalStore.experimental } returns experimentalFlow
@@ -249,7 +270,7 @@ class HomeViewModelEventsTest {
         every { offlineModeManager.goingOnline } returns goingOnlineFlow
         every { offlineRepository.getOfflineLibrary() } returns flowOf(emptyList())
         every { offlineRepository.getOfflineEpisodes() } returns flowOf(emptyList())
-        coEvery { mediaRepository.getOfflineHomeLayout() } returns null
+        coEvery { homeFeed.getOfflineHomeLayout() } returns null
         every { newsletterTriggerManager.shouldShowBanner() } returns flowOf(false)
     }
 
@@ -262,7 +283,7 @@ class HomeViewModelEventsTest {
         episodeCatalogue = episodeCatalogue,
         userDataMutator = userDataMutator,
         mediaSearchEngine = mediaSearchEngine,
-        mediaRepository = mediaRepository,
+        homeFeed = homeFeed,
         imageUrlProvider = imageUrlProvider,
         photoFolderPrefetcher = photoFolderPrefetcher,
         downloadIntake = downloadIntake,
@@ -285,7 +306,8 @@ class HomeViewModelEventsTest {
         settingsSearchProvider = fakeSettingsSearchProvider,
         homeRefresherFactory = HomeRefresherFactory(
             clock = fakeTimeSource,
-            mediaRepository = mediaRepository,
+            homeFeed = homeFeed,
+            userDataChanges = userDataChanges,
             seerrRepository = seerrRepository,
             arrRepository = arrRepository,
             orderHomeSections = OrderHomeSectionsUseCase(),
@@ -335,7 +357,7 @@ class HomeViewModelEventsTest {
             filters = LibraryFilters(mediaTypes = listOf(MediaType.MOVIE), sortBy = SortOption.RANDOM),
         )
         homeDiscoveryFlow.value = HomeDiscoverySlice(discoverRows = listOf(row))
-        coEvery { mediaRepository.getHomeSections(any()) } returns Result.success(
+        coEvery { homeFeed.getHomeSections(any(), any()) } returns Result.success(
             HomeSectionsResult(
                 sections = listOf(
                     HomeSection(
@@ -356,7 +378,7 @@ class HomeViewModelEventsTest {
         )
 
         val rolled = listOf(item("r9"), item("r4"))
-        coEvery { mediaRepository.rerollDiscoverRow(row) } returns Result.success(rolled)
+        coEvery { homeFeed.rerollDiscoverRow(row) } returns Result.success(rolled)
 
         viewModel.onEvent(HomeUiEvent.RollDiscoverRow(row.id))
         runCurrent()
@@ -372,14 +394,14 @@ class HomeViewModelEventsTest {
         // The cache choreography is the repository's now (rerollDiscoverRow
         // owns invalidate → fetch → seed); the end-to-end pin here is that the
         // roll reached it exactly once.
-        coVerify(exactly = 1) { mediaRepository.rerollDiscoverRow(row) }
+        coVerify(exactly = 1) { homeFeed.rerollDiscoverRow(row) }
     }
 
     @Test
     fun rollDiscoverRow_failedFetch_keepsItems_andToasts() = vmTest {
         val row = DiscoverRowConfig(id = "dr_x", title = "Random Surprise")
         homeDiscoveryFlow.value = HomeDiscoverySlice(discoverRows = listOf(row))
-        coEvery { mediaRepository.getHomeSections(any()) } returns Result.success(
+        coEvery { homeFeed.getHomeSections(any(), any()) } returns Result.success(
             HomeSectionsResult(
                 sections = listOf(
                     HomeSection(
@@ -395,7 +417,7 @@ class HomeViewModelEventsTest {
         signIn("u1")
         runCurrent()
 
-        coEvery { mediaRepository.rerollDiscoverRow(row) } returns
+        coEvery { homeFeed.rerollDiscoverRow(row) } returns
             Result.failure(RuntimeException("server hiccup"))
 
         viewModel.onEvent(HomeUiEvent.RollDiscoverRow(row.id))
@@ -417,7 +439,7 @@ class HomeViewModelEventsTest {
     @Test
     fun markItemUnplayed_carriesPlayedFalse_andFlipsEverySectionOccurrence() = vmTest {
         val shared = item("cw1").copy(isPlayed = true)
-        coEvery { mediaRepository.getHomeSections(any()) } returns Result.success(
+        coEvery { homeFeed.getHomeSections(any(), any()) } returns Result.success(
             HomeSectionsResult(
                 sections = listOf(
                     section(HomeSectionType.CONTINUE_WATCHING, listOf(shared)),

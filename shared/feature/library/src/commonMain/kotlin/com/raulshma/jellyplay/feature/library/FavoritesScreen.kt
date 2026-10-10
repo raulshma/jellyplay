@@ -27,6 +27,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -92,7 +93,6 @@ internal fun FavoritesScreen(
     val adaptiveInfo = LocalAdaptiveInfo.current
     val mediaTypeFilter by viewModel.mediaTypeFilter.collectAsStateWithLifecycle()
     val pagingItems = viewModel.pagedItems.collectAsLazyPagingItems()
-    val photoFolderChildUrls by viewModel.photoFolderChildUrls.collectAsStateWithLifecycle()
 
     DeferredRefreshEffect(viewModel.deferredRefresher)
 
@@ -206,12 +206,20 @@ internal fun FavoritesScreen(
                     }
                 },
             ) { item, itemModifier ->
+                // Per-item collection: only photo-folder cards subscribe, and
+                // only the affected card recomposes on a prefetch merge.
+                val photoFolderChildImageUrls by if (item.mediaType == MediaType.PHOTO_FOLDER) {
+                    remember(item.id) { viewModel.photoFolderChildUrlsFor(item.id) }
+                        .collectAsStateWithLifecycle(emptyList())
+                } else {
+                    remember { mutableStateOf(emptyList()) }
+                }
                 PosterCard(
                     item = item,
                     imageUrl = remember(item.id) { viewModel.getImageUrl(item.id) },
                     blurHash = item.blurHashes.primary,
                     onClick = { onItemClick(item.id, item.mediaType, item.parentId, item.name) },
-                    photoFolderChildImageUrls = photoFolderChildUrls[item.id].orEmpty(),
+                    photoFolderChildImageUrls = photoFolderChildImageUrls,
                     modifier = itemModifier,
                 )
             }

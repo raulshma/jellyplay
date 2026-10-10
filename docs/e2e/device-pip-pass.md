@@ -1,6 +1,6 @@
 # PiP entry/exit on a physical phone — device pass result (wave 21, PARTIAL)
 
-**Verdict: PARTIAL — PiP ENTRY verified; EXPAND and DISMISS not completed.**
+**Result: PARTIAL — PiP ENTRY verified; EXPAND and DISMISS not completed.**
 On the Nokia 6.1 Plus (Android 14 / API 34), during video playback in
 `PlayerActivity`, pressing HOME entered system picture-in-picture reliably:
 the task report flipped to `mode=pinned`, the pinned window rendered at
@@ -11,7 +11,7 @@ device: the wave-21 round was cut short there by directive, and those steps
 of the script remain unexercised. `tools/e2e/device-pip-pass.sh` is
 committed in full for the next run; it encodes the measured menu geometry
 and the retry logic around the two-sided expand-timing race, plus one bug
-fix from this round's review (a duplicated unconditional `tap_node "Play"`
+fix made this round (a duplicated unconditional `tap_node "Play"`
 after the details/quick-start branch that would have fail-exited the
 quick-started-playback path).
 
@@ -48,7 +48,8 @@ surfaced two P0 crashes, both now fixed and committed (full accounts in
    the APK shipped `Res` accessors with no backing assets;
    `MissingResourceException` on the first string read. Fix:
    `androidResources { enable = true }` across core:ui + the 22 shared
-   feature modules (APK now ships 24 modules × 9-locale `.cvr` sets).
+   feature modules (since moved into the `KmpLibraryBasePlugin` convention
+   plugin) — the APK now ships 24 modules × 9-locale `.cvr` sets.
 
 ## Verified evidence (entry)
 
@@ -89,7 +90,7 @@ asserting `dumpsys` state at every step and dropping evidence into
 `tools/e2e/.results/device-pip/`. Preconditions: unlocked debuggable phone,
 healthy `bootstrap-jellyfin.sh` fixture, ffmpeg. Two edits made while
 committing it this round: the header no longer claims a verified full-lane
-verdict (this doc is the record), and the duplicated `tap_node "Play"`
+result (this doc is the record), and the duplicated `tap_node "Play"`
 line after the details/quick-start `fi` was removed — in the quick-start
 branch (card tap starts playback directly) there is no details-screen Play
 button, so the stray tap would have failed a run that was already playing.

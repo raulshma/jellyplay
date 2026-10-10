@@ -132,6 +132,11 @@ internal fun DesktopAppRoot(
     // refreshes whatever pull-to-refresh screen is active — not just Home —
     // and is silently dropped when the current screen has no refresh action.
     menuRefreshRequests: kotlinx.coroutines.flow.Flow<Unit> = kotlinx.coroutines.flow.emptyFlow(),
+    //  open-with: Main.kt's pending link-open holder (argv seed +
+    // Ctrl+Shift+V clipboard accelerator + the second-instance forward
+    // watcher all write into it). Passed through to the scaffold, whose
+    // drain effect navigates parsed targets and snackbars the misses.
+    linkOpens: DesktopLinkOpenQueue? = null,
 ) {
     // Direct Koin reads — NOT the DesktopShellServices holder: this pre-scaffold window (splash /
     // sign-in) composes BEFORE that holder can exist — the composition-order contract on
@@ -232,6 +237,15 @@ internal fun DesktopAppRoot(
         // is registered as the polymorphic NavKey default (see
         // desktopNavSavedStateConfiguration in DesktopRail.kt).
         !isAuthenticated -> {
+            //  open-with boundary: while signed out the pending link
+            // queue has nowhere to route (every destination needs a session)
+            // and this branch has no snackbar surface, so its events are
+            // DISCARDED — draining here (instead of leaving them queued)
+            // keeps a pre-sign-in paste from replaying stale feedback into
+            // the signed-in scaffold after auth.
+            LaunchedEffect(linkOpens) {
+                linkOpens?.pending?.collect { /* discarded: no session, no surface */ }
+            }
             SignedOutAuthHost(
                 savedStateConfiguration = desktopNavSavedStateConfiguration(),
                 content = { authNavigator, backStackDepth, display ->
@@ -259,6 +273,7 @@ internal fun DesktopAppRoot(
         else -> DesktopNavScaffold(
             menuRefreshRequests = menuRefreshRequests,
             windowRef = windowRef,
+            linkOpens = linkOpens,
         )
     }
 

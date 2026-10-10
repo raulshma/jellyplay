@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.player.video
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
+import androidx.compose.animation.scaleIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -16,6 +17,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -61,76 +63,90 @@ import com.raulshma.jellyplay.feature.player.video.generated.resources.player_vi
 /** Trickplay thumbnail offset above the bottom controls. */
 private const val TRICKPLAY_THUMB_BOTTOM_CLEARANCE_DP = 120
 
+/**
+ * Input bundle for [PlayerCenterOverlayTier] (the [com.raulshma.jellyplay.feature.player.video.components.PlayerEffectsControls]
+ * idiom): the 22 values the center overlays read — the gesture-trickplay and
+ * seek feeds, the intro/segment-skip/up-next family with their TV focus
+ * anchors, and the playback-context flags — riding one `@Immutable` carrier.
+ * The call wall remembers it on exactly these fields, so the bundle instance
+ * is equal across recompositions and the tier keeps skipping until a value it
+ * actually renders flips.
+ */
+@Immutable
+internal data class CenterOverlayInputs(
+    val trickplayOnSeekGesture: Boolean,
+    val gestureTrickplayVisible: Boolean,
+    val gestureTrickplayBitmap: PlatformBitmap?,
+    val gestureSeekPositionMs: Long,
+    val gestureDeltaMs: Long,
+    val durationMs: Long,
+    val isCinemaIntroVisible: Boolean,
+    val tvCinemaIntroFocusRequester: FocusRequester,
+    val activeSegment: MediaSegment?,
+    val activeSegmentBehavior: SegmentBehavior?,
+    val shouldShowUpNext: Boolean,
+    val isInPipMode: Boolean,
+    val tvSkipSegmentFocusRequester: FocusRequester,
+    val nextEpisode: MediaItem?,
+    val nextEpisodeImageUrl: String?,
+    val isNextEpisodeLoading: Boolean,
+    val tvNextEpisodeFocusRequester: FocusRequester,
+    val isPlaying: Boolean,
+    val isSheetOpen: Boolean,
+    val isScreenLocked: Boolean,
+    val playbackIntended: Boolean,
+    /** The "Still watching?" confirm state; null = hidden (feature 1.3). */
+    val stillWatchingPrompt: StillWatchingPromptState?,
+)
+
 /** Center/anchored overlays: gesture trickplay, intro/segment skip, skipped notice, up-next, HDR badge, buffering spinner. */
 @Composable
 internal fun BoxScope.PlayerCenterOverlayTier(
     viewModel: VideoPlayerViewModel,
     uiState: VideoPlayerUiState,
-    trickplayOnSeekGesture: Boolean,
-    gestureTrickplayVisible: Boolean,
-    gestureTrickplayBitmap: PlatformBitmap?,
-    gestureSeekPositionMs: Long,
-    gestureDeltaMs: Long,
-    durationMs: Long,
-    isCinemaIntroVisible: Boolean,
-    tvCinemaIntroFocusRequester: FocusRequester,
+    inputs: CenterOverlayInputs,
     performConfirmHaptic: () -> Unit,
-    activeSegment: MediaSegment?,
-    activeSegmentBehavior: SegmentBehavior?,
-    shouldShowUpNext: Boolean,
-    isInPipMode: Boolean,
-    tvSkipSegmentFocusRequester: FocusRequester,
-    nextEpisode: MediaItem?,
-    nextEpisodeImageUrl: String?,
-    isNextEpisodeLoading: Boolean,
-    tvNextEpisodeFocusRequester: FocusRequester,
-    isPlaying: Boolean,
-    isSheetOpen: Boolean,
-    isScreenLocked: Boolean,
-    playbackIntended: Boolean,
-    /** The "Still watching?" confirm state; null = hidden (feature 1.3). */
-    stillWatchingPrompt: StillWatchingPromptState?,
 ) {
     // Trickplay overlay for seek gestures
     AnimatedVisibility(
-        visible = trickplayOnSeekGesture && gestureTrickplayVisible,
+        visible = inputs.trickplayOnSeekGesture && inputs.gestureTrickplayVisible,
         enter = fadeIn(tween(150, easing = AlphaEasing)),
         exit = fadeOut(tween(200, easing = AlphaEasing)),
         modifier = Modifier.align(Alignment.Center),
     ) {
         TrickplayOverlay(
-            bitmap = gestureTrickplayBitmap,
-            positionMs = gestureSeekPositionMs,
-            deltaMs = gestureDeltaMs,
-            durationMs = durationMs,
+            bitmap = inputs.gestureTrickplayBitmap,
+            positionMs = inputs.gestureSeekPositionMs,
+            deltaMs = inputs.gestureDeltaMs,
+            durationMs = inputs.durationMs,
         )
     }
 
-    if (isCinemaIntroVisible) {
+    if (inputs.isCinemaIntroVisible) {
         IntroSkipOverlay(
             isVisible = true,
             onSkip = {
                 viewModel.onEvent(VideoPlayerUiEvent.SkipIntro)
                 performConfirmHaptic()
             },
-            focusRequester = tvCinemaIntroFocusRequester,
+            focusRequester = inputs.tvCinemaIntroFocusRequester,
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .padding(bottom = 100.dp, end = 40.dp),
         )
     }
 
-    if (activeSegment != null && activeSegmentBehavior == SegmentBehavior.SHOW_BUTTON && !isInPipMode) {
-        val hideForUpNext = activeSegment.type == com.raulshma.jellyplay.core.model.MediaSegmentType.OUTRO && shouldShowUpNext
+    if (inputs.activeSegment != null && inputs.activeSegmentBehavior == SegmentBehavior.SHOW_BUTTON && !inputs.isInPipMode) {
+        val hideForUpNext = inputs.activeSegment.type == com.raulshma.jellyplay.core.model.MediaSegmentType.OUTRO && inputs.shouldShowUpNext
         if (!hideForUpNext) {
             SegmentSkipOverlay(
                 isVisible = true,
-                segmentType = activeSegment.type,
+                segmentType = inputs.activeSegment.type,
                 onSkip = {
-                    viewModel.onEvent(VideoPlayerUiEvent.SkipSegment(activeSegment))
+                    viewModel.onEvent(VideoPlayerUiEvent.SkipSegment(inputs.activeSegment))
                     performConfirmHaptic()
                 },
-                focusRequester = tvSkipSegmentFocusRequester,
+                focusRequester = inputs.tvSkipSegmentFocusRequester,
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(bottom = 100.dp, end = 40.dp),
@@ -169,25 +185,25 @@ internal fun BoxScope.PlayerCenterOverlayTier(
         }
     }
 
-    if (nextEpisode != null) {
+    if (inputs.nextEpisode != null) {
         // The confirm overlay suppresses the up-next card while visible —
         // the answer decides the advance, the card must not race it.
         NextEpisodeOverlay(
-            isVisible = shouldShowUpNext && stillWatchingPrompt == null,
-            episodeTitle = nextEpisode.name,
-            seriesName = nextEpisode.seriesName,
-            seasonNumber = nextEpisode.seasonNumber,
-            episodeNumber = nextEpisode.episodeNumber,
-            thumbnailUrl = nextEpisodeImageUrl,
+            isVisible = inputs.shouldShowUpNext && inputs.stillWatchingPrompt == null,
+            episodeTitle = inputs.nextEpisode.name,
+            seriesName = inputs.nextEpisode.seriesName,
+            seasonNumber = inputs.nextEpisode.seasonNumber,
+            episodeNumber = inputs.nextEpisode.episodeNumber,
+            thumbnailUrl = inputs.nextEpisodeImageUrl,
             countdownSeconds = uiState.autoplay.autoPlayCountdownSec,
             autoplayEnabled = uiState.autoplay.videoAutoplayNext,
             onPlayNext = { viewModel.onEvent(VideoPlayerUiEvent.PlayNextEpisode) },
             onCancel = { viewModel.onEvent(VideoPlayerUiEvent.CancelAutoplay) },
             onToggleAutoplay = { viewModel.onEvent(VideoPlayerUiEvent.SetVideoAutoplayNext(!uiState.autoplay.videoAutoplayNext)) },
-            isPlaying = isPlaying,
-            pauseCountdown = isSheetOpen || isScreenLocked,
-            isLoading = isNextEpisodeLoading,
-            focusRequester = tvNextEpisodeFocusRequester,
+            isPlaying = inputs.isPlaying,
+            pauseCountdown = inputs.isSheetOpen || inputs.isScreenLocked,
+            isLoading = inputs.isNextEpisodeLoading,
+            focusRequester = inputs.tvNextEpisodeFocusRequester,
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .padding(bottom = 40.dp, end = 40.dp),
@@ -198,11 +214,11 @@ internal fun BoxScope.PlayerCenterOverlayTier(
     // card; the countdown reuses the card's pauseCountdown hook so a sheet or
     // the screen lock doesn't rush the answer, and expiry lands as Stop.
     StillWatchingOverlay(
-        state = stillWatchingPrompt,
+        state = inputs.stillWatchingPrompt,
         onContinue = { viewModel.onEvent(VideoPlayerUiEvent.StillWatchingContinue) },
         onStop = { viewModel.onEvent(VideoPlayerUiEvent.StillWatchingStop) },
         onTick = { viewModel.onEvent(VideoPlayerUiEvent.StillWatchingTick) },
-        pauseCountdown = isSheetOpen || isScreenLocked,
+        pauseCountdown = inputs.isSheetOpen || inputs.isScreenLocked,
         modifier = Modifier.align(Alignment.Center),
     )
 
@@ -214,13 +230,20 @@ internal fun BoxScope.PlayerCenterOverlayTier(
             .padding(top = 16.dp, end = 16.dp),
     )
 
-    if (uiState.isBuffering && uiState.playerError == null && !isPlaying && playbackIntended) {
-        Box(
-            modifier = Modifier.align(Alignment.Center),
-            contentAlignment = Alignment.Center,
-        ) {
-            JellyPlayLoadingIndicator(color = playerOnScrim())
-        }
+    // Buffering spinner fades/scales in and out — an abrupt pop mid-playback
+    // reads as a glitch, especially at seek boundaries where it toggles fast.
+    val bufferingVisible = uiState.isBuffering && uiState.playerError == null && !inputs.isPlaying && inputs.playbackIntended
+    val bufferingFade = MaterialTheme.motionScheme.fastEffectsSpec<Float>()
+    val bufferingScaleSpec = MaterialTheme.motionScheme.fastSpatialSpec<Float>()
+    AnimatedVisibility(
+        visible = bufferingVisible,
+        enter = fadeIn(animationSpec = bufferingFade) +
+            scaleIn(initialScale = 0.8f, animationSpec = bufferingScaleSpec),
+        exit = fadeOut(animationSpec = bufferingFade),
+        modifier = Modifier.align(Alignment.Center),
+        label = "bufferingIndicator",
+    ) {
+        JellyPlayLoadingIndicator(color = playerOnScrim())
     }
 }
 

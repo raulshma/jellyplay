@@ -306,7 +306,7 @@ class DownloadLifecycleActionsTest {
     fun `resetForNavigation clears populated sheet and download state`() = runTest {
         val season1 = MediaItem(id = "s1", name = "Season 1", mediaType = MediaType.SEASON)
         val ep1 = MediaItem(id = "e1", name = "E1", mediaType = MediaType.EPISODE)
-        coEvery { downloadRepository.getDownloadedEpisodeIdsForSeries("series-1") } returns setOf("e1")
+        coEvery { downloadRepository.episodeIdsForSeries("series-1") } returns setOf("e1")
 
         val h = makeActions(
             scope = this,

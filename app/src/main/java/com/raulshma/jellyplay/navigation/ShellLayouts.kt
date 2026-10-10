@@ -112,6 +112,7 @@ internal fun TvContent(
     tvDrawerState: androidx.tv.material3.DrawerState,
     tvDrawerListState: androidx.compose.foundation.lazy.LazyListState,
     libraryFolders: List<com.raulshma.jellyplay.core.model.LibraryFolder>,
+    tvOverscan: com.raulshma.jellyplay.core.model.TvOverscan,
     hiddenNavItems: Set<String> = emptySet(),
     navItemOrder: List<String> = emptyList(),
     nowPlayingEnabled: Boolean,
@@ -140,7 +141,13 @@ internal fun TvContent(
             borderVariant = MaterialTheme.colorScheme.outlineVariant,
         )
     ) {
-        TvScaffold {
+        // The overscan safe area: TvScaffold is the one wrapper of
+        // ALL TV chrome (drawer + screens + mini-player), so the calibration
+        // applies here once. Full-screen routes (the video/live players,
+        // onboarding, …) never compose through this branch — MainContent
+        // routes them to FullScreenContent's bare Box — so playback surfaces
+        // stay edge-to-edge by construction.
+        TvScaffold(overscan = tvOverscan) {
             val tvCurrentRoute = navigationState.backStacks[currentTopLevel]?.lastOrNull()
             val tvIsSubPage = tvCurrentRoute != null && tvCurrentRoute !in activeTopLevelRoutes.keys
 

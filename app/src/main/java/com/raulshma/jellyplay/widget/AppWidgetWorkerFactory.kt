@@ -5,7 +5,8 @@ import androidx.work.ListenableWorker
 import androidx.work.WorkerFactory
 import androidx.work.WorkerParameters
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
-import com.raulshma.jellyplay.core.data.repository.MediaCollectionReads
+import com.raulshma.jellyplay.core.network.api.LibraryApiClient
+import com.raulshma.jellyplay.core.data.repository.HomeFeed
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
@@ -33,7 +34,8 @@ class AppWidgetWorkerFactory : WorkerFactory() {
             LibraryRecommendationsWidgetWorker::class.java.name -> {
                 val widgetDataStore: WidgetDataStore = koin.get()
                 val mediaRepository: MediaRepository = koin.get()
-                val mediaCollectionReads: MediaCollectionReads = koin.get()
+                val homeFeed: HomeFeed = koin.get()
+                val libraryApiClient: LibraryApiClient = koin.get()
                 val imageUrlProvider: ImageUrlProvider = koin.get()
                 val authRepository: AuthRepository = koin.get()
                 LibraryRecommendationsWidgetWorker(
@@ -41,7 +43,8 @@ class AppWidgetWorkerFactory : WorkerFactory() {
                     params = workerParameters,
                     widgetDataStore = widgetDataStore,
                     mediaRepository = mediaRepository,
-                    mediaCollectionReads = mediaCollectionReads,
+                    homeFeed = homeFeed,
+                    libraryApiClient = libraryApiClient,
                     imageUrlProvider = imageUrlProvider,
                     authRepository = authRepository,
                 )

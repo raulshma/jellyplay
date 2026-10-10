@@ -39,13 +39,9 @@ import com.raulshma.jellyplay.core.ui.components.SettingsItemList
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
-import com.raulshma.jellyplay.feature.settings.generated.resources.downloads_auto_delete_after_watch
-import com.raulshma.jellyplay.feature.settings.generated.resources.downloads_auto_delete_after_watch_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_live_updates
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_live_updates_off
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_live_updates_on
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_adaptive_bitrate
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_adaptive_bitrate_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_delete_cache
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_delete_off
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_delete_on
@@ -54,47 +50,26 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_download_clean_up_now_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_download_cleaned_up
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_download_cleaned_up_none
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_download_keep_days
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_download_keep_days_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_download_keep_days_value
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_download_keep_days_year
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_download_lookahead
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_download_lookahead_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_download_max_per_pass
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_download_max_per_pass_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_download_new
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_download_new_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_download_server_count
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_download_servers
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_download_servers_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_offline
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_auto_offline_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_background_sync
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_background_sync_off
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_background_sync_on
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_cache_summary
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_cache_used
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_cellular_download_size_warning
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_cellular_download_warning_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_cellular_streaming_quality
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_cellular_streaming_quality_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_clear_cache
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_clear_cache_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_clear_image_cache
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_clear_image_cache_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_connections_per_download
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_connections_per_download_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_data_saver_mode
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_data_saver_mode_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_disabled
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_download_quality
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_download_quality_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_download_schedule
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_download_schedule_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_download_schedule_wifi_only
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_download_schedule_wifi_only_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_download_storage_location
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_download_storage_location_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_downloads
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_downloads_storage_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_downloads_summary
@@ -102,21 +77,14 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_lege
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_legend_downloads
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_legend_images
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_manual_bandwidth_cap
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_manual_bandwidth_cap_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_max_cache_size
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_max_cache_size_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_max_download_storage
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_max_download_storage_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_max_simultaneous_downloads
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_max_simultaneous_downloads_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_metered_network_behavior
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_metered_network_behavior_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_network_offline
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_network_timeouts
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_network_timeouts_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_off
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_offline_mode
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_offline_mode_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_online
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_quality_1080p_full_hd
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_quality_360p_low
@@ -124,11 +92,8 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_qual
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_quality_4k_ultra_hd
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_quality_720p_hd
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_schedule_end
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_schedule_end_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_schedule_start
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_schedule_start_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_smart_downloads
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_smart_downloads_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_status_value
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_storage
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_storage_breakdown
@@ -143,15 +108,6 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_wifi
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_wifi_only_off
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_wifi_only_on
 import com.raulshma.jellyplay.feature.settings.generated.resources.storage_sd_card
-
-private fun streamingQualityLabelRes(quality: StreamingQuality): StringResource = when (quality) {
-    StreamingQuality.AUTO -> Res.string.settings_streaming_quality_auto_adaptive
-    StreamingQuality.LOW_360P -> Res.string.settings_quality_360p_low
-    StreamingQuality.SD_480P -> Res.string.settings_quality_480p_sd
-    StreamingQuality.HD_720P -> Res.string.settings_quality_720p_hd
-    StreamingQuality.FHD_1080P -> Res.string.settings_quality_1080p_full_hd
-    StreamingQuality.UHD_4K -> Res.string.settings_quality_4k_ultra_hd
-}
 
 /**
  * The declared storage screen groups in LazyColumn order — the derivation
@@ -180,9 +136,9 @@ fun StorageSettingsScreen(
     val rowFlags = RowAdmissionFlags(
         showAdvanced = showAdvanced,
         parentsOn = rowParentsOn(
-            StorageSettingsIds.DOWNLOAD_SCHEDULE to preferences.downloadScheduleEnabled,
-            StorageSettingsIds.AUTO_DOWNLOAD_NEW_EPISODES to preferences.autoDownloadNewEpisodes,
-            StorageSettingsIds.AUTO_DOWNLOAD_KEEP_DAYS to (preferences.autoDownloadKeepDays > 0),
+            StorageRows.DownloadSchedule.id to preferences.downloadScheduleEnabled,
+            StorageRows.AutoDownloadNewEpisodes.id to preferences.autoDownloadNewEpisodes,
+            StorageRows.AutoDownloadKeepDays.id to (preferences.autoDownloadKeepDays > 0),
         ),
     )
     LaunchedEffect(Unit) { viewModel.refreshCacheSize() }
@@ -290,34 +246,34 @@ fun StorageSettingsScreen(
                         ConsumeSettingsItemIndex()
                         SettingListItem(
                             icon = Tabler.Outline.Trash,
-                            title = rowTitle(StorageSettingsIds.CLEAR_CACHE),
-                            subtitle = stringResource(Res.string.settings_clear_cache_subtitle),
-                            highlighted = highlightSettingId == StorageSettingsIds.CLEAR_CACHE,
+                            title = rowTitle(StorageRows.ClearCache),
+                            subtitle = rowSubtitle(StorageRows.ClearCache),
+                            highlighted = highlightSettingId == StorageRows.ClearCache.id,
                             onClick = { viewModel.clearCache() },
                         )
                         SettingListItem(
                             icon = Tabler.Outline.Photo,
-                            title = rowTitle(StorageSettingsIds.CLEAR_IMAGE_CACHE),
-                            subtitle = stringResource(Res.string.settings_clear_image_cache_subtitle),
-                            highlighted = highlightSettingId == StorageSettingsIds.CLEAR_IMAGE_CACHE,
+                            title = rowTitle(StorageRows.ClearImageCache),
+                            subtitle = rowSubtitle(StorageRows.ClearImageCache),
+                            highlighted = highlightSettingId == StorageRows.ClearImageCache.id,
                             onClick = { viewModel.clearImageCache() },
                         )
                         if (showAdvanced) {
                             SettingToggleItem(
                                 icon = Tabler.Outline.Wifi,
-                                title = rowTitle(StorageSettingsIds.WIFI_ONLY_DOWNLOADS),
+                                title = rowTitle(StorageRows.WifiOnlyDownloads),
                                 subtitle = if (preferences.wifiOnlyDownloads) stringResource(Res.string.settings_wifi_only_on) else stringResource(Res.string.settings_wifi_only_off),
                                 checked = preferences.wifiOnlyDownloads,
-                                highlighted = highlightSettingId == StorageSettingsIds.WIFI_ONLY_DOWNLOADS,
+                                highlighted = highlightSettingId == StorageRows.WifiOnlyDownloads.id,
                                 onCheckedChange = { viewModel.edit { scope -> scope.downloads.setWifiOnlyDownloads(it) } },
                             )
-                            val connectionsTitle = rowTitle(StorageSettingsIds.DOWNLOAD_CONNECTIONS)
+                            val connectionsTitle = rowTitle(StorageRows.DownloadConnections)
                             SettingListItem(
                                 icon = Tabler.Outline.Download,
                                 title = connectionsTitle,
-                                subtitle = stringResource(Res.string.settings_connections_per_download_subtitle),
+                                subtitle = rowSubtitle(StorageRows.DownloadConnections),
                                 trailingText = "${preferences.downloadConnections}",
-                                highlighted = highlightSettingId == StorageSettingsIds.DOWNLOAD_CONNECTIONS,
+                                highlighted = highlightSettingId == StorageRows.DownloadConnections.id,
                                 onClick = {
                                     activePicker.value = PickerState.List(
                                         title = connectionsTitle,
@@ -328,13 +284,13 @@ fun StorageSettingsScreen(
                                     )
                                 },
                             )
-                            val concurrentDownloadsTitle = rowTitle(StorageSettingsIds.MAX_CONCURRENT_DOWNLOADS)
+                            val concurrentDownloadsTitle = rowTitle(StorageRows.MaxConcurrentDownloads)
                             SettingListItem(
                                 icon = Tabler.Outline.ArrowBarToDown,
                                 title = concurrentDownloadsTitle,
-                                subtitle = stringResource(Res.string.settings_max_simultaneous_downloads_subtitle),
+                                subtitle = rowSubtitle(StorageRows.MaxConcurrentDownloads),
                                 trailingText = "${preferences.maxConcurrentDownloads}",
-                                highlighted = highlightSettingId == StorageSettingsIds.MAX_CONCURRENT_DOWNLOADS,
+                                highlighted = highlightSettingId == StorageRows.MaxConcurrentDownloads.id,
                                 onClick = {
                                     activePicker.value = PickerState.List(
                                         title = concurrentDownloadsTitle,
@@ -347,20 +303,20 @@ fun StorageSettingsScreen(
                             )
                             SettingToggleItem(
                                 icon = Tabler.Outline.Refresh,
-                                title = rowTitle(StorageSettingsIds.AUTO_DELETE_CACHE),
+                                title = rowTitle(StorageRows.AutoDeleteCache),
                                 subtitle = if (preferences.autoDeleteCache) stringResource(Res.string.settings_auto_delete_on) else stringResource(Res.string.settings_auto_delete_off),
                                 checked = preferences.autoDeleteCache,
-                                highlighted = highlightSettingId == StorageSettingsIds.AUTO_DELETE_CACHE,
+                                highlighted = highlightSettingId == StorageRows.AutoDeleteCache.id,
                                 onCheckedChange = { viewModel.edit { scope -> scope.networkOffline.setAutoDeleteCache(it) } },
                             )
-                            val maxCacheSizeTitle = rowTitle(StorageSettingsIds.MAX_CACHE_SIZE)
+                            val maxCacheSizeTitle = rowTitle(StorageRows.MaxCacheSize)
                             val maxCacheUnlimited = stringResource(Res.string.settings_unlimited)
                             SettingListItem(
                                 icon = Tabler.Outline.Database,
                                 title = maxCacheSizeTitle,
-                                subtitle = stringResource(Res.string.settings_max_cache_size_subtitle),
+                                subtitle = rowSubtitle(StorageRows.MaxCacheSize),
                                 trailingText = if (preferences.maxCacheSizeMb == 0) maxCacheUnlimited else "${preferences.maxCacheSizeMb} MB",
-                                highlighted = highlightSettingId == StorageSettingsIds.MAX_CACHE_SIZE,
+                                highlighted = highlightSettingId == StorageRows.MaxCacheSize.id,
                                 onClick = {
                                     activePicker.value = PickerState.List(
                                         title = maxCacheSizeTitle,
@@ -387,45 +343,45 @@ fun StorageSettingsScreen(
                     modifier = Modifier.padding(vertical = 8.dp),
                     initiallyExpanded = highlightSettingId in SettingsScreenGroups.storageNetwork.itemIdSet,
                 ) {
-                    SettingsItemList(total = SettingsScreenGroups.storageNetwork.items.size) {
+                    SettingsItemList(total = rowTotalFor(SettingsScreenGroups.storageNetwork, rowFlags)) {
                     SettingToggleItem(
                         icon = Tabler.Outline.CloudOff,
-                        title = rowTitle(StorageSettingsIds.OFFLINE_MODE),
-                        subtitle = stringResource(Res.string.settings_offline_mode_subtitle),
+                        title = rowTitle(StorageRows.OfflineMode),
+                        subtitle = rowSubtitle(StorageRows.OfflineMode),
                         checked = preferences.manualOfflineEnabled,
-                        highlighted = highlightSettingId == StorageSettingsIds.OFFLINE_MODE,
+                        highlighted = highlightSettingId == StorageRows.OfflineMode.id,
                         onCheckedChange = { viewModel.edit { scope -> scope.networkOffline.setManualOffline(it) } },
                     )
 
                     SettingToggleItem(
                         icon = Tabler.Outline.WifiOff,
-                        title = rowTitle(StorageSettingsIds.AUTO_OFFLINE),
-                        subtitle = stringResource(Res.string.settings_auto_offline_subtitle),
+                        title = rowTitle(StorageRows.AutoOffline),
+                        subtitle = rowSubtitle(StorageRows.AutoOffline),
                         checked = preferences.autoOfflineEnabled,
-                        highlighted = highlightSettingId == StorageSettingsIds.AUTO_OFFLINE,
+                        highlighted = highlightSettingId == StorageRows.AutoOffline.id,
                         onCheckedChange = { viewModel.edit { scope -> scope.networkOffline.setAutoOfflineEnabled(it) } },
                     )
 
                     SettingToggleItem(
                         icon = Tabler.Outline.Gauge,
-                        title = rowTitle(StorageSettingsIds.ADAPTIVE_BITRATE),
-                        subtitle = stringResource(Res.string.settings_adaptive_bitrate_subtitle),
+                        title = rowTitle(StorageRows.AdaptiveBitrate),
+                        subtitle = rowSubtitle(StorageRows.AdaptiveBitrate),
                         checked = preferences.adaptiveBitrateEnabled,
-                        highlighted = highlightSettingId == StorageSettingsIds.ADAPTIVE_BITRATE,
+                        highlighted = highlightSettingId == StorageRows.AdaptiveBitrate.id,
                         onCheckedChange = { viewModel.edit { scope -> scope.networkOffline.setAdaptiveBitrateEnabled(it) } },
                     )
 
                     val caps = listOf(0L, 1_000_000L, 2_000_000L, 5_000_000L, 10_000_000L, 20_000_000L)
-                    val bandwidthCapTitle = rowTitle(StorageSettingsIds.BANDWIDTH_CAP)
+                    val bandwidthCapTitle = rowTitle(StorageRows.BandwidthCap)
                     val bandwidthUnlimited = stringResource(Res.string.settings_unlimited)
                     val capLabel = if (preferences.manualBandwidthCap == 0L) bandwidthUnlimited else "${preferences.manualBandwidthCap / 1_000_000L} Mbps"
 
                     SettingListItem(
                         icon = Tabler.Outline.Lock,
                         title = bandwidthCapTitle,
-                        subtitle = stringResource(Res.string.settings_manual_bandwidth_cap_subtitle),
+                        subtitle = rowSubtitle(StorageRows.BandwidthCap),
                         trailingText = capLabel,
-                        highlighted = highlightSettingId == StorageSettingsIds.BANDWIDTH_CAP,
+                        highlighted = highlightSettingId == StorageRows.BandwidthCap.id,
                         onClick = {
                             activePicker.value = PickerState.List(
                                 title = bandwidthCapTitle,
@@ -437,13 +393,13 @@ fun StorageSettingsScreen(
                         },
                     )
 
-                    val meteredTitle = rowTitle(StorageSettingsIds.METERED_NETWORK_BEHAVIOR)
+                    val meteredTitle = rowTitle(StorageRows.MeteredNetworkBehavior)
                     SettingListItem(
                         icon = Tabler.Outline.Compass,
                         title = meteredTitle,
-                        subtitle = stringResource(Res.string.settings_metered_network_behavior_subtitle),
+                        subtitle = rowSubtitle(StorageRows.MeteredNetworkBehavior),
                         trailingText = preferences.meteredNetworkBehavior.displayName,
-                        highlighted = highlightSettingId == StorageSettingsIds.METERED_NETWORK_BEHAVIOR,
+                        highlighted = highlightSettingId == StorageRows.MeteredNetworkBehavior.id,
                         onClick = {
                             activePicker.value = PickerState.List(
                                 title = meteredTitle,
@@ -455,14 +411,14 @@ fun StorageSettingsScreen(
                         },
                     )
 
-                    val cellularQualityTitle = rowTitle(StorageSettingsIds.CELLULAR_STREAMING_QUALITY)
+                    val cellularQualityTitle = rowTitle(StorageRows.CellularStreamingQuality)
                     val qualityLabels = StreamingQuality.entries.associateWith { stringResource(streamingQualityLabelRes(it)) }
                     SettingListItem(
                         icon = Tabler.Outline.DeviceMobile,
                         title = cellularQualityTitle,
-                        subtitle = stringResource(Res.string.settings_cellular_streaming_quality_subtitle),
+                        subtitle = rowSubtitle(StorageRows.CellularStreamingQuality),
                         trailingText = qualityLabels[preferences.cellularStreamingQuality] ?: preferences.cellularStreamingQuality.name,
-                        highlighted = highlightSettingId == StorageSettingsIds.CELLULAR_STREAMING_QUALITY,
+                        highlighted = highlightSettingId == StorageRows.CellularStreamingQuality.id,
                         onClick = {
                             activePicker.value = PickerState.List(
                                 title = cellularQualityTitle,
@@ -474,15 +430,15 @@ fun StorageSettingsScreen(
                         },
                     )
 
-                    val downloadWarningTitle = rowTitle(StorageSettingsIds.CELLULAR_DOWNLOAD_WARNING)
+                    val downloadWarningTitle = rowTitle(StorageRows.CellularDownloadWarning)
                     val disabledLabel = stringResource(Res.string.settings_disabled)
                     val downloadWarningLabel = if (preferences.cellularDownloadSizeWarningMb == 0) disabledLabel else "${preferences.cellularDownloadSizeWarningMb} MB"
                     SettingListItem(
                         icon = Tabler.Outline.AlertTriangle,
                         title = downloadWarningTitle,
-                        subtitle = stringResource(Res.string.settings_cellular_download_warning_subtitle),
+                        subtitle = rowSubtitle(StorageRows.CellularDownloadWarning),
                         trailingText = downloadWarningLabel,
-                        highlighted = highlightSettingId == StorageSettingsIds.CELLULAR_DOWNLOAD_WARNING,
+                        highlighted = highlightSettingId == StorageRows.CellularDownloadWarning.id,
                         onClick = {
                             activePicker.value = PickerState.List(
                                 title = downloadWarningTitle,
@@ -496,19 +452,19 @@ fun StorageSettingsScreen(
 
                     SettingToggleItem(
                         icon = Tabler.Outline.Gauge,
-                        title = rowTitle(StorageSettingsIds.DATA_SAVER),
-                        subtitle = stringResource(Res.string.settings_data_saver_mode_subtitle),
+                        title = rowTitle(StorageRows.DataSaver),
+                        subtitle = rowSubtitle(StorageRows.DataSaver),
                         checked = preferences.dataSaverEnabled,
-                        highlighted = highlightSettingId == StorageSettingsIds.DATA_SAVER,
+                        highlighted = highlightSettingId == StorageRows.DataSaver.id,
                         onCheckedChange = { viewModel.edit { scope -> scope.networkOffline.setDataSaverEnabled(it) } },
                     )
-                    val networkTimeoutsTitle = rowTitle(StorageSettingsIds.NETWORK_TIMEOUT)
+                    val networkTimeoutsTitle = rowTitle(StorageRows.NetworkTimeout)
                     SettingListItem(
                         icon = Tabler.Outline.Clock,
                         title = networkTimeoutsTitle,
-                        subtitle = stringResource(Res.string.settings_network_timeouts_subtitle),
+                        subtitle = rowSubtitle(StorageRows.NetworkTimeout),
                         trailingText = preferences.networkTimeoutPreset.displayName.substringBefore(" ("),
-                        highlighted = highlightSettingId == StorageSettingsIds.NETWORK_TIMEOUT,
+                        highlighted = highlightSettingId == StorageRows.NetworkTimeout.id,
                         onClick = {
                             activePicker.value = PickerState.List(
                                 title = networkTimeoutsTitle,
@@ -521,18 +477,18 @@ fun StorageSettingsScreen(
                     )
                     SettingToggleItem(
                         icon = Tabler.Outline.Code,
-                        title = rowTitle(StorageSettingsIds.VERBOSE_LOGGING),
+                        title = rowTitle(StorageRows.VerboseLogging),
                         subtitle = if (preferences.verboseNetworkLogging) stringResource(Res.string.settings_verbose_logging_on) else stringResource(Res.string.settings_verbose_logging_off),
                         checked = preferences.verboseNetworkLogging,
-                        highlighted = highlightSettingId == StorageSettingsIds.VERBOSE_LOGGING,
+                        highlighted = highlightSettingId == StorageRows.VerboseLogging.id,
                         onCheckedChange = { viewModel.edit { scope -> scope.networkOffline.setVerboseNetworkLogging(it) } },
                     )
                     SettingToggleItem(
                         icon = Tabler.Outline.Refresh,
-                        title = rowTitle(StorageSettingsIds.USER_DATA_SYNC),
+                        title = rowTitle(StorageRows.UserDataSync),
                         subtitle = if (preferences.userDataSyncEnabled) stringResource(Res.string.settings_background_sync_on) else stringResource(Res.string.settings_background_sync_off),
                         checked = preferences.userDataSyncEnabled,
-                        highlighted = highlightSettingId == StorageSettingsIds.USER_DATA_SYNC,
+                        highlighted = highlightSettingId == StorageRows.UserDataSync.id,
                         onCheckedChange = { viewModel.edit { scope -> scope.playback.setUserDataSyncEnabled(it) } },
                     )
                     }
@@ -567,13 +523,13 @@ fun StorageSettingsScreen(
                     val offLabel = stringResource(Res.string.settings_off)
                     val unlimitedLabel = stringResource(Res.string.settings_unlimited)
 
-                    val downloadQualityTitle = rowTitle(StorageSettingsIds.DOWNLOAD_QUALITY)
+                    val downloadQualityTitle = rowTitle(StorageRows.DownloadQuality)
                     SettingListItem(
                         icon = Tabler.Outline.Video,
                         title = downloadQualityTitle,
-                        subtitle = stringResource(Res.string.settings_download_quality_subtitle),
+                        subtitle = rowSubtitle(StorageRows.DownloadQuality),
                         trailingText = preferences.downloadQuality.displayName,
-                        highlighted = highlightSettingId == StorageSettingsIds.DOWNLOAD_QUALITY,
+                        highlighted = highlightSettingId == StorageRows.DownloadQuality.id,
                         onClick = {
                             activePicker.value = PickerState.List(
                                 title = downloadQualityTitle,
@@ -587,34 +543,34 @@ fun StorageSettingsScreen(
 
                     SettingToggleItem(
                         icon = Tabler.Outline.Trash,
-                        title = rowTitle(StorageSettingsIds.SMART_DOWNLOADS),
-                        subtitle = stringResource(Res.string.settings_smart_downloads_subtitle),
+                        title = rowTitle(StorageRows.SmartDownloads),
+                        subtitle = rowSubtitle(StorageRows.SmartDownloads),
                         checked = preferences.smartDownloadsEnabled,
-                        highlighted = highlightSettingId == StorageSettingsIds.SMART_DOWNLOADS,
+                        highlighted = highlightSettingId == StorageRows.SmartDownloads.id,
                         onCheckedChange = { viewModel.edit { scope -> scope.downloads.setSmartDownloadsEnabled(it) } }
                     )
 
                     SettingToggleItem(
                         icon = Tabler.Outline.Download,
-                        title = rowTitle(StorageSettingsIds.AUTO_DOWNLOAD_NEW_EPISODES),
-                        subtitle = stringResource(Res.string.settings_auto_download_new_subtitle),
+                        title = rowTitle(StorageRows.AutoDownloadNewEpisodes),
+                        subtitle = rowSubtitle(StorageRows.AutoDownloadNewEpisodes),
                         checked = preferences.autoDownloadNewEpisodes,
-                        highlighted = highlightSettingId == StorageSettingsIds.AUTO_DOWNLOAD_NEW_EPISODES,
+                        highlighted = highlightSettingId == StorageRows.AutoDownloadNewEpisodes.id,
                         onCheckedChange = { viewModel.setAutoDownloadNewEpisodes(it) }
                     )
 
                     // The auto-download retention-policy cluster: every row
                     // rides the toggle (their declared WhenOn gate, which
                     // rowFlags carries — the emission `if`s below read it).
-                    if (SettingsScreenGroups.storageDownloads.rowAdmitted(StorageSettingsIds.AUTO_DOWNLOAD_LOOKAHEAD, rowFlags)) {
-                        val lookaheadTitle = rowTitle(StorageSettingsIds.AUTO_DOWNLOAD_LOOKAHEAD)
+                    if (SettingsScreenGroups.storageDownloads.rowAdmitted(StorageRows.AutoDownloadLookahead.id, rowFlags)) {
+                        val lookaheadTitle = rowTitle(StorageRows.AutoDownloadLookahead)
                         SettingListItem(
                             icon = Tabler.Outline.PlayerTrackNext,
                             title = lookaheadTitle,
-                            subtitle = stringResource(Res.string.settings_auto_download_lookahead_subtitle),
+                            subtitle = rowSubtitle(StorageRows.AutoDownloadLookahead),
                             trailingText = preferences.autoDownloadLookahead.takeIf { it > 0 }?.toString()
                                 ?: stringResource(Res.string.settings_off),
-                            highlighted = highlightSettingId == StorageSettingsIds.AUTO_DOWNLOAD_LOOKAHEAD,
+                            highlighted = highlightSettingId == StorageRows.AutoDownloadLookahead.id,
                             onClick = {
                                 activePicker.value = PickerState.List(
                                     title = lookaheadTitle,
@@ -627,14 +583,14 @@ fun StorageSettingsScreen(
                         )
                     }
 
-                    if (SettingsScreenGroups.storageDownloads.rowAdmitted(StorageSettingsIds.AUTO_DOWNLOAD_MAX_PER_PASS, rowFlags)) {
-                        val maxPerPassTitle = rowTitle(StorageSettingsIds.AUTO_DOWNLOAD_MAX_PER_PASS)
+                    if (SettingsScreenGroups.storageDownloads.rowAdmitted(StorageRows.AutoDownloadMaxPerPass.id, rowFlags)) {
+                        val maxPerPassTitle = rowTitle(StorageRows.AutoDownloadMaxPerPass)
                         SettingListItem(
                             icon = Tabler.Outline.ArrowBarToDown,
                             title = maxPerPassTitle,
-                            subtitle = stringResource(Res.string.settings_auto_download_max_per_pass_subtitle),
+                            subtitle = rowSubtitle(StorageRows.AutoDownloadMaxPerPass),
                             trailingText = if (preferences.autoDownloadMaxPerPass == 0) unlimitedLabel else preferences.autoDownloadMaxPerPass.toString(),
-                            highlighted = highlightSettingId == StorageSettingsIds.AUTO_DOWNLOAD_MAX_PER_PASS,
+                            highlighted = highlightSettingId == StorageRows.AutoDownloadMaxPerPass.id,
                             onClick = {
                                 activePicker.value = PickerState.List(
                                     title = maxPerPassTitle,
@@ -647,19 +603,19 @@ fun StorageSettingsScreen(
                         )
                     }
 
-                    if (SettingsScreenGroups.storageDownloads.rowAdmitted(StorageSettingsIds.AUTO_DOWNLOAD_KEEP_DAYS, rowFlags)) {
-                        val keepDaysTitle = rowTitle(StorageSettingsIds.AUTO_DOWNLOAD_KEEP_DAYS)
+                    if (SettingsScreenGroups.storageDownloads.rowAdmitted(StorageRows.AutoDownloadKeepDays.id, rowFlags)) {
+                        val keepDaysTitle = rowTitle(StorageRows.AutoDownloadKeepDays)
                         val keepDaysYearLabel = stringResource(Res.string.settings_auto_download_keep_days_year)
                         SettingListItem(
                             icon = Tabler.Outline.Clock,
                             title = keepDaysTitle,
-                            subtitle = stringResource(Res.string.settings_auto_download_keep_days_subtitle),
+                            subtitle = rowSubtitle(StorageRows.AutoDownloadKeepDays),
                             trailingText = when (val days = preferences.autoDownloadKeepDays) {
                                 0 -> offLabel
                                 365 -> keepDaysYearLabel
                                 else -> stringResource(Res.string.settings_auto_download_keep_days_value, days)
                             },
-                            highlighted = highlightSettingId == StorageSettingsIds.AUTO_DOWNLOAD_KEEP_DAYS,
+                            highlighted = highlightSettingId == StorageRows.AutoDownloadKeepDays.id,
                             onClick = {
                                 activePicker.value = PickerState.List(
                                     title = keepDaysTitle,
@@ -672,8 +628,8 @@ fun StorageSettingsScreen(
                         )
                     }
 
-                    if (SettingsScreenGroups.storageDownloads.rowAdmitted(StorageSettingsIds.AUTO_DOWNLOAD_SERVERS, rowFlags)) {
-                        val serversTitle = rowTitle(StorageSettingsIds.AUTO_DOWNLOAD_SERVERS)
+                    if (SettingsScreenGroups.storageDownloads.rowAdmitted(StorageRows.AutoDownloadServers.id, rowFlags)) {
+                        val serversTitle = rowTitle(StorageRows.AutoDownloadServers)
                         val allServersLabel = stringResource(Res.string.settings_auto_download_all_servers)
                         // Toggle-select semantics: the sheet dismisses after each
                         // tap (the shared single-select sheet), and the row's
@@ -682,7 +638,7 @@ fun StorageSettingsScreen(
                         SettingListItem(
                             icon = Tabler.Outline.Server,
                             title = serversTitle,
-                            subtitle = stringResource(Res.string.settings_auto_download_servers_subtitle),
+                            subtitle = rowSubtitle(StorageRows.AutoDownloadServers),
                             trailingText = if (preferences.autoDownloadServers.isEmpty()) {
                                 allServersLabel
                             } else {
@@ -692,7 +648,7 @@ fun StorageSettingsScreen(
                                     viewModel.servers.size,
                                 )
                             },
-                            highlighted = highlightSettingId == StorageSettingsIds.AUTO_DOWNLOAD_SERVERS,
+                            highlighted = highlightSettingId == StorageRows.AutoDownloadServers.id,
                             onClick = {
                                 activePicker.value = PickerState.List(
                                     title = serversTitle,
@@ -710,10 +666,10 @@ fun StorageSettingsScreen(
                         )
                     }
 
-                    if (SettingsScreenGroups.storageDownloads.rowAdmitted(StorageSettingsIds.AUTO_DOWNLOAD_CLEAN_UP_NOW, rowFlags)) {
+                    if (SettingsScreenGroups.storageDownloads.rowAdmitted(StorageRows.AutoDownloadCleanUpNow.id, rowFlags)) {
                         SettingListItem(
                             icon = Tabler.Outline.Trash,
-                            title = rowTitle(StorageSettingsIds.AUTO_DOWNLOAD_CLEAN_UP_NOW),
+                            title = rowTitle(StorageRows.AutoDownloadCleanUpNow),
                             subtitle = viewModel.lastCleanupSummary?.let { summary ->
                                 if (summary.deletedCount > 0) {
                                     stringResource(
@@ -725,7 +681,7 @@ fun StorageSettingsScreen(
                                     stringResource(Res.string.settings_auto_download_cleaned_up_none)
                                 }
                             } ?: stringResource(Res.string.settings_auto_download_clean_up_now_subtitle),
-                            highlighted = highlightSettingId == StorageSettingsIds.AUTO_DOWNLOAD_CLEAN_UP_NOW,
+                            highlighted = highlightSettingId == StorageRows.AutoDownloadCleanUpNow.id,
                             onClick = { viewModel.cleanupDownloadsNow() },
                         )
                     }
@@ -736,30 +692,30 @@ fun StorageSettingsScreen(
                     // subtitle spells out the interaction).
                     SettingToggleItem(
                         icon = Tabler.Outline.Trash,
-                        title = rowTitle(StorageSettingsIds.AUTO_DELETE_AFTER_WATCH),
-                        subtitle = stringResource(Res.string.downloads_auto_delete_after_watch_subtitle),
+                        title = rowTitle(StorageRows.AutoDeleteAfterWatch),
+                        subtitle = rowSubtitle(StorageRows.AutoDeleteAfterWatch),
                         checked = preferences.autoDeleteAfterWatch,
-                        highlighted = highlightSettingId == StorageSettingsIds.AUTO_DELETE_AFTER_WATCH,
+                        highlighted = highlightSettingId == StorageRows.AutoDeleteAfterWatch.id,
                         onCheckedChange = { viewModel.edit { scope -> scope.downloads.setAutoDeleteAfterWatch(it) } }
                     )
 
                     SettingToggleItem(
                         icon = Tabler.Outline.Clock,
-                        title = rowTitle(StorageSettingsIds.DOWNLOAD_SCHEDULE),
-                        subtitle = stringResource(Res.string.settings_download_schedule_subtitle),
+                        title = rowTitle(StorageRows.DownloadSchedule),
+                        subtitle = rowSubtitle(StorageRows.DownloadSchedule),
                         checked = preferences.downloadScheduleEnabled,
-                        highlighted = highlightSettingId == StorageSettingsIds.DOWNLOAD_SCHEDULE,
+                        highlighted = highlightSettingId == StorageRows.DownloadSchedule.id,
                         onCheckedChange = { viewModel.edit { scope -> scope.downloads.setDownloadScheduleEnabled(it) } }
                     )
 
-                    if (SettingsScreenGroups.storageDownloads.rowAdmitted(StorageSettingsIds.DOWNLOAD_SCHEDULE_START, rowFlags)) {
-                        val scheduleStartTitle = rowTitle(StorageSettingsIds.DOWNLOAD_SCHEDULE_START)
+                    if (SettingsScreenGroups.storageDownloads.rowAdmitted(StorageRows.DownloadScheduleStart.id, rowFlags)) {
+                        val scheduleStartTitle = rowTitle(StorageRows.DownloadScheduleStart)
                         SettingListItem(
                             icon = Tabler.Outline.Sun,
                             title = scheduleStartTitle,
-                            subtitle = stringResource(Res.string.settings_schedule_start_subtitle),
+                            subtitle = rowSubtitle(StorageRows.DownloadScheduleStart),
                             trailingText = "${preferences.downloadScheduleWindow.startHour}:00",
-                            highlighted = highlightSettingId == StorageSettingsIds.DOWNLOAD_SCHEDULE_START,
+                            highlighted = highlightSettingId == StorageRows.DownloadScheduleStart.id,
                             onClick = {
                                 val current = preferences.downloadScheduleWindow
                                 activePicker.value = PickerState.List(
@@ -772,13 +728,13 @@ fun StorageSettingsScreen(
                             }
                         )
 
-                        val scheduleEndTitle = rowTitle(StorageSettingsIds.DOWNLOAD_SCHEDULE_END)
+                        val scheduleEndTitle = rowTitle(StorageRows.DownloadScheduleEnd)
                         SettingListItem(
                             icon = Tabler.Outline.Moon,
                             title = scheduleEndTitle,
-                            subtitle = stringResource(Res.string.settings_schedule_end_subtitle),
+                            subtitle = rowSubtitle(StorageRows.DownloadScheduleEnd),
                             trailingText = "${preferences.downloadScheduleWindow.endHour}:00",
-                            highlighted = highlightSettingId == StorageSettingsIds.DOWNLOAD_SCHEDULE_END,
+                            highlighted = highlightSettingId == StorageRows.DownloadScheduleEnd.id,
                             onClick = {
                                 val current = preferences.downloadScheduleWindow
                                 activePicker.value = PickerState.List(
@@ -793,10 +749,10 @@ fun StorageSettingsScreen(
 
                         SettingToggleItem(
                             icon = Tabler.Outline.Wifi,
-                            title = rowTitle(StorageSettingsIds.DOWNLOAD_SCHEDULE_WIFI_ONLY),
-                            subtitle = stringResource(Res.string.settings_download_schedule_wifi_only_subtitle),
+                            title = rowTitle(StorageRows.DownloadScheduleWifiOnly),
+                            subtitle = rowSubtitle(StorageRows.DownloadScheduleWifiOnly),
                             checked = preferences.downloadScheduleWindow.wifiOnly,
-                            highlighted = highlightSettingId == StorageSettingsIds.DOWNLOAD_SCHEDULE_WIFI_ONLY,
+                            highlighted = highlightSettingId == StorageRows.DownloadScheduleWifiOnly.id,
                             onCheckedChange = {
                                 val current = preferences.downloadScheduleWindow
                                 viewModel.edit { scope -> scope.downloads.setDownloadScheduleWindow(current.copy(wifiOnly = it)) }
@@ -804,13 +760,13 @@ fun StorageSettingsScreen(
                         )
                     }
 
-                    val maxDownloadStorageTitle = rowTitle(StorageSettingsIds.MAX_DOWNLOAD_STORAGE_LIMIT)
+                    val maxDownloadStorageTitle = rowTitle(StorageRows.MaxDownloadStorageLimit)
                     SettingListItem(
                         icon = Tabler.Outline.Database,
                         title = maxDownloadStorageTitle,
-                        subtitle = stringResource(Res.string.settings_max_download_storage_subtitle),
+                        subtitle = rowSubtitle(StorageRows.MaxDownloadStorageLimit),
                         trailingText = if (preferences.maxDownloadStorageGb == 0) unlimitedLabel else "${preferences.maxDownloadStorageGb} GB",
-                        highlighted = highlightSettingId == StorageSettingsIds.MAX_DOWNLOAD_STORAGE_LIMIT,
+                        highlighted = highlightSettingId == StorageRows.MaxDownloadStorageLimit.id,
                         onClick = {
                             activePicker.value = PickerState.List(
                                 title = maxDownloadStorageTitle,
@@ -825,7 +781,7 @@ fun StorageSettingsScreen(
                     val internalLabel = stringResource(Res.string.settings_storage_internal)
                     val externalLabel = stringResource(Res.string.settings_storage_external)
                     val sdCardLabel = stringResource(Res.string.storage_sd_card)
-                    val storageLocationTitle = rowTitle(StorageSettingsIds.DOWNLOAD_STORAGE_LOCATION)
+                    val storageLocationTitle = rowTitle(StorageRows.DownloadStorageLocation)
                     // Build the picker from the *real*
                     // available mounts (primary + any SD/USB) instead of the
                     // hardcoded INTERNAL/EXTERNAL pair. Falls back to the
@@ -849,9 +805,9 @@ fun StorageSettingsScreen(
                     SettingListItem(
                         icon = Tabler.Outline.Folder,
                         title = storageLocationTitle,
-                        subtitle = stringResource(Res.string.settings_download_storage_location_subtitle),
+                        subtitle = rowSubtitle(StorageRows.DownloadStorageLocation),
                         trailingText = selectedMountLabel,
-                        highlighted = highlightSettingId == StorageSettingsIds.DOWNLOAD_STORAGE_LOCATION,
+                        highlighted = highlightSettingId == StorageRows.DownloadStorageLocation.id,
                         onClick = {
                             val items = if (mounts.isNotEmpty()) mounts else emptyList()
                             activePicker.value = PickerState.List(

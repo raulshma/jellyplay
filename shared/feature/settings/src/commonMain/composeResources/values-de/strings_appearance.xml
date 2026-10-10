@@ -26,6 +26,8 @@
     <string name="settings_library_view_mode">Mediathek-Ansichtsmodus</string>
     <string name="settings_layout_mode">Layout</string>
     <string name="settings_layout_mode_subtitle">Automatisches, Telefon- oder Tablet-Layout wählen</string>
+    <string name="settings_screen_fit">Bildschirmanpassung</string>
+    <string name="settings_screen_fit_subtitle">Bild innerhalb des sicheren TV-Bereichs einpassen, damit nichts an den Rändern abgeschnitten wird</string>
     <string name="settings_library_view_grid">Einträge in einer Rasteransicht anzeigen</string>
     <string name="settings_library_view_list">Einträge in einer Listenansicht anzeigen</string>
     <string name="settings_library_view_thumb">Einträge als Querformat-Vorschaubilder anzeigen</string>

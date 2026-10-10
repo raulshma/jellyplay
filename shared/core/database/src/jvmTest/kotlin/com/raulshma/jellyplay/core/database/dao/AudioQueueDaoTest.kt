@@ -132,6 +132,7 @@ class AudioQueueDaoTest {
             isPlaying = true,
             repeatMode = 1,
             shuffleEnabled = true,
+            shuffleSeed = 123_456_789L,
             playbackSpeed = 1.5f,
             updatedAt = 5_000L,
         )
@@ -145,7 +146,23 @@ class AudioQueueDaoTest {
         assertTrue(loaded.isPlaying)
         assertEquals(1, loaded.repeatMode)
         assertTrue(loaded.shuffleEnabled)
+        assertEquals(123_456_789L, loaded.shuffleSeed, "the shuffle seed round-trips through the new column")
         assertEquals(1.5f, loaded.playbackSpeed)
+    }
+
+    @Test
+    fun `saveState defaults the shuffle seed to null and clears it on rewrite`() = runTest {
+        // A pre-seed row (or shuffle-off write) reads back with a null seed…
+        audioQueueDao.saveState(AudioQueueStateEntity(id = 1, currentIndex = 0, shuffleEnabled = false))
+        val seedless = audioQueueDao.getState()
+        assertNotNull(seedless)
+        assertNull(seedless.shuffleSeed)
+
+        // …and a later shuffle-on write carries one, then an off write clears it.
+        audioQueueDao.saveState(AudioQueueStateEntity(id = 1, currentIndex = 0, shuffleEnabled = true, shuffleSeed = 7L))
+        assertEquals(7L, audioQueueDao.getState()!!.shuffleSeed)
+        audioQueueDao.saveState(AudioQueueStateEntity(id = 1, currentIndex = 0, shuffleEnabled = false, shuffleSeed = null))
+        assertNull(audioQueueDao.getState()!!.shuffleSeed)
     }
 
     @Test

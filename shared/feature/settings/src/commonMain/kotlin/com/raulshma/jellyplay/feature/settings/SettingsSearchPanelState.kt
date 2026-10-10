@@ -23,7 +23,7 @@ internal const val TV_HIGHLIGHT_REFOCUS_DELAY_MS = 1000L
 
 /**
  * The settings root screen's search-panel state machine, plain-class JVM-testable
- * like [ReorderState] (Compose snapshot state is fine on the JVM; the gesture and
+ * like [com.raulshma.jellyplay.core.ui.reorder.ReorderState] (Compose snapshot state is fine on the JVM; the gesture and
  * focus wiring stay in the composable).
  *
  * Owns the five loose pieces of panel state the screen used to scatter across
@@ -36,7 +36,7 @@ internal const val TV_HIGHLIGHT_REFOCUS_DELAY_MS = 1000L
  * **Recents ownership.** The persisted authority is the [SettingsRecentsStore]
  * behind the ViewModel (its `addRecent` dedupes, prepends and trims). This
  * holder keeps the display mirror: the composable re-seeds it from the
- * store-backed flow ([submitRecents], the [ReorderState.submitOrder]
+ * store-backed flow ([submitRecents], the [com.raulshma.jellyplay.core.ui.reorder.ReorderState.submitOrder]
  * re-sync shape) and taps update it optimistically ([recordRecent]) with the
  * same dedupe+prepend policy the store applies, so the panel never renders a
  * pre-tap list when it is reopened before the store echo lands. Persistence

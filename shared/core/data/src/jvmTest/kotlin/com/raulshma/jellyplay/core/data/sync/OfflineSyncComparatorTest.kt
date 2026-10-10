@@ -18,7 +18,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 import kotlin.test.Test
-import com.raulshma.jellyplay.core.data.testutil.FakeTimeSource
+import com.raulshma.jellyplay.core.testfixtures.FakeTimeSource
 
 class OfflineSyncComparatorTest {
 

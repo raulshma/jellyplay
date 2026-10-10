@@ -19,6 +19,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -45,11 +46,13 @@ import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
 import com.raulshma.jellyplay.core.ui.components.AnimatedSectionEntrance
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState
+import com.raulshma.jellyplay.core.ui.message.LocalUserMessageBus
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.feature.admin.dashboard.components.ActiveSessionsSection
 import com.raulshma.jellyplay.core.model.SessionInfo
+import com.raulshma.jellyplay.feature.admin.dashboard.components.BroadcastDialog
 import com.raulshma.jellyplay.feature.admin.dashboard.components.LibraryStatsRow
 import com.raulshma.jellyplay.feature.admin.dashboard.components.QuickActionsSection
 import com.raulshma.jellyplay.feature.admin.dashboard.components.RecentActivityTimeline
@@ -69,6 +72,7 @@ import com.raulshma.jellyplay.feature.admin.generated.resources.admin_stop
 import com.raulshma.jellyplay.feature.admin.generated.resources.admin_stop_session_body
 import com.raulshma.jellyplay.feature.admin.generated.resources.admin_stop_session_title
 import com.raulshma.jellyplay.feature.admin.generated.resources.admin_unknown_error
+import com.raulshma.jellyplay.feature.admin.generated.resources.jellyplay_bc_sent
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -83,12 +87,28 @@ fun AdminDashboardScreen(
     onPlugins: () -> Unit = {},
     onUsers: () -> Unit = {},
     onBackups: () -> Unit = {},
+    /** Gated on the companion plugin's `transcodes` feature (ADR 0010); off = no tile. */
+    onTranscodes: () -> Unit = {},
+    /** Gated on the companion plugin's `analytics` feature (ADR 0010); off = no tile. */
+    onAnalytics: () -> Unit = {},
     viewModel: AdminDashboardViewModel = koinViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val transcodesEnabled by viewModel.jellyPlayTranscodesEnabled.collectAsStateWithLifecycle()
+    val broadcastEnabled by viewModel.jellyPlayBroadcastEnabled.collectAsStateWithLifecycle()
+    val analyticsEnabled by viewModel.jellyPlayAnalyticsEnabled.collectAsStateWithLifecycle()
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
     val backgroundColorState = rememberScreenBackgroundColorState()
+    val bus = LocalUserMessageBus.current
+
+    // Resolve the companion-plugin gate when the dashboard becomes visible —
+    // UNKNOWN → one probe (no-op once AVAILABLE/UNAVAILABLE, re-armed by the
+    // store's identity reset). Without this the Quick Actions tile would stay
+    // hidden until the user visited settings.
+    LaunchedEffect(Unit) {
+        viewModel.refreshJellyPlayPluginStatus()
+    }
 
     // TV focus-on-launch: focus the first quick action once content arrives so D-pad input lands on
     // content, not the navigation drawer.
@@ -101,6 +121,57 @@ fun AdminDashboardScreen(
 
     var showRestartDialog by remember { mutableStateOf(false) }
     var showShutdownDialog by remember { mutableStateOf(false) }
+
+    // The "Send broadcast" composer state (ADR 0010): the three fields live
+    // here so reopening keeps the draft, the in-flight flag spans the request
+    // (Send/Cancel disabled until it settles), and a failure keeps the dialog
+    // open over its inline error line. Success closes + posts the bus message
+    // (the admin module's toast/snackbar idiom).
+    var showBroadcastDialog by remember { mutableStateOf(false) }
+    var broadcastTitle by remember { mutableStateOf("") }
+    var broadcastBody by remember { mutableStateOf("") }
+    var broadcastUrl by remember { mutableStateOf("") }
+    var isBroadcasting by remember { mutableStateOf(false) }
+    var broadcastFailed by remember { mutableStateOf(false) }
+    val broadcastSentMessage = stringResource(Res.string.jellyplay_bc_sent)
+
+    if (showBroadcastDialog) {
+        BroadcastDialog(
+            title = broadcastTitle,
+            body = broadcastBody,
+            url = broadcastUrl,
+            isSending = isBroadcasting,
+            sendFailed = broadcastFailed,
+            onTitleChange = { broadcastTitle = it; broadcastFailed = false },
+            onBodyChange = { broadcastBody = it; broadcastFailed = false },
+            onUrlChange = { broadcastUrl = it; broadcastFailed = false },
+            onConfirm = {
+                isBroadcasting = true
+                viewModel.submitBroadcast(
+                    title = broadcastTitle.trim(),
+                    body = broadcastBody.trim(),
+                    url = broadcastUrl.trim().takeIf { it.isNotBlank() },
+                ) { success ->
+                    isBroadcasting = false
+                    if (success) {
+                        showBroadcastDialog = false
+                        broadcastTitle = ""
+                        broadcastBody = ""
+                        broadcastUrl = ""
+                        bus.info(broadcastSentMessage)
+                    } else {
+                        broadcastFailed = true
+                    }
+                }
+            },
+            onDismiss = {
+                if (!isBroadcasting) {
+                    showBroadcastDialog = false
+                    broadcastFailed = false
+                }
+            },
+        )
+    }
 
     if (showRestartDialog) {
         ConfirmDialog(
@@ -200,6 +271,12 @@ fun AdminDashboardScreen(
                     onPlugins = onPlugins,
                     onUsers = onUsers,
                     onBackups = onBackups,
+                    onTranscodes = onTranscodes,
+                    showTranscodes = transcodesEnabled,
+                    onBroadcast = { showBroadcastDialog = true },
+                    showBroadcast = broadcastEnabled,
+                    onAnalytics = onAnalytics,
+                    showAnalytics = analyticsEnabled,
                     onStopSession = { viewModel.showStopSessionDialog(it) },
                     contentFocusRequester = contentFocusRequester,
                     modifier = Modifier.fillMaxSize(),
@@ -227,6 +304,14 @@ private fun DashboardContent(
     onPlugins: () -> Unit = {},
     onUsers: () -> Unit = {},
     onBackups: () -> Unit = {},
+    onTranscodes: () -> Unit = {},
+    showTranscodes: Boolean = false,
+    /** Gated on the companion plugin's `events` feature (ADR 0010); off = no tile. */
+    onBroadcast: () -> Unit = {},
+    showBroadcast: Boolean = false,
+    /** Gated on the companion plugin's `analytics` feature (ADR 0010); off = no tile. */
+    onAnalytics: () -> Unit = {},
+    showAnalytics: Boolean = false,
     onStopSession: (SessionInfo) -> Unit = {},
     contentFocusRequester: FocusRequester,
     modifier: Modifier = Modifier,
@@ -334,6 +419,12 @@ private fun DashboardContent(
                 onPlugins = onPlugins,
                 onUsers = onUsers,
                 onBackups = onBackups,
+                showTranscodes = showTranscodes,
+                onTranscodes = onTranscodes,
+                showBroadcast = showBroadcast,
+                onBroadcast = onBroadcast,
+                showAnalytics = showAnalytics,
+                onAnalytics = onAnalytics,
             )
         }
     }

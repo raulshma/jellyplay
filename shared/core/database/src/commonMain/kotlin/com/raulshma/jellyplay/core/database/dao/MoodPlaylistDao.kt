@@ -43,4 +43,8 @@ interface MoodPlaylistDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertPreference(preference: MoodPlaylistPreferenceEntity)
+
+    /** Removes one playlist's preference row — the sync adapter's adopted-tombstone face. */
+    @Query("DELETE FROM mood_playlist_preferences WHERE playlistId = :playlistId")
+    suspend fun deletePreferenceById(playlistId: String)
 }

@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.core.data.repository
 import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.HomeSectionsResult
+import com.raulshma.jellyplay.core.model.JellyPlayRowEntry
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import kotlin.test.Test
@@ -132,6 +133,48 @@ class HomeSnapshotFingerprintTest {
         )
         for ((field, mutate) in mutations) {
             assertNotEquals(baseline, HomeSnapshotFingerprint.of(mutate(result())), field)
+        }
+    }
+
+    @Test
+    fun `plugin row entries are fingerprinted`() {
+        // A PLUGIN_ROW section with one resolved card + one fallback tile.
+        fun pluginResult(entries: List<JellyPlayRowEntry>) = result(
+            sections = listOf(
+                section(
+                    id = "jellyplay_seasonal",
+                    title = "Spooky Season",
+                    type = HomeSectionType.PLUGIN_ROW,
+                    items = emptyList(),
+                ).copy(jellyPlayRowEntries = entries),
+            ),
+        )
+        val baselineEntries = listOf(
+            JellyPlayRowEntry(title = "Local One", year = "2001", localItem = item(id = "l1")),
+            JellyPlayRowEntry(title = "Unmatched", year = "1954"),
+        )
+        val baseline = HomeSnapshotFingerprint.of(pluginResult(baselineEntries))
+
+        // Same result → same fingerprint.
+        assertEquals(baseline, HomeSnapshotFingerprint.of(pluginResult(baselineEntries)))
+
+        // Everything the row renders flips it: the curation order, either
+        // fallback-tile text field, entry membership, and the resolved card's
+        // user-data fields.
+        val mutations = listOf(
+            "entryOrder" to baselineEntries.reversed(),
+            "entryTitle" to baselineEntries.map { it.copy(title = "Renamed") },
+            "entryYear" to baselineEntries.map { it.copy(year = "1999") },
+            "entryMembership" to baselineEntries.take(1),
+            "localItemId" to baselineEntries.map { it.copy(localItem = it.localItem?.copy(id = "l2")) },
+            "localItemPosition" to baselineEntries.map {
+                it.copy(localItem = it.localItem?.copy(playbackPositionTicks = 600_000_000L))
+            },
+            "localItemPlayed" to baselineEntries.map { it.copy(localItem = it.localItem?.copy(isPlayed = true)) },
+            "localItemFavorite" to baselineEntries.map { it.copy(localItem = it.localItem?.copy(isFavorite = true)) },
+        )
+        for ((field, entries) in mutations) {
+            assertNotEquals(baseline, HomeSnapshotFingerprint.of(pluginResult(entries)), field)
         }
     }
 

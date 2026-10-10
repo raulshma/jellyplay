@@ -8,7 +8,7 @@ import com.raulshma.jellyplay.core.model.ItemPlaybackPreference
 /**
  * Folds one resolved per-item/series playback preference
  * ([ItemPlaybackPreferenceResolver.resolved]'s emission) into the session's
- * dependent slices — the arm-phase collector body the [PlayerWiring] builder
+ * dependent slices — the arm-phase collector body the `PlayerWiring` builder
  * used to own inline (the [PlayerPrefsFanout] shape: plain values in, named
  * single-purpose lambdas out, jvmTest-pinned with fakes). In emission order:
  *
@@ -63,7 +63,7 @@ internal class TrackPreferenceFanout(
 
 /**
  * The displaced-holder self-pause decision for the focus claim flow — the
- * arm-phase collector body the [PlayerWiring] builder used to own inline
+ * arm-phase collector body the `PlayerWiring` builder used to own inline
  * (the reader's observation pattern): skip ONLY while the floor is HELD by
  * us — every other state falls through and pauses an engine that is somehow
  * still playing. That includes our OWN Suspended(VIDEO) claims: a user pause

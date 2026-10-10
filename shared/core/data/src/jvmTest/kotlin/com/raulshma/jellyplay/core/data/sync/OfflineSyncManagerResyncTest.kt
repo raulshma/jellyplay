@@ -6,7 +6,7 @@ import com.raulshma.jellyplay.core.data.repository.DownloadStartRequest
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineDownloadWriter
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
-import com.raulshma.jellyplay.core.data.util.TimeSource
+import com.raulshma.jellyplay.core.model.TimeSource
 import com.raulshma.jellyplay.core.database.dao.OfflineMediaDao
 import com.raulshma.jellyplay.core.database.dao.SyncBaselineDao
 import com.raulshma.jellyplay.core.database.entity.SyncBaselineEntity
@@ -509,6 +509,18 @@ class OfflineSyncManagerResyncTest {
         override fun enqueueDownload(downloadId: String) {
             calls += "enqueueDownload"
         }
+
+        // The port's read side — resync writes never read back here, so these
+        // are surface-completing no-ops.
+        override suspend fun loadLocalSubtitleManifest(
+            downloadPath: String,
+            itemId: String?,
+        ): com.raulshma.jellyplay.core.model.OfflineSubtitleManifest? = null
+
+        override suspend fun loadLocalSegments(itemId: String): List<com.raulshma.jellyplay.core.model.MediaSegment>? = null
+
+        override suspend fun getDownloadFileInventory(itemId: String): com.raulshma.jellyplay.core.model.DownloadFileInventory =
+            com.raulshma.jellyplay.core.model.DownloadFileInventory.EMPTY
     }
 
     private fun detail(): MediaDetail {

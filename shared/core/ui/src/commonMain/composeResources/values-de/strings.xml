@@ -281,4 +281,132 @@
          for PosterCard/WideMediaCard). -->
     <string name="core_ui_card_percent_complete">%1$d% abgeschlossen</string>
     <string name="core_ui_card_time_left">noch %1$s</string>
+
+    <!-- SubtitleFreeFormColorPickerDialog (matches the default-locale grouping) -->
+    <string name="core_ui_color_picker_title">Farbe wählen</string>
+    <string name="core_ui_color_hex">Hex</string>
+    <string name="core_ui_color_hue">Farbton</string>
+    <string name="core_ui_color_saturation">Sättigung</string>
+    <string name="core_ui_color_value">Helligkeit</string>
+    <string name="core_ui_color_invalid_hex">Ungültiger Hex-Farbwert</string>
+    <string name="core_ui_color_apply">Anwenden</string>
+    <string name="core_ui_color_cancel">Abbrechen</string>
+
+    <!-- Localizable labels for the enum-valued preference rows rendered from
+         PreferenceEnumNames.kt (gesture mode, orientation lock, gesture
+         indicator side, notification check frequency). -->
+    <string name="core_gesture_mode_all">Alle Gesten</string>
+    <string name="core_gesture_mode_tap_only">Nur Tippen</string>
+    <string name="core_gesture_mode_none">Aus</string>
+    <string name="core_orientation_sensor_landscape">Querformat</string>
+    <string name="core_orientation_sensor_portrait">Hochformat</string>
+    <string name="core_orientation_sensor">Automatisch drehen</string>
+    <string name="core_orientation_locked_landscape">Querformat gesperrt</string>
+    <string name="core_orientation_locked_portrait">Hochformat gesperrt</string>
+    <string name="core_gesture_indicator_opposite">Gegenseite</string>
+    <string name="core_gesture_indicator_same">Gleiche Seite</string>
+    <string name="core_check_frequency_every_hour">Jede Stunde</string>
+    <string name="core_check_frequency_every_3_hours">Alle 3 Stunden</string>
+    <string name="core_check_frequency_every_6_hours">Alle 6 Stunden</string>
+    <string name="core_check_frequency_every_12_hours">Alle 12 Stunden</string>
+    <string name="core_check_frequency_every_24_hours">Jeden Tag</string>
+
+    <!-- Player input mapping (issue #171 generalized): action / pattern / key labels -->
+    <string name="core_input_action_toggle_play_pause">Wiedergabe/Pause</string>
+    <string name="core_input_action_play">Wiedergeben</string>
+    <string name="core_input_action_pause">Pause</string>
+    <string name="core_input_action_seek_forward">Vorspulen</string>
+    <string name="core_input_action_seek_back">Zurückspulen</string>
+    <string name="core_input_action_toggle_controls">Steuerung ein-/ausblenden</string>
+    <string name="core_input_action_back_or_hide">Zurück / Steuerung ausblenden</string>
+    <string name="core_input_action_exit_player">Player beenden</string>
+    <string name="core_input_action_volume_up">Lautstärke erhöhen</string>
+    <string name="core_input_action_volume_down">Lautstärke senken</string>
+    <string name="core_input_action_toggle_mute">Ton an/aus</string>
+    <string name="core_input_action_brightness_up">Helligkeit erhöhen</string>
+    <string name="core_input_action_brightness_down">Helligkeit senken</string>
+    <string name="core_input_action_swipe_seek">Spulen (ziehen)</string>
+    <string name="core_input_action_swipe_volume">Lautstärke (ziehen)</string>
+    <string name="core_input_action_swipe_brightness">Helligkeit (ziehen)</string>
+    <string name="core_input_action_toggle_subtitles">Untertitel ein-/ausblenden</string>
+    <string name="core_input_action_lock_controls">Steuerung sperren</string>
+    <string name="core_input_action_sub_delay_decrease">Untertitel-Verzögerung -</string>
+    <string name="core_input_action_sub_delay_increase">Untertitel-Verzögerung +</string>
+    <string name="core_input_action_audio_delay_decrease">Audio-Verzögerung -</string>
+    <string name="core_input_action_audio_delay_increase">Audio-Verzögerung +</string>
+    <string name="core_input_action_cycle_speed">Geschwindigkeit wechseln</string>
+    <string name="core_input_action_hold_speed">Halten zum Beschleunigen</string>
+    <string name="core_input_action_zoom">Zwei-Finger-Zoom</string>
+    <string name="core_input_action_toggle_orientation">Bildschirm drehen</string>
+    <string name="core_input_action_screenshot">Screenshot</string>
+    <string name="core_input_action_next_episode">Nächste Episode</string>
+    <string name="core_input_action_previous_episode">Vorherige Episode</string>
+    <string name="core_input_action_none">Nicht belegt</string>
+    <string name="core_input_pattern_tap">Einfaches Tippen</string>
+    <string name="core_input_pattern_double_tap_left">Doppeltippen links</string>
+    <string name="core_input_pattern_double_tap_center">Doppeltippen Mitte</string>
+    <string name="core_input_pattern_double_tap_right">Doppeltippen rechts</string>
+    <string name="core_input_pattern_double_tap_hold_left">Doppeltippen und halten (links)</string>
+    <string name="core_input_pattern_double_tap_hold_right">Doppeltippen und halten (rechts)</string>
+    <string name="core_input_pattern_long_press">Langes Drücken</string>
+    <string name="core_input_pattern_vertical_swipe_left">Linke Seite nach oben/unten wischen (%1$s)</string>
+    <string name="core_input_pattern_vertical_swipe_right">Rechte Seite nach oben/unten wischen (%1$s)</string>
+    <!-- Short action words filling the vertical-swipe placeholders. -->
+    <string name="core_input_action_short_brightness">Helligkeit</string>
+    <string name="core_input_action_short_volume">Lautstärke</string>
+    <string name="core_input_pattern_horizontal_swipe">Nach links/rechts wischen (Spulen)</string>
+    <string name="core_input_edge_left">Am Rand wischen (links)</string>
+    <string name="core_input_edge_right">Am Rand wischen (rechts)</string>
+    <string name="core_input_pattern_pinch">Auf- und Zusammenziehen</string>
+    <string name="core_input_pattern_wheel_volume">Mausrad</string>
+    <string name="core_input_pattern_wheel_seek">Mausrad (Umschalt / horizontal)</string>
+    <string name="core_input_key_ctrl">Strg</string>
+    <string name="core_input_key_shift">Umschalt</string>
+    <string name="core_input_key_alt">Alt</string>
+    <string name="core_input_key_space">Leertaste</string>
+    <string name="core_input_key_k">K</string>
+    <string name="core_input_key_m">M</string>
+    <string name="core_input_key_v">V</string>
+    <string name="core_input_key_f">F</string>
+    <string name="core_input_key_g">G</string>
+    <string name="core_input_key_h">H</string>
+    <string name="core_input_key_j">J</string>
+    <string name="core_input_key_l">L</string>
+    <string name="core_input_key_bracket_left">[</string>
+    <string name="core_input_key_bracket_right">]</string>
+    <string name="core_input_key_f1">F1</string>
+    <string name="core_input_key_f2">F2</string>
+    <string name="core_input_key_f3">F3</string>
+    <string name="core_input_key_f4">F4</string>
+    <string name="core_input_key_escape">Esc</string>
+    <string name="core_input_key_back">Zurück</string>
+    <string name="core_input_key_dpad_left">Pfeil nach links</string>
+    <string name="core_input_key_dpad_right">Pfeil nach rechts</string>
+    <string name="core_input_key_dpad_up">Pfeil nach oben</string>
+    <string name="core_input_key_dpad_down">Pfeil nach unten</string>
+    <string name="core_input_key_volume_up">Lauter-Taste</string>
+    <string name="core_input_key_volume_down">Leiser-Taste</string>
+    <string name="core_input_key_page_up">Bild auf</string>
+    <string name="core_input_key_page_down">Bild ab</string>
+    <string name="core_input_key_home">Pos1</string>
+    <string name="core_input_key_end">Ende</string>
+    <string name="core_input_key_media_play">Medientaste Wiedergabe</string>
+    <string name="core_input_key_media_pause">Medientaste Pause</string>
+    <string name="core_input_key_media_play_pause">Medientaste Wiedergabe/Pause</string>
+    <string name="core_input_key_media_ff">Medientaste Schnellvorlauf</string>
+    <string name="core_input_key_media_rew">Medientaste Zurückspulen</string>
+    <string name="core_input_dpad_left">Steuerkreuz links</string>
+    <string name="core_input_dpad_right">Steuerkreuz rechts</string>
+    <string name="core_input_dpad_up">Steuerkreuz oben</string>
+    <string name="core_input_dpad_down">Steuerkreuz unten</string>
+    <string name="core_input_dpad_select">Steuerkreuz Mitte</string>
+    <string name="core_input_dpad_back">Zurück</string>
+    <string name="core_input_dpad_play_pause">Wiedergabe/Pause</string>
+    <string name="core_input_dpad_fast_forward">Schnellvorlauf</string>
+    <string name="core_input_dpad_rewind">Zurückspulen</string>
+
+    <!-- The JellyPlay sync / details-badges / player-notice strings
+         (ADR 0010 wave), translated together with the default file. -->
+    <string name="core_action_hide_from_continue_watching">Aus „Weiter ansehen“ entfernen</string>
+    <string name="core_action_show_from_continue_watching">In „Weiter ansehen“ anzeigen</string>
 </resources>

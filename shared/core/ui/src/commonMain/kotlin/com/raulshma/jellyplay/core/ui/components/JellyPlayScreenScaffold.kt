@@ -1,7 +1,5 @@
 package com.raulshma.jellyplay.core.ui.components
 import com.raulshma.jellyplay.core.ui.generated.resources.Res
-import com.raulshma.jellyplay.core.ui.generated.resources.core_report
-import com.raulshma.jellyplay.core.ui.generated.resources.core_retry
 import com.raulshma.jellyplay.core.ui.generated.resources.core_ui_back
 
 import androidx.compose.animation.AnimatedVisibility
@@ -387,70 +385,6 @@ fun ScreenEmptyState(
                         Text(actionLabel)
                     }
                 }
-            }
-        }
-    }
-}
-
-/**
- * Centralized full-screen error state, mirroring [ScreenLoadingState] /
- * [ScreenEmptyState]. Every screen previously rolled its own error UI
- * (a `Surface` with `errorContainer` + retry, or a snackbar). Adopting this
- * gives consistent iconography, retry affordance, and an optional report hook.
- *
- * @param message   localized error description.
- * @param onRetry   retry callback; when null, the Retry button is hidden.
- * @param onReport  optional "report" affordance for support requests.
- * @param retryLoading when true, disables Retry and shows a spinner.
- */
-@OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
-@Composable
-fun ScreenErrorState(
-    message: String,
-    onRetry: (() -> Unit)? = null,
-    modifier: Modifier = Modifier,
-    onReport: (() -> Unit)? = null,
-    retryLoading: Boolean = false,
-) {
-    Box(
-        modifier = modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center,
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
-        ) {
-            Icon(
-                com.composables.icons.tabler.Tabler.Outline.AlertTriangle,
-                contentDescription = null,
-                modifier = Modifier.size(64.dp),
-                tint = MaterialTheme.colorScheme.error,
-            )
-            Text(
-                text = message,
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-            )
-            if (onRetry != null) {
-                Spacer(Modifier.height(8.dp))
-                val retryFocusState = rememberTvFocusState(focusedScale = 1.05f)
-                androidx.compose.material3.OutlinedButton(
-                    onClick = onRetry,
-                    enabled = !retryLoading,
-                    modifier = Modifier
-                        .then(retryFocusState.focusModifier)
-                        .tvFocusIndicator(retryFocusState, ShapeCache.smooth12),
-                ) {
-                    if (retryLoading) {
-                        JellyPlayCircularProgressIndicator(modifier = Modifier.size(16.dp))
-                    } else {
-                        Text(stringResource(Res.string.core_retry))
-                    }
-                }
-            }
-            if (onReport != null) {
-                androidx.compose.material3.TextButton(onClick = onReport) { Text(stringResource(Res.string.core_report)) }
             }
         }
     }

@@ -76,6 +76,7 @@ import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
 import com.raulshma.jellyplay.core.ui.adaptive.rowCardWidth
 import com.raulshma.jellyplay.core.ui.components.ExpressiveChipContainer
+import com.raulshma.jellyplay.core.ui.components.HorizontalEdgePullRefreshBox
 import com.raulshma.jellyplay.core.ui.components.OfflineMediaCard
 import com.raulshma.jellyplay.core.ui.components.PlayButtonWithProgress
 import com.raulshma.jellyplay.core.ui.components.PosterCard
@@ -281,6 +282,10 @@ internal fun <T> HomeItemRow(
     // TV-only: reports the D-pad-focused item so the screen's Menu key can
     // open its quick actions (the card's own long-press handles touch).
     onFocusedItemChange: ((T) -> Unit)? = null,
+    // Touch-only: edge-pull refresh wiring for the row — null disables the
+    // gesture (TV rows and the non-refreshable/offline/Seerr sections pass
+    // null and render exactly as before).
+    edgeRefresh: EdgeRefreshContext? = null,
     itemContent: @Composable (item: T, modifier: Modifier) -> Unit,
 ) {
     val isTv = LocalTvMode.current
@@ -301,16 +306,27 @@ internal fun <T> HomeItemRow(
             itemContent(item, focusModifier)
         }
     } else {
-        HorizontalMediaScroller(
-            itemCount = items.size,
-            itemWidth = cardWidth,
-            spacing = spacing,
-            contentPad = contentPad,
-            clippingEnabled = clippingEnabled,
+        // The pull gesture wraps the scroller (a Box overlay): the child
+        // list's edge leftovers feed the accumulator, and the edge spinner
+        // overlays the row. The scroller's own mouseScroll stays inside and
+        // unaffected (dispatchRawDelta bypasses nested scroll, so mouse input
+        // can never trigger the pull).
+        HorizontalEdgePullRefreshBox(
+            enabled = edgeRefresh != null,
+            isRefreshing = edgeRefresh?.inProgress == true,
+            onRefresh = { edgeRefresh?.onRefresh() },
             modifier = modifier.tvFocusRestorer(),
-            key = { index -> key(items[index]) },
-        ) { index ->
-            itemContent(items[index], Modifier)
+        ) {
+            HorizontalMediaScroller(
+                itemCount = items.size,
+                itemWidth = cardWidth,
+                spacing = spacing,
+                contentPad = contentPad,
+                clippingEnabled = clippingEnabled,
+                key = { index -> key(items[index]) },
+            ) { index ->
+                itemContent(items[index], Modifier)
+            }
         }
     }
 }
@@ -393,7 +409,7 @@ private fun HorizontalMediaScroller(
  * → `PlaybackSourceResolver`), so offline playback needs no dedicated intent.
  */
 @Composable
-fun <T> ContinueWatchingRow(
+internal fun <T> ContinueWatchingRow(
     title: String,
     items: List<T>,
     toMediaItem: (T) -> MediaItem,
@@ -413,6 +429,9 @@ fun <T> ContinueWatchingRow(
     // TV-only: reports the D-pad-focused item so the screen's Menu key can open
     // its quick actions (the wide card's own long-press handles touch).
     onFocusedItemChange: ((MediaItem) -> Unit)? = null,
+    // Touch-only edge-pull refresh wiring — forwarded to [HomeItemRow]; null
+    // (offline rows) keeps the gesture off.
+    edgeRefresh: EdgeRefreshContext? = null,
 ) {
     // Continue-watching cards are wide (landscape thumbnails + progress/metadata), so they
     // scale ~1.6× the portrait poster-card width rather than using [rowCardWidth] directly.
@@ -442,6 +461,7 @@ fun <T> ContinueWatchingRow(
             focusRequester = focusRequester,
             onRowFocused = onRowFocused,
             onFocusedItemChange = { item -> onFocusedItemChange?.invoke(toMediaItem(item)) },
+            edgeRefresh = edgeRefresh,
         ) { item, mod ->
             val memoizedClick = remember(item) { { onItemClick(item) } }
             val memoizedPlayClick = onPlayClick?.let { click -> remember(item, click) { { click(item) } } }
@@ -462,7 +482,7 @@ fun <T> ContinueWatchingRow(
 
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
-fun HomeMediaRow(
+internal fun HomeMediaRow(
     title: String,
     items: List<MediaItem>,
     imageUrlBuilder: (MediaItem) -> String,
@@ -502,6 +522,9 @@ fun HomeMediaRow(
     onRollClick: (() -> Unit)? = null,
     rollInProgress: Boolean = false,
     rollAccessibilityLabel: String? = null,
+    // Touch-only edge-pull refresh wiring — forwarded to [HomeItemRow]; null
+    // (offline/Seerr rows, non-refreshable types) keeps the gesture off.
+    edgeRefresh: EdgeRefreshContext? = null,
 ) {
     val isTv = LocalTvMode.current
     val cardPrefs = LocalCardDisplayPreferences.current
@@ -552,6 +575,7 @@ fun HomeMediaRow(
             focusRequester = focusRequester,
             onRowFocused = onRowFocused,
             onFocusedItemChange = { item -> onFocusedItemChange?.invoke(item) },
+            edgeRefresh = edgeRefresh,
         ) { item, mod ->
             val memoizedClick = remember(item) { { onItemClick(item) } }
             val memoizedPlayClick = onPlayClick?.let { click -> remember(item, click) { { click(item) } } }

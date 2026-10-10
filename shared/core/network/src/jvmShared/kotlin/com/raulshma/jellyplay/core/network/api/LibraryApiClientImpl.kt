@@ -4,6 +4,7 @@ import com.raulshma.jellyplay.core.model.CollectionSummary
 import com.raulshma.jellyplay.core.model.CacheIdentity
 import com.raulshma.jellyplay.core.model.DiscoverRowConfig
 import com.raulshma.jellyplay.core.model.Genre
+import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionQuery
 import com.raulshma.jellyplay.core.model.HomeSectionsResult
 import com.raulshma.jellyplay.core.model.LibraryFilters
@@ -35,6 +36,7 @@ import com.raulshma.jellyplay.core.network.library.HomeSectionsFetcher
 import com.raulshma.jellyplay.core.network.library.SEARCH_SUGGESTIONS_FIELDS
 import com.raulshma.jellyplay.core.network.library.SEARCH_SUGGESTIONS_ITEM_TYPES
 import com.raulshma.jellyplay.core.network.library.SEARCH_SUGGESTIONS_SORT_BY
+import com.raulshma.jellyplay.core.network.library.JellyPlayHomeSectionSources
 import com.raulshma.jellyplay.core.network.library.SeerrHomeSectionSources
 import com.raulshma.jellyplay.core.network.library.buildChildItemImagesQuerySpec
 import com.raulshma.jellyplay.core.network.library.buildDiscoverRowQuerySpec
@@ -122,6 +124,15 @@ class LibraryApiClientImpl(
      * layer). Default null = this wiring fetches no Seerr rows (unit fakes).
      */
     private val seerrHomeSectionSources: SeerrHomeSectionSources? = null,
+    /**
+     * The plugin-side leaf source for the home fetcher's PLUGIN_ROW rows
+     * (seasonal today; satisfied by the data layer's adapter beside the
+     * `JellyPlayPluginApiClient` (the family) —
+     * the capability probe lives in the data layer's status store). Default
+     * null = this wiring fetches no plugin rows (unit fakes, graphs without
+     * the plugin cluster).
+     */
+    private val jellyPlayHomeSectionSources: JellyPlayHomeSectionSources? = null,
 ) : LibraryApiClient, PlaylistApiClient, CollectionApiClient, HomeSectionSources, HomeSectionsCachePort {
 
     /**
@@ -179,6 +190,7 @@ class LibraryApiClientImpl(
             // this Android floor must not assume): [nowLocalDateTime].
             timeSource.nowLocalDateTime().toLocalDate().toString()
         },
+        jellyPlaySources = jellyPlayHomeSectionSources,
     )
 
     /**
@@ -203,17 +215,32 @@ class LibraryApiClientImpl(
     // The home cache-maintenance verbs are NOT on [LibraryApiClient] anymore:
     // the data layer's write/roll paths reach them through
     // [HomeSectionsCachePort], which this impl satisfies with the same
-    // one-line forwards to the fetcher it has always delegated to.
+    // one-line forwards to the fetcher it has always delegated to. The
+    // discover-row verbs' generation parameter rides along untouched: it is
+    // the data layer's post-bump cache-write token, and this client neither
+    // derives nor alters it — pure pass-through to the fetcher's mirror.
     override fun invalidateSubcallCaches() {
         homeSectionsFetcher.invalidateCaches()
     }
 
-    override fun invalidateDiscoverRow(rowId: String) {
-        homeSectionsFetcher.invalidateDiscoverRow(rowId)
+    override fun invalidateDiscoverRow(rowId: String, generation: Long) {
+        homeSectionsFetcher.invalidateDiscoverRow(rowId, generation)
     }
 
-    override fun seedDiscoverRow(row: DiscoverRowConfig, items: List<MediaItem>) {
-        homeSectionsFetcher.seedDiscoverRow(row, items)
+    override fun seedDiscoverRow(row: DiscoverRowConfig, items: List<MediaItem>, generation: Long) {
+        homeSectionsFetcher.seedDiscoverRow(row, items, generation)
+    }
+
+    override suspend fun refreshHomeSection(
+        section: HomeSection,
+        query: HomeSectionQuery,
+        mergeNextUpIntoContinueWatching: Boolean,
+        force: Boolean,
+    ): Result<HomeSection?> = engine.apiResultWithRetry {
+        // The fetcher returns Result (per-row failures are values); the retry
+        // wrapper's unit of work is a throw, so unwrap — a failure rethrows
+        // here and comes back as Result.failure with the retry policy applied.
+        homeSectionsFetcher.refreshSection(section, query, mergeNextUpIntoContinueWatching, force).getOrThrow()
     }
 
     override suspend fun getDiscoverRowItems(row: DiscoverRowConfig): Result<List<MediaItem>> = engine.withApi { api ->
@@ -486,6 +513,24 @@ class LibraryApiClientImpl(
             totalRecordCount = totalCount,
             startIndex = startIndex,
         )
+    }
+
+    override suspend fun getItemsByIds(ids: List<String>): Result<List<MediaItem>> = engine.withApi { api ->
+        if (ids.isEmpty()) {
+            emptyList()
+        } else {
+            // Same batched-ids read the classic-latest pipeline uses to
+            // resolve grouped Series cards (degrade-not-fail there); here the
+            // caller — the home fetcher's plugin-row mapping — degrades per
+            // entry, so a failed read surfaces as a failed Result and every
+            // entry falls back to its title+year tile. Parental-rating
+            // filtered like every list read: the row renders on home, so it
+            // obeys the home rules.
+            api.itemsApi.getItems(
+                ids = ids.map { it.toUUID() },
+                fields = LIST_ITEM_FIELDS,
+            ).content?.items.orEmpty().toFilteredMediaItems(engine.currentMaxParentalRating)
+        }
     }
 
     override suspend fun getMediaDetail(itemId: String): Result<MediaDetail> = engine.withApi { api ->

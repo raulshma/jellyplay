@@ -19,7 +19,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.Test
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
-import com.raulshma.jellyplay.core.data.testutil.FakeTimeSource
+import com.raulshma.jellyplay.core.testfixtures.FakeTimeSource
 
 /**
  * Exercises [ItemPlaybackPreferenceRepositoryImpl] against a real in-memory

@@ -14,7 +14,8 @@ class DurationFormatterTest {
     @BeforeTest
     fun pinUsLocale() {
         // The hour branch routes through the "%.1f"-shaped formatOneDecimal
-        // seam, whose JVM actual is default-locale-sensitive.
+        // seam (pinned directly below, too), whose JVM actual is
+        // default-locale-sensitive.
         Locale.setDefault(Locale.US)
     }
 
@@ -137,6 +138,26 @@ class DurationFormatterTest {
     }
 
     @Test
+    fun `formatDurationMs paddedMinutes zero-pads the under-hour minutes`() {
+        // Trickplay's deliberate padding (the plain variant renders "5:07"):
+        // the overlay label must not jitter between the 9- and 10-minute
+        // marks while scrubbing.
+        assertEquals("05:07", formatDurationMs((5 * 60 + 7) * 1000L, paddedMinutes = true))
+        assertEquals("09:59", formatDurationMs((9 * 60 + 59) * 1000L, paddedMinutes = true))
+        assertEquals("10:00", formatDurationMs(10 * 60 * 1000L, paddedMinutes = true))
+        assertEquals("00:45", formatDurationMs(45_000, paddedMinutes = true))
+        assertEquals("00:00", formatDurationMs(0, paddedMinutes = true))
+    }
+
+    @Test
+    fun `formatDurationMs paddedMinutes leaves the hours branch unpadded`() {
+        // Only the under-hour minutes pad; hours render bare, exactly the
+        // shape the trickplay overlay shipped before the fold.
+        assertEquals("1:02:03", formatDurationMs((3600 + 2 * 60 + 3) * 1000L, paddedMinutes = true))
+        assertEquals("2:00:00", formatDurationMs(2 * 3600 * 1000L, paddedMinutes = true))
+    }
+
+    @Test
     fun `formatRelativeTime buckets real ISO stamps`() {
         val now = java.time.OffsetDateTime.now()
         assertNull(formatRelativeTime(null))
@@ -160,5 +181,39 @@ class DurationFormatterTest {
         assertEquals("59m", formatDurationApproxSeconds(3_599))    // minute branch, no decimal
         assertEquals("45s", formatDurationApproxSeconds(45))       // seconds branch
         assertEquals("0s", formatDurationApproxSeconds(0))
+    }
+
+    // ── the formatOneDecimal seam, directly ──────────────────────────────
+    // Migrated here when the expect left PlatformTime.kt for this file's
+    // subject: DateLabelsJvmTest and PlatformTimeJvmTest both pinned it
+    // through the old homes; the assertions below are their union.
+
+    /** `%.1f` renders with the host-default decimal separator — normalize it. */
+    private fun String.normalized() = replace(',', '.')
+
+    @Test
+    fun `formatOneDecimal keeps the percent-one-f contract`() {
+        assertEquals("4.0", formatOneDecimal(4.0).normalized())
+        assertEquals("12.3", formatOneDecimal(12.34).normalized())
+    }
+
+    @Test
+    fun `formatOneDecimal rounds half-up at the first decimal`() {
+        assertEquals("1.0", formatOneDecimal(1.04).normalized())
+        assertEquals("1.0", formatOneDecimal(0.96).normalized())
+        assertEquals("1.0", formatOneDecimal(1.0).normalized())
+        // HALF_UP: 0.25 rounds away from the 0.24999... boundary.
+        assertEquals("0.3", formatOneDecimal(0.25).normalized())
+        assertEquals("1.3", formatOneDecimal(1.25).normalized())
+        assertEquals("2.0", formatOneDecimal(1.96).normalized())
+    }
+
+    @Test
+    fun `formatOneDecimal renders stray negative signs symmetrically`() {
+        // "%.1f" of a small negative is "-0.0" — pinned as the documented
+        // ("sign rendered symmetrically") contract, not silently fixed.
+        assertEquals("-0.0", formatOneDecimal(-0.04).normalized())
+        assertEquals("-1.5", formatOneDecimal(-1.54).normalized())
+        assertEquals("-1.3", formatOneDecimal(-1.25).normalized())
     }
 }

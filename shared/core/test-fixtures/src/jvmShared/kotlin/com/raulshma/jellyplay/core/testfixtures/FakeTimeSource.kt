@@ -7,10 +7,9 @@ import java.time.ZoneId
 /**
  * The canonical controllable [TimeSource] fake for feature-module jvmTest
  * suites — the richest of the per-module copies that used to drift (livetv's
- * former private one was a strict subset of this shape).
- * :core:data keeps its own same-shaped local copy for its 14 consumer files;
- * per-touch adoption means those stay put until a touch migrates them — keep
- * the two in shape sync when editing either.
+ * former private one was a strict subset of this shape). core:data's former
+ * same-shaped local copy was adopted into this one (its consumer files import
+ * this class now).
  *
  * D3: implements the core:model TimeSource (the seam moved there; the
  * old core:data FQIN is a deprecated typealias).

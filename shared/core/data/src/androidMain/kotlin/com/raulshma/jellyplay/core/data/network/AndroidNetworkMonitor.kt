@@ -128,11 +128,7 @@ class AndroidNetworkMonitor(
         .distinctUntilChanged()
         .conflate()
 
-    private fun currentStatus(): NetworkStatus {
-        val activeNetwork = connectivityManager.activeNetwork
-            ?: return NetworkStatus.Offline
-        return deriveStatusFromCapabilities(activeNetwork)
-    }
+    private fun currentStatus(): NetworkStatus = activeNetworkStatus(connectivityManager)
 
     private fun deriveStatusFromCapabilities(network: Network): NetworkStatus {
         val caps = connectivityManager.getNetworkCapabilities(network)
@@ -173,6 +169,25 @@ internal fun networkStatusFromCapabilityFacts(
     validated -> NetworkStatus.Online
     hasInternet -> NetworkStatus.Local
     else -> NetworkStatus.Offline
+}
+
+/**
+ * The synchronous active-network read, shared by [AndroidNetworkMonitor]'s
+ * current-value seeding and the offline manager's foreground probe: the
+ * active network's capability facts through the
+ * [networkStatusFromCapabilityFacts] ladder — [NetworkStatus.Offline] when
+ * there is no active network or no readable capabilities. One function, not
+ * two hand-mirrored ladders: the probe's "reachable" verdict and the
+ * published [NetworkStatus] cannot drift.
+ */
+internal fun activeNetworkStatus(connectivityManager: ConnectivityManager): NetworkStatus {
+    val activeNetwork = connectivityManager.activeNetwork ?: return NetworkStatus.Offline
+    val caps = connectivityManager.getNetworkCapabilities(activeNetwork)
+        ?: return NetworkStatus.Offline
+    return networkStatusFromCapabilityFacts(
+        hasInternet = caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET),
+        validated = caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED),
+    )
 }
 
 /**

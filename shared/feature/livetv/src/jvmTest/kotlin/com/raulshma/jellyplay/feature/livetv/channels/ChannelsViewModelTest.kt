@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.feature.livetv.channels
 
 import com.raulshma.jellyplay.core.data.playback.VideoMiniPlayerState
-import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
+import com.raulshma.jellyplay.core.network.api.LiveTvApiClient
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeState
 import com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeStateStore
@@ -36,7 +36,7 @@ class ChannelsViewModelTest {
     // has no access to that module (search/music conveyor port pattern).
     private val mainDispatcher = StandardTestDispatcher()
 
-    private lateinit var mediaRepository: LiveTvRepository
+    private lateinit var mediaRepository: LiveTvApiClient
     private lateinit var imageUrlProvider: ImageUrlProvider
 
     /** Backing flow behind the mocked store's `state` — the fake runtime store. */

@@ -48,6 +48,9 @@ internal class JellyfinRawRequester(
     private val engine: JellyfinApiEngine,
 ) {
 
+    /** The engine's shared OkHttp client — for stream-flavoured variants (SSE) that clone it with different timeouts. */
+    internal val httpClient: okhttp3.OkHttpClient get() = engine.okHttpClient
+
     /**
      * Failover-correct base address + access token — the guard every folded
      * Plugin/MediaInfo endpoint used to run inline, with the same texts:
@@ -201,6 +204,24 @@ internal class JellyfinRawRequester(
         return client.newCall(request).execute().use { response ->
             if (!response.isSuccessful) throw Exception("$failureMessage: ${response.code}")
             response.body?.string().orEmpty()
+        }
+    }
+
+    /**
+     * [postForText]'s optional-read twin — [getBodyText]'s contract on a POST:
+     * null on ANY non-2xx, failure is "no data", never an error (the
+     * JellyPlay snapshots/import wave's degrade-to-hide reads). Same client as
+     * [postForText] (no timeout clone — these are short calls).
+     */
+    fun postForTextOrNull(path: String, bodyText: String): String? {
+        val session = requireSession()
+        val request = Request.Builder()
+            .url(session.base + path)
+            .tokenAuthHeader(session.token)
+            .post(bodyText.toRequestBody("application/json".toMediaType()))
+            .build()
+        return engine.okHttpClient.newCall(request).execute().use { response ->
+            if (response.isSuccessful) response.body?.string() else null
         }
     }
 }

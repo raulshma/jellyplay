@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.feature.livetv.channeldetail
 
-import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
-import com.raulshma.jellyplay.core.data.util.EpochMillisSource
+import com.raulshma.jellyplay.core.network.api.LiveTvApiClient
+import com.raulshma.jellyplay.core.model.EpochMillisSource
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.LiveTvProgram
 import com.raulshma.jellyplay.core.ui.message.UiMessage
@@ -31,7 +31,7 @@ import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
 
 class ChannelDetailViewModel(
-    private val mediaRepository: LiveTvRepository,
+    private val mediaRepository: LiveTvApiClient,
     private val imageUrlProvider: ImageUrlProvider,
     private val timeSource: EpochMillisSource,
 ) : JellyPlayViewModel() {

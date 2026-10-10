@@ -40,10 +40,123 @@ data class AdminDashboardState(
 
 class AdminDashboardViewModel(
     private val adminRepository: AdminRepository,
+    /**
+     * The JellyPlay companion-plugin seam (ADR 0010), nullable-with-default
+     * (SettingsViewModel pattern) so the direct-construction test harnesses
+     * compile. Backs the Quick Actions "Transcodes" tile's gate — the tile is
+     * offered only when the probe reports AVAILABLE **and** the `transcodes`
+     * feature key is present; a null store (or a stock server) never shows it.
+     */
+    private val jellyPlayStatusStore: com.raulshma.jellyplay.core.data.session.JellyPlayPluginStatusStore? = null,
+    /**
+     * The per-feature gate seam (probe AND the user's toggle) over the store
+     * above. Nullable-with-default; without it the probe-only combine below
+     * keeps the pre-toggle behavior.
+     */
+    private val jellyPlayFeatureGate: com.raulshma.jellyplay.core.data.session.JellyPlayFeatureGate? = null,
+    /**
+     * The plugin api client behind the "Send broadcast" composer (ADR 0010 —
+     * POST jellyplay/broadcast, riding the `events` stream). Nullable-with-
+     * default like the seams above; the send is refused while either gate is
+     * unwired, so direct construction (tests) simply can't broadcast.
+     */
+    private val jellyPlayPluginApiClient: com.raulshma.jellyplay.core.network.api.JellyPlayEventsRoutes? = null,
 ) : JellyPlayViewModel() {
 
     private val _uiState = stateFlow(AdminDashboardState())
     val uiState: StateFlow<AdminDashboardState> = _uiState.flow
+
+    /**
+     * The nullable-seam gate every plugin tile rides (the transcodes monitor's
+     * exact shape): the ONE gate seam when wired, else the probe-only combine
+     * over the status store, else constant false — a tile whose seams are
+     * unwired (direct construction, tests) simply never renders.
+     */
+    private fun pluginFeatureEnabled(featureKey: String): StateFlow<Boolean> =
+        when {
+            jellyPlayFeatureGate != null -> jellyPlayFeatureGate.isAvailable(featureKey)
+            jellyPlayStatusStore != null -> {
+                val store = jellyPlayStatusStore
+                stateIn(
+                    initial = false,
+                    flow = kotlinx.coroutines.flow.combine(store.status, store.features) { status, features ->
+                        status == com.raulshma.jellyplay.core.model.JellyPlayPluginStatus.AVAILABLE &&
+                            features.contains(featureKey)
+                    },
+                )
+            }
+            else -> kotlinx.coroutines.flow.MutableStateFlow(false)
+        }
+
+    /**
+     * Whether the dashboard may offer the companion-plugin transcodes monitor:
+     * plugin AVAILABLE + [com.raulshma.jellyplay.core.model.JellyPlayPluginFeatures.Transcodes]
+     * + the user's per-feature toggle (the ONE gate seam's reactive arm).
+     * Always false without the plugin seam — the tile simply never renders.
+     */
+    val jellyPlayTranscodesEnabled: StateFlow<Boolean> =
+        pluginFeatureEnabled(com.raulshma.jellyplay.core.model.JellyPlayPluginFeatures.Transcodes)
+
+    /**
+     * Whether the dashboard may offer the "Send broadcast" composer: the
+     * transcodes tile's gate shape over the `events` feature key (broadcasts
+     * fan out to connected clients over the plugin's events stream — no
+     * stream, no broadcast). Always false without the plugin seam.
+     */
+    val jellyPlayBroadcastEnabled: StateFlow<Boolean> =
+        pluginFeatureEnabled(com.raulshma.jellyplay.core.model.JellyPlayPluginFeatures.Events)
+
+    /**
+     * Whether the dashboard may offer the analytics dashboard tile: the
+     * transcodes tile's gate shape over the `analytics` feature key (an
+     * admin-only aggregate surface, gated on probe AND the per-feature toggle
+     * like its siblings). Always false without the plugin seam.
+     */
+    val jellyPlayAnalyticsEnabled: StateFlow<Boolean> =
+        pluginFeatureEnabled(com.raulshma.jellyplay.core.model.JellyPlayPluginFeatures.Analytics)
+
+    /**
+     * Sends the composer's broadcast (POST jellyplay/broadcast; the server
+     * answers 202 and fans the toast-style event out over the events stream).
+     * Refused while either plugin seam is unwired or the gate is closed —
+     * the [jellyPlayBroadcastEnabled] gate keeps the tile hidden, this is the
+     * send-time backstop (the transcodes VM's gate discipline). The Result is
+     * returned so the caller posts the success/error feedback through the
+     * shared user-message bus (the admin module's toast/snackbar idiom).
+     */
+    suspend fun sendBroadcast(title: String, body: String, url: String?): Result<Unit> {
+        val client = jellyPlayPluginApiClient ?: return Result.failure(IllegalStateException("JellyPlay plugin unavailable"))
+        if (jellyPlayBroadcastEnabled.value != true) {
+            return Result.failure(IllegalStateException("JellyPlay broadcast gate closed"))
+        }
+        return client.broadcast(title, body, url?.takeIf { it.isNotBlank() })
+    }
+
+    /**
+     * The screen's fire-and-forget entry: [sendBroadcast] on the VM scope with
+     * the settled outcome folded into a single boolean callback (true = the
+     * 202 accepted, false = any refusal/failure).
+     */
+    fun submitBroadcast(title: String, body: String, url: String?, onResult: (Boolean) -> Unit) {
+        launch {
+            onResult(sendBroadcast(title, body, url).isSuccess)
+        }
+    }
+
+    /**
+     * One capabilities probe; called when the dashboard becomes visible so the
+     * Transcodes tile's gate resolves without a settings detour. The store
+     * itself only acts while UNKNOWN (same discipline as the settings screen's
+     * sync section) — a stock server eats exactly one probe per visit.
+     */
+    fun refreshJellyPlayPluginStatus() {
+        val store = jellyPlayStatusStore ?: return
+        launch {
+            if (store.status.value == com.raulshma.jellyplay.core.model.JellyPlayPluginStatus.UNKNOWN) {
+                store.refresh()
+            }
+        }
+    }
 
     /**
      * Deadline (via [System.currentTimeMillis]) up to which an IDLE scan task

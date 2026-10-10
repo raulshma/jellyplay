@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.feature.livetv.epg
 
-import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
-import com.raulshma.jellyplay.core.data.util.SystemTimeSource
+import com.raulshma.jellyplay.core.network.api.LiveTvApiClient
+import com.raulshma.jellyplay.core.model.SystemTimeSource
 import com.raulshma.jellyplay.core.model.EpgGuide
 import com.raulshma.jellyplay.core.model.LiveTvProgram
 import com.raulshma.jellyplay.feature.livetv.components.RecordDialogState
@@ -36,7 +36,7 @@ class EpgViewModelRecordTest {
 
     private val mainDispatcher = StandardTestDispatcher()
 
-    private lateinit var mediaRepository: LiveTvRepository
+    private lateinit var mediaRepository: LiveTvApiClient
     private lateinit var viewModel: EpgViewModel
 
     @BeforeTest

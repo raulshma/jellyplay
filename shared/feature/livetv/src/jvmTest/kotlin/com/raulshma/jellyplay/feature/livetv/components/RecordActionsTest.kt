@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.feature.livetv.components
 
-import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
+import com.raulshma.jellyplay.core.network.api.LiveTvApiClient
 import com.raulshma.jellyplay.core.model.LiveTvProgram
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -37,7 +37,7 @@ class RecordActionsTest {
     private val mainDispatcher = StandardTestDispatcher()
 
     private lateinit var scope: CoroutineScope
-    private lateinit var repository: LiveTvRepository
+    private lateinit var repository: LiveTvApiClient
     private lateinit var observed: MutableList<RecordOutcome>
     private lateinit var actions: RecordActions
 

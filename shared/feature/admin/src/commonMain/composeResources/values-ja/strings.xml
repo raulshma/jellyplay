@@ -422,4 +422,49 @@
     <string name="admin_backups_reconnecting">サーバーが復帰しました — 再接続中…</string>
     <string name="admin_backups_restore_complete">復元が完了しました — サーバーに再接続しました。</string>
     <string name="admin_backups_restore_server_unreachable">復元後にサーバーが戻りませんでした。実行中か確認し、再度サインインしてください。</string>
+
+    <!-- JellyPlay companion plugin: active streams monitor -->
+    <string name="jellyplay_tr_title">アクティブなストリーム</string>
+    <string name="jellyplay_tr_empty">アクティブなストリームはありません</string>
+    <string name="jellyplay_tr_unknown">不明</string>
+    <string name="jellyplay_tr_paused">一時停止中</string>
+    <string name="jellyplay_tr_play_direct">ダイレクト</string>
+    <string name="jellyplay_tr_play_transcode">トランスコード</string>
+    <string name="jellyplay_tr_cancel">ストリームをキャンセル</string>
+    <string name="jellyplay_tr_cancel_title">ストリームをキャンセルしますか？</string>
+    <string name="jellyplay_tr_cancel_body">%1$s による %3$s での「%2$s」のストリームを停止します。クライアントは再生を終了します。</string>
+    <string name="jellyplay_tr_unavailable_title">アクティブなストリームを利用できません</string>
+    <string name="jellyplay_tr_unavailable_body">このサーバーで JellyPlay 連携プラグインを利用できないか、トランスコード機能が提供されていません。</string>
+
+    <!-- JellyPlay companion plugin: broadcast composer -->
+    <string name="jellyplay_bc_title">ブロードキャストを送信</string>
+    <string name="jellyplay_bc_field_title">タイトル</string>
+    <string name="jellyplay_bc_field_body">メッセージ</string>
+    <string name="jellyplay_bc_field_url">リンク URL（任意）</string>
+    <string name="jellyplay_bc_url_invalid">有効な http(s) リンクを入力してください</string>
+    <string name="jellyplay_bc_send">送信</string>
+    <string name="jellyplay_bc_sent">ブロードキャストを送信しました</string>
+    <string name="jellyplay_bc_failed">ブロードキャストに失敗しました。もう一度お試しください。</string>
+
+    <!-- JellyPlay companion plugin: analytics dashboard -->
+    <string name="jellyplay_an_title">統計</string>
+    <string name="jellyplay_an_unavailable_title">統計を利用できません</string>
+    <string name="jellyplay_an_unavailable_body">このサーバーで JellyPlay 連携プラグインを利用できないか、統計機能が提供されていません。</string>
+    <string name="jellyplay_an_degraded_title">統計は利用できません</string>
+    <string name="jellyplay_an_degraded_body">このサーバーでは統計を利用できません。サーバーの JellyPlay プラグインが提供していません。</string>
+    <string name="jellyplay_an_empty">この期間の再生はまだ記録されていません。</string>
+    <string name="jellyplay_an_days_7">7 日間</string>
+    <string name="jellyplay_an_days_30">30 日間</string>
+    <string name="jellyplay_an_days_90">90 日間</string>
+    <string name="jellyplay_an_plays">再生</string>
+    <string name="jellyplay_an_totals_watch_time">視聴時間</string>
+    <string name="jellyplay_an_totals_transcode_time">トランスコード時間</string>
+    <string name="jellyplay_an_totals_users">ユニークユーザー</string>
+    <string name="jellyplay_an_totals_items">ユニークアイテム</string>
+    <string name="jellyplay_an_section_chart">日別の再生</string>
+    <string name="jellyplay_an_section_users">ユーザー別</string>
+    <string name="jellyplay_an_section_top_items">人気アイテム</string>
+    <string name="jellyplay_an_section_sessions">最近のセッション</string>
+    <string name="jellyplay_an_sessions_empty">最近のセッションはありません</string>
+    <string name="jellyplay_an_filter_all">すべてのユーザー</string>
 </resources>

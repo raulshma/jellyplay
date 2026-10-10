@@ -91,5 +91,17 @@ class HomeQuickActionsTest {
         )
     }
 
+    @Test
+    fun cwToggle_routesToTheResumeRowOverlayWrite() {
+        assertEquals(
+            HomeQuickActionEffect.HideFromContinueWatching(item(MediaType.MOVIE)),
+            homeQuickActionEffect(item(MediaType.MOVIE), QuickAction.HIDE_FROM_CONTINUE_WATCHING, noopNavigate()),
+        )
+        assertEquals(
+            HomeQuickActionEffect.ShowFromContinueWatching(item(MediaType.EPISODE)),
+            homeQuickActionEffect(item(MediaType.EPISODE), QuickAction.SHOW_FROM_CONTINUE_WATCHING, noopNavigate()),
+        )
+    }
+
     private fun noopNavigate(): (String, Boolean) -> Unit = { _, _ -> }
 }

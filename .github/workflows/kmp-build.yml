@@ -41,6 +41,19 @@ defaults:
   run:
     shell: bash
 
+env:
+  # gradle/gradle-daemon-jvm.properties pins the Gradle daemon to JDK 21 with
+  # hardcoded foojay download URLs. windows runners keep their JDKs in
+  # hostedtoolcache, which Gradle's auto-detection does not scan, so the
+  # windows daemon falls back to the foojay redirect URL — which answers 400
+  # to Actions egress (2026-10: both windows jobs died at daemon start while
+  # ubuntu/macos found a local 21). setup-java (below) installs 21 too and
+  # exports JAVA_HOME_21_X64; this property adds that env var to Gradle's
+  # detection sources so the daemon criteria resolve locally on every OS.
+  # JAVA_HOME itself stays on 17 (the LAST version in setup-java's list wins)
+  # so the jvmToolchain(17) build lane never downloads a JDK either.
+  GRADLE_OPTS: -Dorg.gradle.java.installations.fromEnv=JAVA_HOME_21_X64
+
 jobs:
   shared-targets:
     strategy:
@@ -50,13 +63,27 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout Repository
+        # submodules: recursive — the plugin tree (jellyfin-plugin-jellyplay)
+        # carries the committed settings-catalog artifact the datastore
+        # golden-file test (SettingsCatalogGeneratorTest) opens; without it
+        # every shared-targets OS fails with "settings catalog artifact
+        # missing".
         uses: actions/checkout@v7
+        with:
+          submodules: recursive
 
-      - name: Set up JDK 17
+      - name: Set up JDK 17 + 21
+        # 17 is the build toolchain (jvmToolchain(17), AGP) and stays JAVA_HOME
+        # (last listed version wins); 21 satisfies the Gradle daemon JVM
+        # criteria (gradle-daemon-jvm.properties) via GRADLE_OPTS above —
+        # required on windows, whose hostedtoolcache layout Gradle can't
+        # auto-detect.
         uses: actions/setup-java@v5
         with:
           distribution: 'temurin'
-          java-version: '17'
+          java-version: |
+            21
+            17
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -173,13 +200,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
+        # submodules: recursive — uniform with shared-targets above; the
+        # hostTest lanes must be free to open the plugin tree the same way
+        # the datastore golden-file test does.
         uses: actions/checkout@v7
+        with:
+          submodules: recursive
 
-      - name: Set up JDK 17
+      - name: Set up JDK 17 + 21
+        # Same split as shared-targets: 17 = build toolchain/JAVA_HOME,
+        # 21 = daemon JVM criteria (GRADLE_OPTS at the workflow level).
         uses: actions/setup-java@v5
         with:
           distribution: 'temurin'
-          java-version: '17'
+          java-version: |
+            21
+            17
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -229,13 +265,23 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout Repository
+        # submodules: recursive — packaging embeds the shared tree; keep the
+        # plugin tree present so any future packaging-time read of it (the
+        # companion plugin artifact lives there) can't break the lane.
         uses: actions/checkout@v7
+        with:
+          submodules: recursive
 
-      - name: Set up JDK 17
+      - name: Set up JDK 17 + 21
+        # Same split as shared-targets: 17 = build toolchain/JAVA_HOME,
+        # 21 = daemon JVM criteria (GRADLE_OPTS at the workflow level) —
+        # windows packaging died at daemon start on the foojay 400 otherwise.
         uses: actions/setup-java@v5
         with:
           distribution: 'temurin'
-          java-version: '17'
+          java-version: |
+            21
+            17
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4

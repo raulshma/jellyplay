@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.feature.livetv.series
 
 import androidx.compose.runtime.Immutable
-import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
+import com.raulshma.jellyplay.core.network.api.LiveTvApiClient
 import com.raulshma.jellyplay.core.model.DvrSeriesTimer
 import com.raulshma.jellyplay.core.ui.message.UiMessage
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
@@ -27,7 +27,7 @@ data class SeriesUiState(
  * cancel sheet on tap.
  */
 class SeriesViewModel(
-    private val mediaRepository: LiveTvRepository,
+    private val mediaRepository: LiveTvApiClient,
 ) : JellyPlayViewModel() {
 
     private val _uiState = stateFlow(SeriesUiState())

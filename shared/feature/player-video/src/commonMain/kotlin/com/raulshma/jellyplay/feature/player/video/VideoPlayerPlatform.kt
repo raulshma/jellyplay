@@ -68,9 +68,14 @@ interface VideoPlayerPlatform : SubtitleContentGateway {
      * observed live — the same contract the legacy inline adapter had. The
      * audio-focus half of the former `createAudioLifecycle` seam died with
      * the video focus slice (the seat moved into core:data's PlaybackFocus).
+     *
+     * [isResumeOnPlugEnabled] feeds the opt-in resume-on-headset-insert twin
+     * re-read at every plug event so a mid-session pref flip
+     * is observed live. The desktop actual ignores it (no headset broadcast).
      */
     fun createBecomingNoisy(
         getEngine: () -> MediaEngine?,
+        isResumeOnPlugEnabled: () -> Boolean,
     ): VideoPlayerAudio
 
     /**

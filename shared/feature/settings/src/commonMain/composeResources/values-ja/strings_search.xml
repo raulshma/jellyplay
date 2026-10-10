@@ -60,6 +60,8 @@
     <string name="ss_library_view_mode_subtitle">ライブラリアイテムをグリッドまたはリストで表示します</string>
     <string name="ss_layout_mode_title">レイアウト</string>
     <string name="ss_layout_mode_subtitle">ウィンドウサイズに従わず、電話またはタブレットのレイアウトを強制します</string>
+    <string name="ss_screen_fit_title">画面フィット</string>
+    <string name="ss_screen_fit_subtitle">テレビのオーバースキャン対応セーフエリア余白（オフ / 5% / 10%）</string>
     <string name="ss_home_mode_title">ホームモード</string>
     <string name="ss_home_mode_subtitle">デフォルトのホーム画面レイアウトを設定します: 動画または音楽</string>
     <string name="ss_hero_section_title">ヒーローセクションを表示</string>
@@ -128,6 +130,8 @@
     <string name="ss_gestures_subtitle">明るさ、音量、シークのスワイプジェスチャーを切り替えます</string>
     <string name="ss_gesture_indicator_side_title">ジェスチャーインジケーターの位置</string>
     <string name="ss_gesture_indicator_side_subtitle">明るさ/音量バーをジェスチャーと反対側または同じ側に表示します</string>
+    <string name="ss_double_tap_hold_seek_title">ダブルタップ長押しシーク</string>
+    <string name="ss_double_tap_hold_seek_subtitle">ダブルタップ後の長押しでシークを繰り返します</string>
     <string name="ss_default_speed_title">デフォルト再生速度</string>
     <string name="ss_default_speed_subtitle">動画のデフォルトの初期再生速度</string>
     <string name="ss_default_aspect_title">デフォルトアスペクト比</string>
@@ -138,6 +142,8 @@
     <string name="ss_autoplay_countdown_subtitle">次のエピソードを自動再生する前のカウントダウン時間</string>
     <string name="ss_controls_timeout_title">コントロール表示時間</string>
     <string name="ss_controls_timeout_subtitle">遅延後に画面上のプレーヤーコントロールを自動的に非表示にします</string>
+    <string name="ss_hide_osd_on_pause_title">一時停止時にOSDを非表示</string>
+    <string name="ss_hide_osd_on_pause_subtitle">一時停止時にコントロールのオーバーレイを表示しない</string>
     <string name="ss_skip_back_on_resume_title">再開時に少し戻る</string>
     <string name="ss_skip_back_on_resume_subtitle">再生を再開したときに数秒戻ります</string>
     <string name="ss_show_clock_player_title">プレーヤーに時計を表示</string>
@@ -200,6 +206,8 @@
     <string name="ss_show_time_remaining_subtitle">経過時間の代わりに残り時間を表示します</string>
     <string name="ss_pause_on_focus_loss_title">フォーカス喪失時に一時停止</string>
     <string name="ss_pause_on_focus_loss_subtitle">システムがオーディオフォーカスの喪失を通知したときに再生を一時停止します</string>
+    <string name="ss_resume_headset_plug_title">ヘッドホン再接続時に再生を再開</string>
+    <string name="ss_resume_headset_plug_subtitle">取り外し時の自動一時停止後、ヘッドホンを再接続すると再生を再開します</string>
     <string name="ss_mpv_video_output_title">MPV 動画出力</string>
     <string name="ss_mpv_video_output_subtitle">MPV の動画出力ドライバー</string>
     <string name="ss_mpv_scaler_title">MPV スケーラー</string>
@@ -383,6 +391,8 @@
     <string name="ss_notification_vibrate_subtitle">通知時に振動させます</string>
     <string name="ss_notification_lights_title">通知ライト</string>
     <string name="ss_notification_lights_subtitle">対応デバイスで通知ライトを点滅させます</string>
+    <string name="ss_new_episodes_title">新エピソード通知</string>
+    <string name="ss_new_episodes_subtitle">新しいエピソード用の専用チャンネル</string>
     <string name="ss_max_per_check_title">確認ごとの最大通知数</string>
     <string name="ss_max_per_check_subtitle">通知バッチあたりの最大アイテム数</string>
     <string name="ss_notification_libraries_title">通知対象ライブラリ</string>
@@ -455,6 +465,8 @@
     <string name="ss_auto_lock_timer_subtitle">離脱後にアプリをロックするまでの時間</string>
     <string name="ss_backup_export_title">設定バックアップをエクスポート</string>
     <string name="ss_backup_export_subtitle">現在の設定を JSON ファイルにエクスポートします</string>
+    <string name="ss_backup_export_secrets_title">シークレット付きバックアップをエクスポート</string>
+    <string name="ss_backup_export_secrets_subtitle">設定に加えて、パスフレーズで暗号化した API キーと保存済みサーバーリストをエクスポートします</string>
     <string name="ss_backup_import_title">設定バックアップをインポート</string>
     <string name="ss_backup_import_subtitle">以前にエクスポートした設定バックアップから設定を復元します</string>
     <string name="ss_factory_reset_title">工場出荷時にリセット</string>
@@ -570,4 +582,6 @@
     <string name="ss_hooks_ended_cmd_subtitle">メディアの再生終了時に実行するコマンド</string>
     <string name="ss_hooks_idle_cmd_subtitle">アプリがアイドル状態になったときに実行するコマンド</string>
     <string name="ss_hooks_idle_ended_cmd_subtitle">アプリがアイドル状態を終了したときに実行するコマンド</string>
+    <string name="ss_input_bindings_title">コントロールをカスタマイズ</string>
+    <string name="ss_input_bindings_subtitle">ジェスチャー、マウス、キーボード、リモコンの操作</string>
 </resources>

@@ -79,8 +79,8 @@ class SeekTransportRoutingWiringTest {
             Regex(
                 """private fun routedSeek\(positionMs: Long[^)]*\) \{\s*""" +
                     """when \{\s*""" +
-                    """_uiState\.value\.isInSyncPlaySession -> syncPlay\.seekTo\(positionMs\)\s*""" +
-                    """cast\.isConnectedFlow\.value -> cast\.castSeekTo\(positionMs\)\s*""" +
+                    """_uiState\.value\.isInSyncPlaySession -> (playbackSession\.)?syncPlay\.seekTo\(positionMs\)\s*""" +
+                    """(playbackSession\.)?cast\.isConnectedFlow\.value -> (playbackSession\.)?cast\.castSeekTo\(positionMs\)\s*""" +
                     """else -> seekTo\(positionMs\)\s*""" +
                     """\}""",
             ),
@@ -92,9 +92,11 @@ class SeekTransportRoutingWiringTest {
 
     @Test
     fun `routedSeek is the only transport ladder in the ViewModel`() {
+        // The controllers moved into the session at the C6 collapse, so the
+        // ladder arms read them through the qualified playbackSession handle.
         val ladderArms = listOf(
-            Regex("""isInSyncPlaySession\s*->\s*syncPlay\.seekTo\("""),
-            Regex("""isConnectedFlow\.value\s*->\s*cast\.castSeekTo\("""),
+            Regex("""isInSyncPlaySession\s*->\s*(playbackSession\.)?syncPlay\.seekTo\("""),
+            Regex("""(playbackSession\.)?cast\.isConnectedFlow\.value\s*->\s*(playbackSession\.)?cast\.castSeekTo\("""),
         )
         for (arm in ladderArms) {
             assertEquals(

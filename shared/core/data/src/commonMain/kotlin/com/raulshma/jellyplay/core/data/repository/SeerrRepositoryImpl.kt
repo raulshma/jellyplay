@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.core.data.repository
 
 import com.raulshma.jellyplay.core.data.cache.getOrFetchTyped
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
+import com.raulshma.jellyplay.core.data.session.JellyPlayFeatureGate
 import com.raulshma.jellyplay.core.data.session.SessionIdentityProvider
 import com.raulshma.jellyplay.core.data.session.SessionCacheRegistry
 import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
@@ -20,7 +21,6 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 /**
@@ -42,6 +42,9 @@ private const val POLL_INTERVAL_IDLE_MS = 15 * 60_000L
 
 /** The one failure message every session-bound member reports when Seerr is unconfigured. */
 private const val NOT_CONFIGURED_MESSAGE = "Seerr not configured"
+
+/** The interceptor-swapped base marker; see [withSeerrSession]'s bridge arm. */
+private const val BRIDGE_PLACEHOLDER_BASE = "https://jellyplay.bridge.invalid"
 
 class SeerrRepositoryImpl(
     private val seerrApiClient: SeerrApiClient,
@@ -70,6 +73,12 @@ class SeerrRepositoryImpl(
      * binding. Nullable; a null manager skips the offline gate.
      */
     private val offlineModeManager: OfflineModeManager? = null,
+    /**
+     * The per-feature gate seam (probe AND the user's toggle) for the bridge
+     * arm below. Nullable-with-default (direct-construction tests) — without
+     * it the saved-mode pref alone governs, the pre-toggle behavior.
+     */
+    private val featureGate: JellyPlayFeatureGate? = null,
 ) : SeerrRepository,
     // Family seams (the SonarrSeriesOperations over-the-impl pattern): the
     // same single carries the service-directory, request-lifecycle and auth
@@ -148,10 +157,31 @@ class SeerrRepositoryImpl(
     private suspend fun <T> withSeerrSession(
         block: suspend (url: String, credentials: SeerrCredentials) -> Result<T>,
     ): Result<T> {
+        // Bridge mode (ADR 0010): the plugin proxy carries its own
+        // server-side session — no direct URL/credentials to resolve. The
+        // base passed here is a placeholder; the OkHttp bridge interceptor
+        // rewrites every URL to `{jellyfin}/jellyplay/seerr/...` and swaps
+        // the auth to the Jellyfin token before the call leaves the client.
+        // Gated on the ONE feature seam (probe AVAILABLE + the user's
+        // `seerr-bridge` toggle): switch-off forces DIRECT mode — the saved
+        // via-server pref stays put (flipping the toggle back on restores it)
+        // but no call ever rides the plugin proxy while the feature is off.
+        if (seerrPreferencesStore.preferences.value.useServerBridge && bridgeGateOpen()) {
+            return block(BRIDGE_PLACEHOLDER_BASE, SeerrCredentials.ApiKey(apiKey = ""))
+        }
         val url = serverUrl() ?: return Result.failure(IllegalStateException(NOT_CONFIGURED_MESSAGE))
         val credentials = getCredentials() ?: return Result.failure(IllegalStateException(NOT_CONFIGURED_MESSAGE))
         return block(url, credentials)
     }
+
+    /**
+     * The bridge arm's gate. Fail-CLOSED on the unwired seam
+     * (direct-construction tests): the registry is the only gating mechanism
+     * (ADR 0010 §6), so a missing gate must read "bridge off" — direct mode —
+     * never open.
+     */
+    private suspend fun bridgeGateOpen(): Boolean =
+        featureGate?.isAvailableNow(com.raulshma.jellyplay.core.model.JellyPlayPluginFeatures.SeerrBridge) ?: false
 
     override suspend fun testConnection(): Result<SeerrStatusResponse> =
         withSeerrSession { url, credentials ->
@@ -320,17 +350,7 @@ class SeerrRepositoryImpl(
             seerrApiClient.getServiceDetail(url, credentials, id, kind)
         }
 
-    override fun isConnected(): Flow<Boolean> = seerrPreferencesStore.isConnected
-
-    override fun isEnabled(): Flow<Boolean> = seerrPreferencesStore.preferences.map { it.enabled }
-
-    override fun isSearchEnabled(): Flow<Boolean> = seerrPreferencesStore.preferences.map { it.searchEnabled }
-
-    override fun isRecommendationsEnabled(): Flow<Boolean> = seerrPreferencesStore.preferences.map { it.recommendationsEnabled }
-
-    override fun isDiscoverEnabled(): Flow<Boolean> = seerrPreferencesStore.preferences.map { it.discoverEnabled }
-
-    override fun getPreferences(): Flow<SeerrPreferences> = seerrPreferencesStore.preferences
+    override val preferences: StateFlow<SeerrPreferences> get() = seerrPreferencesStore.preferences
 
     override suspend fun getTrending(page: Int): Result<List<SeerrSearchItem>> =
         withSeerrSession { url, credentials ->
@@ -339,21 +359,19 @@ class SeerrRepositoryImpl(
 
     override suspend fun getDiscoverMovies(
         page: Int,
-        primaryReleaseDateGte: String?,
         params: com.raulshma.jellyplay.core.model.seerr.SeerrDiscoverParams?,
     ): Result<List<SeerrSearchItem>> =
         withSeerrSession { url, credentials ->
-            seerrApiClient.getDiscoverMovies(url, credentials, page, primaryReleaseDateGte, params)
+            seerrApiClient.getDiscoverMovies(url, credentials, page, params?.releaseDateGte, params)
                 .map { items -> backfillMediaType(items, "movie") }
         }
 
     override suspend fun getDiscoverTv(
         page: Int,
-        firstAirDateGte: String?,
         params: com.raulshma.jellyplay.core.model.seerr.SeerrDiscoverParams?,
     ): Result<List<SeerrSearchItem>> =
         withSeerrSession { url, credentials ->
-            seerrApiClient.getDiscoverTv(url, credentials, page, firstAirDateGte, params)
+            seerrApiClient.getDiscoverTv(url, credentials, page, params?.releaseDateGte, params)
                 .map { items -> backfillMediaType(items, "tv") }
         }
 
@@ -432,10 +450,6 @@ class SeerrRepositoryImpl(
         }.also { result ->
             result.getOrNull()?.let { _currentUser.value = it }
         }
-
-    override fun isAdmin(): Flow<Boolean> = _currentUser.map { user ->
-        user?.canManageRequests == true
-    }
 
     private var pollingJob: kotlinx.coroutines.Job? = null
 

@@ -7,11 +7,12 @@ import kotlin.test.assertNull
 /**
  * Pins the live mute-memory chip ([LiveMuteMemory]) — the exact pre-mute
  * restore (not the VOD policy's 0.05-floored level), the null-restore
- * "leave untouched" arm, the unconditional re-mute overwrite and the
- * stale-clear-on-stop reset. The ViewModel's mute suite
- * (LiveTvPlayerViewModelGapsTest) pins the same semantics end to end through
- * the [com.raulshma.jellyplay.feature.player.live.LiveTvPlayerViewModel]
- * seam; these tests pin the chip in isolation.
+ * "leave untouched" arm, the unconditional re-mute overwrite and the stale
+ * clears (on unmute, and on teardown — kept for the store's completeness). [LiveMuteController] consumes the chip inside
+ * the shared volume/mute template and is pinned end to end by
+ * LiveMuteControllerTest; the ViewModel's mute-routing suite
+ * (LiveTvPlayerViewModelGapsTest) pins the toggle that drives it. These
+ * tests pin the chip in isolation.
  */
 class LiveMuteMemoryTest {
 

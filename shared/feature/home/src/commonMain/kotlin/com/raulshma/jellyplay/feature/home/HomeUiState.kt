@@ -82,6 +82,13 @@ data class HomeUiState(
      * choreography owns it).
      */
     val rollingDiscoverRowIds: Set<String> = emptySet(),
+    /**
+     * Section ids with an edge-pull refresh in flight — drives the matching
+     * row's edge spinner and arms the one-refresh-per-row pull guard.
+     * Mirrored from [HomeRefreshState.refreshingSectionIds] (the refresher's
+     * single-row refresh choreography owns it).
+     */
+    val refreshingSectionIds: Set<String> = emptySet(),
     val homeMode: HomeMode = HomeMode.VIDEO,
     /** The appearance/theme quintet — see [AppearanceUiState]. */
     val appearance: AppearanceUiState = AppearanceUiState(),
@@ -111,6 +118,15 @@ data class HomeUiState(
      * offline home never contradicts the user's online home layout.
      */
     val offlineSectionPrefs: OfflineHomeSectionPrefs = OfflineHomeSectionPrefs(),
+    /**
+     * The hidden resume-row item ids (the client-side Continue Watching /
+     * Next Up / Continue Reading overlay), mirrored from the same prefs
+     * snapshot that drives the section query so the quick-action toggle can
+     * resolve HIDE↔SHOW per card at long-press time. Restore lives in the
+     * settings Home-display row and the detail ⋮ menu; the set roams via the
+     * `cw` sync namespace.
+     */
+    val hiddenCwItemIds: Set<String> = emptySet(),
     /**
      * The single offline-render predicate, computed once per gate/library
      * emission by [computeHomeRenderSource] (see [HomeRenderSource]). The

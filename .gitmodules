@@ -1,0 +1,3 @@
+[submodule "jellyfin-plugin-jellyplay"]
+	path = jellyfin-plugin-jellyplay
+	url = https://github.com/raulshma/jellyfin-plugin-jellyplay.git

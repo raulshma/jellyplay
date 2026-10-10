@@ -6,6 +6,8 @@
     <string name="player_reset_to_auto">자동으로 재설정</string>
     <string name="player_track_default">기본</string>
     <string name="player_track_none">없음</string>
+    <string name="player_capturing_frame">프레임을 캡처하는 중…</string>
+    <string name="player_not_ready">플레이어가 준비되지 않았습니다</string>
 
     <string name="track_badge_forced">강제</string>
     <string name="track_badge_sdh">SDH</string>
@@ -35,10 +37,8 @@
     <string name="player_video_open_tester">테스터 열기</string>
     <string name="player_video_reset">재설정</string>
     <string name="player_video_reset_all">모두 재설정</string>
-    <string name="player_video_pick_color">색상 선택</string>
     <string name="player_video_hue">색상</string>
     <string name="player_video_saturation">채도</string>
-    <string name="player_video_value">명도</string>
     <string name="player_video_apply">적용</string>
     <string name="player_video_cancel">취소</string>
     <string name="player_video_override_subtitle_styles">자막 스타일 재정의</string>
@@ -56,6 +56,14 @@
     <string name="player_video_ass_force">강제</string>
     <string name="player_video_ass_scale_hint">포함된 스타일 유지, 크기와 위치만 적용</string>
     <string name="player_video_ass_force_hint">포함된 스타일을 사용자의 색상, 글꼴, 테두리로 재정의</string>
+    <string name="player_video_mpv_config_notice_title">mpv 구성이 일부 자막 설정을 재정의합니다</string>
+    <string name="player_video_mpv_config_owned_keys_intro">구성이 다음 키에 우선합니다 — 여기의 해당 컨트롤로는 변경할 수 없습니다:</string>
+    <string name="player_video_mpv_config_case_srt">일반 자막(SRT)에는 항상 구성의 색상, 테두리, 글꼴이 적용됩니다.</string>
+    <string name="player_video_mpv_config_case_ass">ASS/SSA 자막은 포함된 스타일을 유지합니다 — 내 스타일을 적용하려면 아래의 ASS 스타일 선택을 사용하세요.</string>
+    <string name="player_video_mpv_config_ass_override_owned">구성이 sub-ass-override를 설정하고 있어 여기의 유지/강제 선택은 효과가 없습니다.</string>
+    <string name="player_video_mpv_config_app_owned_keys">자막 켜기/끄기와 자막 지연은 항상 앱을 따릅니다 — 구성으로는 변경할 수 없습니다.</string>
+    <string name="player_video_mpv_config_dropped_keys">mpv는 mpv.conf 파일의 %1$s을(를) 읽을 수 없습니다. 따옴표 없는 #은 주석 시작으로 처리됩니다. 파일 내에서는 값을 따옴표로 묶으세요 (sub-color="#FF0000"). 앱의 고급 MPV 구성에서는 반대로, 따옴표 없이 그대로 입력하세요 (sub-color=#FF0000). 따옴표는 값의 일부가 됩니다.</string>
+    <string name="player_video_mpv_config_chip">사용자 지정 mpv 구성</string>
     <string name="player_video_font_color">글꼴 색상</string>
     <string name="player_video_background_color">배경색</string>
     <string name="player_video_background_opacity">배경 불투명도: %1$d%</string>
@@ -79,6 +87,11 @@
     <string name="player_video_sleep_timer">수면 타이머</string>
     <string name="player_video_sleep_timer_on">수면 타이머 \u00B7 %1$s</string>
     <string name="player_video_cancel_sleep_timer">수면 타이머 취소 (%1$s 남음)</string>
+    <string name="player_video_sleep_timer_stops_at">%1$s에 정지</string>
+    <string name="player_video_cancel_sleep_timer_confirm_title">수면 타이머를 취소할까요?</string>
+    <string name="player_video_cancel_sleep_timer_confirm_message">타이머에 아직 %1$s 남았어요. 취소할까요?</string>
+    <string name="player_video_cancel_timer">타이머 취소</string>
+    <string name="player_video_keep_sleep_timer">타이머 유지</string>
     <string name="player_video_custom_duration">사용자 지정 지속 시간</string>
     <string name="player_video_custom_ellipsis">사용자 지정…</string>
     <string name="player_video_end_of_episode">에피소드 끝</string>
@@ -155,6 +168,8 @@
     <string name="player_video_normalization_on">정규화 \u00B7 %1$s</string>
     <string name="player_video_channel_mixing">채널 믹싱</string>
     <string name="player_video_channel_mix_on">채널 믹스 \u00B7 %1$s</string>
+    <string name="player_video_gestures">제스처</string>
+    <string name="player_video_gestures_on">제스처 \u00B7 %1$d/%2$d</string>
     <string name="player_video_av_sync">A/V 동기화</string>
     <string name="player_video_playback_mode">재생 모드</string>
     <string name="player_video_playback_mode_on">%1$s \u00B7 켜짐</string>
@@ -342,4 +357,21 @@
     <string name="player_video_source_label">소스</string>
     <string name="player_video_version">버전</string>
     <string name="player_video_remember_version">이 버전 기억</string>
+
+    <!-- Subtitle style presets -->
+    <string name="player_video_presets_title">프리셋</string>
+    <string name="player_video_preset_subtle">절제</string>
+    <string name="player_video_preset_big_bold">크고 굵게</string>
+    <string name="player_video_preset_classic_yellow">클래식 옐로</string>
+    <string name="player_video_preset_netflixish">넷플릭스 스타일</string>
+    <string name="player_video_preset_save">현재 설정 저장</string>
+    <string name="player_video_preset_save_dialog_title">프리셋 저장</string>
+    <string name="player_video_preset_name_label">프리셋 이름</string>
+    <string name="player_video_preset_delete_a11y">프리셋 %1$s 삭제</string>
+
+    <!-- The JellyPlay sync / details-badges / player-notice strings
+         (ADR 0010 wave), translated together with the default file. -->
+    <string name="player_video_transcode_switched">트랜스코딩 스트림으로 전환됨 — 다시 버퍼링하는 중</string>
+    <string name="player_video_direct_play_unavailable">이 항목은 다이렉트 재생이 불가능합니다 — 트랜스코딩으로 전환합니다</string>
+    <string name="player_video_vlc_client_cert_unsupported">클라이언트 인증서는 VLC 엔진에서 지원되지 않습니다 — mTLS 서버는 ExoPlayer 또는 mpv로 전환하세요</string>
 </resources>

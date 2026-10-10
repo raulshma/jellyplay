@@ -102,6 +102,32 @@ data class DetailUiState(
     /** True when the resolved item has an OUTRO (credits) media segment. Paired
      *  with [hasIntroSegment] to drive the detail-side skip chip. Remote-only. */
     val hasCreditSegment: Boolean = false,
+    // ── jellyfin-plugin-jellyplay companion sections (ADR 0010) ──
+    // All three reset to empty on navigation/refresh (the clearedForReload
+    // defaults) and stay empty on ANY plugin failure — silent absence, never
+    // an error surface (the plugin contract's gating rule).
+    /** Aggregated external ratings (mdblist) for the item's IMDb id, as the
+     *  server sent them (source + score entries). Empty = section absent. */
+    val pluginRatings: List<com.raulshma.jellyplay.core.model.JellyPlayPluginRating> = emptyList(),
+    /** Server-scored "More like this" ([JellyPlayPluginFeatures.Recommendations]),
+     *  hydrated into displayable items the shared poster row renders. Empty =
+     *  section absent; the stock relatedItems row stays in place beside it. */
+    val pluginSimilarItems: List<MediaItem> = emptyList(),
+    /** True only when the capabilities handshake said the plugin registered
+     *  into the host's similar-items pipeline (Jellyfin 12+ hosts) — there the
+     *  stock endpoint returns the SAME scored list, so the stock row is
+     *  suppressed to avoid a duplicate. False on pre-12 hosts / older plugins:
+     *  the two lists differ and both rows render. */
+    val pluginSimilarSuppressesStock: Boolean = false,
+    /** Anime filler/mixed/recap badges for the current series' episode numbers
+     *  ([JellyPlayPluginFeatures.AnimeMarkers]). Rendered on episode rows in
+     *  the seasons section; empty = no badges anywhere. */
+    val animeMarkers: Map<Int, AnimeBadgeKind> = emptyMap(),
+    /** Per-season TMDB episode scores ([JellyPlayPluginFeatures.Ratings]),
+     *  keyed season id → (episode number → ratings). Rendered as compact
+     *  score chips on the seasons section's episode rows plus the season
+     *  header's average; empty = no scores anywhere. */
+    val seasonRatings: Map<String, Map<Int, com.raulshma.jellyplay.core.model.JellyPlayEpisodeScore>> = emptyMap(),
     // Smart play (continue-watching / next-up computed target)
     val smartPlayTarget: SmartPlayTarget? = null,
     // Stream selection (audio/subtitle indices persisted across sessions)

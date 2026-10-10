@@ -9,9 +9,9 @@ import com.raulshma.jellyplay.core.data.playback.focus.FocusOutcome
 import com.raulshma.jellyplay.core.data.playback.focus.PlaybackFocus
 import com.raulshma.jellyplay.core.data.playback.focus.PlaybackSurfaceId
 import com.raulshma.jellyplay.core.data.playback.focus.VideoFocusPolicyInput
-import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
+import com.raulshma.jellyplay.core.network.api.LiveTvApiClient
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
-import com.raulshma.jellyplay.core.data.util.EpochMillisSource
+import com.raulshma.jellyplay.core.model.EpochMillisSource
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackSlice
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
 import com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeState
@@ -21,9 +21,8 @@ import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregateSto
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.LiveStreamOption
 import com.raulshma.jellyplay.core.model.LiveTvProgram
-import com.raulshma.jellyplay.core.model.MediaSource
 import com.raulshma.jellyplay.core.model.PlayMethod
-import com.raulshma.jellyplay.core.model.PlaybackInfoResult
+import com.raulshma.jellyplay.core.model.PlaybackResolution
 import com.raulshma.jellyplay.core.model.ResolvedPlayback
 import com.raulshma.jellyplay.feature.player.live.data.LastChannelStore
 import com.raulshma.jellyplay.feature.player.live.engine.LiveEngineFactory
@@ -61,7 +60,7 @@ import com.raulshma.jellyplay.core.ui.message.UiMessage
 @OptIn(ExperimentalCoroutinesApi::class)
 class LiveTvPlayerViewModelTest {
 
-    private lateinit var liveTvRepo: LiveTvRepository
+    private lateinit var liveTvRepo: LiveTvApiClient
     private lateinit var playbackRepo: PlaybackRepository
     private lateinit var playbackIdentity: PlaybackIdentity
     private lateinit var appRuntimeStateStore: AppRuntimeStateStore
@@ -87,7 +86,7 @@ class LiveTvPlayerViewModelTest {
     @BeforeTest
     fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
-        liveTvRepo = mockk<LiveTvRepository>(relaxed = true)
+        liveTvRepo = mockk<LiveTvApiClient>(relaxed = true)
         playbackRepo = mockk(relaxed = true)
         playbackIdentity = mockk(relaxed = true)
         appRuntimeStateStore = mockk(relaxed = true)
@@ -139,13 +138,15 @@ class LiveTvPlayerViewModelTest {
 
     private fun stubResolve() {
         coEvery {
-            playbackRepo.resolvePlayback(any(), any(), any(), any(), any(), any(), any(), any(), any())
-        } returns ResolvedPlayback(
-            mediaSourceId = "src",
-            streamUrl = "https://srv/Videos/x/stream",
-            playMethod = PlayMethod.DIRECT_STREAM,
-            playSessionId = "psid",
-            maxStreamingBitrate = null,
+            playbackRepo.resolvePlayable(any())
+        } returns PlaybackResolution.Resolved(
+            ResolvedPlayback(
+                mediaSourceId = "src",
+                streamUrl = "https://srv/Videos/x/stream",
+                playMethod = PlayMethod.DIRECT_STREAM,
+                playSessionId = "psid",
+                maxStreamingBitrate = null,
+            ),
         )
     }
 
@@ -198,17 +199,15 @@ class LiveTvPlayerViewModelTest {
     }
 
     @Test
-    fun `resolvePlayback failure surfaces error`() = runTest {
+    fun `resolve failure surfaces error`() = runTest {
         coEvery {
             liveTvRepo.getLiveTvChannels(any(), any(), any(), any(), any())
         } returns Result.success(channels(2))
+        // The whole resolution misses (resolve verdict and the forced
+        // fallback both) — that must surface the error.
         coEvery {
-            playbackRepo.resolvePlayback(any(), any(), any(), any(), any(), any(), any(), any(), any())
-        } returns null
-        // fetchPlaybackInfo fallback must also fail to surface the error.
-        coEvery {
-            playbackRepo.fetchPlaybackInfo(any(), any(), any(), any(), any(), any(), any(), any(), any())
-        } returns Result.failure(RuntimeException("server down"))
+            playbackRepo.resolvePlayable(any())
+        } returns PlaybackResolution.Unplayable
 
         val vm = createVm()
         vm.onEvent(LiveTvPlayerUiEvent.Initialize("ch-0", null, null))
@@ -223,41 +222,26 @@ class LiveTvPlayerViewModelTest {
     }
 
     @Test
-    fun `resolvePlayback null with fetchPlaybackInfo fallback builds direct-stream URL`() = runTest {
+    fun `resolve miss with the live fallback builds direct-stream URL`() = runTest {
         coEvery {
             liveTvRepo.getLiveTvChannels(any(), any(), any(), any(), any())
         } returns Result.success(channels(1))
-        // resolvePlayback returns null (e.g. device profile didn't match).
+        // The resolve verdict misses (e.g. device profile didn't match); the
+        // forced fallback re-request resolves the live source.
         coEvery {
-            playbackRepo.resolvePlayback(any(), any(), any(), any(), any(), any(), any(), any(), any())
-        } returns null
-        // fetchPlaybackInfo fallback returns a live source.
+            playbackRepo.resolvePlayable(match { !it.forceLiveStreamFallback })
+        } returns PlaybackResolution.Unplayable
         coEvery {
-            playbackRepo.fetchPlaybackInfo(any(), any(), any(), any(), any(), any(), any(), any(), any())
-        } returns Result.success(
-            PlaybackInfoResult(
+            playbackRepo.resolvePlayable(match { it.forceLiveStreamFallback })
+        } returns PlaybackResolution.Resolved(
+            ResolvedPlayback(
+                mediaSourceId = "src-1",
+                streamUrl = "https://srv/Videos/ch-0/stream?LiveStreamId=live-1",
+                playMethod = PlayMethod.DIRECT_STREAM,
                 playSessionId = "psid",
-                mediaSources = listOf(
-                    MediaSource(
-                        id = "src-1",
-                        name = "tuner",
-                        supportsDirectStream = true,
-                        supportsDirectPlay = false,
-                        supportsTranscoding = false,
-                        liveStreamId = "live-1",
-                        requiresOpening = true,
-                    ),
-                ),
+                maxStreamingBitrate = null,
             ),
         )
-        every {
-            playbackRepo.getStreamUrl(
-                itemId = any(),
-                mediaSourceId = any(),
-                startTimeTicks = any(),
-                liveStreamId = any(),
-            )
-        } returns "https://srv/Videos/ch-0/stream?LiveStreamId=live-1"
         coEvery { liveTvRepo.getLiveTvPrograms(any(), any(), any()) } returns Result.success(emptyList<LiveTvProgram>())
 
         val vm = createVm()
@@ -275,34 +259,19 @@ class LiveTvPlayerViewModelTest {
             liveTvRepo.getLiveTvChannels(any(), any(), any(), any(), any())
         } returns Result.success(channels(1))
         coEvery {
-            playbackRepo.resolvePlayback(any(), any(), any(), any(), any(), any(), any(), any(), any())
-        } returns null
+            playbackRepo.resolvePlayable(match { !it.forceLiveStreamFallback })
+        } returns PlaybackResolution.Unplayable
         coEvery {
-            playbackRepo.fetchPlaybackInfo(any(), any(), any(), any(), any(), any(), any(), any(), any())
-        } returns Result.success(
-            PlaybackInfoResult(
+            playbackRepo.resolvePlayable(match { it.forceLiveStreamFallback })
+        } returns PlaybackResolution.Resolved(
+            ResolvedPlayback(
+                mediaSourceId = "src-1",
+                streamUrl = "https://srv/Videos/ch-0/stream?LiveStreamId=live-1",
+                playMethod = PlayMethod.DIRECT_STREAM,
                 playSessionId = "psid",
-                mediaSources = listOf(
-                    MediaSource(
-                        id = "src-1",
-                        name = "tuner",
-                        supportsDirectStream = false,
-                        supportsDirectPlay = false,
-                        supportsTranscoding = false,
-                        liveStreamId = "live-1",
-                        requiresOpening = true,
-                    ),
-                ),
+                maxStreamingBitrate = null,
             ),
         )
-        every {
-            playbackRepo.getStreamUrl(
-                itemId = any(),
-                mediaSourceId = any(),
-                startTimeTicks = any(),
-                liveStreamId = any(),
-            )
-        } returns "https://srv/Videos/ch-0/stream?LiveStreamId=live-1"
         coEvery { liveTvRepo.getLiveTvPrograms(any(), any(), any()) } returns Result.success(emptyList<LiveTvProgram>())
 
         val vm = createVm()
@@ -323,43 +292,29 @@ class LiveTvPlayerViewModelTest {
         // User selected Direct Stream, but the server's live-source probe
         // failed (DirectPlayError) so it resolved a transcode.
         coEvery {
-            playbackRepo.resolvePlayback(any(), any(), any(), any(), any(), any(), any(), any(), any())
-        } returns ResolvedPlayback(
-            mediaSourceId = "src",
-            streamUrl = "https://srv/Videos/x/master.m3u8",
-            playMethod = PlayMethod.TRANSCODE,
-            playSessionId = "psid",
-            maxStreamingBitrate = null,
-        )
-        // Fallback fetchPlaybackInfo returns the opened live source.
-        coEvery {
-            playbackRepo.fetchPlaybackInfo(any(), any(), any(), any(), any(), any(), any(), any(), any())
-        } returns Result.success(
-            PlaybackInfoResult(
+            playbackRepo.resolvePlayable(match { !it.forceLiveStreamFallback })
+        } returns PlaybackResolution.Resolved(
+            ResolvedPlayback(
+                mediaSourceId = "src",
+                streamUrl = "https://srv/Videos/x/master.m3u8",
+                playMethod = PlayMethod.TRANSCODE,
                 playSessionId = "psid",
-                mediaSources = listOf(
-                    MediaSource(
-                        id = "src-1",
-                        name = "tuner",
-                        supportsDirectStream = false,
-                        supportsDirectPlay = false,
-                        supportsTranscoding = true,
-                        transcodeUrl = "/Videos/x/master.m3u8",
-                        liveStreamId = "live-1",
-                        requiresOpening = true,
-                        container = "hls",
-                    ),
-                ),
+                maxStreamingBitrate = null,
             ),
         )
-        every {
-            playbackRepo.getStreamUrl(
-                itemId = any(),
-                mediaSourceId = any(),
-                startTimeTicks = any(),
-                liveStreamId = any(),
-            )
-        } returns "https://srv/Videos/ch-0/stream?LiveStreamId=live-1"
+        // The probe-override's forced re-request resolves the opened live
+        // source through the ladder.
+        coEvery {
+            playbackRepo.resolvePlayable(match { it.forceLiveStreamFallback })
+        } returns PlaybackResolution.Resolved(
+            ResolvedPlayback(
+                mediaSourceId = "src-1",
+                streamUrl = "https://srv/Videos/ch-0/stream?LiveStreamId=live-1",
+                playMethod = PlayMethod.DIRECT_STREAM,
+                playSessionId = "psid",
+                maxStreamingBitrate = null,
+            ),
+        )
         coEvery { liveTvRepo.getLiveTvPrograms(any(), any(), any()) } returns Result.success(emptyList<LiveTvProgram>())
 
         // Opt into Direct Stream.

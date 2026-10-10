@@ -26,9 +26,10 @@ data class MpvPlaybackLatches(
  * One binding-agnostic mpv event or property change — the raw surface the
  * Android (`MPV.EventObserver` / `mpv_event`) and desktop (JNA `mpv_event`)
  * bindings both hand over, stripped of their native payload types. Numeric
- * cache writes (time-pos, duration, demuxer-cache-*) stay engine-side: they
- * carry no playback-state decision and their payload shapes differ per
- * binding.
+ * cache writes (time-pos, duration, demuxer-cache-*) stay OUT of this
+ * surface — they carry no playback-state decision and their payload shapes
+ * differ per binding; their per-property decisions live on the shared
+ * [MpvPropertyIntake] table, landed by each host's reader.
  */
 sealed interface MpvPlaybackEvent {
     /** `MPV_EVENT_START_FILE` — a new file begins loading. */

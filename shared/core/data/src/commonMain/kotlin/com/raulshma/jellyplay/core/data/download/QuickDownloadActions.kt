@@ -4,6 +4,15 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import kotlinx.coroutines.flow.StateFlow
 
 /**
+ * Minimal message sink so core/data can report download outcomes without
+ * depending on core/ui's UserMessageBus.
+ */
+interface DownloadOutcomeMessenger {
+    fun downloadStarted()
+    fun downloadStartFailed()
+}
+
+/**
  * The quick-action download/remove seam every host surface shares (library,
  * favorites, search, studio, home). Originally shipped as byte-identical
  * `internal` twins in feature:library and feature:search (one landed by copy,
@@ -43,9 +52,20 @@ interface QuickDownloadActions {
 
     /**
      * [download] plus the shared outcome handling: Started/Failed surface via
-     * the platform messenger, both navigation outcomes route to [onOpenDetail].
+     * [messenger] (null ⇒ the platform default), NeedsDetailScreen routes to
+     * [onOpenDetail] plainly, and SeriesSelectionRequired routes to
+     * [onOpenDetail] with the series sheet pre-presented iff
+     * [seriesOpensSheet] — plainly when false (the hosts whose navigation
+     * cannot pre-present the sheet), or not at all when `null` (home, whose
+     * series cards are intercepted upstream by the in-place series sheet, so
+     * the branch is unreachable and pinned as a silent no-op).
      */
-    suspend fun downloadAndReport(item: MediaItem, onOpenDetail: (itemId: String) -> Unit)
+    suspend fun downloadAndReport(
+        item: MediaItem,
+        onOpenDetail: (itemId: String, prePresentDownloadSheet: Boolean) -> Unit,
+        seriesOpensSheet: Boolean? = false,
+        messenger: DownloadOutcomeMessenger? = null,
+    )
 
     /** Remove [item]'s local download (artifacts + offline rows). Fire-and-forget. */
     fun removeDownload(item: MediaItem)

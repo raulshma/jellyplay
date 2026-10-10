@@ -83,6 +83,9 @@ import kotlin.math.pow
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 import com.raulshma.jellyplay.core.model.GestureIndicatorSide
+import com.raulshma.jellyplay.core.model.PlayerAction
+import com.raulshma.jellyplay.core.model.SwipeEdge
+import com.raulshma.jellyplay.core.model.SwipeSide
 
 private fun brightnessIcon(value: Float) = when {
     value <= 0f -> Tabler.Outline.BrightnessDown
@@ -106,7 +109,27 @@ private fun applySensitivityCurve(rawDelta: Float): Float {
 // volume are both normalized 0f..1f, and the drag handler feeds the curved delta
 // straight to the gesture callbacks; a fixed ~10% step matches a moderate drag
 // and gives TalkBack/Switch Access users a predictable increment per invocation.
-private const val A11Y_STEP_DELTA = 0.1f
+// Shared with the rebound BRIGHTNESS_UP/DOWN / VOLUME arms in the screen's
+// executor so a discrete step and one a11y invocation move the same distance.
+internal const val A11Y_STEP_DELTA = 0.1f
+
+/**
+ * The overlay's five swipe-arm switches, pre-ANDed with the screen lock by
+ * the caller ([PlayerInputGates] arms × `!isScreenLocked`). One immutable
+ * bundle so the composable's signature and the drag `pointerInput` key
+ * stay one value instead of five loose booleans.
+ */
+internal data class GestureSwipeGates(
+    val brightnessSwipe: Boolean,
+    val volumeSwipe: Boolean,
+    val seekSwipe: Boolean,
+    val edgeSwipeLeft: Boolean,
+    val edgeSwipeRight: Boolean,
+) {
+    /** Any arm on — the drag `pointerInput` attaches when this holds. */
+    val anyOn: Boolean
+        get() = brightnessSwipe || volumeSwipe || seekSwipe || edgeSwipeLeft || edgeSwipeRight
+}
 
 @Composable
 internal fun GestureOverlay(
@@ -114,14 +137,27 @@ internal fun GestureOverlay(
     brightnessFlow: StateFlow<Float>,
     volumeFlow: StateFlow<Float>,
     indicatorSide: GestureIndicatorSide = GestureIndicatorSide.OPPOSITE,
-    swipeGesturesEnabled: Boolean,
+    /**
+     * Per-arm swipe gates (the input mapping resolved; issue #171's split),
+     * pre-ANDed with the screen lock — one immutable bundle key instead of
+     * five loose booleans.
+     */
+    gates: GestureSwipeGates,
     swipeSeekMaxMs: Long,
     showControls: Boolean,
     onSeekGesture: (Long) -> Unit,
     onBrightnessGesture: (Float) -> Unit,
     onVolumeGesture: (Float) -> Unit,
     onClearOverlays: () -> Unit,
-    onEdgeSwipe: () -> Unit,
+    /** Edge-swipe decision, carrying the edge so the caller resolves THAT row's binding. */
+    onEdgeSwipe: (SwipeEdge) -> Unit,
+    /**
+     * Vertical-swipe decision, carrying the SIDE so the caller resolves THAT
+     * half's binding — the side→action pairing is config, not fixed (the
+     * sides are swappable in the persisted input map). Null = the half is
+     * unbound/disabled/NONE and stays inert.
+     */
+    resolveVerticalAction: (SwipeSide) -> PlayerAction?,
     onHapticPulse: () -> Unit = {},
     overlayDismissDelayMs: Long = 800L,
     onStartGesture: () -> Unit = {},
@@ -132,6 +168,7 @@ internal fun GestureOverlay(
     val currentOnVolumeGesture by rememberUpdatedState(onVolumeGesture)
     val currentOnClearOverlays by rememberUpdatedState(onClearOverlays)
     val currentOnEdgeSwipe by rememberUpdatedState(onEdgeSwipe)
+    val currentResolveVerticalAction by rememberUpdatedState(resolveVerticalAction)
     val currentOnHapticPulse by rememberUpdatedState(onHapticPulse)
     val currentOnStartGesture by rememberUpdatedState(onStartGesture)
     val currentOnCancelOverlays by rememberUpdatedState(onCancelOverlays)
@@ -168,12 +205,12 @@ internal fun GestureOverlay(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            // a11y + drag surface share one gate: both are the swipe tier, so
-            // with swipes disabled (GestureMode.TAP_ONLY / NONE) neither
-            // exists — no inert surface announcing gesture controls, no
-            // custom actions driving disabled callbacks.
+            // a11y + drag surface gate per arm now: the semantics attach when
+            // EITHER vertical arm is on (the custom actions individually),
+            // the drag detector when ANY arm is on — with an arm disabled its
+            // callbacks never fire and its half of the surface stays inert.
             .then(
-                if (swipeGesturesEnabled) {
+                if (gates.brightnessSwipe || gates.volumeSwipe) {
                     Modifier
                         // a11y: the vertical-drag gesture surface previously
                         // carried no semantics, so TalkBack/Switch Access
@@ -187,111 +224,163 @@ internal fun GestureOverlay(
                         // below is left intact; semantics are additive.
                         .semantics {
                             contentDescription = a11yGestureControlsLabel
-                            customActions = listOf(
-                                CustomAccessibilityAction(
-                                    label = a11yBrightnessIncreaseLabel,
-                                ) {
-                                    currentOnBrightnessGesture(A11Y_STEP_DELTA); true
-                                },
-                                CustomAccessibilityAction(
-                                    label = a11yBrightnessDecreaseLabel,
-                                ) {
-                                    currentOnBrightnessGesture(-A11Y_STEP_DELTA); true
-                                },
-                                CustomAccessibilityAction(
-                                    label = a11yVolumeIncreaseLabel,
-                                ) {
-                                    currentOnVolumeGesture(A11Y_STEP_DELTA); true
-                                },
-                                CustomAccessibilityAction(
-                                    label = a11yVolumeDecreaseLabel,
-                                ) {
-                                    currentOnVolumeGesture(-A11Y_STEP_DELTA); true
-                                },
-                            )
+                            customActions = buildList {
+                                if (gates.brightnessSwipe) {
+                                    add(
+                                        CustomAccessibilityAction(
+                                            label = a11yBrightnessIncreaseLabel,
+                                        ) {
+                                            currentOnBrightnessGesture(A11Y_STEP_DELTA); true
+                                        },
+                                    )
+                                    add(
+                                        CustomAccessibilityAction(
+                                            label = a11yBrightnessDecreaseLabel,
+                                        ) {
+                                            currentOnBrightnessGesture(-A11Y_STEP_DELTA); true
+                                        },
+                                    )
+                                }
+                                if (gates.volumeSwipe) {
+                                    add(
+                                        CustomAccessibilityAction(
+                                            label = a11yVolumeIncreaseLabel,
+                                        ) {
+                                            currentOnVolumeGesture(A11Y_STEP_DELTA); true
+                                        },
+                                    )
+                                    add(
+                                        CustomAccessibilityAction(
+                                            label = a11yVolumeDecreaseLabel,
+                                        ) {
+                                            currentOnVolumeGesture(-A11Y_STEP_DELTA); true
+                                        },
+                                    )
+                                }
+                            }
                         }
                 } else Modifier
             )
             .then(
-                if (swipeGesturesEnabled) Modifier.pointerInput(swipeSeekMaxMs, showControls, edgeThresholdPx, deadZonePx) {
-                    awaitEachGesture {
-                        val down = awaitFirstDown(requireUnconsumed = false)
-                        val startX = down.position.x
-                        val startY = down.position.y
-                        var decided = false
-                        var isHorizontal = false
-                        var isEdgeSwipeGesture = false
-                        var edgeSwipeConsumed = false
-                        var prevBrightnessBoundHapticTime = 0L
-                        var prevVolumeBoundHapticTime = 0L
-                        var wasMultiTouchCancelled = false
-                        currentOnStartGesture()
-                        do {
-                            val event = awaitPointerEvent()
-                            // A second finger means the user is pinching to
-                            // zoom/reframe the video surface. Abort this
-                            // single-finger gesture (seek/brightness/volume)
-                            // so it doesn't fight the pinch detector, and leave
-                            // the changes unconsumed so the surface's pinch
-                            // handler can take over.
-                            if (event.changes.count { it.pressed } >= 2) {
-                                wasMultiTouchCancelled = true
-                                break
-                            }
-                            val change = event.changes.firstOrNull() ?: break
-                            if (!change.pressed) break
-                            val totalDx = change.position.x - startX
-                            val totalDy = change.position.y - startY
-                            if (!decided && (abs(totalDx) > deadZonePx || abs(totalDy) > deadZonePx)) {
-                                decided = true
-                                isHorizontal = abs(totalDx) > abs(totalDy)
-                                isEdgeSwipeGesture = isHorizontal &&
-                                    (startX < edgeThresholdPx || startX > size.width - edgeThresholdPx)
-                            }
-                            if (decided) {
-                                if (isEdgeSwipeGesture) {
-                                    if (!edgeSwipeConsumed) {
-                                        edgeSwipeConsumed = true
-                                        currentOnEdgeSwipe()
-                                    }
-                                } else if (isHorizontal) {
-                                    val seekDeltaMs = ((totalDx / size.width) * swipeSeekMaxMs).toLong()
-                                    currentOnSeekGesture(seekDeltaMs)
-                                } else {
-                                    val halfWidth = size.width / 2f
-                                    val dy = change.position.y - change.previousPosition.y
-                                    val rawDelta = -(dy / size.height) * 0.5f
-                                    val delta = applySensitivityCurve(rawDelta)
-                                    // Monotonic clock — avoids the wall-clock syscall of
-                                    // System.currentTimeMillis() per move event and is immune
-                                    // to wall-clock jumps. Gesture timing is duration-based
-                                    // (hapticMinInterval), so this is strictly more correct.
-                                    val now = monotonicNowMillis()
-                                    if (change.position.x > halfWidth) {
-                                        currentOnVolumeGesture(delta)
-                                        if ((currentVolumeValue <= 0f && delta < 0f) || (currentVolumeValue >= 1f && delta > 0f)) {
-                                            if (now - prevVolumeBoundHapticTime > hapticMinInterval) {
-                                                prevVolumeBoundHapticTime = now
-                                                currentOnHapticPulse()
-                                            }
+                if (gates.anyOn) {
+                    Modifier.pointerInput(
+                        gates,
+                        swipeSeekMaxMs,
+                        showControls,
+                        edgeThresholdPx,
+                        deadZonePx,
+                    ) {
+                        awaitEachGesture {
+                            val down = awaitFirstDown(requireUnconsumed = false)
+                            val startX = down.position.x
+                            val startY = down.position.y
+                            var decided = false
+                            var isHorizontal = false
+                            var isEdgeSwipeGesture = false
+                            var edgeSide = SwipeEdge.LEFT
+                            var edgeSwipeConsumed = false
+                            var prevBrightnessBoundHapticTime = 0L
+                            var prevVolumeBoundHapticTime = 0L
+                            var wasMultiTouchCancelled = false
+                            currentOnStartGesture()
+                            do {
+                                val event = awaitPointerEvent()
+                                // A second finger means the user is pinching to
+                                // zoom/reframe the video surface. Abort this
+                                // single-finger gesture (seek/brightness/volume)
+                                // so it doesn't fight the pinch detector, and leave
+                                // the changes unconsumed so the surface's pinch
+                                // handler can take over.
+                                if (event.changes.count { it.pressed } >= 2) {
+                                    wasMultiTouchCancelled = true
+                                    break
+                                }
+                                val change = event.changes.firstOrNull() ?: break
+                                if (!change.pressed) break
+                                val totalDx = change.position.x - startX
+                                val totalDy = change.position.y - startY
+                                if (!decided && (abs(totalDx) > deadZonePx || abs(totalDy) > deadZonePx)) {
+                                    decided = true
+                                    isHorizontal = abs(totalDx) > abs(totalDy)
+                                    val startEdge =
+                                        startX < edgeThresholdPx || startX > size.width - edgeThresholdPx
+                                    // A disabled edge row demotes the gesture to an
+                                    // ordinary swipe on that side (seek if the seek
+                                    // arm is on) — the edge band stops being special
+                                    // exactly when the user unbinds it.
+                                    isEdgeSwipeGesture = isHorizontal && startEdge &&
+                                        (if (startX < size.width / 2f) gates.edgeSwipeLeft else gates.edgeSwipeRight)
+                                    edgeSide = if (startX < size.width / 2f) SwipeEdge.LEFT else SwipeEdge.RIGHT
+                                }
+                                if (decided) {
+                                    var acted = false
+                                    if (isEdgeSwipeGesture) {
+                                        if (!edgeSwipeConsumed) {
+                                            edgeSwipeConsumed = true
+                                            currentOnEdgeSwipe(edgeSide)
+                                            acted = true
+                                        }
+                                    } else if (isHorizontal) {
+                                        if (gates.seekSwipe) {
+                                            val seekDeltaMs = ((totalDx / size.width) * swipeSeekMaxMs).toLong()
+                                            currentOnSeekGesture(seekDeltaMs)
+                                            acted = true
                                         }
                                     } else {
-                                        currentOnBrightnessGesture(delta)
-                                        if ((currentBrightnessValue <= 0f && delta < 0f) || (currentBrightnessValue >= 1f && delta > 0f)) {
-                                            if (now - prevBrightnessBoundHapticTime > hapticMinInterval) {
-                                                prevBrightnessBoundHapticTime = now
-                                                currentOnHapticPulse()
+                                        val halfWidth = size.width / 2f
+                                        val dy = change.position.y - change.previousPosition.y
+                                        val rawDelta = -(dy / size.height) * 0.5f
+                                        val delta = applySensitivityCurve(rawDelta)
+                                        // Monotonic clock — avoids the wall-clock syscall of
+                                        // System.currentTimeMillis() per move event and is immune
+                                        // to wall-clock jumps. Gesture timing is duration-based
+                                        // (hapticMinInterval), so this is strictly more correct.
+                                        val now = monotonicNowMillis()
+                                        // The half routes through its CONFIGURED action, not a
+                                        // fixed pairing — a swapped map (left = volume) fires
+                                        // the volume arm from the left half, and a disabled or
+                                        // rebound-to-discrete row leaves its half inert.
+                                        when (
+                                            currentResolveVerticalAction(
+                                                if (change.position.x > halfWidth) SwipeSide.RIGHT else SwipeSide.LEFT,
+                                            )
+                                        ) {
+                                            PlayerAction.SWIPE_VOLUME -> {
+                                                currentOnVolumeGesture(delta)
+                                                if ((currentVolumeValue <= 0f && delta < 0f) || (currentVolumeValue >= 1f && delta > 0f)) {
+                                                    if (now - prevVolumeBoundHapticTime > hapticMinInterval) {
+                                                        prevVolumeBoundHapticTime = now
+                                                        currentOnHapticPulse()
+                                                    }
+                                                }
+                                                acted = true
                                             }
+                                            PlayerAction.SWIPE_BRIGHTNESS -> {
+                                                currentOnBrightnessGesture(delta)
+                                                if ((currentBrightnessValue <= 0f && delta < 0f) || (currentBrightnessValue >= 1f && delta > 0f)) {
+                                                    if (now - prevBrightnessBoundHapticTime > hapticMinInterval) {
+                                                        prevBrightnessBoundHapticTime = now
+                                                        currentOnHapticPulse()
+                                                    }
+                                                }
+                                                acted = true
+                                            }
+                                            else -> {}
                                         }
                                     }
+                                    // Consume only when an arm actually acted: a
+                                    // gesture on a fully-unbound direction stays
+                                    // unconsumed (nothing above it wants drags on
+                                    // the video surface, but an unbound swipe must
+                                    // not suppress future detectors either).
+                                    if (acted) change.consume()
                                 }
-                                change.consume()
+                            } while (true)
+                            if (wasMultiTouchCancelled) {
+                                currentOnCancelOverlays()
+                            } else {
+                                currentOnClearOverlays()
                             }
-                        } while (true)
-                        if (wasMultiTouchCancelled) {
-                            currentOnCancelOverlays()
-                        } else {
-                            currentOnClearOverlays()
                         }
                     }
                 } else Modifier
@@ -306,10 +395,10 @@ internal fun GestureOverlay(
             )
         }
 
-        // Gesture sides are fixed (left = brightness, right = volume); the
-        // indicator bar can render on the opposite side (default) or the same
-        // side as the gesture. OPPOSITE is the default so the bar doesn't sit
-        // under the user's dragging thumb.
+        // The bars are VALUE-keyed (brightness vs volume — whichever side the
+        // persisted mapping binds them to); each renders on the opposite side
+        // of the screen (default) or the same side as its gesture. OPPOSITE is
+        // the default so the bar doesn't sit under the user's dragging thumb.
         val opposite = indicatorSide == GestureIndicatorSide.OPPOSITE
         val brightnessAlignment =
             if (opposite) Alignment.CenterEnd else Alignment.CenterStart

@@ -14,6 +14,7 @@ import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.model.SearchResult
+import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.model.toMediaItem
 import io.mockk.Called
@@ -71,8 +72,9 @@ class MediaSearchEngineImplTest {
         every { experimentalStore.experimental } returns experimentalPrefs
         every { offlineModeManager.isOffline } returns false
         every { offlineModeManager.networkStatus } returns networkStatus
-        every { seerrRepository.isConnected() } returns flowOf(true)
-        every { seerrRepository.isSearchEnabled() } returns flowOf(true)
+        every { seerrRepository.preferences } returns MutableStateFlow(
+            SeerrPreferences(serverUrl = "https://seerr.example.com", searchEnabled = true),
+        )
         engine = MediaSearchEngineImpl(
             mediaRepository = mediaRepository,
             seerrRepository = seerrRepository,
@@ -209,17 +211,18 @@ class MediaSearchEngineImplTest {
     fun `isSeerrSearchAvailable requires connection and search enabled`() = runTest {
         assertTrue(engine.isSeerrSearchAvailable())
 
-        every { seerrRepository.isConnected() } returns flowOf(false)
+        every { seerrRepository.preferences } returns MutableStateFlow(SeerrPreferences(searchEnabled = true))
         assertFalse(engine.isSeerrSearchAvailable())
 
-        every { seerrRepository.isConnected() } returns flowOf(true)
-        every { seerrRepository.isSearchEnabled() } returns flowOf(false)
+        every { seerrRepository.preferences } returns MutableStateFlow(
+            SeerrPreferences(serverUrl = "https://seerr.example.com", searchEnabled = false),
+        )
         assertFalse(engine.isSeerrSearchAvailable())
     }
 
     @Test
     fun `isSeerrSearchAvailable never throws`() = runTest {
-        every { seerrRepository.isConnected() } throws RuntimeException("boom")
+        every { seerrRepository.preferences } throws RuntimeException("boom")
 
         assertFalse(engine.isSeerrSearchAvailable())
     }

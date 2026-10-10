@@ -90,7 +90,7 @@ sealed interface VideoPlayerUiEvent {
 
     /**
      * The transport play/pause funnel: SyncPlay group first, cast receiver
-     * second, local engine last (the A1 routing — the PiP window's
+     * second, local engine last (the routing — the PiP window's
      * PLAY/PAUSE actions land on the same path).
      */
     data class TransportPlay(val play: Boolean) : VideoPlayerUiEvent
@@ -159,6 +159,15 @@ sealed interface VideoPlayerUiEvent {
     /** Saves the brightness level (persisted when remember-brightness is on). */
     data class SaveBrightness(val level: Float) : VideoPlayerUiEvent
 
+    /**
+     * In-player quick toggle (the input-mapping sheet): flips one binding's
+     * enabled flag — [bindingId] is the stable row id from the persisted
+     * [com.raulshma.jellyplay.core.model.PlayerInputMap]. Updates the live
+     * uiState mapping immediately (the detectors resolve through it) and
+     * persists the whole map.
+     */
+    data class SetInputBindingEnabled(val bindingId: String, val enabled: Boolean) : VideoPlayerUiEvent
+
     /** Changes the playback speed. */
     data class SetPlaybackSpeed(val speed: Float) : VideoPlayerUiEvent
 
@@ -167,6 +176,14 @@ sealed interface VideoPlayerUiEvent {
 
     /** Selects a subtitle track (the subtitle picker / downloaded-subtitle activation). */
     data class SelectSubtitleTrack(val option: TrackOption) : VideoPlayerUiEvent
+
+    /**
+     * Toggles subtitle visibility with memory: off remembers the last
+     * non-Off track in-session, on silently restores it. Bound to `V` and the
+     * CC button's long-press; distinct from picking the hub's Off row, which
+     * does not remember a restore target.
+     */
+    data object ToggleSubtitles : VideoPlayerUiEvent
 
     /** Clears the stored audio-track override. */
     data object ResetAudioTrack : VideoPlayerUiEvent

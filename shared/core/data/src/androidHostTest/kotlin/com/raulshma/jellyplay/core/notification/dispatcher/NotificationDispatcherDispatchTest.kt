@@ -40,6 +40,10 @@ import org.robolectric.annotation.Config
  *   suppresses everything.
  * - Stale per-library channels are deleted after a dispatch that no longer
  *   covers their library.
+ * - With the opt-in new-episodes preference on, EPISODE items reroute to the
+ *   fixed "New episodes" channel with "Series S2 · E4" framing; movies and
+ *   the per-library summary never ride that channel, and pref-off behaviour
+ *   is byte-identical to the legacy path.
  *
  * This module's unit tests do not bundle its merged android resources, so the
  * test application hands out a stub [Resources] answering every string lookup
@@ -79,10 +83,32 @@ class NotificationDispatcherDispatchTest {
 
     private fun item(id: String, name: String) = MediaItem(id = id, name = name, mediaType = MediaType.MOVIE)
 
+    private fun episode(
+        id: String,
+        name: String,
+        seriesName: String? = "Series",
+        seasonNumber: Int? = 2,
+        episodeNumber: Int? = 4,
+    ) = MediaItem(
+        id = id,
+        name = name,
+        mediaType = MediaType.EPISODE,
+        seriesName = seriesName,
+        seasonNumber = seasonNumber,
+        episodeNumber = episodeNumber,
+    )
+
     private fun libraryFolder(id: String) = LibraryFolder(id = id, name = "Library $id")
 
     private fun postedIds(): Set<Int> =
         shadowOf(notificationManager).activeNotifications.map { it.id }.toSet()
+
+    /**
+     * The routed channel of a posted notification — the accessor form of
+     * `Notification.getChannelId()` (the legacy public `channel` field is
+     * absent from this module's androidHostTest classpath).
+     */
+    private fun postedChannelId(notification: Notification): String? = notification.channelId
 
     // ── no-op gates ──────────────────────────────────────────────────────
 
@@ -243,6 +269,73 @@ class NotificationDispatcherDispatchTest {
 
         assertNull(notificationManager.getNotificationChannel(NotificationChannelManager.channelIdFor("lib-old")))
         assertNotNull(notificationManager.getNotificationChannel(NotificationChannelManager.channelIdFor("lib-1")))
+    }
+
+    // ── new-episodes routing (opt-in) ────────────────────────────────────
+
+    @Test
+    fun `episodes route to the new-episodes channel with series framing when the pref is on`() {
+        dispatcher.dispatch(
+            mapOf(libraryFolder("lib-1") to listOf(episode("e1", "Pilot"))),
+            NotificationPreferences(newEpisodesEnabled = true),
+        )
+
+        val notification = shadowOf(notificationManager)
+            .getNotification(NotificationDispatcher.notificationIdFor("lib-1", 0))
+        assertEquals(NotificationChannelManager.CHANNEL_NEW_EPISODES, postedChannelId(notification))
+        // "Series S2 · E4" framing title, episode name as text.
+        assertEquals("Series S2 \u00B7 E4", notification.extras.getString(Notification.EXTRA_TITLE))
+        assertEquals("Pilot", notification.extras.getString(Notification.EXTRA_TEXT))
+        // The dedicated channel itself is created by the dispatch…
+        assertNotNull(notificationManager.getNotificationChannel(NotificationChannelManager.CHANNEL_NEW_EPISODES))
+        // …and the mark-seen action keeps the item's identity triple.
+        val markSeen = notification.actions.first { action ->
+            shadowOf(action.actionIntent).savedIntent.action == NotificationActionReceiver.ACTION_MARK_SEEN
+        }
+        assertEquals(
+            "EPISODE",
+            shadowOf(markSeen.actionIntent).savedIntent.getStringExtra(NotificationActionReceiver.EXTRA_MEDIA_TYPE),
+        )
+    }
+
+    @Test
+    fun `episodes keep the per-library channel and framing when the pref is off`() {
+        dispatcher.dispatch(
+            mapOf(libraryFolder("lib-1") to listOf(episode("e1", "Pilot"))),
+            NotificationPreferences(),
+        )
+
+        val notification = shadowOf(notificationManager)
+            .getNotification(NotificationDispatcher.notificationIdFor("lib-1", 0))
+        assertEquals("new_media_lib-1", postedChannelId(notification))
+        assertEquals("Pilot", notification.extras.getString(Notification.EXTRA_TITLE))
+        // Today's generic framing: media-type label subtext.
+        assertEquals("Episode", notification.extras.getString(Notification.EXTRA_TEXT))
+    }
+
+    @Test
+    fun `non-episode items and the summary never ride the new-episodes channel even when the pref is on`() {
+        dispatcher.dispatch(
+            mapOf(libraryFolder("lib-1") to listOf(item("i1", "Movie One"), episode("e1", "Pilot"))),
+            NotificationPreferences(newEpisodesEnabled = true),
+        )
+
+        val movie = shadowOf(notificationManager)
+            .getNotification(NotificationDispatcher.notificationIdFor("lib-1", 0))
+        assertEquals("new_media_lib-1", postedChannelId(movie))
+        assertEquals("Movie One", movie.extras.getString(Notification.EXTRA_TITLE))
+
+        val summary = shadowOf(notificationManager)
+            .getNotification(NotificationDispatcher.notificationIdFor("lib-1", -1))
+        assertEquals("new_media_lib-1", postedChannelId(summary))
+        assertTrue(summary.flags and Notification.FLAG_GROUP_SUMMARY != 0)
+
+        // Both children stay grouped under the library group and covered by
+        // the summary regardless of which channel they posted to.
+        assertEquals("new_media_lib-1", movie.group)
+        val episodeNotification = shadowOf(notificationManager)
+            .getNotification(NotificationDispatcher.notificationIdFor("lib-1", 1))
+        assertEquals("new_media_lib-1", episodeNotification.group)
     }
 
     private companion object {

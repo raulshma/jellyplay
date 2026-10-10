@@ -9,6 +9,7 @@ import com.raulshma.jellyplay.core.model.GestureIndicatorSide
 import com.raulshma.jellyplay.core.model.GestureMode
 import com.raulshma.jellyplay.core.model.MediaSegmentType
 import com.raulshma.jellyplay.core.model.OrientationMode
+import com.raulshma.jellyplay.core.model.PlayerInputDefaults
 import com.raulshma.jellyplay.core.model.PreloadBufferSize
 import com.raulshma.jellyplay.core.model.SegmentBehavior
 import com.raulshma.jellyplay.core.model.StillWatchingMode
@@ -108,6 +109,35 @@ class VideoPlayerStoreTest {
     }
 
     @Test
+    fun `double tap hold seek defaults on and round-trips`() = runTest {
+        assertTrue(store.videoPlayer.first().videoDoubleTapHoldSeekEnabled)
+        store.setVideoDoubleTapHoldSeekEnabled(false)
+        assertFalse(store.videoPlayer.first().videoDoubleTapHoldSeekEnabled)
+        store.setVideoDoubleTapHoldSeekEnabled(true)
+        assertTrue(store.videoPlayer.first().videoDoubleTapHoldSeekEnabled)
+    }
+
+    @Test
+    fun `hide osd on pause defaults off and round-trips`() = runTest {
+        // Default OFF — today's show-on-pause behavior is untouched.
+        assertFalse(store.videoPlayer.first().videoHideOsdOnPause)
+        store.setVideoHideOsdOnPause(true)
+        assertTrue(store.videoPlayer.first().videoHideOsdOnPause)
+        store.setVideoHideOsdOnPause(false)
+        assertFalse(store.videoPlayer.first().videoHideOsdOnPause)
+    }
+
+    @Test
+    fun `resume on headset plug defaults off and round-trips`() = runTest {
+        // Default OFF — the resume is opt-in.
+        assertFalse(store.videoPlayer.first().videoResumeOnHeadsetPlug)
+        store.setVideoResumeOnHeadsetPlug(true)
+        assertTrue(store.videoPlayer.first().videoResumeOnHeadsetPlug)
+        store.setVideoResumeOnHeadsetPlug(false)
+        assertFalse(store.videoPlayer.first().videoResumeOnHeadsetPlug)
+    }
+
+    @Test
     fun `legacy video_gestures_enabled false migrates to NONE`() = runTest {
         // Pre-mode install with gestures disabled: no `video_gesture_mode` key,
         // so readGestureMode falls back to the legacy boolean.
@@ -140,6 +170,106 @@ class VideoPlayerStoreTest {
             it[androidx.datastore.preferences.core.stringPreferencesKey("video_gesture_mode")] = "BOGUS"
         }
         assertEquals(GestureMode.ALL, store.videoPlayer.first().videoGestureMode)
+    }
+
+    @Test
+    fun `input bindings default to the legacy-derived mapping and round-trip`() = runTest {
+        // Fresh store: the blob is absent, so the default read derives the
+        // mapping from the ALL-mode legacy config — the full factory map.
+        assertEquals(PlayerInputDefaults.defaultMap(), store.videoPlayer.first().videoInputBindings)
+        val custom = PlayerInputDefaults.defaultMap().let { map ->
+            map.copy(
+                bindings = map.bindings.map { binding ->
+                    if (binding.id == PlayerInputDefaults.ID_SWIPE_BRIGHTNESS) {
+                        binding.copy(enabled = false)
+                    } else {
+                        binding
+                    }
+                },
+            )
+        }
+        store.setVideoInputBindings(custom)
+        assertEquals(custom, store.videoPlayer.first().videoInputBindings)
+    }
+
+    @Test
+    fun `updateVideoInputBindings applies the transform to the stored blob inside the edit`() = runTest {
+        // Seed a blob, then flip one row through the transform write — the
+        // stored blob is read and rewritten in the SAME edit, so a
+        // read-modify-write can never interleave with another writer.
+        store.setVideoInputBindings(PlayerInputDefaults.defaultMap())
+        store.updateVideoInputBindings { it.withBindingEnabled(PlayerInputDefaults.ID_PINCH, false) }
+        val stored = store.videoPlayer.first().videoInputBindings
+        assertFalse(stored.bindings.first { it.id == PlayerInputDefaults.ID_PINCH }.enabled)
+        // Every other row rode along untouched.
+        assertEquals(
+            PlayerInputDefaults.defaultMap().withBindingEnabled(PlayerInputDefaults.ID_PINCH, false),
+            stored,
+        )
+        // An unchanged candidate writes nothing (the stored map is unchanged).
+        store.updateVideoInputBindings { it.withBindingEnabled("no-such-id", false) }
+        assertEquals(stored, store.videoPlayer.first().videoInputBindings)
+    }
+
+    @Test
+    fun `input bindings migrate from the legacy gesture config when blob absent`() = runTest {
+        // Pre-blob install: gesture mode + the two per-behavior switches feed
+        // the derived default — the exact prior behavior, in mapping form.
+        dataStore.edit {
+            it[androidx.datastore.preferences.core.stringPreferencesKey("video_gesture_mode")] = "TAP_ONLY"
+            it[androidx.datastore.preferences.core.booleanPreferencesKey("video_hold_speed_enabled")] = false
+            it[androidx.datastore.preferences.core.booleanPreferencesKey("video_double_tap_hold_seek_enabled")] = false
+        }
+        val migrated = store.videoPlayer.first().videoInputBindings
+        // The migrated map IS the factory map built for this exact legacy
+        // config — the pre-mapping behavior, in mapping form.
+        assertEquals(
+            PlayerInputDefaults.defaultMap(
+                gestureMode = GestureMode.TAP_ONLY,
+                holdSpeedEnabled = false,
+                doubleTapHoldSeekEnabled = false,
+            ),
+            migrated,
+        )
+        // Sanity: the swipe-tier rows really are off in the migrated map.
+        assertTrue(
+            migrated.bindings.first { it.id == PlayerInputDefaults.ID_SWIPE_VOLUME }.enabled.not(),
+        )
+        assertTrue(
+            migrated.bindings.first { it.id == PlayerInputDefaults.ID_SWIPE_BRIGHTNESS }.enabled.not(),
+        )
+        assertFalse(
+            migrated.bindings.first { it.id == PlayerInputDefaults.ID_LONG_PRESS }.enabled,
+            "hold-speed pref off ⇒ hold-speed row disabled",
+        )
+        assertFalse(
+            migrated.bindings.first { it.id == PlayerInputDefaults.ID_DOUBLE_TAP_HOLD_LEFT }.enabled,
+            "double-tap-hold pref off ⇒ hold row disabled",
+        )
+        // The wheel/keyboard/D-pad rows are untouched by the touch-tier config.
+        assertTrue(
+            migrated.bindings.first { it.id == PlayerInputDefaults.ID_WHEEL_VOLUME }.enabled,
+        )
+    }
+
+    @Test
+    fun `setVideoGestureMode applies the preset to the stored mapping`() = runTest {
+        // The demoted preset: picking TAP_ONLY mass-disables the swipe-tier
+        // rows of the PERSISTED blob in the same edit.
+        store.setVideoGestureMode(GestureMode.TAP_ONLY)
+        val stored = store.videoPlayer.first().videoInputBindings
+        assertTrue(
+            stored.bindings.first { it.id == PlayerInputDefaults.ID_SWIPE_VOLUME }.enabled.not(),
+        )
+        assertTrue(
+            stored.bindings.first { it.id == PlayerInputDefaults.ID_DOUBLE_TAP_CENTER }.enabled,
+        )
+        // And back: ALL re-enables the swipe rows, leaving the tap rows alone.
+        store.setVideoGestureMode(GestureMode.ALL)
+        val restored = store.videoPlayer.first().videoInputBindings
+        assertTrue(
+            restored.bindings.first { it.id == PlayerInputDefaults.ID_SWIPE_VOLUME }.enabled,
+        )
     }
 
     @Test
@@ -198,6 +328,9 @@ class VideoPlayerStoreTest {
             videoDefaultOrientation = OrientationMode.LOCKED_LANDSCAPE,
             videoDefaultAspectRatio = "16:9",
             videoGestureMode = GestureMode.TAP_ONLY,
+            videoDoubleTapHoldSeekEnabled = false,
+            videoHideOsdOnPause = true,
+            videoResumeOnHeadsetPlug = true,
             videoPassOutProtectionHours = 24,
             videoSkipBackOnResumeMs = 10_000L,
             videoHoldSpeedEnabled = false,

@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Clock
+import com.composables.icons.tabler.outline.Subtitles
 import com.composables.icons.tabler.outline.Wifi
 import com.raulshma.jellyplay.core.designsystem.theme.HdrColors
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
@@ -42,6 +43,9 @@ import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.feature.player.video.TrackOption
 import com.raulshma.jellyplay.feature.player.video.engine.PlaybackMetadataSnapshot
+import com.raulshma.jellyplay.feature.player.video.generated.resources.Res
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_mpv_config_chip
+import org.jetbrains.compose.resources.stringResource
 
 /**
  * The play-method / resolution / codec / HDR / audio / channels chip row shown
@@ -53,6 +57,12 @@ import com.raulshma.jellyplay.feature.player.video.engine.PlaybackMetadataSnapsh
  * typography. The play-method chip is clickable (when [onPlayMethodClick] is
  * provided) and opens the playback-mode picker; the subtitle delay chip is
  * clickable and triggers the subtitle delay overlay.
+ *
+ * When [mpvConfigNoticeActive] (the engine's custom-mpv-config subtitle
+ * ownership snapshot reports user-owned `sub-*` keys), a warning-tinted chip
+ * joins the row so the interaction is visible without opening the subtitle
+ * sheet — the sheet's style tab carries the full case-by-case notice, and the
+ * chip is the shortcut there.
  *
  * Pure function of its arguments: all state is hoisted to the caller.
  */
@@ -69,6 +79,8 @@ internal fun PlaybackMetadataRow(
     subtitleDelayMs: Long = 0L,
     onSubtitleDelayClick: () -> Unit = {},
     onPlayMethodClick: (() -> Unit)? = null,
+    mpvConfigNoticeActive: Boolean = false,
+    onMpvConfigNoticeClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val videoStream = mediaStreams.firstOrNull { it.type == StreamType.VIDEO }
@@ -160,6 +172,8 @@ internal fun PlaybackMetadataRow(
     }
     val playMethodLabel = if (isDirectPlayForced) "Direct Play \u26A0" else playMethod
 
+    val mpvConfigChipLabel = stringResource(Res.string.player_video_mpv_config_chip)
+
     val items = remember(
         playMethodLabel,
         resolutionLabel,
@@ -175,6 +189,9 @@ internal fun PlaybackMetadataRow(
         subtitleDelayMs,
         onPlayMethodClick,
         onSubtitleDelayClick,
+        mpvConfigNoticeActive,
+        mpvConfigChipLabel,
+        onMpvConfigNoticeClick,
     ) {
         listOfNotNull(
             MetadataItem(
@@ -264,6 +281,22 @@ internal fun PlaybackMetadataRow(
                     containerColor = warningColor.copy(alpha = 0.14f),
                     borderColor = warningColor.copy(alpha = 0.35f),
                     icon = Tabler.Outline.Wifi,
+                )
+            } else null,
+            // Custom mpv config owns sub-* styling keys this session: in-app
+            // subtitle-style controls for those keys are no-ops. The chip
+            // surfaces that here — where the playback mode already lives —
+            // and clicks through to the subtitle hub, whose style tab spells
+            // out the full case-by-case notice (owned keys, the ASS force
+            // requirement, the mpv.conf quoting trap).
+            if (mpvConfigNoticeActive) {
+                MetadataItem(
+                    text = mpvConfigChipLabel,
+                    textColor = warningColor,
+                    containerColor = warningColor.copy(alpha = 0.14f),
+                    borderColor = warningColor.copy(alpha = 0.35f),
+                    icon = Tabler.Outline.Subtitles,
+                    onClick = onMpvConfigNoticeClick,
                 )
             } else null,
         )

@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.feature.library.components
 
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,13 +28,25 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.size.Size as CoilSize
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.ui.image.MediaImage
+import com.raulshma.jellyplay.core.ui.components.LocalMediaQuickActionController
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.components.rememberSharedElementModifier
 import com.raulshma.jellyplay.core.ui.tv.enableMarqueeOnFocus
 
+/**
+ * One media row in the library's LIST view mode (flat and grouped paths).
+ * Tap opens the item; long-press opens the host screen's quick-action sheet
+ * when a controller is wired ([LocalMediaQuickActionController] — the
+ * PosterCard pattern; the row predates the sheet and never had the
+ * affordance). No card chrome: the row keeps its own plain
+ * [combinedClickable] with the default indication, plus the focus-tracking /
+ * marquee pair it has always carried.
+ */
 @Composable
 fun LibraryListItem(
+    item: MediaItem,
     title: String,
     subtitle: AnnotatedString?,
     imageUrl: String?,
@@ -45,11 +57,19 @@ fun LibraryListItem(
     fallbackUrls: List<String> = emptyList(),
 ) {
     var isFocused by remember { mutableStateOf(false) }
+    // Same stable-lambda pattern as PosterCard: reads the controller from
+    // composition scope so the sheet target is always this row's exact item,
+    // remembered per (item, controller) so the gesture detector isn't
+    // restarted mid-press. Null controller → plain click, no long-press.
+    val quickActionController = LocalMediaQuickActionController.current
+    val onQuickActionsLongPress = quickActionController?.let { controller ->
+        remember(item, controller) { { controller.show(item) } }
+    }
     Row(
         modifier = modifier
             .fillMaxWidth()
             .clip(ShapeCache.smooth12)
-            .clickable(onClick = onClick)
+            .combinedClickable(onClick = onClick, onLongClick = onQuickActionsLongPress)
             .onFocusChanged { isFocused = it.isFocused }
             .focusable()
             .focusIndicator()

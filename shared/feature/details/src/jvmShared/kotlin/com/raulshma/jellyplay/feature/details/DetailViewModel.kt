@@ -1,22 +1,25 @@
 package com.raulshma.jellyplay.feature.details
 
 import androidx.compose.runtime.Immutable
-import com.raulshma.jellyplay.core.data.download.DownloadRequestResult
+import com.raulshma.jellyplay.core.data.download.DownloadOutcomeMessenger
 import com.raulshma.jellyplay.core.data.download.MediaDownloadActions
 import com.raulshma.jellyplay.core.data.offline.OfflineDeleteActions
+import com.raulshma.jellyplay.core.data.session.isAvailableNowOrProbe
 import com.raulshma.jellyplay.core.data.repository.DetailLoadState
 import com.raulshma.jellyplay.core.data.repository.MediaDetailProvider
 import com.raulshma.jellyplay.core.data.repository.BookTocCacheRepository
 import com.raulshma.jellyplay.core.data.repository.NoopBookTocCacheRepository
 import com.raulshma.jellyplay.core.data.repository.ReaderAnnotationsRepository
 import com.raulshma.jellyplay.core.data.book.BookTocProber
-import com.raulshma.jellyplay.core.data.repository.MediaExtrasReads
+import com.raulshma.jellyplay.core.network.api.LibraryApiClient
+import com.raulshma.jellyplay.core.network.api.toModel
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.repository.UserDataContainer
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.model.HomeFreshness
+import com.raulshma.jellyplay.core.model.JellyPlayPluginFeatures
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestStateHolder
 import com.raulshma.jellyplay.core.data.seerr.TmdbCompanionFetches
 import com.raulshma.jellyplay.core.data.seerr.TmdbCompanionLanding
@@ -53,6 +56,9 @@ import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import com.raulshma.jellyplay.core.concurrency.DEFAULT_FANOUT_PARALLELISM
+import com.raulshma.jellyplay.core.concurrency.mapConcurrentCatching
+import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -113,8 +119,11 @@ class DetailViewModel internal constructor(
     private val storageProbe: DetailStorageProbe,
     private val strings: DetailStrings,
     private val mediaRepository: MediaRepository,
-    /** The item-attached extras seam (the detail screen's special-features row). */
-    private val mediaExtrasReads: MediaExtrasReads,
+    /** The item-attached extras + provider-id reads (the detail screen's
+     *  special-features row, the Seerr item resolution). */
+    private val libraryApiClient: LibraryApiClient,
+    /** The collection family reads/writes (the Add-to-Collection picker). */
+    private val collectionApiClient: com.raulshma.jellyplay.core.network.api.CollectionApiClient,
     /**
      * The single seam for user-data mutations (watched / favorite). The VM
      * supplies only the container adapter below (which projections of an item
@@ -165,6 +174,34 @@ class DetailViewModel internal constructor(
      * Tests inject the test dispatcher so `advanceUntilIdle` covers the launch.
      */
     private val smartPlayDispatcher: CoroutineDispatcher = Dispatchers.Default,
+    /**
+     * The jellyfin-plugin-jellyplay companion-plugin seams (ADR 0010), behind
+     * the three plugin-gated detail sections (ratings row, server-scored
+     * "More like this", anime filler/recap badges). The data seams are the
+     * NARROW plugin roles the enrichments read — the ratings role (mdblist
+     * chips + per-season TMDB scores), the recommendations role (similar
+     * items) and the markers role (filler/recap badges) — not the whole
+     * client family. Nullable-with-default keeps the direct-construction test
+     * harnesses compiling — the Settings screen's `jellyPlayStatusStore`
+     * precedent; the Koin factory passes the real singles and every
+     * enrichment degrades to silent absence when either is null (the plugin
+     * contract's never-an-error-surface rule).
+     *
+     * Gating goes through the status store ONLY ([JellyPlayPluginFeatures]
+     * keys, one [JellyPlayPluginStatusStore.refresh] probe per item
+     * navigation); data calls ride the roles — never per-endpoint 404
+     * handling.
+     */
+    private val pluginStatusStore: com.raulshma.jellyplay.core.data.session.JellyPlayPluginStatusStore? = null,
+    private val pluginRatingsApi: com.raulshma.jellyplay.core.network.api.JellyPlayRatingsRoutes? = null,
+    private val pluginRecommendationsApi: com.raulshma.jellyplay.core.network.api.JellyPlayRecommendationsRoutes? = null,
+    private val pluginMarkersApi: com.raulshma.jellyplay.core.network.api.JellyPlayMarkersRoutes? = null,
+    /**
+     * The per-feature gate (probe AND the user's toggle — the ONE seam).
+     * Nullable-with-default like the two seams above; without it the
+     * probe-only fallback keeps the pre-toggle behavior (tests).
+     */
+    private val jellyPlayFeatureGate: com.raulshma.jellyplay.core.data.session.JellyPlayFeatureGate? = null,
 ) : JellyPlayViewModel() {
 
     /** Media-detail preference fields, projected centrally off the store slices. */
@@ -267,13 +304,16 @@ class DetailViewModel internal constructor(
         // sub-flows; snapshotIn gives the group its dedicated StateFlow so its
         // ticks don't re-run the outer combine.
         val seerrRequest = seerrRequestState.snapshotIn(scope)
-        // Group 3 — Seerr connection flags that only gate recommendation visibility.
-        val seerrFlags = combine(
-            remoteDiscovery.seerrRepository.isConnected(),
-            remoteDiscovery.seerrRepository.isRecommendationsEnabled(),
-        ) { isConnected, isRecommendationsEnabled ->
-            SeerrConnectionFlags(isConnected, isRecommendationsEnabled)
-        }.stateIn(scope, SharingStarted.WhileSubscribed(5_000), SeerrConnectionFlags())
+        // Group 3 — Seerr connection flags that only gate recommendation visibility
+        // (the two retired repository lenses, derived off the one preferences flow).
+        val seerrFlags = remoteDiscovery.seerrRepository.preferences
+            .map { prefs ->
+                SeerrConnectionFlags(
+                    isConnected = prefs.serverUrl.isNotBlank(),
+                    isRecommendationsEnabled = prefs.recommendationsEnabled,
+                )
+            }
+            .stateIn(scope, SharingStarted.WhileSubscribed(5_000), SeerrConnectionFlags())
 
         combine(core, seerrRequest, seerrFlags) { primary, request, flags ->
             primary.copy(
@@ -355,7 +395,7 @@ class DetailViewModel internal constructor(
         scope = scope,
         session = _session,
         messages = _messages,
-        adapter = CollectionAddTarget(strings, mediaRepository),
+        adapter = CollectionAddTarget(strings, collectionApiClient, mediaRepository),
         mediaDetailProvider = mediaDetailProvider,
     )
     private val downloadLifecycleActions = actionFactories.downloads.create(
@@ -451,6 +491,12 @@ class DetailViewModel internal constructor(
      * covers both lifecycles.
      */
     private val loadGuard = DetailLoadGuard()
+    /**
+     * The plugin similar-items hydration width (the arrqueue searchSemaphore /
+     * heatmap resolveSemaphore idiom, [DEFAULT_FANOUT_PARALLELISM]) — the one
+     * bounded-parallel surface for the per-candidate getMediaDetail fan-out.
+     */
+    private val hydrationSemaphore = Semaphore(DEFAULT_FANOUT_PARALLELISM)
     /**
      * The series whose provider catalogue the current screen consumes — the
      * [loadItemInternal] invalidation target and the [loadEpisodesForSeason]
@@ -864,7 +910,7 @@ class DetailViewModel internal constructor(
             // Fetch special features / extras (featurettes, deleted scenes, etc.)
             // concurrently so the core detail renders immediately; the result lands
             // in specialFeatures and renders as its own horizontal row.
-            mediaExtrasReads.getSpecialFeatures(inputs.itemId)
+            libraryApiClient.getSpecialFeatures(inputs.itemId)
                 .onSuccess { extras ->
                     if (!loadGuard.isCurrent(inputs.itemId)) return@onSuccess
                     _uiState.update { it.copy(specialFeatures = extras) }
@@ -937,7 +983,143 @@ class DetailViewModel internal constructor(
                     _uiState.update { it.copy(collectionItems = result.items) }
                 }
         },
+        DetailEnrichment(
+            name = "pluginRatings",
+            // ADR 0010: the mdblist ratings chips row. The feature-key gate is
+            // a suspend probe, so it lives in the BODY (the gate stays a pure
+            // snapshot read); failure/null → the field stays empty → the
+            // section is silently absent.
+            gate = { it.remoteDiscoveryAllowed },
+        ) { inputs ->
+            if (!pluginFeature(JellyPlayPluginFeatures.Ratings, inputs.itemId)) return@DetailEnrichment
+            val imdbId = resolveImdbId(inputs.detail) ?: return@DetailEnrichment
+            val result = pluginRatingsApi?.getMdbListRatings(imdbId)?.getOrNull() ?: return@DetailEnrichment
+            if (!loadGuard.isCurrent(inputs.itemId)) return@DetailEnrichment
+            _uiState.update {
+                // Scoreless entries would render an empty chip — dropped here so
+                // the section's emptiness check matches what it can render.
+                it.copy(
+                    pluginRatings = result.ratings
+                        .filter { r -> r.score != null }
+                        .map { it.toModel() },
+                )
+            }
+        },
+        DetailEnrichment(
+            name = "pluginSimilarItems",
+            // The server-scored "More like this" row, rendered BESIDE the stock
+            // one. The stock row stands down only when the capabilities
+            // handshake says the plugin registered into the host's similar
+            // pipeline (Jellyfin 12+ — there the stock endpoint returns the
+            // same scored list and both rows would duplicate); on pre-12 hosts
+            // / older plugins the lists differ and both render. The plugin
+            // returns scored item ids only, so each id is hydrated through
+            // the same per-item fetch the detail screen already uses
+            // (getMediaDetail), preserving score order; per-id failures drop
+            // out and an empty hydration leaves the stock row in place.
+            gate = { it.remoteDiscoveryAllowed },
+        ) { inputs ->
+            if (!pluginFeature(JellyPlayPluginFeatures.Recommendations, inputs.itemId)) return@DetailEnrichment
+            val scored = pluginRecommendationsApi?.getJellyPlaySimilarItems(inputs.itemId, limit = SIMILAR_ITEMS_LIMIT)
+                ?.getOrNull()
+                .orEmpty()
+                .filter { it.itemId != inputs.itemId }
+                .distinctBy { it.itemId }
+            if (scored.isEmpty()) return@DetailEnrichment
+            // The shared bounded-parallel hydration (DEFAULT_FANOUT_PARALLELISM,
+            // the arrqueue/heatmap idiom): per-id failures and null details drop
+            // out (mapConcurrentCatching's drop policy) instead of an unbounded
+            // async/awaitAll fan-out over the server.
+            val hydrated = hydrationSemaphore.mapConcurrentCatching(scored) { candidate ->
+                mediaRepository.getMediaDetail(candidate.itemId).getOrNull()?.item
+            }
+            if (!loadGuard.isCurrent(inputs.itemId)) return@DetailEnrichment
+            _uiState.update {
+                it.copy(
+                    pluginSimilarItems = hydrated
+                        .filterNotNull()
+                        .filter { item -> item.id != inputs.itemId }
+                        .distinctBy { item -> item.id },
+                    // The probe ran synchronously inside pluginFeature above, so
+                    // the capabilities payload is fresh for this read.
+                    pluginSimilarSuppressesStock =
+                        pluginStatusStore?.capabilities?.value?.serverSimilarPipeline == true,
+                )
+            }
+        },
+        DetailEnrichment(
+            name = "pluginAnimeMarkers",
+            // Series-scoped filler/recap badges for the seasons section's
+            // episode rows. SERIES resolves to itself, EPISODE/SEASON to the
+            // parent series (seriesIdForDetail) — the same series context the
+            // seasons tree renders.
+            gate = {
+                it.remoteDiscoveryAllowed && it.detail.item.seriesIdForDetail != null
+            },
+        ) { inputs ->
+            if (!pluginFeature(JellyPlayPluginFeatures.AnimeMarkers, inputs.itemId)) return@DetailEnrichment
+            val seriesId = inputs.detail.item.seriesIdForDetail ?: return@DetailEnrichment
+            val providerSeriesId = resolveProviderSeriesId(inputs.detail) ?: return@DetailEnrichment
+            val markers = pluginMarkersApi?.getAnimeMarkers(seriesId, providerSeriesId)
+                ?.getOrNull() ?: return@DetailEnrichment
+            if (!loadGuard.isCurrent(inputs.itemId)) return@DetailEnrichment
+            _uiState.update { it.copy(animeMarkers = animeBadges(markers.markers.map { it.toModel() })) }
+        },
+        DetailEnrichment(
+            name = "pluginSeasonRatings",
+            // The TMDB per-episode scores for the seasons section's episode
+            // rows + the season header's average (ADR 0010, the `ratings`
+            // feature family's season leg). Same series context as the anime
+            // badges; one fetch per LOADED season (a lazily-expanded season
+            // re-emits a new generation, so the enrichment re-runs and picks
+            // it up). Per-season null/empty results drop out; a wholly empty
+            // fold leaves the field empty — silent absence, never an error.
+            gate = {
+                it.remoteDiscoveryAllowed && it.detail.item.seriesIdForDetail != null
+            },
+        ) { inputs ->
+            if (!pluginFeature(JellyPlayPluginFeatures.Ratings, inputs.itemId)) return@DetailEnrichment
+            val tmdbId = resolveTmdbId(inputs.detail) ?: return@DetailEnrichment
+            val ratingsBySeasonId = buildMap {
+                for (season in inputs.snapshot.seasons) {
+                    val seasonNumber = season.indexNumber ?: continue
+                    val ratings = pluginRatingsApi?.getTmdbSeasonRatings(tmdbId.toString(), seasonNumber)
+                        ?.getOrNull() ?: continue
+                    if (ratings.isEmpty()) continue
+                    put(season.id, ratings.mapValues { (_, episode) -> episode.toModel() })
+                }
+            }
+            if (ratingsBySeasonId.isEmpty()) return@DetailEnrichment
+            if (!loadGuard.isCurrent(inputs.itemId)) return@DetailEnrichment
+            _uiState.update { it.copy(seasonRatings = ratingsBySeasonId) }
+        },
     )
+
+    /** The stock similar row's limit (the plugin row mirrors it). */
+    private companion object {
+        const val SIMILAR_ITEMS_LIMIT = 12
+    }
+
+    /**
+     * The ADR 0010 feature gate for the plugin sections: one capabilities
+     * probe per item navigation (latched on the item id — the store's own
+     * contract re-probes on identity transitions), then the ONE gate seam —
+     * [JellyPlayFeatureGate.isAvailableNow] (probe AND the user's per-feature
+     * toggle; the fresh one-shot arm honors the refresh that just landed).
+     * Without the gate seam (direct-construction tests) the probe-only
+     * snapshot read keeps the pre-toggle behavior. False when the plugin
+     * seams are unwired or the probe failed — silent absence.
+     */
+    private var pluginProbedItemId: String? = null
+
+    private suspend fun pluginFeature(feature: String, itemId: String): Boolean {
+        val store = pluginStatusStore ?: return false
+        if (pluginProbedItemId != itemId) {
+            pluginProbedItemId = itemId
+            store.refresh()
+        }
+        return jellyPlayFeatureGate.isAvailableNowOrProbe(store, feature)
+    }
 
     /**
      * The evaluator beside [reduceLoaded]: walks the declaration list in
@@ -1333,18 +1515,30 @@ class DetailViewModel internal constructor(
     /**
      * Long-press Download from a detail row card (related/collection/episode,
      * #147): same routing as the library grid — inline start for single-stream
-     * items, detail screen for series (selection sheet) and other richer flows.
+     * items, detail screen for series (selection sheet) and other richer
+     * flows. The outcome cascade is the shared
+     * [MediaDownloadActions.downloadAndReport] fold; this host's messages ride
+     * [rowDownloadSink]'s DetailMessage queue and its strings.
      */
     private fun downloadRowItem(item: MediaItem, onOpenDetail: (itemId: String) -> Unit) {
         launch {
-            when (val result = mediaDownloadActions.download(item)) {
-                DownloadRequestResult.Started ->
-                    _messages.emit(DetailMessage.Text(strings.get(Res.string.detail_msg_download_started)))
-                is DownloadRequestResult.SeriesSelectionRequired -> onOpenDetail(result.seriesId)
-                is DownloadRequestResult.NeedsDetailScreen -> onOpenDetail(result.itemId)
-                is DownloadRequestResult.Failed ->
-                    _messages.emit(DetailMessage.Text(strings.get(Res.string.detail_msg_download_start_failed)))
-            }
+            mediaDownloadActions.downloadAndReport(
+                item = item,
+                onOpenDetail = { id, _ -> onOpenDetail(id) },
+                seriesOpensSheet = false,
+                messenger = rowDownloadSink,
+            )
+        }
+    }
+
+    /** The fold's message sink: this screen's DetailMessage queue + strings. */
+    private val rowDownloadSink = object : DownloadOutcomeMessenger {
+        override fun downloadStarted() {
+            launch { _messages.tryEmit(DetailMessage.Text(strings.get(Res.string.detail_msg_download_started))) }
+        }
+
+        override fun downloadStartFailed() {
+            launch { _messages.tryEmit(DetailMessage.Text(strings.get(Res.string.detail_msg_download_start_failed))) }
         }
     }
 

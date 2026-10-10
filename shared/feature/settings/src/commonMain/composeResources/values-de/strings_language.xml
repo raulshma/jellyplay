@@ -86,4 +86,6 @@
     <string name="settings_track_rule_subtitle_mode">Untertitelmodus</string>
     <string name="settings_track_rule_edit">Regel bearbeiten</string>
     <string name="settings_track_rule_delete">Regel löschen</string>
+
+    <string name="settings_subtitle_custom_color">Benutzerdefiniert…</string>
 </resources>

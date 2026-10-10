@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.model
 
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.Test
 
@@ -55,6 +56,22 @@ descriptor.titleFor("Movies"),
 descriptor.idFor("COLLECTION_7"),
 "pinned_COLLECTION_7",
 )
+    }
+
+    @Test
+    fun pluginRow_resolvesInstanceIdsUnderTheJellyplayPrefix_andIsNotConfigurable() {
+        // The plugin rows (companion server plugin, ADR 0010) are gated by
+        // the capability registry, never the layout config — pinned here so
+        // PLUGIN_ROW can never silently become user-configurable (which
+        // would add it to the persisted default order).
+        val descriptor = HomeSectionType.PLUGIN_ROW.descriptor
+        assertNull(descriptor.id)
+        assertFalse(descriptor.isConfigurable)
+        assertEquals("jellyplay_seasonal", descriptor.idFor("seasonal"))
+        assertEquals("jellyplay_custom_Top 10 of 2025", descriptor.idFor("custom_Top 10 of 2025"))
+        assertEquals("seasonal", descriptor.instanceIdFor("jellyplay_seasonal"))
+        assertEquals("custom_Top 10 of 2025", descriptor.instanceIdFor("jellyplay_custom_Top 10 of 2025"))
+        assertNull(descriptor.instanceIdFor("discover_row-1"), "foreign prefixes resolve to no instance id")
     }
 
     @Test

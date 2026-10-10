@@ -142,6 +142,25 @@ class PreferenceSpec<T> internal constructor(
     val resetCategory: PreferenceResetCategory?,
     /** The knob's settings-search entry, when the knob is searchable. */
     val search: PreferenceSearchSpec?,
+    /**
+     * The enum constant names when this row is an [enumRow] declaration (the
+     * persisted-by-name wire vocabulary), else null. Catalog metadata only —
+     * captures `enumValues<E>()` at declaration so the settings-catalog
+     * generator can advertise the allowed values without reflection.
+     */
+    internal val enumOptions: List<String>? = null,
+    /**
+     * The advertised numeric bounds, or null when the row has none. Catalog
+     * metadata only — documentation for the settings-catalog generator and
+     * the plugin's admin-defaults validation; nothing here enforces anything
+     * at read or write time (the owning store's setter stays the clamp
+     * owner). Declare a bound only where the store visibly clamps, so the
+     * catalog cannot advertise a range the client does not honor. Bounds
+     * travel as Double (exact through 2^53 — fine for every real bound;
+     * don't declare epoch-scale ranges).
+     */
+    internal val min: Double? = null,
+    internal val max: Double? = null,
 ) {
 
     /**
@@ -284,11 +303,15 @@ class PreferenceSpec<T> internal constructor(
          * Typed int slot read through the shared legacy-string fallback
          * ([PreferenceCodec.readInt]); the wire name IS [keyName] — see
          * [plainBoolean]. The derived write is the plain typed slot write.
+         * [min] and [max] are settings-catalog metadata only — no runtime
+         * enforcement.
          */
         internal fun plainInt(
             keyName: String,
             default: Int,
             resetCategory: PreferenceResetCategory? = null,
+            min: Int? = null,
+            max: Int? = null,
             search: PreferenceSearchSpec? = null,
         ): PreferenceSpec<Int> {
             val key = intPreferencesKey(keyName)
@@ -302,6 +325,8 @@ class PreferenceSpec<T> internal constructor(
                 default = default,
                 resetCategory = resetCategory,
                 search = search,
+                min = min?.toDouble(),
+                max = max?.toDouble(),
             )
         }
 
@@ -314,6 +339,8 @@ class PreferenceSpec<T> internal constructor(
             keyName: String,
             default: Long,
             resetCategory: PreferenceResetCategory? = null,
+            min: Long? = null,
+            max: Long? = null,
             search: PreferenceSearchSpec? = null,
         ): PreferenceSpec<Long> {
             val key = longPreferencesKey(keyName)
@@ -327,6 +354,8 @@ class PreferenceSpec<T> internal constructor(
                 default = default,
                 resetCategory = resetCategory,
                 search = search,
+                min = min?.toDouble(),
+                max = max?.toDouble(),
             )
         }
 
@@ -342,6 +371,8 @@ class PreferenceSpec<T> internal constructor(
             default: Float,
             resetCategory: PreferenceResetCategory? = null,
             transform: (Float) -> Float = { it },
+            min: Float? = null,
+            max: Float? = null,
             search: PreferenceSearchSpec? = null,
         ): PreferenceSpec<Float> {
             val key = floatPreferencesKey(keyName)
@@ -355,6 +386,8 @@ class PreferenceSpec<T> internal constructor(
                 default = default,
                 resetCategory = resetCategory,
                 search = search,
+                min = min?.toDouble(),
+                max = max?.toDouble(),
             )
         }
 
@@ -378,6 +411,7 @@ class PreferenceSpec<T> internal constructor(
                 default = default,
                 resetCategory = resetCategory,
                 search = search,
+                enumOptions = enumValues<E>().map { it.name },
             )
         }
 

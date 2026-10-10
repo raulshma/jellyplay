@@ -3,22 +3,16 @@ package com.raulshma.jellyplay.core.data.di
 import com.raulshma.jellyplay.core.data.playback.AudioLyricsManager
 import com.raulshma.jellyplay.core.data.playback.PlaybackSourceResolver
 import com.raulshma.jellyplay.core.data.playback.PlaybackSourceResolverImpl
-import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
-import com.raulshma.jellyplay.core.data.repository.LiveTvRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.LyricsRepository
 import com.raulshma.jellyplay.core.data.repository.LyricsRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.MediaCacheInvalidator
-import com.raulshma.jellyplay.core.data.repository.MediaBrowseReads
-import com.raulshma.jellyplay.core.data.repository.MediaCollectionReads
 import com.raulshma.jellyplay.core.data.repository.MediaDetailProvider
-import com.raulshma.jellyplay.core.data.repository.MediaExtrasReads
+import com.raulshma.jellyplay.core.data.repository.HomeFeed
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryCacheInvalidation
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryInternals
-import com.raulshma.jellyplay.core.data.repository.MediaUncachedReadsImpl
 import com.raulshma.jellyplay.core.data.repository.MusicCatalogue
-import com.raulshma.jellyplay.core.data.repository.NewsletterRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineFirstItemResolver
 import com.raulshma.jellyplay.core.data.repository.OfflineFirstItemResolverImpl
 import com.raulshma.jellyplay.core.data.repository.OfflinePlaybackFacade
@@ -27,7 +21,9 @@ import com.raulshma.jellyplay.core.data.repository.PlayedStateSyncImpl
 import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
 import com.raulshma.jellyplay.core.data.repository.PlaylistRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.SyncPlayRepository
+import com.raulshma.jellyplay.core.data.repository.SyncPlayRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.UnifiedMediaDetailProviderImpl
+import com.raulshma.jellyplay.core.data.repository.UserDataChanges
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.data.repository.UserDataMutatorImpl
 import com.raulshma.jellyplay.core.data.repository.UserDataWriteOperations
@@ -98,6 +94,11 @@ internal val dataMediaRepositoryModule: Module = module {
         MediaRepositoryInternals(
             apiClient = get(),
             homeSession = get(),
+            // The detail cluster's four member caches each register their
+            // identity action (epoch bump + wholesale clear) through their
+            // SessionScopedCache chassis — the registry reaches the group
+            // here, at construction.
+            sessionCacheRegistry = get(),
         )
     }
     // The home-sections snapshot store: the deep owner of the PERSISTED half
@@ -118,7 +119,6 @@ internal val dataMediaRepositoryModule: Module = module {
             libraryApiClient = get(),
             collectionApiClient = get(),
             homeSectionsCachePort = get(),
-            syncPlayApiClient = get(),
             homeSnapshotStore = get(),
             playedStateSync = get(),
             episodeCatalogue = get(),
@@ -127,9 +127,6 @@ internal val dataMediaRepositoryModule: Module = module {
             homeSession = get(),
             sessionCacheRegistry = get(),
             internals = get(),
-            // The deepened createSyncPlayGroup routes through the manager
-            // (create→join MY group lives there once — see its KDoc).
-            syncPlayManager = get(),
         )
     }
     single<MediaRepository> { get<MediaRepositoryImpl>() }
@@ -144,18 +141,13 @@ internal val dataMediaRepositoryModule: Module = module {
     // the detail provider's session resolves detail + album tracks together.
     single<MusicCatalogue> { get<MediaRepositoryImpl>() }
     single<UserDataWriteOperations> { get<MediaRepositoryImpl>() }
-    // Family-repository split, second wave: the nine uncached browse-read
-    // members left the union for their own narrow seams over the
-    // [LibraryApiClient] single ([MediaUncachedReadsImpl] — one impl, three
-    // seams, the same one-impl-many-seams idiom as the two binds above; the
-    // LiveTvRepositoryImpl shape: pure forwards, no cache state). Consumers
-    // inject only the seam they read — MediaExtrasReads (intros/extras),
-    // MediaBrowseReads (people/tags), MediaCollectionReads (items/favorites/
-    // suggestions queries).
-    single { MediaUncachedReadsImpl(libraryApiClient = get()) }
-    single<MediaExtrasReads> { get<MediaUncachedReadsImpl>() }
-    single<MediaBrowseReads> { get<MediaUncachedReadsImpl>() }
-    single<MediaCollectionReads> { get<MediaUncachedReadsImpl>() }
+    // The home-feed family (the sections payload, the single-row edge-pull
+    // refetch, the SWR snapshot reads, the discover-row verbs) and the
+    // user-data change feed: the same over-the-impl aliasing, so the home
+    // feature's refresh stack injects the seam alone and the background
+    // refetchers take it beside the surfaces they are mixed consumers of.
+    single<HomeFeed> { get<MediaRepositoryImpl>() }
+    single<UserDataChanges> { get<MediaRepositoryImpl>() }
     // Plan 08's module-internal cache-maintenance view (the former DataModule
     // bindMediaRepositoryCacheInvalidation @Binds): same single, narrow seam.
     single<MediaRepositoryCacheInvalidation> { get<MediaRepositoryImpl>() }
@@ -163,32 +155,22 @@ internal val dataMediaRepositoryModule: Module = module {
     // MediaRepositoryCacheInvalidation pattern): keeps the background sync
     // workers in legacy :core:data off the concrete MediaRepositoryImpl type.
     single<MediaCacheInvalidator> { get<MediaRepositoryImpl>() }
-    // Family-repository split: SyncPlay stays a VIEW of the media single by
-    // decision (its 11 members interleave with the user-data channel's
-    // invalidation choreography). LiveTv / Newsletter / Playlist moved to
-    // their own impls over the narrow API family clients (the
-    // PlaybackRepositoryImpl ctor precedent — the family singles compose the
-    // same impls the JellyfinApiClient union delegates to, so the wire
-    // behavior is unchanged); single-family consumers keep injecting the
-    // family type instead of the MediaRepository union.
-    single<SyncPlayRepository> { get<MediaRepositoryImpl>() }
+    // Family-repository split: the SyncPlay family is 4 stateless members on
+    // its own impl (contract: see SyncPlayRepositoryImpl). Single-family
+    // consumers (SyncPlayViewModel, WatchPartyActions) inject the family
+    // type, not the MediaRepository union.
     single {
-        LiveTvRepositoryImpl(
-            liveTvApiClient = get(),
-            // deleteRecording goes through the generic item delete — the
-            // one route this family uses that MediaInfoApiClient owns.
-            mediaInfoApiClient = get(),
+        SyncPlayRepositoryImpl(
+            syncPlayApiClient = get(),
+            syncPlayManager = get(),
         )
     }
-    single<LiveTvRepository> { get<LiveTvRepositoryImpl>() }
-    // Pass-through mirror retired: NewsletterRepository extends the
-    // NewsletterApiClient family seam and the MediaInfoApiClient single
-    // implements that family — interface delegation (a two-line inline
-    // object, the LiveTvRepositoryImpl `by` shape without the class) carries
-    // the three members verbatim, so no forward impl class exists anymore.
-    single<NewsletterRepository> {
-        val apiClient = get<com.raulshma.jellyplay.core.network.api.MediaInfoApiClient>()
-        object : NewsletterRepository, com.raulshma.jellyplay.core.network.api.NewsletterApiClient by apiClient {}
+    single<SyncPlayRepository> { get<SyncPlayRepositoryImpl>() }
+    // The newsletter family seam of the MediaInfoApiClient single (the
+    // one-impl-many-seams idiom the network module uses for the other client
+    // families): the newsletter feature's view model injects the family type.
+    single<com.raulshma.jellyplay.core.network.api.NewsletterApiClient> {
+        get<com.raulshma.jellyplay.core.network.api.MediaInfoApiClient>()
     }
     single {
         PlaylistRepositoryImpl(

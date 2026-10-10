@@ -234,6 +234,18 @@ internal data class SheetControls(
     val openSheet: (PlayerSheet) -> Unit = {},
     val onSubtitleClick: () -> Unit = {},
     val onSubtitleHubClick: () -> Unit = {},
+    /**
+     * The playback-metadata row's mpv-config chip: the hub must land on its
+     * Style tab (the full ownership notice), so the screen sets the
+     * initial-tab intent before opening — beyond what [openSheet] carries.
+     */
+    val onMpvConfigNoticeClick: () -> Unit = {},
+    /**
+     * The subtitle-visibility toggle (CC button's long-press): off
+     * remembers the last non-Off track in-session, on silently restores it.
+     * Short-press keeps opening the hub.
+     */
+    val onSubtitleToggle: () -> Unit = {},
     val onSubtitleDelayClick: () -> Unit = {},
     val hasEpisodes: Boolean = false,
     val episodeBrowserEnabled: Boolean = true,
@@ -280,6 +292,12 @@ internal data class TrackControls(
     val showPlaybackMetadata: Boolean = true,
     /** The playing item exposes more than one version (media source). */
     val hasMultipleVersions: Boolean = false,
+    /**
+     * The engine's custom-mpv-config subtitle ownership is active (user-owned
+     * `sub-*` keys): the metadata row renders its warning chip, clicking
+     * through to the subtitle hub's full notice.
+     */
+    val mpvConfigNoticeActive: Boolean = false,
 )
 
 @Composable
@@ -306,6 +324,11 @@ internal fun PlayerControls(
     gestures: GestureControls = GestureControls(),
     sheets: SheetControls = SheetControls(),
     tracks: TrackControls = TrackControls(),
+    // Input-binding quick toggles (issue #171) — forwarded to the overflow
+    // menu's tap-to-flip section. Defaulted empty so previews/tests are
+    // unaffected.
+    inputQuickToggles: List<PlayerOverflowMenuInputToggle> = emptyList(),
+    onInputQuickToggle: (String, Boolean) -> Unit = { _, _ -> },
     currentAspectRatio: AspectRatio,
     detectedAspectRatio: AspectRatio?,
     isVisible: Boolean,
@@ -624,6 +647,8 @@ internal fun PlayerControls(
                         subtitleDelayMs = tracks.subtitleDelayMs,
                         onSubtitleDelayClick = sheets.onSubtitleDelayClick,
                         onPlayMethodClick = { sheets.openSheet(PlayerSheet.PlaybackMode) },
+                        mpvConfigNoticeActive = tracks.mpvConfigNoticeActive,
+                        onMpvConfigNoticeClick = sheets.onMpvConfigNoticeClick,
                         modifier = Modifier.padding(bottom = 4.dp)
                     )
                 }
@@ -678,6 +703,7 @@ internal fun PlayerControls(
                             playbackSpeed = playbackSpeed,
                             openSheet = sheets.openSheet,
                             onSubtitleClick = sheets.onSubtitleClick,
+                            onSubtitleToggle = sheets.onSubtitleToggle,
                             chapters = chapters,
                             hasEpisodes = sheets.hasEpisodes,
                             episodeBrowserEnabled = sheets.episodeBrowserEnabled,
@@ -791,6 +817,8 @@ internal fun PlayerControls(
         PlayerOverflowMenu(
             expanded = showOverflow,
             onDismiss = { showOverflow = false },
+            inputQuickToggles = inputQuickToggles,
+            onInputQuickToggle = onInputQuickToggle,
             supportsSubtitleStyle = capabilities.supportsSubtitleStyle,
             supportsDialogueBoost = capabilities.supportsDialogueBoost,
             supportsNightMode = capabilities.supportsNightMode,

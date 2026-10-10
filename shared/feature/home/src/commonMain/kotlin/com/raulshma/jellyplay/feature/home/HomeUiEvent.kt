@@ -41,6 +41,18 @@ sealed interface HomeUiEvent {
     /** Quick-action mark unplayed — the unplayed counterpart of [MarkItemPlayed]. */
     data class MarkItemUnplayed(val item: MediaItem) : HomeUiEvent
 
+    /**
+     * Quick-action hide of a resume-row item (Continue Watching / Next Up /
+     * Continue Reading — one client-side overlay set; the store write is the
+     * same seam the detail ⋮ menu's toggle uses, and the changed prefs
+     * snapshot re-filters the rows). Restore lives in settings' Home display
+     * row and the detail screen; the set roams via the `cw` sync namespace.
+     */
+    data class HideFromContinueWatching(val itemId: String) : HomeUiEvent
+
+    /** Quick-action un-hide — the counterpart of [HideFromContinueWatching]. */
+    data class ShowFromContinueWatching(val itemId: String) : HomeUiEvent
+
     /** Quick-action delete of a downloaded (non-series) item. */
     data class DeleteOfflineMedia(val item: MediaItem) : HomeUiEvent
 
@@ -110,6 +122,13 @@ sealed interface HomeUiEvent {
      * that row's items in place (see [HomeRefresher.rollDiscoverRow]).
      */
     data class RollDiscoverRow(val rowId: String) : HomeUiEvent
+
+    /**
+     * The edge-pull refresh of ONE section row (by section id): refetches
+     * that section's source and swaps it in place (see
+     * [HomeRefresher.refreshSectionRow]).
+     */
+    data class RefreshSection(val sectionId: String) : HomeUiEvent
 
     /** Prefetches the child-image URLs for the visible photo-folder rows. */
     data class PrefetchPhotoFolderChildUrls(val items: List<MediaItem>) : HomeUiEvent

@@ -21,7 +21,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 
 /**
  * Full-screen "this feature is switched off" state, mirroring
- * [ScreenEmptyState] / [ScreenErrorState]: the feature's icon, a title +
+ * [ScreenEmptyState] / [ErrorScreen]: the feature's icon, a title +
  * body explaining the disabled feature, and a settings button for enabling
  * it. Strings are caller-resolved so each feature screen keeps its own copy
  * (this component owns no string resources); the icon is the *arr Database

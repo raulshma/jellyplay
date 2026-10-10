@@ -14,9 +14,9 @@ import kotlin.test.assertTrue
  *
  * Two surfaces are pinned:
  *
- *  1. **[DownloadRepository] itself (28)** — the downloads lifecycle/status/
- *     series-batch seam. Its inherited write port
- *     ([OfflineDownloadWriter], the 9-member artifact bundle surface the
+ *  1. **[DownloadRepository] itself (23)** — the downloads lifecycle/status/
+ *     series-batch seam. Its inherited artifact port
+ *     ([OfflineDownloadWriter], the 12-member write+read surface the
  *     delegate consumes) is deliberately NOT counted here: that port has its
  *     own narrow contract and its own consumer, so its member count is a
  *     different budget, not part of this interface's.
@@ -35,7 +35,7 @@ import kotlin.test.assertTrue
 class DownloadRepositorySurfaceTest {
 
     /** The maximum allowed member count of [DownloadRepository] (see class KDoc). */
-    private val maxInterfaceMembers = 28
+    private val maxInterfaceMembers = 23
 
     /**
      * The maximum allowed member counts of the four promoted read seams the

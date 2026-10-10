@@ -51,9 +51,9 @@ class MediaRepositorySurfaceTest {
      * (toggleFavorite, markUnplayed, markSeasonPlayed, markSeasonUnplayed)
      * retired off the union. 31 after the uncached browse-read split: the nine
      * members the impl never cached moved to their own seams over the
-     * [MediaUncachedReadsImpl] single — MediaExtrasReads (getIntros,
-     * getSpecialFeatures), MediaBrowseReads (getPeople, getItemsByPerson,
-     * getTags) and MediaCollectionReads (getMediaItems, getFavorites,
+     * the MediaUncachedReadsImpl single — LibraryApiClient (getIntros,
+     * getSpecialFeatures), LibraryApiClient (getPeople, getItemsByPerson,
+     * getTags) and LibraryApiClient (getMediaItems, getFavorites,
      * getSearchSuggestions) — and getItemsByStudio retired outright (zero
      * repo-typed callers; the network layer's own HomeSectionsFetcher keeps
      * its private studio drill-down). The repository's paged projections
@@ -67,9 +67,19 @@ class MediaRepositorySurfaceTest {
      * music member left on the union is getAlbumTracks: the detail provider's
      * session resolves detail + album tracks together and is a mixed consumer,
      * so its read rides the union. getMusicVideos (already seam-only, zero
-     * callers) retired from the seam outright in the same wave.
+     * callers) retired from the seam outright in the same wave. 29 added
+     * refreshHomeSection — the home-sections family's single-row refetch (the
+     * home screen's edge-pull refresh), the same row-scoped reasoning as the
+     * discover-row trio. 23 after the home-feed split: the whole home family
+     * (getHomeSections, refreshHomeSection, getDiscoverRowItems,
+     * rerollDiscoverRow, getCachedHomeSections, getOfflineHomeLayout) lives on
+     * the HomeFeed seam over the same impl, and the user-data change feed's
+     * read val gained the UserDataChanges seam beside it — the home feature's
+     * refresh stack injects the seam alone, and the mixed consumers (the
+     * background home-sections refetchers, the widget, the discover-row
+     * editor) keep the union for their non-home members.
      */
-    private val maxInterfaceMembers = 28
+    private val maxInterfaceMembers = 21
 
     /** Walks up from the working dir to the module root that owns src/commonMain/kotlin. */
     private fun moduleRoot(): File {
@@ -177,7 +187,7 @@ class MediaRepositorySurfaceTest {
         // body can never satisfy the ratchet above.
         val body = interfaceBody()
         assertTrue(
-            countMembers(body) > 0 && body.contains("getHomeSections"),
+            countMembers(body) > 0 && body.contains("getMediaDetail"),
             "interface body parse found no members — the ratchet is vacuous",
         )
     }

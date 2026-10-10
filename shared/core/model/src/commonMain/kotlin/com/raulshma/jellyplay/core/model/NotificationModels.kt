@@ -17,6 +17,8 @@ data class NotificationPreferences(
     val maxPerCheck: Int = 10,
     val libraryConfigs: Map<String, LibraryNotificationConfig> = emptyMap(),
     val respectSystemDnd: Boolean = true,
+    /** Opt-in: route newly discovered episodes to the dedicated "New episodes" channel. */
+    val newEpisodesEnabled: Boolean = false,
 )
 
 @Immutable

@@ -41,6 +41,13 @@ sealed interface QuickActionEffect {
 
     /** Toggle the favorite flag (offered by the offline hosts). */
     data class ToggleFavorite(val item: MediaItem) : QuickActionEffect
+
+    /**
+     * Action with no shared meaning on this table's hosts — the home-only
+     * resume-row toggle lands here (home keeps its own fold, where it routes
+     * to the hidden-CW write). Dispatching it is a deliberate no-op.
+     */
+    data object None : QuickActionEffect
 }
 
 /**
@@ -54,6 +61,9 @@ sealed interface QuickActionEffect {
  * The library grid — the only host that offers the action — always routed it
  * to the item's detail screen (the picker lives in feature/details, which
  * the library module does not depend on); the table now says so once.
+ * `HIDE_FROM_CONTINUE_WATCHING`/`SHOW_FROM_CONTINUE_WATCHING` are home-only
+ * (the resolver never offers them on this table's hosts) and fold onto
+ * [QuickActionEffect.None].
  *
  * Which actions are OFFERED stays upstream in
  * [quickActions][com.raulshma.jellyplay.core.model.quickActions] (scope +
@@ -68,6 +78,7 @@ fun quickActionEffect(item: MediaItem, action: QuickAction): QuickActionEffect =
     QuickAction.REMOVE_DOWNLOAD -> QuickActionEffect.RemoveDownload(item)
     QuickAction.ADD_TO_PLAYLIST, QuickAction.DETAILS -> QuickActionEffect.OpenDetail(item)
     QuickAction.FAVORITE, QuickAction.UNFAVORITE -> QuickActionEffect.ToggleFavorite(item)
+    QuickAction.HIDE_FROM_CONTINUE_WATCHING, QuickAction.SHOW_FROM_CONTINUE_WATCHING -> QuickActionEffect.None
 }
 
 /**
@@ -159,6 +170,7 @@ internal fun dispatchQuickActionEffect(
         is QuickActionEffect.RemoveDownload -> removeDownloadState.request(effect.item)
         is QuickActionEffect.OpenDetail -> adapter.onOpenDetail(effect.item)
         is QuickActionEffect.ToggleFavorite -> adapter.onToggleFavorite(effect.item)
+        QuickActionEffect.None -> Unit
     }
 }
 

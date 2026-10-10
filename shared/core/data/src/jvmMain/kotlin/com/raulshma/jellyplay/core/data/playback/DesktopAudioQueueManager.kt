@@ -169,6 +169,12 @@ import kotlinx.coroutines.launch
  *    hand-rolled reset cleared all six). Harmless surface — the flow is only
  *    read while a now-playing row renders — and it keeps ONE clear shape
  *    shared by both managers.
+ *
+ * The manager also implements [NowPlayingSurface] (the four now-playing
+ * flows the shells' music home reads at click time — satisfied by the
+ * [AudioQueueManager]/[AudioPlayerEngine] overrides below): it is the
+ * app-scoped Koin SINGLE, identity-stable for the app's lifetime — the
+ * remember-key contract the shells' audio-clicks helper reads.
  */
 class DesktopAudioQueueManager(
     private val trackResolver: AudioTrackResolver,
@@ -231,7 +237,7 @@ class DesktopAudioQueueManager(
      * constructions (tests, other hosts) compile and behave unchanged.
      */
     private val nowPlayingReporter: NowPlayingReporter? = null,
-) : AudioQueueManager, AudioPlayerEngine {
+) : AudioQueueManager, AudioPlayerEngine, NowPlayingSurface {
 
     private companion object {
         // Same cadences as the Android manager/ticker pair.
@@ -420,6 +426,7 @@ class DesktopAudioQueueManager(
                 repeatMode = state._repeatMode,
                 shuffleEnabled = state._shuffleMode,
                 playbackSpeed = state._speed,
+                shuffleSeed = state._shuffleSeed,
             )
         }
         startNowPlayingMirror()
@@ -825,6 +832,25 @@ class DesktopAudioQueueManager(
     override fun pause() {
         assertMainThread("pause")
         engineDispatch.pause()
+    }
+
+    /**
+     * [AudioPlayerEngine.volume] — the sleep-timer fade's capture source
+     * read off the dedicated audio engine (mpv software gain, the
+     * same `RemotePlayableEngine.volume` the video player rides).
+     */
+    override val volume: Float
+        get() = engine?.volume ?: 1f
+
+    /**
+     * [AudioPlayerEngine.setVolume] — the sleep-timer fade/restore path.
+     * Programmatic write (`isUserChange = false`): mpv must not remember a
+     * fade tick as the user's chosen level. Desktop has no OS stream mirror
+     * to worry about — the software gain IS the audible level here.
+     */
+    override fun setVolume(volume: Float, isUserChange: Boolean) {
+        assertMainThread("setVolume")
+        engine?.setVolume(volume, isUserChange = isUserChange)
     }
 
     override fun changePlaybackSpeed(value: Float) {

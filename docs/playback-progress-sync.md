@@ -50,7 +50,8 @@ Three event types are reported to the Jellyfin `/Sessions/Playing` endpoints:
 | **Stop** | Playback ends, ViewModel cleared, or 95% watched | `reportPlaybackStopped` |
 
 Each reporter (`PlaybackProgressReporter` for video,
-`AudioProgressReporter` for audio, `MainViewModel` for external players) calls
+`AudioProgressReporter` for audio, `ExternalPlayerReports` for external
+players) calls
 the matching `PlaybackRepository` method, which delegates to
 `JellyfinApiClient`. The result is fire-and-forget from the reporter's
 perspective — the repository absorbs failures.
@@ -96,8 +97,7 @@ time, for reconciliation) and `createdAt` (drain ordering).
   leave the server at a stale mid position.
 - `BOOK_PROGRESS` (book reading position) coalesces per item exactly like
   `PROGRESS` — latest page wins. It carries only `positionTicks` (the
-  pageIndex × 10,000 encoding books persist in UserData; see
-  `docs/spikes/book-reading.md`). Replay posts
+  pageIndex × 10,000 encoding books persist in UserData). Replay posts
   `POST /Users/{userId}/PlayingItems/{itemId}/Progress` — books carry no
   playback session, so no START/STOP machinery surrounds it.
 - `PLAYED`/`UNPLAYED` use a deterministic id (`played_state:$itemId`) so a
@@ -108,9 +108,10 @@ time, for reconciliation) and `createdAt` (drain ordering).
 
 ### Local resume cache
 
-Separately from the outbox, `VideoPlayerViewModel.persistPlaybackPosition`
+Separately from the outbox, `PlaybackSession.persistPlaybackPosition`
 writes the current position to `offline_media` on every position tick (throttled).
-This is what `resolveOfflineResumeTicks` reads when resuming a downloaded item
+This is what the `SessionLoadPipeline`'s `resolveOfflineResumeTicks` hook reads
+when resuming a downloaded item
 offline. The outbox is the *upward* sync path; `offline_media` is the *local*
 resume cache.
 
@@ -133,13 +134,17 @@ the server's chance to resolve final resume position) is not silently dropped.
 the app's `OfflineMode`, firing `PlaybackSyncScheduler.enqueueNow()` whenever
 the combined state becomes ready (validated Online + Offline Mode disabled).
 That includes an Offline/Local → Online transition and turning **manual Offline
-Mode** off while connectivity is already online. (`Local` is treated as offline
-— captive portals can't reach the server.) It also fires once at app start so
+Mode** off while connectivity is already online. (`Local` is treated the same
+as Offline here — a portal's LAN cannot *reliably* reach the server, so sync
+drains wait for a validated connection; auto-offline, by contrast, stays
+online over a Local network since the LAN server may answer.) It also fires
+once at app start so
 progress captured while the process was killed flushes shortly after launch.
 
-`PlaybackSyncWorker.doWork()`:
+`PlaybackOutboxDrainer.drainOnce()` — invoked by `PlaybackSyncWorker.doWork()`,
+which maps the outcome to WorkManager retry/success:
 
-1. **Bail** if Offline Mode is still enabled → `Result.success()` without
+1. **Bail** if Offline Mode is still enabled → success without
    draining. This releases the unique one-shot work slot; the ready-state
    listener immediately schedules a fresh drain when Offline Mode is disabled.
 2. **Drop superseded telemetry**: once a `PLAYED` flip is staged for an item,
@@ -175,7 +180,7 @@ progress captured while the process was killed flushes shortly after launch.
    trigger `UserDataSyncScheduler.enqueueNow()` so Continue Watching, Next
    Up, and detail caches re-fetch fresh server state instead of waiting for
    their 60s/2min TTLs or the 12h periodic tick.
-8. **Return** `Result.success` (all drained) or `Result.retry` (some failed,
+8. **Return** success (all drained) or retry (some failed,
    under the retry budget). Budget-exhausted entries are already dead-lettered
    by then, so the drain always converges to success and the pending count
    reaches 0.
@@ -201,7 +206,8 @@ any drain the reconnect signal misses.
 
 ## Reconciliation (latest-wins)
 
-After pushing local progress up, `PlaybackSyncWorker.reconcileOfflineRow(itemId)`
+After pushing local progress up, the drainer's
+`reconcileOfflineRow(itemId)`
 compares the local `offline_media` row against fresh server state. Three
 branches, with an undelivered-intent exception on the first two (#153):
 
@@ -239,7 +245,8 @@ Jellyfin's `markPlayedItem` / `markUnplayedItem` endpoints recurse into a
 season's or series's children server-side. The client mirrors that cascade
 locally so the offline screens stay consistent.
 
-`MediaRepositoryImpl.markPlayed` / `markUnplayed`:
+`MediaRepositoryImpl.markPlayed` / `markUnplayed` delegate the fan-out to
+`PlayedStateSync.flip`, which:
 1. **Offline** (or transient online failure): optimistically call
    `offlineRepository.applyPlayedState(itemId, isPlayed)` so the UI flips
    immediately, then `outbox.enqueuePlayedState(itemId, isPlayed)` for the
@@ -249,7 +256,7 @@ locally so the offline screens stay consistent.
    `offlineRepository.applyPlayedState(itemId, isPlayed)` as the mirror.
 3. **Online + failure**: same as the offline path — apply locally + enqueue,
    swallow the failure.
-4. `OfflineMediaDao.applyPlayedStateToHierarchy` runs one batch `UPDATE`
+4. `PlaybackStateDao.applyPlayedStateToHierarchy` runs one batch upsert
    matching `id == itemId OR parentId == itemId OR seasonId == itemId OR
    seriesId == itemId` — one query covers episode/season/series uniformly. It
    clears every matching resume position in both directions, matching
@@ -307,11 +314,12 @@ StateFlow<Int>` → collected in `MainHomeContent` → threaded to
 |---|---|
 | `PlaybackRepositoryImplTest` | Chokepoint: online success/failure, offline enqueue, field propagation, STOP clears stale PROGRESS |
 | `PlaybackOutboxRepositoryImplTest` | Coalescence (session/position/paused), no-coalesce for START/STOP, drain order, countFlow reactivity |
-| `PlaybackSyncWorkerTest` | Empty outbox, offline retry, drain+delete, partial failure, reconcile branches, enqueueNow trigger |
+| `PlaybackOutboxDrainerTest` / `PlaybackOutboxDrainerResilienceTest` (jvmTest) | Empty outbox, offline retry, drain+delete, partial failure, reconcile branches, dead-letter budgets |
+| `PlaybackSyncWorkerResilienceTest` + `OfflineWatchSyncContractTest` (androidHostTest) | Worker mapping, enqueueNow trigger, end-to-end watch sync contract |
 | `PlaybackSyncSchedulerTest` | Periodic + enqueueNow work, KEEP policy idempotency |
 | `PlaybackSyncReconnectListenerTest` | Offline→Online transition fires drain; steady-state doesn't |
 | `UserDataSyncSchedulerTest` | Periodic + enqueueNow (post-drain cache refresh) |
-| `OfflineMediaDaoTest` | `applyPlayedStateToHierarchy` cascade: series/season/episode, no-op for unknown |
+| `OfflineMediaDaoTest` | `PlaybackStateDao.applyPlayedStateToHierarchy` cascade: series/season/episode, no-op for unknown |
 | `MigrationTest` | `playback_outbox` table created via `MIGRATION_35_36`, contiguity |
 
 ## Key files
@@ -320,14 +328,16 @@ StateFlow<Int>` → collected in `MainHomeContent` → threaded to
 |---|---|
 | `shared/core/data/.../repository/PlaybackRepositoryImpl.kt` | Chokepoint — online/offline decision per event |
 | `shared/core/data/.../repository/PlaybackOutboxRepository.kt` | Outbox interface + coalescence |
-| `core/data/.../worker/PlaybackSyncWorker.kt` (Android remainder) | Drain + reconcile |
-| `shared/core/data/.../worker/PlaybackSyncScheduler.kt` | Periodic + reconnect enqueue (interface; Android impl in `core/data`) |
-| `core/data/.../worker/PlaybackSyncReconnectListener.kt` (Android remainder) | Offline→Online trigger |
-| `core/data/.../worker/PlaybackSyncNotificationHelper.kt` (Android remainder) | Drain notification |
+| `shared/core/data/.../worker/PlaybackOutboxDrainerImpl.kt` | Drain choreography + reconcile (jvmShared) |
+| `shared/core/data/src/androidMain/.../worker/PlaybackSyncWorker.kt` | Worker shell — maps drain result to retry/success |
+| `shared/core/data/.../worker/PlaybackSyncScheduler.kt` | Periodic + reconnect enqueue (interface; Android impl in androidMain) |
+| `shared/core/data/src/androidMain/.../worker/PlaybackSyncReconnectListener.kt` | Offline→Online trigger |
+| `shared/core/data/src/androidMain/.../worker/PlaybackSyncNotificationHelper.kt` | Drain notification |
+| `shared/core/data/.../repository/PlayedStateSync.kt` | `markPlayed`/`markUnplayed` fan-out (`flip`) |
 | `shared/core/data/.../repository/MediaRepositoryImpl.kt` | `markPlayed`/`markUnplayed` cascade |
 | `shared/core/data/.../repository/OfflineRepositoryImpl.kt` | `applyPlayedState` wrapper |
 | `shared/core/database/.../dao/PlaybackOutboxDao.kt` | Outbox queries + `countFlow` |
-| `shared/core/database/.../dao/OfflineMediaDao.kt` | `applyPlayedStateToHierarchy` batch UPDATE |
+| `shared/core/database/.../dao/PlaybackStateDao.kt` | `applyPlayedStateToHierarchy` batch upsert |
 | `shared/core/database/.../migration/Migrations.kt` | `MIGRATION_35_36` (outbox table) |
 
 ## Known limitations

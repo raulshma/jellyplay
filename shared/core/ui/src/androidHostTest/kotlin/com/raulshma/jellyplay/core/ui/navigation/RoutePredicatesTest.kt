@@ -84,6 +84,7 @@ class RoutePredicatesTest {
         Route.DiscoverRows(),
         Route.DiscoverRowEditor(),
         Route.PlaybackSettings(),
+        Route.InputBindings,
         Route.AudioSettings(),
         Route.LanguageSettings(),
         Route.NotificationSettings(),
@@ -91,12 +92,18 @@ class RoutePredicatesTest {
         Route.SecuritySettings(),
         Route.PrivacyData(),
         Route.BackupSettings(),
-        Route.ImportPreview("content://test"),
+        Route.RestoreWizard("content://test"),
         Route.ExperimentalSettings(),
         Route.FactoryReset(),
         Route.Integrations(),
         Route.ArrSettings(),
         Route.SubtitleProviderSettings(),
+        // JellyPlay companion-plugin screens (ADR 0010) — reached from the
+        // Settings root's capability-gated entries, no classification flags.
+        Route.JellyPlayMessages,
+        Route.JellyPlaySync,
+        Route.JellyPlayUserRatings,
+        Route.JellyPlayYourWatching,
         // music
         Route.MusicBrowse,
         Route.Artists,
@@ -121,6 +128,8 @@ class RoutePredicatesTest {
         Route.ScheduledTasks,
         Route.Devices,
         Route.Logs,
+        Route.JellyPlayTranscodes,
+        Route.JellyPlayAnalytics,
         Route.UserStatistics,
         Route.UserStatisticsDetail("user-1"),
         Route.Users,
@@ -219,10 +228,14 @@ class RoutePredicatesTest {
                 "ServerManagement", "UserManagement", "AppearanceSettings", "HomeSettings",
                 "PinnedHomeSections", "HomeLayoutPresets", "LibraryHomeSections",
                 "DiscoverRows", "DiscoverRowEditor",
-                "PlaybackSettings", "AudioSettings", "LanguageSettings",
+                "PlaybackSettings", "InputBindings", "AudioSettings", "LanguageSettings",
                 "NotificationSettings", "StorageSettings", "SecuritySettings",
-                "PrivacyData", "BackupSettings", "ImportPreview",
+                "PrivacyData", "BackupSettings", "RestoreWizard",
                 "ExperimentalSettings", "FactoryReset",
+                // JellyPlay companion-plugin screens (ADR 0010) — Settings-root
+                // capability-gated entries, deliberately unclassified
+                "JellyPlayMessages", "JellyPlaySync", "JellyPlayUserRatings",
+                "JellyPlayYourWatching",
                 // music
                 "Artists", "Albums", "Tracks", "Genres", "SmartPlaylists",
                 "MoodPlaylists", "Playlists",

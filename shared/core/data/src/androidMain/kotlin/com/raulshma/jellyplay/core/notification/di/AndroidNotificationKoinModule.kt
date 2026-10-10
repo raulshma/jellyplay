@@ -31,6 +31,26 @@ fun androidNotificationModule(context: Context): Module = module {
         )
     }
 
+    // The companion-plugin's SSE new-media pushes (ADR 0010) ride the same
+    // tray path. The events session controller resolves this seam with
+    // getOrNull and degrades to log-only on platforms that register nothing
+    // (desktop has no tray-notification surface).
+    single<com.raulshma.jellyplay.core.data.notification.JellyPlayNewMediaNotifier> {
+        val dispatcher: NotificationDispatcher = get()
+        com.raulshma.jellyplay.core.data.notification.JellyPlayNewMediaNotifier { event ->
+            dispatcher.dispatchPluginNewMedia(event)
+        }
+    }
+
+    // The push wave's platform half: the UnifiedPush connector over the user's
+    // distributor app (ntfy & co). The commonMain push repository resolves
+    // this seam getOrNull — desktop registers nothing and parks on
+    // NoDistributor; the push receiver routes the connector's broadcasts into
+    // the repository / the dispatcher here.
+    single<com.raulshma.jellyplay.core.data.repository.JellyPushDistributor> {
+        com.raulshma.jellyplay.core.push.AndroidJellyPushDistributor(context = context)
+    }
+
     single {
         NotificationScheduler(
             context = context,

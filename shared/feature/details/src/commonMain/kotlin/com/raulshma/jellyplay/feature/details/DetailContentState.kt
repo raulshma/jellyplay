@@ -110,6 +110,25 @@ internal data class DetailContentState(
     val downloadPicker: DownloadPickerState = DownloadPickerState(),
     // Book-only extras (BOOK media type): format + TOC cache + marks counts.
     val book: DetailUiState.BookDetailState? = null,
+    // ── jellyfin-plugin-jellyplay companion sections (ADR 0010) ──
+    // Aggregated external ratings (mdblist) chips for the item's IMDb id.
+    // Empty = section absent (probe failure / no data — never an error).
+    val pluginRatings: List<com.raulshma.jellyplay.core.model.JellyPlayPluginRating> = emptyList(),
+    /** Server-scored "More like this", hydrated into displayable items.
+     *  Empty = section absent; the stock relatedItems row stays beside it. */
+    val pluginSimilarItems: List<MediaItem> = emptyList(),
+    /** True only when the plugin's scorer feeds the HOST's similar pipeline
+     *  (Jellyfin 12+ — the capabilities handshake says so): there the stock
+     *  row returns the same scored list and is suppressed. See
+     *  [DetailUiState.pluginSimilarSuppressesStock]. */
+    val pluginSimilarSuppressesStock: Boolean = false,
+    /** Anime filler/mixed/recap badges by episode number, rendered on the
+     *  seasons section's episode rows. Empty = no badges. */
+    val animeMarkers: Map<Int, AnimeBadgeKind> = emptyMap(),
+    /** Per-season TMDB episode scores (ADR 0010, [JellyPlayPluginFeatures.Ratings])
+     *  keyed season id → (episode number → ratings). Empty = section absent
+     *  (probe failure / no data — never an error). */
+    val seasonRatings: Map<String, Map<Int, com.raulshma.jellyplay.core.model.JellyPlayEpisodeScore>> = emptyMap(),
 )
 
 /**

@@ -2,7 +2,7 @@ package com.raulshma.jellyplay.core.data.repository
 
 import com.raulshma.jellyplay.core.database.dao.HomeSectionCacheDao
 import com.raulshma.jellyplay.core.database.entity.HomeSectionCacheEntity
-import com.raulshma.jellyplay.core.data.testutil.FakeTimeSource
+import com.raulshma.jellyplay.core.testfixtures.FakeTimeSource
 import com.raulshma.jellyplay.core.model.ActiveSession
 import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionQuery
@@ -119,24 +119,21 @@ class MediaRepositoryHomeSectionsSwrPersistTest {
         return MediaRepositoryImpl(
             // One union mock covers both family seams (the JellyfinApiClient
             // mock implements each of them).
-            apiClient,
-            apiClient,
+            libraryApiClient = apiClient,
+            collectionApiClient = apiClient,
             // The home cache-maintenance port (inert here — this suite pins
             // the persisted SWR half through the real store).
-            mockk(relaxed = true),
-            apiClient,
-            homeSnapshotStore,
-            playedStateSync,
-            episodeCatalogue,
-            realtimeChannel,
-            fakeTimeSource,
-            homeSession,
-            sessionCacheRegistry,
+            homeSectionsCachePort = mockk(relaxed = true),
+            homeSnapshotStore = homeSnapshotStore,
+            playedStateSync = playedStateSync,
+            episodeCatalogue = episodeCatalogue,
+            userDataRealtimeChannel = realtimeChannel,
+            timeSource = fakeTimeSource,
+            homeSession = homeSession,
+            sessionCacheRegistry = sessionCacheRegistry,
             // Facade split: the detail cluster now lives on the shared
             // internals holder (construction-only ctor re-point).
-            MediaRepositoryInternals(apiClient, homeSession),
-            // The deepened createSyncPlayGroup's engine (inert here).
-            mockk(relaxed = true),
+            internals = MediaRepositoryInternals(apiClient, homeSession, sessionCacheRegistry),
         )
     }
 
@@ -190,9 +187,9 @@ class MediaRepositoryHomeSectionsSwrPersistTest {
         signIn()
         coEvery { apiClient.getHomeSections(any(), any()) } returns homeResult()
 
-        repository.getHomeSections(HomeSectionQuery()) // fetch → persist
+        repository.getHomeSections(HomeSectionQuery(), force = false) // fetch → persist
         fakeTimeSource.nowMs += 5_000L // inside the memory TTL → cache hit
-        repository.getHomeSections(HomeSectionQuery())
+        repository.getHomeSections(HomeSectionQuery(), force = false)
 
         val row = storedRows.values.single()
         assertEquals("user-A", row.userId)
@@ -215,7 +212,7 @@ class MediaRepositoryHomeSectionsSwrPersistTest {
         val repository = buildRepository()
         signIn("user-A")
         coEvery { apiClient.getHomeSections(any(), any()) } returns homeResult()
-        repository.getHomeSections(HomeSectionQuery()) // user-A row persisted
+        repository.getHomeSections(HomeSectionQuery(), force = false) // user-A row persisted
 
         switchUser("user-B")
 
@@ -228,7 +225,7 @@ class MediaRepositoryHomeSectionsSwrPersistTest {
         val repository = buildRepository()
         signIn("user-A", serverId = "server-1")
         coEvery { apiClient.getHomeSections(any(), any()) } returns homeResult()
-        repository.getHomeSections(HomeSectionQuery())
+        repository.getHomeSections(HomeSectionQuery(), force = false)
 
         switchServer("server-2")
 
@@ -240,7 +237,7 @@ class MediaRepositoryHomeSectionsSwrPersistTest {
         val repository = buildRepository()
         signIn("user-A")
         coEvery { apiClient.getHomeSections(any(), any()) } returns homeResult()
-        repository.getHomeSections(HomeSectionQuery())
+        repository.getHomeSections(HomeSectionQuery(), force = false)
 
         sessionFlow.value = null
         waitForCacheObserver()

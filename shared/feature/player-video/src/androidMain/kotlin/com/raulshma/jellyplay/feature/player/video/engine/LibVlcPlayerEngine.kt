@@ -273,19 +273,43 @@ class LibVlcPlayerEngine(
         // options last-wins).
         libVlcChannelCapOption(currentConfig.audioEffects.maxAudioChannels)?.let { options.add(it) }
 
+        // Night mode + audio normalization share the ONE `--audio-filter`
+        // option (a duplicate `--audio-filter` resolves last-wins, so the
+        // filters compose into a single comma list), and when both want the
+        // compressor filter — libVLC exposes a single filter instance — ONE
+        // param set applies, night mode's (the deliberate user choice; the
+        // DYNAMIC arm's fixed pair below is skipped). Like every other audio
+        // effect here this is a load-time option: a mid-playback toggle takes
+        // the documented reload path (see [onConfigChanged]).
+        val audioFilters = LinkedHashSet<String>()
+        if (currentConfig.audioEffects.nightModeEnabled) {
+            audioFilters += "compressor"
+        }
         if (currentConfig.audioEffects.audioNormalizationEnabled) {
             when (currentConfig.audioEffects.audioNormalizationMode) {
-                AudioNormalizationMode.DYNAMIC -> {
-                    options.add("--audio-filter=compressor")
-                    options.add("--compressor-ratio=3")
-                    options.add("--compressor-threshold=-18")
-                }
-                AudioNormalizationMode.TRACK, AudioNormalizationMode.ALBUM -> {
-                    options.add("--audio-filter=normvol")
-                    options.add("--norm-max-level=0.8")
-                }
+                AudioNormalizationMode.DYNAMIC -> audioFilters += "compressor"
+                AudioNormalizationMode.TRACK, AudioNormalizationMode.ALBUM -> audioFilters += "normvol"
                 AudioNormalizationMode.NONE -> {}
             }
+        }
+        if (audioFilters.isNotEmpty()) {
+            options.add("--audio-filter=${audioFilters.joinToString(separator = ",")}")
+        }
+        if (currentConfig.audioEffects.nightModeEnabled) {
+            options.addAll(libVlcNightModeCompressorOptions(currentConfig.audioEffects.nightModeStrength))
+        }
+        if (currentConfig.audioEffects.audioNormalizationEnabled &&
+            !currentConfig.audioEffects.nightModeEnabled &&
+            currentConfig.audioEffects.audioNormalizationMode == AudioNormalizationMode.DYNAMIC
+        ) {
+            options.add("--compressor-ratio=3")
+            options.add("--compressor-threshold=-18")
+        }
+        if (currentConfig.audioEffects.audioNormalizationEnabled &&
+            (currentConfig.audioEffects.audioNormalizationMode == AudioNormalizationMode.TRACK ||
+                currentConfig.audioEffects.audioNormalizationMode == AudioNormalizationMode.ALBUM)
+        ) {
+            options.add("--norm-max-level=0.8")
         }
 
         val vlc = try {
@@ -351,13 +375,13 @@ class LibVlcPlayerEngine(
         releaseInternal(releaseVlc = true)
         hasRenderer = false
         pendingRendererItem = null
-        // Published-flow resets live in BasePlayerEngine (C5). Its cue reset
+        // Published-flow resets live in BasePlayerEngine. Its cue reset
         // is a same-value write here — libVLC never publishes cues — so the
         // observable reset set is unchanged.
         resetPublishedEngineState()
     }
 
-    /** The libVLC residue cleared alongside the base published-state reset (C5): the cached duration. */
+    /** The libVLC residue cleared alongside the base published-state reset: the cached duration. */
     override fun onResetItemScopedState() {
         cachedDurationMs = 0L
     }
@@ -435,13 +459,14 @@ class LibVlcPlayerEngine(
                 mp.setSpuDelay(newConfig.subtitleDelayMs * 1000L)
             }
 
-            // Known limitation: channel-mix mode, audio-normalization,
-            // decoder mode, audio passthrough, and subtitle style are
+            // Known limitation: channel-mix mode, audio-normalization, night
+            // mode, decoder mode, audio passthrough, and subtitle style are
             // load-time `--stereo-mode` / `--audio-filter` / `--avcodec` VLC
             // options — libvlc's runtime API surface on Android does not
-            // expose setters for these, so toggling them mid-playback forces
-            // a reload below (subtitle style does; the rest require the user
-            // to back out and re-enter the player). Documented here so future
+            // expose setters for these. Subtitle style AND the audio-effects
+            // group (channel-mix / normalization / night mode) force a reload
+            // below; decoder mode and passthrough still require the user to
+            // back out and re-enter the player. Documented here so future
             // contributors don't assume the toggle is silently dropped.
             //
             // Subtitle delay is excluded from this reload decision: it rides on
@@ -452,7 +477,8 @@ class LibVlcPlayerEngine(
             // without reloading (see scratch vlc-android: PlayerController/
             // PlaylistManager setSpuDelay — no stop/seek).
             if (styleChangedExcludingDelay(oldConfig.subtitleStyle, newConfig.subtitleStyle) ||
-                oldConfig.videoEffects != newConfig.videoEffects
+                oldConfig.videoEffects != newConfig.videoEffects ||
+                oldConfig.audioEffects != newConfig.audioEffects
             ) {
                 reloadMediaForSubtitleStyleChange()
             }
@@ -578,7 +604,7 @@ class LibVlcPlayerEngine(
             (mediaPlayer?.volume ?: 100).coerceIn(0, 200) / 100f
         } catch (_: Exception) { 1f }
 
-    // ── Volume / mute seams (C4) ────────────────────────────────────────────
+    // ── Volume / mute seams ────────────────────────────────────────────
     // The four command bodies are final templates in ReloadablePlayerEngine;
     // libVLC contributes the int-percent write/read (with amplification
     // headroom to 200), the zero-on-mute / remembered-level-on-unmute

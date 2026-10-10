@@ -302,6 +302,95 @@ class TrackSelectionHelperTest {
         assertFalse(helper.state.value.subtitleTracks[1].isSelected)
     }
 
+    // ─── toggle-with-memory ─────────────────────────────────────────
+    // ON→off remembers the active track; off→ON silently restores exactly
+    // that track. The latch is session memory beside the other track state.
+
+    @Test
+    fun toggleSubtitles_onTurnsOff_andRemembersTheActiveTrack() {
+        availableTracks.value = listOf(
+            mediaTrack(0, "English", "eng", TrackType.SUBTITLE, isSelected = false),
+            mediaTrack(1, "Spanish", "spa", TrackType.SUBTITLE, isSelected = false),
+        )
+        helper.updateTracksFromEngine()
+        helper.selectSubtitleTrack(TrackOption(1, "Spanish", "spa", false))
+
+        helper.toggleSubtitles()
+
+        verify { engine.selectTrack(TrackType.SUBTITLE, -1) }
+        assertTrue(helper.state.value.subtitleTracks[0].isSelected) // Off row
+        assertFalse(helper.state.value.subtitleTracks[2].isSelected)
+    }
+
+    @Test
+    fun toggleSubtitles_offTurnsOn_andRestoresExactlyTheRememberedTrack() {
+        availableTracks.value = listOf(
+            mediaTrack(0, "English", "eng", TrackType.SUBTITLE, isSelected = false),
+            mediaTrack(1, "Spanish", "spa", TrackType.SUBTITLE, isSelected = false),
+        )
+        helper.updateTracksFromEngine()
+        helper.selectSubtitleTrack(TrackOption(1, "Spanish", "spa", false))
+        helper.toggleSubtitles() // off
+        io.mockk.clearMocks(engine, answers = false, recordedCalls = true, childMocks = false,
+            verificationMarks = false, exclusionRules = false)
+
+        helper.toggleSubtitles() // on again
+
+        // Exactly the remembered Spanish track — not the first track, not the
+        // language-preference default.
+        verify { engine.selectTrack(TrackType.SUBTITLE, 1) }
+        assertTrue(helper.state.value.subtitleTracks[0].isSelected.not())
+        assertTrue(helper.state.value.subtitleTracks[2].isSelected)
+    }
+
+    @Test
+    fun toggleSubtitles_staleMemory_noOpsWhenTrackGone() {
+        // The latch holds a track the current picker list no longer contains
+        // (item switch / re-enumeration): pressing ON must not invent a
+        // selection. (The "no memory at all" case is unreachable through the
+        // public API — every non-Off selection, auto or manual, seeds the
+        // latch — so the policy-level no-memory no-op is pinned in
+        // SubtitleTogglePolicyTest.)
+        availableTracks.value = listOf(
+            mediaTrack(0, "English", "eng", TrackType.SUBTITLE, isSelected = false),
+        )
+        helper.updateTracksFromEngine() // auto-selects English → latch = English
+        helper.selectSubtitleTrack(TrackOption(-1, "Off", null, true)) // off
+
+        availableTracks.value = listOf(
+            mediaTrack(0, "Spanish", "spa", TrackType.SUBTITLE, isSelected = false),
+        )
+        helper.updateTracksFromEngine()
+        io.mockk.clearMocks(engine, answers = false, recordedCalls = true, childMocks = false,
+            verificationMarks = false, exclusionRules = false)
+
+        helper.toggleSubtitles() // on — memory points at English, list has Spanish only
+
+        verify(exactly = 0) { engine.selectTrack(any(), any()) }
+    }
+
+    @Test
+    fun toggleSubtitles_memorySurvivesTrackListRepublish_andResolvesByLabelWhenReindexed() {
+        // The picker list re-publishes (bitrate/mode change) and the engine
+        // renumbers: the remembered index is gone, but the same track is
+        // resolvable by label+language and still restores.
+        availableTracks.value = listOf(
+            mediaTrack(0, "English", "eng", TrackType.SUBTITLE, isSelected = false),
+        )
+        helper.updateTracksFromEngine()
+        helper.selectSubtitleTrack(TrackOption(0, "English", "eng", false))
+        helper.toggleSubtitles() // off, remembers index 0 "English"
+
+        availableTracks.value = listOf(
+            mediaTrack(7, "English", "eng", TrackType.SUBTITLE, isSelected = false),
+        )
+        helper.updateTracksFromEngine()
+
+        helper.toggleSubtitles() // on
+
+        verify { engine.selectTrack(TrackType.SUBTITLE, 7) }
+    }
+
     @Test
     fun updateTracksFromEngine_preferredAudioLanguageMatches_autoSelects() {
         every { subtitleStore.subtitle } returns MutableStateFlow(
@@ -472,7 +561,7 @@ class TrackSelectionHelperTest {
     //
     // The detail screen's local-subtitle selector writes the chosen
     // OfflineSubtitleEntry.index (== the original server stream index) into the
-    // per-item subtitleStreamIndex. PlayerSessionManager.loadOfflineSubtitles
+    // per-item subtitleStreamIndex. SessionSubtitleSources.loadOfflineSubtitles
     // stamps id == "offline:${index}" onto each side-loaded SubtitleSource,
     // and both ExoPlayer and mpv propagate that id into MediaTrack.id. The
     // restore path must resolve the stored index to that track — NOT to the

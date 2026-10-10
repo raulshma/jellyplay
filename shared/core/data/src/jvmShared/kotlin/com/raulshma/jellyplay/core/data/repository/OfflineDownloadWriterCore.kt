@@ -4,7 +4,7 @@ import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.playback.PlaybackIdentity
 import com.raulshma.jellyplay.core.data.sync.OfflineSyncComparator
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
-import com.raulshma.jellyplay.core.data.util.TimeSource
+import com.raulshma.jellyplay.core.model.TimeSource
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
 import com.raulshma.jellyplay.core.database.JellyPlayDatabase
 import com.raulshma.jellyplay.core.database.dao.DownloadDao
@@ -234,18 +234,18 @@ public class OfflineDownloadWriterCore(
         fileName: String,
     ): String? = sidecarCore.downloadImageToDisk(itemId, imageType, maxWidth, parentDir, fileName)
 
-    /** Local sidecar reads the [DownloadRepository] surface exposes. */
-    suspend fun loadLocalSubtitleManifest(
+    /** Local sidecar reads the [OfflineDownloadWriter] port carries. */
+    override suspend fun loadLocalSubtitleManifest(
         downloadPath: String,
         itemId: String?,
     ): OfflineSubtitleManifest? = sidecarCore.loadLocalSubtitleManifest(downloadPath, itemId)
 
-    /** Local sidecar reads the [DownloadRepository] surface exposes. */
-    suspend fun loadLocalSegments(itemId: String): List<MediaSegment>? =
+    /** Local sidecar reads the [OfflineDownloadWriter] port carries. */
+    override suspend fun loadLocalSegments(itemId: String): List<MediaSegment>? =
         sidecarCore.loadLocalSegments(itemId)
 
-    /** Local sidecar reads the [DownloadRepository] surface exposes. */
-    suspend fun getDownloadFileInventory(itemId: String): DownloadFileInventory =
+    /** Local sidecar reads the [OfflineDownloadWriter] port carries. */
+    override suspend fun getDownloadFileInventory(itemId: String): DownloadFileInventory =
         sidecarCore.getDownloadFileInventory(itemId)
 
     /**

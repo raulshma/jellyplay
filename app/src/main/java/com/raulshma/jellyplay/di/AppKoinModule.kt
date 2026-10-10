@@ -33,6 +33,7 @@ import com.raulshma.jellyplay.feature.player.audio.AudioPlayerCast
 import com.raulshma.jellyplay.feature.player.video.engine.VideoStreamCache
 import com.raulshma.jellyplay.feature.player.video.subtitle.FontProvider
 import com.raulshma.jellyplay.floating.FloatingPlayerState
+import com.raulshma.jellyplay.navigation.playbackhost.ExternalPlayerReports
 import com.raulshma.jellyplay.shell.AppLockState
 import com.raulshma.jellyplay.shell.SessionCoordinator
 import com.raulshma.jellyplay.shell.SyncPlayOpenCoordinator
@@ -125,6 +126,20 @@ fun androidAppModule(context: Context): Module = module {
     }
     single { SyncPlayOpenCoordinator(syncPlayManager = get()) }
 
+    // External-player reporting contract (navigation/playbackhost): launch
+    // resolution + the server start/stop report pair, over the class's own
+    // fire-and-forget scope (reports may outlive the shell activity — see
+    // the class KDoc). Resolved through ShellInfra's
+    // externalPlayerReportsLazy at the shell's external-player host wiring.
+    single {
+        ExternalPlayerReports(
+            playbackRepository = get(),
+            mediaRepository = get(),
+            playbackSourceResolver = get(),
+            playbackStore = get(),
+        )
+    }
+
     // Startup initializers (formerly field-injected into the Application and
     // driven off the @ApplicationScope coroutine scope).
     single {
@@ -163,6 +178,7 @@ fun androidAppModule(context: Context): Module = module {
             userDataSyncScheduler = lazy { get<UserDataSyncScheduler>() },
             playbackSyncScheduler = lazy { get<PlaybackSyncScheduler>() },
             playbackSyncReconnectListener = lazy { get<PlaybackSyncReconnectListener>() },
+            settingsSyncBackgroundTrigger = lazy { get<com.raulshma.jellyplay.core.data.worker.SettingsSyncBackgroundTrigger>() },
             downloadReconnectListener = lazy { get<DownloadReconnectListener>() },
             notificationReconnectListener = lazy { get<NotificationReconnectListener>() },
             autoDownloadScheduler = lazy { get<AutoDownloadScheduler>() },
@@ -216,10 +232,7 @@ val androidAppViewModelsModule: Module = module {
             remoteControlReceiver = get(),
             appShortcutManager = get(),
             deepLinkHandler = get(),
-            playbackRepository = get(),
             downloadRepository = get(),
-            mediaRepository = get(),
-            playbackSourceResolver = get(),
             offlineModeManager = get(),
             userMessageBus = get(),
             sessionCoordinator = get(),
@@ -270,6 +283,15 @@ fun androidAppInteropAdaptersModule(application: Application): Module = module {
     // at render time — the same one-shot cadence either way.
     single<DownloadOutcomeMessenger> {
         AppDownloadOutcomeMessenger(userMessageBus = get(), application = application)
+    }
+    // The companion-plugin's live broadcast events (ADR 0010) surface as
+    // one-shot user messages over the same core bus (the text is the
+    // controller's title/body fold — server-supplied, UiText.Raw path).
+    single<com.raulshma.jellyplay.core.data.session.JellyPlayBroadcastMessenger> {
+        val bus: UserMessageBus = get()
+        com.raulshma.jellyplay.core.data.session.JellyPlayBroadcastMessenger { text ->
+            bus.info(text)
+        }
     }
 }
 

@@ -115,6 +115,7 @@ import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 import com.composables.icons.tabler.Tabler
 import com.raulshma.jellyplay.core.ui.image.MediaImage
+import com.composables.icons.tabler.outline.AlertTriangle
 import com.composables.icons.tabler.outline.Check
 import com.composables.icons.tabler.outline.ChevronLeft
 import com.composables.icons.tabler.outline.ChevronRight
@@ -129,7 +130,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.isLightColor
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
-import com.raulshma.jellyplay.core.ui.components.ScreenErrorState
+import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
@@ -273,9 +274,10 @@ fun WatchProgressHeatmapScreen(
             )
         } else if (state.error != null && state.dailyActivities.isEmpty()) {
             val content: @Composable (Modifier) -> Unit = { mod ->
-                ScreenErrorState(
+                ErrorScreen(
                     message = state.error!!,
                     onRetry = { viewModel.refresh() },
+                    icon = Tabler.Outline.AlertTriangle,
                     modifier = mod.fillMaxSize(),
                 )
             }

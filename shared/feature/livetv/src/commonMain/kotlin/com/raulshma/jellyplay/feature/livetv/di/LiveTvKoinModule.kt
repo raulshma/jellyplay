@@ -69,6 +69,7 @@ val liveTvModule: Module = module {
     viewModel {
         RecordingsViewModel(
             mediaRepository = get(),
+            mediaInfoApiClient = get(),
             imageUrlProvider = get(),
         )
     }

@@ -12,6 +12,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.platform.LocalContext
 import com.raulshma.jellyplay.core.ui.message.LocalUserMessageBus
 import com.raulshma.jellyplay.navigation.playbackhost.ExternalPlayerHost
+import com.raulshma.jellyplay.navigation.playbackhost.ExternalPlayerReports
 import com.raulshma.jellyplay.navigation.playbackhost.resolveExternalPlayerComponent
 import com.raulshma.jellyplay.navigation.playbackhost.toExtrasMap
 
@@ -35,11 +36,12 @@ internal class ExternalPlayerLauncherHost(
 /**
  * Constructs the [ExternalPlayerLauncherHost] pair on the composition's
  * stable seams — the activity [android.content.Context] (stable for the
- * host's lifetime) and the shell's [MainShellModel].
+ * host's lifetime) and the [ExternalPlayerReports] reporting contract
+ * (a Koin single, resolved through the ShellInfra bundle).
  */
 @Composable
 internal fun rememberExternalPlayerLauncherHost(
-    model: MainShellModel,
+    externalPlayerReports: ExternalPlayerReports,
 ): ExternalPlayerLauncherHost {
     val context = LocalContext.current
     // The app-wide (commonMain) message bus — the ONE bus since the legacy
@@ -64,10 +66,10 @@ internal fun rememberExternalPlayerLauncherHost(
     // Context is the composition's activity — stable for the host's lifetime.
     val externalPlayerHost = remember {
         ExternalPlayerHost(
-            buildLaunch = model::buildExternalPlayerLaunch,
+            buildLaunch = externalPlayerReports::buildExternalPlayerLaunch,
             resolveComponent = { app -> resolveExternalPlayerComponent(context.packageManager, app) },
-            reportStart = model::reportExternalPlaybackStart,
-            reportStopped = model::reportExternalPlaybackStopped,
+            reportStart = externalPlayerReports::reportExternalPlaybackStart,
+            reportStopped = externalPlayerReports::reportExternalPlaybackStopped,
             notifyNoPlayerFound = {
                 // Resolved at POST time through the captured activity context —
                 // the same context (and resource table) the bus's former

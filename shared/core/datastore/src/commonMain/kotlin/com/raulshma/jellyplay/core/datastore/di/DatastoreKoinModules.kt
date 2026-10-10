@@ -32,6 +32,7 @@ import com.raulshma.jellyplay.core.datastore.search.SettingsRecentsStore
 import com.raulshma.jellyplay.core.datastore.security.PinRateLimiter
 import com.raulshma.jellyplay.core.datastore.security.SecurityStore
 import com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections
+import com.raulshma.jellyplay.core.datastore.settings.ExternalBackupSlice
 import com.raulshma.jellyplay.core.datastore.settings.PreferenceSnapshotReader
 import com.raulshma.jellyplay.core.datastore.settings.PreferenceStores
 import com.raulshma.jellyplay.core.datastore.subtitle.SubtitleLanguageStore
@@ -366,6 +367,12 @@ val datastoreCommonModule = module {
             get<ExperimentalStore>(),
             get<VolumeProfileStore>(),
             get<AppRuntimeStateStore>(),
+            // Wave-2 external backup slices (Room-backed config, integration /
+            // widget settings): their concrete sources live in core:data's
+            // dataSettingsBackupSlicesModule, so they are gathered by type —
+            // empty in datastore-only graphs (tests, standalone resolution),
+            // the full four in the app/desktop shells that load core:data.
+            externalSlices = getAll<ExternalBackupSlice>(),
         )
     }
 

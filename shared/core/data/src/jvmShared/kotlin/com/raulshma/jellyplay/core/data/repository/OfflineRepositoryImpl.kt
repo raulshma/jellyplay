@@ -4,7 +4,7 @@ import kotlinx.coroutines.Dispatchers
 import com.raulshma.jellyplay.core.data.sync.toOfflineSyncState
 import com.raulshma.jellyplay.core.data.sync.toOfflineSyncUpdate
 import com.raulshma.jellyplay.core.data.util.SQLITE_HOST_VARIABLE_CHUNK_SIZE
-import com.raulshma.jellyplay.core.data.util.TimeSource
+import com.raulshma.jellyplay.core.model.TimeSource
 import com.raulshma.jellyplay.core.datastore.toEnumOrNull
 import com.raulshma.jellyplay.core.database.JellyPlayDatabase
 import com.raulshma.jellyplay.core.database.dao.DownloadDao

@@ -5,15 +5,9 @@ import androidx.compose.runtime.remember
 import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.toComposeImageBitmap
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEvent
-import androidx.compose.ui.input.key.key
 import androidx.compose.ui.window.FrameWindowScope
 import com.raulshma.jellyplay.core.model.SubtitleStyle
-import com.raulshma.jellyplay.core.ui.player.TranscodeReasonCatalog
-import com.raulshma.jellyplay.core.ui.player.normalizeReasonToken
 import com.raulshma.jellyplay.core.ui.platform.pickAwtFile
-import org.jetbrains.compose.resources.stringResource
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import java.io.File
 import java.text.DateFormat
@@ -96,59 +90,6 @@ internal actual fun rememberIs24HourFormat(): Boolean =
             .format(java.util.Date(13L * 60L * 60L * 1000L))
         !formatted.contains("PM") && !formatted.contains("AM")
     }
-
-// ── Key codes ──────────────────────────────────────────────────────────────
-
-internal actual val KeyEvent.playerKeyCode: Int
-    get() = when (key) {
-        Key.Spacebar -> PlayerKeyCodes.KEYCODE_SPACE
-        Key.MediaPlay -> PlayerKeyCodes.KEYCODE_MEDIA_PLAY
-        Key.MediaPause -> PlayerKeyCodes.KEYCODE_MEDIA_PAUSE
-        Key.MediaPlayPause -> PlayerKeyCodes.KEYCODE_MEDIA_PLAY_PAUSE
-        Key.DirectionRight -> PlayerKeyCodes.KEYCODE_DPAD_RIGHT
-        Key.MediaFastForward -> PlayerKeyCodes.KEYCODE_MEDIA_FAST_FORWARD
-        Key.L -> PlayerKeyCodes.KEYCODE_L
-        Key.DirectionLeft -> PlayerKeyCodes.KEYCODE_DPAD_LEFT
-        Key.MediaRewind -> PlayerKeyCodes.KEYCODE_MEDIA_REWIND
-        Key.J -> PlayerKeyCodes.KEYCODE_J
-        Key.DirectionUp -> PlayerKeyCodes.KEYCODE_DPAD_UP
-        Key.VolumeUp -> PlayerKeyCodes.KEYCODE_VOLUME_UP
-        Key.DirectionDown -> PlayerKeyCodes.KEYCODE_DPAD_DOWN
-        Key.VolumeDown -> PlayerKeyCodes.KEYCODE_VOLUME_DOWN
-        Key.F -> PlayerKeyCodes.KEYCODE_F
-        Key.F1 -> PlayerKeyCodes.KEYCODE_F1
-        Key.F2 -> PlayerKeyCodes.KEYCODE_F2
-        Key.F3 -> PlayerKeyCodes.KEYCODE_F3
-        Key.F4 -> PlayerKeyCodes.KEYCODE_F4
-        Key.M -> PlayerKeyCodes.KEYCODE_M
-        Key.Escape -> PlayerKeyCodes.KEYCODE_ESCAPE
-        else -> 0 // KEYCODE_UNKNOWN: unmatched keys fall through every when-branch.
-    }
-
-internal actual object PlayerKeyCodes {
-    actual val KEYCODE_SPACE: Int = 1
-    actual val KEYCODE_MEDIA_PLAY: Int = 2
-    actual val KEYCODE_MEDIA_PAUSE: Int = 3
-    actual val KEYCODE_MEDIA_PLAY_PAUSE: Int = 4
-    actual val KEYCODE_DPAD_RIGHT: Int = 5
-    actual val KEYCODE_MEDIA_FAST_FORWARD: Int = 6
-    actual val KEYCODE_L: Int = 7
-    actual val KEYCODE_DPAD_LEFT: Int = 8
-    actual val KEYCODE_MEDIA_REWIND: Int = 9
-    actual val KEYCODE_J: Int = 10
-    actual val KEYCODE_DPAD_UP: Int = 11
-    actual val KEYCODE_VOLUME_UP: Int = 12
-    actual val KEYCODE_DPAD_DOWN: Int = 13
-    actual val KEYCODE_VOLUME_DOWN: Int = 14
-    actual val KEYCODE_F: Int = 15
-    actual val KEYCODE_F1: Int = 16
-    actual val KEYCODE_F2: Int = 17
-    actual val KEYCODE_F3: Int = 18
-    actual val KEYCODE_F4: Int = 19
-    actual val KEYCODE_M: Int = 20
-    actual val KEYCODE_ESCAPE: Int = 21
-    actual val KEYCODE_BACK: Int = 22
-}
 
 // ── Document picker ────────────────────────────────────────────────────────
 
@@ -288,38 +229,4 @@ private fun saveCapture(image: java.awt.image.BufferedImage, titleHint: String):
     val out = File(dir, name)
     javax.imageio.ImageIO.write(image, "png", out)
     return "Frame saved to ${out.absolutePath} (${image.width}×${image.height})"
-}
-
-// ── Transcode reasons ──────────────────────────────────────────────────────
-
-actual class PlatformTranscodeReason(
-    actual val raw: String,
-    actual val explanation: String,
-    actual val hint: String?,
-) {
-    actual val renderedText: String
-        get() = if (hint != null) "$explanation\n$hint" else explanation
-}
-
-@Composable
-internal actual fun rememberFormattedTranscodeReasons(
-    rawReasons: List<String>,
-): List<PlatformTranscodeReason> {
-    // Resolve through the commonMain TranscodeReasonCatalog (compose resources),
-    // so desktop localizes exactly like Android instead of echoing raw tokens.
-    // Unknown tokens keep the raw server text, same as Android's fallback.
-    val rows = remember(rawReasons) {
-        rawReasons
-            .filter { it.isNotBlank() }
-            .distinctBy { it.normalizeReasonToken() }
-            .map { raw -> raw to TranscodeReasonCatalog.lookup(raw) }
-    }
-    return rows.map { (raw, strings) ->
-        PlatformTranscodeReason(
-            raw = raw,
-            explanation = strings?.let { stringResource(it.explanation) }
-                ?: stringResource(TranscodeReasonCatalog.unknownTemplate, raw),
-            hint = strings?.hint?.let { stringResource(it) },
-        )
-    }
 }

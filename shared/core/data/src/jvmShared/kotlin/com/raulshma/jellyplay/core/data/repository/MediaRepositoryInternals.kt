@@ -1,12 +1,12 @@
 package com.raulshma.jellyplay.core.data.repository
 
-import com.raulshma.jellyplay.core.data.cache.getOrFetchGuarded
-import com.raulshma.jellyplay.core.data.concurrency.SingleFlightFetcher
 import com.raulshma.jellyplay.core.data.session.HomeSession
+import com.raulshma.jellyplay.core.data.session.SessionCacheRegistry
+import com.raulshma.jellyplay.core.data.session.SessionScopedCache
+import com.raulshma.jellyplay.core.model.CacheIdentity
 import com.raulshma.jellyplay.core.model.FreshnessCeilings
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
-import com.raulshma.jellyplay.core.model.TtlCache
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import java.util.concurrent.atomic.AtomicLong
 
@@ -57,6 +57,13 @@ internal class MediaRepositoryInternals(
      */
     apiClient: LibraryApiClient,
     homeSession: HomeSession,
+    /**
+     * The single home for identity reactions (see [SessionCacheRegistry]):
+     * the group's four member caches each register their own identity action
+     * through their [SessionScopedCache] chassis, so the registry must reach
+     * the group at construction.
+     */
+    sessionCacheRegistry: SessionCacheRegistry,
 ) {
     /**
      * The detail screen's item-scoped cache group. Declared divergence
@@ -64,7 +71,7 @@ internal class MediaRepositoryInternals(
      * [MediaRepositoryImpl] so [PlaylistRepositoryImpl] shares the instance;
      * the class body below is byte-identical to the one that moved.
      */
-    val detailCaches = DetailCacheGroup(apiClient, homeSession)
+    val detailCaches = DetailCacheGroup(apiClient, homeSession, sessionCacheRegistry)
 }
 
 /**
@@ -95,48 +102,83 @@ internal class MediaRepositoryInternals(
  *
  * One epoch guards every write in the group. `invalidateItem` /
  * `invalidateAll` bump it; a fetch that completes after a bump is returned
- * to its caller but never written back (the `getOrFetchGuarded` write guard
- * and [SingleFlightFetcher]'s guard share [epoch]) — a slow fetch that raced
- * a user-data invalidation must not pin the pre-mutation snapshot for the
- * full TTL. Exactly one bump per invalidation call, no more.
+ * to its caller but never written back (the members'
+ * [SessionScopedCache.getOrFetch] write guard and the shared injected
+ * [epoch]) — a slow fetch that raced a user-data invalidation must not pin
+ * the pre-mutation snapshot for the full TTL. Per-item invalidations bump
+ * exactly once (the item's own shapes evict under the one bump); the
+ * wholesale `invalidateAll` bumps once per member cache — monotonic, so the
+ * veto only ever strengthens.
  *
  * ## Identity
  *
- * Every get/put/remove goes through the [TtlCache] identity overloads
- * (fetch paths read [HomeSession.cacheIdentity], the suspend source-flow
- * read; best-effort evictions read [HomeSession.cacheIdentitySnapshot]) so a
- * wrong identity is a guaranteed miss by construction.
+ * Every get/put/remove goes through the identity-keyed [SessionScopedCache]
+ * surface (fetch paths read [HomeSession.cacheIdentity], the suspend
+ * source-flow read; best-effort evictions read
+ * [HomeSession.cacheIdentitySnapshot]) so a wrong identity is a guaranteed
+ * miss by construction. Each member cache registers its own identity action
+ * (epoch bump + wholesale clear) through the chassis; the ONE [epoch] is
+ * injected into all four so a single bump stall-guards every member's
+ * writers.
  */
 internal class DetailCacheGroup(
     private val apiClient: LibraryApiClient,
     private val homeSession: HomeSession,
+    sessionCacheRegistry: SessionCacheRegistry,
 ) {
 
-    private val detailCache = TtlCache<MediaDetail>(
+    // The ONE epoch of the group (verbatim the pre-chassis detailCacheEpoch):
+    // injected into every member's SessionScopedCache so invalidateItem's /
+    // invalidateAll's single bump vetoes writes across the whole group —
+    // a slow fetch that raced a user-data invalidation must not pin the
+    // pre-mutation snapshot for the full TTL, whichever member it was
+    // fetching into. Declared delta over the former registration (unobservable
+    // beyond the veto itself): the identity transition bumps this epoch once
+    // per member action (four bumps) instead of once — the veto is monotonic,
+    // so more bumps reject strictly more stale writes and nothing else.
+    private val epoch = AtomicLong(0L)
+
+    // The identity supplier the four chassis share: the source-flow read (the
+    // mirror lags a switch by a dispatch, which would key fetches under the
+    // previous identity).
+    private val identity: suspend () -> CacheIdentity = { homeSession.cacheIdentity() }
+
+    private val detailCache = SessionScopedCache<MediaDetail>(
+        owner = "media-detail",
         maxSize = DETAIL_CACHE_MAX_ENTRIES,
         ttlMs = FreshnessCeilings.DETAIL_TTL_MS,
+        epoch = epoch,
+        registry = sessionCacheRegistry,
+        identity = identity,
     )
 
-    private val similarCache = TtlCache<List<MediaItem>>(ttlMs = FreshnessCeilings.DETAIL_TTL_MS)
-    private val albumTracksCache = TtlCache<List<MediaItem>>(ttlMs = FreshnessCeilings.DETAIL_TTL_MS)
+    private val similarCache = SessionScopedCache<List<MediaItem>>(
+        owner = "media-similar-items",
+        ttlMs = FreshnessCeilings.DETAIL_TTL_MS,
+        epoch = epoch,
+        registry = sessionCacheRegistry,
+        identity = identity,
+    )
+    private val albumTracksCache = SessionScopedCache<List<MediaItem>>(
+        owner = "media-album-tracks",
+        ttlMs = FreshnessCeilings.DETAIL_TTL_MS,
+        epoch = epoch,
+        registry = sessionCacheRegistry,
+        identity = identity,
+    )
 
     // Theme songs for a detail item: ThemeMusicPlayer releases its player on
     // screen exit, so every detail re-entry re-fetched the (almost always
     // empty) list — one HTTP round-trip per navigation for nothing. Cached
     // with the same 2-minute TTL and epoch-guarded write as its siblings; a
     // stale list ≤2 min after a server change is harmless for ambient audio.
-    private val themeSongsCache = TtlCache<List<MediaItem>>(ttlMs = FreshnessCeilings.DETAIL_TTL_MS)
-
-    // Single-flight dedup for `detail`: the detail screen is reachable from
-    // many entry points (home row tap, deep link, "play next" notification,
-    // cast handshake, download resume) and TtlCache's get-check-put is not
-    // atomic — two near-simultaneous entries share one flight instead of
-    // firing two round-trips. The fetch semantics (caller-scope async,
-    // lock-scope re-check, epoch guard, cancellation ladder) live in
-    // [SingleFlightFetcher]; the epoch it shares with the guarded writes
-    // above/below is [epoch].
-    private val epoch = AtomicLong(0L)
-    private val detailFetcher = SingleFlightFetcher(detailCache, epoch)
+    private val themeSongsCache = SessionScopedCache<List<MediaItem>>(
+        owner = "media-theme-songs",
+        ttlMs = FreshnessCeilings.DETAIL_TTL_MS,
+        epoch = epoch,
+        registry = sessionCacheRegistry,
+        identity = identity,
+    )
 
     // ── Key grammar (the one home of every item-scoped key) ────────────────
 
@@ -168,18 +210,17 @@ internal class DetailCacheGroup(
      */
     suspend fun detail(itemId: String, force: Boolean): Result<MediaDetail> {
         if (force) invalidateItem(itemId)
-        return detailFetcher.getOrFetch({ homeSession.cacheIdentity() }, itemId) {
+        // No force on the chassis read: the group invalidation above already
+        // evicted the item's companion shapes (similar/tracks bump-guarded),
+        // which a chassis-level force could not express.
+        return detailCache.getOrFetch(itemId) {
             apiClient.getMediaDetail(itemId)
         }
     }
 
     /** Similar items — limit-shaped key, epoch-guarded write. */
     suspend fun similarItems(itemId: String, limit: Int): Result<List<MediaItem>> =
-        similarCache.getOrFetchGuarded(
-            { homeSession.cacheIdentity() },
-            similarGetKey(itemId, limit),
-            currentEpoch = epoch::get,
-        ) {
+        similarCache.getOrFetch(similarGetKey(itemId, limit)) {
             apiClient.getSimilarItems(itemId, limit)
         }
 
@@ -194,22 +235,14 @@ internal class DetailCacheGroup(
      */
     suspend fun albumTracks(albumId: String, force: Boolean): Result<List<MediaItem>> {
         if (force) invalidateAlbumTracks(albumId)
-        return albumTracksCache.getOrFetchGuarded(
-            { homeSession.cacheIdentity() },
-            tracksKey(albumId),
-            currentEpoch = epoch::get,
-        ) {
+        return albumTracksCache.getOrFetch(tracksKey(albumId)) {
             apiClient.getAlbumTracks(albumId)
         }
     }
 
     /** Theme songs — epoch-guarded write. */
     suspend fun themeSongs(itemId: String): Result<List<MediaItem>> =
-        themeSongsCache.getOrFetchGuarded(
-            { homeSession.cacheIdentity() },
-            themesKey(itemId),
-            currentEpoch = epoch::get,
-        ) {
+        themeSongsCache.getOrFetch(themesKey(itemId)) {
             apiClient.getThemeSongs(itemId)
         }
 
@@ -222,14 +255,15 @@ internal class DetailCacheGroup(
     /**
      * Drops EVERY cached shape of one item: the detail snapshot, every limit
      * variant of its similar items (prefix evict), and its theme songs —
-     * plus the epoch bump that stall-guards in-flight writers.
+     * plus the epoch bump that stall-guards in-flight writers. ONE bump
+     * (through the detail entry's chassis invalidate) covers all three
+     * evictions; the similar/themes removes are bump-less on purpose.
      */
     fun invalidateItem(itemId: String) {
-        epoch.incrementAndGet()
-        val identity = homeSession.cacheIdentitySnapshot()
-        detailCache.remove(identity, itemId)
-        similarCache.removeByKeyPrefix(identity, similarEvictAllLimitsPrefix(itemId))
-        themeSongsCache.removeByKeyPrefix(identity, themesKey(itemId))
+        val snapshotIdentity = homeSession.cacheIdentitySnapshot()
+        detailCache.invalidate(snapshotIdentity, itemId)
+        similarCache.removeByKeyPrefix(snapshotIdentity, similarEvictAllLimitsPrefix(itemId))
+        themeSongsCache.removeByKeyPrefix(snapshotIdentity, themesKey(itemId))
     }
 
     /**
@@ -240,21 +274,19 @@ internal class DetailCacheGroup(
      * [invalidateItem], which bumps.)
      */
     fun invalidateAlbumTracks(albumId: String) {
-        epoch.incrementAndGet()
-        albumTracksCache.remove(homeSession.cacheIdentitySnapshot(), tracksKey(albumId))
+        albumTracksCache.invalidate(homeSession.cacheIdentitySnapshot(), tracksKey(albumId))
     }
 
     /**
-     * Wholesale drop of the detail/similar/themes trio + the epoch bump.
-     * This (not [clearAll]) is the identity-transition reaction: album
-     * tracks rides the registry's cache list there instead — see
-     * [registryCaches].
+     * Wholesale drop of the detail/similar/themes trio plus the epoch bump
+     * (one per member chassis — monotonic, see the epoch-semantics KDoc).
+     * This (not [clearAll]) is ALSO the identity-transition reaction: each
+     * member's chassis registers this section as its own registry action.
      */
     fun invalidateAll() {
-        epoch.incrementAndGet()
-        detailCache.clear()
-        similarCache.clear()
-        themeSongsCache.clear()
+        detailCache.invalidateAll()
+        similarCache.invalidateAll()
+        themeSongsCache.invalidateAll()
     }
 
     /**
@@ -265,9 +297,9 @@ internal class DetailCacheGroup(
      * [invalidateItem]), then runs the full per-item invalidation.
      */
     fun invalidateUserData(itemId: String): MediaDetail? {
-        val identity = homeSession.cacheIdentitySnapshot()
-        val cached = detailCache.get(identity, itemId)
-        albumTracksCache.remove(identity, tracksKey(itemId))
+        val snapshotIdentity = homeSession.cacheIdentitySnapshot()
+        val cached = detailCache.get(snapshotIdentity, itemId)
+        albumTracksCache.remove(snapshotIdentity, tracksKey(itemId))
         invalidateItem(itemId)
         return cached
     }
@@ -275,27 +307,17 @@ internal class DetailCacheGroup(
     /**
      * Wholesale drop for [MediaRepositoryImpl.invalidateCaches] (the
      * background sync-worker path): [invalidateAll] plus the album-tracks
-     * cache, which the identity path clears via the registry's cache list
-     * instead — the two wholesale callers each clear every member exactly
-     * once. Declared resequencing, unobservable: the former body cleared
-     * albumTracks AFTER the episode catalogue's invalidateAll(); the member
-     * caches are independent (no cross-cache read exists) and each is
-     * cleared exactly once, so ordering within the drop cannot matter —
-     * a racing getAlbumTracks put-after-clear was equally possible before.
+     * cache — the two wholesale callers each clear every member exactly
+     * once (the identity path reaches album tracks through its own chassis
+     * registration instead). Declared resequencing, unobservable: the former
+     * body cleared albumTracks AFTER the episode catalogue's invalidateAll();
+     * the member caches are independent (no cross-cache read exists) and
+     * each is cleared exactly once, so ordering within the drop cannot
+     * matter — a racing getAlbumTracks put-after-clear was equally possible
+     * before.
      */
     fun clearAll() {
         invalidateAll()
-        albumTracksCache.clear()
+        albumTracksCache.invalidateAll()
     }
-
-    /**
-     * The group's contribution to the repo's `SessionCacheRegistry`
-     * registration: the member caches a plain registry wholesale clear fully
-     * invalidates. Only album tracks qualifies — the detail/similar/themes
-     * trio's reaction needs the epoch bump (an in-flight previous-identity
-     * fetch must not write back into the cleared cache), which a plain clear
-     * cannot express; that trio rides the repo's `media-identity-clear`
-     * ACTION ([invalidateAll]) instead.
-     */
-    val registryCaches: List<TtlCache<*>> get() = listOf(albumTracksCache)
 }

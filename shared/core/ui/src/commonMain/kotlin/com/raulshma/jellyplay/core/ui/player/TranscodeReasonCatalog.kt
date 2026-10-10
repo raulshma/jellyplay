@@ -85,13 +85,21 @@ fun String.normalizeReasonToken(): String =
     filter { it.isLetterOrDigit() }.lowercase()
 
 /**
+ * The blank-filter + spelling-dedupe prelude every transcode-reason consumer
+ * runs before [TranscodeReasonCatalog.lookup] — one copy so all surfaces
+ * merge casing duplicates identically.
+ */
+fun List<String>.distinctTranscodeReasons(): List<String> =
+    filter { it.isNotBlank() }.distinctBy { it.normalizeReasonToken() }
+
+/**
  * The ONE token → compose-resource lookup table for transcode reasons,
- * commonMain so both platforms localize. Android's `TranscodeReasonsFormatter`
- * (androidMain) mirrors this table with `R.string` ids because its callers
- * (`player-video`'s android seam, `player-live`'s Koin `TranscodeReasonsRenderer`)
- * resolve synchronously through a `Context`, which compose-resources cannot
- * serve off the main thread; the desktop seam reads THIS table via
- * `stringResource` so desktop no longer echoes raw tokens.
+ * commonMain so both platforms localize. Every consumer resolves through it —
+ * player-video's `rememberFormattedTranscodeReasons` (composable
+ * `stringResource`), player-live's `TranscodeReasonsRenderer` and the admin
+ * transcodes monitor (suspend `getString` / `stringResource` at their own
+ * edges) — so adding a reason is one enum entry plus its string resources,
+ * and every surface renders identical text.
  */
 object TranscodeReasonCatalog {
 
@@ -217,4 +225,13 @@ object TranscodeReasonCatalog {
      */
     fun lookup(rawReason: String): ReasonStrings? =
         byNormalizedKey[rawReason.normalizeReasonToken()]
+
+    /**
+     * The canonical one-reason render: explanation, then the optional hint
+     * on a second line. Every consumer surface (stats overlay, error
+     * dialogs, the live error conveyor, admin monitor) renders identical
+     * text through this one shape.
+     */
+    fun renderedLine(explanation: String, hint: String?): String =
+        if (hint != null) "$explanation\n$hint" else explanation
 }

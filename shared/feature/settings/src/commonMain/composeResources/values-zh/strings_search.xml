@@ -60,6 +60,8 @@
     <string name="ss_library_view_mode_subtitle">以网格或列表布局显示媒体库项目</string>
     <string name="ss_layout_mode_title">布局</string>
     <string name="ss_layout_mode_subtitle">强制使用手机或平板布局，而不跟随窗口大小</string>
+    <string name="ss_screen_fit_title">屏幕适配</string>
+    <string name="ss_screen_fit_subtitle">电视过扫描安全区留白（关闭 / 5% / 10%）</string>
     <string name="ss_home_mode_title">主页模式</string>
     <string name="ss_home_mode_subtitle">设置默认主页屏幕布局：视频或音乐</string>
     <string name="ss_hero_section_title">显示主推板块</string>
@@ -128,6 +130,8 @@
     <string name="ss_gestures_subtitle">切换亮度、音量和跳转的滑动手势</string>
     <string name="ss_gesture_indicator_side_title">手势指示条位置</string>
     <string name="ss_gesture_indicator_side_subtitle">在手势的相反或相同侧显示亮度/音量条</string>
+    <string name="ss_double_tap_hold_seek_title">双击长按持续快进快退</string>
+    <string name="ss_double_tap_hold_seek_subtitle">双击后按住即持续快进或快退</string>
     <string name="ss_default_speed_title">默认播放速度</string>
     <string name="ss_default_speed_subtitle">视频默认的初始播放速度</string>
     <string name="ss_default_aspect_title">默认宽高比</string>
@@ -138,6 +142,8 @@
     <string name="ss_autoplay_countdown_subtitle">自动播放下一集之前的倒计时时长</string>
     <string name="ss_controls_timeout_title">控制栏超时</string>
     <string name="ss_controls_timeout_subtitle">延迟后自动隐藏屏幕上的播放器控件</string>
+    <string name="ss_hide_osd_on_pause_title">暂停时隐藏OSD</string>
+    <string name="ss_hide_osd_on_pause_subtitle">暂停时不弹出控制浮层</string>
     <string name="ss_skip_back_on_resume_title">恢复播放时回退</string>
     <string name="ss_skip_back_on_resume_subtitle">取消暂停播放时向后跳转几秒</string>
     <string name="ss_show_clock_player_title">播放器中显示时钟</string>
@@ -200,6 +206,8 @@
     <string name="ss_show_time_remaining_subtitle">显示剩余时间而不是已过时间</string>
     <string name="ss_pause_on_focus_loss_title">失去焦点时暂停</string>
     <string name="ss_pause_on_focus_loss_subtitle">系统报告音频焦点丢失时暂停播放</string>
+    <string name="ss_resume_headset_plug_title">耳机重新连接时恢复播放</string>
+    <string name="ss_resume_headset_plug_subtitle">拔出自动暂停后重新插入耳机时恢复播放</string>
     <string name="ss_mpv_video_output_title">MPV 视频输出</string>
     <string name="ss_mpv_video_output_subtitle">MPV 视频输出驱动</string>
     <string name="ss_mpv_scaler_title">MPV 缩放器</string>
@@ -383,6 +391,8 @@
     <string name="ss_notification_vibrate_subtitle">收到通知时振动</string>
     <string name="ss_notification_lights_title">通知指示灯</string>
     <string name="ss_notification_lights_subtitle">在支持的设备上闪烁通知灯</string>
+    <string name="ss_new_episodes_title">新剧集通知</string>
+    <string name="ss_new_episodes_subtitle">为新剧集使用专用通知渠道</string>
     <string name="ss_max_per_check_title">每次检查最大通知数</string>
     <string name="ss_max_per_check_subtitle">每批通知的最大项目数</string>
     <string name="ss_notification_libraries_title">通知媒体库</string>
@@ -455,6 +465,8 @@
     <string name="ss_auto_lock_timer_subtitle">离开后应用锁定前的时间</string>
     <string name="ss_backup_export_title">导出设置备份</string>
     <string name="ss_backup_export_subtitle">将当前配置设置导出到 JSON 文件</string>
+    <string name="ss_backup_export_secrets_title">导出包含机密的备份</string>
+    <string name="ss_backup_export_secrets_subtitle">导出设置以及经密码短语加密的 API 密钥和已保存的服务器列表</string>
     <string name="ss_backup_import_title">导入设置备份</string>
     <string name="ss_backup_import_subtitle">从之前导出的设置备份还原配置</string>
     <string name="ss_factory_reset_title">恢复出厂设置</string>
@@ -570,4 +582,6 @@
     <string name="ss_hooks_ended_cmd_subtitle">媒体播放结束时运行的命令</string>
     <string name="ss_hooks_idle_cmd_subtitle">应用进入空闲时运行的命令</string>
     <string name="ss_hooks_idle_ended_cmd_subtitle">应用退出空闲时运行的命令</string>
+    <string name="ss_input_bindings_title">自定义控制</string>
+    <string name="ss_input_bindings_subtitle">手势、鼠标、键盘和遥控器的操作</string>
 </resources>

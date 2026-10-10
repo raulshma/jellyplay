@@ -32,10 +32,8 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.Res
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_integrations_arr
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_integrations_arr_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_integrations_subtitles
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_integrations_subtitles_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_integrations_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_seerr_integration
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_seerr_integration_subtitle
 
 /**
  * Top-level integrations hub. Lists every third-party service JellyPlay talks
@@ -121,11 +119,11 @@ fun IntegrationsScreen(
                     val count = 3
                     SettingListItem(
                         icon = Tabler.Outline.Puzzle,
-                        title = rowTitle(IntegrationsScreenIds.SEERR_SETTINGS),
-                        subtitle = stringResource(Res.string.settings_seerr_integration_subtitle),
+                        title = rowTitle(IntegrationsRows.SeerrSettings),
+                        subtitle = rowSubtitle(IntegrationsRows.SeerrSettings),
                         index = 0,
                         count = count,
-                        highlighted = highlightSettingId == IntegrationsScreenIds.SEERR_SETTINGS,
+                        highlighted = highlightSettingId == IntegrationsRows.SeerrSettings.id,
                         onClick = onSeerrSettings,
                     )
                     SettingListItem(
@@ -139,11 +137,11 @@ fun IntegrationsScreen(
                     )
                     SettingListItem(
                         icon = Tabler.Outline.Subtitles,
-                        title = rowTitle(IntegrationsScreenIds.SUBTITLE_PROVIDER_SETTINGS),
-                        subtitle = stringResource(Res.string.settings_integrations_subtitles_subtitle),
+                        title = rowTitle(IntegrationsRows.SubtitleProviderSettings),
+                        subtitle = rowSubtitle(IntegrationsRows.SubtitleProviderSettings),
                         index = 2,
                         count = count,
-                        highlighted = highlightSettingId == IntegrationsScreenIds.SUBTITLE_PROVIDER_SETTINGS,
+                        highlighted = highlightSettingId == IntegrationsRows.SubtitleProviderSettings.id,
                         onClick = onSubtitleProviderSettings,
                     )
                 }

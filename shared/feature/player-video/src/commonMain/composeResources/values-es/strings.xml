@@ -6,6 +6,8 @@
     <string name="player_reset_to_auto">Restablecer a Automático</string>
     <string name="player_track_default">Predeterminada</string>
     <string name="player_track_none">Ninguna</string>
+    <string name="player_capturing_frame">Capturando fotograma…</string>
+    <string name="player_not_ready">Reproductor no disponible</string>
 
     <string name="track_badge_forced">Forzado</string>
     <string name="track_badge_sdh">SDH</string>
@@ -35,10 +37,8 @@
     <string name="player_video_open_tester">Abrir probador</string>
     <string name="player_video_reset">Restablecer</string>
     <string name="player_video_reset_all">Restablecer todo</string>
-    <string name="player_video_pick_color">Elegir un color</string>
     <string name="player_video_hue">Matiz</string>
     <string name="player_video_saturation">Saturación</string>
-    <string name="player_video_value">Valor</string>
     <string name="player_video_apply">Aplicar</string>
     <string name="player_video_cancel">Cancelar</string>
     <string name="player_video_override_subtitle_styles">Sobrescribir estilos de subtítulos</string>
@@ -56,6 +56,14 @@
     <string name="player_video_ass_force">Forzar</string>
     <string name="player_video_ass_scale_hint">Mantener el estilo incrustado; aplicar solo tu tamaño y posición</string>
     <string name="player_video_ass_force_hint">Sobrescribir el estilo incrustado con tus colores, fuente y bordes</string>
+    <string name="player_video_mpv_config_notice_title">Tu configuración de mpv anula algunas opciones de subtítulos</string>
+    <string name="player_video_mpv_config_owned_keys_intro">Tu configuración tiene prioridad para estas claves — los controles correspondientes aquí no las cambian:</string>
+    <string name="player_video_mpv_config_case_srt">Los subtítulos simples (SRT) siempre usan los colores, bordes y fuentes de tu configuración.</string>
+    <string name="player_video_mpv_config_case_ass">Los subtítulos ASS/SSA conservan su estilo incrustado — para aplicar tu estilo, usa la opción de Estilo ASS de abajo.</string>
+    <string name="player_video_mpv_config_ass_override_owned">Tu configuración define sub-ass-override: la elección Respetar/Forzar aquí no tiene efecto.</string>
+    <string name="player_video_mpv_config_app_owned_keys">Activar/desactivar subtítulos y el retardo de subtítulos siempre dependen de la app — tu configuración no puede cambiarlos.</string>
+    <string name="player_video_mpv_config_dropped_keys">mpv no puede leer %1$s de su archivo mpv.conf: una # sin comillas inicia un comentario. En ese archivo, entrecomilla el valor: sub-color="#FF0000". En la configuración mpv avanzada de la app rige lo contrario: escribe sub-color=#FF0000 sin comillas — las comillas pasarían a formar parte del valor.</string>
+    <string name="player_video_mpv_config_chip">Configuración mpv personalizada</string>
     <string name="player_video_font_color">Color de fuente</string>
     <string name="player_video_background_color">Color de fondo</string>
     <string name="player_video_background_opacity">Opacidad de fondo: %1$d%</string>
@@ -79,6 +87,11 @@
     <string name="player_video_sleep_timer">Temporizador</string>
     <string name="player_video_sleep_timer_on">Temporizador \u00B7 %1$s</string>
     <string name="player_video_cancel_sleep_timer">Cancelar temporizador (quedan %1$s)</string>
+    <string name="player_video_sleep_timer_stops_at">Se detiene a las %1$s</string>
+    <string name="player_video_cancel_sleep_timer_confirm_title">¿Cancelar el temporizador?</string>
+    <string name="player_video_cancel_sleep_timer_confirm_message">Al temporizador aún le quedan %1$s. ¿Cancelarlo?</string>
+    <string name="player_video_cancel_timer">Cancelar temporizador</string>
+    <string name="player_video_keep_sleep_timer">Mantener temporizador</string>
     <string name="player_video_custom_duration">Duración personalizada</string>
     <string name="player_video_custom_ellipsis">Personalizada…</string>
     <string name="player_video_end_of_episode">Fin del episodio</string>
@@ -155,6 +168,8 @@
     <string name="player_video_normalization_on">Normalización \u00B7 %1$s</string>
     <string name="player_video_channel_mixing">Mezcla de canales</string>
     <string name="player_video_channel_mix_on">Mezcla \u00B7 %1$s</string>
+    <string name="player_video_gestures">Gestos</string>
+    <string name="player_video_gestures_on">Gestos \u00B7 %1$d/%2$d</string>
     <string name="player_video_av_sync">Sincronía A/V</string>
     <string name="player_video_playback_mode">Modo de reproducción</string>
     <string name="player_video_playback_mode_on">%1$s \u00B7 Activado</string>
@@ -343,4 +358,21 @@
     <string name="player_video_source_label">Fuente</string>
     <string name="player_video_version">Versión</string>
     <string name="player_video_remember_version">Recordar esta versión</string>
+
+    <!-- Subtitle style presets -->
+    <string name="player_video_presets_title">Ajustes predefinidos</string>
+    <string name="player_video_preset_subtle">Discreto</string>
+    <string name="player_video_preset_big_bold">Grande y negrita</string>
+    <string name="player_video_preset_classic_yellow">Amarillo clásico</string>
+    <string name="player_video_preset_netflixish">Estilo Netflix</string>
+    <string name="player_video_preset_save">Guardar el actual</string>
+    <string name="player_video_preset_save_dialog_title">Guardar ajuste</string>
+    <string name="player_video_preset_name_label">Nombre del ajuste</string>
+    <string name="player_video_preset_delete_a11y">Eliminar ajuste %1$s</string>
+
+    <!-- The JellyPlay sync / details-badges / player-notice strings
+         (ADR 0010 wave), translated together with the default file. -->
+    <string name="player_video_transcode_switched">Cambiado a transmisión transcodificada — volviendo a almacenar en el búfer</string>
+    <string name="player_video_direct_play_unavailable">Reproducción directa no disponible para este elemento — se usará la transcodificación</string>
+    <string name="player_video_vlc_client_cert_unsupported">El certificado de cliente no es compatible con el motor VLC — cambia a ExoPlayer o mpv para servidores mTLS</string>
 </resources>

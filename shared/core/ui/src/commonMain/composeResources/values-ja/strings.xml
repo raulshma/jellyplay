@@ -280,4 +280,130 @@
          for PosterCard/WideMediaCard). -->
     <string name="core_ui_card_percent_complete">%1$d%完了</string>
     <string name="core_ui_card_time_left">残り %1$s</string>
+
+    <!-- SubtitleFreeFormColorPickerDialog (matches the default-locale grouping) -->
+    <string name="core_ui_color_picker_title">色を選択</string>
+    <string name="core_ui_color_hex">HEX</string>
+    <string name="core_ui_color_hue">色相</string>
+    <string name="core_ui_color_saturation">彩度</string>
+    <string name="core_ui_color_value">明るさ</string>
+    <string name="core_ui_color_invalid_hex">無効な16進数カラー</string>
+    <string name="core_ui_color_apply">適用</string>
+    <string name="core_ui_color_cancel">キャンセル</string>
+
+    <!-- PreferenceEnumNames enum labels (gesture mode, orientation, gesture
+         indicator side, check frequency) + player input mapping labels
+         (actions / patterns / keys / D-pad), matching the default-locale
+         grouping. -->
+    <string name="core_gesture_mode_all">すべてのジェスチャー</string>
+    <string name="core_gesture_mode_tap_only">タップのみ</string>
+    <string name="core_gesture_mode_none">オフ</string>
+    <string name="core_orientation_sensor_landscape">横向き</string>
+    <string name="core_orientation_sensor_portrait">縦向き</string>
+    <string name="core_orientation_sensor">自動回転</string>
+    <string name="core_orientation_locked_landscape">横向き（ロック）</string>
+    <string name="core_orientation_locked_portrait">縦向き（ロック）</string>
+    <string name="core_gesture_indicator_opposite">反対側</string>
+    <string name="core_gesture_indicator_same">同じ側</string>
+    <string name="core_check_frequency_every_hour">1時間ごと</string>
+    <string name="core_check_frequency_every_3_hours">3時間ごと</string>
+    <string name="core_check_frequency_every_6_hours">6時間ごと</string>
+    <string name="core_check_frequency_every_12_hours">12時間ごと</string>
+    <string name="core_check_frequency_every_24_hours">毎日</string>
+    <string name="core_input_action_toggle_play_pause">再生 / 一時停止</string>
+    <string name="core_input_action_play">再生</string>
+    <string name="core_input_action_pause">一時停止</string>
+    <string name="core_input_action_seek_forward">前方へシーク</string>
+    <string name="core_input_action_seek_back">後方へシーク</string>
+    <string name="core_input_action_toggle_controls">コントロールを切り替え</string>
+    <string name="core_input_action_back_or_hide">戻る / コントロールを非表示</string>
+    <string name="core_input_action_exit_player">プレーヤーを終了</string>
+    <string name="core_input_action_volume_up">音量を上げる</string>
+    <string name="core_input_action_volume_down">音量を下げる</string>
+    <string name="core_input_action_toggle_mute">ミュートを切り替え</string>
+    <string name="core_input_action_brightness_up">明るさを上げる</string>
+    <string name="core_input_action_brightness_down">明るさを下げる</string>
+    <string name="core_input_action_swipe_seek">シーク（ドラッグ）</string>
+    <string name="core_input_action_swipe_volume">音量（ドラッグ）</string>
+    <string name="core_input_action_swipe_brightness">明るさ（ドラッグ）</string>
+    <string name="core_input_action_toggle_subtitles">字幕を切り替え</string>
+    <string name="core_input_action_lock_controls">コントロールをロック</string>
+    <string name="core_input_action_sub_delay_decrease">字幕遅延 -</string>
+    <string name="core_input_action_sub_delay_increase">字幕遅延 +</string>
+    <string name="core_input_action_audio_delay_decrease">音声遅延 -</string>
+    <string name="core_input_action_audio_delay_increase">音声遅延 +</string>
+    <string name="core_input_action_cycle_speed">再生速度を切り替え</string>
+    <string name="core_input_action_hold_speed">長押しで早送り</string>
+    <string name="core_input_action_zoom">ピンチで拡大縮小</string>
+    <string name="core_input_action_toggle_orientation">画面を回転</string>
+    <string name="core_input_action_screenshot">スクリーンショット</string>
+    <string name="core_input_action_next_episode">次のエピソード</string>
+    <string name="core_input_action_previous_episode">前のエピソード</string>
+    <string name="core_input_action_none">未割り当て</string>
+    <string name="core_input_pattern_tap">シングルタップ</string>
+    <string name="core_input_pattern_double_tap_left">左をダブルタップ</string>
+    <string name="core_input_pattern_double_tap_center">中央をダブルタップ</string>
+    <string name="core_input_pattern_double_tap_right">右をダブルタップ</string>
+    <string name="core_input_pattern_double_tap_hold_left">左をダブルタップして長押し</string>
+    <string name="core_input_pattern_double_tap_hold_right">右をダブルタップして長押し</string>
+    <string name="core_input_pattern_long_press">長押し</string>
+    <string name="core_input_pattern_vertical_swipe_left">左側を上下にスワイプ（%1$s）</string>
+    <string name="core_input_pattern_vertical_swipe_right">右側を上下にスワイプ（%1$s）</string>
+    <string name="core_input_action_short_brightness">明るさ</string>
+    <string name="core_input_action_short_volume">音量</string>
+    <string name="core_input_pattern_horizontal_swipe">左右にスワイプ（シーク）</string>
+    <string name="core_input_edge_left">エッジスワイプ（左）</string>
+    <string name="core_input_edge_right">エッジスワイプ（右）</string>
+    <string name="core_input_pattern_pinch">ピンチ</string>
+    <string name="core_input_pattern_wheel_volume">スクロールホイール</string>
+    <string name="core_input_pattern_wheel_seek">スクロールホイール（Shift / 横方向）</string>
+    <string name="core_input_key_ctrl">Ctrl</string>
+    <string name="core_input_key_shift">Shift</string>
+    <string name="core_input_key_alt">Alt</string>
+    <string name="core_input_key_space">スペース</string>
+    <string name="core_input_key_k">K</string>
+    <string name="core_input_key_m">M</string>
+    <string name="core_input_key_v">V</string>
+    <string name="core_input_key_f">F</string>
+    <string name="core_input_key_g">G</string>
+    <string name="core_input_key_h">H</string>
+    <string name="core_input_key_j">J</string>
+    <string name="core_input_key_l">L</string>
+    <string name="core_input_key_bracket_left">[</string>
+    <string name="core_input_key_bracket_right">]</string>
+    <string name="core_input_key_f1">F1</string>
+    <string name="core_input_key_f2">F2</string>
+    <string name="core_input_key_f3">F3</string>
+    <string name="core_input_key_f4">F4</string>
+    <string name="core_input_key_escape">Esc</string>
+    <string name="core_input_key_back">戻る</string>
+    <string name="core_input_key_dpad_left">左矢印</string>
+    <string name="core_input_key_dpad_right">右矢印</string>
+    <string name="core_input_key_dpad_up">上矢印</string>
+    <string name="core_input_key_dpad_down">下矢印</string>
+    <string name="core_input_key_volume_up">音量アップキー</string>
+    <string name="core_input_key_volume_down">音量ダウンキー</string>
+    <string name="core_input_key_page_up">Page up</string>
+    <string name="core_input_key_page_down">Page down</string>
+    <string name="core_input_key_home">Home</string>
+    <string name="core_input_key_end">End</string>
+    <string name="core_input_key_media_play">メディア再生</string>
+    <string name="core_input_key_media_pause">メディア一時停止</string>
+    <string name="core_input_key_media_play_pause">メディア再生/一時停止</string>
+    <string name="core_input_key_media_ff">メディア早送り</string>
+    <string name="core_input_key_media_rew">メディア巻き戻し</string>
+    <string name="core_input_dpad_left">十字キー左</string>
+    <string name="core_input_dpad_right">十字キー右</string>
+    <string name="core_input_dpad_up">十字キー上</string>
+    <string name="core_input_dpad_down">十字キー下</string>
+    <string name="core_input_dpad_select">十字キー中央</string>
+    <string name="core_input_dpad_back">戻る</string>
+    <string name="core_input_dpad_play_pause">再生/一時停止</string>
+    <string name="core_input_dpad_fast_forward">早送り</string>
+    <string name="core_input_dpad_rewind">巻き戻し</string>
+
+    <!-- The JellyPlay sync / details-badges / player-notice strings
+         (ADR 0010 wave), translated together with the default file. -->
+    <string name="core_action_hide_from_continue_watching">「視聴を続ける」から削除</string>
+    <string name="core_action_show_from_continue_watching">「視聴を続ける」に表示</string>
 </resources>

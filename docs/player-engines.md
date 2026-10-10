@@ -49,9 +49,8 @@ not to.
 ## libmpv
 
 [libmpv](https://github.com/mpv-player/mpv) is the Android port of the
-legendary [mpv](https://mpv.io/) player. JellyPlay bundles
-[libmpv-android](https://github.com/JarneDeprez/mpv-android) by Jarne
-Deprez.
+legendary [mpv](https://mpv.io/) player. JellyPlay bundles the
+`io.github.abdallahmehiz:mpv-android-lib` packaging by AbdallahMehiz.
 
 **Pros**
 
@@ -64,12 +63,35 @@ Deprez.
   - **Subtitle precedence:** any `sub-*` styling key you set in the
     *Advanced MPV Configuration* (or, on Android, in `mpv.conf`) wins —
     the app skips writing that key, at startup and on live subtitle-style
-    changes alike. Example: `sub-color=#FF00FF00` in your conf keeps your
+    changes alike. Example: `sub-color="#FF00FF00"` in your conf keeps your
     green captions even with custom subtitle styling enabled in-app.
+    **Quoting:** in a hand-written `mpv.conf`, mpv treats everything after
+    an unquoted `#` as a comment — color values like `sub-color=#FF0000`
+    parse as empty and are silently dropped, so wrap them in quotes
+    (`sub-color="#FF0000"`). Values in the in-app *Advanced MPV
+    Configuration* go straight to mpv's option API, where `#` is not
+    special — but quotes are **not** stripped there: they become part of
+    the value, so write values unquoted (`sub-color=#FF0000`).
+    **ASS/SSA subtitles:** style keys like `sub-color` only
+    affect ASS subs when your config also sets `sub-ass-override=force`
+    (which also stops the app's default `sub-ass-override=scale` write);
+    with `scale` or `yes`, ASS subs keep their embedded styling.
     Functional keys the player drives at runtime (`sub-visibility`,
     `sub-delay`, `secondary-sub-delay`, `sub-use-margins`,
     `sub-ass-force-margins`, and the font-provider options) stay app-owned
     so in-app subtitle toggle/sync keep working.
+    **In-app notice:** when a custom config participates, the subtitle
+    hub's *Style* tab (and the standalone subtitle tester) show a notice
+    card listing the owned keys, the ASS-track case (ASS subs keep their
+    embedded styling; the card points at the *ASS Styling* choice, and
+    calls out when the config itself owns `sub-ass-override`), the
+    app-owned keys it names (subtitle on/off and subtitle delay — the
+    rest of the always-app-owned functional set is enforced without being
+    listed), and — when
+    mpv.conf values were dropped by the parser — the quoting fix. The card
+    reads the same ownership snapshot the engines gate their writes with
+    (`MediaEngine.subtitleStyleOwnership`), so it can never disagree with
+    what is actually skipped.
   - **Platform note:** the desktop builds run mpv with `config=no`, so
     `~/.config/mpv/mpv.conf` is not read there — only the in-app
     *Advanced MPV Configuration* participates in the precedence above.
@@ -104,7 +126,7 @@ engine from the VLC media player.
 - ✅ Mature, well-tested code
 - ✅ Hardware decoding on a wide range of chipsets
 - ✅ Network streaming (SMB, NFS, SFTP, HTTP, FTP) built-in
-- ✅ Brightness / contrast / saturation / sharpness filter controls
+- ✅ Brightness / contrast / saturation filter controls
   (in JellyPlay's player)
 - ✅ Audio passthrough and audio-delay control
 - ✅ Native renderer (cast) item support
@@ -145,7 +167,7 @@ setting simply won't appear in the player UI).
 | ASS/SSA *user style override* | ✗ | ✅ | ✗ | ✗ |
 | Image subtitles (PGS/VobSub sidecars) | ✗ | ✅ | ✗ | ✗ |
 | Font family | ✅ | ✅ | ✅ | ✗ |
-| Free-form subtitle colors | ✅ | ✅ | ✗ | ✗ |
+| Free-form subtitle colors | ✗ | ✅ | ✗ | ✗ |
 | Border styles | ✅ | ✅ | ✗ | ✗ |
 | Dialogue boost | ✅ | ✅ | ✗ | ✗ |
 | Night mode | ✅ | ✅ | ✗ | ✗ |
@@ -159,7 +181,10 @@ setting simply won't appear in the player UI).
 Only **mpv** also applies *your* style overrides (colors, borders,
 Force) on top of ASS/SSA tracks (`--ass-override=force`). ExoPlayer
 renders ASS as-authored — your style overrides take effect on SRT/VTT
-only. LibVLC does not render ASS at all.
+only. LibVLC does not render ASS at all. For the same reason, the
+free-form (hex) color picker is offered on **libmpv only**: it requires
+ASS user style override so the picked color also holds on ASS tracks,
+not just SRT/VTT.
 
 Image subtitles delivered as files (bitmap PGS `.sup`, VobSub) play on
 mpv only, via its libav decoders — this gates offline side-loading:
@@ -173,8 +198,9 @@ self-contained.
 
 ## How to switch engines
 
-1. Open **Settings → Player → Engine** (labeled **Preferred Player**)
-2. Pick **ExoPlayer**, **libmpv**, or **LibVLC**
+1. Open **Settings → Playback → Player Engine**
+   (labeled **Preferred Player**)
+2. Pick **ExoPlayer**, **mpv**, or **LibVLC**
 3. Tap to apply — JellyPlay reloads the player
 
 The choice is **per-device and manual** — JellyPlay does not auto-pick
@@ -190,14 +216,15 @@ time. If you hit a file no bundled engine handles well, use an
 
 ## Per-engine tuning (advanced)
 
-Below the engine picker, **Settings → Player → Engine Config** exposes
+Below the engine picker, **Settings → Playback → Engine Config** exposes
 knobs specific to the active engine. Defaults are sane for almost
 everyone; reach for these only if a particular file misbehaves.
 
 - **ExoPlayer** — video scaling mode, frame-rate strategy, preferred
   video MIME types, skip-silence, audio offload mode, back-buffer
   duration, decoder fallback.
-- **libmpv** — video output (`gpu-next` default), scaler (Lanczos),
+- **libmpv** — video output (`gpu-next` default), scaler (bilinear
+  default),
   hardware-decode override, audio output, demuxer max bytes, frame drop,
   skip-loop-filter, interpolation, deband.
 - **LibVLC** — audio output, video output, network caching,
@@ -209,12 +236,13 @@ everyone; reach for these only if a particular file misbehaves.
 ## External player
 
 If none of the bundled engines work for a specific file, JellyPlay can
-launch an **external player** (MX Player, VLC, mpv for Android, etc.):
+hand playback to an **external player** (MX Player, VLC, mpv for
+Android, etc.):
 
-1. Open the media detail page
-2. Tap the kebab menu → **Open in external player**
-3. Pick the player of your choice
-4. Watch via the external app
+1. Set **Settings → Playback → Preferred Player → External** — you can
+   also pick your preferred external app there
+2. Start playback on any video; JellyPlay launches the external app
+   with the stream and steps aside
 
 Internally this selects the **External** engine type, which is a no-op
 in-app placeholder — playback happens entirely in the third-party app.
@@ -223,7 +251,7 @@ server via the session, even when using an external player.
 
 ## Hardware vs. software decoding
 
-Each engine has a **decoder mode** setting in **Settings → Player →
+Each engine has a **decoder mode** setting in **Settings → Playback →
 Decoder**:
 
 - **Hardware** *(default)* — uses the device's GPU/DSP for video
@@ -273,8 +301,9 @@ instance.
 The three switchable engines above cover **on-demand video**. Two other
 playback paths exist and are **not** user-switchable:
 
-- **Live TV** uses a dedicated live engine (Media3 ExoPlayer, HLS-only,
-  always joins at the live edge) regardless of your Preferred Player
+- **Live TV** uses a dedicated live engine (Media3 ExoPlayer — HLS for
+  transcodes, progressive TS for direct streams — always joins at the
+  live edge) regardless of your Preferred Player
   setting. If a live stream can't direct-play, it falls back to a
   transcode path automatically.
 - **Background music / audio** runs on its own Media3

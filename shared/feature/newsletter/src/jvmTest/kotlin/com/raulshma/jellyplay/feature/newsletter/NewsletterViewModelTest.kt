@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.feature.newsletter
 
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
-import com.raulshma.jellyplay.core.data.repository.NewsletterRepository
+import com.raulshma.jellyplay.core.network.api.NewsletterApiClient
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.notification.NotificationStore
 import com.raulshma.jellyplay.core.datastore.notification.NotificationSlice
@@ -52,7 +52,7 @@ class NewsletterViewModelTest {
     // has no access to that module (requests conveyor port pattern).
     private val mainDispatcher = StandardTestDispatcher()
 
-    private lateinit var mediaRepository: NewsletterRepository
+    private lateinit var mediaRepository: NewsletterApiClient
     private lateinit var imageUrlProvider: ImageUrlProvider
     private lateinit var notificationStore: NotificationStore
     private lateinit var authRepository: AuthRepository
@@ -86,7 +86,7 @@ class NewsletterViewModelTest {
     }
 
     private fun createViewModel(): NewsletterViewModel = NewsletterViewModel(
-        newsletterRepository = mediaRepository,
+        newsletterApiClient = mediaRepository,
         imageUrlProvider = imageUrlProvider,
         notificationStore = notificationStore,
         authRepository = authRepository,

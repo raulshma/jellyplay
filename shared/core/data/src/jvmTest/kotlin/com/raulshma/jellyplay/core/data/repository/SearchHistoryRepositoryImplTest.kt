@@ -10,7 +10,7 @@ import kotlin.test.BeforeTest
 import kotlin.test.assertEquals
 import kotlin.test.Test
 import kotlin.test.assertTrue
-import com.raulshma.jellyplay.core.data.testutil.FakeTimeSource
+import com.raulshma.jellyplay.core.testfixtures.FakeTimeSource
 
 /**
  * Exercises [SearchHistoryRepositoryImpl] against a real in-memory Room

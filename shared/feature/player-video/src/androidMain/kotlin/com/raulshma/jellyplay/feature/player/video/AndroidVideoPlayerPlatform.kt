@@ -4,9 +4,12 @@ import android.app.ActivityManager
 import android.content.Context
 import android.media.MediaMetadataRetriever
 import android.net.Uri
+import android.os.SystemClock
 import android.provider.OpenableColumns
 import com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager
 import com.raulshma.jellyplay.core.data.playback.BecomingNoisyPauseReceiver
+import com.raulshma.jellyplay.core.data.playback.HeadsetPlugReceiver
+import com.raulshma.jellyplay.core.data.playback.HeadsetResumePolicy
 import com.raulshma.jellyplay.core.data.playback.focus.PlaybackFocus
 import com.raulshma.jellyplay.core.data.playback.focus.VideoPlaybackSurface
 import com.raulshma.jellyplay.core.data.cast.CastManager
@@ -89,9 +92,11 @@ internal class AndroidVideoPlayerPlatform(
 
     override fun createBecomingNoisy(
         getEngine: () -> MediaEngine?,
+        isResumeOnPlugEnabled: () -> Boolean,
     ): VideoPlayerAudio = AndroidVideoPlayerBecomingNoisy(
         context = context,
         getEngine = getEngine,
+        isResumeOnPlugEnabled = isResumeOnPlugEnabled,
     )
 }
 
@@ -123,18 +128,67 @@ private class AndroidOfflineMediaProbe : OfflineMediaProbe {
  * stayed behind because it is the only headphone-unplug path for the
  * non-media3 engines (ExoPlayer's built-in
  * `setHandleAudioBecomingNoisy(true)` keeps running alongside it, exactly
- * the dual coverage the shared lifecycle had). The broadcast chassis lives
- * in core:data's [BecomingNoisyPauseReceiver] (one home, shared with the
- * live player); this adapter only supplies the engine pause target.
+ * the dual coverage the shared lifecycle had) — plus the
+ * resume-on-headset-insert twin: when the opt-in pref is on, a headset
+ * re-plug within core:data's [HeadsetResumePolicy] freshness window resumes
+ * the engine the becoming-noisy event itself paused (the unplug pause path
+ * marks the session-scoped holder ONLY when the engine was actually playing
+ * at broadcast time, so a user-initiated pause never auto-resumes; the plug
+ * consumer additionally requires the engine to be paused right now).
+ *
+ * The broadcast chassis live in core:data ([BecomingNoisyPauseReceiver] —
+ * one home shared with the live player — and [HeadsetPlugReceiver]); this
+ * adapter owns the session-scoped marker that joins them and supplies the
+ * engine pause/resume targets (re-read per event, so engine swaps and
+ * teardown stay correct).
  */
 internal class AndroidVideoPlayerBecomingNoisy(
     context: Context,
-    getEngine: () -> MediaEngine?,
+    private val getEngine: () -> MediaEngine?,
+    private val isResumeOnPlugEnabled: () -> Boolean,
 ) : VideoPlayerAudio {
 
-    private val receiver = BecomingNoisyPauseReceiver(context) { getEngine()?.pause() }
+    /**
+     * `SystemClock.elapsedRealtime` timestamp of the last becoming-noisy
+     * pause that actually stopped playback — null until one does. Session-
+     * scoped by construction (this instance is per-ViewModel, registered in
+     * the wiring's arm phase and released with the session), so a re-entered
+     * player never inherits a stale marker.
+     */
+    @Volatile
+    private var noisyPauseAtMs: Long? = null
 
-    override fun register() = receiver.register()
+    private val becomingNoisy = BecomingNoisyPauseReceiver(context) {
+        val engine = getEngine()
+        val wasPlaying = engine?.isPlaying?.value == true
+        engine?.pause()
+        if (HeadsetResumePolicy.shouldMarkNoisyPause(wasPlaying)) {
+            noisyPauseAtMs = SystemClock.elapsedRealtime()
+        }
+    }
 
-    override fun release() = receiver.release()
+    private val headsetPlug = HeadsetPlugReceiver(context) {
+        val resumed = HeadsetResumePolicy.shouldResumeOnHeadsetPlug(
+            nowMs = SystemClock.elapsedRealtime(),
+            noisyPauseAtMs = noisyPauseAtMs,
+            prefEnabled = isResumeOnPlugEnabled(),
+        )
+        // One resume attempt per unplug cycle: the marker is consumed whether
+        // or not an engine was around to take it.
+        noisyPauseAtMs = null
+        if (resumed) {
+            val engine = getEngine()
+            if (engine != null && !engine.isPlaying.value) engine.play()
+        }
+    }
+
+    override fun register() {
+        becomingNoisy.register()
+        headsetPlug.register()
+    }
+
+    override fun release() {
+        becomingNoisy.release()
+        headsetPlug.release()
+    }
 }

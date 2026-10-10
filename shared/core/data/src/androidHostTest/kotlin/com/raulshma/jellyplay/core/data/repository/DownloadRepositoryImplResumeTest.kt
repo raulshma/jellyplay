@@ -80,6 +80,7 @@ class DownloadRepositoryImplResumeTest {
         storagePolicy = storagePolicy,
         downloadEnqueuer = downloadEnqueuer,
         progressNotifier = progressNotifier,
+        timeSource = com.raulshma.jellyplay.core.model.SystemTimeSource(),
         writer = writer,
         downloadDelegate = downloadDelegate,
     )

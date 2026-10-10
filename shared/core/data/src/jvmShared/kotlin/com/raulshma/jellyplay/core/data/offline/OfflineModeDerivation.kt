@@ -59,9 +59,11 @@ internal object OfflineModeDerivation {
     /**
      * The synchronous re-derivation behind `checkNetworkAndAutoDetect`:
      * (manual pref, probe reachability, auto pref, current mode) → next
-     * mode. [reachable] folds the managers' probe verdicts (Android: an
-     * active network with INTERNET + VALIDATED — an unvalidated captive
-     * portal counts as unreachable; desktop: never consulted, see below).
+     * mode. [reachable] folds the managers' probe verdicts (Android: the
+     * active network mapped through the same capability ladder the network
+     * monitor publishes — Online and Local are reachable, only Offline is
+     * not, so an unvalidated captive portal / dead-uplink Wi-Fi with a LAN
+     * server stays online; desktop: never consulted, see below).
      *
      * With [allowAuto] the ladder is manual-wins, then unreachable engages
      * [OfflineMode.OFFLINE_AUTO] only from [OfflineMode.ONLINE] (an engaged

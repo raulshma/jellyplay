@@ -31,7 +31,9 @@ import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
 import com.raulshma.jellyplay.core.ui.components.ExpandableText
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.TopBarStyle
+import com.raulshma.jellyplay.core.ui.animation.UiStateAnimatedContent
 import com.raulshma.jellyplay.core.ui.components.DelayedLoadingScreen
+import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.core.ui.components.DeferredRefreshEffect
 import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator
@@ -272,46 +274,51 @@ fun PersonDetailScreen(
                 }
             },
         ) { padding ->
-        when (state) {
-            is PersonDetailUiState.Error -> {
-                val message = (state as PersonDetailUiState.Error).message
+        // The screen's Loading↔Error↔Success swap through the shared animated
+        // branch primitive (core:ui): crossfade + barely-there scale, snapped
+        // under reduced motion via the motion scheme.
+        val loadingBranchState: JellyPlayViewModel.LoadingState<PersonDetailUiState.Success> =
+            when (val s = state) {
+                is PersonDetailUiState.Error -> JellyPlayViewModel.LoadingState.Error(s.message)
+                PersonDetailUiState.Loading -> JellyPlayViewModel.LoadingState.Loading
+                is PersonDetailUiState.Success -> JellyPlayViewModel.LoadingState.Success(s)
+            }
+        UiStateAnimatedContent(
+            state = loadingBranchState,
+            modifier = Modifier.padding(padding),
+            loading = { DelayedLoadingScreen() },
+            error = { branch ->
                 ErrorScreen(
-                    message = message,
+                    message = branch.message,
                     onRetry = { viewModel.loadPerson(personId) },
-                    modifier = Modifier.padding(padding),
                 )
-            }
-            PersonDetailUiState.Loading -> {
-                DelayedLoadingScreen(modifier = Modifier.padding(padding))
-            }
-            is PersonDetailUiState.Success -> {
-                val success = state as PersonDetailUiState.Success
-                val adaptiveInfo = LocalAdaptiveInfo.current
-                val isTv = LocalTvMode.current
-                val contentPad = adaptiveInfo.contentPadding(isTv)
-                val gridMin = adaptiveInfo.gridMinSize(isTv)
-                val spacing = adaptiveInfo.itemSpacing(isTv)
+            },
+        ) { success ->
+            val adaptiveInfo = LocalAdaptiveInfo.current
+            val isTv = LocalTvMode.current
+            val contentPad = adaptiveInfo.contentPadding(isTv)
+            val gridMin = adaptiveInfo.gridMinSize(isTv)
+            val spacing = adaptiveInfo.itemSpacing(isTv)
 
-                // Filter + sort are client-side over the already-loaded filmography,
-                // so they don't add server round-trips. Defaults surface everything
-                // newest-first, matching how most cast pages read.
-                val filmography = remember(success.filmography) {
-                    success.filmography.sortedByDescending { it.year ?: 0 }
-                }
-
-                PersonFilmography(
-                    filmography = filmography,
-                    biography = success.biography,
-                    getImageUrl = viewModel::getImageUrl,
-                    onItemClick = onItemClick,
-                    onFocusedMediaItem = { item -> quickActionIntake.tvFocusedItem = item },
-                    contentPad = contentPad,
-                    gridMin = gridMin,
-                    spacing = spacing,
-                    topInset = padding.calculateTopPadding() + 16.dp,
-                    bottomInset = padding.calculateBottomPadding() + adaptiveInfo.bottomPadding(isTv),
-                )
+            // Filter + sort are client-side over the already-loaded filmography,
+            // so they don't add server round-trips. Defaults surface everything
+            // newest-first, matching how most cast pages read.
+            val filmography = remember(success.filmography) {
+                success.filmography.sortedByDescending { it.year ?: 0 }
             }
+
+            PersonFilmography(
+                filmography = filmography,
+                biography = success.biography,
+                getImageUrl = viewModel::getImageUrl,
+                onItemClick = onItemClick,
+                onFocusedMediaItem = { item -> quickActionIntake.tvFocusedItem = item },
+                contentPad = contentPad,
+                gridMin = gridMin,
+                spacing = spacing,
+                topInset = padding.calculateTopPadding() + 16.dp,
+                bottomInset = padding.calculateBottomPadding() + adaptiveInfo.bottomPadding(isTv),
+            )
         }
         } // close scaffold content lambda
         } // close CompositionLocalProvider

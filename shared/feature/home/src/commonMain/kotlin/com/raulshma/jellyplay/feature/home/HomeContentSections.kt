@@ -59,6 +59,8 @@ import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.AlertCircle
 import com.composables.icons.tabler.outline.Movie
 import com.composables.icons.tabler.outline.PlayerPlay
+import com.raulshma.jellyplay.core.designsystem.theme.detailEntrance
+import com.raulshma.jellyplay.core.designsystem.theme.rememberDetailEntrance
 import com.raulshma.jellyplay.core.model.ContinueWatchingClickBehavior
 import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionType
@@ -165,6 +167,12 @@ internal data class HomeContentState(
      */
     val rollingDiscoverRowIds: Set<String> = emptySet(),
     /**
+     * Section ids with an edge-pull refresh in flight — the matching online
+     * row's edge spinner spins while its single-row refetch runs (the
+     * refresher's mirror, see [HomeRefreshState.refreshingSectionIds]).
+     */
+    val refreshingSectionIds: Set<String> = emptySet(),
+    /**
      * Non-blocking informational banner (e.g. the implicit-offline
      * "couldn't reach the server — showing your downloads" notice). Null hides it.
      */
@@ -215,6 +223,8 @@ internal data class HomeContentCallbacks(
     val onFocusedMediaItem: (MediaItem) -> Unit = {},
     /** Dice affordance: re-roll one RANDOM-sorted custom discover row (row id). */
     val onRollDiscoverRow: (String) -> Unit = {},
+    /** Edge-pull refresh of ONE section row (section id) — see [HomeRefresher.refreshSectionRow]. */
+    val onRefreshSection: (String) -> Unit = {},
 )
 
 /**
@@ -361,6 +371,11 @@ internal fun HomeContentList(
         // SectionHeader.
         val headerModifier = if (state.homeBackdropEnabled) Modifier else Modifier.background(state.backgroundColor)
 
+        // One shared-scalar reveal for the whole feed on first data arrival
+        // (this branch only composes once sections exist). Cells composed
+        // later during scroll just read the settled 1f and render instantly.
+        val feedEntrance = rememberDetailEntrance()
+
         CompositionLocalProvider(
             com.raulshma.jellyplay.core.ui.components.LocalScrollIdle provides
                 remember(listState) { { !listState.isScrollInProgress } }
@@ -369,6 +384,7 @@ internal fun HomeContentList(
             state = listState,
             modifier = Modifier
                 .fillMaxSize()
+                .detailEntrance(progress = { feedEntrance.value })
                 // Desktop: mouse drag scrolls the page (the wheel already does
                 // via the built-in scrollable; drag is touch-only there).
                 .mouseScroll(listState, Orientation.Vertical),
@@ -510,6 +526,21 @@ internal fun HomeContentList(
                     } else null
                 }
 
+                // Edge-pull refresh wiring: online rows of the refreshable
+                // types only ([isEdgeRefreshableSection] — the same gate the
+                // refresher re-checks, so the gesture and the fetch cannot
+                // disagree). Offline-derived and Seerr rows pass null and
+                // render without the gesture.
+                val edgeRefreshCtx = if (offlineContent == null && isEdgeRefreshableSection(section)) {
+                    EdgeRefreshContext(
+                        sectionId = section.id,
+                        inProgress = section.id in state.refreshingSectionIds,
+                        onRefresh = { callbacks.onRefreshSection(section.id) },
+                    )
+                } else {
+                    null
+                }
+
                 // Which row renders is the chassis dispatch's decision (see
                 // homeRowChassis): the offline-mirror rule (#147) and the
                 // wide-row source split live in one pure, pinned place, so
@@ -518,7 +549,9 @@ internal fun HomeContentList(
                 //
                 // Seerr-sourced custom discover rows bypass the chassis
                 // entirely — they carry TMDB cards with request actions, not
-                // server MediaItems.
+                // server MediaItems. The plugin-sourced rows (PLUGIN_ROW)
+                // bypass it the same way — a mixed list of resolved media
+                // cards and fallback tiles neither poster arm can render.
                 val armContext = HomeRowArmContext(
                     section = section,
                     title = sectionTitle,
@@ -531,9 +564,12 @@ internal fun HomeContentList(
                     currentOfflineById = currentOfflineById,
                     discoverSpacing = discoverSpacing,
                     seerrCardLoadingState = renderInputs.seerrCardLoadingState,
+                    edgeRefresh = edgeRefreshCtx,
                 )
                 if (section.seerrItems.isNotEmpty()) {
                     HomeSectionSeerrRow(ctx = armContext, state = state, callbacks = callbacks, renderInputs = renderInputs)
+                } else if (section.jellyPlayRowEntries.isNotEmpty()) {
+                    HomeSectionJellyPlayRow(ctx = armContext, state = state, callbacks = callbacks, renderInputs = renderInputs)
                 } else when (homeRowChassis(section, offlineContent != null)) {
                     is HomeRowChassis.OfflinePoster -> HomeSectionOfflinePosterRow(ctx = armContext, state = state, callbacks = callbacks, renderInputs = renderInputs)
                     is HomeRowChassis.OfflineWide -> HomeSectionOfflineWideRow(ctx = armContext, state = state, callbacks = callbacks, renderInputs = renderInputs)
@@ -638,6 +674,22 @@ private data class HomeRowArmContext(
     val currentOfflineById: Map<String, OfflineMediaItem>,
     val discoverSpacing: Dp,
     val seerrCardLoadingState: SeerrCardLoadingState,
+    /** Edge-pull refresh wiring; null on every row the gesture is off for. */
+    val edgeRefresh: EdgeRefreshContext?,
+)
+
+/**
+ * The edge-pull refresh wiring for one online row: the section id the
+ * callback targets, whether that row's refetch is in flight (the edge
+ * spinner), and the release callback. Built once per item in
+ * [HomeContentList] — null on every row the gesture is disabled for
+ * ([isEdgeRefreshableSection] excludes the type; the offline feed and Seerr
+ * rows exclude themselves upstream).
+ */
+internal data class EdgeRefreshContext(
+    val sectionId: String,
+    val inProgress: Boolean,
+    val onRefresh: () -> Unit,
 )
 
 /** Seerr-sourced custom discover row (TMDB cards with request actions) — bypasses the row chassis entirely. */
@@ -668,6 +720,50 @@ private fun HomeSectionSeerrRow(
             onSeerrRequest = callbacks.onSeerrRequest,
         )
     }
+}
+
+/**
+ * Plugin-sourced row (PLUGIN_ROW — the companion plugin's seasonal row):
+ * resolved entries as native poster cards, unmatched entries as compact
+ * fallback tiles, dispatched here — ahead of the row chassis — for the same
+ * reason the Seerr arm is: no chassis arm can render the mixed list. Clicks
+ * ride the standard poster-row policy (plugin rows are not resume sections —
+ * [posterRowClick] falls through to the plain click) and the row is
+ * edge-refreshable like the other single-row types.
+ */
+@Composable
+private fun HomeSectionJellyPlayRow(
+    ctx: HomeRowArmContext,
+    state: HomeContentState,
+    callbacks: HomeContentCallbacks,
+    renderInputs: HomeRenderInputs,
+) {
+    val rowItemClick: (MediaItem) -> Unit = remember(
+        ctx.section.type, state.continueWatchingClickBehavior, renderInputs.mediaOnItemClick,
+    ) {
+        posterRowClick(
+            sectionType = ctx.section.type,
+            behavior = state.continueWatchingClickBehavior,
+            toMediaItem = { it },
+            sinks = ctx.resumeSinks,
+            onPlainClick = renderInputs.mediaOnItemClick,
+        )
+    }
+    JellyPlayHomeRow(
+        title = ctx.title,
+        entries = ctx.section.jellyPlayRowEntries,
+        imageUrlBuilder = renderInputs.mediaImageUrlBuilder,
+        fallbackImageUrlBuilder = renderInputs.fallbackImageUrlBuilder,
+        onItemClick = rowItemClick,
+        onPlayClick = renderInputs.mediaOnPlayClick,
+        modifier = ctx.modifier,
+        focusRequester = ctx.focusRequester,
+        onRowFocused = ctx.onRowFocused,
+        clippingEnabled = state.experimentalCardClippingEnabled,
+        onSectionLongClick = ctx.onSectionLongClick,
+        onFocusedItemChange = callbacks.onFocusedMediaItem,
+        edgeRefresh = ctx.edgeRefresh,
+    )
 }
 
 /** Offline-derived poster row: offline originals re-resolved by id, resume-row policy for Continue Reading. */
@@ -846,6 +942,7 @@ private fun HomeSectionOnlineWideRow(
         clippingEnabled = state.experimentalCardClippingEnabled,
         onSectionLongClick = sectionLongClick,
         onFocusedItemChange = callbacks.onFocusedMediaItem,
+        edgeRefresh = ctx.edgeRefresh,
     )
 }
 
@@ -932,6 +1029,7 @@ private fun HomeSectionOnlinePosterRow(
         },
         seriesPosterResolver = remember(callbacks.getImageUrl) { { id: String -> callbacks.getImageUrl(id) } },
         seriesBackdropResolver = remember(renderInputs.onlineBackdropResolver) { { id: String -> renderInputs.onlineBackdropResolver(id) } },
+        edgeRefresh = ctx.edgeRefresh,
     )
 }
 

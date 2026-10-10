@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.syncplay
 
 import com.raulshma.jellyplay.core.data.repository.SyncPlayRepository
+import com.raulshma.jellyplay.core.data.syncplay.SyncPlayEvent
 import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastSlice
 import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastStore
 import com.raulshma.jellyplay.core.model.SyncPlayGroup
@@ -60,7 +61,7 @@ class SyncPlayViewModelTest {
     private lateinit var syncPlayCastStore: SyncPlayCastStore
 
     /** Backing flow behind SyncPlaySession.events so tests can push events. */
-    private lateinit var eventsFlow: MutableSharedFlow<SyncPlaySessionEvent>
+    private lateinit var eventsFlow: MutableSharedFlow<SyncPlayEvent>
 
     /** Backing flow behind SyncPlayCastStore.syncPlayCast. */
     private lateinit var castPrefs: MutableStateFlow<SyncPlayCastSlice>
@@ -459,7 +460,7 @@ class SyncPlayViewModelTest {
         advanceUntilIdle()
         assertNull(viewModel.uiState.value.currentGroup)
 
-        eventsFlow.tryEmit(SyncPlaySessionEvent.PlayQueueUpdate(queueUpdate()))
+        eventsFlow.tryEmit(SyncPlayEvent.PlayQueueUpdate(queueUpdate()))
         advanceUntilIdle()
 
         assertEquals(
@@ -477,7 +478,7 @@ class SyncPlayViewModelTest {
         advanceUntilIdle()
         assertFalse(viewModel.uiState.value.currentGroup!!.isPlaying)
 
-        eventsFlow.tryEmit(SyncPlaySessionEvent.StateUpdate(isPlaying = true, state = "Playing", reason = ""))
+        eventsFlow.tryEmit(SyncPlayEvent.StateUpdate(isPlaying = true, state = "Playing", reason = ""))
         advanceUntilIdle()
 
         assertTrue(viewModel.uiState.value.currentGroup!!.isPlaying)
@@ -491,7 +492,7 @@ class SyncPlayViewModelTest {
         viewModel.joinGroup("g1")
         advanceUntilIdle()
 
-        eventsFlow.tryEmit(SyncPlaySessionEvent.GroupUpdate(groupName = "Party", participantCount = 3))
+        eventsFlow.tryEmit(SyncPlayEvent.GroupUpdate(groupName = "Party", participantCount = 3))
         advanceUntilIdle()
 
         assertEquals("g1", viewModel.uiState.value.currentGroup?.groupId)
@@ -507,7 +508,7 @@ class SyncPlayViewModelTest {
         advanceUntilIdle()
         assertTrue(viewModel.uiState.value.isInGroup)
 
-        eventsFlow.tryEmit(SyncPlaySessionEvent.GroupUpdate(groupName = "", participantCount = 0))
+        eventsFlow.tryEmit(SyncPlayEvent.GroupUpdate(groupName = "", participantCount = 0))
         advanceUntilIdle()
 
         assertFalse(viewModel.uiState.value.isInGroup)
@@ -525,7 +526,7 @@ class SyncPlayViewModelTest {
         // Reconnect "just happened": inside the 5 s grace window.
         every { syncPlaySession.lastReconnectMs } returns System.currentTimeMillis() - 1_000
 
-        eventsFlow.tryEmit(SyncPlaySessionEvent.GroupUpdate(groupName = "", participantCount = 0))
+        eventsFlow.tryEmit(SyncPlayEvent.GroupUpdate(groupName = "", participantCount = 0))
         advanceUntilIdle()
 
         assertTrue(viewModel.uiState.value.isInGroup)
@@ -544,7 +545,7 @@ class SyncPlayViewModelTest {
             viewModel.notifications.collect { received += it }
         }
 
-        eventsFlow.tryEmit(SyncPlaySessionEvent.Notification(message = "server says hi"))
+        eventsFlow.tryEmit(SyncPlayEvent.Notification(message = "server says hi"))
         advanceUntilIdle()
 
         assertEquals(listOf<SyncPlayMessage>(UiMessage.Raw("server says hi")), received)
@@ -570,7 +571,7 @@ class SyncPlayViewModelTest {
         coVerify(exactly = 1) { syncPlaySession.pause() }
         coVerify(exactly = 0) { syncPlaySession.unpause() }
 
-        eventsFlow.tryEmit(SyncPlaySessionEvent.StateUpdate(isPlaying = false, state = "Paused", reason = ""))
+        eventsFlow.tryEmit(SyncPlayEvent.StateUpdate(isPlaying = false, state = "Paused", reason = ""))
         advanceUntilIdle()
         viewModel.togglePlayback()
         advanceUntilIdle()

@@ -7,6 +7,7 @@ import com.raulshma.jellyplay.core.model.SubtitleEdgeType
 import com.raulshma.jellyplay.core.model.SubtitleRenderDefaults
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.resolveAgainst
+import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvUserSubtitleKeys.ASS_OVERRIDE_KEY
 
 /**
  * Pure, testable mapping from [SubtitleStyle] to mpv `sub-*` property key/value
@@ -194,7 +195,7 @@ object MpvStyleMapping {
         add("sub-shadow-color" to values.edgeColor)
         // borderStyle drives the mpv property; BACKGROUND_BOX also folds in backgroundOpacity above.
         add("sub-border-style" to style.borderStyle.toMpvBorderStyle())
-        add("sub-ass-override" to style.assOverride.toMpvAssOverride())
+        add(ASS_OVERRIDE_KEY to style.assOverride.toMpvAssOverride())
         // Apply justification to ASS tracks too. With sub-ass-override active,
         // sub-justify alone only affects SRT/VTT; sub-ass-justify=yes extends
         // the user's alignment to ASS/SSA events. mpvkt pairs these the same way.
@@ -222,7 +223,7 @@ object MpvStyleMapping {
         "sub-border-color" to colorToMpvHex(DEFAULTS.EDGE_COLOR_ARGB, 1f),
         "sub-shadow-color" to colorToMpvHex(DEFAULTS.EDGE_COLOR_ARGB, 1f),
         "sub-border-style" to "outline-and-shadow",
-        "sub-ass-override" to "no",
+        ASS_OVERRIDE_KEY to "no",
         "sub-ass-justify" to "no",
         "sub-bold" to if (DEFAULTS.BOLD) "yes" else "no",
         "sub-italic" to if (DEFAULTS.ITALIC) "yes" else "no",
@@ -238,7 +239,7 @@ object MpvStyleMapping {
      * duplicated the [DEFAULTS] booleans.
      */
     fun defaultInitEntries(): List<Pair<String, String>> {
-        val initKeys = setOf("sub-ass-override", "sub-bold", "sub-italic")
+        val initKeys = setOf(ASS_OVERRIDE_KEY, "sub-bold", "sub-italic")
         return defaultEntries().filter { it.first in initKeys }
     }
 

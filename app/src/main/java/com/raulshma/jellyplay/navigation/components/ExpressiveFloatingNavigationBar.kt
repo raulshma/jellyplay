@@ -33,6 +33,7 @@ import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Search
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
+import com.raulshma.jellyplay.core.ui.feedback.rememberSelectionTickHaptic
 import com.raulshma.jellyplay.navigation.NavIcon
 import com.raulshma.jellyplay.core.ui.navigation.Route
 
@@ -87,6 +88,10 @@ fun ExpressiveFloatingNavigationBar(
                 ) {
                     mainRoutes.forEach { (route, label) ->
                         androidx.compose.runtime.key(route) {
+                            // Selection tick on tab pick (gated by the haptics
+                            // preference); confirm-grade would overstate a
+                            // tab switch.
+                            val selectionTick = rememberSelectionTickHaptic()
                             val selected = route == currentTopLevel
                             val activeContainerColor = if (selected) {
                                 MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.85f)
@@ -117,7 +122,10 @@ fun ExpressiveFloatingNavigationBar(
                                     .clickable(
                                         interactionSource = remember { MutableInteractionSource() },
                                         indication = null,
-                                        onClick = { onNavigate(route) }
+                                        onClick = {
+                                            if (route != currentTopLevel) selectionTick()
+                                            onNavigate(route)
+                                        }
                                     )
                             ) {
                                 Row(

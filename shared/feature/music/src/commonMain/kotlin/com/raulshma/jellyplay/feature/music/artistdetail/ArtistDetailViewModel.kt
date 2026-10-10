@@ -2,8 +2,8 @@ package com.raulshma.jellyplay.feature.music.artistdetail
 
 import com.raulshma.jellyplay.core.data.playback.InstantMixState
 import com.raulshma.jellyplay.core.data.playback.InstantMixStateHolder
+import com.raulshma.jellyplay.core.data.playback.toInstantMixOutcome
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
-import com.raulshma.jellyplay.core.data.repository.MusicCatalogue
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.ui.viewmodel.DeferredFetchCoordinator
@@ -12,7 +12,6 @@ import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.feature.music.MixErrorMessage
 import com.raulshma.jellyplay.feature.music.toMixErrorMessage
 import com.raulshma.jellyplay.feature.music.MusicQueuePlayer
-import com.raulshma.jellyplay.feature.music.toInstantMixOutcome
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.StateFlow
@@ -27,10 +26,10 @@ private data class ArtistContent(
 class ArtistDetailViewModel(
     /**
      * The detail read + user-data feed only — the artist's album row rides
-     * [musicCatalogue], the repository's narrow music family seam.
+     * [libraryApiClient], the catalogue's uncached client read.
      */
     private val mediaRepository: MediaRepository,
-    private val musicCatalogue: MusicCatalogue,
+    private val libraryApiClient: com.raulshma.jellyplay.core.network.api.LibraryApiClient,
     private val imageUrlProvider: ImageUrlProvider,
     private val audioQueueFacade: MusicQueuePlayer,
 ) : JellyPlayViewModel() {
@@ -140,7 +139,7 @@ class ArtistDetailViewModel(
     private suspend fun fetchArtistData(artistId: String, force: Boolean): ArtistContent {
         return coroutineScope {
             val detailDeferred = async { mediaRepository.getMediaDetail(artistId, force = force) }
-            val albumsDeferred = async { musicCatalogue.getArtistAlbums(artistId, limit = 50) }
+            val albumsDeferred = async { libraryApiClient.getArtistAlbums(artistId, limit = 50) }
             val detailResult = detailDeferred.await()
             val albumsResult = albumsDeferred.await()
 

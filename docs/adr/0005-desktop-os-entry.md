@@ -1,7 +1,8 @@
 # 0005 — Desktop single-instance guard; no OS protocol registration in v1
 
 - **Status:** accepted (guard landed 2026-10-01; the registration decision is
-  recorded-as-rejected for v1)
+  recorded-as-rejected for v1); **amended 2026-10-04 — contended launches now
+  hand off open-with links** (see Amendment below)
 - **Date:** 2026-10-01
 - **Scope:** `apps/desktop`
 
@@ -42,3 +43,16 @@ undocumented, therefore indistinguishable from an oversight.
   of `Main.kt`.
 - If window-activation handoff lands later, it replaces the exit-0 path and
   this ADR gets an amendment, not a rewrite.
+
+## Amendment (2026-10-04) — contended launches hand off open-with links
+
+Commit 6b463a9c3 (desktop open-with links) added a lock-aware handoff: a
+contended second launch whose argv carries parsable links forwards them to
+the running instance through `DesktopOpenRequestChannel.enqueue`
+(`apps/desktop/.../Main.kt`, after the guard acquires) and then exits, so
+`jellyplay://`/https/file opens reach the live window instead of dying with
+the second process. A plain contended launch with no link argv still prints
+the message and exits 0 — decision 1 is unchanged on that path, and window
+activation on contention remains out of scope. Decision 2 also stands: no OS
+protocol/file registration was added; the handoff serves the in-process link
+grammar on desktop.

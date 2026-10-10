@@ -2,9 +2,9 @@ package com.raulshma.jellyplay.feature.player.live
 
 import com.raulshma.jellyplay.core.data.playback.PipController
 import com.raulshma.jellyplay.core.data.playback.PlaybackIdentity
-import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
+import com.raulshma.jellyplay.core.network.api.LiveTvApiClient
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
-import com.raulshma.jellyplay.core.data.util.EpochMillisSource
+import com.raulshma.jellyplay.core.model.EpochMillisSource
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackSlice
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
 import com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeState
@@ -15,6 +15,7 @@ import com.raulshma.jellyplay.core.model.LiveStreamOption
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.LiveTvProgram
 import com.raulshma.jellyplay.core.model.PlayMethod
+import com.raulshma.jellyplay.core.model.PlaybackResolution
 import com.raulshma.jellyplay.core.model.ResolvedPlayback
 import com.raulshma.jellyplay.feature.player.live.data.LastChannelStore
 import com.raulshma.jellyplay.feature.player.live.engine.LiveEngineFactory
@@ -67,9 +68,11 @@ import com.raulshma.jellyplay.core.ui.message.UiMessage
  *  1. the 20 s buffering watchdog, on a fully virtual clock (the VM's
      *     `viewModelScope` runs on the injected [TestCoroutineScheduler], so the timeout
  *     fires via `advanceTimeBy` — no real waiting);
- *  2. the mute toggle's pre-mute volume capture/restore contract, including
- *     the stop() reset that must never restore a stale volume onto a fresh
- *     engine;
+ *  2. the mute toggle's routing onto the engine's real `setMuted` (the
+ *     shared volume template's capture/restore semantics live on
+ *     [com.raulshma.jellyplay.feature.player.live.engine.LiveMuteController],
+ *     pinned by LiveMuteControllerTest), including the stop() release that
+ *     makes a post-stop toggle a no-op;
  *  3. the in-player recording actions and their one-shot [messages] feedback
  *     (success / failure / no-current-program / no-timer guards);
  *  4. the engine-error transcode fallback (re-resolve with TRANSCODE, engine
@@ -90,7 +93,7 @@ class LiveTvPlayerViewModelGapsTest {
      */
     private val scheduler = TestCoroutineScheduler()
 
-    private lateinit var liveTvRepo: LiveTvRepository
+    private lateinit var liveTvRepo: LiveTvApiClient
     private lateinit var playbackRepo: PlaybackRepository
     private lateinit var playbackIdentity: PlaybackIdentity
     private lateinit var appRuntimeStateStore: AppRuntimeStateStore
@@ -166,13 +169,15 @@ class LiveTvPlayerViewModelGapsTest {
         url: String = "https://srv/Videos/x/stream",
     ) {
         coEvery {
-            playbackRepo.resolvePlayback(any(), any(), any(), any(), any(), any(), any(), any(), any())
-        } returns ResolvedPlayback(
-            mediaSourceId = "src",
-            streamUrl = url,
-            playMethod = method,
-            playSessionId = "psid",
-            maxStreamingBitrate = null,
+            playbackRepo.resolvePlayable(any())
+        } returns PlaybackResolution.Resolved(
+            ResolvedPlayback(
+                mediaSourceId = "src",
+                streamUrl = url,
+                playMethod = method,
+                playSessionId = "psid",
+                maxStreamingBitrate = null,
+            ),
         )
     }
 
@@ -285,80 +290,77 @@ class LiveTvPlayerViewModelGapsTest {
         assertTrue(vm.state.value.isBuffering)
     }
 
-    // ── 2. Mute toggle (pre-mute volume contract) ────────────────────────────
+    // ── 2. Mute toggle (real engine mute routing) ────────────────────────────
 
-    /** Recording [LivePlayerAudio] fake: captures bind/lifecycle + volume calls. */
+    /** Recording [LivePlayerAudio] fake: captures bind/lifecycle calls. */
     private class FakeAudio : LivePlayerAudio {
         var boundOwner: Any? = null
-        val volumeWrites = mutableListOf<Float>()
-        var currentVolume: Float? = 0.7f
         var engineCreatedCount = 0
         var releasedCount = 0
 
         override fun bind(owner: LiveTvPlayerViewModel) { boundOwner = owner }
-        override fun playerVolume(): Float? = currentVolume
-        override fun setPlayerVolume(volume: Float) {
-            volumeWrites.add(volume)
-            currentVolume = volume
-        }
+        override fun playerVolume(): Float? = 0.7f
+        override fun setPlayerVolume(volume: Float) {}
         override fun onEngineCreated() { engineCreatedCount++ }
         override fun onReleased() { releasedCount++ }
     }
 
     @Test
-    fun `toggleMute captures pre-mute volume and restores it exactly on unmute`() = runTest {
-        val audio = FakeAudio()
-        val vm = tune(audio = audio)
+    fun `toggleMute routes real mute through the engine and mirrors state`() = runTest {
+        val muteWrites = mutableListOf<Boolean>()
+        every { fakeEngine.setMuted(any()) } answers { muteWrites.add(firstArg()) }
+        val vm = tune()
 
         vm.onEvent(LiveTvPlayerUiEvent.ToggleMute)
         assertTrue(vm.state.value.isMuted)
-        assertEquals(listOf(0.0f), audio.volumeWrites, "mute writes volume 0")
 
         vm.onEvent(LiveTvPlayerUiEvent.ToggleMute)
         assertFalse(vm.state.value.isMuted)
-        assertEquals(listOf(0.0f, 0.7f), audio.volumeWrites, "unmute restores the captured 0.7f, not a default")
+        assertEquals(
+            listOf(true, false),
+            muteWrites,
+            "mute rides the engine's real setMuted, not a volume-0 write",
+        )
     }
 
     @Test
-    fun `toggleMute with no player volume is a no-op`() = runTest {
-        val audio = FakeAudio().apply { currentVolume = null }
-        val vm = tune(audio = audio)
+    fun `toggleMute without an engine is a no-op`() = runTest {
+        val muteWrites = mutableListOf<Boolean>()
+        every { fakeEngine.setMuted(any()) } answers { muteWrites.add(firstArg()) }
+        val vm = createVm() // never tuned — no engine exists yet
 
         vm.onEvent(LiveTvPlayerUiEvent.ToggleMute)
 
         assertFalse(vm.state.value.isMuted)
-        assertTrue(audio.volumeWrites.isEmpty())
+        assertTrue(muteWrites.isEmpty(), "no engine — no mute write may land")
     }
 
     @Test
-    fun `toggleMute without an audio seam never crashes`() = runTest {
-        val vm = tune() // audio = null (the jvmTest default)
+    fun `toggleMute without an audio seam mutes through the engine`() = runTest {
+        val vm = tune() // audio = null (the jvmTest default) — mute no longer needs the seam
+
         vm.onEvent(LiveTvPlayerUiEvent.ToggleMute)
-        assertFalse(vm.state.value.isMuted)
+
+        assertTrue(vm.state.value.isMuted)
+        verify { fakeEngine.setMuted(true) }
     }
 
     @Test
-    fun `stop clears the pre-mute volume so a stale level never lands on a fresh engine`() = runTest {
+    fun `stop releases the engine so a post-stop toggle is a no-op`() = runTest {
+        val muteWrites = mutableListOf<Boolean>()
+        every { fakeEngine.setMuted(any()) } answers { muteWrites.add(firstArg()) }
         val audio = FakeAudio()
         val vm = tune(audio = audio)
-        vm.onEvent(LiveTvPlayerUiEvent.ToggleMute) // captures 0.7f, writes 0f
-        assertEquals(listOf(0.0f), audio.volumeWrites)
+        vm.onEvent(LiveTvPlayerUiEvent.ToggleMute)
+        assertEquals(listOf(true), muteWrites)
 
         vm.stop()
         assertEquals(1, audio.releasedCount, "audio lifecycle torn down before the engine release")
 
-        // Fresh entry: a new player reports its own level (0.5f). Muting must
-        // capture 0.5f — the 0.7f captured before stop() must be gone.
-        audio.currentVolume = 0.5f
-        audio.volumeWrites.clear()
         vm.onEvent(LiveTvPlayerUiEvent.ToggleMute)
-        assertTrue(vm.state.value.isMuted)
-        vm.onEvent(LiveTvPlayerUiEvent.ToggleMute)
-        assertEquals(
-            listOf(0.0f, 0.5f),
-            audio.volumeWrites,
-            "unmute must restore the fresh engine's level, not the pre-stop 0.7f",
-        )
+
+        assertEquals(listOf(true), muteWrites, "the released engine is gone — no stray mute write")
+        assertFalse(vm.state.value.isMuted)
     }
 
     @Test
@@ -587,13 +589,11 @@ class LiveTvPlayerViewModelGapsTest {
     @Test
     fun `transcode fallback failure surfaces the fallback error with the channel name`() = runTest {
         val vm = tune()
-        // Both resolution paths fail under TRANSCODE.
+        // The whole resolution misses under TRANSCODE (resolve verdict and
+        // the forced fallback both).
         coEvery {
-            playbackRepo.resolvePlayback(any(), any(), any(), any(), any(), any(), any(), any(), any())
-        } returns null
-        coEvery {
-            playbackRepo.fetchPlaybackInfo(any(), any(), any(), any(), any(), any(), any(), any(), any())
-        } returns Result.failure(RuntimeException("no transcode"))
+            playbackRepo.resolvePlayable(any())
+        } returns PlaybackResolution.Unplayable
 
         // The engine captured its originating error detail while holding the
         // BUFFERING state through the fallback.

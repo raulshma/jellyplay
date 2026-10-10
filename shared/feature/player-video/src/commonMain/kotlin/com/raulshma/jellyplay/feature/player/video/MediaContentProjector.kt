@@ -1,11 +1,16 @@
 package com.raulshma.jellyplay.feature.player.video
 
+import com.raulshma.jellyplay.core.data.repository.LyricsRepository
+import com.raulshma.jellyplay.core.datastore.volume.VolumeProfileStore
+import com.raulshma.jellyplay.core.model.ChapterInfo
 import com.raulshma.jellyplay.core.model.LyricsLine
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaSource
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.MediaStreamSelection
+import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import com.raulshma.jellyplay.feature.player.video.state.MediaContentState
+import kotlinx.coroutines.CoroutineScope
 
 /**
  * Owns the [MediaContentState] slice's writes — the single writer seam the
@@ -18,6 +23,16 @@ import com.raulshma.jellyplay.feature.player.video.state.MediaContentState
  * It is also the fold target of the session-state collector's residue
  * (the title/subtitle mirror, the stored-selection seed and the
  * item/series-change choreography) — see [onSessionState].
+ *
+ * **Owns the detail-application cluster** ([MediaDetailProjection], the
+ * former construction-cycle sibling): a fresh or refreshed
+ * [MediaDetail] lands here first and fans out through the projection the
+ * projector builds inside itself — detail holder → chapters → media slice →
+ * episode adoption → companion lyrics → volume memory — so the former
+ * projector↔projection mutual construction reference flows ONE way
+ * (projection → projector callbacks; the projector is constructed first and
+ * hands its own methods down). External consumers reach the cluster through
+ * the [applyDetail] / [applyRefreshedDetail] forwarders.
  *
  * Compose-free and ViewModel-free: the slice write flows through the
  * [updateMedia] seam and the VM-bound collaborators stay behind constructor
@@ -42,8 +57,6 @@ import com.raulshma.jellyplay.feature.player.video.state.MediaContentState
 internal class MediaContentProjector(
     /** The media-slice write seam (the VM's `_uiState` mirror update). */
     private val updateMedia: ((MediaContentState) -> MediaContentState) -> Unit,
-    /** Full detail apply (slice write + chapters + navigator + lyrics fetch). */
-    private val applyDetail: (MediaDetail) -> Unit,
     /** Session-manager re-sync with a refreshed detail ([PlayerSessionManager.applyRefreshedDetail]). */
     private val applyRefreshedDetail: (detail: MediaDetail, attachToEngine: Boolean) -> Unit,
     /** Resolves the playing version's source for a refreshed detail ([PlayerSessionManager.matchedMediaSource]). */
@@ -62,11 +75,65 @@ internal class MediaContentProjector(
     private val onSessionItemChanged: suspend (itemId: String?, seriesId: String?) -> Unit,
     /** Launches the render poke fire-and-forget on the VM scope — never awaited, exactly like the inline collector's `launch`. */
     private val launchAsync: (block: suspend () -> Unit) -> Unit,
+    // ── The owned detail-application cluster's construction inputs ──────────
+    //    (passed through to the [MediaDetailProjection] this projector builds;
+    //    see the class KDoc for why the cluster lives here).
+    private val scope: CoroutineScope,
+    private val lyricsRepository: LyricsRepository,
+    /** Desktop-only volume memory reads/writes (the session's `stores.volumeProfile`). */
+    private val volumeProfileStore: VolumeProfileStore,
+    /** Writes the session's `@Volatile` detail holder (the getDetail seam's source). */
+    private val setDetail: (MediaDetail) -> Unit,
+    /** Chapters are a top-level uiState field — the projection's one direct state write. */
+    private val setChapters: (List<ChapterInfo>) -> Unit,
+    /** The media slice's artwork URL (the `getImageUrl(id, 400)` seam). */
+    private val artworkUrl: (itemId: String) -> String,
+    /** The episode-slice adoption ([EpisodeContinuationController.adoptSeasonOf]). */
+    private val adoptSeasonOf: (MediaDetail) -> Unit,
+    /** The active engine (volume-memory restore + capture arm). */
+    private val getEngine: () -> MediaEngine?,
 ) {
+
+    /**
+     * The owned detail-application cluster (see the class KDoc): constructed
+     * with the projector's own fold methods handed down directly — the
+     * dependency flows one way, projection → projector.
+     */
+    private val detailProjection = MediaDetailProjection(
+        scope = scope,
+        lyricsRepository = lyricsRepository,
+        volumeProfileStore = volumeProfileStore,
+        setDetail = setDetail,
+        setChapters = setChapters,
+        onDetail = { detail, url -> onDetail(detail, url) },
+        artworkUrl = artworkUrl,
+        adoptSeasonOf = adoptSeasonOf,
+        onLyrics = { lines -> onLyrics(lines) },
+        onDetailRefreshed = { refresh -> onDetailRefreshed(refresh) },
+        getEngine = getEngine,
+    )
 
     /** The collector-fold residue: the last item/series ids seen by [onSessionState] (VM lifetime, never reset per item). */
     private var lastItemId: String? = null
     private var lastSeriesId: String? = null
+
+    /**
+     * Full detail apply through the owned projection (slice write + chapters +
+     * navigator + lyrics fetch + volume memory) — the load spine's
+     * `applyMediaDetail` hook body.
+     */
+    fun applyDetail(detail: MediaDetail) {
+        detailProjection.applyDetail(detail)
+    }
+
+    /**
+     * The refreshed-detail re-sync through the owned projection — the
+     * subtitle download/upload path ([SubtitleManager]'s
+     * `onMediaDetailRefreshed` seam).
+     */
+    fun applyRefreshedDetail(refresh: MediaDetailRefresh) {
+        detailProjection.applyRefreshedDetail(refresh)
+    }
 
     /** Mirrors the resolved stream URL once the load spine resolves it. */
     fun onStreamUrl(url: String) {

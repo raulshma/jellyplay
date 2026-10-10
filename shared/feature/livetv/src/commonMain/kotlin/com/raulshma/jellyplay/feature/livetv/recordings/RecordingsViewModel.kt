@@ -1,7 +1,8 @@
 package com.raulshma.jellyplay.feature.livetv.recordings
 
 import androidx.compose.runtime.Immutable
-import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
+import com.raulshma.jellyplay.core.network.api.LiveTvApiClient
+import com.raulshma.jellyplay.core.network.api.MediaInfoApiClient
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.LiveTvRecording
 import com.raulshma.jellyplay.core.ui.message.UiMessage
@@ -27,7 +28,12 @@ data class RecordingsUiState(
  * Jellyfin's web client no longer exposes them.)
  */
 class RecordingsViewModel(
-    private val mediaRepository: LiveTvRepository,
+    private val mediaRepository: LiveTvApiClient,
+    /**
+     * Recording deletes ride the generic item delete (Jellyfin has no
+     * dedicated LiveTv recording-delete route), which MediaInfoApiClient owns.
+     */
+    private val mediaInfoApiClient: MediaInfoApiClient,
     private val imageUrlProvider: ImageUrlProvider,
 ) : JellyPlayViewModel() {
 
@@ -93,7 +99,7 @@ class RecordingsViewModel(
             _uiState.update { it.copy(isDeleting = true) }
             // Cancel the series timer (best-effort) if one is attached.
             recording.seriesTimerId?.let { mediaRepository.cancelSeriesTimer(it) }
-            val result = mediaRepository.deleteRecording(recording.id)
+            val result = mediaInfoApiClient.deleteItem(recording.id)
             if (result.isSuccess) {
                 _uiState.update { it.copy(isDeleting = false, error = null) }
                 deleteConfirmation.clear()

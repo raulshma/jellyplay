@@ -422,4 +422,49 @@
     <string name="admin_backups_reconnecting">服务器已恢复——正在重新连接…</string>
     <string name="admin_backups_restore_complete">恢复完成——已重新连接到服务器。</string>
     <string name="admin_backups_restore_server_unreachable">恢复后服务器未恢复运行。请确认其正在运行，然后重新登录。</string>
+
+    <!-- JellyPlay companion plugin: active streams monitor -->
+    <string name="jellyplay_tr_title">活动流</string>
+    <string name="jellyplay_tr_empty">没有活动的流</string>
+    <string name="jellyplay_tr_unknown">未知</string>
+    <string name="jellyplay_tr_paused">已暂停</string>
+    <string name="jellyplay_tr_play_direct">直接播放</string>
+    <string name="jellyplay_tr_play_transcode">转码</string>
+    <string name="jellyplay_tr_cancel">取消流</string>
+    <string name="jellyplay_tr_cancel_title">取消该流？</string>
+    <string name="jellyplay_tr_cancel_body">这将停止 %1$s 在 %3$s 上对“%2$s”的流。客户端将结束播放。</string>
+    <string name="jellyplay_tr_unavailable_title">活动流不可用</string>
+    <string name="jellyplay_tr_unavailable_body">此服务器上没有 JellyPlay 配套插件，或未提供转码功能。</string>
+
+    <!-- JellyPlay companion plugin: broadcast composer -->
+    <string name="jellyplay_bc_title">发送广播</string>
+    <string name="jellyplay_bc_field_title">标题</string>
+    <string name="jellyplay_bc_field_body">消息</string>
+    <string name="jellyplay_bc_field_url">链接 URL（可选）</string>
+    <string name="jellyplay_bc_url_invalid">请输入有效的 http(s) 链接</string>
+    <string name="jellyplay_bc_send">发送</string>
+    <string name="jellyplay_bc_sent">广播已发送</string>
+    <string name="jellyplay_bc_failed">广播发送失败。请重试。</string>
+
+    <!-- JellyPlay companion plugin: analytics dashboard -->
+    <string name="jellyplay_an_title">统计</string>
+    <string name="jellyplay_an_unavailable_title">统计不可用</string>
+    <string name="jellyplay_an_unavailable_body">此服务器上没有 JellyPlay 配套插件，或未提供统计功能。</string>
+    <string name="jellyplay_an_degraded_title">统计不可用</string>
+    <string name="jellyplay_an_degraded_body">此服务器不提供统计功能。服务器上的 JellyPlay 插件未提供该功能。</string>
+    <string name="jellyplay_an_empty">该时间段内还没有播放记录。</string>
+    <string name="jellyplay_an_days_7">7 天</string>
+    <string name="jellyplay_an_days_30">30 天</string>
+    <string name="jellyplay_an_days_90">90 天</string>
+    <string name="jellyplay_an_plays">播放</string>
+    <string name="jellyplay_an_totals_watch_time">观看时长</string>
+    <string name="jellyplay_an_totals_transcode_time">转码时长</string>
+    <string name="jellyplay_an_totals_users">独立用户</string>
+    <string name="jellyplay_an_totals_items">独立条目</string>
+    <string name="jellyplay_an_section_chart">每日播放</string>
+    <string name="jellyplay_an_section_users">按用户</string>
+    <string name="jellyplay_an_section_top_items">热门条目</string>
+    <string name="jellyplay_an_section_sessions">最近会话</string>
+    <string name="jellyplay_an_sessions_empty">没有最近的会话</string>
+    <string name="jellyplay_an_filter_all">所有用户</string>
 </resources>

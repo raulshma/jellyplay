@@ -280,4 +280,130 @@
          for PosterCard/WideMediaCard). -->
     <string name="core_ui_card_percent_complete">已完成 %1$d%</string>
     <string name="core_ui_card_time_left">剩余 %1$s</string>
+
+    <!-- SubtitleFreeFormColorPickerDialog (matches the default-locale grouping) -->
+    <string name="core_ui_color_picker_title">选择颜色</string>
+    <string name="core_ui_color_hex">十六进制</string>
+    <string name="core_ui_color_hue">色相</string>
+    <string name="core_ui_color_saturation">饱和度</string>
+    <string name="core_ui_color_value">亮度</string>
+    <string name="core_ui_color_invalid_hex">无效的十六进制颜色</string>
+    <string name="core_ui_color_apply">应用</string>
+    <string name="core_ui_color_cancel">取消</string>
+
+    <!-- PreferenceEnumNames enum labels (gesture mode, orientation, gesture
+         indicator side, check frequency) + player input mapping labels
+         (actions / patterns / keys / D-pad), matching the default-locale
+         grouping. -->
+    <string name="core_gesture_mode_all">所有手势</string>
+    <string name="core_gesture_mode_tap_only">仅点按</string>
+    <string name="core_gesture_mode_none">关闭</string>
+    <string name="core_orientation_sensor_landscape">横屏</string>
+    <string name="core_orientation_sensor_portrait">竖屏</string>
+    <string name="core_orientation_sensor">自动旋转</string>
+    <string name="core_orientation_locked_landscape">横屏（锁定）</string>
+    <string name="core_orientation_locked_portrait">竖屏（锁定）</string>
+    <string name="core_gesture_indicator_opposite">另一侧</string>
+    <string name="core_gesture_indicator_same">同侧</string>
+    <string name="core_check_frequency_every_hour">每小时</string>
+    <string name="core_check_frequency_every_3_hours">每 3 小时</string>
+    <string name="core_check_frequency_every_6_hours">每 6 小时</string>
+    <string name="core_check_frequency_every_12_hours">每 12 小时</string>
+    <string name="core_check_frequency_every_24_hours">每天</string>
+    <string name="core_input_action_toggle_play_pause">播放 / 暂停</string>
+    <string name="core_input_action_play">播放</string>
+    <string name="core_input_action_pause">暂停</string>
+    <string name="core_input_action_seek_forward">快进</string>
+    <string name="core_input_action_seek_back">快退</string>
+    <string name="core_input_action_toggle_controls">切换控制</string>
+    <string name="core_input_action_back_or_hide">返回 / 隐藏控制</string>
+    <string name="core_input_action_exit_player">退出播放器</string>
+    <string name="core_input_action_volume_up">音量增大</string>
+    <string name="core_input_action_volume_down">音量减小</string>
+    <string name="core_input_action_toggle_mute">切换静音</string>
+    <string name="core_input_action_brightness_up">亮度调高</string>
+    <string name="core_input_action_brightness_down">亮度调低</string>
+    <string name="core_input_action_swipe_seek">快进/快退（拖动）</string>
+    <string name="core_input_action_swipe_volume">音量（拖动）</string>
+    <string name="core_input_action_swipe_brightness">亮度（拖动）</string>
+    <string name="core_input_action_toggle_subtitles">切换字幕</string>
+    <string name="core_input_action_lock_controls">锁定控制</string>
+    <string name="core_input_action_sub_delay_decrease">字幕延迟 -</string>
+    <string name="core_input_action_sub_delay_increase">字幕延迟 +</string>
+    <string name="core_input_action_audio_delay_decrease">音频延迟 -</string>
+    <string name="core_input_action_audio_delay_increase">音频延迟 +</string>
+    <string name="core_input_action_cycle_speed">切换播放速度</string>
+    <string name="core_input_action_hold_speed">长按加速</string>
+    <string name="core_input_action_zoom">双指缩放</string>
+    <string name="core_input_action_toggle_orientation">旋转屏幕</string>
+    <string name="core_input_action_screenshot">截图</string>
+    <string name="core_input_action_next_episode">下一集</string>
+    <string name="core_input_action_previous_episode">上一集</string>
+    <string name="core_input_action_none">未绑定</string>
+    <string name="core_input_pattern_tap">单次点按</string>
+    <string name="core_input_pattern_double_tap_left">左侧双击</string>
+    <string name="core_input_pattern_double_tap_center">中央双击</string>
+    <string name="core_input_pattern_double_tap_right">右侧双击</string>
+    <string name="core_input_pattern_double_tap_hold_left">左侧双击后长按</string>
+    <string name="core_input_pattern_double_tap_hold_right">右侧双击后长按</string>
+    <string name="core_input_pattern_long_press">长按</string>
+    <string name="core_input_pattern_vertical_swipe_left">左侧上下滑动（%1$s）</string>
+    <string name="core_input_pattern_vertical_swipe_right">右侧上下滑动（%1$s）</string>
+    <string name="core_input_action_short_brightness">亮度</string>
+    <string name="core_input_action_short_volume">音量</string>
+    <string name="core_input_pattern_horizontal_swipe">左右滑动（快进/快退）</string>
+    <string name="core_input_edge_left">边缘滑动（左）</string>
+    <string name="core_input_edge_right">边缘滑动（右）</string>
+    <string name="core_input_pattern_pinch">双指捏合</string>
+    <string name="core_input_pattern_wheel_volume">滚轮</string>
+    <string name="core_input_pattern_wheel_seek">滚轮（Shift / 横向）</string>
+    <string name="core_input_key_ctrl">Ctrl</string>
+    <string name="core_input_key_shift">Shift</string>
+    <string name="core_input_key_alt">Alt</string>
+    <string name="core_input_key_space">空格</string>
+    <string name="core_input_key_k">K</string>
+    <string name="core_input_key_m">M</string>
+    <string name="core_input_key_v">V</string>
+    <string name="core_input_key_f">F</string>
+    <string name="core_input_key_g">G</string>
+    <string name="core_input_key_h">H</string>
+    <string name="core_input_key_j">J</string>
+    <string name="core_input_key_l">L</string>
+    <string name="core_input_key_bracket_left">[</string>
+    <string name="core_input_key_bracket_right">]</string>
+    <string name="core_input_key_f1">F1</string>
+    <string name="core_input_key_f2">F2</string>
+    <string name="core_input_key_f3">F3</string>
+    <string name="core_input_key_f4">F4</string>
+    <string name="core_input_key_escape">Esc</string>
+    <string name="core_input_key_back">返回</string>
+    <string name="core_input_key_dpad_left">左箭头</string>
+    <string name="core_input_key_dpad_right">右箭头</string>
+    <string name="core_input_key_dpad_up">上箭头</string>
+    <string name="core_input_key_dpad_down">下箭头</string>
+    <string name="core_input_key_volume_up">音量增大键</string>
+    <string name="core_input_key_volume_down">音量减小键</string>
+    <string name="core_input_key_page_up">Page up</string>
+    <string name="core_input_key_page_down">Page down</string>
+    <string name="core_input_key_home">Home</string>
+    <string name="core_input_key_end">End</string>
+    <string name="core_input_key_media_play">媒体播放</string>
+    <string name="core_input_key_media_pause">媒体暂停</string>
+    <string name="core_input_key_media_play_pause">媒体播放/暂停</string>
+    <string name="core_input_key_media_ff">媒体快进</string>
+    <string name="core_input_key_media_rew">媒体快退</string>
+    <string name="core_input_dpad_left">左方向键</string>
+    <string name="core_input_dpad_right">右方向键</string>
+    <string name="core_input_dpad_up">上方向键</string>
+    <string name="core_input_dpad_down">下方向键</string>
+    <string name="core_input_dpad_select">方向键中央</string>
+    <string name="core_input_dpad_back">返回</string>
+    <string name="core_input_dpad_play_pause">播放/暂停</string>
+    <string name="core_input_dpad_fast_forward">快进</string>
+    <string name="core_input_dpad_rewind">快退</string>
+
+    <!-- The JellyPlay sync / details-badges / player-notice strings
+         (ADR 0010 wave), translated together with the default file. -->
+    <string name="core_action_hide_from_continue_watching">从“继续观看”中移除</string>
+    <string name="core_action_show_from_continue_watching">在“继续观看”中显示</string>
 </resources>

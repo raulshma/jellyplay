@@ -72,6 +72,11 @@
     <string name="audio_sleep_timer_title">スリープタイマー</string>
     <string name="audio_sleep_timer_end_of_episode">エピソードの終わりまで</string>
     <string name="audio_sleep_timer_duration">時間</string>
+    <string name="audio_sleep_timer_stops_at">%1$s に停止</string>
+    <string name="audio_sleep_timer_cancel_title">スリープタイマーをキャンセルしますか？</string>
+    <string name="audio_sleep_timer_cancel_message">タイマーの残りはまだ %1$s です。キャンセルしますか？</string>
+    <string name="audio_cancel_timer">タイマーをキャンセル</string>
+    <string name="audio_sleep_timer_keep">タイマーを継続</string>
 
     <!-- Equalizer -->
     <string name="audio_equalizer_title">イコライザー</string>
@@ -97,6 +102,11 @@
     <string name="audio_queue_title">キュー</string>
     <string name="audio_queue_remove">キューから削除</string>
     <string name="audio_queue_position">%1$d / %2$d</string>
+
+    <!-- Queue drag-reorder -->
+    <string name="audio_queue_reorder_handle">長押しで並べ替え</string>
+    <string name="audio_queue_move_up">上へ移動</string>
+    <string name="audio_queue_move_down">下へ移動</string>
 
     <!-- Add to playlist picker -->
     <string name="audio_playlist_picker_title">プレイリストに追加</string>

@@ -20,4 +20,16 @@
     <!-- Summary notification channel -->
     <string name="notification_channel_summary">新着メディア</string>
     <string name="notification_channel_summary_desc">新着メディア通知のまとめ</string>
+
+    <!-- New-episodes channel (opt-in routing for episode items) -->
+    <string name="notification_channel_new_episodes">新エピソード</string>
+    <string name="notification_channel_new_episodes_desc">新しく追加されたエピソードの通知</string>
+
+    <!-- Companion-plugin live new-media push (ADR 0010, single-event tray post) -->
+    <string name="notification_plugin_new_media_subtitle">サーバーに新しいメディアが追加されました</string>
+    <string name="notification_plugin_new_episodes_count">%1$d件の新着エピソード</string>
+
+    <!-- Companion-plugin UnifiedPush message (the push wave: broadcast/message
+         kinds — new-media rides the typed path above). -->
+    <string name="notification_plugin_push_title">JellyPlay サーバー</string>
 </resources>

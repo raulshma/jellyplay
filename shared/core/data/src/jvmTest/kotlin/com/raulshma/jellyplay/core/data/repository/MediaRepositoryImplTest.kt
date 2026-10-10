@@ -1,7 +1,6 @@
 package com.raulshma.jellyplay.core.data.repository
 
 import com.raulshma.jellyplay.core.database.dao.HomeSectionCacheDao
-import com.raulshma.jellyplay.core.model.CollectionSummary
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
@@ -11,7 +10,7 @@ import com.raulshma.jellyplay.core.network.realtime.UserDataRealtimeChannel
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueImpl
 import com.raulshma.jellyplay.core.data.session.HomeSession
 import com.raulshma.jellyplay.core.data.session.SessionCacheRegistry
-import com.raulshma.jellyplay.core.data.util.SystemTimeSource
+import com.raulshma.jellyplay.core.model.SystemTimeSource
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -86,7 +85,7 @@ class MediaRepositoryImplTest {
             homeSession,
             sessionCacheRegistry,
         )
-        val internals = MediaRepositoryInternals(apiClient, homeSession)
+        val internals = MediaRepositoryInternals(apiClient, homeSession, sessionCacheRegistry)
         val timeSource = SystemTimeSource()
         // Snapshot-store extraction: the repo now ctor-injects the persisted
         // half of the home pipeline (the same store the Koin graph wires);
@@ -100,23 +99,19 @@ class MediaRepositoryImplTest {
         repository = MediaRepositoryImpl(
             // One union mock covers both family seams (the JellyfinApiClient
             // mock implements each of them).
-            apiClient,
-            apiClient,
+            libraryApiClient = apiClient,
+            collectionApiClient = apiClient,
             // The home cache-maintenance port (inert here — this suite pins
             // the detail-cache / staleness choreography).
-            mockk(relaxed = true),
-            apiClient,
-            homeSnapshotStore,
-            playedStateSync,
-            episodeCatalogue,
-            userDataRealtimeChannel,
-            timeSource,
-            homeSession,
-            sessionCacheRegistry,
-            internals,
-            // The deepened createSyncPlayGroup's engine (inert here — this
-            // suite never creates a SyncPlay group).
-            mockk(relaxed = true),
+            homeSectionsCachePort = mockk(relaxed = true),
+            homeSnapshotStore = homeSnapshotStore,
+            playedStateSync = playedStateSync,
+            episodeCatalogue = episodeCatalogue,
+            userDataRealtimeChannel = userDataRealtimeChannel,
+            timeSource = timeSource,
+            homeSession = homeSession,
+            sessionCacheRegistry = sessionCacheRegistry,
+            internals = internals,
         )
         playlistRepository = PlaylistRepositoryImpl(apiClient, internals)
     }
@@ -727,24 +722,10 @@ class MediaRepositoryImplTest {
     }
 
     // ------------------------------------------------------------------
-    // Collection write/list paths are uncached passthroughs to the apiClient
+    // Collection write paths are uncached passthroughs to the apiClient
     // (the picker refetches on every open so a freshly-created collection is
     // immediately selectable). Pin the delegation here.
     // ------------------------------------------------------------------
-
-    @Test
-    fun `getCollections delegates to apiClient`() = runTest {
-        val collections = listOf(
-            CollectionSummary(id = "c1", name = "Marvel", itemCount = 4),
-        )
-        coEvery { apiClient.getCollections(100) } returns Result.success(collections)
-
-        val result = repository.getCollections()
-
-        assertTrue(result.isSuccess)
-        assertEquals(collections, result.getOrNull())
-        coVerify(exactly = 1) { apiClient.getCollections(100) }
-    }
 
     @Test
     fun `createCollection delegates name and seed ids to apiClient`() = runTest {
@@ -957,6 +938,37 @@ class MediaRepositoryImplTest {
         repository.getMediaDetail("movie-1")
 
         coVerify(exactly = 2) { apiClient.getMediaDetail("movie-1") }
+    }
+
+    // ------------------------------------------------------------------
+    // Spec-registry pin: the composite user-data eviction clears exactly the
+    // USER_DATA group's member caches. Latest media is a member (its entries
+    // carry per-item UserData under parent-folder keys — latestMediaSpec);
+    // genres is not — so a user-data mutation refetches the former while the
+    // latter still serves from cache.
+    // ------------------------------------------------------------------
+
+    @Test
+    fun `a user-data mutation refetches the userData-group cache but serves a non-member from cache`() = runTest {
+        coEvery { apiClient.getLatestMedia("folder-1", 20) } returns Result.success(listOf(mediaItem("l1")))
+        coEvery { apiClient.getGenres(any()) } returns Result.success(emptyList())
+
+        // Populate both caches.
+        repository.getLatestMedia("folder-1", 20)
+        repository.getGenres(null)
+        coVerify(exactly = 1) { apiClient.getLatestMedia("folder-1", 20) }
+        coVerify(exactly = 1) { apiClient.getGenres(null) }
+
+        // The composite eviction runs through the mutation wrapper (markPlayed
+        // → withUserDataMutationCacheInvalidation → invalidateUserDataCaches).
+        repository.markPlayed("movie-1")
+
+        // Group member: whole-cache drop → refetch. Non-member: still cached.
+        repository.getLatestMedia("folder-1", 20)
+        repository.getGenres(null)
+
+        coVerify(exactly = 2) { apiClient.getLatestMedia("folder-1", 20) }
+        coVerify(exactly = 1) { apiClient.getGenres(null) }
     }
 
     // ------------------------------------------------------------------

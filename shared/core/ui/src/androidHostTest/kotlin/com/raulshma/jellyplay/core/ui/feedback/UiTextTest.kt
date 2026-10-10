@@ -55,11 +55,11 @@ class UiTextTest {
     @Test
     fun `nested UiText args are resolved recursively`() {
         val text = UiText.Resource(
-            R.string.transcode_reason_unknown,
+            R.string.ui_text_test_server_reported,
             listOf(UiText.Resource(R.string.core_ui_auth_title)),
         )
 
-        assertEquals("Server reported: Authenticate", text.resolve(context))
+        assertEquals("Server said: Authenticate", text.resolve(context))
     }
 
     @Test

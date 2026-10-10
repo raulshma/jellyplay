@@ -54,20 +54,19 @@ To see the right streaming availability and "Trending in" content:
 2. Pick your **streaming region** (defaults to your Jellyfin server
    region)
 3. Pick your **discover region** for trending content
-4. Optional: enable **NSFW content** if your Seerr instance allows it
-   (admin must also enable it server-side)
 
 ## Step 4 — Request a movie
 
 There are three ways to request content:
 
-### A) From the Discover tab
+### A) From the Home discover rows
 
-1. Tap the **Requests** tab in the bottom navigation
-2. Browse the **Trending**, **Popular**, or **Upcoming** rows
-3. Tap any poster to open the detail page
-4. Tap **Request** — pick quality (HD / 4K) and confirm
-5. Status updates appear in **Requests → My Requests**
+1. Open the **Home** screen and browse the **Trending**, **Popular**, or
+   **Upcoming** rows (enable the **Discover** toggle under
+   **Settings → Seerr**)
+2. Tap any poster to open the detail page
+3. Tap **Request** — pick a quality profile and confirm
+4. Status updates appear in **Requests → My Requests**
 
 ### B) From search
 
@@ -85,18 +84,13 @@ There are three ways to request content:
 
 ## TV show requests
 
-When requesting a TV show, JellyPlay shows a season picker:
-
-- **All seasons** (default)
-- **First season only** — useful for trying out a new show
-- **Custom selection** — pick exactly the seasons you want
-
-JellyPlay remembers your preference per series.
+When requesting a TV show, JellyPlay shows a season picker with an
+**All seasons** switch plus per-season checkboxes — leave the switch on
+for everything, or turn it off and tick exactly the seasons you want.
 
 ## Status badges
 
-JellyPlay shows a small Seerr badge on every search result and library
-poster:
+JellyPlay shows a small Seerr badge on every search result:
 
 | Badge | Meaning |
 | ----- | ------- |
@@ -113,7 +107,6 @@ poster:
 | 401 Unauthorized | Re-paste the API key from Seerr. |
 | No trending content | Set a **discover region** in Settings → Seerr → Regions. |
 | Search button missing | The Requests tab only appears when integration is enabled. |
-| SyncPlay conflicts | Pause any active SyncPlay session before requesting — Seerr calls are blocked during playback to keep streams stable. |
 
 ## Next steps
 

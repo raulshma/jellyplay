@@ -48,6 +48,23 @@ interface AudioPlayerEngine {
     val isFetchingLyrics: StateFlow<Boolean>
     val lyricsOffsetMs: StateFlow<Long>
 
+    /**
+     * Current playback volume in `[0f, 1f]` — the audio sleep-timer fade's
+     * pre-ramp capture source (`AudioSleepTimerController`). Software
+     * gain only: it reads the engine's own level, never the OS stream volume.
+     */
+    val volume: Float
+
+    /**
+     * Programmatic volume write — the sleep-timer fade/restore path. The
+     * `isUserChange = false` contract mirrors the video engine's: engines
+     * with per-content-type volume memory must not capture a fade tick (or
+     * the post-expiry restore) as the user's chosen level, and the write
+     * must stay software-only — the OS stream volume is the USER path's
+     * business, never a fade tick's.
+     */
+    fun setVolume(volume: Float, isUserChange: Boolean = false)
+
     fun play(itemId: String)
     fun seekTo(positionMs: Long)
     fun togglePlayPause()

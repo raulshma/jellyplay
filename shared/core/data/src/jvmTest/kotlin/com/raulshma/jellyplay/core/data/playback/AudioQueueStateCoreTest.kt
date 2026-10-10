@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.data.playback
 
+import com.raulshma.jellyplay.core.database.entity.AudioQueueStateEntity
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -404,6 +405,112 @@ class AudioQueueStateCoreTest {
         assertEquals(2, h.core.repeatMode.value)
         h.core.setRepeatMode(-4)
         assertEquals(0, h.core.repeatMode.value)
+    }
+
+    // ── seeded shuffle ──────────────────────────────────────────────────
+
+    @Test
+    fun toggleShufflePublishesAFreshSeedWhileEnabledAndClearsItOnDisable() {
+        val h = newHarness()
+        h.seed(items("a", "b", "c", "d"), index = 0)
+
+        h.core.toggleShuffle()
+
+        assertTrue(h.core.shuffleMode.value)
+        val seed = h.core.shuffleSeed.value
+        assertTrue(seed != null, "enabling shuffle publishes the seed the order was drawn with")
+
+        h.core.toggleShuffle()
+
+        assertFalse(h.core.shuffleMode.value)
+        assertNull(h.core.shuffleSeed.value, "disabling shuffle clears the seed")
+    }
+
+    @Test
+    fun shuffleWithSeedIsDeterministicSameSeedSameOrderDifferentSeedDifferentOrder() {
+        val orderFor = { seed: Long ->
+            val h = newHarness()
+            h.seed(items("a", "b", "c", "d", "e", "f", "g", "h"), index = 0)
+            h.core.shuffleWithSeed(seed)
+            h.core.queue.value.map { it.id }
+        }
+
+        val first = orderFor(42L)
+        val replay = orderFor(42L)
+        val other = orderFor(43L)
+
+        assertEquals(first, replay, "same seed over the same input order → the exact same arrangement")
+        assertTrue(first != other, "a different seed re-arranges (8 rows ⇒ 5040 permutations)")
+        assertEquals("a", first.first(), "the current row still shuffles to the head under a fixed seed")
+        assertEquals(setOf("a", "b", "c", "d", "e", "f", "g", "h"), first.toSet(), "a seeded shuffle is still a permutation")
+        assertTrue(first.drop(1) != listOf("b", "c", "d", "e", "f", "g", "h"), "the fixed seed genuinely re-arranges the others")
+    }
+
+    @Test
+    fun shuffleWithSeedPublishesTheSeedAndToggleOffStillRestoresTheOriginalOrder() {
+        val h = newHarness()
+        h.seed(items("a", "b", "c", "d"), index = 1)
+        h.core.nowPlayingTracker.publishQueueItem(item("b"))
+        h.core.currentItemId = "b"
+
+        h.core.shuffleWithSeed(7L)
+
+        assertTrue(h.core.shuffleMode.value, "the flag turns on with the seeded shuffle")
+        assertEquals(7L, h.core.shuffleSeed.value, "the caller's seed is published, not regenerated")
+        assertEquals(0, h.core.currentIndex.value, "current item shuffles to the head")
+
+        h.core.toggleShuffle()
+
+        assertFalse(h.core.shuffleMode.value)
+        assertEquals(listOf("a", "b", "c", "d"), h.core.queue.value.map { it.id }, "original order restored")
+        assertEquals(1, h.core.currentIndex.value, "cursor snaps to the restored slot of the playing item")
+        assertNull(h.core.shuffleSeed.value)
+    }
+
+    @Test
+    fun shuffleWithoutAnEngineFlagsOnButLeavesTheSeedUntouched() {
+        val h = newHarness()
+        h.seed(items("a", "b", "c"), index = -1)
+        h.dispatch.live = false
+
+        h.core.shuffleWithSeed(5L)
+
+        assertTrue(h.core.shuffleMode.value, "the flag flips before the gate, exactly like toggleShuffle")
+        assertNull(h.core.shuffleSeed.value, "no live engine → no order change → no seed published")
+        assertEquals(listOf("a", "b", "c"), h.core.queue.value.map { it.id }, "order untouched behind the gate")
+    }
+
+    @Test
+    fun restoreKeepsTheSeedConsistentWithThePersistedShuffleFlag() {
+        val h = newHarness()
+        h.core.restorePersisted(
+            queue = items("a", "b", "c"),
+            savedState = AudioQueueStateEntity(
+                currentIndex = 0,
+                shuffleEnabled = true,
+                shuffleSeed = 123_456_789L,
+            ),
+        )
+        assertTrue(h.core.shuffleMode.value)
+        assertEquals(123_456_789L, h.core.shuffleSeed.value, "a shuffled restore keeps its seed")
+
+        val legacy = newHarness()
+        legacy.core.restorePersisted(
+            queue = items("a", "b"),
+            savedState = AudioQueueStateEntity(currentIndex = 0, shuffleEnabled = true, shuffleSeed = null),
+        )
+        assertNull(legacy.core.shuffleSeed.value, "a legacy row (or engine-less flip) restores with no seed")
+
+        val shuffledOff = newHarness()
+        shuffledOff.core.restorePersisted(
+            queue = items("a", "b"),
+            savedState = AudioQueueStateEntity(currentIndex = 0, shuffleEnabled = false, shuffleSeed = 42L),
+        )
+        assertFalse(shuffledOff.core.shuffleMode.value)
+        assertNull(
+            shuffledOff.core.shuffleSeed.value,
+            "a seed never survives a restore whose persisted flag says shuffle is OFF",
+        )
     }
 
     // ── playFromQueue / ended matrix ────────────────────────────────────────

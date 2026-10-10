@@ -64,5 +64,6 @@ class ShellInfra(
     val syncPlayOpenCoordinatorLazy: Lazy<SyncPlayOpenCoordinator>,
     val whatsNewCoordinatorLazy: Lazy<WhatsNewCoordinator>,
     val userMessageBusLazy: Lazy<UserMessageBus>,
+    val externalPlayerReportsLazy: Lazy<com.raulshma.jellyplay.navigation.playbackhost.ExternalPlayerReports>,
     val keyDispatcher: (Int) -> Boolean,
 )

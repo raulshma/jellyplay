@@ -29,6 +29,9 @@ import org.robolectric.annotation.Config
  * 3. `deleteStaleChannels` deletes *only* channels carrying the
  *    `new_media_` prefix whose library is no longer in the valid set;
  *    unrelated channels (no prefix) and channels for valid libraries survive.
+ * 4. `ensureNewEpisodesChannel` creates the fixed opt-in `new_episodes`
+ *    channel idempotently and it is equally immune to the stale sweep (no
+ *    `new_media_` prefix).
  *
  * Note: `new_media_summary` also carries the `new_media_` prefix, so the
  * current `deleteStaleChannels` filter removes it too when it is not in the
@@ -130,6 +133,32 @@ class NotificationChannelManagerTest {
             it.id == NotificationChannelManager.CHANNEL_SUMMARY
         }
         assertEquals(1, matches.size)
+    }
+
+    @Test
+    fun `ensureNewEpisodesChannel creates the fixed channel once with new-media importance`() {
+        manager.ensureNewEpisodesChannel()
+        manager.ensureNewEpisodesChannel()
+
+        val matches = notificationManager.notificationChannels.filter {
+            it.id == NotificationChannelManager.CHANNEL_NEW_EPISODES
+        }
+        assertEquals(1, matches.size)
+        val channel = notificationManager.getNotificationChannel(NotificationChannelManager.CHANNEL_NEW_EPISODES)
+        assertEquals("new_episodes", NotificationChannelManager.CHANNEL_NEW_EPISODES)
+        assertEquals(NotificationManager.IMPORTANCE_DEFAULT, channel.importance)
+        assertTrue(channel.canShowBadge())
+    }
+
+    @Test
+    fun `deleteStaleChannels never removes the unprefixed new-episodes channel`() {
+        manager.ensureNewEpisodesChannel()
+
+        // The new-episodes channel carries no `new_media_` prefix, so the
+        // stale-library sweep must leave it alone even with no valid libraries.
+        manager.deleteStaleChannels(validLibraryIds = emptySet())
+
+        assertNotNull(notificationManager.getNotificationChannel(NotificationChannelManager.CHANNEL_NEW_EPISODES))
     }
 
     @Test

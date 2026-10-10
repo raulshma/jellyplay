@@ -66,6 +66,7 @@ class AppearanceSpecDerivationTest {
         "color_blind_mode" to String::class,
         "hand_mode" to String::class,
         "layout_mode" to String::class,
+        "tv_overscan" to String::class,
         "haptics_enabled" to Boolean::class,
         "show_advanced_settings" to Boolean::class,
     )
@@ -111,9 +112,10 @@ class AppearanceSpecDerivationTest {
     fun `resetKeysFor returns exactly the APPEARANCE-category keys`() {
         val store = AppearanceStore(TestDataStoreProvider.get(), scope)
         val appearanceKeys = store.resetKeysFor(PreferenceResetCategory.APPEARANCE).map { it.name }
-        // The exact 28 keys the hand-written pre-spec reset list carried (the
-        // three legacy theme booleans and their accents included — the legacy
-        // surfaces still reset with their category).
+        // The exact 29 keys the pre-spec reset list carried plus the
+        // tv_overscan spec row (the three legacy theme booleans and their
+        // accents included — the legacy surfaces still reset with their
+        // category).
         assertEquals(
             listOf(
                 "theme_mode",
@@ -144,6 +146,7 @@ class AppearanceSpecDerivationTest {
                 "color_blind_mode",
                 "hand_mode",
                 "layout_mode",
+                "tv_overscan",
             ).sorted(),
             appearanceKeys.sorted(),
         )

@@ -4,6 +4,7 @@ import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogueSnapshot
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
 import com.raulshma.jellyplay.core.data.repository.AutoDownloadSweepResult
+import com.raulshma.jellyplay.core.data.repository.DownloadCoverage
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.DownloadRepositoryImpl
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsSlice
@@ -19,6 +20,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
@@ -52,7 +54,8 @@ class DesktopAutoDownloadSchedulerTest {
             DownloadsSlice(autoDownloadNewEpisodes = true, autoDownloadLookahead = 0),
         )
         coEvery { downloadRepository.sweepExpiredAutoDownloads() } returns AutoDownloadSweepResult.EMPTY
-        coEvery { downloadRepository.getDownloadedSeriesIds() } returns listOf("s1")
+        coEvery { downloadRepository.downloadCoverage() } returns
+            flowOf(DownloadCoverage(completedItemIds = emptySet(), seriesIds = setOf("s1")))
         coEvery { downloadRepository.getDownloadedEpisodeIdsBySeries() } returns mapOf("s1" to setOf("ep-old"))
         coEvery { episodeCatalogue.loadSeriesEpisodes(any(), any()) } returns Result.success(snapshot())
         coEvery { downloadIntake.startSeries(any(), any()) } returns Result.success(emptyList())
@@ -103,7 +106,7 @@ class DesktopAutoDownloadSchedulerTest {
         testScheduler.runCurrent()
         scheduler.stop()
 
-        coVerify(exactly = 0) { downloadRepository.getDownloadedSeriesIds() }
+        coVerify(exactly = 0) { downloadRepository.downloadCoverage() }
         coVerify(exactly = 0) { episodeCatalogue.loadSeriesEpisodes(any(), any()) }
     }
 
@@ -192,7 +195,8 @@ class DesktopAutoDownloadSchedulerTest {
 
     @Test
     fun `stop aborts the in-flight pass mid-series`() = runTest {
-        coEvery { downloadRepository.getDownloadedSeriesIds() } returns listOf("s1", "s2")
+        coEvery { downloadRepository.downloadCoverage() } returns
+            flowOf(DownloadCoverage(completedItemIds = emptySet(), seriesIds = setOf("s1", "s2")))
         coEvery { downloadRepository.getDownloadedEpisodeIdsBySeries() } returns emptyMap()
         val s1Loaded = Channel<EpisodeCatalogueSnapshot>()
         coEvery { episodeCatalogue.loadSeriesEpisodes("s1", any()) } coAnswers {

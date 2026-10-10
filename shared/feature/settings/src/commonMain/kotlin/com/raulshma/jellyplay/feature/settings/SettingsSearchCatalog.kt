@@ -30,14 +30,6 @@ internal val ANDROID_ONLY_PLATFORMS: Set<PlatformKind> = setOf(PlatformKind.ANDR
 internal val DESKTOP_ONLY_PLATFORMS: Set<PlatformKind> = setOf(PlatformKind.DESKTOP)
 
 /**
- * Tags every receiver item as offered on Android only — the whole-list form
- * of `platforms = ANDROID_ONLY_PLATFORMS` for lists whose backing surface
- * is Android-only (notifications, the Exo/VLC engine configs).
- */
-internal fun List<SettingsSearchItem>.androidOnly(): List<SettingsSearchItem> =
-    map { it.copy(platforms = ANDROID_ONLY_PLATFORMS) }
-
-/**
  * The per-item platform tag derived from the [SettingsCapabilities] flag
  * that gates the row's visibility: `all` where the capability backs the row
  * (the tag then carries no information), `ANDROID_ONLY_PLATFORMS` where it

@@ -2,7 +2,8 @@
 
 **Status:** implemented and gated on Windows only. Honest framing: every runtime
 observation below comes from the Windows dev machine (`tools/mpv/libmpv-2.dll`,
-mpv dev build shipped with this checkout). Nothing in this document has touched
+an mpv dev build fetched into the tree by `FetchBundledLibmpvTask` — gitignored,
+not committed content). Nothing in this document has touched
 real macOS/Linux hardware yet; the whole point of shipping path B is that it is
 plausible there, not that it is proven there.
 
@@ -44,9 +45,13 @@ modern CPUs it is fine, and correctness beats absence of video.
   so aspect/panscan semantics match the HWND path by construction, and it
   composites subtitles+OSD INTO the surface — the sw Canvas gets that for free.
 
-## Header-verified constant table (tools/mpv/include/mpv/render.h)
+## mpv render.h constant table (as pinned in `MpvLibRender.kt`)
 
-Every value re-checked against THIS checkout's header before mapping:
+The vendored header itself (`tools/mpv/include/mpv/render.h`) is not
+committed — the dll and headers are fetched at build time — so the values
+live as constants in `MpvLibRender.kt` with the header line numbers kept as
+comments. Every value was re-checked against the fetched header before
+mapping:
 
 | Constant                          | Value | Header line |
 |-----------------------------------|-------|-------------|
@@ -164,7 +169,7 @@ a render is still in flight is DROPPED (never queued behind itself).
   covers "dll present but sw backend missing" (MPV_ERROR_NOT_IMPLEMENTED from
   create); it cannot cover "no dll at all" better than returning false.
 - AudioQueue interplay: sw-path tests run `ao=null`. Whether the desktop
-  AudioQueue manager (DesktopAudioQueueManager) behaves identically when the
+  AudioQueue manager (`DesktopAudioQueueManagerSurface`) behaves identically when the
   session engine is the sw variant is untested (its tests use plain
   MpvDesktopEngine). No known coupling, but unproven.
 - Subtitle overlay interplay: NativePinnedSubtitleHost / zoomed subtitle
@@ -174,7 +179,7 @@ a render is still in flight is DROPPED (never queued behind itself).
   screen's existing single-subtitle-source logic to govern, verify visually.
 - Performance on real content (720p60/1080p24+) is unmeasured anywhere; zimg vs
   swscale builds differ measurably. Threading: the pull runs off-UI-thread
-  (Dispatchers.Default) as of the review round, so any remaining jank would be
+  (Dispatchers.Default), so any remaining jank would be
   CPU saturation, not dispatcher blocking.
 - The EOF-keep-open replay path WAS exercised against the real sw engine; the
   multi-session reuse case (factory reusing engines across navigation) follows

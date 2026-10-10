@@ -1,6 +1,5 @@
 package com.raulshma.jellyplay.core.data.repository
 
-import com.raulshma.jellyplay.core.model.DownloadFileInventory
 import com.raulshma.jellyplay.core.model.DownloadItem
 import kotlinx.coroutines.flow.Flow
 
@@ -16,6 +15,29 @@ data class AutoDownloadSweepResult(
 ) {
     companion object {
         val EMPTY = AutoDownloadSweepResult(deletedCount = 0, bytesReclaimed = 0L)
+    }
+}
+
+/**
+ * One snapshot of the download-coverage union — the completed item ids and the
+ * series ids (series with at least one downloaded episode) a UI gate or the
+ * auto-download worker reads. [ids] is the union the UI actually gates on: a
+ * series card's Download action flips to Remove download once either half
+ * contains the card's id. Consumers used to build the union themselves and
+ * home was the only one honoring the series half; the contract is the
+ * interface's, not a convention.
+ */
+data class DownloadCoverage(
+    /** Download-complete item ids ([observeCompletedDownloadedIds]' set). */
+    val completedItemIds: Set<String>,
+    /** Every series id with at least one downloaded episode. */
+    val seriesIds: Set<String>,
+) {
+    /** The union the UI gates on: [completedItemIds] ∪ [seriesIds]. */
+    val ids: Set<String> get() = completedItemIds + seriesIds
+
+    companion object {
+        val EMPTY = DownloadCoverage(emptySet(), emptySet())
     }
 }
 
@@ -121,51 +143,25 @@ interface DownloadRepository : OfflineDownloadWriter {
         episodeIds: Map<String, List<String>>? = null,
     ): Result<List<String>>
 
-    suspend fun getDownloadedEpisodeIdsForSeries(seriesId: String): Set<String>
+    suspend fun episodeIdsForSeries(seriesId: String): Set<String>
 
     /**
      * All downloaded episode ids grouped by their parent series, fetched in a
      * single 2-column query. Intended for callers (e.g. the periodic
      * auto-download worker) that need the ids for *every* series at once —
-     * preferable to calling [getDownloadedEpisodeIdsForSeries] per series,
+     * preferable to calling [episodeIdsForSeries] per series,
      * which issues N full-row queries (N+1) while consuming only `mediaItemId`.
      */
     suspend fun getDownloadedEpisodeIdsBySeries(): Map<String, Set<String>>
 
-    suspend fun getDownloadedSeriesIds(): List<String>
-
     /**
-     * Reactive [getDownloadedSeriesIds] — every series with at least one
-     * downloaded episode. UI surfaces union this with
-     * [observeCompletedDownloadedIds] so a series card's Download action
-     * flips to Remove download once the series has anything downloaded.
+     * The [DownloadCoverage] union flow — [observeCompletedDownloadedIds] ∪ the
+     * series-with-downloads read, snapped into one value. Collapses equal
+     * coverages like its inputs; consumers that need only the flat id set read
+     * [DownloadCoverage.ids]. The auto-download worker reads
+     * [DownloadCoverage.seriesIds] for its per-pass series walk.
      */
-    fun observeDownloadedSeriesIds(): Flow<Set<String>>
-
-    /**
-     * The union the UI actually gates on: [observeCompletedDownloadedIds] ∪
-     * [observeDownloadedSeriesIds] — a series card's Download action flips to
-     * Remove download once the series has anything downloaded. Consumers used
-     * to build this union themselves and home was the only one honoring the
-     * series half; this member makes the contract the interface's, not a
-     * convention. Collapses equal sets like its inputs.
-     */
-    fun observeDownloadedIdsIncludingSeries(): Flow<Set<String>>
-
-    /** Returns the locally-cached subtitle manifest for a downloaded item, if any. */
-    suspend fun loadLocalSubtitleManifest(downloadPath: String, itemId: String? = null): com.raulshma.jellyplay.core.model.OfflineSubtitleManifest?
-
-    /** Returns locally-cached media segments for a downloaded item, if any. */
-    suspend fun loadLocalSegments(itemId: String): List<com.raulshma.jellyplay.core.model.MediaSegment>?
-
-    /**
-     * Enumerates every on-disk file belonging to a downloaded item — the media
-     * file plus all sidecar artifacts (subtitles, trickplay, segments, images)
-     * — each with its absolute path and actual on-disk byte size. Sidecar sizes
-     * are not persisted, so they are read live from the filesystem. Returns
-     * [DownloadFileInventory.EMPTY] when the item has no resolvable download path.
-     */
-    suspend fun getDownloadFileInventory(itemId: String): DownloadFileInventory
+    fun downloadCoverage(): Flow<DownloadCoverage>
 
     /**
      * Auto-resume pass run by the network-reconnect path. Resumes interrupted

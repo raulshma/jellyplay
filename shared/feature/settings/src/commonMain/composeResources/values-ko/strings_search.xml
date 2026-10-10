@@ -60,6 +60,8 @@
     <string name="ss_library_view_mode_subtitle">라이브러리 항목을 그리드 또는 목록 레이아웃으로 표시합니다</string>
     <string name="ss_layout_mode_title">레이아웃</string>
     <string name="ss_layout_mode_subtitle">창 크기를 따르지 않고 휴대전화 또는 태블릿 레이아웃을 강제합니다</string>
+    <string name="ss_screen_fit_title">화면 맞춤</string>
+    <string name="ss_screen_fit_subtitle">TV 오버스캔 세이프 에어리어 여백(끄기 / 5% / 10%)</string>
     <string name="ss_home_mode_title">홈 모드</string>
     <string name="ss_home_mode_subtitle">기본 홈 화면 레이아웃을 설정합니다: 비디오 또는 음악</string>
     <string name="ss_hero_section_title">히어로 섹션 표시</string>
@@ -128,6 +130,8 @@
     <string name="ss_gestures_subtitle">밝기, 볼륨 및 탐색을 위한 스와이프 제스처를 켜거나 끕니다</string>
     <string name="ss_gesture_indicator_side_title">제스처 표시기 위치</string>
     <string name="ss_gesture_indicator_side_subtitle">밝기/볼륨 바를 제스처의 반대쪽 또는 같은 쪽에 표시합니다</string>
+    <string name="ss_double_tap_hold_seek_title">두 번 탭 후 길게 눌러 탐색</string>
+    <string name="ss_double_tap_hold_seek_subtitle">두 번 탭 후 길게 누르는 동안 탐색을 반복합니다</string>
     <string name="ss_default_speed_title">기본 재생 속도</string>
     <string name="ss_default_speed_subtitle">비디오의 기본 초기 재생 속도입니다</string>
     <string name="ss_default_aspect_title">기본 화면비</string>
@@ -138,6 +142,8 @@
     <string name="ss_autoplay_countdown_subtitle">다음 에피소드 자동 재생 전 카운트다운 시간입니다</string>
     <string name="ss_controls_timeout_title">컨트롤 시간 제한</string>
     <string name="ss_controls_timeout_subtitle">지정된 시간 후 플레이어 컨트롤을 자동으로 숨깁니다</string>
+    <string name="ss_hide_osd_on_pause_title">일시정지 시 OSD 숨기기</string>
+    <string name="ss_hide_osd_on_pause_subtitle">일시정지 시 컨트롤 오버레이를 표시하지 않음</string>
     <string name="ss_skip_back_on_resume_title">이어볼 때 뒤로 건너뛰기</string>
     <string name="ss_skip_back_on_resume_subtitle">일시 정지를 해제할 때 몇 초 뒤로 이동합니다</string>
     <string name="ss_show_clock_player_title">플레이어에 시계 표시</string>
@@ -200,6 +206,8 @@
     <string name="ss_show_time_remaining_subtitle">경과 시간 대신 남은 시간을 표시합니다</string>
     <string name="ss_pause_on_focus_loss_title">포커스 상실 시 일시 정지</string>
     <string name="ss_pause_on_focus_loss_subtitle">시스템이 오디오 포커스 상실을 알리면 재생을 일시 정지합니다</string>
+    <string name="ss_resume_headset_plug_title">헤드폰 다시 연결 시 재생 재개</string>
+    <string name="ss_resume_headset_plug_subtitle">분리 시 자동 일시 정지 후 헤드폰을 다시 연결하면 재생을 재개합니다</string>
     <string name="ss_mpv_video_output_title">MPV 비디오 출력</string>
     <string name="ss_mpv_video_output_subtitle">MPV 비디오 출력 드라이버입니다</string>
     <string name="ss_mpv_scaler_title">MPV 스케일러</string>
@@ -383,6 +391,8 @@
     <string name="ss_notification_vibrate_subtitle">알림 시 진동합니다</string>
     <string name="ss_notification_lights_title">알림 표시등</string>
     <string name="ss_notification_lights_subtitle">지원되는 기기에서 알림 표시등을 깜빡입니다</string>
+    <string name="ss_new_episodes_title">새 에피소드 알림</string>
+    <string name="ss_new_episodes_subtitle">새 에피소드 전용 알림 채널</string>
     <string name="ss_max_per_check_title">확인당 최대 알림 수</string>
     <string name="ss_max_per_check_subtitle">알림 일괄 처리당 최대 항목 수입니다</string>
     <string name="ss_notification_libraries_title">알림 라이브러리</string>
@@ -455,6 +465,8 @@
     <string name="ss_auto_lock_timer_subtitle">앱을 떠난 후 잠금될 때까지의 시간입니다</string>
     <string name="ss_backup_export_title">설정 백업 내보내기</string>
     <string name="ss_backup_export_subtitle">현재 구성 설정을 JSON 파일로 내보냅니다</string>
+    <string name="ss_backup_export_secrets_title">시크릿 포함 백업 내보내기</string>
+    <string name="ss_backup_export_secrets_subtitle">설정과 함께 암호 문구로 암호화된 API 키 및 저장된 서버 목록을 내보냅니다</string>
     <string name="ss_backup_import_title">설정 백업 가져오기</string>
     <string name="ss_backup_import_subtitle">이전에 내보낸 설정 백업에서 구성을 복원합니다</string>
     <string name="ss_factory_reset_title">공장 초기화</string>
@@ -570,4 +582,6 @@
     <string name="ss_hooks_ended_cmd_subtitle">미디어 재생이 끝날 때 실행할 명령</string>
     <string name="ss_hooks_idle_cmd_subtitle">앱이 유휴 상태가 될 때 실행할 명령</string>
     <string name="ss_hooks_idle_ended_cmd_subtitle">앱이 유휴 상태를 벗어날 때 실행할 명령</string>
+    <string name="ss_input_bindings_title">컨트롤 사용자 지정</string>
+    <string name="ss_input_bindings_subtitle">제스처, 마우스, 키보드, 리모컨 동작</string>
 </resources>

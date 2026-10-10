@@ -57,8 +57,17 @@ internal val dataCoreLeafModule: Module = module {
     // straight from Koin.
     single { PhotoFolderPrefetcher(get()) }
 
-    // AuthApiClient resolves from :shared:core:network's networkJvmModule.
-    single { ServerHealthMonitor(get(), get()) }
+    // AuthApiClient resolves from :shared:core:network's networkJvmModule;
+    // NetworkMonitor from the platform connectivity bindings (AndroidDataModule
+    // on Android, DesktopConnectivityKoinModule on desktop) — the health
+    // monitor re-probes on network changes.
+    single {
+        ServerHealthMonitor(
+            apiClient = get(),
+            timeSource = get(),
+            networkMonitor = get(),
+        )
+    }
 
     single { RemoteNavigationBridge() }
 

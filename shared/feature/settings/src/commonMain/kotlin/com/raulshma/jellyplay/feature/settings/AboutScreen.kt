@@ -155,7 +155,7 @@ fun AboutScreen(
 
             SettingsGroup(
                 icon = Tabler.Outline.InfoCircle,
-                title = rowTitle(AboutScreenIds.ABOUT_VERSION),
+                title = rowTitle(AboutRows.AboutVersion),
                 initiallyExpanded = true,
             ) {
                 SettingInfoItem(

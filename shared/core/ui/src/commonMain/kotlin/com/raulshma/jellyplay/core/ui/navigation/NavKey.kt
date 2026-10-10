@@ -311,6 +311,13 @@ sealed class Route : NavKey {
         override fun withHighlightSettingId(id: String) = copy(highlightSettingId = id)
     }
 
+    /**
+     * The player input-binding editor (issue #171 generalized): per-input
+     * action assignment + enable switches over touch / wheel / keyboard /
+     * D-pad. Reached from Playback settings' "Customize controls" row.
+     */
+    @Serializable data object InputBindings : Route()
+
     @Serializable data class AudioSettings(val highlightSettingId: String? = null) : Route(),
         HighlightableRoute {
         override fun withHighlightSettingId(id: String) = copy(highlightSettingId = id)
@@ -369,13 +376,20 @@ sealed class Route : NavKey {
     }
 
     /**
-     * Import preview screen. Shows a before/after diff of every setting from
-     * the selected backup file (current vs incoming) with per-category and
-     * import-all actions. Reached from [BackupSettings] after a file is picked.
+     * The unified restore wizard — ONE flow for restoring settings regardless
+     * of source: pick source (server restore point / backup file) → diff vs
+     * the live state → select categories → confirm → automatic pre-apply
+     * snapshot → apply. Reached from the backup screen (a picked file rides
+     * in [uri]) and the sync screen (a tapped restore point rides in
+     * [snapshotId]; a bare entry opens the wizard's own source step).
      *
-     * @param uri the `Uri` of the picked backup file, as an encoded string.
+     * Replaces the retired `ImportPreview` route (the per-file preview) and
+     * the sync screen's one-click snapshot restore + import-from-file rows.
      */
-    @Serializable data class ImportPreview(val uri: String) : Route()
+    @Serializable data class RestoreWizard(
+        val uri: String? = null,
+        val snapshotId: String? = null,
+    ) : Route()
 
     /**
      * Integrations hub — top-level list of every third-party service JellyPlay
@@ -409,6 +423,46 @@ sealed class Route : NavKey {
         override val isModal = true
         override fun withHighlightSettingId(id: String) = copy(highlightSettingId = id)
     }
+
+    /**
+     * The JellyPlay companion-plugin's inbox messages screen (ADR 0010) — the
+     * durable counterpart of the plugin's live events stream: admin-published
+     * messages with read state, tapping one marks it read. Reached ONLY from
+     * the Settings root's capability-gated "Messages" entry (plugin probe
+     * AVAILABLE + the `messages` feature key), so no in-screen gate chrome.
+     */
+    @Serializable data object JellyPlayMessages : Route()
+
+    /**
+     * The JellyPlay companion-plugin's settings-sync screen (ADR 0010) — the
+     * sync engine's whole UI: opt-in toggle, sync-now, server usage + quotas,
+     * per-device last sync, this device's resolved profile, the sync history
+     * ledger, and the namespace reset / force-re-pull recovery actions.
+     * Reached ONLY from the Settings root's capability-gated "Sync" entry
+     * (plugin probe AVAILABLE + the `settings-sync` meta feature key — no
+     * user toggle exists for meta keys), so no in-screen gate chrome.
+     */
+    @Serializable data object JellyPlaySync : Route()
+
+    /**
+     * The JellyPlay companion-plugin's "My ratings" screen (ADR 0010) — the
+     * user's synced likes / dislikes / ratings as the plugin recorded them,
+     * tapping a row opens the item's detail. Reached ONLY from the Settings
+     * root's capability-gated entry (plugin probe AVAILABLE + the
+     * `user-ratings` feature key), so no in-screen gate chrome.
+     */
+    @Serializable data object JellyPlayUserRatings : Route()
+
+    /**
+     * The JellyPlay companion-plugin's "Your watching" screen — the signed-in
+     * user's OWN play aggregates (plays, watch time, per-day chart, top
+     * titles) over a 7/30/90-day window, the per-user face of the plugin's
+     * analytics (any user, unlike the admin dashboard). Reached ONLY from the
+     * Settings root's capability-gated entry (plugin probe AVAILABLE + the
+     * `analytics` feature key + the user's toggle), so no in-screen gate
+     * chrome.
+     */
+    @Serializable data object JellyPlayYourWatching : Route()
 
     // ───────────────────────── Music ─────────────────────────
 
@@ -481,6 +535,26 @@ sealed class Route : NavKey {
     }
 
     @Serializable data object Logs : Route() {
+        override val isModal = true
+    }
+
+    /**
+     * Admin transcodes monitor — the companion plugin's live active-transcode
+     * list (ADR 0010, `transcodes` feature). An admin tool presented like
+     * [Devices] / [Logs]; the admin gate is the shared admin area's
+     * AdminRouteContainer, so the route itself carries no extra classification.
+     */
+    @Serializable data object JellyPlayTranscodes : Route() {
+        override val isModal = true
+    }
+
+    /**
+     * Admin analytics dashboard — the companion plugin's play-history
+     * aggregates (ADR 0010, `analytics` feature). Same presentation contract
+     * as [JellyPlayTranscodes]: an admin tool behind the shared admin area's
+     * AdminRouteContainer, so the route itself carries no extra classification.
+     */
+    @Serializable data object JellyPlayAnalytics : Route() {
         override val isModal = true
     }
 

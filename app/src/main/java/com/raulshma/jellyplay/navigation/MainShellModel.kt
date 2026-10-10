@@ -3,19 +3,18 @@ package com.raulshma.jellyplay.navigation
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.OfflineMode
 import com.raulshma.jellyplay.core.ui.navigation.Route
-import com.raulshma.jellyplay.navigation.ExternalPlaybackOutcome
-import com.raulshma.jellyplay.navigation.playbackhost.ExternalPlayerLaunch
-import com.raulshma.jellyplay.navigation.playbackhost.ExternalPlayerRequest
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 
 /**
  * The slice of the activity-scoped MainViewModel the main shell renders
- * through — [MainContent]'s ONLY view of it. The seam exists so the
- * navigation package never names the concrete ViewModel type: the shell
- * depends on just the flows it collects and the commands it invokes, and the
- * ViewModel (which also serves the intent/deep-link/shortcut surfaces
- * MainActivity owns) implements it. Everything else the composition needs
+ * through — [MainContent]'s ONLY view of it. The navigation package names
+ * only slice interfaces, never the concrete ViewModel type: this interface
+ * is the layout subtree's view (the flows it collects and the commands it
+ * invokes), [ShellGateModel] is the root session gate's view
+ * ([com.raulshma.jellyplay.navigation.JellyPlayApp] — preferences,
+ * onboarding, logout, shell-overlay navigation), and both are implemented by
+ * the one activity-scoped ViewModel. Everything else the composition needs
  * from the shell layer arrives through the [ShellInfra] coordinator bundle
  * and [com.raulshma.jellyplay.feature.shell.navigation.ShellHostHooks].
  */
@@ -65,23 +64,4 @@ internal interface MainShellModel {
 
     /** Acks the pending search query after the Search entry consumed it. */
     fun consumePendingSearchQuery()
-
-    /**
-     * Resolves the external-player launch for an [ExternalPlayerRequest]
-     * (completed download or server stream URL, plus the external-subtitle
-     * payload and the preferred-app targeting state read off the preference
-     * pipeline). The request's `subtitleStreamIndex` is the route's selected
-     * subtitle track (feeds the launch's `subs.enable` extra).
-     */
-    suspend fun buildExternalPlayerLaunch(request: ExternalPlayerRequest): ExternalPlayerLaunch?
-
-    /** Reports an external-player playback start to the server. */
-    fun reportExternalPlaybackStart(playerLaunch: ExternalPlayerLaunch)
-
-    /**
-     * Reports an external-player playback stop, mapping the parsed outcome:
-     * completion marks the item played, a mid-stream stop credits its
-     * position, a cancellation credits the start position.
-     */
-    fun reportExternalPlaybackStopped(playerLaunch: ExternalPlayerLaunch, outcome: ExternalPlaybackOutcome)
 }

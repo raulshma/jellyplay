@@ -41,8 +41,12 @@ kotlin {
             // MediaEngine contract + engine value types (AspectRatio,
             // EnginePlaybackState, SegmentCalculator, SubtitleSource, …) —
             // replaces the legacy :feature:player:core api edge, which this
-            // module absorbed.
-            implementation(project(":shared:core:player-contract"))
+            // module absorbed. api (not implementation) because the moved
+            // PlaybackVolumePolicy/VolumeCommandTemplates types appear in this
+            // module's public engine API (ReloadablePlayerEngine's protected
+            // nativeVolumeRestore; apps/desktop's MpvDesktopEngine surface) —
+            // the re-export half of the volume-policy conveyor move.
+            api(project(":shared:core:player-contract"))
             // (The legacy build's lifecycle-viewmodel-navigation3 and
             // hilt-navigation-compose edges were dropped with the move: the
             // screen hosts no nav entry — PlayerActivity is the sole entry

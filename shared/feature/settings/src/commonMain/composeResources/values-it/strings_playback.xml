@@ -35,6 +35,8 @@
     <string name="settings_auto_play_countdown_subtitle">Durata del countdown prima della riproduzione automatica dell'episodio successivo</string>
     <string name="settings_controls_timeout">Timeout controlli</string>
     <string name="settings_controls_timeout_subtitle">Nascondi automaticamente i controlli del lettore</string>
+    <string name="settings_hide_osd_on_pause">Nascondi OSD in pausa</string>
+    <string name="settings_hide_osd_on_pause_subtitle">Mantieni i controlli nascosti in pausa</string>
     <string name="settings_streaming_quality_auto_adaptive">Automatico (adattivo)</string>
     <string name="settings_streaming_quality_auto">Automatico</string>
     <string name="settings_b_frames_none_best">Nessuno (qualità migliore)</string>
@@ -84,6 +86,8 @@
     <string name="settings_preferred_player">Player preferito</string>
     <string name="settings_double_tap_seek_duration">Durata salto doppio tocco</string>
     <string name="settings_gesture_indicator_side">Lato indicatore gesto</string>
+    <string name="settings_double_tap_hold_seek">Doppio tocco e tieni premuto per spostarti</string>
+    <string name="settings_double_tap_hold_seek_subtitle">Continua a spostarti tenendo premuto dopo il doppio tocco</string>
     <string name="settings_gesture_indicator_opposite">Mostra barra luminosità/volume dal lato opposto al gesto</string>
     <string name="settings_gesture_indicator_same">Mostra barra sullo stesso lato del gesto</string>
     <string name="settings_countdown_immediate">Riproduci subito l'elemento successivo</string>
@@ -132,6 +136,8 @@
     <string name="settings_pause_on_focus_loss">Pausa alla perdita di focus</string>
     <string name="settings_pause_on_focus_loss_on">Metti in pausa quando il sistema segnala perdita di focus</string>
     <string name="settings_pause_on_focus_loss_off">Continua la riproduzione alla perdita di focus</string>
+    <string name="settings_resume_headset_plug">Riprendi al ricollegamento delle cuffie</string>
+    <string name="settings_resume_headset_plug_subtitle">Riprendi la riproduzione quando le cuffie vengono ricollegate dopo la pausa automatica</string>
     <string name="settings_decoder_summary">Decoder: %1$s</string>
     <string name="settings_decoder">Decoder</string>
     <string name="settings_refresh_rate_match">Corrispondenza frequenza</string>
@@ -161,7 +167,12 @@
     <string name="settings_skip_loop_filter">Skip Loop Filter</string>
     <string name="settings_frame_drop">Frame Drop</string>
     <string name="settings_raw_mpv_options">Opzioni mpv raw (stile mpv.conf)</string>
-    <string name="settings_mpv_helper_text">Un'opzione per riga (chiave=valore). Applicata dopo le impostazioni sopra, un valore qui sovrascrive la sua controparte strutturata. Le righe vuote e i commenti # vengono ignorati.</string>
+    <string name="settings_mpv_helper_text">Un'opzione mpv per riga (chiave=valore). Vengono applicate dopo le impostazioni sopra e le sostituiscono.
+
+• Le righe vuote e le righe che iniziano con # vengono ignorate; una chiave da sola (es. hr-seek) vale yes.
+• Le chiavi dei sottotitoli (sub-color, sub-pos, …) sostituiscono anche le impostazioni sottotitoli dell'app.
+• Non racchiudere i valori tra virgolette — vengono passati a mpv così come sono e le virgolette diventerebbero parte del valore (sub-color=#FF0000 funziona; sub-color="#FF0000" no). Un # dentro un valore è valido qui.</string>
+    <string name="settings_mpv_config_placeholder">scale=ewa_lanczossharp\ncache-secs=120</string>
     <string name="settings_reset_mpv">Ripristina tutte le impostazioni MPV</string>
     <string name="settings_network_caching">Caching di rete</string>
     <string name="settings_skip_frames">Salta frame</string>

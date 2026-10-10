@@ -180,6 +180,19 @@ private val homeSectionDescriptors: Map<HomeSectionType, HomeSectionDescriptor> 
                 isConfigurable = true,
                 dynamicIdPrefix = "discover_",
             )
+            HomeSectionType.PLUGIN_ROW -> HomeSectionDescriptor(
+                type = type,
+                id = null,
+                displayName = "JellyPlay Rows",
+                description = "Curated rows from the JellyPlay companion server plugin",
+                isConfigurable = false,
+                // Per-instance ids: the plugin's seasonal row resolves to
+                // `jellyplay_seasonal`, an admin-defined titled row to
+                // `jellyplay_custom_<title>` (the raw title rides as the
+                // instance id — it is only ever a JSON/lazy-list key, never
+                // parsed beyond the `custom_` marker).
+                dynamicIdPrefix = "jellyplay_",
+            )
         }
     }
 

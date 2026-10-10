@@ -8,14 +8,20 @@ import com.raulshma.jellyplay.feature.settings.ArrSettingsViewModel
 import com.raulshma.jellyplay.feature.settings.AudioSettingsViewModel
 import com.raulshma.jellyplay.feature.settings.ExperimentalSettingsViewModel
 import com.raulshma.jellyplay.feature.settings.FactoryResetViewModel
-import com.raulshma.jellyplay.feature.settings.ImportPreviewViewModel
+import com.raulshma.jellyplay.feature.settings.RestoreWizardViewModel
 import com.raulshma.jellyplay.feature.settings.LanguageSettingsViewModel
 import com.raulshma.jellyplay.feature.settings.LicensesViewModel
 import com.raulshma.jellyplay.feature.settings.DiscoverRowsViewModel
+import com.raulshma.jellyplay.feature.settings.InputBindingsViewModel
+import com.raulshma.jellyplay.feature.settings.JellyPlayMessagesViewModel
+import com.raulshma.jellyplay.feature.settings.JellyPlaySyncViewModel
+import com.raulshma.jellyplay.feature.settings.JellyPlayUserRatingsViewModel
+import com.raulshma.jellyplay.feature.settings.JellyPlayYourWatchingViewModel
 import com.raulshma.jellyplay.feature.settings.LibraryLayoutViewModel
 import com.raulshma.jellyplay.feature.settings.NotificationSettingsViewModel
 import com.raulshma.jellyplay.feature.settings.PlaybackSettingsViewModel
 import com.raulshma.jellyplay.feature.settings.PrivacyDataViewModel
+import com.raulshma.jellyplay.feature.settings.SecretsBackupAssembler
 import com.raulshma.jellyplay.feature.settings.SecuritySettingsViewModel
 import com.raulshma.jellyplay.feature.settings.SeerrSettingsViewModel
 import com.raulshma.jellyplay.feature.settings.ServerManagementViewModel
@@ -88,6 +94,19 @@ val settingsModule: Module = module {
             .apply { warm() }
     }
 
+    // The Wave-3 secrets-block gather/apply seam, shared by the export
+    // (SettingsViewModel) and the restore wizard's file arm. Resolves
+    // the three secure credential stores (datastore platform modules) plus
+    // core:data's ServerBackupMetadataStore (the token-free server-list seam).
+    single {
+        SecretsBackupAssembler(
+            arrStore = get(),
+            seerrStore = get(),
+            subtitleStore = get(),
+            serverMetadataStore = get(),
+        )
+    }
+
     viewModel {
         SettingsViewModel(
             settingsBackupIo = get(),
@@ -98,6 +117,60 @@ val settingsModule: Module = module {
             serverAdminActions = get(),
             editor = get(),
             recentsStore = get(),
+            jellyPlayStatusStore = get(),
+            jellyPlaySyncRepository = get(),
+            jellyPlayEventsRepository = get(),
+            jellyPlayFeatureGate = get(),
+            jellyPlayPushRepository = get(),
+            secretsBackupAssembler = get(),
+            serverIdentityStore = get(),
+        )
+    }
+
+    // The companion-plugin inbox screen (ADR 0010). Reachability is gated at
+    // the settings root's "Messages" entry; the VM still re-checks the
+    // `messages` gate (probe AND the user's toggle) before every api call.
+    viewModel {
+        JellyPlayMessagesViewModel(
+            eventsRepository = get(),
+            statusStore = get(),
+            featureGate = get(),
+        )
+    }
+    // The companion-plugin "My ratings" screen (ADR 0010). Reachability is
+    // gated at the settings root's entry; the VM still re-checks the
+    // `user-ratings` gate (probe AND the user's toggle) before every api call.
+    viewModel {
+        JellyPlayUserRatingsViewModel(
+            pluginApiClient = get(),
+            statusStore = get(),
+            featureGate = get(),
+        )
+    }
+    // The companion-plugin "Your watching" screen. Reachability is gated at
+    // the settings root's entry; the VM still re-checks the `analytics` gate
+    // (probe AND the user's toggle — the per-user analytics face, not the
+    // admin route) before every api call.
+    viewModel {
+        JellyPlayYourWatchingViewModel(
+            pluginApiClient = get(),
+            statusStore = get(),
+            featureGate = get(),
+        )
+    }
+    // The companion-plugin settings-sync screen (ADR 0010). Reachability is
+    // gated at the settings root's "Sync" entry (probe AND the `settings-sync`
+    // meta key — no user toggle exists for meta keys); the VM still re-checks
+    // the same probe-only gate before every api call.
+    viewModel {
+        JellyPlaySyncViewModel(
+            syncRepository = get(),
+            pluginApiClient = get(),
+            deviceRegistry = get(),
+            statusStore = get(),
+            // The background flush scheduler — the disable edge de-arms the
+            // 12h catch-up periodic (ADR 0011: armed only while enabled).
+            syncScheduler = get(),
         )
     }
     viewModel {
@@ -134,6 +207,12 @@ val settingsModule: Module = module {
         )
     }
     viewModel {
+        InputBindingsViewModel(
+            projections = get(),
+            editor = get(),
+        )
+    }
+    viewModel {
         AudioSettingsViewModel(
             projections = get(),
             advancedSettings = get(),
@@ -152,10 +231,18 @@ val settingsModule: Module = module {
         FactoryResetViewModel(
             snapshotReader = get(),
             editor = get(),
+            // Wave 6: the pre-reset safety restore point's api + gate seams.
+            pluginApiClient = get(),
+            statusStore = get(),
         )
     }
+    // The unified restore wizard (Wave 5): ONE flow for restoring settings
+    // regardless of source. Replaces the retired ImportPreviewViewModel (the
+    // file arm ports its parser/diff/restore logic verbatim over the same
+    // seams) and absorbs the sync screen's import + one-click snapshot
+    // restore rows.
     viewModel {
-        ImportPreviewViewModel(
+        RestoreWizardViewModel(
             settingsBackupIo = get(),
             userPreferencesStore = get(),
             // The live diff snapshot rides the factory-reset review's seam —
@@ -163,6 +250,18 @@ val settingsModule: Module = module {
             // of enumerating the stores here, so a new slice extends the
             // bundle, not this definition.
             snapshotReader = get(),
+            // The Wave-3 secrets seam: unlock preview counts + the explicit
+            // apply fan-out.
+            secretsBackupAssembler = get(),
+            // The server arm: restore points, current-state diff, apply batch,
+            // plus the Wave-6 pre-apply safety capture.
+            pluginApiClient = get(),
+            statusStore = get(),
+            syncRepository = get(),
+            // The Wave-3 cross-account warning vs the staged backup's origin ids.
+            serverIdentityStore = get(),
+            // The Wave-6 warning surface (safety-capture misses + summaries).
+            messageBus = get(),
         )
     }
     // ──: storage / privacy / server / security / integrations / about ──
@@ -221,6 +320,15 @@ val settingsModule: Module = module {
             seerrAuthenticator = get(),
             seerrPreferencesStore = get(),
             secureCredentialsStore = get(),
+            // The "via server" bridge seams (ADR 0010): the plugin api client
+            // (seerr status/login/logout), the ONE availability gate, the
+            // per-feature gate (probe AND the user's `seerr-bridge` toggle),
+            // and the Jellyfin Quick Connect source the plugin authorizes
+            // against.
+            pluginApiClient = get(),
+            pluginStatusStore = get(),
+            jellyPlayFeatureGate = get(),
+            authRepository = get(),
         )
     }
     viewModel {
@@ -261,7 +369,7 @@ val settingsModule: Module = module {
             homeDiscoveryStore = get(),
             editor = get(),
             mediaRepository = get(),
-            mediaCollectionReads = get(),
+            libraryApiClient = get(),
             playlistRepository = get(),
         )
     }
@@ -270,7 +378,7 @@ val settingsModule: Module = module {
             homeDiscoveryStore = get(),
             editor = get(),
             mediaRepository = get(),
-            mediaBrowseReads = get(),
+            libraryApiClient = get(),
         )
     }
     viewModel {

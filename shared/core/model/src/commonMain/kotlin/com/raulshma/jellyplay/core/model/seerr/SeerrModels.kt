@@ -745,6 +745,20 @@ data class SeerrAuthLocalRequest(
     val password: String,
 )
 
+/**
+ * The Seerr preference slice. [useServerBridge] selects the connection MODE
+ * on the Seerr settings surface (direct server fields vs the jellyfin-plugin-
+ * jellyplay Seerr bridge, ADR 0010).
+ *
+ * seam: this flag is the consumer seam for switching the Seerr DATA PATH to
+ * the plugin proxy. Today only the settings UI reads it; the follow-up task
+ * that rewires `SeerrRepository`/`SeerrApiClient` must read it (reactively,
+ * off [SeerrPreferencesStore.preferences]) to point the Seerr request
+ * builder at the plugin's `jellyplay/seerr/{**path}` proxy — which serves
+ * every Seerr API call with the user's server-side session once linked —
+ * instead of the direct `{seerr}/api/v1` base URL. Until that lands, the
+ * data path stays direct regardless of this flag.
+ */
 @Immutable
 @Serializable
 data class SeerrPreferences(
@@ -752,6 +766,7 @@ data class SeerrPreferences(
     val authMethod: SeerrAuthMethod = SeerrAuthMethod.API_KEY,
     val username: String = "",
     val email: String = "",
+    val useServerBridge: Boolean = false,
     val enabled: Boolean = false,
     val searchEnabled: Boolean = false,
     val recommendationsEnabled: Boolean = false,

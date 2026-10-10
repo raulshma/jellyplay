@@ -39,7 +39,8 @@ val homeModule: Module = module {
     single {
         HomeRefresherFactory(
             clock = get(),
-            mediaRepository = get(),
+            homeFeed = get(),
+            userDataChanges = get(),
             seerrRepository = get(),
             arrRepository = get(),
             orderHomeSections = get(),
@@ -64,7 +65,7 @@ val homeModule: Module = module {
             episodeCatalogue = get(),
             userDataMutator = get(),
             mediaSearchEngine = get(),
-            mediaRepository = get(),
+            homeFeed = get(),
             imageUrlProvider = get(),
             photoFolderPrefetcher = get(),
             downloadIntake = get(),

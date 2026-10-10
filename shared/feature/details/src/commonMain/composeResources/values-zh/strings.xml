@@ -437,6 +437,9 @@
     <string name="detail_download_advanced_hint_quality_subtitles">%1$s · %2$s</string>
     <string name="detail_download_subtitles_all">全部字幕</string>
     <string name="detail_download_subtitles_none">无字幕</string>
+    <plurals name="detail_download_subtitles_count">
+        <item quantity="other">%1$d 条字幕</item>
+    </plurals>
     <string name="detail_option_refresh_metadata">刷新元数据</string>
     <string name="detail_msg_refresh_started">已在服务器上排队刷新元数据</string>
     <string name="detail_msg_refresh_failed">无法刷新元数据</string>
@@ -473,4 +476,15 @@
     <string name="detail_msg_merge_failed">无法合并版本</string>
     <string name="detail_msg_split_started">正在拆分版本…</string>
     <string name="detail_msg_split_failed">无法拆分版本</string>
+    <plurals name="detail_merge_count_selected">
+        <item quantity="other">已选择 %1$d 个条目</item>
+    </plurals>
+
+    <!-- The JellyPlay sync / details-badges / player-notice strings
+         (ADR 0010 wave), translated together with the default file. -->
+    <string name="jellyplay_det_ratings_title">评分</string>
+    <string name="jellyplay_det_similar_badge">服务器推荐</string>
+    <string name="jellyplay_det_filler_badge">灌水</string>
+    <string name="jellyplay_det_mixed_badge">褒贬不一</string>
+    <string name="jellyplay_det_recap_badge">前情提要</string>
 </resources>

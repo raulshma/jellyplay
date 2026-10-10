@@ -40,6 +40,7 @@ class QueuePersistenceHelper(
         repeatMode: MutableStateFlow<Int>,
         shuffleEnabled: MutableStateFlow<Boolean>,
         playbackSpeed: MutableStateFlow<Float>,
+        shuffleSeed: MutableStateFlow<Long?>,
     ) {
         queue.drop(1)
             .distinctUntilChanged()
@@ -52,6 +53,7 @@ class QueuePersistenceHelper(
             repeatMode.drop(1).distinctUntilChanged(),
             shuffleEnabled.drop(1).distinctUntilChanged(),
             playbackSpeed.drop(1).distinctUntilChanged(),
+            shuffleSeed.drop(1).distinctUntilChanged(),
         )
             .onEach {
                 persistState(
@@ -61,6 +63,7 @@ class QueuePersistenceHelper(
                     repeatMode = repeatMode.value,
                     shuffleEnabled = shuffleEnabled.value,
                     playbackSpeed = playbackSpeed.value,
+                    shuffleSeed = shuffleSeed.value,
                 )
             }
             .launchIn(scope)
@@ -79,6 +82,7 @@ class QueuePersistenceHelper(
                     repeatMode = repeatMode.value,
                     shuffleEnabled = shuffleEnabled.value,
                     playbackSpeed = playbackSpeed.value,
+                    shuffleSeed = shuffleSeed.value,
                 )
             }
             .launchIn(scope)
@@ -112,6 +116,7 @@ class QueuePersistenceHelper(
         repeatMode: Int,
         shuffleEnabled: Boolean,
         playbackSpeed: Float,
+        shuffleSeed: Long?,
     ) {
         audioQueueDao.saveState(
             AudioQueueStateEntity(
@@ -121,6 +126,7 @@ class QueuePersistenceHelper(
                 isPlaying = isPlaying,
                 repeatMode = repeatMode,
                 shuffleEnabled = shuffleEnabled,
+                shuffleSeed = shuffleSeed,
                 playbackSpeed = playbackSpeed,
             )
         )

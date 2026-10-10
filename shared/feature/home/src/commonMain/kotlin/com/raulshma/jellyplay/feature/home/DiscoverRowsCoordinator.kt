@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.feature.home
 
 import com.raulshma.jellyplay.core.data.log.Log
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.HomeFeed
 import com.raulshma.jellyplay.core.model.DiscoverRowConfig
 import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionType
@@ -36,7 +36,7 @@ import kotlin.time.TimeSource
  * folding one state object.
  *
  * The repository owns the cache half of the roll (invalidate → fetch → seed;
- * see `MediaRepository.rerollDiscoverRow`, the protocol's single owner);
+ * see `HomeFeed.rerollDiscoverRow`, the protocol's single owner);
  * this class owns the FEATURE half: patching the on-screen row in place and
  * ordering its writes against a fetch's own sections write.
  *
@@ -57,10 +57,10 @@ import kotlin.time.TimeSource
  * no filtering by stamp.
  *
  * Vocabulary: "generation", not "epoch", in the feature layer — the lower
- * layers keep their store-local epoch guards (the repository's
- * discoverRollEpoch, the network layer's discoverRowEpoch; see the roll
- * protocol on `MediaRepository.rerollDiscoverRow` for how the three layers
- * compose). Identity transitions clear this registry wholesale
+ * layers keep their store-local cache-write guard (the repository's
+ * homeWriteGeneration token, which the network layer's row memo observes
+ * through it; see the roll protocol on `HomeFeed.rerollDiscoverRow` for how
+ * the layers compose). Identity transitions clear this registry wholesale
  * ([cancelForIdentityChange]) — clearing alone is sufficient because the
  * generation's job is ordering WITHIN one identity, and an identity change
  * voids ordering wholesale; [rollGeneration] is deliberately not reset.
@@ -72,7 +72,7 @@ import kotlin.time.TimeSource
 internal class DiscoverRowsCoordinator(
     /** The refresher's scope: roll jobs must die with the VM, beside the refresh jobs. */
     private val scope: CoroutineScope,
-    private val mediaRepository: MediaRepository,
+    private val homeFeed: HomeFeed,
     /** The refresher's own state store — handed in so the roll patches and flag writes land in the single UiState fold. */
     private val state: MutableStateFlow<HomeRefreshState>,
 ) {
@@ -128,7 +128,7 @@ internal class DiscoverRowsCoordinator(
 
     /**
      * The dice affordance for one RANDOM-sorted Jellyfin discover row. The
-     * repository's [MediaRepository.rerollDiscoverRow] owns the whole cache
+     * repository's [HomeFeed.rerollDiscoverRow] owns the whole cache
      * choreography (drop the pre-roll payloads, fetch fresh, commit the rolled
      * set where the next home fetch reads it); this side does only what the
      * repository cannot see: patch the row's items in place — no full refresh,
@@ -163,7 +163,7 @@ internal class DiscoverRowsCoordinator(
             var rolled = false
             try {
                 runCatchingRethrowingCancellation {
-                    val result = mediaRepository.rerollDiscoverRow(row)
+                    val result = homeFeed.rerollDiscoverRow(row)
                     val items = result.getOrNull().orEmpty()
                     if (items.isEmpty()) {
                         // A silent skip here reads as a dead button on the

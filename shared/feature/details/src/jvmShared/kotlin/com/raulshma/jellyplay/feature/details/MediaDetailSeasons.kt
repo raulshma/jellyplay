@@ -108,6 +108,9 @@ import com.raulshma.jellyplay.feature.details.generated.resources.detail_section
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_spoiler
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_time_left_format
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_watched_badge
+import com.raulshma.jellyplay.feature.details.generated.resources.jellyplay_det_filler_badge
+import com.raulshma.jellyplay.feature.details.generated.resources.jellyplay_det_mixed_badge
+import com.raulshma.jellyplay.feature.details.generated.resources.jellyplay_det_recap_badge
 import org.jetbrains.compose.resources.stringResource
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalSharedTransitionApi::class)
@@ -134,6 +137,20 @@ internal fun SeasonsSection(
     getImageUrl: (String) -> String,
     /** Season-tab, episode-list and mark callbacks (see [SeasonsSectionCallbacks] for the pin/select split). */
     callbacks: SeasonsSectionCallbacks,
+    /**
+     * The jellyfin-plugin-jellyplay anime markers for this series
+     * (episodeNumber → badge kind, ADR 0010). Empty = no badges anywhere
+     * (plugin absent / probe failed / series carries no markers — silent
+     * absence by contract).
+     */
+    animeMarkers: Map<Int, AnimeBadgeKind> = emptyMap(),
+    /**
+     * The jellyfin-plugin-jellyplay TMDB season ratings for this series
+     * (season id → episodeNumber → ratings, ADR 0010). Drives the compact
+     * "★ score" chip on the episode rows and the season-average chip beside
+     * the section header. Empty = no scores anywhere (silent absence).
+     */
+    seasonRatings: Map<String, Map<Int, com.raulshma.jellyplay.core.model.JellyPlayEpisodeScore>> = emptyMap(),
 ) {
     // ── DEFERRED FOR LOCAL ORIGIN (decided in [SeasonsPresentation.from]) ────
     // The following affordances remain ONLINE-ONLY and are deliberately NOT
@@ -196,12 +213,24 @@ internal fun SeasonsSection(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    text = stringResource(Res.string.detail_section_seasons),
-                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.semantics { heading() },
-                )
+                // Title + the selected season's TMDB average chip (ADR 0010,
+                // plugin `ratings`): one fold over the loaded season's
+                // score-carrying episodes; absent when none carry a score.
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = stringResource(Res.string.detail_section_seasons),
+                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.semantics { heading() },
+                    )
+                    seasons.getOrNull(selectedSeasonIndex)
+                        ?.let { seasonRatings[it.id] }
+                        ?.let { seasonAverageScore(it) }
+                        ?.let { average -> TmdbScoreChip(score = average) }
+                }
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -371,6 +400,10 @@ internal fun SeasonsSection(
 
         val selectedSeason = seasons.getOrNull(selectedSeasonIndex)
         val seasonEpisodes = selectedSeason?.let { episodes[it.id] }
+        // The selected season's TMDB per-episode scores (ADR 0010) — the
+        // per-episode chip lookup for both episode-row layouts. Empty =
+        // the plugin sent nothing for this season (no chips anywhere).
+        val selectedSeasonRatings = selectedSeason?.let { seasonRatings[it.id] } ?: emptyMap()
         val isFetched = selectedSeason?.id?.let { fetchedSeasonIds.contains(it) } ?: false
         val isLoading = seasonEpisodes == null && selectedSeason != null && !isFetched
         // Capture in composable scope; AnimatedContent's transitionSpec is not composable.
@@ -451,6 +484,8 @@ internal fun SeasonsSection(
                                     isDownloaded = presentation.downloadedEpisodeIds?.contains(episode.id) == true,
                                     onDeleteClick = { callbacks.onEpisodeDeleteClick(episode) },
                                     localImagePath = presentation.episodeLocalImagePaths[episode.id],
+                                    animeBadge = animeMarkers[episode.episodeNumber ?: episode.indexNumber],
+                                    tmdbScore = selectedSeasonRatings[episode.episodeNumber ?: episode.indexNumber]?.tmdbScore,
                                     sharedThumbnailModifier = episodeThumbSharedModifier(
                                         episodeId = episode.id,
                                         sharedTransitionScope = sharedTransitionScope,
@@ -483,6 +518,8 @@ internal fun SeasonsSection(
                                     isDownloaded = presentation.downloadedEpisodeIds?.contains(episode.id) == true,
                                     onDeleteClick = { callbacks.onEpisodeDeleteClick(episode) },
                                     localImagePath = presentation.episodeLocalImagePaths[episode.id],
+                                    animeBadge = animeMarkers[episode.episodeNumber ?: episode.indexNumber],
+                                    tmdbScore = selectedSeasonRatings[episode.episodeNumber ?: episode.indexNumber]?.tmdbScore,
                                     sharedThumbnailModifier = episodeThumbSharedModifier(
                                         episodeId = episode.id,
                                         sharedTransitionScope = sharedTransitionScope,
@@ -556,6 +593,10 @@ internal fun EpisodeCard(
     onDeleteClick: () -> Unit = {},
     /** On-disk thumbnail path; preferred over [getImageUrl] when non-null. */
     localImagePath: String? = null,
+    /** Plugin anime badge for this episode number (null = none — ADR 0010). */
+    animeBadge: AnimeBadgeKind? = null,
+    /** Plugin TMDB score for this episode number (null = none — ADR 0010). */
+    tmdbScore: Double? = null,
 ) {
     // Build the episode image URL once per episode instead of 3× per recomposition.
     // Prefer the on-disk local thumbnail (a downloaded episode's saved Primary
@@ -726,6 +767,17 @@ internal fun EpisodeCard(
                 )
             }
 
+            // Plugin anime badge — bottom-end, mirrored against the watched
+            // tag (a filler episode can be watched too; the two never collide).
+            animeBadge?.let { kind ->
+                AnimeEpisodeBadge(
+                    kind = kind,
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(start = 6.dp, bottom = 8.dp),
+                )
+            }
+
             // Per-episode delete affordance — only for a downloaded episode
             // (gated by `isDownloaded`, which the host sets from the downloaded-
             // episode-id set or the local origin). Online episodes never show
@@ -770,6 +822,7 @@ internal fun EpisodeCard(
                 titleStyle = MaterialTheme.typography.titleMedium,
                 metaStyle = MaterialTheme.typography.labelMedium,
                 runtimeTopPadding = 4.dp,
+                tmdbScore = tmdbScore,
             )
             episode.overview?.takeIf { it.isNotBlank() }?.let { overview ->
                 Spacer(Modifier.height(8.dp))
@@ -817,6 +870,10 @@ private fun CompactEpisodeRow(
     isDownloaded: Boolean = false,
     onDeleteClick: () -> Unit = {},
     localImagePath: String? = null,
+    /** Plugin anime badge for this episode number (null = none — ADR 0010). */
+    animeBadge: AnimeBadgeKind? = null,
+    /** Plugin TMDB score for this episode number (null = none — ADR 0010). */
+    tmdbScore: Double? = null,
 ) {
     val cardInteractionSource = remember { MutableInteractionSource() }
     val isCardPressed by cardInteractionSource.collectIsPressedAsState()
@@ -942,6 +999,17 @@ private fun CompactEpisodeRow(
                         .padding(start = 4.dp, bottom = 6.dp),
                 )
             }
+
+            // Plugin anime badge — bottom-end, mirrored against the watched
+            // tag (see EpisodeCard).
+            animeBadge?.let { kind ->
+                AnimeEpisodeBadge(
+                    kind = kind,
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(start = 4.dp, bottom = 6.dp),
+                )
+            }
         }
 
         Column(
@@ -956,6 +1024,7 @@ private fun CompactEpisodeRow(
                 titleStyle = MaterialTheme.typography.titleSmall,
                 metaStyle = MaterialTheme.typography.labelSmall,
                 runtimeTopPadding = 2.dp,
+                tmdbScore = tmdbScore,
             )
         }
 
@@ -1094,6 +1163,8 @@ private fun ColumnScope.EpisodeMetaLines(
     titleStyle: TextStyle,
     metaStyle: TextStyle,
     runtimeTopPadding: Dp,
+    /** Plugin TMDB score for this episode (null = no chip — ADR 0010). */
+    tmdbScore: Double? = null,
 ) {
     Text(
         text = buildString {
@@ -1136,6 +1207,16 @@ private fun ColumnScope.EpisodeMetaLines(
             style = metaStyle,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = runtimeTopPadding)
+        )
+    }
+
+    // Plugin TMDB score chip (ADR 0010, `ratings`) — the compact "★ 7.8"
+    // badge under the runtime line, before the last-watched timestamp.
+    // Rendered only when the plugin sent a score for this episode number.
+    if (tmdbScore != null) {
+        TmdbScoreChip(
+            score = tmdbScore,
+            modifier = Modifier.padding(top = 4.dp),
         )
     }
 
@@ -1271,6 +1352,73 @@ private fun VirtualEpisodeBadge(episode: MediaItem, modifier: Modifier = Modifie
         MissingEpisodeBadge.Missing -> stringResource(Res.string.detail_missing_badge)
     }
     MissingEpisodeTag(label = label, modifier = modifier)
+}
+
+/**
+ * The jellyfin-plugin-jellyplay anime badge (filler / mixed / recap) for an
+ * episode row — a compact tonal chip mirroring [EpisodeWatchedTag]'s chrome
+ * minus the check icon, in the secondary container so it never reads as a
+ * watch-state. Rendered only when the plugin's marker probe returned a
+ * badge-carrying kind for the episode number (ADR 0010: silent absence).
+ */
+@Composable
+internal fun AnimeEpisodeBadge(
+    kind: AnimeBadgeKind,
+    modifier: Modifier = Modifier,
+) {
+    val label = stringResource(
+        when (kind) {
+            AnimeBadgeKind.FILLER -> Res.string.jellyplay_det_filler_badge
+            AnimeBadgeKind.MIXED -> Res.string.jellyplay_det_mixed_badge
+            AnimeBadgeKind.RECAP -> Res.string.jellyplay_det_recap_badge
+        },
+    )
+    Surface(
+        modifier = modifier,
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+        shape = ShapeCache.smooth12,
+        shadowElevation = 2.dp,
+        tonalElevation = 1.dp,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+        )
+    }
+}
+
+/**
+ * The jellyfin-plugin-jellyplay TMDB score chip (ADR 0010, `ratings`) — the
+ * compact "★ 7.8" badge rendered on the episode rows and beside the seasons
+ * header's title (the season average). Chip chrome mirrors
+ * [AnimeEpisodeBadge]'s compact sizing; the colors MATCH the plugin ratings
+ * section's mdblist chips (`JellyPlayPluginRating`
+ * rendering in MediaDetailBodySections: onSurface 15% / 95%). Rendered only
+ * when the plugin sent a score (silent absence).
+ */
+@Composable
+internal fun TmdbScoreChip(
+    score: Double,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier,
+        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f),
+        contentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.95f),
+        shape = ShapeCache.smooth12,
+    ) {
+        Text(
+            text = "★ ${formatPluginScore(score)}",
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+        )
+    }
 }
 // endregion
 

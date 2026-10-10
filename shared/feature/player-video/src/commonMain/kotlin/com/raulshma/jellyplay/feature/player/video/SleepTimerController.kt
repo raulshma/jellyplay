@@ -163,6 +163,20 @@ internal class SleepTimerController(
     }
 
     /**
+     * True when the playback-ended funnel must let the sleep timer win over
+     * the auto-advance/still-watching gates (the user asked to STOP at this
+     * episode's end — see [SleepTimerBoundaryPolicy]). Follow with
+     * [triggerSleepTimerEndOfEpisode].
+     */
+    fun interceptsAutoAdvance(): Boolean {
+        val snapshot = _state.value
+        return SleepTimerBoundaryPolicy.sleepTimerWinsOverAutoAdvance(
+            active = snapshot.sleepTimerActive,
+            endOfEpisode = snapshot.sleepTimerEndOfEpisode,
+        )
+    }
+
+    /**
      * Seeds [SleepTimerState.sleepTimerLastUsedDurationMs] from the persisted
      * [AudioStore] preference. The former projection lived in
      * [SettingsProjector]; it moves here because the field's home moved. Guarded

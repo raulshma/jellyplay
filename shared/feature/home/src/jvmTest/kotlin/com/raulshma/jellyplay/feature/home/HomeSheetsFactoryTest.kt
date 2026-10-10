@@ -87,7 +87,7 @@ class HomeSheetsFactoryTest {
             epoch = 1L,
         )
         coEvery { episodeCatalogue.loadSeriesEpisodes("s1") } returns Result.success(snapshot)
-        coEvery { seriesDownloads.getDownloadedEpisodeIdsForSeries("s1") } returns setOf("e1")
+        coEvery { seriesDownloads.episodeIdsForSeries("s1") } returns setOf("e1")
         val sheets = createSheets()
 
         sheets.seriesDownload.requestSeriesDownload(series())

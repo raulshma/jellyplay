@@ -58,6 +58,7 @@ class NotificationStoreTest {
         assertTrue(np.lightsEnabled)
         assertEquals(10, np.maxPerCheck)
         assertTrue(np.libraryConfigs.isEmpty())
+        assertFalse(np.newEpisodesEnabled)
         // Newsletter defaults
         assertTrue(slice.newsletterEnabled)
         assertEquals(7, slice.newsletterDayOfWeek)
@@ -80,6 +81,7 @@ class NotificationStoreTest {
                 lightsEnabled = false,
                 maxPerCheck = 25,
                 libraryConfigs = mapOf("library1" to LibraryNotificationConfig(enabled = false, mediaTypes = setOf("Movie"))),
+                newEpisodesEnabled = true,
             )
         }
         val np = store.notification.first().notificationPreferences
@@ -96,6 +98,7 @@ class NotificationStoreTest {
             mapOf("library1" to LibraryNotificationConfig(enabled = false, mediaTypes = setOf("Movie"))),
             np.libraryConfigs,
         )
+        assertTrue(np.newEpisodesEnabled)
     }
 
     @Test

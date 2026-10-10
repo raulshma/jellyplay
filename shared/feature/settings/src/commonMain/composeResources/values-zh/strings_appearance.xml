@@ -26,6 +26,8 @@
     <string name="settings_library_view_mode">媒体库视图模式</string>
     <string name="settings_layout_mode">布局</string>
     <string name="settings_layout_mode_subtitle">选择自动、手机或平板布局</string>
+    <string name="settings_screen_fit">屏幕适配</string>
+    <string name="settings_screen_fit_subtitle">将画面收进电视安全区内，避免边缘被裁切</string>
     <string name="settings_library_view_grid">以网格布局显示项目</string>
     <string name="settings_library_view_list">以列表布局显示项目</string>
     <string name="settings_library_view_thumb">以横向缩略图显示项目</string>

@@ -5,10 +5,11 @@ import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.RememberedTrack
 import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.isLanguageMatch
+import com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind
 
 /**
  * Side-loaded streaming subtitle id: `"external:{server stream index}"`.
- * Stamped by `PlayerSessionManager.buildExternalSubtitles` onto each
+ * Stamped by `SessionSubtitleSources.buildExternalSubtitles` onto each
  * `SubtitleSource` and matched by [TrackSelectionPolicy.resolveByStreamIndex].
  * Single source so constructor and matcher can't drift apart.
  */
@@ -17,17 +18,47 @@ internal fun externalSubtitleTrackId(streamIndex: Int): String = "external:$stre
 /**
  * Inverse of [externalSubtitleTrackId]: recovers the server stream index from
  * a side-loaded streaming-subtitle id, or null for every other id shape
- * (`offline:`, `local:`, `provider:`).
+ * (`offline:`, `streaming:`, `local:`, `provider:`).
  */
 internal fun externalSubtitleTrackStreamIndex(id: String): Int? =
     id.takeIf { it.startsWith("external:") }?.removePrefix("external:")?.toIntOrNull()
 
 /**
  * Offline side-loaded subtitle id: `"offline:{subtitle manifest index}"`.
- * Stamped by `PlayerSessionManager.loadOfflineSubtitles` and matched by
+ * Stamped by `SessionSubtitleSources.loadOfflineSubtitles` and matched by
  * [TrackSelectionPolicy.resolveByOfflineSubtitleId].
  */
 internal fun offlineSubtitleTrackId(index: Int): String = "offline:$index"
+
+/**
+ * Streaming-store side-loaded subtitle id:
+ * `"streaming:{provider}:{providerSubtitleId}"`. Stamped by
+ * `SessionSubtitleSources.loadStreamingSubtitles` onto every provider
+ * subtitle (OpenSubtitles/Wyzie) side-loaded from the durable
+ * streaming-subtitle store; [streamingSubtitleTrackRowKey] recovers the
+ * [com.raulshma.jellyplay.feature.player.video.state.providerSubtitleRowKey]
+ * payload. Single source so constructor and matcher can't drift apart.
+ *
+ * Unlike the `external:`/`offline:` ids this prefix has NO selection rung
+ * today: streaming rows restore through `SubtitleManager`'s appear-polling
+ * (`waitForSubtitleToAppear`) and attach-verification
+ * (`waitForTrackAttachment`) heuristics rather than a prefix-scoped resolve.
+ * The codec exists so prefix-scoped policy CAN exclude/include streaming rows
+ * deliberately (an exclude rule beside
+ * [externalSubtitleTrackStreamIndex], a scoped resolve of its own) without
+ * re-deriving the string shape at the policy site.
+ */
+internal fun streamingSubtitleTrackId(provider: SubtitleProviderKind, providerSubtitleId: String): String =
+    "streaming:$provider:$providerSubtitleId"
+
+/**
+ * Inverse of [streamingSubtitleTrackId]: recovers the
+ * `"provider:providerSubtitleId"` composite from a streaming-subtitle id, or
+ * null for every other id shape (`external:`, `offline:`, `local:`,
+ * `provider:`).
+ */
+internal fun streamingSubtitleTrackRowKey(id: String): String? =
+    id.takeIf { it.startsWith("streaming:") }?.removePrefix("streaming:")
 
 /**
  * The deep, **pure** home for the track-selection *policy*: given the candidate
@@ -170,7 +201,7 @@ internal class TrackSelectionPolicy {
         if (byStreamIndex != null) return byStreamIndex
         // Streaming side-load contract: on a transcode the server's text subs
         // are delivered as side-loaded files and
-        // PlayerSessionManager.buildExternalSubtitles stamps
+        // SessionSubtitleSources.buildExternalSubtitles stamps
         // [externalSubtitleTrackId] onto each SubtitleSource — propagated into
         // TrackOption.id by both engines (the streaming mirror of the
         // "offline:{index}" contract below). The id is exact, so it outranks
@@ -190,7 +221,7 @@ internal class TrackSelectionPolicy {
      * Offline playback carries no server [MediaStream]s, so the only stable
      * handle linking the detail screen's persisted selection (the original server
      * stream index) to an engine track is the `"offline:${index}"` id that
-     * `PlayerSessionManager.loadOfflineSubtitles` stamps onto every
+     * `SessionSubtitleSources.loadOfflineSubtitles` stamps onto every
      * `SubtitleSource` and the engines propagate into [TrackOption.id]:
      * ExoPlayer via the `MediaItem.SubtitleConfiguration.id` → track `format.id`,
      * and mpv via its side-loaded-subtitle id registry. Returns `null` when no
@@ -199,7 +230,7 @@ internal class TrackSelectionPolicy {
      * positional-index match.
      *
      * The `offline:${index}` contract is established in
-     * `PlayerSessionManager.loadOfflineSubtitles` and matched by the detail
+     * `SessionSubtitleSources.loadOfflineSubtitles` and matched by the detail
      * screen's local-subtitle selector, which writes the chosen
      * `OfflineSubtitleEntry.index` into the per-item `subtitleStreamIndex`.
      */

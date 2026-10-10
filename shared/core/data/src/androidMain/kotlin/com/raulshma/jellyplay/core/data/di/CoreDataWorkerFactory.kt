@@ -9,6 +9,7 @@ import com.raulshma.jellyplay.core.data.worker.DownloadWorker
 import com.raulshma.jellyplay.core.data.worker.PlaybackOutboxDrainer
 import com.raulshma.jellyplay.core.data.worker.PlaybackOutboxDrainerImpl
 import com.raulshma.jellyplay.core.data.worker.PlaybackSyncWorker
+import com.raulshma.jellyplay.core.data.worker.SettingsSyncWorker
 import com.raulshma.jellyplay.core.data.worker.StaleMediaScanWorker
 import com.raulshma.jellyplay.core.data.worker.TvWatchNextWorker
 import com.raulshma.jellyplay.core.data.worker.UserDataSyncScheduler
@@ -45,7 +46,7 @@ class CoreDataWorkerFactory : WorkerFactory() {
             )
             UserDataSyncWorker::class.simpleName -> UserDataSyncWorker(
                 context, workerParameters,
-                mediaRepository = koin().get(),
+                homeFeed = koin().get(),
                 cacheInvalidator = koin().get(),
                 playbackStore = koin().get(),
                 serverIdentityStore = koin().get(),
@@ -63,7 +64,7 @@ class CoreDataWorkerFactory : WorkerFactory() {
             )
             TvWatchNextWorker::class.simpleName -> TvWatchNextWorker(
                 context, workerParameters,
-                mediaRepository = koin().get(),
+                homeFeed = koin().get(),
                 imageUrlProvider = koin().get(),
                 playbackStore = koin().get(),
                 timeSource = koin().get(),
@@ -100,6 +101,10 @@ class CoreDataWorkerFactory : WorkerFactory() {
                 tokenCipher = koin().get(),
                 concurrencyLimiter = koin().get(),
                 transferClient = koin().get(),
+            )
+            SettingsSyncWorker::class.simpleName -> SettingsSyncWorker(
+                context, workerParameters,
+                syncRepository = koin().get(),
             )
             else -> null
         }

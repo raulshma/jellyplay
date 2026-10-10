@@ -20,8 +20,11 @@ Choose the correct APK:
 
 | File | Target device |
 | ---- | ------------- |
-| `app-phone-<version>.apk` | Phones, tablets, foldables |
-| `app-tv-<version>.apk` | Android TV, Fire TV, Chromecast with Google TV |
+| `jellyplay-v<version>-phone-<abi>.apk` | Phones, tablets, foldables |
+| `jellyplay-v<version>-tv-<abi>.apk` | Android TV, Fire TV, Chromecast with Google TV |
+
+> Both flavors also ship a `-universal.apk` covering every ABI. Builds are
+> **arm64-v8a only** — every phone and TV box from the last decade qualifies.
 
 > Tip: The TV APK includes a Leanback launcher tile so JellyPlay shows
 > up alongside Netflix, Prime Video, etc.
@@ -42,12 +45,14 @@ for sideloading instructions (Downloader app, ADB, or USB stick).
 
 ## Step 3 — Connect to your Jellyfin server
 
-On first launch JellyPlay walks you through a 10-step **Onboarding Wizard**.
-The first step is server connection.
+On first launch JellyPlay asks you to connect to your Jellyfin server.
+Once you are signed in, a 10-step **Onboarding Wizard** (starting with a
+Welcome page) walks you through personalization.
 
-1. Enter your Jellyfin server URL, e.g. `http://192.168.1.100:8096`.
-2. Tap **Auto-discover** to let JellyPlay scan your local network.
-3. Authenticate with:
+1. Enter your Jellyfin server URL, e.g. `http://192.168.1.100:8096` —
+   or let JellyPlay find it for you: the Add Server screen scans your
+   local network automatically and lists the servers it finds.
+2. Authenticate with:
    - **Username & password** — token-based, persisted in encrypted storage
    - **Quick Connect** — open Jellyfin's web dashboard, approve the
      6-digit code, and JellyPlay signs you in instantly
@@ -72,9 +77,9 @@ The Onboarding Wizard continues with:
 - **Security** — PIN lock and biometric lock with auto-lock timer
 - **Seerr** *(optional)* — connect your Seerr / Overseerr
   server for media requests — see the
-  [Seerr integration guide](./seerr-integration.md)
+  [Seerr integration guide](./jellyseerr-integration.md)
 
-You can re-run the wizard at any time from **Settings → Onboarding**.
+You can re-run the wizard at any time from **Settings → System → Setup Wizard**.
 
 ## Step 5 — Start streaming
 
@@ -88,13 +93,13 @@ flight.
 | ------- | --- |
 | "Connection refused" | Verify the server URL includes the port (`8096` by default) and that the server is reachable from the device's network. |
 | Login loop | Clear app data from Android Settings, then re-add the server. |
-| Video stutters | Try a different player engine in **Settings → Player → Engine** (libmpv is often more robust on budget devices). |
-| Audio out of sync | Adjust **Settings → Audio → Audio delay (ms)**. |
+| Video stutters | Try a different player engine in **Settings → Playback → Player Engine** (libmpv is often more robust on budget devices). |
+| Audio out of sync | Adjust **Settings → Playback → Audio Sync Delay**. |
 | Need more help? | Open a [Q&A discussion](https://github.com/raulshma/jellyplay/discussions). |
 
 ## Next steps
 
 - 📺 [Android TV & Fire TV setup →](./android-tv-setup.md)
-- 📡 [Connect Seerr for media requests →](./seerr-integration.md)
+- 📡 [Connect Seerr for media requests →](./jellyseerr-integration.md)
 - 👯 [Start a SyncPlay watch party →](./syncplay-guide.md)
 - ⬇️ [Set up offline downloads →](./offline-downloads.md)

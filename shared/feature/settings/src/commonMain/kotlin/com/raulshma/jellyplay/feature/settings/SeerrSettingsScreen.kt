@@ -46,13 +46,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import org.koin.compose.viewmodel.koinViewModel
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.expressiveListShape
+import com.raulshma.jellyplay.core.model.JellyPlayPluginFeatures
+import com.raulshma.jellyplay.core.model.JellyPlayPluginStatus
 import com.raulshma.jellyplay.core.model.seerr.SeerrAuthMethod
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
@@ -128,6 +132,29 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_upco
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_upcoming_series
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_upcoming_series_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_username_label
+import com.raulshma.jellyplay.feature.settings.generated.resources.jellyplay_seerr_bridge_checking
+import com.raulshma.jellyplay.feature.settings.generated.resources.jellyplay_seerr_bridge_linked_with
+import com.raulshma.jellyplay.feature.settings.generated.resources.jellyplay_seerr_bridge_login
+import com.raulshma.jellyplay.feature.settings.generated.resources.jellyplay_seerr_bridge_logout
+import com.raulshma.jellyplay.feature.settings.generated.resources.jellyplay_seerr_bridge_not_configured
+import com.raulshma.jellyplay.feature.settings.generated.resources.jellyplay_seerr_bridge_retry
+import com.raulshma.jellyplay.feature.settings.generated.resources.jellyplay_seerr_bridge_unavailable
+import com.raulshma.jellyplay.feature.settings.generated.resources.jellyplay_seerr_bridge_unlinked
+import com.raulshma.jellyplay.feature.settings.generated.resources.jellyplay_seerr_bridge_via_note
+import com.raulshma.jellyplay.feature.settings.generated.resources.jellyplay_seerr_error_login_failed
+import com.raulshma.jellyplay.feature.settings.generated.resources.jellyplay_seerr_error_logout_failed
+import com.raulshma.jellyplay.feature.settings.generated.resources.jellyplay_seerr_error_qc_disabled
+import com.raulshma.jellyplay.feature.settings.generated.resources.jellyplay_seerr_error_qc_failed
+import com.raulshma.jellyplay.feature.settings.generated.resources.jellyplay_seerr_error_qc_timeout
+import com.raulshma.jellyplay.feature.settings.generated.resources.jellyplay_seerr_error_status_unreachable
+import com.raulshma.jellyplay.feature.settings.generated.resources.jellyplay_seerr_mode_direct
+import com.raulshma.jellyplay.feature.settings.generated.resources.jellyplay_seerr_mode_via_server
+import com.raulshma.jellyplay.feature.settings.generated.resources.jellyplay_seerr_qc_cancel
+import com.raulshma.jellyplay.feature.settings.generated.resources.jellyplay_seerr_qc_enter_code
+import com.raulshma.jellyplay.feature.settings.generated.resources.jellyplay_seerr_qc_starting
+import com.raulshma.jellyplay.feature.settings.generated.resources.jellyplay_seerr_qc_waiting
+import com.raulshma.jellyplay.feature.settings.generated.resources.jellyplay_seerr_summary_linked
+import com.raulshma.jellyplay.feature.settings.generated.resources.jellyplay_seerr_summary_unlinked
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_clear_cd
 
 // Region pickers flow through the shared `PickerState` dispatcher; no screen-local
@@ -146,6 +173,34 @@ fun SeerrSettingsScreen(
     val isTesting = connectionStatus is ConnectionProbe.Status.Testing
     val isConnected = connectionStatus is ConnectionProbe.Status.Connected
 
+    // ── "via JellyPlay server" mode (ADR 0010) ──
+    // The mode selector arms only on AVAILABLE + the SeerrBridge feature key
+    // + the user's per-feature toggle (the capability-registry gate — never a
+    // per-endpoint 404). The probe rides the selector's visibility (the
+    // sync-section discipline: UNKNOWN → one refresh; the store's identity
+    // reset re-arms the next visit). While the toggle is off the mode is
+    // SUPERSEDED: the selector hides and the screen renders the direct pane
+    // regardless of the saved pref (the repository's bridge arm is gated to
+    // match — the saved mode comes back when the toggle does).
+    val pluginStatus by viewModel.jellyPlayPluginStatus.collectAsStateWithLifecycle()
+    val pluginFeatures by viewModel.jellyPlayPluginFeatures.collectAsStateWithLifecycle()
+    val featureToggles by viewModel.jellyPlayFeatureToggles.collectAsStateWithLifecycle()
+    val bridgeAvailable = pluginStatus == JellyPlayPluginStatus.AVAILABLE &&
+        JellyPlayPluginFeatures.SeerrBridge in pluginFeatures &&
+        JellyPlayPluginFeatures.SeerrBridge in featureToggles
+    val useServerBridge = viewModel.useServerBridge && bridgeAvailable
+    val bridgeLinked = viewModel.bridgeStatus?.linked == true
+
+    LaunchedEffect(pluginStatus) {
+        if (pluginStatus == JellyPlayPluginStatus.UNKNOWN) {
+            viewModel.refreshJellyPlayPluginStatus()
+        }
+    }
+
+    // The integration feature/region groups render in whichever mode is active
+    // and only when its connection is established (direct probe or bridge link).
+    val seerrActive = if (useServerBridge) bridgeLinked else isConnected
+
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = LocalTvMode.current
     val contentPad = adaptiveInfo.contentPadding(isTv)
@@ -161,7 +216,7 @@ fun SeerrSettingsScreen(
     val scrollState = rememberLazyListState()
     val scrollIndex = remember(highlightSettingId) {
         when (highlightSettingId) {
-            IntegrationsScreenIds.SEERR_SETTINGS -> 2
+            IntegrationsRows.SeerrSettings.id -> 2
             else -> -1
         }
     }
@@ -215,20 +270,36 @@ fun SeerrSettingsScreen(
                         icon = Tabler.Outline.Server,
                         title = stringResource(Res.string.settings_server_connection),
                         summary = {
-                            when (connectionStatus) {
-                                is ConnectionProbe.Status.Connected -> {
-                                    val versionText = if (connectionStatus.details.version.isNotBlank()) " (v${connectionStatus.details.version})" else ""
-                                    stringResource(Res.string.settings_connected_to, "${viewModel.serverUrl}$versionText")
+                            if (useServerBridge) {
+                                // Non-delegated local: the VM bridge getters are
+                                // custom properties, so the null arm can't
+                                // smart-cast without it.
+                                val bridgeFailure = viewModel.bridgeFailure
+                                when {
+                                    bridgeLinked -> stringResource(
+                                        Res.string.jellyplay_seerr_summary_linked,
+                                        viewModel.bridgeStatus?.serverUrl ?: "",
+                                    )
+                                    viewModel.bridgeStatus != null -> stringResource(Res.string.jellyplay_seerr_summary_unlinked)
+                                    bridgeFailure != null -> seerrBridgeFailureText(bridgeFailure)
+                                    else -> stringResource(Res.string.jellyplay_seerr_bridge_checking)
                                 }
-                                is ConnectionProbe.Status.Error -> probeFailureText(connectionStatus.failure)
-                                else -> {
-                                    if (isTesting) stringResource(Res.string.settings_connecting)
-                                    else if (viewModel.serverUrl.isNotBlank()) stringResource(Res.string.settings_credentials_configured)
-                                    else stringResource(Res.string.settings_configure_server_address)
+                            } else {
+                                when (connectionStatus) {
+                                    is ConnectionProbe.Status.Connected -> {
+                                        val versionText = if (connectionStatus.details.version.isNotBlank()) " (v${connectionStatus.details.version})" else ""
+                                        stringResource(Res.string.settings_connected_to, "${viewModel.serverUrl}$versionText")
+                                    }
+                                    is ConnectionProbe.Status.Error -> probeFailureText(connectionStatus.failure)
+                                    else -> {
+                                        if (isTesting) stringResource(Res.string.settings_connecting)
+                                        else if (viewModel.serverUrl.isNotBlank()) stringResource(Res.string.settings_credentials_configured)
+                                        else stringResource(Res.string.settings_configure_server_address)
+                                    }
                                 }
                             }
                         },
-                        initiallyExpanded = !isConnected,
+                        initiallyExpanded = if (useServerBridge) !bridgeLinked else !isConnected,
                     ) {
                         Column(
                             modifier = Modifier
@@ -236,129 +307,29 @@ fun SeerrSettingsScreen(
                                 .padding(vertical = 4.dp),
                             verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            OutlinedTextField(
-                                value = viewModel.serverUrl,
-                                onValueChange = viewModel::onServerUrlChanged,
-                                label = { Text(stringResource(Res.string.settings_server_url)) },
-                                placeholder = { Text(stringResource(Res.string.settings_server_url_placeholder)) },
-                                leadingIcon = {
-                                    Icon(Tabler.Outline.Globe, contentDescription = null)
-                                },
-                                trailingIcon = {
-                                    if (viewModel.serverUrl.isNotBlank() && !isTesting) {
-                                        IconButton(
-                                            onClick = { viewModel.onServerUrlChanged("") },
-                                            modifier = Modifier.focusIndicator(CircleShape),
-                                        ) {
-                                            Icon(Tabler.Outline.X, contentDescription = stringResource(Res.string.settings_clear_cd))
-                                        }
-                                    }
-                                },
-                                singleLine = true,
-                                modifier = Modifier.fillMaxWidth(),
-                                enabled = !isTesting,
-                                shape = ShapeCache.smooth16,
-                            )
-
-                            SingleChoiceSegmentedButtonRow(
-                                modifier = Modifier.fillMaxWidth(),
-                            ) {
-                                SegmentedButton(
-                                    shape = SegmentedButtonDefaults.itemShape(index = 0, count = 3),
-                                    onClick = { viewModel.onAuthMethodChanged(SeerrAuthMethod.API_KEY) },
-                                    selected = viewModel.authMethod == SeerrAuthMethod.API_KEY,
-                                    icon = {},
-                                ) {
-                                    Text(stringResource(Res.string.settings_seerr_api_key_method))
-                                }
-                                SegmentedButton(
-                                    shape = SegmentedButtonDefaults.itemShape(index = 1, count = 3),
-                                    onClick = { viewModel.onAuthMethodChanged(SeerrAuthMethod.JELLYFIN) },
-                                    selected = viewModel.authMethod == SeerrAuthMethod.JELLYFIN,
-                                    icon = {},
-                                ) {
-                                    Text(stringResource(Res.string.settings_seerr_jellyfin_method))
-                                }
-                                SegmentedButton(
-                                    shape = SegmentedButtonDefaults.itemShape(index = 2, count = 3),
-                                    onClick = { viewModel.onAuthMethodChanged(SeerrAuthMethod.LOCAL) },
-                                    selected = viewModel.authMethod == SeerrAuthMethod.LOCAL,
-                                    icon = {},
-                                ) {
-                                    Text(stringResource(Res.string.settings_seerr_local_method))
-                                }
+                            // Mode selector (ADR 0010): direct connection vs the
+                            // plugin-brokered "via server" bridge. Only armed when
+                            // the capabilities probe reports AVAILABLE with the
+                            // SeerrBridge feature key — a stock server never sees it.
+                            if (bridgeAvailable) {
+                                SeerrModeSelector(
+                                    viaServer = useServerBridge,
+                                    onSelect = viewModel::setUseServerBridge,
+                                )
                             }
 
-                            when (viewModel.authMethod) {
-                                SeerrAuthMethod.API_KEY -> ApiKeyFields(viewModel, isTesting)
-                                SeerrAuthMethod.JELLYFIN -> JellyfinAuthFields(viewModel, isTesting)
-                                SeerrAuthMethod.LOCAL -> LocalAuthFields(viewModel, isTesting)
-                            }
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            ) {
-                                Button(
-                                    onClick = { viewModel.testConnection() },
-                                    enabled = !isTesting && viewModel.serverUrl.isNotBlank() && when (viewModel.authMethod) {
-                                        SeerrAuthMethod.API_KEY -> viewModel.apiKey.isNotBlank()
-                                        SeerrAuthMethod.JELLYFIN -> viewModel.username.isNotBlank() && viewModel.password.isNotBlank()
-                                        SeerrAuthMethod.LOCAL -> viewModel.email.isNotBlank() && viewModel.password.isNotBlank()
-                                    },
-                                    modifier = Modifier.weight(1f).focusIndicator(),
-                                    shape = ShapeCache.smooth16,
-                                ) {
-                                    if (isTesting) {
-                                        JellyPlayCircularProgressIndicator(
-                                            modifier = Modifier.size(18.dp),
-                                        )
-                                        Spacer(Modifier.width(8.dp))
-                                    }
-                                    Text(
-                                        when (viewModel.authMethod) {
-                                            SeerrAuthMethod.API_KEY -> stringResource(Res.string.settings_test_connection)
-                                            SeerrAuthMethod.JELLYFIN,
-                                            SeerrAuthMethod.LOCAL -> stringResource(Res.string.settings_seerr_sign_in)
-                                        }
-                                    )
-                                }
-
-                                if (isConnected) {
-                                    OutlinedButton(
-                                        onClick = { viewModel.disconnect() },
-                                        modifier = Modifier.focusIndicator(),
-                                        shape = ShapeCache.smooth16,
-                                        colors = ButtonDefaults.outlinedButtonColors(
-                                            contentColor = MaterialTheme.colorScheme.error,
-                                        ),
-                                    ) {
-                                        Text(stringResource(Res.string.settings_disconnect))
-                                    }
-                                }
-                            }
-
-                            AnimatedVisibility(
-                                visible = connectionStatus is ConnectionProbe.Status.Connected || connectionStatus is ConnectionProbe.Status.Error,
-                                enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()) + expandVertically(animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec()),
-                                exit = fadeOut(MaterialTheme.motionScheme.defaultEffectsSpec()) + shrinkVertically(animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec()),
-                            ) {
-                                // Banner retention (declared): Seerr keeps the
-                                // full banner because its subtitle carries the
-                                // integration-specific version text; the
-                                // retry/login actions stay in the form above.
-                                ConnectionProbeStatusIndicator(
-                                    status = connectionStatus,
-                                    style = ConnectionProbeIndicatorStyle.Banner,
-                                    connectedSubtitle = when (val status = connectionStatus) {
-                                        is ConnectionProbe.Status.Connected ->
-                                            if (status.details.version.isNotBlank()) {
-                                                stringResource(Res.string.settings_server_reached_version, status.details.version)
-                                            } else {
-                                                stringResource(Res.string.settings_seerr_server_reached)
-                                            }
-                                        else -> null
-                                    },
+                            when {
+                                useServerBridge && pluginStatus == JellyPlayPluginStatus.AVAILABLE ->
+                                    ViaServerBridgeContent(viewModel)
+                                useServerBridge -> BridgePluginUnavailableContent(
+                                    probed = pluginStatus != JellyPlayPluginStatus.UNKNOWN,
+                                    onUseDirect = { viewModel.setUseServerBridge(false) },
+                                )
+                                else -> SeerrDirectConnectionContent(
+                                    viewModel = viewModel,
+                                    connectionStatus = connectionStatus,
+                                    isTesting = isTesting,
+                                    isConnected = isConnected,
                                 )
                             }
                         }
@@ -367,7 +338,7 @@ fun SeerrSettingsScreen(
             }
 
             // Features Group
-            if (isConnected) {
+            if (seerrActive) {
                 item {
                     AnimatedSettingsEntrance(index = 2, visible = animateEntrance) {
                         SettingsGroup(
@@ -386,7 +357,7 @@ fun SeerrSettingsScreen(
                                 }
                             },
                             modifier = Modifier.padding(vertical = 4.dp),
-                            initiallyExpanded = preferences.enabled || highlightSettingId == IntegrationsScreenIds.SEERR_SETTINGS,
+                            initiallyExpanded = preferences.enabled || highlightSettingId == IntegrationsRows.SeerrSettings.id,
                         ) {
                             val showSubFeatures = preferences.enabled
                             val featTotal = if (showSubFeatures) 4 else 1
@@ -398,7 +369,7 @@ fun SeerrSettingsScreen(
                                 checked = preferences.enabled,
                                 index = 0,
                                 count = featTotal,
-                                highlighted = highlightSettingId == IntegrationsScreenIds.SEERR_SETTINGS,
+                                highlighted = highlightSettingId == IntegrationsRows.SeerrSettings.id,
                                 onCheckedChange = viewModel::setEnabled,
                             )
 
@@ -633,6 +604,438 @@ private fun SeerrHeader() {
                 text = stringResource(Res.string.settings_seerr_header_description),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun SeerrModeSelector(viaServer: Boolean, onSelect: (Boolean) -> Unit) {
+    SingleChoiceSegmentedButtonRow(
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        SegmentedButton(
+            shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
+            onClick = { onSelect(false) },
+            selected = !viaServer,
+            icon = {},
+        ) {
+            Text(stringResource(Res.string.jellyplay_seerr_mode_direct))
+        }
+        SegmentedButton(
+            shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+            onClick = { onSelect(true) },
+            selected = viaServer,
+            icon = {},
+        ) {
+            Text(stringResource(Res.string.jellyplay_seerr_mode_via_server))
+        }
+    }
+}
+
+/**
+ * The "via JellyPlay server" pane: the plugin's Seerr bridge status
+ * ([SeerrSettingsViewModel.bridgeStatus]) is the linked/unlinked truth, the
+ * Quick Connect link flow renders inline (code display + approval poll +
+ * cancel, the QuickConnectScreen discipline compressed into the pane), and
+ * logout unlinks the server-side session. Failures surface through the same
+ * shared banner the direct pane uses ([ConnectionProbeStatusIndicator]).
+ */
+@Composable
+private fun ViaServerBridgeContent(viewModel: SeerrSettingsViewModel) {
+    val status = viewModel.bridgeStatus
+    val busy = viewModel.bridgeBusy
+    val qcStarting = viewModel.bridgeQcStarting
+    val qcCode = viewModel.bridgeQcCode
+    val failure = viewModel.bridgeFailure
+    val linked = status?.linked == true
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        when {
+            qcStarting -> {
+                BridgeBusyRow(
+                    text = stringResource(Res.string.jellyplay_seerr_qc_starting),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+
+            // Quick Connect approval: show the code large, poll, cancel.
+            qcCode != null -> {
+                Text(
+                    text = stringResource(Res.string.jellyplay_seerr_qc_enter_code),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    text = qcCode,
+                    style = MaterialTheme.typography.displaySmall.copy(fontFamily = FontFamily.Monospace),
+                    color = MaterialTheme.colorScheme.primary,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                BridgeBusyRow(
+                    text = stringResource(Res.string.jellyplay_seerr_qc_waiting),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedButton(
+                    onClick = viewModel::cancelBridgeQuickConnect,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .focusIndicator(),
+                    shape = ShapeCache.smooth16,
+                ) {
+                    Text(stringResource(Res.string.jellyplay_seerr_qc_cancel))
+                }
+            }
+
+            status == null && busy -> {
+                BridgeBusyRow(
+                    text = stringResource(Res.string.jellyplay_seerr_bridge_checking),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+
+            // The plugin is installed but has no Seerr server configured.
+            status != null && !status.configured -> {
+                Text(
+                    text = stringResource(Res.string.jellyplay_seerr_bridge_not_configured),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+
+            linked -> {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        imageVector = Tabler.Outline.Link,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Column {
+                        Text(
+                            text = stringResource(
+                                Res.string.jellyplay_seerr_bridge_linked_with,
+                                status?.serverUrl ?: "",
+                            ),
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            text = stringResource(Res.string.jellyplay_seerr_bridge_via_note),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+                OutlinedButton(
+                    onClick = viewModel::bridgeLogout,
+                    enabled = !busy,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .focusIndicator(),
+                    shape = ShapeCache.smooth16,
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error,
+                    ),
+                ) {
+                    if (busy) {
+                        JellyPlayCircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Spacer(Modifier.width(8.dp))
+                    }
+                    Text(stringResource(Res.string.jellyplay_seerr_bridge_logout))
+                }
+            }
+
+            // Unlinked (or the status fetch failed before any status landed):
+            // the QC button is both the entry and the retry for the link flow.
+            else -> {
+                Text(
+                    text = stringResource(Res.string.jellyplay_seerr_bridge_unlinked),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Button(
+                    onClick = viewModel::startBridgeQuickConnect,
+                    enabled = !busy,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .focusIndicator(),
+                    shape = ShapeCache.smooth16,
+                ) {
+                    if (busy) {
+                        JellyPlayCircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Spacer(Modifier.width(8.dp))
+                    }
+                    Text(stringResource(Res.string.jellyplay_seerr_bridge_login))
+                }
+                if (failure != null && status == null) {
+                    OutlinedButton(
+                        onClick = viewModel::refreshBridgeStatus,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .focusIndicator(),
+                        shape = ShapeCache.smooth16,
+                    ) {
+                        Text(stringResource(Res.string.jellyplay_seerr_bridge_retry))
+                    }
+                }
+            }
+        }
+
+        // Failure banner — the screen's existing error mechanism; declared
+        // fallbacks localize here ([seerrBridgeFailureText]), reported plugin
+        // text renders verbatim.
+        AnimatedVisibility(
+            visible = failure != null,
+            enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()) + expandVertically(animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec()),
+            exit = fadeOut(MaterialTheme.motionScheme.defaultEffectsSpec()) + shrinkVertically(animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec()),
+        ) {
+            val shownFailure = failure
+            if (shownFailure != null) {
+                ConnectionProbeStatusIndicator(
+                    status = ConnectionProbe.Status.Error(
+                        ConnectionProbe.Failure.Reported(seerrBridgeFailureText(shownFailure)),
+                    ),
+                    style = ConnectionProbeIndicatorStyle.Banner,
+                )
+            }
+        }
+    }
+}
+
+/** The pane shown when the saved mode is via-server but the probe reports the plugin absent. */
+@Composable
+private fun BridgePluginUnavailableContent(
+    probed: Boolean,
+    onUseDirect: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        if (probed) {
+            Text(
+                text = stringResource(Res.string.jellyplay_seerr_bridge_unavailable),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            OutlinedButton(
+                onClick = onUseDirect,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .focusIndicator(),
+                shape = ShapeCache.smooth16,
+            ) {
+                Text(stringResource(Res.string.jellyplay_seerr_mode_direct))
+            }
+        } else {
+            BridgeBusyRow(
+                text = stringResource(Res.string.jellyplay_seerr_bridge_checking),
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+    }
+}
+
+@Composable
+private fun BridgeBusyRow(text: String, modifier: Modifier = Modifier) {
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        JellyPlayCircularProgressIndicator(
+            modifier = Modifier.size(18.dp),
+        )
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/**
+ * The via-server pane's failure-text resolution — the probeFailureText
+ * discipline: plugin/transport text renders verbatim, declared fallbacks
+ * localize through this one function.
+ */
+@Composable
+private fun seerrBridgeFailureText(failure: SeerrBridgeFailure): String = when (failure) {
+    is SeerrBridgeFailure.Reported -> failure.message
+    is SeerrBridgeFailure.Declared -> stringResource(
+        when (failure.text) {
+            SeerrBridgeFailure.Fallback.StatusUnreachable -> Res.string.jellyplay_seerr_error_status_unreachable
+            SeerrBridgeFailure.Fallback.QuickConnectDisabled -> Res.string.jellyplay_seerr_error_qc_disabled
+            SeerrBridgeFailure.Fallback.QuickConnectFailed -> Res.string.jellyplay_seerr_error_qc_failed
+            SeerrBridgeFailure.Fallback.QuickConnectTimeout -> Res.string.jellyplay_seerr_error_qc_timeout
+            SeerrBridgeFailure.Fallback.LoginFailed -> Res.string.jellyplay_seerr_error_login_failed
+            SeerrBridgeFailure.Fallback.LogoutFailed -> Res.string.jellyplay_seerr_error_logout_failed
+        },
+    )
+}
+
+/**
+ * The direct-connection form, extracted verbatim from the connection group
+ * when the mode dispatch moved in (ADR 0010) — the pre-bridge pane, byte for
+ * byte in behavior: server URL, auth-method segmented row, per-method fields,
+ * test/sign-in + disconnect, and the status banner.
+ */
+@Composable
+private fun SeerrDirectConnectionContent(
+    viewModel: SeerrSettingsViewModel,
+    connectionStatus: ConnectionProbe.Status<SeerrSettingsViewModel.SeerrConnectionDetails>,
+    isTesting: Boolean,
+    isConnected: Boolean,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        OutlinedTextField(
+            value = viewModel.serverUrl,
+            onValueChange = viewModel::onServerUrlChanged,
+            label = { Text(stringResource(Res.string.settings_server_url)) },
+            placeholder = { Text(stringResource(Res.string.settings_server_url_placeholder)) },
+            leadingIcon = {
+                Icon(Tabler.Outline.Globe, contentDescription = null)
+            },
+            trailingIcon = {
+                if (viewModel.serverUrl.isNotBlank() && !isTesting) {
+                    IconButton(
+                        onClick = { viewModel.onServerUrlChanged("") },
+                        modifier = Modifier.focusIndicator(CircleShape),
+                    ) {
+                        Icon(Tabler.Outline.X, contentDescription = stringResource(Res.string.settings_clear_cd))
+                    }
+                }
+            },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+            enabled = !isTesting,
+            shape = ShapeCache.smooth16,
+        )
+
+        SingleChoiceSegmentedButtonRow(
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            SegmentedButton(
+                shape = SegmentedButtonDefaults.itemShape(index = 0, count = 3),
+                onClick = { viewModel.onAuthMethodChanged(SeerrAuthMethod.API_KEY) },
+                selected = viewModel.authMethod == SeerrAuthMethod.API_KEY,
+                icon = {},
+            ) {
+                Text(stringResource(Res.string.settings_seerr_api_key_method))
+            }
+            SegmentedButton(
+                shape = SegmentedButtonDefaults.itemShape(index = 1, count = 3),
+                onClick = { viewModel.onAuthMethodChanged(SeerrAuthMethod.JELLYFIN) },
+                selected = viewModel.authMethod == SeerrAuthMethod.JELLYFIN,
+                icon = {},
+            ) {
+                Text(stringResource(Res.string.settings_seerr_jellyfin_method))
+            }
+            SegmentedButton(
+                shape = SegmentedButtonDefaults.itemShape(index = 2, count = 3),
+                onClick = { viewModel.onAuthMethodChanged(SeerrAuthMethod.LOCAL) },
+                selected = viewModel.authMethod == SeerrAuthMethod.LOCAL,
+                icon = {},
+            ) {
+                Text(stringResource(Res.string.settings_seerr_local_method))
+            }
+        }
+
+        when (viewModel.authMethod) {
+            SeerrAuthMethod.API_KEY -> ApiKeyFields(viewModel, isTesting)
+            SeerrAuthMethod.JELLYFIN -> JellyfinAuthFields(viewModel, isTesting)
+            SeerrAuthMethod.LOCAL -> LocalAuthFields(viewModel, isTesting)
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Button(
+                onClick = { viewModel.testConnection() },
+                enabled = !isTesting && viewModel.serverUrl.isNotBlank() && when (viewModel.authMethod) {
+                    SeerrAuthMethod.API_KEY -> viewModel.apiKey.isNotBlank()
+                    SeerrAuthMethod.JELLYFIN -> viewModel.username.isNotBlank() && viewModel.password.isNotBlank()
+                    SeerrAuthMethod.LOCAL -> viewModel.email.isNotBlank() && viewModel.password.isNotBlank()
+                },
+                modifier = Modifier.weight(1f).focusIndicator(),
+                shape = ShapeCache.smooth16,
+            ) {
+                if (isTesting) {
+                    JellyPlayCircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                }
+                Text(
+                    when (viewModel.authMethod) {
+                        SeerrAuthMethod.API_KEY -> stringResource(Res.string.settings_test_connection)
+                        SeerrAuthMethod.JELLYFIN,
+                        SeerrAuthMethod.LOCAL -> stringResource(Res.string.settings_seerr_sign_in)
+                    }
+                )
+            }
+
+            if (isConnected) {
+                OutlinedButton(
+                    onClick = { viewModel.disconnect() },
+                    modifier = Modifier.focusIndicator(),
+                    shape = ShapeCache.smooth16,
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error,
+                    ),
+                ) {
+                    Text(stringResource(Res.string.settings_disconnect))
+                }
+            }
+        }
+
+        AnimatedVisibility(
+            visible = connectionStatus is ConnectionProbe.Status.Connected || connectionStatus is ConnectionProbe.Status.Error,
+            enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()) + expandVertically(animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec()),
+            exit = fadeOut(MaterialTheme.motionScheme.defaultEffectsSpec()) + shrinkVertically(animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec()),
+        ) {
+            // Banner retention (declared): Seerr keeps the
+            // full banner because its subtitle carries the
+            // integration-specific version text; the
+            // retry/login actions stay in the form above.
+            ConnectionProbeStatusIndicator(
+                status = connectionStatus,
+                style = ConnectionProbeIndicatorStyle.Banner,
+                connectedSubtitle = when (val status = connectionStatus) {
+                    is ConnectionProbe.Status.Connected ->
+                        if (status.details.version.isNotBlank()) {
+                            stringResource(Res.string.settings_server_reached_version, status.details.version)
+                        } else {
+                            stringResource(Res.string.settings_seerr_server_reached)
+                        }
+                    else -> null
+                },
             )
         }
     }

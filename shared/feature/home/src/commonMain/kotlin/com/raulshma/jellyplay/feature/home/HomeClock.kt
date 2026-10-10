@@ -3,7 +3,7 @@ package com.raulshma.jellyplay.feature.home
 import kotlinx.datetime.LocalDate
 
 /**
- * Common seam over core:data's jvmShared [com.raulshma.jellyplay.core.data.util.TimeSource]
+ * Common seam over core:model's jvmShared [com.raulshma.jellyplay.core.model.TimeSource]
  * — the two clock reads the home refresher makes (epoch-millis for the
  * throttle/TTL math, the calendar-window "today" for the *arr refresh and
  * the discover fetch). The jvmShared TimeSource carries a java.time

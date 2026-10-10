@@ -41,6 +41,7 @@ class QueuePersistenceHelperTest {
     private lateinit var repeatMode: MutableStateFlow<Int>
     private lateinit var shuffleEnabled: MutableStateFlow<Boolean>
     private lateinit var playbackSpeed: MutableStateFlow<Float>
+    private lateinit var shuffleSeed: MutableStateFlow<Long?>
 
     @BeforeTest
     fun setup() {
@@ -53,6 +54,7 @@ class QueuePersistenceHelperTest {
         repeatMode = MutableStateFlow(0)
         shuffleEnabled = MutableStateFlow(false)
         playbackSpeed = MutableStateFlow(1.0f)
+        shuffleSeed = MutableStateFlow(null)
     }
 
     private fun item(id: String) = AudioQueueItem(
@@ -76,6 +78,7 @@ class QueuePersistenceHelperTest {
             repeatMode = repeatMode,
             shuffleEnabled = shuffleEnabled,
             playbackSpeed = playbackSpeed,
+            shuffleSeed = shuffleSeed,
         )
         runCurrent()
     }
@@ -140,7 +143,37 @@ class QueuePersistenceHelperTest {
         assertEquals(12_345L, persisted.currentPositionMs)
         assertEquals(true, persisted.isPlaying)
         assertEquals(false, persisted.shuffleEnabled)
+        assertEquals(null, persisted.shuffleSeed)
         assertEquals(1.0f, persisted.playbackSpeed)
+    }
+
+    @Test
+    fun `the shuffle seed rides the state row and survives persist-load`() = runTest {
+        startObserving()
+        queue.value = listOf(item("a"))
+        shuffleEnabled.value = true
+        shuffleSeed.value = 123_456_789L
+        runCurrent()
+
+        val states = mutableListOf<AudioQueueStateEntity>()
+        coVerify(atLeast = 1) { dao.saveState(capture(states)) }
+        val persisted = states.last()
+        assertEquals(true, persisted.shuffleEnabled)
+        assertEquals(123_456_789L, persisted.shuffleSeed, "the seed the order was drawn with is persisted")
+
+        // The restore half: loadState hands the row (seed included) back verbatim.
+        coEvery { dao.getState() } returns persisted
+        val loaded = helper.loadState()
+        assertEquals(123_456_789L, loaded!!.shuffleSeed, "seed survives persist → load")
+
+        // And disabling shuffle clears the seed in the same composite write.
+        shuffleEnabled.value = false
+        shuffleSeed.value = null
+        runCurrent()
+        val after = mutableListOf<AudioQueueStateEntity>()
+        coVerify(atLeast = 2) { dao.saveState(capture(after)) }
+        assertEquals(false, after.last().shuffleEnabled)
+        assertEquals(null, after.last().shuffleSeed)
     }
 
     @Test

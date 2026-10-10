@@ -151,7 +151,7 @@ class MainActivity : FragmentActivity() {
         // coordinator's restore flag) so the shell host's cross-cutting
         // services — the infrastructure providers plus the three shell
         // coordinators and the shared message bus — travel to JellyPlayApp →
-        // MainContent as ONE value with ONE Koin resolution site. All nine
+        // MainContent as ONE value with ONE Koin resolution site. All ten
         // lazy providers — nothing here resolves any Koin single; each
         // `.value` fires at the consumer's first real use (see ShellInfra's
         // KDoc).
@@ -165,6 +165,7 @@ class MainActivity : FragmentActivity() {
             syncPlayOpenCoordinatorLazy = lazy { KoinPlatform.getKoin()!!.get() },
             whatsNewCoordinatorLazy = lazy { KoinPlatform.getKoin()!!.get() },
             userMessageBusLazy = lazy { KoinPlatform.getKoin()!!.get<com.raulshma.jellyplay.core.ui.message.UserMessageBus>() },
+            externalPlayerReportsLazy = lazy { KoinPlatform.getKoin()!!.get<com.raulshma.jellyplay.navigation.playbackhost.ExternalPlayerReports>() },
             // Remote navigation ladder: synthesized D-pad/select/menu
             // key events go through the activity's own dispatch (down + up),
             // so Compose's existing key/focus handling interprets them —

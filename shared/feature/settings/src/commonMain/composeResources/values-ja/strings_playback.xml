@@ -35,6 +35,8 @@
     <string name="settings_auto_play_countdown_subtitle">次のエピソードを自動再生する前のカウントダウン時間</string>
     <string name="settings_controls_timeout">操作ボタンのタイムアウト</string>
     <string name="settings_controls_timeout_subtitle">プレーヤーのコントロールを自動的に隠す</string>
+    <string name="settings_hide_osd_on_pause">一時停止時にOSDを非表示</string>
+    <string name="settings_hide_osd_on_pause_subtitle">一時停止してもコントロールを表示したままにしない</string>
     <string name="settings_streaming_quality_auto_adaptive">自動 (アダプティブ)</string>
     <string name="settings_streaming_quality_auto">自動</string>
     <string name="settings_b_frames_none_best">なし (最高品質)</string>
@@ -84,6 +86,8 @@
     <string name="settings_preferred_player">優先プレーヤー</string>
     <string name="settings_double_tap_seek_duration">ダブルタップシーク時間</string>
     <string name="settings_gesture_indicator_side">ジェスチャーインジケーターの側</string>
+    <string name="settings_double_tap_hold_seek">ダブルタップ長押しシーク</string>
+    <string name="settings_double_tap_hold_seek_subtitle">ダブルタップ後に長押しするとシークを繰り返します</string>
     <string name="settings_gesture_indicator_opposite">明るさ/音量バーをジェスチャーと反対側に表示</string>
     <string name="settings_gesture_indicator_same">バーをジェスチャーと同じ側に表示</string>
     <string name="settings_countdown_immediate">次のアイテムをすぐに再生</string>
@@ -132,6 +136,8 @@
     <string name="settings_pause_on_focus_loss">フォーカス消失で一時停止</string>
     <string name="settings_pause_on_focus_loss_on">システムがフォーカス消失を報告した時に一時停止</string>
     <string name="settings_pause_on_focus_loss_off">フォーカス消失時も再生を継続</string>
+    <string name="settings_resume_headset_plug">ヘッドホン再接続時に再生を再開</string>
+    <string name="settings_resume_headset_plug_subtitle">取り外し時の自動一時停止後、ヘッドホンを再接続すると再生を再開します</string>
     <string name="settings_decoder_summary">デコーダー：%1$s</string>
     <string name="settings_decoder">デコーダー</string>
     <string name="settings_refresh_rate_match">リフレッシュレート一致</string>
@@ -161,7 +167,12 @@
     <string name="settings_skip_loop_filter">Skip Loop Filter</string>
     <string name="settings_frame_drop">Frame Drop</string>
     <string name="settings_raw_mpv_options">生 mpv オプション（mpv.conf 形式）</string>
-    <string name="settings_mpv_helper_text">1 行 1 オプション（キー=値）。上の設定の後に適用され、ここの値は対応する構造設定を上書きします。空行と # コメントは無視されます。</string>
+    <string name="settings_mpv_helper_text">mpv のオプションを 1 行に 1 つ（キー=値）入力します。上の設定より後に適用され、上の設定を上書きします。
+
+• 空行と # で始まる行は無視されます。値なしのキー（例: hr-seek）は yes になります。
+• 字幕のキー（sub-color、sub-pos など）はアプリの字幕設定も上書きします。
+• 値は引用符で囲まないでください。mpv にはそのまま渡されるため、引用符も値の一部になります（sub-color=#FF0000 は有効、sub-color="#FF0000" は無効）。値に # を含めることはここでは問題ありません。</string>
+    <string name="settings_mpv_config_placeholder">scale=ewa_lanczossharp\ncache-secs=120</string>
     <string name="settings_reset_mpv">すべての MPV 設定を復元</string>
     <string name="settings_network_caching">ネットワークキャッシュ</string>
     <string name="settings_skip_frames">フレームスキップ</string>

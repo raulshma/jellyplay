@@ -1,32 +1,27 @@
 package com.raulshma.jellyplay.feature.player.live.engine
 
 /**
- * The live mute-memory chip — the ONE pre-mute remember/restore policy for
- * the live player's mute toggle. Extracted from the [LiveTvPlayerViewModel]'s
- * former private `preMuteVolume: Float?`, which was written inline across
- * toggleMute and stop() with the semantics living only in comments.
- *
- * Why a dedicated policy instead of the VOD player's
- * `PlaybackVolumePolicy.planMute/planUnmute`: that core models a richer
- * surface than live has, and adopting it would CHANGE live's behavior —
- * its `planUnmute` floors the remembered level at 0.05 (live restores the
- * exact pre-mute level, 0.03 stays 0.03), its plans carry a system
- * music-stream value (live has no such seam — [LivePlayerAudio] is a bare
- * player-volume float), and its unmute takes a non-null remembered level
- * (live's chip-null means "leave the current volume untouched"). Live's
- * semantics are deliberate and test-pinned, so they get their own chip.
+ * The live mute-memory chip — the ONE pre-mute remember/restore store for
+ * the live player's mute, consumed by [LiveMuteController] (the engine-side
+ * host of the shared volume/mute template). The former ViewModel applier
+ * died when mute became real engine state; the chip keeps only the
+ * exact-level remember/restore semantics live declares ON that shared
+ * template call — the restore carries no audible floor (0.03 stays 0.03; the
+ * template's `unmuteRestoreFloor` is 0 on live), the empty chip maps to the
+ * template's LEAVE_UNCHANGED native restore ("leave the current volume
+ * untouched"), and there is no system music-stream value.
  *
  * The transitions, verbatim from the former inline arms:
  *  - muting snapshots the raw player volume read BEFORE the mute write, so
  *    unmute restores exactly what was playing — never a fixed default;
- *  - unmuting restores that snapshot, or NOTHING when the chip is empty
- *    (the mute was set externally, or the player was swapped between the
- *    arms), then clears the chip;
- *  - stop()/teardown clears the chip so a stale level is never restored
- *    onto a LATER player (mute → leave screen → return to a fresh engine).
+ *  - the controller clears the chip after applying an unmute, so a stale
+ *    level never outlives its mute;
+ *  - the engine instance's lifetime owns teardown (the former
+ *    stop()-clears-the-chip rule: a released engine's controller — memory
+ *    included — is gone, so a stale level can never land on a LATER player).
  *
- * Internal: consumed only by the ViewModel (the applier) and this module's
- * jvmTest — not a stable API surface.
+ * Internal: consumed by [LiveMuteController] and this module's jvmTest —
+ * not a stable API surface.
  */
 internal data class LiveMuteMemory(val preMuteVolume: Float? = null) {
 

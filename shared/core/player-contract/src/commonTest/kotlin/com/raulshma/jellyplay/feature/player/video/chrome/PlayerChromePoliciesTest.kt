@@ -16,7 +16,7 @@ import kotlinx.coroutines.test.runTest
  * Pins the shared player-chrome policies both player screens consume
  * (the VOD `VideoPlayerScreen` and the live `LivePlayerScreen` cite this ONE
  * implementation — moved verbatim from player-video's `PlayerScreenPolicies`
- * with the candidate-C4 dedup; the play-state mirror is the hosts' shared
+ * with the funnel dedup; the play-state mirror is the hosts' shared
  * `isPlaying` collector with its same-value guard and sink fan-out).
  */
 class PlayerChromePoliciesTest {
@@ -192,7 +192,7 @@ class StepSeekTargetTest {
         )
     }
 
-    // ── Funnel (C3) ──────────────────────────────────────────────────────────
+    // ── Funnel ──────────────────────────────────────────────────────────
     // stepSeekTargetMs is the reduction VideoPlayerViewModel.seekByStep makes
     // over the engine's live reads; the pins feed the same position/duration
     // values the old FakeMediaEngine-driven reads produced (advanceTo /
@@ -353,5 +353,96 @@ class ControlsAutoHidePolicyTest {
                 controlsHasFocus = false,
             ),
         )
+    }
+}
+
+/**
+ * The summons gate's pins (jellyfin-androidtv #3924: pausing should not
+ * summon the control overlay). The VOD screen gates BOTH pause-summons arms
+ * (the keyboard media-key toggle and the TV D-pad space) through this one
+ * policy; the live screen has no pause-summons arm at all, so it cites the
+ * policy nowhere — the rows below pin the shape both arms must follow.
+ */
+class ControlsSummonOnPausePolicyTest {
+
+    @Test
+    fun pause_withPrefOff_summonsToday() {
+        // Default OFF — today's behavior is untouched.
+        assertTrue(shouldSummonControlsOnPause(isPause = true, hideOsdOnPause = false))
+    }
+
+    @Test
+    fun pause_withPrefOn_suppressesTheSummon() {
+        assertFalse(shouldSummonControlsOnPause(isPause = true, hideOsdOnPause = true))
+    }
+
+    @Test
+    fun play_keepsTheSummon_evenWithPrefOn() {
+        // The option is "don't summon on pause", not "never show": resuming
+        // still summons exactly as before.
+        assertTrue(shouldSummonControlsOnPause(isPause = false, hideOsdOnPause = true))
+        assertTrue(shouldSummonControlsOnPause(isPause = false, hideOsdOnPause = false))
+    }
+}
+
+/**
+ * The modifier-stepped keyboard seek table ([keyboardSeekStepMs]) — one test
+ * per row of the modifier fold (VLC's arrow map) plus the constant pins. The
+ * key→row mapping that FEEDS this fold lives in player-video's
+ * `mediaKeySeek` (pinned there in MediaKeySeekTest); the values are this
+ * file's.
+ */
+class KeyboardSeekStepTest {
+
+    @Test
+    fun plainPress_fallsThroughToTheConfiguredStep() {
+        // The configured preference step passes through untouched — no
+        // hardcoded default on the plain row.
+        assertEquals(33_000L, keyboardSeekStepMs(false, false, false, configuredStepMs = 33_000L))
+        assertEquals(10_000L, keyboardSeekStepMs(false, false, false, configuredStepMs = 10_000L))
+    }
+
+    @Test
+    fun shift_takesTheFineStep() {
+        assertEquals(KEY_SEEK_STEP_FINE_MS, keyboardSeekStepMs(true, false, false, configuredStepMs = 10_000L))
+    }
+
+    @Test
+    fun ctrl_takesTheCoarseStep() {
+        assertEquals(KEY_SEEK_STEP_CTRL_MS, keyboardSeekStepMs(false, true, false, configuredStepMs = 10_000L))
+    }
+
+    @Test
+    fun shiftCtrl_takesTheMidStep_beatingTheSingleModifierRows() {
+        // Row precedence: Shift+Ctrl is 30s, never the 5s or 60s a naive
+        // single-modifier first match would yield.
+        assertEquals(
+            KEY_SEEK_STEP_SHIFT_CTRL_MS,
+            keyboardSeekStepMs(true, true, false, configuredStepMs = 10_000L),
+        )
+    }
+
+    @Test
+    fun altCtrl_takesTheVeryCoarseStep() {
+        assertEquals(KEY_SEEK_STEP_ALT_CTRL_MS, keyboardSeekStepMs(false, true, true, configuredStepMs = 10_000L))
+    }
+
+    @Test
+    fun homeEnd_step_isTenSeconds() {
+        assertEquals(10_000L, KEY_SEEK_STEP_HOME_END_MS)
+    }
+
+    @Test
+    fun page_step_isFiveMinutes_matchingAltCtrl() {
+        assertEquals(300_000L, KEY_SEEK_STEP_PAGE_MS)
+        assertEquals(KEY_SEEK_STEP_ALT_CTRL_MS, KEY_SEEK_STEP_PAGE_MS)
+    }
+
+    @Test
+    fun keyboardSeekCommitDelay_isHalfASecond() {
+        // The debounce: the keyboard seek chip commits this long after the
+        // LAST key-down (must stay under the screen's 800ms chip linger so
+        // the commit lands before the chip resets out).
+        assertEquals(500L, KEYBOARD_SEEK_COMMIT_DELAY_MS)
     }
 }

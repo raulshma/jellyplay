@@ -46,6 +46,35 @@ data class HomeSection(
      * persisted Room snapshots decode unchanged.
      */
     val seerrItems: List<com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem> = emptyList(),
+    /**
+     * Entries for a PLUGIN_ROW section (`jellyplay_<instanceId>` — the
+     * companion server plugin's seasonal row today, admin-defined custom rows
+     * once they become listable): the plugin's scraped list resolved against
+     * the local library. An entry with a non-null [JellyPlayRowEntry.localItem]
+     * renders as a native media card; one without renders as a compact
+     * title+year fallback tile. Mutually exclusive with [items] by
+     * construction (same one-source-per-row rule as [seerrItems]); empty for
+     * every non-plugin section. Additive with a default, so persisted Room
+     * snapshots decode unchanged.
+     */
+    val jellyPlayRowEntries: List<JellyPlayRowEntry> = emptyList(),
+)
+
+/**
+ * One entry of a plugin-sourced home row — the model-side shape the home
+ * fetcher maps the plugin's wire row item (the network layer's
+ * JellyPlayRowItem: title/year/ids, kept beside the plugin api client) into:
+ * the entry's `localItemId` resolved to the full library [MediaItem] (native
+ * card), or left unresolved (compact title+year fallback tile — the row never
+ * invents remote-image loading for unmatched entries).
+ */
+@Immutable
+@Serializable
+data class JellyPlayRowEntry(
+    val title: String,
+    val year: String? = null,
+    /** The matched library item; null when the plugin matched nothing locally. */
+    val localItem: MediaItem? = null,
 )
 
 /**
@@ -89,6 +118,18 @@ enum class HomeSectionType {
      * [descriptor]); renders nothing while zero rows are enabled.
      */
     DISCOVER,
+    /**
+     * Rows sourced from the jellyfin-plugin-jellyplay companion server
+     * plugin (ADR 0010), fetched through the JellyPlayHomeSectionSources
+     * home-fetcher leaf (network layer) and gated by the plugin's capability
+     * registry — never by user layout config ([isConfigurable] is false, like
+     * PINNED: the row appears exactly when the probe says AVAILABLE && the
+     * row feature is on, and is silently absent otherwise). Dynamic identity:
+     * the seasonal row is `jellyplay_seasonal`, an admin-defined titled row
+     * `jellyplay_custom_<title>` (see [descriptor]). Entries ride
+     * [HomeSection.jellyPlayRowEntries], not [HomeSection.items].
+     */
+    PLUGIN_ROW,
     ;
 
     /**
@@ -115,7 +156,10 @@ enum class HomeSectionType {
          * The configurable types in DEFAULT ORDER. Mirrors
          * [HomeSectionDescriptor.isConfigurable] but is spelled out because the
          * list order defines the default home section order — deriving it from
-         * `entries` would silently reshuffle defaults.
+         * `entries` would silently reshuffle defaults. This list stays the
+         * wire-safe authority (persisted layouts reference it);
+         * [com.raulshma.jellyplay.core.model.home.HomeRowModules.defaultOrder]
+         * is its registry-side derivation, pinned equal by HomeRowModulesTest.
          */
         val CONFIGURABLE = listOf(
             CONTINUE_WATCHING,

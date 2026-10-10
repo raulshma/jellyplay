@@ -4,6 +4,8 @@ import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.AuthRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.BookTocCacheRepository
 import com.raulshma.jellyplay.core.data.repository.BookTocCacheRepositoryImpl
+import com.raulshma.jellyplay.core.data.repository.BookmarksSyncRepository
+import com.raulshma.jellyplay.core.data.repository.BookmarksSyncRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.ClientCertificateRepository
 import com.raulshma.jellyplay.core.data.repository.ClientCertificateRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.ItemPlaybackPreferenceRepository
@@ -24,6 +26,7 @@ import com.raulshma.jellyplay.core.data.repository.SeenMediaRepository
 import com.raulshma.jellyplay.core.data.repository.SeenMediaRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.SelfSignedTrustRepository
 import com.raulshma.jellyplay.core.data.repository.SelfSignedTrustRepositoryImpl
+import com.raulshma.jellyplay.core.data.repository.ServerBackupMetadataStore
 import com.raulshma.jellyplay.core.data.repository.ServerDiscoveryRepository
 import com.raulshma.jellyplay.core.data.repository.ServerDiscoveryRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.SmartPlaylistRepository
@@ -31,11 +34,13 @@ import com.raulshma.jellyplay.core.data.repository.StoragePolicy
 import com.raulshma.jellyplay.core.data.repository.WatchHistoryRepository
 import com.raulshma.jellyplay.core.data.repository.WatchHistoryRepositoryImpl
 import com.raulshma.jellyplay.core.data.session.PlaybackReportingStatusStore
+import com.raulshma.jellyplay.core.data.worker.SettingsSyncScheduler
 import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
 import com.raulshma.jellyplay.core.database.dao.DownloadDao
 import com.raulshma.jellyplay.core.network.websocket.JellyfinWebSocketClient
 import org.koin.core.module.Module
 import org.koin.dsl.module
+import org.koin.mp.KoinPlatformTools
 
 /**
  * The repository-layer family of the dataJvmModule split (C4 part 2, batch
@@ -70,6 +75,19 @@ internal val dataRepositoriesModule: Module = module {
     // legacy bindRealtimeConnection @Binds, one instance — not a second socket).
     single<RealtimeConnection> { get<AuthRepositoryImpl>() }
 
+    // The settings-backup server-list seam (the AuthRepositorySurfaceTest
+    // ratchet's narrow-collaborator rule): gathers server rows + user names
+    // and upserts token-free server rows for the secrets block restore —
+    // never a token path (see the class KDoc).
+    single {
+        ServerBackupMetadataStore(
+            database = get(),
+            serverDao = get(),
+            userDao = get(),
+            json = get(),
+        )
+    }
+
     // Auth-cluster narrow seam (the AuthRepositorySurfaceTest ratchet's named
     // escape hatch for a genuinely new auth capability): the self-signed
     // trust DECISION the Server Management screen renders, delegating to
@@ -88,7 +106,29 @@ internal val dataRepositoriesModule: Module = module {
     single { ServerDiscoveryRepositoryImpl(get()) }
     single<ServerDiscoveryRepository> { get<ServerDiscoveryRepositoryImpl>() }
 
-    single { SearchHistoryRepositoryImpl(get(), get()) }
+    // The dirty-write flush signal resolves the platform SettingsSyncScheduler
+    // (WorkManager on Android, the in-process desktop scheduler on desktop) —
+    // getKoin() captured here, the resolution deferred to each write (the
+    // JellyPlayHomeSectionSourcesImpl idiom: the single's own scope is gone by
+    // call time). Graphs without the scheduler (tests, bare constructions)
+    // resolve null and simply never enqueue a flush; the background triggers
+    // still cover those writes.
+    fun settingsSyncFlush(): suspend () -> Unit = {
+        // The global container resolved at WRITE time (the single's own scope
+        // is long gone by then, and module-registration time may precede
+        // context registration) — the JellyPlayHomeSectionSourcesImpl
+        // captured-container idiom, deferred all the way to the call.
+        runCatching { KoinPlatformTools.defaultContext().get() }.getOrNull()
+            ?.getOrNull<SettingsSyncScheduler>()
+            ?.enqueueNow()
+    }
+    single {
+        SearchHistoryRepositoryImpl(
+            dao = get(),
+            timeSource = get(),
+            onDirty = settingsSyncFlush(),
+        )
+    }
     single<SearchHistoryRepository> { get<SearchHistoryRepositoryImpl>() }
 
     single { ItemPlaybackPreferenceRepositoryImpl(get(), get(), get()) }
@@ -105,9 +145,26 @@ internal val dataRepositoriesModule: Module = module {
             bookmarkDao = get(),
             annotationDao = get(),
             timeSource = get(),
+            onDirty = settingsSyncFlush(),
         )
     }
     single<ReaderAnnotationsRepository> { get<ReaderAnnotationsRepositoryImpl>() }
+
+    // Companion-plugin bookmark sync (ADR 0010, `bookmarks` feature) over the
+    // SAME book_bookmarks rows the marks repo owns — shares the BookBookmarkDao
+    // single. The status store resolves from dataSessionPlaybackModule (one
+    // graph); the network api client from the network modules.
+    single {
+        BookmarksSyncRepositoryImpl(
+            bookmarkDao = get(),
+            apiClient = get(),
+            statusStore = get(),
+            // The per-feature gate (probe AND the user's `bookmarks` toggle
+            // — JellyPlayFeatureGate) on top of the probe store.
+            featureGate = get(),
+        )
+    }
+    single<BookmarksSyncRepository> { get<BookmarksSyncRepositoryImpl>() }
 
     single { BookTocCacheRepositoryImpl(dao = get(), timeSource = get()) }
     single<BookTocCacheRepository> { get<BookTocCacheRepositoryImpl>() }

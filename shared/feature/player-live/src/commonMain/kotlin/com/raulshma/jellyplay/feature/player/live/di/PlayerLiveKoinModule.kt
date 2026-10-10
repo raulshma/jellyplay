@@ -3,6 +3,8 @@ package com.raulshma.jellyplay.feature.player.live.di
 import com.raulshma.jellyplay.core.data.playback.PlaybackIdentity
 import com.raulshma.jellyplay.feature.player.live.LiveTvPlayerViewModel
 import com.raulshma.jellyplay.feature.player.live.data.LastChannelStore
+import com.raulshma.jellyplay.feature.player.live.engine.CatalogTranscodeReasonsRenderer
+import com.raulshma.jellyplay.feature.player.live.engine.TranscodeReasonsRenderer
 import org.koin.compose.viewmodel.dsl.viewModel
 import org.koin.core.module.Module
 import org.koin.dsl.module
@@ -12,15 +14,18 @@ import org.koin.dsl.module
  * plan.md,  player-live conveyor). The HiltViewModel/@Inject
  * annotations were stripped at the move — Koin is the single constructor
  * owner (one framework per type). Ctor deps split three ways:
- *  - LiveTvRepository/PlaybackRepository/ImageUrlProvider are Koin-native
+ *  - LiveTvApiClient/PlaybackRepository/ImageUrlProvider are Koin-native
  *    (dataJvmModule, both platforms — the MediaRepository cluster flip
  *    already landed); the three stores are Koin-native in the shared
  *    datastore graph;
- *  - the three platform seams (LiveEngineFactory, LivePlayerAudio,
- *    TranscodeReasonsRenderer) are Android-only definitions in
- *    `androidPlayerLiveModule` (subtitle-tester's context-param pattern) —
- *    the desktop registration of this module is documented-latent: the VM
- *    is only constructed by the Android screen, which lives in androidMain;
+ *  - the two platform seams (LiveEngineFactory, LivePlayerAudio) are
+ *    Android-only definitions in `androidPlayerLiveModule`
+ *    (subtitle-tester's context-param pattern) — the desktop registration of
+ *    this module is documented-latent: the VM is only constructed by the
+ *    Android screen, which lives in androidMain;
+ *  - [TranscodeReasonsRenderer] is platform-free (the commonMain
+ *    [CatalogTranscodeReasonsRenderer] over core:ui's transcode-reason
+ *    catalog), so it binds here directly;
  *  - LastChannelStore is a plain single over AppRuntimeStateStore.
  *
  * The record/cancel feedback no longer goes through the Android-only
@@ -68,4 +73,5 @@ val playerLiveModule: Module = module {
             prefs = get(),
         )
     }
+    single<TranscodeReasonsRenderer> { CatalogTranscodeReasonsRenderer }
 }

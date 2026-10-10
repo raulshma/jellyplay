@@ -13,8 +13,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -28,6 +30,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.vector.ImageVector
 import org.jetbrains.compose.resources.stringResource
 import androidx.compose.ui.unit.dp
 
@@ -99,10 +102,21 @@ fun DelayedLoadingScreen(
     }
 }
 
+/**
+ * Full-screen error state. On TV, focus is deterministic: the Retry button when
+ * present, otherwise the screen itself as a focus sink, so an error never leaves
+ * the D-pad orphaned.
+ *
+ * @param message localized error description.
+ * @param onRetry retry callback; when null, the Retry button is hidden.
+ * @param icon    optional error icon (e.g. `Tabler.Outline.AlertTriangle`) drawn
+ *                above the message; null keeps the text-only layout.
+ */
 @Composable
 fun ErrorScreen(
     message: String,
     onRetry: (() -> Unit)? = null,
+    icon: ImageVector? = null,
     modifier: Modifier = Modifier,
 ) {
     val isTv = LocalTvMode.current
@@ -124,6 +138,15 @@ fun ErrorScreen(
             contentAlignment = Alignment.Center,
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                if (icon != null) {
+                    Icon(
+                        icon,
+                        contentDescription = null,
+                        modifier = Modifier.size(64.dp),
+                        tint = MaterialTheme.colorScheme.error,
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
                 Text(
                     text = message,
                     style = MaterialTheme.typography.bodyLarge,

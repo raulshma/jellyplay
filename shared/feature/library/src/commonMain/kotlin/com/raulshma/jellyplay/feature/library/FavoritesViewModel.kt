@@ -1,7 +1,6 @@
 package com.raulshma.jellyplay.feature.library
 
 import androidx.paging.PagingData
-import androidx.paging.cachedIn
 import com.raulshma.jellyplay.core.data.download.QuickDownloadActions
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
@@ -10,8 +9,9 @@ import com.raulshma.jellyplay.core.data.util.PhotoFolderChildUrlsStore
 import com.raulshma.jellyplay.core.data.util.PhotoFolderPrefetcher
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
-import com.raulshma.jellyplay.core.ui.viewmodel.DeferredUserDataRefresher
+import com.raulshma.jellyplay.core.ui.components.DeferredRefreshHost
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
+import com.raulshma.jellyplay.core.ui.viewmodel.PagedMediaGridHost
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -26,29 +26,45 @@ internal class FavoritesViewModel(
 ) : JellyPlayViewModel() {
 
     private val _mediaTypeFilter = stateFlow<MediaType?>(null)
-    private val _refreshTrigger = stateFlow(0)
 
+    /**
+     * The favorites grid, wired through the shared [PagedMediaGridHost]: the
+     * host owns the deferred-refresh generation counter + refresher pairing,
+     * the cachedIn sharing and the quick-action forwarding; this source keeps
+     * the media-type key.
+     */
     @OptIn(ExperimentalCoroutinesApi::class)
-    val pagedItems: Flow<PagingData<MediaItem>> =
-        combine(_mediaTypeFilter.flow, _refreshTrigger.flow) { type, trigger -> type to trigger }
-            .flatMapLatest { (type, _) ->
-                mediaRepository.getFavoritesPaged(
-                    mediaTypes = type?.let { listOf(it) },
-                )
-            }.cachedIn(scope)
+    private val pagedGrid = PagedMediaGridHost(
+        scope = scope,
+        userDataChanges = mediaRepository.userDataChanges,
+        downloadedIds = quickDownloadActions.downloadedIds,
+        downloadSupported = quickDownloadActions.isSupported,
+        setPlayedSilently = { itemId, played -> userDataMutator.setPlayed(itemId, played) },
+        requestDownload = { item, onOpenDetail, seriesOpensSheet ->
+            quickDownloadActions.downloadAndReport(item, onOpenDetail, seriesOpensSheet)
+        },
+        removeDownloadItem = quickDownloadActions::removeDownload,
+        source = { trigger ->
+            combine(_mediaTypeFilter.flow, trigger) { type, _ -> type }
+                .flatMapLatest { type ->
+                    mediaRepository.getFavoritesPaged(
+                        mediaTypes = type?.let { listOf(it) },
+                    )
+                }
+        },
+    )
+
+    val pagedItems: Flow<PagingData<MediaItem>> get() = pagedGrid.items
 
     val mediaTypeFilter = _mediaTypeFilter.flow
 
     /**
      * User-data changes while another screen is up only mark the pager stale;
      * the single regeneration fires when the favorites screen is next entered
-     * (see [DeferredUserDataRefresher]) — never mid-scroll.
+     * (the [DeferredUserDataRefresher] the [PagedMediaGridHost] owns) — never
+     * mid-scroll.
      */
-    val deferredRefresher = DeferredUserDataRefresher(
-        userDataChanges = mediaRepository.userDataChanges,
-        scope = scope,
-        trigger = _refreshTrigger,
-    )
+    val deferredRefresher: DeferredRefreshHost get() = pagedGrid
 
     /**
      * The photo-folder child-URL cache — the shared [PhotoFolderChildUrlsStore]
@@ -59,7 +75,15 @@ internal class FavoritesViewModel(
      */
     private val photoFolderChildUrlsStore = PhotoFolderChildUrlsStore(scope, photoFolderPrefetcher)
 
-    val photoFolderChildUrls = photoFolderChildUrlsStore.childUrls
+    /**
+     * Per-item slice of the photo-folder child-URL cache — the fold lives on
+     * the store ([PhotoFolderChildUrlsStore.childUrlsFor]). Each photo-folder
+     * card collects only its own urls, so a prefetch merge (a new Map
+     * reference) invalidates only the card whose urls changed, not the whole
+     * favorites grid.
+     */
+    fun photoFolderChildUrlsFor(itemId: String): Flow<List<String>> =
+        photoFolderChildUrlsStore.childUrlsFor(itemId)
 
     fun setMediaTypeFilter(type: MediaType?) {
         _mediaTypeFilter.set(type)
@@ -74,17 +98,15 @@ internal class FavoritesViewModel(
      * position — the badge updates on the next natural data refresh.
      */
     fun markItemPlayed(item: MediaItem, played: Boolean) {
-        launch {
-            userDataMutator.setPlayed(item.id, played)
-        }
+        pagedGrid.markPlayed(item, played)
     }
 
     /** Ids whose quick actions flip to "Remove download" — see [QuickDownloadActions.downloadedIds]. */
     // Whether this platform has a download pipeline — screens gate the
     // download CTA on it (hidden rather than Failed-toasting).
-    val downloadSupported = quickDownloadActions.isSupported
+    val downloadSupported get() = pagedGrid.downloadSupported
 
-    val downloadedIds = quickDownloadActions.downloadedIds
+    val downloadedIds get() = quickDownloadActions.downloadedIds
 
     /**
      * Long-press Download from a favorites card (#147): inline start for
@@ -93,12 +115,12 @@ internal class FavoritesViewModel(
      * sheet (unlike the library grid).
      */
     fun downloadItem(item: MediaItem, onOpenDetail: (itemId: String) -> Unit) {
-        launch { quickDownloadActions.downloadAndReport(item, onOpenDetail) }
+        pagedGrid.download(item, { id, _ -> onOpenDetail(id) })
     }
 
     /** Long-press Remove download — deletes the local copy only. */
     fun removeItemDownload(item: MediaItem) {
-        quickDownloadActions.removeDownload(item)
+        pagedGrid.removeDownload(item)
     }
 
     fun prefetchPhotoFolderChildUrls(items: List<MediaItem>) {

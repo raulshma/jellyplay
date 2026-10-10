@@ -6,7 +6,9 @@ package com.raulshma.jellyplay.core.ui.components
  * `java.time`). Android/desktop behavior is pinned by the jvmShared actuals
  * (which carry the original bodies verbatim). [formatIntPattern] is the one
  * public member: the settings and editor features (whose PlatformFormats
- * expect/actual twins it replaces) consume it directly.
+ * expect/actual twins it replaces) consume it directly. (The former
+ * `formatOneDecimal` member moved to DurationFormatter.kt — the formatting
+ * home — when it went public; its actual moved with it.)
  */
 
 /**
@@ -18,15 +20,6 @@ package com.raulshma.jellyplay.core.ui.components
  * locale included.
  */
 expect fun formatIntPattern(pattern: String, value: Int): String
-
-/**
- * One-decimal fixed notation ("%.1f" formatting contract: HALF_UP rounding at
- * the first decimal, sign rendered symmetrically for stray negatives). The
- * decimal separator follows the JVM's %.1f behavior — the JVM default
- * locale (decimal comma under e.g. de-DE hosts) on android/desktop. Every
- * former `"%.1f".format(x)` site in this module routes through here.
- */
-internal expect fun formatOneDecimal(value: Double): String
 
 /** Current calendar year in the system timezone (was `Calendar.YEAR`). */
 internal expect fun currentYear(): Int

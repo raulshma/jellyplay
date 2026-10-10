@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.feature.livetv.channels
 
 import androidx.compose.runtime.Immutable
-import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
+import com.raulshma.jellyplay.core.network.api.LiveTvApiClient
 import com.raulshma.jellyplay.core.data.playback.VideoMiniPlayerState
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeStateStore
@@ -27,7 +27,7 @@ data class ChannelsUiState(
 )
 
 class ChannelsViewModel(
-    private val mediaRepository: LiveTvRepository,
+    private val mediaRepository: LiveTvApiClient,
     private val imageUrlProvider: ImageUrlProvider,
     private val appRuntimeStateStore: AppRuntimeStateStore,
     videoMiniPlayerState: VideoMiniPlayerState,

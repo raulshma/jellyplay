@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.player.video
 
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.StillWatchingMode
 
 /**
  * Encapsulates the "auto-advance to the next episode" decision state that
@@ -88,6 +89,21 @@ internal class AutoPlayController {
      */
     fun needsStillWatchingCheck(): Boolean =
         stillWatchingThreshold > 0 && consecutiveAutoPlays >= stillWatchingThreshold
+
+    /**
+     * Full episode-arm gate for the end-of-playback funnel: the threshold is
+     * armed, the streak reached it, and the mode wants the prompt for this
+     * session type. Raises the confirm overlay instead of advancing.
+     */
+    fun shouldPromptStillWatching(
+        mode: StillWatchingMode,
+        isInSyncPlaySession: Boolean,
+    ): Boolean =
+        StillWatchingGate.shouldPrompt(
+            mode = mode,
+            episodeCheck = needsStillWatchingCheck(),
+            isInSyncPlaySession = isInSyncPlaySession,
+        )
 
     /**
      * Natural end-of-playback rule: advance only when a next episode exists,

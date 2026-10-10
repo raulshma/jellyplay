@@ -8,7 +8,7 @@ import androidx.core.net.toUri
 import androidx.tvprovider.media.tv.TvContractCompat
 import androidx.tvprovider.media.tv.WatchNextProgram
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.HomeFeed
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
 import com.raulshma.jellyplay.core.model.HomeSectionQuery
 import com.raulshma.jellyplay.core.model.HomeSectionType
@@ -35,7 +35,7 @@ import kotlinx.coroutines.withContext
  */
 class TvWatchNextPublisher(
     private val context: Context,
-    private val mediaRepository: MediaRepository,
+    private val homeFeed: HomeFeed,
     /** Backdrop artwork URL for the row's poster (the ImageUrlProvider seam). */
     private val imageUrlProvider: ImageUrlProvider,
     /** Clock seam (D3) for the row's last-engagement timestamp. */
@@ -48,10 +48,11 @@ class TvWatchNextPublisher(
     suspend fun publish(): Result<Unit> = runCatchingRethrowingCancellation {
         if (!isTv()) return@runCatchingRethrowingCancellation
 
-        val sections = mediaRepository.getHomeSections(
+        val sections = homeFeed.getHomeSections(
             HomeSectionQuery(
                 enabledSections = setOf(HomeSectionType.CONTINUE_WATCHING, HomeSectionType.NEXT_UP),
             ),
+            force = false,
         ).getOrThrow().sections
 
         val continueWatching = sections.firstOrNull { it.type == HomeSectionType.CONTINUE_WATCHING }?.items.orEmpty()

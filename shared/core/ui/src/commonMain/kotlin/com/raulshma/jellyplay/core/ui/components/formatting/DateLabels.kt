@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.core.ui.components
 
 import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.minus
 import kotlinx.datetime.todayIn
@@ -29,7 +30,10 @@ import kotlin.time.Instant
  *  - [longMonthDayYear]     "MMMM d, yyyy"
  *  - [monthYear]            "MMMM yyyy"
  *  - [weekdayShortMonthDay] "EEE, MMM d"
- *  - [oneDecimal]           the "%.1f" contract (see [formatOneDecimal])
+ *
+ * (The one-decimal renderer that started here as the public [oneDecimal]
+ * wrapper is gone: [formatOneDecimal] — DurationFormatter.kt — is public
+ * itself, and the newsletter/editor façades route through it directly.)
  */
 
 /** Short month + day, e.g. "Jul 13" (digest entries). */
@@ -48,12 +52,13 @@ expect fun monthYear(year: Int, monthNumber: Int): String
 expect fun weekdayShortMonthDay(date: LocalDate): String
 
 /**
- * One-decimal fixed notation for ratings/counts — the public route to the
- * internal [formatOneDecimal] machinery ("%.1f" contract: HALF_UP rounding at
- * the first decimal; separator follows the platform's %.1f behavior — see its
- * KDoc). Formerly duplicated by the newsletter and editor seams.
+ * The clock-time fragment, 24-hour "HH:mm" — promoted from the settings sync
+ * screen's timestamp composite ("Yesterday, HH:mm"), which combines this with
+ * [relativeDayLabel] for its date half. Fixed pattern (the old settings-root
+ * row's precedent), not locale-am/pm aware: am/pm shapes ride the wall-clock
+ * seam in DurationFormatter, which is a different contract.
  */
-fun oneDecimal(value: Double): String = formatOneDecimal(value)
+expect fun clockTime(time: LocalTime): String
 
 /**
  * The Today/Yesterday ladder, pure and clock-free: the exact "Today" /

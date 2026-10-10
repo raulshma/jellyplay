@@ -6,6 +6,8 @@
     <string name="player_reset_to_auto">Repor para Automático</string>
     <string name="player_track_default">Predefinido</string>
     <string name="player_track_none">Nenhum</string>
+    <string name="player_capturing_frame">Capturando quadro…</string>
+    <string name="player_not_ready">Reprodutor não pronto</string>
 
     <string name="track_badge_forced">Forçada</string>
     <string name="track_badge_sdh">SDH</string>
@@ -35,10 +37,8 @@
     <string name="player_video_open_tester">Abrir testador</string>
     <string name="player_video_reset">Repor</string>
     <string name="player_video_reset_all">Repor tudo</string>
-    <string name="player_video_pick_color">Escolher uma cor</string>
     <string name="player_video_hue">Matiz</string>
     <string name="player_video_saturation">Saturação</string>
-    <string name="player_video_value">Valor</string>
     <string name="player_video_apply">Aplicar</string>
     <string name="player_video_cancel">Cancelar</string>
     <string name="player_video_override_subtitle_styles">Substituir estilos de legendas</string>
@@ -56,6 +56,14 @@
     <string name="player_video_ass_force">Forçar</string>
     <string name="player_video_ass_scale_hint">Manter o estilo incorporado; aplicar apenas o seu tamanho e posição</string>
     <string name="player_video_ass_force_hint">Substituir o estilo incorporado pelas suas cores, letra e bordas</string>
+    <string name="player_video_mpv_config_notice_title">A sua configuração do mpv substitui algumas definições de legendas</string>
+    <string name="player_video_mpv_config_owned_keys_intro">A sua configuração tem prioridade para estas chaves — os controlos correspondentes aqui não as alteram:</string>
+    <string name="player_video_mpv_config_case_srt">As legendas simples (SRT) usam sempre as cores, bordas e letras da sua configuração.</string>
+    <string name="player_video_mpv_config_case_ass">As legendas ASS/SSA mantêm o estilo incorporado — para aplicar o seu estilo, use a escolha Estilo ASS abaixo.</string>
+    <string name="player_video_mpv_config_ass_override_owned">A sua configuração define sub-ass-override — a escolha Respeitar/Forçar aqui não tem efeito.</string>
+    <string name="player_video_mpv_config_app_owned_keys">Ligar/desligar legendas e o atraso das legendas seguem sempre a app — a sua configuração não as pode alterar.</string>
+    <string name="player_video_mpv_config_dropped_keys">O mpv não consegue ler %1$s do arquivo mpv.conf — um # sem aspas inicia um comentário. Nesse arquivo, coloque o valor entre aspas: sub-color="#FF0000". Na configuração mpv avançada do app vale o contrário: escreva sub-color=#FF0000 sem aspas — aspas virariam parte do valor.</string>
+    <string name="player_video_mpv_config_chip">Config. mpv personalizada</string>
     <string name="player_video_font_color">Cor da letra</string>
     <string name="player_video_background_color">Cor de fundo</string>
     <string name="player_video_background_opacity">Opacidade do fundo: %1$d%</string>
@@ -79,6 +87,11 @@
     <string name="player_video_sleep_timer">Temporizador</string>
     <string name="player_video_sleep_timer_on">Temporizador \u00B7 %1$s</string>
     <string name="player_video_cancel_sleep_timer">Cancelar temporizador (%1$s restante)</string>
+    <string name="player_video_sleep_timer_stops_at">Para às %1$s</string>
+    <string name="player_video_cancel_sleep_timer_confirm_title">Cancelar o temporizador?</string>
+    <string name="player_video_cancel_sleep_timer_confirm_message">Ainda faltam %1$s no temporizador. Cancelar?</string>
+    <string name="player_video_cancel_timer">Cancelar temporizador</string>
+    <string name="player_video_keep_sleep_timer">Manter temporizador</string>
     <string name="player_video_custom_duration">Duração personalizada</string>
     <string name="player_video_custom_ellipsis">Personalizada…</string>
     <string name="player_video_end_of_episode">Fim do episódio</string>
@@ -155,6 +168,8 @@
     <string name="player_video_normalization_on">Normalização \u00B7 %1$s</string>
     <string name="player_video_channel_mixing">Mixagem de canais</string>
     <string name="player_video_channel_mix_on">Mixagem \u00B7 %1$s</string>
+    <string name="player_video_gestures">Gestos</string>
+    <string name="player_video_gestures_on">Gestos \u00B7 %1$d/%2$d</string>
     <string name="player_video_av_sync">Sincronia A/V</string>
     <string name="player_video_playback_mode">Modo de reprodução</string>
     <string name="player_video_playback_mode_on">%1$s \u00B7 Ativado</string>
@@ -343,4 +358,21 @@
     <string name="player_video_source_label">Fonte</string>
     <string name="player_video_version">Versão</string>
     <string name="player_video_remember_version">Memorizar esta versão</string>
+
+    <!-- Subtitle style presets -->
+    <string name="player_video_presets_title">Predefinições</string>
+    <string name="player_video_preset_subtle">Discreto</string>
+    <string name="player_video_preset_big_bold">Grande e negrito</string>
+    <string name="player_video_preset_classic_yellow">Amarelo clássico</string>
+    <string name="player_video_preset_netflixish">Estilo Netflix</string>
+    <string name="player_video_preset_save">Guardar o atual</string>
+    <string name="player_video_preset_save_dialog_title">Guardar predefinição</string>
+    <string name="player_video_preset_name_label">Nome da predefinição</string>
+    <string name="player_video_preset_delete_a11y">Eliminar predefinição %1$s</string>
+
+    <!-- The JellyPlay sync / details-badges / player-notice strings
+         (ADR 0010 wave), translated together with the default file. -->
+    <string name="player_video_transcode_switched">Mudou para stream transcodificado — a armazenar no buffer novamente</string>
+    <string name="player_video_direct_play_unavailable">Reprodução direta indisponível para este item — a usar transcodificação</string>
+    <string name="player_video_vlc_client_cert_unsupported">O certificado de cliente não é suportado pelo motor VLC — mude para ExoPlayer ou mpv em servidores mTLS</string>
 </resources>

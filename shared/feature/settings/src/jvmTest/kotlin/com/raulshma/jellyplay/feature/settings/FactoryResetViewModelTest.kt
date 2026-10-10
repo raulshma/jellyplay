@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.settings
 
+import com.raulshma.jellyplay.core.data.session.JellyPlayPluginStatusStore
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.datastore.appearance.AppearanceSlice
@@ -46,23 +47,33 @@ import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerStore
 import com.raulshma.jellyplay.core.model.PinLockoutState
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import com.raulshma.jellyplay.core.model.ThemeMode
+import com.raulshma.jellyplay.core.model.JellyPlayPluginFeatures
+import com.raulshma.jellyplay.core.model.JellyPlayPluginStatus
+import com.raulshma.jellyplay.core.network.api.JellyPlaySettingsSyncRoutes
+import com.raulshma.jellyplay.core.network.api.JellyPlaySnapshotCreated
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import kotlinx.coroutines.withContext
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
+import kotlin.test.assertTrue
 
 /**
  * The factory-reset review screen: the one-shot current-vs-factory snapshot
@@ -76,6 +87,11 @@ import kotlin.test.assertNotEquals
  * readers); the editor is a relaxed mock so the delegation is verified
  * verbatim. Main-dispatcher rule inlined (StandardTestDispatcher +
  * setMain/resetMain — module jvmTest pattern).
+ *
+ * The Wave-6 seam-present resets (the nullable `pluginApiClient`/`statusStore`
+ * ctor seams) get their own block: a gated capture parks `resetRunning` and
+ * refuses a second confirmation, a FAILED capture warns without blocking, and
+ * the capture strictly precedes the destructive clear.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class FactoryResetViewModelTest {
@@ -164,7 +180,10 @@ class FactoryResetViewModelTest {
         every { appearanceStore.appearance } returns MutableStateFlow(slice)
     }
 
-    private fun viewModel(): FactoryResetViewModel = FactoryResetViewModel(
+    private fun viewModel(
+        pluginApiClient: JellyPlaySettingsSyncRoutes? = null,
+        statusStore: JellyPlayPluginStatusStore? = null,
+    ): FactoryResetViewModel = FactoryResetViewModel(
         snapshotReader = PreferenceSnapshotReader(
             stores = PreferenceStores(
                 playback = playbackStore,
@@ -192,6 +211,8 @@ class FactoryResetViewModelTest {
         ),
         editor = editor,
         diffLabelResolver = { _ -> { res -> res.toString() } },
+        pluginApiClient = pluginApiClient,
+        statusStore = statusStore,
     )
 
     // ---------------------------------------------------------------- snapshot
@@ -236,5 +257,101 @@ class FactoryResetViewModelTest {
         vm.resetAll()
 
         verify(exactly = 1) { editor.clearAllPreferences() }
+    }
+
+    // ---------------------------------------------------------------- Wave-6 seam-present resets
+
+    private val pluginStatus = MutableStateFlow(JellyPlayPluginStatus.UNAVAILABLE)
+    private lateinit var pluginApi: JellyPlaySettingsSyncRoutes
+
+    /**
+     * The seam-present VM: the Wave-6 capture's gate is OPEN (probe AVAILABLE +
+     * the `settings-sync` registry), so the safety capture actually runs — the
+     * [JellyPlaySyncViewModelTest] api-mockk idiom.
+     */
+    private fun seamPresentViewModel(): FactoryResetViewModel {
+        pluginApi = mockk(relaxed = true)
+        val statusStore = mockk<JellyPlayPluginStatusStore>(relaxed = true)
+        every { statusStore.status } returns pluginStatus
+        every { statusStore.hasFeature(JellyPlayPluginFeatures.SettingsSync) } returns true
+        pluginStatus.value = JellyPlayPluginStatus.AVAILABLE
+        return viewModel(pluginApiClient = pluginApi, statusStore = statusStore)
+    }
+
+    /** Polls until [condition] holds, pumping the test scheduler between waits. */
+    private suspend fun kotlinx.coroutines.test.TestScope.awaitUntil(description: String, condition: () -> Boolean) {
+        advanceUntilIdle()
+        val deadline = System.currentTimeMillis() + 10_000
+        while (!condition()) {
+            assertTrue(
+                System.currentTimeMillis() < deadline,
+                "$description (timed out waiting for the VM's continuation)",
+            )
+            withContext(Dispatchers.Default) { delay(10) }
+            advanceUntilIdle()
+        }
+    }
+
+    @Test
+    fun `seam-present resetAll parks on the capture - a second confirmation is refused until it settles`() = runTest(testDispatcher) {
+        val captureEntries = mutableListOf<Int>()
+        val captureGate = CompletableDeferred<Unit>()
+        val vm = seamPresentViewModel()
+        coEvery { pluginApi.createSnapshot() } coAnswers {
+            captureEntries += 1
+            captureGate.await()
+            Result.success(JellyPlaySnapshotCreated(0L))
+        }
+
+        vm.resetAll()
+        awaitUntil("the capture parks mid-flight") { captureEntries.size == 1 }
+
+        assertTrue(vm.resetRunning, "parked mid-capture must raise the running face")
+        vm.resetAll()
+        verify(exactly = 0) { editor.clearAllPreferences() }
+
+        captureGate.complete(Unit)
+        awaitUntil("the reset settles") { !vm.resetRunning }
+
+        verify(exactly = 1) { editor.clearAllPreferences() }
+        assertFalse(vm.safetySnapshotMissed, "a succeeding capture must not raise the warning face")
+    }
+
+    @Test
+    fun `seam-present resetAll with a failed capture still completes and raises the warning face`() = runTest(testDispatcher) {
+        val vm = seamPresentViewModel()
+        // A failed capture must warn through the one-shot face — and never block the reset.
+        coEvery { pluginApi.createSnapshot() } returns Result.failure(IllegalStateException("500"))
+
+        vm.resetAll()
+        advanceUntilIdle()
+
+        verify(exactly = 1) { editor.clearAllPreferences() }
+        assertTrue(vm.safetySnapshotMissed, "a missed capture must surface the warning face")
+        assertFalse(vm.resetRunning, "the reset settled — the running face must drop")
+
+        vm.clearSafetySnapshotMissed()
+        assertFalse(vm.safetySnapshotMissed)
+    }
+
+    @Test
+    fun `seam-present resetAll runs only after the capture settles - capture-before-reset ordering`() = runTest(testDispatcher) {
+        val order = mutableListOf<String>()
+        val vm = seamPresentViewModel()
+        coEvery { pluginApi.createSnapshot() } coAnswers {
+            order += "capture"
+            Result.success(JellyPlaySnapshotCreated(0L))
+        }
+        every { editor.clearAllPreferences() } answers {
+            order += "reset"
+            Job()
+        }
+
+        vm.resetAll()
+        advanceUntilIdle()
+
+        assertEquals(listOf("capture", "reset"), order, "the destructive clear must wait for the capture to settle")
+        assertFalse(vm.safetySnapshotMissed)
+        assertFalse(vm.resetRunning)
     }
 }

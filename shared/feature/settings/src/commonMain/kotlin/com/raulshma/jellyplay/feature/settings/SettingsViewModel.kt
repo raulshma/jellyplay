@@ -4,7 +4,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
+import com.raulshma.jellyplay.core.data.session.JellyPlayFeatureGate
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
+import com.raulshma.jellyplay.core.datastore.BackupSecretsCodec
 import com.raulshma.jellyplay.core.datastore.SettingsBackup
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.datastore.search.SettingsRecentsStore
@@ -13,6 +15,7 @@ import com.raulshma.jellyplay.core.model.HomeScreenPreferences
 import com.raulshma.jellyplay.core.model.SettingsScreenPreferences
 import com.raulshma.jellyplay.core.model.UserInfo
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
@@ -38,6 +41,44 @@ class SettingsViewModel(
     private val serverAdminActions: ServerAdminActions,
     editor: PreferencesEditor,
     private val recentsStore: SettingsRecentsStore,
+    /**
+     * The JellyPlay companion-plugin seams (ADR 0010). Nullable-with-default
+     * keeps the direct-construction test harnesses compiling; the Koin
+     * factory passes the real singles and the UI renders the sync section
+     * only when both are present AND the probe reports AVAILABLE.
+     */
+    private val jellyPlayStatusStore: com.raulshma.jellyplay.core.data.session.JellyPlayPluginStatusStore? = null,
+    private val jellyPlaySyncRepository: com.raulshma.jellyplay.core.data.repository.ProfileSyncRepository? = null,
+    /**
+     * The plugin's events/messages face — backs the capability-gated
+     * "Messages" entry (unread badge) on the settings root. Same
+     * nullable-with-default discipline as the two seams above.
+     */
+    private val jellyPlayEventsRepository: com.raulshma.jellyplay.core.data.repository.JellyPlayEventsRepository? = null,
+    /**
+     * The per-feature gate seam (probe AND the user's toggle). Same
+     * nullable-with-default discipline as the seams above.
+     */
+    private val jellyPlayFeatureGate: JellyPlayFeatureGate? = null,
+    /**
+     * The plugin's push face (the push wave) — backs the `push` toggle row's
+     * dynamic subtitle (Registered / No distributor app / Server push
+     * disabled). Same nullable-with-default discipline as the seams above.
+     */
+    private val jellyPlayPushRepository: com.raulshma.jellyplay.core.data.repository.JellyPushRepository? = null,
+    /**
+     * The Wave-3 secrets-block seam: gathers the device's secret material for
+     * the "Export with secrets" flow. Nullable-with-default keeps the
+     * direct-construction test harnesses compiling; a null seam with secrets
+     * requested fails the export with a clear message.
+     */
+    private val secretsBackupAssembler: SecretsBackupAssembler? = null,
+    /**
+     * Session identity — stamps [SettingsBackup.originUserId]/[originServerId]
+     * at secrets export so a cross-account restore can warn.
+     * Same nullable-with-default discipline as the seams above.
+     */
+    private val serverIdentityStore: com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore? = null,
 ) : SettingsEditorViewModel(editor) {
 
     private val preferencesFlow: kotlinx.coroutines.flow.StateFlow<SettingsScreenPreferences> =
@@ -100,6 +141,119 @@ class SettingsViewModel(
      * it lifecycle-aware without re-subscribing here.
      */
     val recentSettingIds: kotlinx.coroutines.flow.StateFlow<List<String>> = recentsStore.recents
+
+    /** Companion-plugin availability (UNKNOWN until [refreshJellyPlayPluginStatus] probes). */
+    val jellyPlayPluginStatus: kotlinx.coroutines.flow.StateFlow<com.raulshma.jellyplay.core.model.JellyPlayPluginStatus> =
+        jellyPlayStatusStore?.status
+            ?: kotlinx.coroutines.flow.MutableStateFlow(com.raulshma.jellyplay.core.model.JellyPlayPluginStatus.UNAVAILABLE)
+
+    /** The sync engine's outcome (opt-in toggle, last sync, errors). */
+    val jellyPlaySyncState: kotlinx.coroutines.flow.StateFlow<com.raulshma.jellyplay.core.data.repository.ProfileSyncRepository.SyncState> =
+        jellyPlaySyncRepository?.state
+            ?: kotlinx.coroutines.flow.MutableStateFlow(com.raulshma.jellyplay.core.data.repository.ProfileSyncRepository.SyncState())
+
+    /**
+     * The synced keys whose admin default is `forced` (composite `"ns/key"`
+     * form, derived from each sync cycle's resolved payload) — the "Server
+     * plugin" section's forced-lock treatment: a toggle whose sync key is in
+     * here renders disabled with the admin-set subtitle. Defaults to an empty
+     * flow where the sync repository seam is absent (direct-construction
+     * harnesses, old graphs).
+     */
+    val jellyPlayForcedKeys: kotlinx.coroutines.flow.StateFlow<Set<String>> =
+        jellyPlaySyncRepository?.forcedKeys
+            ?: kotlinx.coroutines.flow.MutableStateFlow(emptySet())
+
+    /**
+     * The plugin's live feature keys (the capability registry — the ONE
+     * gating mechanism, ADR 0010). The "Messages" entry gates on
+     * [com.raulshma.jellyplay.core.model.JellyPlayPluginFeatures.Messages]
+     * being present, reactively.
+     */
+    val jellyPlayPluginFeatures: kotlinx.coroutines.flow.StateFlow<Set<String>> =
+        jellyPlayStatusStore?.features
+            ?: kotlinx.coroutines.flow.MutableStateFlow(emptySet())
+
+    /**
+     * The per-feature USER toggles behind the "Server plugin" section's
+     * switches: the set of
+     * [JellyPlayFeatureGate.TOGGLEABLE_FEATURES]
+     * keys currently switched ON (absent pref = enabled). A row's VISIBILITY
+     * rides the probe registry above; this is only the switch state.
+     */
+    val jellyPlayFeatureToggles: kotlinx.coroutines.flow.StateFlow<Set<String>> =
+        jellyPlayFeatureGate?.enabledFeatures
+            ?: kotlinx.coroutines.flow.MutableStateFlow(
+                JellyPlayFeatureGate.TOGGLEABLE_FEATURES.toSet(),
+            )
+
+    /**
+     * The push registration machine's state — the `push` toggle row's dynamic
+     * subtitle reads it (Registered / No distributor app / Server push
+     * disabled / …). Defaults to a plain Unregistered flow where the push
+     * repository seam is absent (direct-construction harnesses, old graphs).
+     */
+    val jellyPlayPushState: kotlinx.coroutines.flow.StateFlow<com.raulshma.jellyplay.core.data.repository.JellyPushState> =
+        jellyPlayPushRepository?.state
+            ?: kotlinx.coroutines.flow.MutableStateFlow(
+                com.raulshma.jellyplay.core.data.repository.JellyPushState.Unregistered,
+            )
+
+    /**
+     * The plugin's inbox messages — the durable counterpart of the live
+     * events stream. Feeds the "Messages" entry's unread badge; the
+     * [com.raulshma.jellyplay.feature.settings.JellyPlayMessagesViewModel]
+     * owns the screen-side consumption.
+     */
+    val jellyPlayInbox: kotlinx.coroutines.flow.StateFlow<List<com.raulshma.jellyplay.core.network.api.JellyPlayMessage>> =
+        jellyPlayEventsRepository?.inbox
+            ?: kotlinx.coroutines.flow.MutableStateFlow(emptyList())
+
+    /** Unread count behind the "Messages" entry's badge. */
+    val jellyPlayUnreadMessageCount: kotlinx.coroutines.flow.StateFlow<Int> =
+        jellyPlayInbox
+            .map { list -> list.count { !it.read } }
+            .stateIn(scope, SharingStarted.WhileSubscribed(5_000), 0)
+
+    /**
+     * One inbox refresh so the badge is fresh whenever the settings root
+     * becomes visible. Called from the gated entry (AVAILABLE + Messages
+     * feature), never on its own — the repository's api client 404s against
+     * a stock server.
+     */
+    fun refreshJellyPlayInbox() {
+        val repo = jellyPlayEventsRepository ?: return
+        scope.launch { repo.refreshInbox() }
+    }
+
+    /** One capabilities probe; called when the sync section becomes visible. */
+    fun refreshJellyPlayPluginStatus() {
+        val store = jellyPlayStatusStore ?: return
+        scope.launch { store.refresh() }
+    }
+
+    /**
+     * Persists one per-feature toggle (the "Server plugin" section's switch
+     * rows). The write is an ordinary synced pref — the gate's reactive flows
+     * re-emit and every consumer surface re-gates on the next read/collect.
+     */
+    fun setJellyPlayFeatureEnabled(feature: String, enabled: Boolean) {
+        val gate = jellyPlayFeatureGate ?: return
+        scope.launch { gate.setEnabled(feature, enabled) }
+    }
+
+    fun setJellyPlaySyncEnabled(enabled: Boolean) {
+        val repo = jellyPlaySyncRepository ?: return
+        repo.setEnabled(enabled)
+        if (enabled) {
+            // First enable pulls + pushes immediately so the toggle has an effect.
+            scope.launch { repo.requestSync() }
+        }
+    }
+
+    fun syncJellyPlayNow() {
+        jellyPlaySyncRepository?.let { repo -> scope.launch { repo.requestSync() } }
+    }
 
     var activeSessions by composeState<List<com.raulshma.jellyplay.core.model.SessionInfo>>(emptyList())
         private set
@@ -263,17 +417,23 @@ class SettingsViewModel(
         private set
 
     /**
-     * The stage-and-navigate signal of the import flow: the picked backup uri
-     * string between the file picker and the backup screen's navigation into
-     * the import preview. Nothing is read or decoded here — the preview
-     * screen's [ImportPreviewViewModel] re-reads the file through the pure
-     * [com.raulshma.jellyplay.core.datastore.BackupParser] and owns
-     * classification, security-gating and the restore itself.
+     * Exports the v2 backup to [uri]. With [includeSecrets] the Wave-3
+     * secrets block rides along: the payload is gathered from the secure
+     * stores + server list, encrypted under [passphrase]
+     * ([BackupSecretsCodec], PBKDF2-600k → AES-256-GCM), and attached to the
+     * envelope together with the exporting session's origin ids. Without it
+     * the written document carries no `secrets` key at all — byte-shape as
+     * every pre-Wave-3 export.
+     *
+     * [passphrase] is consumed and zeroed before this returns; it is never
+     * persisted anywhere. The KDF runs on [Dispatchers.Default] — a
+     * 600,000-iteration PBKDF2 must not pin the main thread.
      */
-    var stagedImportUri by composeState<String?>(null)
-        private set
-
-    fun exportSettings(uri: String) {
+    fun exportSettings(
+        uri: String,
+        includeSecrets: Boolean = false,
+        passphrase: CharArray? = null,
+    ) {
         launch {
             backupRestoreStatus = null
             runCatching {
@@ -281,7 +441,27 @@ class SettingsViewModel(
                 // No buildUserPreferences round-trip — the per-store slices are
                 // the canonical payload.
                 val snapshot = preferencesStore.snapshotForBackup()
-                val backup = SettingsBackup(slices = snapshot.slices, extras = snapshot.extras)
+                var backup = SettingsBackup(slices = snapshot.slices, extras = snapshot.extras)
+                if (includeSecrets) {
+                    val assembler = secretsBackupAssembler
+                        ?: throw IllegalStateException("Secrets export is unavailable")
+                    val chars = passphrase ?: throw IllegalStateException("A passphrase is required")
+                    try {
+                        val secrets = assembler.gather()
+                        val envelope = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                            BackupSecretsCodec.encrypt(secrets, chars)
+                        }
+                        val identity = serverIdentityStore?.identity?.value
+                        backup = backup.copy(
+                            secrets = envelope,
+                            originUserId = identity?.activeUserId?.takeIf { it.isNotBlank() },
+                            originServerId = identity?.activeServerId?.takeIf { it.isNotBlank() },
+                        )
+                    } finally {
+                        // Zero the passphrase material regardless of outcome.
+                        chars.fill('\u0000')
+                    }
+                }
                 val jsonString = com.raulshma.jellyplay.core.datastore.PreferencesJson.export
                     .encodeToString(SettingsBackup.serializer(), backup)
                 if (!settingsBackupIo.writeExportPayload(uri, jsonString)) {
@@ -292,23 +472,6 @@ class SettingsViewModel(
                 backupRestoreStatus = "Export failed: ${it.message}"
             }
         }
-    }
-
-    /**
-     * Stages the picked backup [uri] as the stage-and-navigate signal
-     * ([stagedImportUri]); the backup screen navigates to the import preview
-     * and consumes the signal. Deliberately no file read or decode here —
-     * the preview ViewModel re-reads the source and reports its own load
-     * failures, so the two paths cannot drift on classification.
-     */
-    fun importSettings(uri: String) {
-        backupRestoreStatus = null
-        stagedImportUri = uri
-    }
-
-    /** Discards the staged import uri after navigation (or a failed navigation). */
-    fun cancelImport() {
-        stagedImportUri = null
     }
 
     fun clearBackupRestoreStatus() {

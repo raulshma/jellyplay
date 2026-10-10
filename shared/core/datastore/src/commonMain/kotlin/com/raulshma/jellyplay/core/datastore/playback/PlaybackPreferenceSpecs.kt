@@ -323,6 +323,8 @@ object PlaybackPreferenceSpecs {
         default = DEFAULT_DOWNMIX_BOOST_DB,
         resetCategory = PreferenceResetCategory.PLAYBACK,
         transform = { it.coerceIn(MIN_DOWNMIX_BOOST_DB, MAX_DOWNMIX_BOOST_DB) },
+        min = MIN_DOWNMIX_BOOST_DB,
+        max = MAX_DOWNMIX_BOOST_DB,
         search = PreferenceSearchSpec(
             // The search hit restates the row's screen title (the fold): the
             // catalog row declares no ss_*_title twin.

@@ -12,6 +12,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.yield
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
@@ -108,9 +110,28 @@ class SubtitleLanguageStoreTest {
     @Test
     fun `setSubtitlesForcedOnly round-trips`() = runTest {
         store.setSubtitlesForcedOnly(true)
-        assertTrue(store.subtitle.first().subtitlesForcedOnly)
+        assertTrue(awaitSlice { it.subtitlesForcedOnly }.subtitlesForcedOnly)
         store.setSubtitlesForcedOnly(false)
-        assertFalse(store.subtitle.first().subtitlesForcedOnly)
+        assertFalse(awaitSlice { !it.subtitlesForcedOnly }.subtitlesForcedOnly)
+    }
+
+    /**
+     * The slice flow publishes a write on the DataStore writer's thread (the
+     * store scope is Unconfined), so `subtitle.first()` immediately after a
+     * write can race that propagation — flakily, when several store test
+     * classes share one JVM DataStore and contend for it. Poll (bounded,
+     * with real thread hops so the writer side gets to run) until [predicate]
+     * observes the write.
+     */
+    private suspend fun awaitSlice(predicate: (SubtitleSlice) -> Boolean): SubtitleSlice {
+        var slice = store.subtitle.value
+        var spins = 0
+        while (!predicate(slice) && spins < 10_000) {
+            withContext(Dispatchers.Default) { yield() }
+            slice = store.subtitle.value
+            spins++
+        }
+        return slice
     }
 
     @Test

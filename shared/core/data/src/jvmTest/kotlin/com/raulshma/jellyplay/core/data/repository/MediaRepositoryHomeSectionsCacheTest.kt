@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.core.data.repository
 
 import com.raulshma.jellyplay.core.database.dao.HomeSectionCacheDao
-import com.raulshma.jellyplay.core.data.testutil.FakeTimeSource
+import com.raulshma.jellyplay.core.testfixtures.FakeTimeSource
 import com.raulshma.jellyplay.core.model.DiscoverRowConfig
 import com.raulshma.jellyplay.core.model.HomeFreshness
 import com.raulshma.jellyplay.core.model.HomeSection
@@ -110,24 +110,21 @@ class MediaRepositoryHomeSectionsCacheTest {
         return MediaRepositoryImpl(
             // One union mock covers both family seams (the JellyfinApiClient
             // mock implements each of them).
-            apiClient,
-            apiClient,
+            libraryApiClient = apiClient,
+            collectionApiClient = apiClient,
             // The home cache-maintenance port (the write/roll paths' verbs —
             // verified directly in the reroll pins below).
-            homeSectionsCachePort,
-            apiClient,
-            homeSnapshotStore,
-            playedStateSync,
-            episodeCatalogue,
-            mockk<UserDataRealtimeChannel>(relaxed = true),
-            fakeTimeSource,
-            homeSession,
-            sessionCacheRegistry,
+            homeSectionsCachePort = homeSectionsCachePort,
+            homeSnapshotStore = homeSnapshotStore,
+            playedStateSync = playedStateSync,
+            episodeCatalogue = episodeCatalogue,
+            userDataRealtimeChannel = mockk<UserDataRealtimeChannel>(relaxed = true),
+            timeSource = fakeTimeSource,
+            homeSession = homeSession,
+            sessionCacheRegistry = sessionCacheRegistry,
             // Facade split: the detail cluster now lives on the shared
             // internals holder (construction-only ctor re-point).
-            MediaRepositoryInternals(apiClient, homeSession),
-            // The deepened createSyncPlayGroup's engine (inert here).
-            mockk(relaxed = true),
+            internals = MediaRepositoryInternals(apiClient, homeSession, sessionCacheRegistry),
         )
     }
 
@@ -160,8 +157,8 @@ class MediaRepositoryHomeSectionsCacheTest {
         signIn("server-1", "user-A")
         coEvery { apiClient.getHomeSections(any(), any()) } returns homeResult("A")
 
-        repository.getHomeSections(HomeSectionQuery())
-        repository.getHomeSections(HomeSectionQuery())
+        repository.getHomeSections(HomeSectionQuery(), force = false)
+        repository.getHomeSections(HomeSectionQuery(), force = false)
 
         coVerify(exactly = 1) { apiClient.getHomeSections(any(), any()) }
     }
@@ -176,7 +173,7 @@ class MediaRepositoryHomeSectionsCacheTest {
         signIn("server-1", "user-A")
         coEvery { apiClient.getHomeSections(any(), any()) } returns homeResult("A")
 
-        repository.getHomeSections(HomeSectionQuery())
+        repository.getHomeSections(HomeSectionQuery(), force = false)
         repository.getHomeSections(HomeSectionQuery(), force = true)
 
         coVerify(exactly = 2) { apiClient.getHomeSections(any(), any()) }
@@ -188,9 +185,9 @@ class MediaRepositoryHomeSectionsCacheTest {
         signIn("server-1", "user-A")
         coEvery { apiClient.getHomeSections(any(), any()) } returns homeResult("A")
 
-        repository.getHomeSections(HomeSectionQuery())
+        repository.getHomeSections(HomeSectionQuery(), force = false)
         repository.invalidateCaches()
-        repository.getHomeSections(HomeSectionQuery())
+        repository.getHomeSections(HomeSectionQuery(), force = false)
 
         coVerify(exactly = 2) { apiClient.getHomeSections(any(), any()) }
     }
@@ -211,9 +208,9 @@ class MediaRepositoryHomeSectionsCacheTest {
         val result = repository.rerollDiscoverRow(row)
 
         assertEquals(rolledItems, result.getOrNull())
-        coVerify(exactly = 1) { homeSectionsCachePort.invalidateDiscoverRow(row.id) }
+        coVerify(exactly = 1) { homeSectionsCachePort.invalidateDiscoverRow(row.id, any()) }
         coVerify(exactly = 1) { apiClient.getDiscoverRowItems(row) }
-        coVerify(exactly = 1) { homeSectionsCachePort.seedDiscoverRow(row, rolledItems) }
+        coVerify(exactly = 1) { homeSectionsCachePort.seedDiscoverRow(row, rolledItems, any()) }
     }
 
     @Test
@@ -229,9 +226,9 @@ class MediaRepositoryHomeSectionsCacheTest {
             Result.success(listOf(mockk<MediaItem>(relaxed = true)))
         val row = DiscoverRowConfig(id = "dr_x", title = "Surprise Me")
 
-        repository.getHomeSections(HomeSectionQuery())
+        repository.getHomeSections(HomeSectionQuery(), force = false)
         repository.rerollDiscoverRow(row)
-        repository.getHomeSections(HomeSectionQuery())
+        repository.getHomeSections(HomeSectionQuery(), force = false)
 
         coVerify(exactly = 2) { apiClient.getHomeSections(any(), any()) }
     }
@@ -252,7 +249,7 @@ class MediaRepositoryHomeSectionsCacheTest {
             Result.success(listOf(mockk<MediaItem>(relaxed = true)))
         val row = DiscoverRowConfig(id = "dr_x", title = "Surprise Me")
 
-        val racedFetch = async { repository.getHomeSections(HomeSectionQuery()) }
+        val racedFetch = async { repository.getHomeSections(HomeSectionQuery(), force = false) }
         runCurrent() // the fetch captures its epoch and parks on the gate
         repository.rerollDiscoverRow(row)
 
@@ -260,9 +257,84 @@ class MediaRepositoryHomeSectionsCacheTest {
         assertTrue(racedFetch.await().isSuccess, "the raced fetch still returns its result to its caller")
 
         coEvery { apiClient.getHomeSections(any(), any()) } returns homeResult("post-roll")
-        repository.getHomeSections(HomeSectionQuery())
+        repository.getHomeSections(HomeSectionQuery(), force = false)
 
         coVerify(exactly = 2) { apiClient.getHomeSections(any(), any()) }
+    }
+
+    @Test
+    fun `invalidate and seed each bump the write generation exactly once - the funnel is the only writer`() = runTest {
+        // The one-token consolidation pin: the repo's home cache-write
+        // generation moves through ONE funnel, and each roll verb hands its
+        // post-bump value down to the network layer as a parameter (the
+        // fetcher keeps no counter of its own). Pinned in two halves:
+        //  - the port verbs receive exactly one generation each, strictly +1
+        //    apart (the funnel bumped once per verb, and nothing else wrote);
+        //  - the guard behaves accordingly: a home fetch parked BETWEEN the
+        //    two verbs (capturing the post-invalidate value) is refused once
+        //    the seed's commit bump lands, and the post-roll ordinary read —
+        //    capturing the settled token — pins and serves, so nothing
+        //    bumped after the commit either.
+        val repository = buildRepository()
+        signIn("server-1", "user-A")
+        val rolledItems = listOf(mockk<MediaItem>(relaxed = true))
+        val row = DiscoverRowConfig(id = "dr_x", title = "Surprise Me")
+
+        val invalidateGenerations = mutableListOf<Long>()
+        val seedGenerations = mutableListOf<Long>()
+        every { homeSectionsCachePort.invalidateDiscoverRow(any(), any()) } answers { invalidateGenerations += arg<Long>(1) }
+        every { homeSectionsCachePort.seedDiscoverRow(any(), any(), any()) } answers { seedGenerations += arg<Long>(2) }
+
+        // The roll's own fresh fetch parks between the two verbs, opening the
+        // invalidate-only window a home fetch can start inside.
+        val rowGate = CompletableDeferred<Unit>()
+        coEvery { apiClient.getDiscoverRowItems(any()) } coAnswers { rowGate.await(); Result.success(rolledItems) }
+
+        // Phase 1 — a home fetch parked BEFORE the roll captures the pre-roll
+        // generation (0).
+        val preRollGate = CompletableDeferred<Result<HomeSectionsResult>>()
+        coEvery { apiClient.getHomeSections(any(), any()) } coAnswers { preRollGate.await() }
+        val beforeRoll = async { repository.getHomeSections(HomeSectionQuery(), force = false) }
+        runCurrent() // parked on preRollGate, generation captured
+
+        val roll = async { repository.rerollDiscoverRow(row) }
+        runCurrent() // invalidate ran (bump 1 + port call); the roll parks on rowGate
+
+        // Phase 2 — a home fetch started INSIDE the invalidate-only window
+        // captures the post-invalidate generation (1).
+        val betweenGate = CompletableDeferred<Result<HomeSectionsResult>>()
+        coEvery { apiClient.getHomeSections(any(), any()) } coAnswers { betweenGate.await() }
+        val midRollFetch = async { repository.getHomeSections(HomeSectionQuery(), force = false) }
+        runCurrent() // parked on betweenGate, post-invalidate generation captured
+
+        // Release the roll: seed runs (bump 2 + port call) and the roll commits.
+        rowGate.complete(Unit)
+        assertTrue(roll.await().isSuccess)
+
+        // Exactly one generation per verb, in order, +1 apart — the funnel is
+        // the only writer and each verb delivered the repo's post-bump token.
+        assertEquals(listOf(1L), invalidateGenerations)
+        assertEquals(listOf(2L), seedGenerations)
+
+        // Phase 1's write lands AFTER both bumps: refused (captured 0 ≠ 2),
+        // still returned to its caller.
+        preRollGate.complete(homeResult("pre-roll"))
+        assertTrue(beforeRoll.await().isSuccess, "the raced fetch still returns its result to its caller")
+
+        // Phase 2's write lands after the seed too: refused as well (captured
+        // 1 ≠ 2) — the window the commit-time bump exists to close.
+        betweenGate.complete(homeResult("between"))
+        assertTrue(midRollFetch.await().isSuccess)
+
+        // The post-roll ordinary read refetches (neither raced write pinned),
+        // captures the settled generation, and PINS; a further read is then
+        // served from the cache with zero new calls — nothing bumped after
+        // the commit.
+        coEvery { apiClient.getHomeSections(any(), any()) } returns homeResult("post-roll")
+        repository.getHomeSections(HomeSectionQuery(), force = false)
+        repository.getHomeSections(HomeSectionQuery(), force = false)
+
+        coVerify(exactly = 3) { apiClient.getHomeSections(any(), any()) }
     }
 
     @Test
@@ -279,8 +351,81 @@ class MediaRepositoryHomeSectionsCacheTest {
         val result = repository.rerollDiscoverRow(row)
 
         assertTrue(result.isFailure)
-        coVerify(exactly = 1) { homeSectionsCachePort.invalidateDiscoverRow(row.id) }
-        coVerify(exactly = 0) { homeSectionsCachePort.seedDiscoverRow(any(), any()) }
+        coVerify(exactly = 1) { homeSectionsCachePort.invalidateDiscoverRow(row.id, any()) }
+        coVerify(exactly = 0) { homeSectionsCachePort.seedDiscoverRow(any(), any(), any()) }
+    }
+
+    @Test
+    fun `refreshHomeSection is forced all the way to the network layer`() = runBlocking {
+        // The edge-pull refresh's freshness contract, first half: the force
+        // flag must arrive at the network fetcher so its sub-call memos
+        // (latest media / discover rows) are BYPASSED on read — a pull that
+        // served a memoised row would not be a refresh.
+        val repository = buildRepository()
+        signIn("server-1", "user-A")
+        val section = homeSection("latest_lib1")
+        coEvery { homeSectionsCachePort.refreshHomeSection(any(), any(), any(), any()) } returns
+            Result.success(section)
+
+        repository.refreshHomeSection(
+            section,
+            HomeSectionQuery(),
+            mergeNextUpIntoContinueWatching = false,
+            force = true,
+        )
+
+        coVerify(exactly = 1) { homeSectionsCachePort.refreshHomeSection(section, any(), false, true) }
+    }
+
+    @Test
+    fun `refreshHomeSection success drops the cached home payload - the next ordinary read refetches`() = runBlocking {
+        // The freshness contract's second half (the dice-roll drop's twin):
+        // the in-memory assembled payload still carries the PRE-pull sections,
+        // and a non-forced periodic read landing inside its 60s TTL would
+        // repaint the stale row over the fresh one. Success must evict it, so
+        // the next ordinary read refetches (through the network layer, whose
+        // sub-call memos the pull just refreshed). The SWR snapshot persist
+        // stays untouched — verified structurally: the port call, not a
+        // getHomeSections path, produced the refresh.
+        val repository = buildRepository()
+        signIn("server-1", "user-A")
+        coEvery { apiClient.getHomeSections(any(), any()) } returns homeResult("A")
+        coEvery { homeSectionsCachePort.refreshHomeSection(any(), any(), any(), any()) } returns
+            Result.success(homeSection("latest_lib1_fresh"))
+
+        repository.getHomeSections(HomeSectionQuery(), force = false) // populate the assembled cache
+        repository.refreshHomeSection(
+            homeSection("latest_lib1"),
+            HomeSectionQuery(),
+            mergeNextUpIntoContinueWatching = false,
+            force = true,
+        )
+        repository.getHomeSections(HomeSectionQuery(), force = false) // must refetch, not serve pre-pull payload
+
+        coVerify(exactly = 2) { apiClient.getHomeSections(any(), any()) }
+    }
+
+    @Test
+    fun `refreshHomeSection failure keeps the cached home payload`() = runBlocking {
+        // A failed pull leaves every row it didn't touch exactly as they were —
+        // the assembled payload is still accurate for them, so the next
+        // ordinary read keeps serving it instead of paying a full refetch.
+        val repository = buildRepository()
+        signIn("server-1", "user-A")
+        coEvery { apiClient.getHomeSections(any(), any()) } returns homeResult("A")
+        coEvery { homeSectionsCachePort.refreshHomeSection(any(), any(), any(), any()) } returns
+            Result.failure(RuntimeException("server down"))
+
+        repository.getHomeSections(HomeSectionQuery(), force = false) // populate the assembled cache
+        repository.refreshHomeSection(
+            homeSection("latest_lib1"),
+            HomeSectionQuery(),
+            mergeNextUpIntoContinueWatching = false,
+            force = true,
+        )
+        repository.getHomeSections(HomeSectionQuery(), force = false) // still within TTL: cached
+
+        coVerify(exactly = 1) { apiClient.getHomeSections(any(), any()) }
     }
 
     @Test
@@ -292,13 +437,13 @@ class MediaRepositoryHomeSectionsCacheTest {
         signIn("server-1", "user-A")
         coEvery { apiClient.getHomeSections(any(), any()) } returns homeResult("A")
 
-        repository.getHomeSections(HomeSectionQuery()) // populates user-A entry
+        repository.getHomeSections(HomeSectionQuery(), force = false) // populates user-A entry
 
         // Switch to user B on the same server.
         switchUser("user-B")
         coEvery { apiClient.getHomeSections(any(), any()) } returns homeResult("B")
 
-        repository.getHomeSections(HomeSectionQuery())
+        repository.getHomeSections(HomeSectionQuery(), force = false)
 
         // Two distinct network fetches — user A's cached entry did NOT serve user B.
         coVerify(exactly = 2) { apiClient.getHomeSections(any(), any()) }
@@ -320,9 +465,9 @@ class MediaRepositoryHomeSectionsCacheTest {
         signIn("server-1", "user-A")
         coEvery { apiClient.getHomeSections(any(), any()) } returns homeResult("A")
 
-        repository.getHomeSections(HomeSectionQuery())
+        repository.getHomeSections(HomeSectionQuery(), force = false)
         repository.notifyUserDataChanged(listOf("item-1"))
-        repository.getHomeSections(HomeSectionQuery())
+        repository.getHomeSections(HomeSectionQuery(), force = false)
 
         coVerify(exactly = 2) { apiClient.getHomeSections(any(), any()) }
     }
@@ -345,11 +490,11 @@ class MediaRepositoryHomeSectionsCacheTest {
             }
         }
 
-        repository.getHomeSections(HomeSectionQuery()) // populate the cache
+        repository.getHomeSections(HomeSectionQuery(), force = false) // populate the cache
         repository.notifyUserDataChanged(listOf("item-1")) // arm the marker
-        val failed = repository.getHomeSections(HomeSectionQuery()) // consumes, fetch fails
+        val failed = repository.getHomeSections(HomeSectionQuery(), force = false) // consumes, fetch fails
         assertTrue(failed.isFailure)
-        repository.getHomeSections(HomeSectionQuery()) // re-armed: refetches
+        repository.getHomeSections(HomeSectionQuery(), force = false) // re-armed: refetches
 
         coVerify(exactly = 3) { apiClient.getHomeSections(any(), any()) }
     }
@@ -369,9 +514,9 @@ class MediaRepositoryHomeSectionsCacheTest {
             homeResult("A")
         }
 
-        repository.getHomeSections(HomeSectionQuery()) // populate, force = false
+        repository.getHomeSections(HomeSectionQuery(), force = false) // populate, force = false
         repository.notifyUserDataChanged(listOf("item-1")) // arm the marker
-        repository.getHomeSections(HomeSectionQuery()) // consumes the marker
+        repository.getHomeSections(HomeSectionQuery(), force = false) // consumes the marker
 
         coVerify(exactly = 2) { apiClient.getHomeSections(any(), any()) }
         assertEquals(listOf(false, true), forcedFlags)
@@ -383,8 +528,8 @@ class MediaRepositoryHomeSectionsCacheTest {
         signIn("server-1", "user-A")
         coEvery { apiClient.getHomeSections(any(), any()) } returns homeResult("A")
 
-        val first = repository.getHomeSections(HomeSectionQuery())
-        val second = repository.getHomeSections(HomeSectionQuery())
+        val first = repository.getHomeSections(HomeSectionQuery(), force = false)
+        val second = repository.getHomeSections(HomeSectionQuery(), force = false)
 
         coVerify(exactly = 1) { apiClient.getHomeSections(any(), any()) }
         assertEquals(first.getOrNull(), second.getOrNull())
@@ -396,10 +541,10 @@ class MediaRepositoryHomeSectionsCacheTest {
         signIn("server-1", "user-A")
         coEvery { apiClient.getHomeSections(any(), any()) } returns homeResult("A")
 
-        repository.getHomeSections(HomeSectionQuery())
+        repository.getHomeSections(HomeSectionQuery(), force = false)
         repository.notifyUserDataChanged(listOf("item-1"))
-        repository.getHomeSections(HomeSectionQuery()) // consumes the marker, refetches
-        repository.getHomeSections(HomeSectionQuery()) // marker gone: cached
+        repository.getHomeSections(HomeSectionQuery(), force = false) // consumes the marker, refetches
+        repository.getHomeSections(HomeSectionQuery(), force = false) // marker gone: cached
 
         coVerify(exactly = 2) { apiClient.getHomeSections(any(), any()) }
     }
@@ -421,10 +566,10 @@ class MediaRepositoryHomeSectionsCacheTest {
             homeResult("A")
         }
 
-        repository.getHomeSections(HomeSectionQuery()) // populate, force = false
+        repository.getHomeSections(HomeSectionQuery(), force = false) // populate, force = false
         repository.notifyUserDataChanged(listOf("item-1")) // arm the marker
         switchUser("user-B")
-        repository.getHomeSections(HomeSectionQuery()) // identity miss refetches anyway
+        repository.getHomeSections(HomeSectionQuery(), force = false) // identity miss refetches anyway
 
         coVerify(exactly = 2) { apiClient.getHomeSections(any(), any()) }
         assertEquals(listOf(false, false), forcedFlags)
@@ -446,9 +591,9 @@ class MediaRepositoryHomeSectionsCacheTest {
 
         fakeTimeSource.nowMs = 1_000L
 
-        repository.getHomeSections(HomeSectionQuery()) // cached at t=1000
+        repository.getHomeSections(HomeSectionQuery(), force = false) // cached at t=1000
         fakeTimeSource.nowMs += HomeFreshness.REPO_MEMORY_TTL_MS + 1_000L // 61s later
-        repository.getHomeSections(HomeSectionQuery())
+        repository.getHomeSections(HomeSectionQuery(), force = false)
 
         coVerify(exactly = 2) { apiClient.getHomeSections(any(), any()) }
     }

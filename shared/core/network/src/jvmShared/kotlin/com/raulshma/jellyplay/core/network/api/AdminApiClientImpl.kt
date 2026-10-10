@@ -10,6 +10,8 @@ import com.raulshma.jellyplay.core.model.ScheduledTaskInfo
 import com.raulshma.jellyplay.core.model.ServerBackup
 import com.raulshma.jellyplay.core.model.SessionInfo
 import com.raulshma.jellyplay.core.model.SystemInfo
+import com.raulshma.jellyplay.core.concurrency.PollSpec
+import com.raulshma.jellyplay.core.concurrency.boundedPoll
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.model.TaskTriggerInfo
 import com.raulshma.jellyplay.core.model.TtlCache
@@ -238,29 +240,25 @@ class AdminApiClientImpl(
     /**
      * Polls [listManifests] for an entry whose [BackupManifestDto.path] the
      * pre-create snapshot didn't carry — the archive the timed-out create
-     * actually wrote. Gives up after [BACKUP_CREATE_POLL_ATTEMPTS] rounds.
+     * actually wrote. The cadence (real gaps between rounds, a busy or failed
+     * GET consuming its round, no trailing delay once [BACKUP_CREATE_POLL_ATTEMPTS]
+     * rounds pass without a fresh path) is [boundedPoll]'s declared policy —
+     * the loop choreography 43c806a90 had to fix by hand is the governor's now.
      */
-    private suspend fun pollForNewBackup(api: ApiClient, knownPaths: Set<String>): BackupManifestDto? {
-        repeat(BACKUP_CREATE_POLL_ATTEMPTS) {
+    private suspend fun pollForNewBackup(api: ApiClient, knownPaths: Set<String>): BackupManifestDto? =
+        boundedPoll(
+            PollSpec(
+                intervalMs = BACKUP_CREATE_POLL_INTERVAL_MS,
+                maxAttempts = BACKUP_CREATE_POLL_ATTEMPTS,
+            ),
+        ) { _ ->
             // Check before sleeping: the archive may already be listed by the
             // time the transport failure surfaces.
-            val fresh = listManifests(api)
-            if (fresh == null) {
-                // Busy server (the null case): back off like a normal round —
-                // returning early here would burn the remaining rounds with
-                // no gap between the requests.
-                kotlinx.coroutines.delay(BACKUP_CREATE_POLL_INTERVAL_MS)
-                return@repeat
-            }
+            val fresh = listManifests(api) ?: return@boundedPoll null
             val created = fresh.firstOrNull { entry -> entry.path != null && entry.path !in knownPaths }
-            if (created != null) {
-                NetworkLog.d(TAG_BACKUPS, "create poll found ${created.path}")
-                return created
-            }
-            kotlinx.coroutines.delay(BACKUP_CREATE_POLL_INTERVAL_MS)
+            if (created != null) NetworkLog.d(TAG_BACKUPS, "create poll found ${created.path}")
+            created
         }
-        return null
-    }
 
     override suspend fun restoreBackup(archiveFileName: String): Result<Unit> = engine.withApi { api ->
         // Fire-and-forget: 204, then the server restarts immediately. The

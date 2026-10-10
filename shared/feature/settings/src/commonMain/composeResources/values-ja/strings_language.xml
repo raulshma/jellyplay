@@ -86,4 +86,6 @@
     <string name="settings_track_rule_subtitle_mode">字幕モード</string>
     <string name="settings_track_rule_edit">ルールを編集</string>
     <string name="settings_track_rule_delete">ルールを削除</string>
+
+    <string name="settings_subtitle_custom_color">カスタム…</string>
 </resources>

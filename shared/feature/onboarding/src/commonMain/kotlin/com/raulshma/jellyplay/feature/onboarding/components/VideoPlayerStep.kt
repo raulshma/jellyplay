@@ -18,6 +18,7 @@ import com.composables.icons.tabler.outline.*
 import com.raulshma.jellyplay.core.model.OrientationMode
 import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.StreamingQuality
+import com.raulshma.jellyplay.core.ui.model.localizedDisplayName
 import com.raulshma.jellyplay.feature.onboarding.generated.resources.Res
 import com.raulshma.jellyplay.feature.onboarding.generated.resources.onboarding_video_autoplay_next
 import com.raulshma.jellyplay.feature.onboarding.generated.resources.onboarding_video_default_orientation
@@ -136,7 +137,7 @@ fun VideoPlayerStep(
                 ).forEach { mode ->
                     val selected = mode == defaultOrientation
                     OnboardingOptionCard(
-                        label = mode.displayName,
+                        label = mode.localizedDisplayName(),
                         selected = selected,
                         onClick = { onDefaultOrientationChange(mode) },
                         modifier = Modifier.weight(1f),

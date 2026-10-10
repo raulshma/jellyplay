@@ -15,7 +15,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalConfiguration
@@ -25,7 +24,6 @@ import com.raulshma.jellyplay.core.data.cast.CastSessionEvent
 import com.raulshma.jellyplay.core.data.playback.FrameRateMatcher
 import com.raulshma.jellyplay.core.model.RefreshRateMode
 import com.raulshma.jellyplay.core.model.SubtitleStyle
-import com.raulshma.jellyplay.core.ui.player.TranscodeReasonsFormatter
 import com.raulshma.jellyplay.core.ui.player.findActivity
 import com.raulshma.jellyplay.feature.player.video.components.CastButton
 import com.raulshma.jellyplay.feature.player.video.components.MpvSubtitleOverlay
@@ -287,36 +285,6 @@ internal actual fun rememberIs24HourFormat(): Boolean {
     return remember(context) { android.text.format.DateFormat.is24HourFormat(context) }
 }
 
-// ── Key codes ──────────────────────────────────────────────────────────────
-
-internal actual val KeyEvent.playerKeyCode: Int
-    get() = nativeKeyEvent.keyCode
-
-internal actual object PlayerKeyCodes {
-    actual val KEYCODE_SPACE: Int = android.view.KeyEvent.KEYCODE_SPACE
-    actual val KEYCODE_MEDIA_PLAY: Int = android.view.KeyEvent.KEYCODE_MEDIA_PLAY
-    actual val KEYCODE_MEDIA_PAUSE: Int = android.view.KeyEvent.KEYCODE_MEDIA_PAUSE
-    actual val KEYCODE_MEDIA_PLAY_PAUSE: Int = android.view.KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE
-    actual val KEYCODE_DPAD_RIGHT: Int = android.view.KeyEvent.KEYCODE_DPAD_RIGHT
-    actual val KEYCODE_MEDIA_FAST_FORWARD: Int = android.view.KeyEvent.KEYCODE_MEDIA_FAST_FORWARD
-    actual val KEYCODE_L: Int = android.view.KeyEvent.KEYCODE_L
-    actual val KEYCODE_DPAD_LEFT: Int = android.view.KeyEvent.KEYCODE_DPAD_LEFT
-    actual val KEYCODE_MEDIA_REWIND: Int = android.view.KeyEvent.KEYCODE_MEDIA_REWIND
-    actual val KEYCODE_J: Int = android.view.KeyEvent.KEYCODE_J
-    actual val KEYCODE_DPAD_UP: Int = android.view.KeyEvent.KEYCODE_DPAD_UP
-    actual val KEYCODE_VOLUME_UP: Int = android.view.KeyEvent.KEYCODE_VOLUME_UP
-    actual val KEYCODE_DPAD_DOWN: Int = android.view.KeyEvent.KEYCODE_DPAD_DOWN
-    actual val KEYCODE_VOLUME_DOWN: Int = android.view.KeyEvent.KEYCODE_VOLUME_DOWN
-    actual val KEYCODE_F: Int = android.view.KeyEvent.KEYCODE_F
-    actual val KEYCODE_F1: Int = android.view.KeyEvent.KEYCODE_F1
-    actual val KEYCODE_F2: Int = android.view.KeyEvent.KEYCODE_F2
-    actual val KEYCODE_F3: Int = android.view.KeyEvent.KEYCODE_F3
-    actual val KEYCODE_F4: Int = android.view.KeyEvent.KEYCODE_F4
-    actual val KEYCODE_M: Int = android.view.KeyEvent.KEYCODE_M
-    actual val KEYCODE_ESCAPE: Int = android.view.KeyEvent.KEYCODE_ESCAPE
-    actual val KEYCODE_BACK: Int = android.view.KeyEvent.KEYCODE_BACK
-}
-
 // ── Document picker ────────────────────────────────────────────────────────
 
 @Composable
@@ -362,8 +330,8 @@ internal actual fun CoroutineScope.launchPlatformCastSessionEvents(viewModel: Vi
     launch {
         viewModel.androidCast.castSessionEvents.collect { event ->
             when (event) {
-                is CastSessionEvent.Connected -> viewModel.cast.castToDevice()
-                is CastSessionEvent.Disconnected -> viewModel.cast.onCastDisconnected()
+                is CastSessionEvent.Connected -> viewModel.playbackSession.cast.castToDevice()
+                is CastSessionEvent.Disconnected -> viewModel.playbackSession.cast.onCastDisconnected()
             }
         }
     }
@@ -480,20 +448,5 @@ internal actual fun requestVideoFrameCapture(
                     "Capture failed: ${result.reason}"
             }
         )
-    }
-}
-
-// ── Transcode reasons ──────────────────────────────────────────────────────
-
-actual typealias PlatformTranscodeReason =
-    com.raulshma.jellyplay.core.ui.player.FormattedTranscodeReason
-
-@Composable
-internal actual fun rememberFormattedTranscodeReasons(
-    rawReasons: List<String>,
-): List<PlatformTranscodeReason> {
-    val context = LocalContext.current
-    return remember(context, rawReasons) {
-        TranscodeReasonsFormatter.format(context, rawReasons)
     }
 }

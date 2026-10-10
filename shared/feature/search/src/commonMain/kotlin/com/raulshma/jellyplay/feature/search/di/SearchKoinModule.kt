@@ -22,8 +22,7 @@ val searchModule: Module = module {
     viewModel {
         SearchViewModel(
             mediaRepository = get(),
-            mediaBrowseReads = get(),
-            mediaCollectionReads = get(),
+            libraryApiClient = get(),
             userDataMutator = get(),
             imageUrlProvider = get(),
             seerrRepository = get(),

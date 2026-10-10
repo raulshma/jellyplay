@@ -36,6 +36,9 @@ kotlin {
             // runCatchingRethrowingCancellation (resolveDiffLabels' resource read).
             implementation(project(":shared:core:concurrency"))
             implementation(project(":shared:core:ui"))
+            // EngineCapabilityMatrix gates the subtitle custom-color swatch
+            // on the selected engine's free-form + ASS-override support.
+            implementation(project(":shared:core:player-contract"))
             implementation(libs.coil.compose)
             // LicensesScreen consumes aboutlibraries Library entities (KMP
             // artifact; JSON is loaded through the asset-reader seam).

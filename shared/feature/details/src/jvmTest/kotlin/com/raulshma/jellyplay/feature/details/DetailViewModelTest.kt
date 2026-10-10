@@ -12,7 +12,7 @@ import com.raulshma.jellyplay.core.data.repository.DetailLoadError
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaDetailProvider
 import com.raulshma.jellyplay.core.data.repository.MetadataEditorRepository
-import com.raulshma.jellyplay.core.data.repository.MediaExtrasReads
+import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
@@ -49,6 +49,7 @@ import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.NetworkStatus
 import com.raulshma.jellyplay.core.model.RemoteConnectivity
 import com.raulshma.jellyplay.core.model.UserDataChange
+import com.raulshma.jellyplay.core.model.seerr.SeerrPreferences
 import com.raulshma.jellyplay.core.testfixtures.FakeUserDataMutator
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -62,7 +63,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -114,7 +114,7 @@ class DetailViewModelTest {
     // relaxed mocks — no VM test exercises those helpers directly; their own
     // suites do).
     private lateinit var mediaRepository: MediaRepository
-    private lateinit var mediaExtrasReads: MediaExtrasReads
+    private lateinit var libraryApiClient: LibraryApiClient
     private lateinit var mediaDetailProvider: MediaDetailProvider
     private lateinit var userDataMutator: FakeUserDataMutator
     private lateinit var playbackRepository: PlaybackRepository
@@ -137,7 +137,7 @@ class DetailViewModelTest {
     fun setUp() {
         mediaRepository = mockk(relaxed = true)
 
-        mediaExtrasReads = mockk(relaxed = true)
+        libraryApiClient = mockk(relaxed = true)
         mediaDetailProvider = mockk(relaxed = false)
         playbackRepository = mockk(relaxed = true)
         offlineRepository = mockk(relaxed = true)
@@ -148,8 +148,7 @@ class DetailViewModelTest {
         audioQueueFacade = mockk()
         themeMusicPlayer = mockk(relaxed = true)
 
-        every { seerrRepository.isConnected() } returns flowOf(false)
-        every { seerrRepository.isRecommendationsEnabled() } returns flowOf(false)
+        every { seerrRepository.preferences } returns MutableStateFlow(SeerrPreferences())
         // Default: online. Prevents the Seerr Local-skip from falsely firing on
         // a relaxed-mock NetworkStatus when a REMOTE snapshot triggers discovery.
         every { offlineModeManager.networkStatus } returns MutableStateFlow(NetworkStatus.Online)
@@ -159,7 +158,7 @@ class DetailViewModelTest {
         // Default stub for the special-features fetch so its REMOTE side-effect
         // launch doesn't crash casting the relaxed-mock Result default. Individual
         // tests override this to drive the specialFeatures list.
-        coEvery { mediaExtrasReads.getSpecialFeatures(any()) } returns Result.success(emptyList())
+        coEvery { libraryApiClient.getSpecialFeatures(any()) } returns Result.success(emptyList())
         // Default stub for the media-segments pre-warm fetch so its REMOTE
         // side-effect launch doesn't crash casting the relaxed-mock Result default.
         // Individual tests override this to drive the availability booleans.
@@ -232,7 +231,8 @@ class DetailViewModelTest {
             storageProbe = mockk<DetailStorageProbe>(relaxed = true),
             strings = strings,
             mediaRepository = mediaRepository,
-            mediaExtrasReads = mediaExtrasReads,
+            libraryApiClient = libraryApiClient,
+            collectionApiClient = mockk<com.raulshma.jellyplay.core.network.api.CollectionApiClient>(relaxed = true),
             userDataMutator = userDataMutator,
             mediaDetailProvider = mediaDetailProvider,
             playbackRepository = playbackRepository,
@@ -1188,11 +1188,11 @@ class DetailViewModelTest {
     fun loadSeerrData_whenConnectedAndEnabled_fetchesSeerrRecommendations() =
         runTest(mainDispatcher) {
             // Flip the connection-flag stubs BEFORE constructing the ViewModel:
-            // the uiState combine captures the flows returned by isConnected() /
-            // isRecommendationsEnabled() at construction time, so a stub flipped
-            // after construction has no effect.
-            every { seerrRepository.isConnected() } returns MutableStateFlow(true)
-            every { seerrRepository.isRecommendationsEnabled() } returns MutableStateFlow(true)
+            // the uiState combine captures the preferences flow at construction
+            // time, so a stub flipped after construction has no effect.
+            every { seerrRepository.preferences } returns MutableStateFlow(
+                SeerrPreferences(serverUrl = "https://seerr.example.com", recommendationsEnabled = true),
+            )
             every { offlineModeManager.networkStatus } returns MutableStateFlow(NetworkStatus.Online)
             buildViewModel()
 
@@ -1231,8 +1231,7 @@ class DetailViewModelTest {
     @Test
     fun loadSeerrData_fetchesTmdbReviews() =
         runTest(mainDispatcher) {
-            every { seerrRepository.isConnected() } returns MutableStateFlow(false)
-            every { seerrRepository.isRecommendationsEnabled() } returns MutableStateFlow(false)
+            every { seerrRepository.preferences } returns MutableStateFlow(SeerrPreferences())
             every { offlineModeManager.networkStatus } returns MutableStateFlow(NetworkStatus.Online)
             buildViewModel()
 
@@ -1671,7 +1670,7 @@ class DetailViewModelTest {
         }
 
     // ── Special features / extras ───────────────────────────────────────────
-    // A REMOTE load fires mediaExtrasReads.getSpecialFeatures (sourced from
+    // A REMOTE load fires libraryApiClient.getSpecialFeatures (sourced from
     // Jellyfin's /Items/{id}/SpecialFeatures) and projects the result onto
     // uiState.specialFeatures so the "Special Features" row can render.
 
@@ -1687,13 +1686,13 @@ class DetailViewModelTest {
                 MediaItem(id = "extra-1", name = "Making Of", mediaType = MediaType.MOVIE),
                 MediaItem(id = "extra-2", name = "Deleted Scenes", mediaType = MediaType.MOVIE),
             )
-            coEvery { mediaExtrasReads.getSpecialFeatures("m1") } returns Result.success(extras)
+            coEvery { libraryApiClient.getSpecialFeatures("m1") } returns Result.success(extras)
 
             viewModel.onEvent(DetailUiEvent.LoadItem("m1"))
             advanceUntilIdle()
 
             // The fetch fired exactly once for the resolved item.
-            coVerify(exactly = 1) { mediaExtrasReads.getSpecialFeatures("m1") }
+            coVerify(exactly = 1) { libraryApiClient.getSpecialFeatures("m1") }
             // The extras landed on uiState for the detail row.
             assertEquals(extras, viewModel.uiState.value.specialFeatures)
         }
@@ -1708,7 +1707,7 @@ class DetailViewModelTest {
                 remoteSnapshot(MediaDetail(item = MediaItem(id = "m1", name = "Movie", mediaType = MediaType.MOVIE))),
             )
             val extras = listOf(MediaItem(id = "extra-1", name = "Making Of", mediaType = MediaType.MOVIE))
-            coEvery { mediaExtrasReads.getSpecialFeatures("m1") } returns Result.success(extras)
+            coEvery { libraryApiClient.getSpecialFeatures("m1") } returns Result.success(extras)
             viewModel.onEvent(DetailUiEvent.LoadItem("m1"))
             advanceUntilIdle()
             assertEquals(extras, viewModel.uiState.value.specialFeatures)
@@ -1733,7 +1732,7 @@ class DetailViewModelTest {
 
             assertTrue(viewModel.uiState.value.specialFeatures.isEmpty())
             // A LOCAL origin short-circuits remote discovery — no extras fetch.
-            coVerify(exactly = 0) { mediaExtrasReads.getSpecialFeatures("s1") }
+            coVerify(exactly = 0) { libraryApiClient.getSpecialFeatures("s1") }
         }
 
     // ── Instant Mix ───────────────────────────────────────────────────────

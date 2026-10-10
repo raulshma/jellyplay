@@ -10,11 +10,6 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 
 /**
  * AnimatedVisibility wrapper for a whole section: fade + slight rise on
@@ -84,37 +79,4 @@ fun AnimatedScaleEntrance(
                 ),
         content = content,
     )
-}
-
-@Composable
-fun rememberAnimatedItemVisibility(index: Int): Boolean {
-    var visible by remember { mutableStateOf(false) }
-    androidx.compose.runtime.LaunchedEffect(Unit) {
-        visible = true
-    }
-    return visible
-}
-
-@Composable
-fun AnimatedMediaItem(
-    index: Int,
-    delayPerItem: Int = 40,
-    content: @Composable () -> Unit,
-) {
-    var visible by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        visible = true
-    }
-    AnimatedVisibility(
-        visible = visible,
-        enter = fadeIn(
-            animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
-        ) + slideInVertically(
-            initialOffsetY = { it / 10 },
-            animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
-        ),
-        exit = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()),
-    ) {
-        content()
-    }
 }

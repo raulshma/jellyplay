@@ -1,9 +1,11 @@
 package com.raulshma.jellyplay.feature.admin.navigation
 
+import androidx.compose.runtime.Composable
 import androidx.navigation3.runtime.EntryProviderScope
 import androidx.navigation3.runtime.NavKey
 import com.raulshma.jellyplay.core.ui.navigation.Navigator
 import com.raulshma.jellyplay.core.ui.navigation.Route
+import com.raulshma.jellyplay.feature.admin.analytics.JellyPlayAnalyticsScreen
 import com.raulshma.jellyplay.feature.admin.backups.AdminBackupsScreen
 import com.raulshma.jellyplay.feature.admin.dashboard.AdminDashboardScreen
 import com.raulshma.jellyplay.feature.admin.devices.DevicesScreen
@@ -15,6 +17,7 @@ import com.raulshma.jellyplay.feature.admin.statistics.UserStatisticsScreen
 import com.raulshma.jellyplay.feature.admin.statistics.detail.UserStatisticsDetailScreen
 import com.raulshma.jellyplay.feature.admin.stalemedia.StaleMediaScreen
 import com.raulshma.jellyplay.feature.admin.tasks.ScheduledTasksScreen
+import com.raulshma.jellyplay.feature.admin.transcodes.JellyPlayTranscodesScreen
 import com.raulshma.jellyplay.feature.admin.users.UsersScreen
 import com.raulshma.jellyplay.feature.admin.users.detail.UserDetailScreen
 import com.raulshma.jellyplay.feature.admin.watchedremoval.WatchedMediaCleanupScreen
@@ -30,13 +33,10 @@ fun EntryProviderScope<NavKey>.adminSection(
     // server on entry and renders an AccessDeniedScreen for non-admins. This
     // covers navigate(), deep-links, and start-destination alike — closing the
     // gap where admin routes were reachable without any client-side check.
+    // The wrap itself is bound once in AdminRouteEntry below — each entry
+    // here supplies only its screen content.
     entry<Route.AdminDashboard> {
-        AdminRouteContainer(
-            onBack = { navigator.goBack() },
-            isAdmin = isAdmin,
-            isRefreshingAdmin = isRefreshingAdmin,
-            onRefreshAdmin = onRefreshAdmin,
-        ) {
+        AdminRouteEntry(navigator, isAdmin, isRefreshingAdmin, onRefreshAdmin) {
             AdminDashboardScreen(
                 onBack = { navigator.goBack() },
                 onScheduledTasks = { navigator.navigate(Route.ScheduledTasks) },
@@ -48,17 +48,14 @@ fun EntryProviderScope<NavKey>.adminSection(
                 onPlugins = { navigator.navigate(Route.Plugins) },
                 onUsers = { navigator.navigate(Route.Users) },
                 onBackups = { navigator.navigate(Route.AdminBackups) },
+                onTranscodes = { navigator.navigate(Route.JellyPlayTranscodes) },
+                onAnalytics = { navigator.navigate(Route.JellyPlayAnalytics) },
             )
         }
     }
 
     entry<Route.ScheduledTasks> {
-        AdminRouteContainer(
-            onBack = { navigator.goBack() },
-            isAdmin = isAdmin,
-            isRefreshingAdmin = isRefreshingAdmin,
-            onRefreshAdmin = onRefreshAdmin,
-        ) {
+        AdminRouteEntry(navigator, isAdmin, isRefreshingAdmin, onRefreshAdmin) {
             ScheduledTasksScreen(
                 onBack = { navigator.goBack() },
             )
@@ -66,12 +63,7 @@ fun EntryProviderScope<NavKey>.adminSection(
     }
 
     entry<Route.Devices> {
-        AdminRouteContainer(
-            onBack = { navigator.goBack() },
-            isAdmin = isAdmin,
-            isRefreshingAdmin = isRefreshingAdmin,
-            onRefreshAdmin = onRefreshAdmin,
-        ) {
+        AdminRouteEntry(navigator, isAdmin, isRefreshingAdmin, onRefreshAdmin) {
             DevicesScreen(
                 onBack = { navigator.goBack() },
             )
@@ -79,25 +71,31 @@ fun EntryProviderScope<NavKey>.adminSection(
     }
 
     entry<Route.Logs> {
-        AdminRouteContainer(
-            onBack = { navigator.goBack() },
-            isAdmin = isAdmin,
-            isRefreshingAdmin = isRefreshingAdmin,
-            onRefreshAdmin = onRefreshAdmin,
-        ) {
+        AdminRouteEntry(navigator, isAdmin, isRefreshingAdmin, onRefreshAdmin) {
             LogsScreen(
                 onBack = { navigator.goBack() },
             )
         }
     }
 
+    entry<Route.JellyPlayTranscodes> {
+        AdminRouteEntry(navigator, isAdmin, isRefreshingAdmin, onRefreshAdmin) {
+            JellyPlayTranscodesScreen(
+                onBack = { navigator.goBack() },
+            )
+        }
+    }
+
+    entry<Route.JellyPlayAnalytics> {
+        AdminRouteEntry(navigator, isAdmin, isRefreshingAdmin, onRefreshAdmin) {
+            JellyPlayAnalyticsScreen(
+                onBack = { navigator.goBack() },
+            )
+        }
+    }
+
     entry<Route.AdminBackups> {
-        AdminRouteContainer(
-            onBack = { navigator.goBack() },
-            isAdmin = isAdmin,
-            isRefreshingAdmin = isRefreshingAdmin,
-            onRefreshAdmin = onRefreshAdmin,
-        ) {
+        AdminRouteEntry(navigator, isAdmin, isRefreshingAdmin, onRefreshAdmin) {
             AdminBackupsScreen(
                 onBack = { navigator.goBack() },
             )
@@ -105,12 +103,7 @@ fun EntryProviderScope<NavKey>.adminSection(
     }
 
     entry<Route.UserStatistics> {
-        AdminRouteContainer(
-            onBack = { navigator.goBack() },
-            isAdmin = isAdmin,
-            isRefreshingAdmin = isRefreshingAdmin,
-            onRefreshAdmin = onRefreshAdmin,
-        ) {
+        AdminRouteEntry(navigator, isAdmin, isRefreshingAdmin, onRefreshAdmin) {
             UserStatisticsScreen(
                 onBack = { navigator.goBack() },
                 onUserDetail = { userId -> navigator.navigate(Route.UserStatisticsDetail(userId)) },
@@ -119,12 +112,7 @@ fun EntryProviderScope<NavKey>.adminSection(
     }
 
     entry<Route.UserStatisticsDetail> { route ->
-        AdminRouteContainer(
-            onBack = { navigator.goBack() },
-            isAdmin = isAdmin,
-            isRefreshingAdmin = isRefreshingAdmin,
-            onRefreshAdmin = onRefreshAdmin,
-        ) {
+        AdminRouteEntry(navigator, isAdmin, isRefreshingAdmin, onRefreshAdmin) {
             UserStatisticsDetailScreen(
                 userId = route.userId,
                 onBack = { navigator.goBack() },
@@ -133,12 +121,7 @@ fun EntryProviderScope<NavKey>.adminSection(
     }
 
     entry<Route.StaleMedia> {
-        AdminRouteContainer(
-            onBack = { navigator.goBack() },
-            isAdmin = isAdmin,
-            isRefreshingAdmin = isRefreshingAdmin,
-            onRefreshAdmin = onRefreshAdmin,
-        ) {
+        AdminRouteEntry(navigator, isAdmin, isRefreshingAdmin, onRefreshAdmin) {
             StaleMediaScreen(
                 onBack = { navigator.goBack() },
             )
@@ -146,12 +129,7 @@ fun EntryProviderScope<NavKey>.adminSection(
     }
 
     entry<Route.WatchedMediaCleanup> {
-        AdminRouteContainer(
-            onBack = { navigator.goBack() },
-            isAdmin = isAdmin,
-            isRefreshingAdmin = isRefreshingAdmin,
-            onRefreshAdmin = onRefreshAdmin,
-        ) {
+        AdminRouteEntry(navigator, isAdmin, isRefreshingAdmin, onRefreshAdmin) {
             WatchedMediaCleanupScreen(
                 onBack = { navigator.goBack() },
             )
@@ -159,12 +137,7 @@ fun EntryProviderScope<NavKey>.adminSection(
     }
 
     entry<Route.Users> {
-        AdminRouteContainer(
-            onBack = { navigator.goBack() },
-            isAdmin = isAdmin,
-            isRefreshingAdmin = isRefreshingAdmin,
-            onRefreshAdmin = onRefreshAdmin,
-        ) {
+        AdminRouteEntry(navigator, isAdmin, isRefreshingAdmin, onRefreshAdmin) {
             UsersScreen(
                 onBack = { navigator.goBack() },
                 onUserDetail = { userId -> navigator.navigate(Route.UserDetail(userId)) },
@@ -173,12 +146,7 @@ fun EntryProviderScope<NavKey>.adminSection(
     }
 
     entry<Route.UserDetail> { route ->
-        AdminRouteContainer(
-            onBack = { navigator.goBack() },
-            isAdmin = isAdmin,
-            isRefreshingAdmin = isRefreshingAdmin,
-            onRefreshAdmin = onRefreshAdmin,
-        ) {
+        AdminRouteEntry(navigator, isAdmin, isRefreshingAdmin, onRefreshAdmin) {
             UserDetailScreen(
                 userId = route.userId,
                 onBack = { navigator.goBack() },
@@ -187,12 +155,7 @@ fun EntryProviderScope<NavKey>.adminSection(
     }
 
     entry<Route.Plugins> {
-        AdminRouteContainer(
-            onBack = { navigator.goBack() },
-            isAdmin = isAdmin,
-            isRefreshingAdmin = isRefreshingAdmin,
-            onRefreshAdmin = onRefreshAdmin,
-        ) {
+        AdminRouteEntry(navigator, isAdmin, isRefreshingAdmin, onRefreshAdmin) {
             PluginsScreen(
                 onBack = { navigator.goBack() },
                 onPluginDetail = { pluginId, pluginName ->
@@ -203,12 +166,7 @@ fun EntryProviderScope<NavKey>.adminSection(
     }
 
     entry<Route.PluginDetail> { route ->
-        AdminRouteContainer(
-            onBack = { navigator.goBack() },
-            isAdmin = isAdmin,
-            isRefreshingAdmin = isRefreshingAdmin,
-            onRefreshAdmin = onRefreshAdmin,
-        ) {
+        AdminRouteEntry(navigator, isAdmin, isRefreshingAdmin, onRefreshAdmin) {
             PluginDetailScreen(
                 pluginId = route.pluginId,
                 pluginName = route.pluginName,
@@ -221,17 +179,37 @@ fun EntryProviderScope<NavKey>.adminSection(
     }
 
     entry<Route.PluginConfig> { route ->
-        AdminRouteContainer(
-            onBack = { navigator.goBack() },
-            isAdmin = isAdmin,
-            isRefreshingAdmin = isRefreshingAdmin,
-            onRefreshAdmin = onRefreshAdmin,
-        ) {
+        AdminRouteEntry(navigator, isAdmin, isRefreshingAdmin, onRefreshAdmin) {
             PluginConfigHost(
                 pluginId = route.pluginId,
                 pluginName = route.pluginName,
                 onBack = { navigator.goBack() },
             )
         }
+    }
+}
+
+/**
+ * The [AdminRouteContainer] invocation every entry above repeats — the four
+ * fixed arguments (back navigation + the admin gate trio) bound once here,
+ * each entry supplying only its screen content. One AdminRouteContainer call
+ * per entry composition with the same fresh lambdas as before: zero behavior
+ * change, file-private so no signature changes outside this file.
+ */
+@Composable
+private fun AdminRouteEntry(
+    navigator: Navigator,
+    isAdmin: () -> Boolean,
+    isRefreshingAdmin: () -> Boolean,
+    onRefreshAdmin: () -> Unit,
+    screen: @Composable () -> Unit,
+) {
+    AdminRouteContainer(
+        onBack = { navigator.goBack() },
+        isAdmin = isAdmin,
+        isRefreshingAdmin = isRefreshingAdmin,
+        onRefreshAdmin = onRefreshAdmin,
+    ) {
+        screen()
     }
 }

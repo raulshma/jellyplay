@@ -5,15 +5,12 @@ import com.raulshma.jellyplay.core.data.playback.AudioQueueOutcome
 import com.raulshma.jellyplay.core.data.playback.TrackWithAlbumFallback
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.PlaylistItem
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.map
 
 /**
  * The JVM adapter over core:data's `AudioQueueFacade` single — the music VMs'
- * play/enqueue/mix calls delegate verbatim; the only added motion is the 1:1
- * outcome and fallback-pair mapping between core:data's jvmShared result
- * vocabulary and the feature-local [MusicQueueOutcome]/[MusicTrackWithAlbumFallback]
- * mirrors (android/desktop behavior unchanged).
+ * play/enqueue/mix calls delegate verbatim, outcome vocabulary and all (the
+ * promoted-commonMain `AudioQueueOutcome`/`TrackWithAlbumFallback` types need
+ * no mapping — android/desktop behavior unchanged).
  *
  * The former JvmMusicTrackDownloads adapter (over the `DownloadRepository`
  * single) was deleted with the download-actions seam consolidation: the
@@ -31,52 +28,31 @@ internal class JvmMusicQueuePlayer(
         shuffled: Boolean,
         albumFallback: String?,
         imageMaxWidth: Int?,
-    ): MusicQueueOutcome = facade
-        .playTracks(tracks, startIndex, shuffled, albumFallback, imageMaxWidth)
-        .toMirror()
+    ): AudioQueueOutcome = facade.playTracks(tracks, startIndex, shuffled, albumFallback, imageMaxWidth)
 
     override suspend fun playTracks(
-        pairs: List<MusicTrackWithAlbumFallback>,
+        pairs: List<TrackWithAlbumFallback>,
         startIndex: Int,
         shuffled: Boolean,
         imageMaxWidth: Int?,
-    ): MusicQueueOutcome = facade
-        .playTracks(
-            pairs.map { TrackWithAlbumFallback(it.track, it.albumFallback) },
-            startIndex,
-            shuffled,
-            imageMaxWidth,
-        )
-        .toMirror()
+    ): AudioQueueOutcome = facade.playTracks(pairs, startIndex, shuffled, imageMaxWidth)
 
     override suspend fun enqueueTrack(
         track: MediaItem,
         albumFallback: String?,
         imageMaxWidth: Int?,
-    ): MusicQueueOutcome = facade
-        .enqueueTrack(track, albumFallback, imageMaxWidth)
-        .toMirror()
+    ): AudioQueueOutcome = facade.enqueueTrack(track, albumFallback, imageMaxWidth)
 
     override suspend fun startInstantMix(
         seedItemId: String,
         albumFallback: String?,
         guard: () -> Boolean,
-    ): MusicQueueOutcome = facade
-        .startInstantMix(seedItemId, albumFallback, guard)
-        .toMirror()
+    ): AudioQueueOutcome = facade.startInstantMix(seedItemId, albumFallback, guard)
 
-    override suspend fun playPlaylist(items: List<PlaylistItem>, startIndex: Int): MusicQueueOutcome =
-        facade.playPlaylist(items, startIndex).toMirror()
+    override suspend fun playPlaylist(items: List<PlaylistItem>, startIndex: Int): AudioQueueOutcome =
+        facade.playPlaylist(items, startIndex)
 
     override suspend fun enqueuePlaylistItem(item: PlaylistItem) {
         facade.enqueuePlaylistItem(item)
     }
-}
-
-/** Field-identical 1:1 map — see the [MusicQueueOutcome] mirror KDoc. */
-private fun AudioQueueOutcome.toMirror(): MusicQueueOutcome = when (this) {
-    is AudioQueueOutcome.Started -> MusicQueueOutcome.Started(queue, startIndex)
-    is AudioQueueOutcome.Empty -> MusicQueueOutcome.Empty
-    is AudioQueueOutcome.Suppressed -> MusicQueueOutcome.Suppressed
-    is AudioQueueOutcome.Failed -> MusicQueueOutcome.Failed(cause)
 }

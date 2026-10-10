@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.core.ui.animation
 import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.interaction.InteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -100,6 +101,31 @@ fun Modifier.focusScale(
         targetValue = target,
         animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
         label = "focusScale",
+    )
+    return this.graphicsLayer {
+        scaleX = animatedScale
+        scaleY = animatedScale
+    }
+}
+
+/**
+ * Desktop hover affordance: a small scale rise while the pointer hovers,
+ * mirroring [pressScale]'s feedback for mouse-first surfaces. Hover
+ * interactions never fire on touch, so the modifier is inert on phones/TV.
+ * Flattens to 1f under reduced motion.
+ */
+@Composable
+fun Modifier.hoverScale(
+    interactionSource: InteractionSource,
+    hoverScale: Float = AnimationTokens.HoverScale,
+    reducedMotion: Boolean = isReducedMotion(),
+): Modifier {
+    val isHovered by interactionSource.collectIsHoveredAsState()
+    val target = if (reducedMotion) 1f else if (isHovered) hoverScale else 1f
+    val animatedScale by animateFloatAsState(
+        targetValue = target,
+        animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
+        label = "hoverScale",
     )
     return this.graphicsLayer {
         scaleX = animatedScale

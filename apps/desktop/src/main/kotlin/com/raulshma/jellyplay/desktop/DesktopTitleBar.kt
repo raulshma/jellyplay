@@ -57,9 +57,9 @@ import com.composables.icons.tabler.outline.X
  * Replaces the AWT [androidx.compose.ui.window.MenuBar] too: an undecorated
  * frame has no native menu strip on Windows, so the same File/View/Help
  * entries live here as dropdown menus (their keyboard accelerators —
- * Ctrl+R, Ctrl+Q, F11 — render here from the [DesktopAccelerators] table and
- * are wired in Main.kt's window-level onPreviewKeyEvent, which fires with or
- * without a focused Compose node).
+ * Ctrl+R, Ctrl+Shift+V, Ctrl+Q, F11 — render here from the
+ * [DesktopAccelerators] table and are wired in Main.kt's window-level
+ * onPreviewKeyEvent, which fires with or without a focused Compose node).
  *
  * Window controls follow the Windows convention: minimize + maximize/restore
  * hover with a subtle on-surface wash, close hovers with the theme's error
@@ -79,6 +79,7 @@ internal fun WindowScope.DesktopTitleBar(
     onToggleFullscreen: () -> Unit,
     isFullscreenActive: Boolean,
     onAbout: () -> Unit,
+    onPasteOpenLink: () -> Unit = {},
 ) {
     Column(Modifier.fillMaxWidth()) {
         Row(
@@ -141,6 +142,18 @@ internal fun WindowScope.DesktopTitleBar(
                             onClick = {
                                 closeMenu()
                                 onRefresh()
+                            },
+                        )
+                        //  clipboard paste-to-open: the menu twin of the
+                        // Ctrl+Shift+V accelerator (same row of the
+                        // DesktopAccelerators table renders the shortcut
+                        // literal; Main.kt's submit runs behind both).
+                        DropdownMenuItem(
+                            text = { Text("Open Link from Clipboard") },
+                            trailingIcon = { MenuShortcutText(DesktopAccelerators.PasteOpenLink.displayLabel) },
+                            onClick = {
+                                closeMenu()
+                                onPasteOpenLink()
                             },
                         )
                         DropdownMenuItem(

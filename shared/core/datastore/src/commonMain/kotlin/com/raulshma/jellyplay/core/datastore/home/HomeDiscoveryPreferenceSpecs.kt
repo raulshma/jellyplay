@@ -389,6 +389,7 @@ object HomeDiscoveryPreferenceSpecs {
         keyName = "next_up_max_days",
         default = 0,
         resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
+        min = 0,
         search = PreferenceSearchSpec(
             id = "next_up_max_days",
             titleKey = "ss_next_up_max_days_title",

@@ -8,6 +8,7 @@ import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
 import com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore
 import com.raulshma.jellyplay.core.model.SeerrWidgetItem
 import com.raulshma.jellyplay.core.model.SeerrWidgetSource
+import com.raulshma.jellyplay.core.model.seerr.SeerrDiscoverParams
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.model.seerr.buildBackdropUrl
 import com.raulshma.jellyplay.core.model.seerr.buildPosterUrl
@@ -73,11 +74,11 @@ class SeerrRecommendationsWidgetWorker(
         SeerrWidgetSource.POPULAR_TV -> seerrRepository.getDiscoverTv(page = 1)
         SeerrWidgetSource.UPCOMING_MOVIES -> seerrRepository.getDiscoverMovies(
             page = 1,
-            primaryReleaseDateGte = todayIso(),
+            params = SeerrDiscoverParams(releaseDateGte = todayIso()),
         )
         SeerrWidgetSource.UPCOMING_TV -> seerrRepository.getDiscoverTv(
             page = 1,
-            firstAirDateGte = todayIso(),
+            params = SeerrDiscoverParams(releaseDateGte = todayIso()),
         )
     }
 

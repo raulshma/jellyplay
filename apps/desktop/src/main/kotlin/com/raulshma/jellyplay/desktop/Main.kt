@@ -16,6 +16,7 @@ import androidx.compose.ui.awt.ComposeWindow
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.unit.dp
@@ -34,7 +35,7 @@ import com.raulshma.jellyplay.desktop.harness.DesktopFlowHarness
 import org.koin.compose.koinInject
 import org.koin.core.context.startKoin
 
-fun main() {
+fun main(args: Array<String>) {
     //  startup baseline: t0 is the literal first statement so every
     // mark below measures against true process start. Marks themselves are
     // AtomicLong writes (~zero cost); everything heavier (JSON emission,
@@ -64,7 +65,20 @@ fun main() {
         paths.configDirNio.resolve(DesktopSingleInstanceGuard.LOCK_FILE_NAME),
     )
     if (singleInstanceLock == null) {
-        println("[JellyPlay] Another JellyPlay instance is already running — exiting.")
+        //  open-with forward: the guard is lock-only, so the second
+        // JVM cannot open anything itself — instead it drops its parsable
+        // link argv into DesktopOpenRequestChannel's drop file, where the
+        // RUNNING instance's watcher picks it up and routes it. A second
+        // launch without link argv (or with a local .m3u/.strm path — no
+        // file-open flow exists; see DesktopLinkOpen's scope boundary)
+        // keeps the exact old behavior: message + exit.
+        val forwardableLinks = DesktopLinkOpenPolicy.linkArgs(args.toList())
+        if (forwardableLinks.isNotEmpty()) {
+            DesktopOpenRequestChannel.enqueue(paths.configDirNio, forwardableLinks)
+            println("[JellyPlay] Another JellyPlay instance is already running — forwarded ${forwardableLinks.size} link(s) to it.")
+        } else {
+            println("[JellyPlay] Another JellyPlay instance is already running — exiting.")
+        }
         return
     }
     // Pin the lock for the process lifetime: this local is never read again,
@@ -75,6 +89,23 @@ fun main() {
     java.lang.Runtime.getRuntime().addShutdownHook(
         Thread { singleInstanceLock.close() },
     )
+
+    //  open-with: argv links + the second-instance forward channel.
+    // The pending holder exists BEFORE Koin/application{} so an argv link
+    // survives the whole session-restore window and is waiting when the nav
+    // scaffold first composes (DesktopNavScaffold drains it there).
+    // Non-link argv (a dragged-on .m3u/.strm path, junk) is silently
+    // ignored — see DesktopLinkOpen's scope boundary.
+    val linkOpens = DesktopLinkOpenQueue()
+    DesktopLinkOpenPolicy.firstLink(args.toList())?.let(linkOpens::submitLink)
+    // Drop-file cleanup + the forward watcher: a payload left by a launch
+    // that died mid-handshake is stale by definition, and every payload the
+    // watcher drains re-validates through the same parse policy before it
+    // joins the queue.
+    DesktopOpenRequestChannel.clear(paths.configDirNio)
+    DesktopOpenRequestChannel.startDaemonWatcher(paths.configDirNio) { lines ->
+        DesktopLinkOpenPolicy.firstLink(lines)?.let(linkOpens::submitLink)
+    }
 
     // Bundled libmpv (packaged builds): jpackage installs the app-resources
     // dir (fetchBundledLibmpv's windows-x64 subtree, apps/desktop/
@@ -227,8 +258,9 @@ fun main() {
                     // Matching folds through the DesktopAccelerator table (the
                     // same rows the title bar menus render); the effects stay
                     // here. Non-owners decline so route-level handlers
-                    // (Esc/back, media keys in DesktopAppRoot) are unaffected.
-                    when (DesktopAccelerators.match(event.key, event.isCtrlPressed)?.action) {
+                    // (Esc/back, media keys in DesktopAppRoot, text-field
+                    // Ctrl+V) are unaffected.
+                    when (DesktopAccelerators.match(event.key, event.isCtrlPressed, event.isShiftPressed)?.action) {
                         DesktopAcceleratorAction.Refresh -> {
                             menuRefreshRequests.tryEmit(Unit)
                             true
@@ -239,6 +271,17 @@ fun main() {
                         }
                         DesktopAcceleratorAction.ToggleFullscreen -> {
                             toggleFullscreen()
+                            true
+                        }
+                        DesktopAcceleratorAction.PasteOpenLink -> {
+                            //  clipboard paste-to-open: classify the
+                            // clipboard text and park the outcome in the
+                            // pending queue — the scaffold's drain effect
+                            // navigates for links and snackbars the miss
+                            // (both outcomes, so the accelerator never feels
+                            // dead; an unreadable clipboard maps to the same
+                            // miss via readText()'s null).
+                            linkOpens.submitRaw(DesktopClipboard.readText() ?: "")
                             true
                         }
                         null -> false
@@ -298,6 +341,26 @@ fun main() {
                 onDispose { window.removeWindowListener(maximizeListener) }
             }
 
+            // The settings/profile sync engine's window-focus flush (ADR 0011):
+            // the desktop's app-background equivalent — the window regaining
+            // focus is the "the user is back" edge, so changes accumulated on
+            // this device flush promptly (the scheduler's own debounce
+            // collapses alt-tab bursts). Best-effort and inert before the
+            // scheduler's start(): the engine's gates stay authoritative.
+            DisposableEffect(Unit) {
+                val focusListener = object : java.awt.event.WindowAdapter() {
+                    override fun windowGainedFocus(e: java.awt.event.WindowEvent?) {
+                        runCatching {
+                            koinApp.koin
+                                .get<com.raulshma.jellyplay.core.data.worker.DesktopSettingsSyncScheduler>()
+                                .onWindowFocus()
+                        }
+                    }
+                }
+                window.addWindowFocusListener(focusListener)
+                onDispose { window.removeWindowFocusListener(focusListener) }
+            }
+
             // Persist the floating geometry on window teardown. This covers
             // every exit path (title-bar close, Ctrl+Q, tray Quit — all
             // funnel into exitApplication, which disposes the composition).
@@ -351,6 +414,11 @@ fun main() {
                             onToggleFullscreen = toggleFullscreen,
                             isFullscreenActive = windowState.placement == WindowPlacement.Fullscreen,
                             onAbout = { showAbout.value = true },
+                            // The File menu's link-open item — the same
+                            // submit the Ctrl+Shift+V arm above runs.
+                            onPasteOpenLink = {
+                                linkOpens.submitRaw(DesktopClipboard.readText() ?: "")
+                            },
                         )
                     }
                     DesktopAppRoot(
@@ -361,6 +429,11 @@ fun main() {
                         // injection); unused on every normal boot path.
                         windowRef = windowRef,
                         menuRefreshRequests = menuRefreshRequests,
+                        //  open-with: argv-seeded, clipboard-accelerator
+                        // and second-instance-forwarded links drain here —
+                        // the scaffold navigates parsed targets and snackbars
+                        // the misses (see DesktopNavScaffold's drain effect).
+                        linkOpens = linkOpens,
                     )
                 }
             }

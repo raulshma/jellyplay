@@ -2,9 +2,12 @@ package com.raulshma.jellyplay.core.data.util
 
 import com.raulshma.jellyplay.core.model.MediaItem
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 /**
@@ -13,8 +16,8 @@ import kotlinx.coroutines.launch
  * round-trip. Exclusive state — nothing else needs the whole map — so it
  * lives behind this small class instead of the host view model. The host
  * does not re-expose the whole map: each photo-folder card collects its own
- * slice through a per-item fold over [childUrls] (map lookup +
- * `distinctUntilChanged`), so a prefetch merge — which produces a new Map
+ * slice through [childUrlsFor] (map lookup + `distinctUntilChanged`), so a
+ * prefetch merge — which produces a new Map
  * reference — invalidates only the one card whose urls changed, not the
  * entire host body.
  *
@@ -47,6 +50,18 @@ class PhotoFolderChildUrlsStore(
 
     /** Cached child-URL lists keyed by photo-folder item id. */
     val childUrls: StateFlow<Map<String, List<String>>> = _childUrls.asStateFlow()
+
+    /**
+     * Per-item slice of [childUrls] — the fold every photo-row host re-typed
+     * (map lookup + `distinctUntilChanged`), promoted onto the store itself:
+     * each photo-folder card collects only its own urls so a prefetch merge
+     * (which produces a new Map reference) doesn't invalidate the entire host
+     * body, only the one card whose urls changed.
+     */
+    fun childUrlsFor(itemId: String): Flow<List<String>> =
+        childUrls
+            .map { it[itemId].orEmpty() }
+            .distinctUntilChanged()
 
     /**
      * Fetches child URLs for any [items] not already cached (fire-and-forget

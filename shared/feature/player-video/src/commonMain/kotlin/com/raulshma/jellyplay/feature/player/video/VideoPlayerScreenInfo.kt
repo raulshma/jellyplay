@@ -15,6 +15,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -74,23 +75,36 @@ private const val SNACKBAR_BOTTOM_CLEARANCE_DP = 200
  */
 private const val RESUME_CHIP_TOP_CLEARANCE_DP = 60
 
+/**
+ * Input bundle for [PlayerStatusOverlayTier] (the
+ * [com.raulshma.jellyplay.feature.player.video.components.PlayerEffectsControls]
+ * idiom): the 12 values the status tier reads — the stats-overlay render
+ * inputs, the engine/cast context, both snackbar hosts, and the aspect/zoom
+ * badge feeds — riding one `@Immutable` carrier remembered on exactly these
+ * fields at the call wall, so the tier keeps skipping until one flips.
+ */
+@Immutable
+internal data class StatusOverlayInputs(
+    val durationMs: Long,
+    val playbackSpeed: Float,
+    val isPlaying: Boolean,
+    val decoderMode: DecoderMode,
+    val engine: MediaEngine?,
+    val isCastConnected: Boolean,
+    val isCastConnecting: Boolean,
+    val snackbarHostState: SnackbarHostState,
+    val resumeChipHostState: SnackbarHostState,
+    val detectedAspectRatio: AspectRatio?,
+    val aspectRatio: AspectRatio,
+    val videoZoom: Float,
+)
+
 /** Stats/badges/snackbar tier: "Stats for Nerds", aspect/AB-repeat/zoom badges, cast indicator, both snackbar hosts. */
 @Composable
 internal fun BoxScope.PlayerStatusOverlayTier(
     viewModel: VideoPlayerViewModel,
     uiState: VideoPlayerUiState,
-    durationMs: Long,
-    playbackSpeed: Float,
-    isPlaying: Boolean,
-    decoderMode: DecoderMode,
-    engine: MediaEngine?,
-    isCastConnected: Boolean,
-    isCastConnecting: Boolean,
-    snackbarHostState: SnackbarHostState,
-    resumeChipHostState: SnackbarHostState,
-    detectedAspectRatio: AspectRatio?,
-    aspectRatio: AspectRatio,
-    videoZoom: Float,
+    inputs: StatusOverlayInputs,
 ) {
     if (uiState.uiPrefs.showVideoStats) {
         VideoStatsOverlay(
@@ -99,44 +113,44 @@ internal fun BoxScope.PlayerStatusOverlayTier(
             // the ranges readout row's source, collected at
             // this leaf like statsFlow.
             bufferedRangesFlow = viewModel.bufferedRanges,
-            durationMs = durationMs,
-            playbackSpeed = playbackSpeed,
-            isPlaying = isPlaying,
+            durationMs = inputs.durationMs,
+            playbackSpeed = inputs.playbackSpeed,
+            isPlaying = inputs.isPlaying,
             playbackState = when {
                 uiState.playerError != null -> "Error"
-                !isPlaying -> "Paused"
+                !inputs.isPlaying -> "Paused"
                 else -> "Playing"
             },
             playMethod = uiState.media.playMethod,
             isOfflineSource = uiState.media.showDownloadedBadge,
             streamingQuality = uiState.preferredPlayerType.name,
             playerType = uiState.preferredPlayerType.name,
-            decoderMode = decoderMode.displayName,
+            decoderMode = inputs.decoderMode.displayName,
             transcodeReasons = rememberFormattedTranscodeReasons(uiState.media.transcodeReasons),
             // Engines expose a real audio session id (ExoPlayer: live
             // session; mpv: generated id; VLC: 0 — capabilities gate the
             // row). Read the collected engine so a swap refreshes it.
-            audioSessionId = engine?.audioSessionId ?: 0,
+            audioSessionId = inputs.engine?.audioSessionId ?: 0,
             // Drop below the CastIndicator when both are visible so
             // they don't stack on the same (60dp, 16dp) anchor.
             modifier = Modifier
                 .align(Alignment.TopStart)
-                .padding(start = 16.dp, top = if (isCastConnected || isCastConnecting) 92.dp else 60.dp)
+                .padding(start = 16.dp, top = if (inputs.isCastConnected || inputs.isCastConnecting) 92.dp else 60.dp)
                 .width(280.dp),
         )
     }
 
     AutoAspectRatioBadge(
-        detectedAspectRatio = detectedAspectRatio,
-        aspectRatio = aspectRatio,
+        detectedAspectRatio = inputs.detectedAspectRatio,
+        aspectRatio = inputs.aspectRatio,
     )
-    AbRepeatBadge(events = viewModel.abRepeat.events)
+    AbRepeatBadge(events = viewModel.playbackSession.abRepeat.events)
 
-    ZoomBadge(videoZoom = videoZoom)
+    ZoomBadge(videoZoom = inputs.videoZoom)
 
-    if (isCastConnected || isCastConnecting) {
+    if (inputs.isCastConnected || inputs.isCastConnecting) {
         CastIndicatorOverlay(
-            isConnecting = isCastConnecting,
+            isConnecting = inputs.isCastConnecting,
             modifier = Modifier
                 .align(Alignment.TopStart)
                 .padding(top = 60.dp, start = 16.dp),
@@ -144,7 +158,7 @@ internal fun BoxScope.PlayerStatusOverlayTier(
     }
 
     com.raulshma.jellyplay.core.ui.components.JellyPlaySnackbarHost(
-        hostState = snackbarHostState,
+        hostState = inputs.snackbarHostState,
         modifier = Modifier
             .align(Alignment.BottomCenter)
             .padding(bottom = SNACKBAR_BOTTOM_CLEARANCE_DP.dp),
@@ -152,7 +166,7 @@ internal fun BoxScope.PlayerStatusOverlayTier(
 
     // "Resumed from where you left off" chip — anchored under the top bar.
     com.raulshma.jellyplay.core.ui.components.JellyPlaySnackbarHost(
-        hostState = resumeChipHostState,
+        hostState = inputs.resumeChipHostState,
         modifier = Modifier
             .align(Alignment.TopCenter)
             .windowInsetsPadding(WindowInsets.statusBars)

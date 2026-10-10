@@ -138,7 +138,7 @@ private fun Modifier.highlightGlow(glowAlpha: Float, shape: androidx.compose.ui.
 fun SettingListItem(
     icon: ImageVector,
     title: String,
-    subtitle: String,
+    subtitle: String?,
     index: Int = 0,
     count: Int = 1,
     trailingText: String? = null,
@@ -172,7 +172,7 @@ fun SettingListItem(
 private fun SettingListItemImpl(
     icon: ImageVector,
     title: String,
-    subtitle: String,
+    subtitle: String?,
     index: Int,
     count: Int,
     trailingText: String?,
@@ -224,7 +224,7 @@ private fun SettingListItemImpl(
             )
         },
         supportingContent = {
-            if (subtitle.isNotBlank()) {
+            if (!subtitle.isNullOrBlank()) {
                 // Expandable so a long row description (#168 classic-rows
                 // explainer) is fully readable: two collapsed lines + a
                 // "Read more" toggle that only appears on real overflow. The
@@ -299,7 +299,7 @@ private fun SettingListItemImpl(
 fun SettingToggleItem(
     icon: ImageVector,
     title: String,
-    subtitle: String,
+    subtitle: String?,
     checked: Boolean,
     index: Int = 0,
     count: Int = 1,
@@ -333,7 +333,7 @@ fun SettingToggleItem(
 private fun SettingToggleItemImpl(
     icon: ImageVector,
     title: String,
-    subtitle: String,
+    subtitle: String?,
     checked: Boolean,
     index: Int,
     count: Int,
@@ -389,7 +389,7 @@ private fun SettingToggleItemImpl(
             )
         },
         supportingContent = {
-            if (subtitle.isNotBlank()) {
+            if (!subtitle.isNullOrBlank()) {
                 // Expandable so a long row description (#168 classic-rows
                 // explainer) is fully readable: two collapsed lines + a
                 // "Read more" toggle that only appears on real overflow. The

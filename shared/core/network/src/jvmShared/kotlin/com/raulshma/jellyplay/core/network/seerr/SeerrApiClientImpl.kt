@@ -19,9 +19,58 @@ import java.net.ConnectException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 
+/**
+ * The server-brokered bridge context (ADR 0010 Seerr mode): when non-null and
+ * [SeerrBridge.isActive] holds, every Seerr request rewrites from
+ * `{seerr}/api/v1/...` to `{jellyfin}/jellyplay/seerr/...` (the plugin's
+ * catch-all proxy, per-user session server-side) and authenticates with the
+ * JELLYFIN token instead of any Seerr credential — the Seerr API key never
+ * leaves the server.
+ */
+class SeerrBridge(
+    private val isActive: () -> Boolean,
+    private val jellyfinBaseUrl: () -> String?,
+    private val jellyfinToken: () -> String?,
+) {
+    fun context(): Pair<String, String>? {
+        if (!isActive()) return null
+        val base = jellyfinBaseUrl() ?: return null
+        val token = jellyfinToken() ?: return null
+        return base to token
+    }
+}
+
 class SeerrApiClientImpl(
     okHttpClient: OkHttpClient,
+    private val bridge: SeerrBridge? = null,
 ) : SeerrApiClient {
+
+    private val bridgedClient: OkHttpClient = if (bridge == null) {
+        okHttpClient
+    } else {
+        okHttpClient.newBuilder()
+            .addInterceptor { chain ->
+                val request = chain.request()
+                val (base, token) = bridge.context() ?: return@addInterceptor chain.proceed(request)
+                val path = request.url.encodedPath.removePrefix("/api/v1")
+                val query = request.url.encodedQuery
+                val rewritten = request.newBuilder()
+                    .url(
+                        buildString {
+                            append(base.trimEnd('/'))
+                            append("/jellyplay/seerr")
+                            append(path)
+                            if (!query.isNullOrBlank()) append('?').append(query)
+                        },
+                    )
+                    .header("Authorization", "MediaBrowser Token=\"$token\"")
+                    .removeHeader("X-Api-Key")
+                    .removeHeader("Cookie")
+                    .build()
+                chain.proceed(rewritten)
+            }
+            .build()
+    }
     // Read members decode the package-internal wire DTOs (SeerrWireDtos.kt)
     // through the lenient Json and map to the core/model read models at the
     // seam — the envelopes fold and the status ints interpret there.
@@ -51,7 +100,7 @@ class SeerrApiClientImpl(
      * retry is equivalent to the wrapper's per-method retry.
      */
     private val http = HttpExecutor(
-        okHttpClient = okHttpClient,
+        okHttpClient = bridgedClient,
         json = json,
         options = HttpExecutor.Options(
             parseErrorMessage = ::parseErrorMessage,

@@ -3,8 +3,9 @@ package com.raulshma.jellyplay.feature.home
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
 import com.raulshma.jellyplay.core.data.repository.BookTocCacheRepository
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.HomeFeed
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
+import com.raulshma.jellyplay.core.data.repository.UserDataChanges
 import com.raulshma.jellyplay.core.data.usecase.OrderHomeSectionsUseCase
 import com.raulshma.jellyplay.core.data.widget.ContinueWatchingBroadcaster
 import com.raulshma.jellyplay.core.data.widget.LibrarySyncHook
@@ -38,7 +39,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
  */
 internal class HomeRefresherFactory constructor(
     private val clock: HomeClock,
-    private val mediaRepository: MediaRepository,
+    private val homeFeed: HomeFeed,
+    private val userDataChanges: UserDataChanges,
     private val seerrRepository: SeerrRepository,
     private val arrRepository: ArrRepository,
     private val orderHomeSections: OrderHomeSectionsUseCase,
@@ -63,7 +65,8 @@ internal class HomeRefresherFactory constructor(
         return HomeRefresher(
             scope = scope,
             clock = clock,
-            mediaRepository = mediaRepository,
+            homeFeed = homeFeed,
+            userDataChanges = userDataChanges,
             orderHomeSections = orderHomeSections,
             widgetDataStore = widgetDataStore,
             continueWatchingBroadcaster = continueWatchingBroadcaster,

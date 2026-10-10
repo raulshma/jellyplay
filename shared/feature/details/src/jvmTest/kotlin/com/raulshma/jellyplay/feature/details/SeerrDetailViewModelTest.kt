@@ -1,6 +1,6 @@
 package com.raulshma.jellyplay.feature.details
 
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
 import com.raulshma.jellyplay.core.datastore.SeerrPreferencesStore
@@ -70,7 +70,7 @@ class SeerrDetailViewModelTest {
     private lateinit var seerrRequestDelegate: SeerrRequestDelegate
     private lateinit var projections: PreferenceProjections
     private lateinit var seerrPreferencesStore: SeerrPreferencesStore
-    private lateinit var mediaRepository: MediaRepository
+    private lateinit var libraryApiClient: LibraryApiClient
 
     private lateinit var viewModel: SeerrDetailViewModel
 
@@ -80,18 +80,17 @@ class SeerrDetailViewModelTest {
         seerrRequestDelegate = mockk(relaxed = true)
         projections = mockk(relaxed = true)
         seerrPreferencesStore = mockk(relaxed = true)
-        mediaRepository = mockk(relaxed = true)
+        libraryApiClient = mockk(relaxed = true)
 
         every { projections.seerrDetailPreferences } returns MutableStateFlow(SeerrDetailPreferences())
         every { seerrPreferencesStore.preferences } returns MutableStateFlow(SeerrPreferences())
-        every { seerrRepository.isConnected() } returns flowOf(false)
-        every { seerrRepository.getPreferences() } returns flowOf(SeerrPreferences())
-        coEvery { seerrRepository.getRatings(any(), any()) } returns Result.failure(NullPointerException())
+        every { seerrRepository.preferences } returns MutableStateFlow(SeerrPreferences())
+                coEvery { seerrRepository.getRatings(any(), any()) } returns Result.failure(NullPointerException())
         coEvery { seerrRepository.getRecommendations(any(), any()) } returns Result.success(emptySearchResponse())
         coEvery { seerrRepository.getSimilar(any(), any()) } returns Result.success(emptySearchResponse())
 
         viewModel = SeerrDetailViewModel(
-            seerrRepository, seerrRequestDelegate, projections, seerrPreferencesStore, mediaRepository,
+            seerrRepository, seerrRequestDelegate, projections, seerrPreferencesStore, libraryApiClient,
         )
     }
 
@@ -243,7 +242,7 @@ class SeerrDetailViewModelTest {
                 mediaInfo = SeerrMediaInfo(tmdbId = 123, status = SeerrMediaStatus.AVAILABLE),
             ),
         )
-        coEvery { mediaRepository.findItemByProviderId("tmdb", "123") } returns Result.success("jellyfin-1")
+        coEvery { libraryApiClient.findItemByProviderId("tmdb", "123") } returns Result.success("jellyfin-1")
 
         viewModel.loadDetails(123, "movie")
         advanceUntilIdle()
@@ -264,7 +263,7 @@ class SeerrDetailViewModelTest {
         viewModel.loadDetails(123, "movie")
         advanceUntilIdle()
 
-        coVerify(exactly = 0) { mediaRepository.findItemByProviderId(any(), any()) }
+        coVerify(exactly = 0) { libraryApiClient.findItemByProviderId(any(), any()) }
         assertNull(viewModel.uiState.value.jellyfinItemId)
     }
 
@@ -278,8 +277,8 @@ class SeerrDetailViewModelTest {
                 externalIds = SeerrExternalIds(tvdbId = 999),
             ),
         )
-        coEvery { mediaRepository.findItemByProviderId("tmdb", "123") } returns Result.success(null)
-        coEvery { mediaRepository.findItemByProviderId("tvdb", "999") } returns Result.success("jellyfin-2")
+        coEvery { libraryApiClient.findItemByProviderId("tmdb", "123") } returns Result.success(null)
+        coEvery { libraryApiClient.findItemByProviderId("tvdb", "999") } returns Result.success("jellyfin-2")
 
         viewModel.loadDetails(123, "tv")
         advanceUntilIdle()

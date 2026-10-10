@@ -422,4 +422,49 @@
     <string name="admin_backups_reconnecting">O servidor voltou — reconectando…</string>
     <string name="admin_backups_restore_complete">Restauração concluída — reconectado ao servidor.</string>
     <string name="admin_backups_restore_server_unreachable">O servidor não voltou após a restauração. Verifique se ele está em execução e entre novamente.</string>
+
+    <!-- JellyPlay companion plugin: active streams monitor -->
+    <string name="jellyplay_tr_title">Streams ativos</string>
+    <string name="jellyplay_tr_empty">Sem streams ativos</string>
+    <string name="jellyplay_tr_unknown">Desconhecido</string>
+    <string name="jellyplay_tr_paused">Em pausa</string>
+    <string name="jellyplay_tr_play_direct">Direto</string>
+    <string name="jellyplay_tr_play_transcode">Transcodificação</string>
+    <string name="jellyplay_tr_cancel">Cancelar stream</string>
+    <string name="jellyplay_tr_cancel_title">Cancelar o stream?</string>
+    <string name="jellyplay_tr_cancel_body">Isto para o stream de %1$s de "%2$s" em %3$s. O cliente vai terminar a reprodução.</string>
+    <string name="jellyplay_tr_unavailable_title">Streams ativos indisponíveis</string>
+    <string name="jellyplay_tr_unavailable_body">O plugin complementar JellyPlay não está disponível neste servidor ou não expõe a funcionalidade de transcodificações.</string>
+
+    <!-- JellyPlay companion plugin: broadcast composer -->
+    <string name="jellyplay_bc_title">Enviar difusão</string>
+    <string name="jellyplay_bc_field_title">Título</string>
+    <string name="jellyplay_bc_field_body">Mensagem</string>
+    <string name="jellyplay_bc_field_url">URL da ligação (opcional)</string>
+    <string name="jellyplay_bc_url_invalid">Introduza uma ligação http(s) válida</string>
+    <string name="jellyplay_bc_send">Enviar</string>
+    <string name="jellyplay_bc_sent">Difusão enviada</string>
+    <string name="jellyplay_bc_failed">A difusão falhou. Tente novamente.</string>
+
+    <!-- JellyPlay companion plugin: analytics dashboard -->
+    <string name="jellyplay_an_title">Estatísticas</string>
+    <string name="jellyplay_an_unavailable_title">Estatísticas indisponíveis</string>
+    <string name="jellyplay_an_unavailable_body">O plugin complementar JellyPlay não está disponível neste servidor ou não expõe a funcionalidade de estatísticas.</string>
+    <string name="jellyplay_an_degraded_title">Estatísticas indisponíveis</string>
+    <string name="jellyplay_an_degraded_body">As estatísticas não estão disponíveis neste servidor. O plugin JellyPlay do servidor não as disponibiliza.</string>
+    <string name="jellyplay_an_empty">Ainda sem reproduções registadas neste período.</string>
+    <string name="jellyplay_an_days_7">7 dias</string>
+    <string name="jellyplay_an_days_30">30 dias</string>
+    <string name="jellyplay_an_days_90">90 dias</string>
+    <string name="jellyplay_an_plays">Reproduções</string>
+    <string name="jellyplay_an_totals_watch_time">Tempo de visualização</string>
+    <string name="jellyplay_an_totals_transcode_time">Tempo de transcodificação</string>
+    <string name="jellyplay_an_totals_users">Utilizadores únicos</string>
+    <string name="jellyplay_an_totals_items">Itens únicos</string>
+    <string name="jellyplay_an_section_chart">Reproduções por dia</string>
+    <string name="jellyplay_an_section_users">Por utilizador</string>
+    <string name="jellyplay_an_section_top_items">Principais itens</string>
+    <string name="jellyplay_an_section_sessions">Sessões recentes</string>
+    <string name="jellyplay_an_sessions_empty">Sem sessões recentes</string>
+    <string name="jellyplay_an_filter_all">Todos os utilizadores</string>
 </resources>

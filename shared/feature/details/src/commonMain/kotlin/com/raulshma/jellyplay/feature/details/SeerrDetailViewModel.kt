@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.feature.details
 
 import com.raulshma.jellyplay.core.data.log.Log
-import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestDelegate
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestStateHolder
@@ -31,6 +31,7 @@ import com.raulshma.jellyplay.core.model.seerr.buildBackdropUrl
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 
@@ -41,7 +42,7 @@ class SeerrDetailViewModel constructor(
     private val seerrRequestDelegate: SeerrRequestDelegate,
     private val projections: PreferenceProjections,
     private val seerrPreferencesStore: SeerrPreferencesStore,
-    private val mediaRepository: MediaRepository,
+    private val libraryApiClient: LibraryApiClient,
 ) : JellyPlayViewModel() {
 
     /** Artwork theme + inline-trailer autoplay, projected centrally off the store slices. */
@@ -93,7 +94,8 @@ class SeerrDetailViewModel constructor(
     /** The item the request dialog is open for (null = closed) — the render gate. */
     val seerrDialogItem: StateFlow<SeerrSearchItem?> = seerrRequestDialog.item
 
-    val isSeerrConnected: StateFlow<Boolean> = seerrRepository.isConnected()
+    val isSeerrConnected: StateFlow<Boolean> = seerrRepository.preferences
+        .map { it.serverUrl.isNotBlank() }
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), false)
 
     fun loadDetails(tmdbId: Int, mediaType: String) {
@@ -218,7 +220,7 @@ class SeerrDetailViewModel constructor(
         }
 
         for ((provider, id) in candidates) {
-            val result = mediaRepository.findItemByProviderId(provider, id).getOrNull()
+            val result = libraryApiClient.findItemByProviderId(provider, id).getOrNull()
             if (!result.isNullOrBlank()) {
                 _uiState.update { it.copy(jellyfinItemId = result) }
                 return

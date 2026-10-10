@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -64,6 +63,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.Dimensions
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.adaptive.itemSpacing
+import com.raulshma.jellyplay.core.ui.feedback.rememberSelectionTickHaptic
 import com.raulshma.jellyplay.core.ui.components.AddListRow
 import com.raulshma.jellyplay.core.ui.components.CircleBgBackButton
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
@@ -242,18 +242,20 @@ private fun UserCard(
         else -> null
     }
 
-    val shape = when {
-        isSynthwave -> RoundedCornerShape(0.dp)
-        isSoothing -> ShapeCache.smooth16
-        else -> ShapeCache.smooth12
-    }
+    // ShapeCache tokens already flatten to sharp corners while the synthwave
+    // variant is active (SynthwaveDynamicShape), so only soothing's larger
+    // radius needs a branch here.
+    val shape = if (isSoothing) ShapeCache.smooth16 else ShapeCache.smooth12
+    // Pick-account = discrete selection among peers — the tick, not the
+    // heavier confirm (gated by LocalHapticsEnabled).
+    val selectionTick = rememberSelectionTickHaptic()
 
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .then(firstFocusModifier)
             .focusIndicator(shape)
-            .clickable(onClick = onClick),
+            .clickable { selectionTick(); onClick() },
         shape = shape,
         border = border,
     ) {

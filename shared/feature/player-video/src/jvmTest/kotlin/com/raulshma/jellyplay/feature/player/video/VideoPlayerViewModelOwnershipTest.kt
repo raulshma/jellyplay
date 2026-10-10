@@ -20,8 +20,9 @@ import kotlin.test.assertTrue
  * (cast/syncPlay/subtitles/sleepTimer/abRepeat/effects/render/sessionRender/
  * globalMpvConfig — the session's `resolveOfflineResumeTicks` hook lives on
  * SessionLoadPipeline since the VideoSessionHost deletion). The whole
- * collaborator graph is built by the PlayerWiring composition builder (the
- * two-phase construction that broke the six mutual-recursion cycles); the
+ * collaborator graph is built by the PlaybackSession composition root (the
+ * former PlayerWiring builder's construction that broke the six
+ * mutual-recursion cycles, since absorbed into single-phase ownership); the
  * VM's reads of it go through private aliases, so this ceiling held through
  * that move too. New
  * behaviour belongs in an extracted module built from constructor lambdas —

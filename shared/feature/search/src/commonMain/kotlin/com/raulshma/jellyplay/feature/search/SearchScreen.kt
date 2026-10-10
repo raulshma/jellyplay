@@ -208,7 +208,8 @@ internal fun SearchScreen(
     // The live query string is only read inside leaf composables (the search
     // bar, the empty-state suggestions); the body sees this rarely-flipping
     // blank/nonblank signal so keystrokes don't recompose the whole screen.
-    val queryHasText by remember { derivedStateOf { viewModel.query.isNotBlank() } }
+    val queryState = viewModel.query.collectAsStateWithLifecycle()
+    val queryHasText by remember { derivedStateOf { queryState.value.isNotBlank() } }
     val filters by viewModel.filters.collectAsStateWithLifecycle()
     val genres by viewModel.genres.collectAsStateWithLifecycle()
     val tags by viewModel.tags.collectAsStateWithLifecycle()
@@ -665,7 +666,7 @@ internal fun SearchScreen(
                             // fetches. (The former inline derivedStateOf added nothing:
                             // both of its snapshot inputs were already this block's
                             // remember keys.)
-                            val query = viewModel.query
+                            val query by viewModel.query.collectAsStateWithLifecycle()
                             val didYouMean = remember(query, searchHistory) {
                                 didYouMeanSuggestions(query, searchHistory)
                             }
@@ -1078,7 +1079,7 @@ private fun SearchInputBar(
     viewModel: SearchViewModel,
     onFocusedChange: (Boolean) -> Unit,
 ) {
-    val query = viewModel.query
+    val query by viewModel.query.collectAsStateWithLifecycle()
     val focusManager = LocalFocusManager.current
     // Voice-search seam (expect/actual): null when the platform has no speech
     // recognition activity, hiding the mic affordance below.
@@ -1190,7 +1191,7 @@ private fun SearchHistoryRecorder(
     // from polluting search history. Keyed on refresh state + query so it
     // re-evaluates when a new search settles; the item count is read inside
     // the effect so page appends don't re-record the same query.
-    val query = viewModel.query
+    val query by viewModel.query.collectAsStateWithLifecycle()
     val refreshLoadState = pagedResults.loadState.refresh
     LaunchedEffect(refreshLoadState, query) {
         val settled = refreshLoadState is LoadState.NotLoading && pagedResults.itemCount > 0

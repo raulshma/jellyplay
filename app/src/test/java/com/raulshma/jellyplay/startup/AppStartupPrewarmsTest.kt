@@ -6,6 +6,7 @@ import com.raulshma.jellyplay.core.data.worker.AutoDownloadScheduler
 import com.raulshma.jellyplay.core.data.worker.DownloadReconnectListener
 import com.raulshma.jellyplay.core.data.worker.PlaybackSyncReconnectListener
 import com.raulshma.jellyplay.core.data.worker.PlaybackSyncScheduler
+import com.raulshma.jellyplay.core.data.worker.SettingsSyncBackgroundTrigger
 import com.raulshma.jellyplay.core.data.worker.UserDataSyncScheduler
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentity
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
@@ -111,6 +112,9 @@ class AppStartupPrewarmsTest {
     private val playbackSyncReconnectListener: PlaybackSyncReconnectListener = mockk(relaxed = true) {
         every { start() } answers { tag("playbackSyncReconnect.start") }
     }
+    private val settingsSyncBackgroundTrigger: SettingsSyncBackgroundTrigger = mockk(relaxed = true) {
+        every { start() } answers { tag("settingsSyncTrigger.start") }
+    }
     private val downloadReconnectListener: DownloadReconnectListener = mockk(relaxed = true) {
         every { start() } answers { tag("downloadReconnect.start") }
     }
@@ -147,6 +151,7 @@ class AppStartupPrewarmsTest {
         userDataSyncScheduler = lazy { userDataSyncScheduler },
         playbackSyncScheduler = lazy { playbackSyncScheduler },
         playbackSyncReconnectListener = lazy { playbackSyncReconnectListener },
+        settingsSyncBackgroundTrigger = lazy { settingsSyncBackgroundTrigger },
         downloadReconnectListener = lazy { downloadReconnectListener },
         notificationReconnectListener = lazy { notificationReconnectListener },
         autoDownloadScheduler = lazy { autoDownloadScheduler },
@@ -200,6 +205,7 @@ class AppStartupPrewarmsTest {
             "userDataSync.enqueuePeriodic",
             "playbackSync.enqueuePeriodic",
             "playbackSyncReconnect.start",
+            "settingsSyncTrigger.start",
             "downloadReconnect.start",
             "notificationReconnect.start",
             "autoDownload.sync",

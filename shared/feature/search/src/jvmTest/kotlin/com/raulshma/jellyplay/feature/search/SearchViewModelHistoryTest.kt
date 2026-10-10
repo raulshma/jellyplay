@@ -1,7 +1,6 @@
 package com.raulshma.jellyplay.feature.search
 
-import com.raulshma.jellyplay.core.data.repository.MediaBrowseReads
-import com.raulshma.jellyplay.core.data.repository.MediaCollectionReads
+import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.search.MediaSearchEngine
@@ -40,8 +39,7 @@ class SearchViewModelHistoryTest {
     private val mainDispatcher = StandardTestDispatcher()
 
     private val mediaRepository: MediaRepository = mockk(relaxed = true)
-    private val mediaBrowseReads: MediaBrowseReads = mockk(relaxed = true)
-    private val mediaCollectionReads: MediaCollectionReads = mockk(relaxed = true)
+    private val libraryApiClient: LibraryApiClient = mockk(relaxed = true)
     private val imageUrlProvider: ImageUrlProvider = mockk(relaxed = true)
     private val seerrRepository: SeerrRepository = mockk(relaxed = true)
     private val seerrRequestDelegate: SeerrRequestDelegate = mockk(relaxed = true)
@@ -58,21 +56,20 @@ class SearchViewModelHistoryTest {
         every { mediaSearchEngine.recentHistory() } returns flowOf(emptyList())
         every { mediaSearchEngine.sideSearch(any()) } returns flowOf()
         every { searchFiltersStore.searchFiltersJson } returns MutableStateFlow(null)
-        every { seerrRepository.getPreferences() } returns flowOf(
+        every { seerrRepository.preferences } returns MutableStateFlow(
             com.raulshma.jellyplay.core.model.seerr.SeerrPreferences()
         )
         // Stub the init-time repository calls so relaxed-mock defaults don't
         // break the List casts in loadGenres()/loadTags()/loadSuggestions().
         coEvery { mediaRepository.getGenres(any()) } returns Result.success(emptyList())
-        coEvery { mediaBrowseReads.getTags(any(), any(), any()) } returns Result.success(emptyList())
-        coEvery { mediaCollectionReads.getSearchSuggestions(any()) } returns Result.success(
+        coEvery { libraryApiClient.getTags(any(), any(), any()) } returns Result.success(emptyList())
+        coEvery { libraryApiClient.getSearchSuggestions(any()) } returns Result.success(
             com.raulshma.jellyplay.core.model.SearchResult(emptyList(), 0, 0)
         )
 
         viewModel = SearchViewModel(
             mediaRepository,
-            mediaBrowseReads,
-            mediaCollectionReads,
+            libraryApiClient,
             mockk(relaxed = true),
             imageUrlProvider,
             seerrRepository,

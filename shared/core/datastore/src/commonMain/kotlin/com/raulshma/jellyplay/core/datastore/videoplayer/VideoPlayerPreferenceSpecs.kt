@@ -14,6 +14,8 @@ import com.raulshma.jellyplay.core.model.GestureIndicatorSide
 import com.raulshma.jellyplay.core.model.GestureMode
 import com.raulshma.jellyplay.core.model.MediaSegmentType
 import com.raulshma.jellyplay.core.model.OrientationMode
+import com.raulshma.jellyplay.core.model.PlayerInputDefaults
+import com.raulshma.jellyplay.core.model.PlayerInputMap
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import com.raulshma.jellyplay.core.model.PreloadBufferSize
 import com.raulshma.jellyplay.core.model.SegmentBehavior
@@ -91,6 +93,48 @@ object VideoPlayerPreferenceSpecs {
             subtitleKey = "ss_controls_timeout_subtitle",
             categoryKey = "ss_cat_playback",
             keywords = listOf("controls", "timeout", "hide", "overlay"),
+            routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+            isAdvanced = true,
+        ),
+    )
+
+    /**
+     * (jellyfin-androidtv #3924): pausing should not summon the control
+     * overlay. Default **off** — today's show-on-pause behavior. On, the
+     * pause arm of a play/pause transport toggle leaves the overlay hidden
+     * (the play arm keeps summoning, and an already-visible overlay is never
+     * force-hidden — the auto-hide timeout still owns dismissal).
+     */
+    val VIDEO_HIDE_OSD_ON_PAUSE: PreferenceSpec<Boolean> = PreferenceSpec.plainBoolean(
+        keyName = "video_hide_osd_on_pause",
+        default = false,
+        resetCategory = PreferenceResetCategory.PLAYBACK,
+        search = PreferenceSearchSpec(
+            id = "hide_osd_on_pause",
+            titleKey = "ss_hide_osd_on_pause_title",
+            subtitleKey = "ss_hide_osd_on_pause_subtitle",
+            categoryKey = "ss_cat_playback",
+            keywords = listOf("pause", "osd", "overlay", "controls", "hide", "show"),
+            routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+            isAdvanced = true,
+        ),
+    )
+
+    /**
+     * Opt-in resume when headphones reconnect. Default **off**.
+     * The decision machinery (paused-by-becoming-noisy marker + freshness
+     * window) lives in core:data's `HeadsetResumePolicy` — the pref gates it.
+     */
+    val VIDEO_RESUME_ON_HEADSET_PLUG: PreferenceSpec<Boolean> = PreferenceSpec.plainBoolean(
+        keyName = "video_resume_on_headset_plug",
+        default = false,
+        resetCategory = PreferenceResetCategory.PLAYBACK,
+        search = PreferenceSearchSpec(
+            id = "resume_on_headset_plug",
+            titleKey = "ss_resume_headset_plug_title",
+            subtitleKey = "ss_resume_headset_plug_subtitle",
+            categoryKey = "ss_cat_playback",
+            keywords = listOf("headset", "headphones", "resume", "plug", "reconnect", "unplug", "audio"),
             routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
             isAdvanced = true,
         ),
@@ -206,6 +250,87 @@ object VideoPlayerPreferenceSpecs {
         ),
     )
 
+    /**
+     * Holding the second press of a double-tap in a seek zone
+     * repeats the step seek until release (with the accumulating "+Ns" chip)
+     * instead of falling through to the long-press hold-speed. Default ON —
+     * the off state restores the legacy hold-speed-everywhere behavior.
+     * Android-only in the settings catalog, matching the double-tap-seek
+     * knob it extends ([VIDEO_SEEK_DURATION_MS]).
+     */
+    val VIDEO_DOUBLE_TAP_HOLD_SEEK_ENABLED: PreferenceSpec<Boolean> = PreferenceSpec.plainBoolean(
+        keyName = "video_double_tap_hold_seek_enabled",
+        default = true,
+        resetCategory = PreferenceResetCategory.PLAYBACK,
+        search = PreferenceSearchSpec(
+            id = "double_tap_hold_seek",
+            titleKey = "ss_double_tap_hold_seek_title",
+            subtitleKey = "ss_double_tap_hold_seek_subtitle",
+            categoryKey = "ss_cat_playback",
+            keywords = listOf("double tap", "hold", "seek", "continuous", "skip", "gesture", "press"),
+            routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+            platformRule = PreferencePlatformRule.ANDROID_ONLY,
+        ),
+    )
+
+    /**
+     * The whole player input mapping (issue #171 generalized): the free-form
+     * pattern → action rows over touch / wheel / keyboard / D-pad, persisted
+     * as one whole-object JSON blob (the [SEGMENT_BEHAVIORS] precedent). When
+     * the blob is absent the read derives the default map from the legacy
+     * gesture config — [VIDEO_GESTURE_MODE] plus the hold-speed and
+     * double-tap-hold rows — so a pre-mapping install keeps its exact prior
+     * behavior (the [VIDEO_GESTURE_MODE] legacy-boolean dance's second
+     * generation). A corrupt blob falls back to the factory-default mapping.
+     */
+    val VIDEO_INPUT_BINDINGS: PreferenceSpec<PlayerInputMap> = PreferenceSpec.derived(
+        keyName = "input_bindings",
+        default = PlayerInputDefaults.defaultMap(),
+        resetCategory = PreferenceResetCategory.PLAYBACK,
+        read = { prefs, raw ->
+            PreferenceCodec.cachedJson(
+                raw = raw,
+                cache = cachedInputBindings,
+                default = PlayerInputDefaults.defaultMap(),
+                parse = ::decodeInputBindings,
+                onNull = { legacyInputBindings(prefs) },
+                cacheRef = { cachedInputBindings = it },
+                nullPolicy = CachedJsonNullPolicy.NoMemoOnNull,
+            )
+        },
+        encode = { map ->
+            PreferenceCodec.encodeDefaultsJson.encodeToString(
+                serializer<PlayerInputMap>(),
+                map,
+            )
+        },
+        search = PreferenceSearchSpec(
+            id = "input_bindings",
+            titleKey = "ss_input_bindings_title",
+            subtitleKey = "ss_input_bindings_subtitle",
+            categoryKey = "ss_cat_playback",
+            keywords = listOf("controls", "buttons", "gesture", "bindings", "remap", "customize", "input", "keyboard", "swipe", "brightness", "volume"),
+            routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+        ),
+    )
+
+    /**
+     * The absent-blob fallback: the factory mapping gated by the user's
+     * legacy gesture config (tier mode + the two per-behavior switches), so
+     * the first read after an upgrade reproduces the pre-mapping behavior
+     * exactly. The blob is written on the first mapping edit (or mode-preset
+     * flip), after which the legacy keys are observation-only.
+     */
+    private fun legacyInputBindings(prefs: Preferences): PlayerInputMap =
+        PlayerInputDefaults.defaultMap(
+            gestureMode = VIDEO_GESTURE_MODE.readFrom(prefs),
+            holdSpeedEnabled = VIDEO_HOLD_SPEED_ENABLED.readFrom(prefs),
+            doubleTapHoldSeekEnabled = VIDEO_DOUBLE_TAP_HOLD_SEEK_ENABLED.readFrom(prefs),
+        )
+
+    private fun decodeInputBindings(raw: String): PlayerInputMap =
+        PreferenceCodec.json.decodeFromString<PlayerInputMap>(raw)
+
     // ------------------------------------------------------------------
     // Speed / brightness / volume memory
     // ------------------------------------------------------------------
@@ -214,6 +339,7 @@ object VideoPlayerPreferenceSpecs {
         keyName = "video_pass_out_protection_hours",
         default = 0,
         resetCategory = PreferenceResetCategory.PLAYBACK,
+        min = 0,
         search = PreferenceSearchSpec(
             id = "pass_out_protection",
             titleKey = "ss_pass_out_protection_title",
@@ -229,6 +355,7 @@ object VideoPlayerPreferenceSpecs {
         keyName = "video_skip_back_on_resume_ms",
         default = 0L,
         resetCategory = PreferenceResetCategory.PLAYBACK,
+        min = 0L,
         search = PreferenceSearchSpec(
             id = "skip_back_on_resume",
             titleKey = "ss_skip_back_on_resume_title",
@@ -310,6 +437,7 @@ object VideoPlayerPreferenceSpecs {
         keyName = "still_watching_episode_threshold",
         default = 0,
         resetCategory = PreferenceResetCategory.PLAYBACK,
+        min = 0,
         search = PreferenceSearchSpec(
             id = "still_watching_episodes",
             titleKey = "ss_still_watching_episodes_title",
@@ -602,6 +730,15 @@ object VideoPlayerPreferenceSpecs {
         ParsedCache(null, SegmentBehavior.DEFAULT_BEHAVIORS)
 
     /**
+     * Memoisation holder for the [VIDEO_INPUT_BINDINGS] row's JSON decode
+     * (the [cachedSegmentBehaviors] precedent, same [CachedJsonNullPolicy
+     * .NoMemoOnNull] shape — the null-raw path is the legacy-config fallback,
+     * re-derived per read because it depends on sibling keys).
+     */
+    private var cachedInputBindings: ParsedCache<PlayerInputMap> =
+        ParsedCache(null, PlayerInputDefaults.defaultMap())
+
+    /**
      * Reads [VideoPlayerSlice.segmentBehaviors] — the headline migration, verbatim
      * from the store's former hand-written reader. When the JSON
      * `segment_behaviors` blob is present it is decoded and merged over
@@ -814,11 +951,15 @@ object VideoPlayerPreferenceSpecs {
     val all: List<PreferenceSpec<*>> = listOf(
         VIDEO_SEEK_DURATION_MS,
         VIDEO_CONTROLS_TIMEOUT_MS,
+        VIDEO_HIDE_OSD_ON_PAUSE,
+        VIDEO_RESUME_ON_HEADSET_PLUG,
         VIDEO_DEFAULT_ORIENTATION,
         VIDEO_DEFAULT_ASPECT_RATIO,
         VIDEO_GESTURE_MODE,
         VIDEO_GESTURES_ENABLED,
         VIDEO_GESTURE_INDICATOR_SIDE,
+        VIDEO_DOUBLE_TAP_HOLD_SEEK_ENABLED,
+        VIDEO_INPUT_BINDINGS,
         VIDEO_PASS_OUT_PROTECTION_HOURS,
         VIDEO_SKIP_BACK_ON_RESUME_MS,
         VIDEO_HOLD_SPEED_ENABLED,
@@ -877,13 +1018,17 @@ object VideoPlayerPreferenceSpecs {
         VIDEO_SEEK_DURATION_MS.searchEntry(),
         VIDEO_DEFAULT_ORIENTATION.searchEntry(),
         VIDEO_GESTURE_MODE.searchEntry(),
+        VIDEO_INPUT_BINDINGS.searchEntry(),
         VIDEO_GESTURE_INDICATOR_SIDE.searchEntry(),
+        VIDEO_DOUBLE_TAP_HOLD_SEEK_ENABLED.searchEntry(),
         VIDEO_DEFAULT_SPEED.searchEntry(),
         VIDEO_DEFAULT_ASPECT_RATIO.searchEntry(),
         VIDEO_AUTOPLAY_NEXT.searchEntry(),
         STILL_WATCHING_MODE.searchEntry(),
         STILL_WATCHING_EPISODE_THRESHOLD.searchEntry(),
         VIDEO_CONTROLS_TIMEOUT_MS.searchEntry(),
+        VIDEO_HIDE_OSD_ON_PAUSE.searchEntry(),
+        VIDEO_RESUME_ON_HEADSET_PLUG.searchEntry(),
         VIDEO_SKIP_BACK_ON_RESUME_MS.searchEntry(),
         SHOW_CLOCK_IN_PLAYER.searchEntry(),
         VIDEO_PASS_OUT_PROTECTION_HOURS.searchEntry(),

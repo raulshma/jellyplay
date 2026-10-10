@@ -1,5 +1,7 @@
 package com.raulshma.jellyplay.core.data.syncplay
 
+import com.raulshma.jellyplay.core.concurrency.PollSpec
+import com.raulshma.jellyplay.core.concurrency.boundedPoll
 import com.raulshma.jellyplay.core.data.log.Log
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
@@ -15,7 +17,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -360,20 +361,22 @@ class SyncPlayManager(
     /**
      * Bounded poll for the freshly created group: the server list can lag the
      * `New` command (the blind `delay(500)` this replaced), so the poll gives
-     * slow servers [CREATE_GROUP_DISCOVERY_MS] before giving up. Name matches
+     * slow servers [CREATE_GROUP_DISCOVERY_MS] — fetch-and-match rounds at a
+     * [CREATE_GROUP_DISCOVERY_POLL_MS] cadence under one [boundedPoll]
+     * envelope ([PollSpec.envelopeMs]) — before giving up null. Name matches
      * prefer ids absent from the pre-create snapshot so a pre-existing
      * same-named group cannot shadow the fresh one.
      */
     private suspend fun discoverCreatedGroup(groupName: String, priorGroupIds: Set<String>): SyncPlayGroup? =
-        withTimeoutOrNull(CREATE_GROUP_DISCOVERY_MS) {
-            while (true) {
-                val groups = syncPlayApiClient.getSyncPlayGroups().getOrNull().orEmpty()
-                val created = groups.firstOrNull { it.groupName == groupName && it.groupId !in priorGroupIds }
-                    ?: groups.firstOrNull { it.groupName == groupName }
-                if (created != null) return@withTimeoutOrNull created
-                delay(CREATE_GROUP_DISCOVERY_POLL_MS)
-            }
-            @Suppress("UNREACHABLE_CODE") null
+        boundedPoll(
+            PollSpec(
+                intervalMs = CREATE_GROUP_DISCOVERY_POLL_MS,
+                envelopeMs = CREATE_GROUP_DISCOVERY_MS,
+            ),
+        ) {
+            val groups = syncPlayApiClient.getSyncPlayGroups().getOrNull().orEmpty()
+            groups.firstOrNull { it.groupName == groupName && it.groupId !in priorGroupIds }
+                ?: groups.firstOrNull { it.groupName == groupName }
         }
 
     private fun startPingReporting() {

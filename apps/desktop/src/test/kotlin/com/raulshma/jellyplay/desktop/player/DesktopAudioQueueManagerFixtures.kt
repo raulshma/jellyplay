@@ -6,22 +6,19 @@ import com.raulshma.jellyplay.core.data.repository.LyricsRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackOutboxEntry
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
-import com.raulshma.jellyplay.core.data.util.TimeSource
+import com.raulshma.jellyplay.core.model.TimeSource
 import com.raulshma.jellyplay.core.database.dao.AudioQueueDao
 import com.raulshma.jellyplay.core.database.entity.AudioQueueEntity
 import com.raulshma.jellyplay.core.database.entity.AudioQueueStateEntity
 import com.raulshma.jellyplay.core.model.CultureInfo
-import com.raulshma.jellyplay.core.model.LiveStreamOption
 import com.raulshma.jellyplay.core.model.LrcLibTrack
 import com.raulshma.jellyplay.core.model.LyricsResult
 import com.raulshma.jellyplay.core.model.MediaSegment
-import com.raulshma.jellyplay.core.model.PlaybackInfoResult
-import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.core.model.PlaybackProgress
+import com.raulshma.jellyplay.core.model.PlaybackResolution
+import com.raulshma.jellyplay.core.model.PlaybackResolveRequest
 import com.raulshma.jellyplay.core.model.PlaybackStartInfo
-import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
-import com.raulshma.jellyplay.core.model.ResolvedPlayback
 import java.time.LocalDate
 import java.time.ZoneId
 import java.util.concurrent.CopyOnWriteArrayList
@@ -104,25 +101,20 @@ internal class FakePlaybackRepository : PlaybackRepository {
     override fun getBookDownloadUrl(itemId: String): String = ""
     override suspend fun getItemImageBytes(itemId: String, imageType: String, maxWidth: Int): ByteArray? = null
 
-    override fun getStreamUrl(itemId: String, mediaSourceId: String, startTimeTicks: Long, liveStreamId: String?) =
-        "legacy"
-
-    override suspend fun fetchPlaybackInfo(
-        itemId: String, mediaSourceId: String, startTimeTicks: Long, audioStreamIndex: Int?,
-        subtitleStreamIndex: Int?, maxStreamingBitrateBits: Long?, mode: PlaybackMode, playerType: PlayerType,
-        liveStreamOption: LiveStreamOption?,
-    ): Result<PlaybackInfoResult> = error("unexpected")
-
-    override suspend fun resolvePlayback(
-        itemId: String, mediaSourceId: String, startTimeTicks: Long, audioStreamIndex: Int?,
-        subtitleStreamIndex: Int?, maxStreamingBitrateBits: Long?, mode: PlaybackMode, playerType: PlayerType,
-        liveStreamOption: LiveStreamOption?,
-    ): ResolvedPlayback? = null
-
     override fun getStreamUrl(
         itemId: String, mediaSourceId: String, startTimeTicks: Long, maxBitrate: Int?,
         useAudioEndpoint: Boolean, liveStreamId: String?,
     ) = "stream://$itemId/$mediaSourceId"
+
+    override suspend fun resolvePlayable(request: PlaybackResolveRequest): PlaybackResolution =
+        // The audio paths never resolve through the ladder; mirror the
+        // repository's static fold for anything that does.
+        PlaybackResolution.StaticFallback(
+            getStreamUrl(
+                request.itemId, request.mediaSourceId, request.startTimeTicks,
+                liveStreamId = request.staticFallbackLiveStreamId,
+            ),
+        )
 
     override fun getSubtitleDeliveryUrl(deliveryUrl: String) = deliveryUrl
     override fun buildSubtitleDeliveryUrl(itemId: String, mediaSourceId: String, index: Int, codec: String?) = ""

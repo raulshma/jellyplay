@@ -3,7 +3,7 @@ package com.raulshma.jellyplay.feature.player.live
 import com.raulshma.jellyplay.core.data.log.Log
 import com.raulshma.jellyplay.core.data.playback.PlaybackIdentity
 import com.raulshma.jellyplay.core.data.playback.TranscodeReasonsRefresher
-import com.raulshma.jellyplay.core.data.repository.LiveTvRepository
+import com.raulshma.jellyplay.core.network.api.LiveTvApiClient
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackStore
 import com.raulshma.jellyplay.core.model.LiveStreamOption
@@ -89,7 +89,7 @@ private const val LIVE_BUFFERING_TIMEOUT_MS = 20_000L
 internal class LivePlaybackSession(
     /** The owning ViewModel's scope — every launch here dies with the VM. */
     private val scope: CoroutineScope,
-    private val liveTvRepository: LiveTvRepository,
+    private val liveTvRepository: LiveTvApiClient,
     private val sessionManager: LiveSessionManager,
     private val playbackStore: PlaybackStore,
     private val playbackIdentity: PlaybackIdentity,

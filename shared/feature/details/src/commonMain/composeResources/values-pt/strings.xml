@@ -447,6 +447,10 @@
     <string name="detail_download_advanced_hint_quality_subtitles">%1$s · %2$s</string>
     <string name="detail_download_subtitles_all">Todas as legendas</string>
     <string name="detail_download_subtitles_none">Sem legendas</string>
+    <plurals name="detail_download_subtitles_count">
+        <item quantity="one">%1$d legenda</item>
+        <item quantity="other">%1$d legendas</item>
+    </plurals>
     <string name="detail_option_refresh_metadata">Atualizar metadados</string>
     <string name="detail_msg_refresh_started">Atualização de metadados em fila no servidor</string>
     <string name="detail_msg_refresh_failed">Não foi possível atualizar os metadados</string>
@@ -483,4 +487,16 @@
     <string name="detail_msg_merge_failed">Não foi possível mesclar as versões</string>
     <string name="detail_msg_split_started">Dividindo versões…</string>
     <string name="detail_msg_split_failed">Não foi possível dividir as versões</string>
+    <plurals name="detail_merge_count_selected">
+        <item quantity="one">%1$d item selecionado</item>
+        <item quantity="other">%1$d itens selecionados</item>
+    </plurals>
+
+    <!-- The JellyPlay sync / details-badges / player-notice strings
+         (ADR 0010 wave), translated together with the default file. -->
+    <string name="jellyplay_det_ratings_title">Avaliações</string>
+    <string name="jellyplay_det_similar_badge">Escolhas do servidor</string>
+    <string name="jellyplay_det_filler_badge">Filler</string>
+    <string name="jellyplay_det_mixed_badge">Misto</string>
+    <string name="jellyplay_det_recap_badge">Resumo</string>
 </resources>

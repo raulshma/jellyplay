@@ -1,22 +1,15 @@
 package com.raulshma.jellyplay.core.data.download
 
 import com.raulshma.jellyplay.core.data.offline.OfflineDeleteActions
+import com.raulshma.jellyplay.core.data.repository.DownloadCoverage
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.model.MediaItem
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
-
-/**
- * Minimal message sink so core/data can report download outcomes without
- * depending on core/ui's UserMessageBus.
- */
-interface DownloadOutcomeMessenger {
-    fun downloadStarted()
-    fun downloadStartFailed()
-}
 
 /**
  * The download/remove half of a long-press quick-action menu, shared by every
@@ -26,18 +19,17 @@ interface DownloadOutcomeMessenger {
  * Owns exactly the two stateless halves the screens kept re-wiring per
  * ViewModel: the downloaded-id set that flips a card's DOWNLOAD slot to
  * REMOVE_DOWNLOAD ([downloadedIds] — completed ids ∪ series ids, the union
- * contract on [DownloadRepository.observeDownloadedIdsIncludingSeries]), and
+ * contract on [DownloadRepository.downloadCoverage]), and
  * the delete routing ([removeDownload] — series cards delete the whole series
  * download, anything else the single item; never touches the server).
  *
  * [download] is suspend and outcome-returning on purpose: hosts with richer
- * routing (`LibraryViewModel` pre-opens the series selection sheet,
- * `DetailViewModel` owns a local message queue) branch on it themselves.
- * Every plain host uses [downloadAndReport], which folds the shared cascade
- * in here: Started/Failed surface through the injected
- * [DownloadOutcomeMessenger] (UserMessageBus lives in core/ui, which
- * core/data must not depend on) and both navigation outcomes route to the
- * host's open-detail callback.
+ * routing (`DetailViewModel` owns a local message queue) branch on it
+ * themselves. Every other host uses [downloadAndReport], which folds the
+ * shared cascade in here: Started/Failed surface through the injected or
+ * per-call [DownloadOutcomeMessenger] (UserMessageBus lives in core/ui, which
+ * core/data must not depend on) and the navigation outcomes route to the
+ * host's open-detail callback under the per-host `seriesOpensSheet` flag.
  *
  * Koin-owned construction (jvmShared convention): no @Inject/@Singleton —
  * DataKoinModule wires the process scope and dependencies, mirroring the
@@ -68,7 +60,8 @@ class MediaDownloadActions(
      * churn it.
      */
     override val downloadedIds: StateFlow<Set<String>> =
-        downloadRepository.observeDownloadedIdsIncludingSeries()
+        downloadRepository.downloadCoverage()
+            .map { it.ids }
             .stateIn(scope, SharingStarted.Eagerly, emptySet())
 
     private val deleteActions = OfflineDeleteActions(
@@ -82,16 +75,25 @@ class MediaDownloadActions(
 
     /**
      * [download] plus the shared outcome handling: Started/Failed surface via
-     * [DownloadOutcomeMessenger], both navigation outcomes (series selection,
-     * richer detail flows) route to [onOpenDetail]. Hosts with richer routing
-     * (pre-opened series sheet, local message queue) call [download] instead.
+     * the injectable [messenger] (null ⇒ the platform default messenger),
+     * NeedsDetailScreen routes plainly, SeriesSelectionRequired rides the
+     * per-host `seriesOpensSheet` flag (or is silently skipped when null —
+     * see [QuickDownloadActions.downloadAndReport]). Hosts with richer
+     * routing still call [download] and branch on the result themselves.
      */
-    override suspend fun downloadAndReport(item: MediaItem, onOpenDetail: (itemId: String) -> Unit) {
+    override suspend fun downloadAndReport(
+        item: MediaItem,
+        onOpenDetail: (itemId: String, prePresentDownloadSheet: Boolean) -> Unit,
+        seriesOpensSheet: Boolean?,
+        messenger: DownloadOutcomeMessenger?,
+    ) {
+        val sink = messenger ?: this.messenger
         when (val result = download(item)) {
-            DownloadRequestResult.Started -> messenger.downloadStarted()
-            is DownloadRequestResult.SeriesSelectionRequired -> onOpenDetail(result.seriesId)
-            is DownloadRequestResult.NeedsDetailScreen -> onOpenDetail(result.itemId)
-            is DownloadRequestResult.Failed -> messenger.downloadStartFailed()
+            DownloadRequestResult.Started -> sink.downloadStarted()
+            is DownloadRequestResult.SeriesSelectionRequired ->
+                if (seriesOpensSheet != null) onOpenDetail(result.seriesId, seriesOpensSheet)
+            is DownloadRequestResult.NeedsDetailScreen -> onOpenDetail(result.itemId, false)
+            is DownloadRequestResult.Failed -> sink.downloadStartFailed()
         }
     }
 

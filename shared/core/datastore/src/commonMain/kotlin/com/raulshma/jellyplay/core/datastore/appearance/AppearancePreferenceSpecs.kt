@@ -12,6 +12,8 @@ import com.raulshma.jellyplay.core.model.HandMode
 import com.raulshma.jellyplay.core.model.LayoutMode
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import com.raulshma.jellyplay.core.model.ThemeMode
+import com.raulshma.jellyplay.core.model.TvOverscan
+import com.raulshma.jellyplay.core.datastore.spec.PreferencePlatformRule
 
 /**
  * The appearance &amp; accessibility domain's single preference declaration:
@@ -496,6 +498,28 @@ object AppearancePreferenceSpecs {
         ),
     )
 
+    /**
+     * The TV overscan safe-area calibration — the layout-override's
+     * form-factor twin: a TV-only display knob, so its search entry is tagged
+     * [PreferencePlatformRule.ANDROID_ONLY] (form factor is the runtime
+     * `LocalTvMode` axis, not a platform) while the row's screen-side gate is
+     * the feature layer's `RowAdmission.Tv`. The default is the guideline 5%.
+     */
+    val TV_OVERSCAN: PreferenceSpec<TvOverscan> = PreferenceSpec.enumRow(
+        keyName = "tv_overscan",
+        default = TvOverscan.FIVE,
+        resetCategory = PreferenceResetCategory.APPEARANCE,
+        search = PreferenceSearchSpec(
+            id = "screen_fit",
+            titleKey = "ss_screen_fit_title",
+            subtitleKey = "ss_screen_fit_subtitle",
+            categoryKey = "ss_cat_appearance",
+            keywords = listOf("screen fit", "overscan", "safe area", "tv", "edge", "cut off", "calibration", "display", "border"),
+            routeKind = ROUTE_APPEARANCE_SETTINGS,
+            platformRule = PreferencePlatformRule.ANDROID_ONLY,
+        ),
+    )
+
     // ------------------------------------------------------------------
     // Settings-search standalone entries: catalog facts without a single
     // backing knob of this store.
@@ -570,6 +594,7 @@ object AppearancePreferenceSpecs {
         COLOR_BLIND_MODE,
         HAND_MODE,
         LAYOUT_MODE,
+        TV_OVERSCAN,
     )
 
     /**
@@ -607,6 +632,7 @@ object AppearancePreferenceSpecs {
         OLED_MODE.searchEntry(),
         CONTRAST_LEVEL.searchEntry(),
         LAYOUT_MODE.searchEntry(),
+        TV_OVERSCAN.searchEntry(),
         BACKDROP_THEME_MUSIC_ENABLED.searchEntry(),
         ACCENT_COLOR_SWATCH.searchEntry(),
         COLOR_STYLE.searchEntry(),

@@ -25,6 +25,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import com.raulshma.jellyplay.core.ui.components.JellyPlayLinearProgressIndicator
+import com.raulshma.jellyplay.core.ui.components.formatDurationMs
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -122,7 +123,7 @@ fun TrickplayOverlay(
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(
-                            text = formatTime(positionMs),
+                            text = formatDurationMs(positionMs, paddedMinutes = true),
                             color = playerOnScrim().copy(alpha = 0.7f),
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Medium,
@@ -160,7 +161,7 @@ fun TrickplayOverlay(
                             Text(
                                 text = buildString {
                                     append(if (isForward) "+" else "-")
-                                    append(formatTime(abs(deltaMs)))
+                                    append(formatDurationMs(abs(deltaMs), paddedMinutes = true))
                                 },
                                 style = MaterialTheme.typography.titleSmall,
                                 color = MaterialTheme.colorScheme.primary,
@@ -172,7 +173,7 @@ fun TrickplayOverlay(
                 }
 
                 Text(
-                    text = formatTime(positionMs),
+                    text = formatDurationMs(positionMs, paddedMinutes = true),
                     style = MaterialTheme.typography.labelMedium,
                     color = playerOnScrim().copy(alpha = 0.85f),
                     fontWeight = FontWeight.Medium,
@@ -191,19 +192,5 @@ fun TrickplayOverlay(
                 }
             }
         }
-    }
-}
-
-private fun formatTime(ms: Long): String {
-    val totalSeconds = ms / 1000
-    val hours = totalSeconds / 3600
-    val minutes = (totalSeconds % 3600) / 60
-    val seconds = totalSeconds % 60
-    // String templates avoid the per-call Formatter allocation — this runs
-    // per-frame during trickplay scrubbing.
-    return if (hours > 0) {
-        "$hours:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}"
-    } else {
-        "${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}"
     }
 }

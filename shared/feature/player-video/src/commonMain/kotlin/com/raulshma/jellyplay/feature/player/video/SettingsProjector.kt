@@ -121,6 +121,14 @@ internal class SettingsProjector(
             newValue = agg.playback.autoPlayCountdownSec,
             updater = { v -> copy(autoplay = autoplay.copy(autoPlayCountdownSec = v)) },
         )
+        // The input mapping: settings-side editor writes + in-player quick
+        // toggles both land here change-time (the seed owns the load-time
+        // copy), so a mapping edit applies to a live player without reload.
+        syncPref(
+            selector = { it.gestures.inputMap },
+            newValue = agg.videoPlayer.videoInputBindings,
+            updater = { v -> copy(gestures = gestures.copy(inputMap = v)) },
+        )
 
         // PIN lock: two uiPrefs leaves driven by one pref + one derived flag.
         val hasPin = agg.security.pinHash != null

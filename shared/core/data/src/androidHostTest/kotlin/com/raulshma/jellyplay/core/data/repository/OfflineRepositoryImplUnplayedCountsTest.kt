@@ -8,7 +8,7 @@ import com.raulshma.jellyplay.core.database.dao.PlaybackStateDao
 import com.raulshma.jellyplay.core.database.dao.SyncBaselineDao
 import com.raulshma.jellyplay.core.database.dao.UnplayedCountRow
 import com.raulshma.jellyplay.core.database.entity.OfflineMediaEntity
-import com.raulshma.jellyplay.core.data.util.TimeSource
+import com.raulshma.jellyplay.core.model.TimeSource
 import com.raulshma.jellyplay.core.model.OFFLINE_WATCHED_THRESHOLD
 import com.raulshma.jellyplay.core.model.MediaType
 import io.mockk.coEvery

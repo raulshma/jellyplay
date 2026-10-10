@@ -7,8 +7,9 @@ import androidx.paging.LoadStates
 import androidx.paging.PagingData
 import androidx.paging.PagingDataEvent
 import androidx.paging.PagingDataPresenter
+import com.raulshma.jellyplay.core.data.download.DownloadOutcomeMessenger
 import com.raulshma.jellyplay.core.data.download.DownloadRequestResult
-import com.raulshma.jellyplay.core.data.repository.MediaBrowseReads
+import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
@@ -60,7 +61,7 @@ class LibraryViewModelTest {
     private val mainDispatcher = StandardTestDispatcher()
 
     private lateinit var mediaRepository: MediaRepository
-    private val mediaBrowseReads: MediaBrowseReads = mockk(relaxed = true)
+    private val libraryApiClient: LibraryApiClient = mockk(relaxed = true)
     private lateinit var offlineRepository: com.raulshma.jellyplay.core.data.repository.OfflineRepository
     private lateinit var quickDownloadActions: com.raulshma.jellyplay.core.data.download.QuickDownloadActions
     private lateinit var offlineModeManager: com.raulshma.jellyplay.core.data.offline.OfflineModeManager
@@ -97,6 +98,23 @@ class LibraryViewModelTest {
         every { offlineModeManager.offlineMode } returns offlineModeFlow
         // The VM re-exposes this for quick-action download gating.
         every { quickDownloadActions.downloadedIds } returns MutableStateFlow(emptySet())
+        // The VM folds download outcomes through downloadAndReport (the shared
+        // cascade, with this host's series-sheet-prepresented routing); mirror
+        // the real fold so the per-test download(item) stubs keep driving it.
+        coEvery {
+            quickDownloadActions.downloadAndReport(any(), any(), any(), any())
+        } coAnswers {
+            val onOpenDetail = secondArg<(String, Boolean) -> Unit>()
+            val seriesOpensSheet = thirdArg<Boolean?>()
+            val messenger = arg<DownloadOutcomeMessenger?>(3)
+            when (val result = quickDownloadActions.download(firstArg())) {
+                DownloadRequestResult.Started -> messenger?.downloadStarted()
+                is DownloadRequestResult.SeriesSelectionRequired ->
+                    if (seriesOpensSheet != null) onOpenDetail(result.seriesId, seriesOpensSheet)
+                is DownloadRequestResult.NeedsDetailScreen -> onOpenDetail(result.itemId, false)
+                is DownloadRequestResult.Failed -> messenger?.downloadStartFailed()
+            }
+        }
 
         // Stub the init-block repository calls with real Result/Flow values so
         // the relaxed mock's default Result mock doesn't ClassCast inside the
@@ -107,7 +125,7 @@ class LibraryViewModelTest {
         // ClassCasts inside the inline onSuccess/onFailure.
         coEvery { mediaRepository.getLibraryFolders(any()) } returns Result.success(emptyList<LibraryFolder>())
         coEvery { mediaRepository.getGenres(any(), any()) } returns Result.success(emptyList())
-        coEvery { mediaBrowseReads.getTags(any(), any(), any()) } returns Result.success(emptyList())
+        coEvery { libraryApiClient.getTags(any(), any(), any()) } returns Result.success(emptyList())
         // The deferred refresher collects this for the whole VM lifetime.
         every { mediaRepository.userDataChanges } returns userDataEvents
     }
@@ -125,7 +143,7 @@ class LibraryViewModelTest {
             com.raulshma.jellyplay.core.ui.message.UserMessageBus(),
     ): LibraryViewModel = LibraryViewModel(
         mediaRepository = mediaRepository,
-        mediaBrowseReads = mediaBrowseReads,
+        libraryApiClient = libraryApiClient,
         offlineRepository = offlineRepository,
         quickDownloadActions = quickDownloadActions,
         offlineModeManager = offlineModeManager,
@@ -495,6 +513,20 @@ class LibraryViewModelTest {
 
         coVerify {
             userDataMutator.setPlayed("m1", true, UserDataMutator.FlipMode.Silent, emptyList(), null)
+        }
+    }
+
+    /** Quick-action favorite toggle: same silent delegation as markItemPlayed. */
+    @Test
+    fun `toggleFavorite delegates to the mutator silently`() = runTest {
+        val vm = createViewModel()
+        val item = MediaItem(id = "m1", name = "Movie", mediaType = MediaType.MOVIE)
+
+        vm.onEvent(LibraryUiEvent.ToggleFavorite(item))
+        advanceUntilIdle()
+
+        coVerify {
+            userDataMutator.setFavorite("m1", UserDataMutator.FlipMode.Silent, emptyList(), null)
         }
     }
 
@@ -955,7 +987,7 @@ class LibraryViewModelTest {
         coVerify(exactly = 1) { mediaRepository.getLibraryFolders(force = true) }
         coVerify(exactly = 1) { mediaRepository.getGenres(force = true) }
         // Tags are an uncached passthrough: both loads hit them.
-        coVerify(exactly = 2) { mediaBrowseReads.getTags(any(), any(), any()) }
+        coVerify(exactly = 2) { libraryApiClient.getTags(any(), any(), any()) }
     }
 
     // ── Saved sort fallbacks ─────────────────────────────────────────────────
@@ -1057,7 +1089,7 @@ class LibraryViewModelTest {
         vm.onEvent(LibraryUiEvent.PrefetchPhotoFolderChildUrls(listOf(folder1, folder2, movie)))
         advanceUntilIdle()
 
-        assertEquals(mapOf("pf-1" to listOf("u1", "u2")), vm.photoFolderChildUrls.value)
+        assertEquals(listOf("u1", "u2"), vm.photoFolderChildUrlsFor("pf-1").first())
 
         // Recomposition re-fires with the same items: the already-fetched
         // folder is in alreadyFetched this time, and an empty result never
@@ -1070,7 +1102,7 @@ class LibraryViewModelTest {
         coVerify {
             photoFolderPrefetcher.prefetch(listOf(folder1, folder2, movie), alreadyFetched = setOf("pf-1"))
         }
-        assertEquals(mapOf("pf-1" to listOf("u1", "u2")), vm.photoFolderChildUrls.value)
+        assertEquals(listOf("u1", "u2"), vm.photoFolderChildUrlsFor("pf-1").first())
     }
 
     @Test

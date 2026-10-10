@@ -204,6 +204,8 @@ data class MainPreferences(
     val navBarShowLabels: Boolean = true,
     /** Manual adaptive-layout override (issue #166); AUTO follows the window. */
     val layoutMode: LayoutMode = LayoutMode.AUTO,
+    /** The TV overscan safe-area calibration; only consumed on the TV form factor. */
+    val tvOverscan: TvOverscan = TvOverscan.FIVE,
     val preferredPlayer: PlayerType = PlayerType.EXO_PLAYER,
     /** Which third-party app the EXTERNAL arm hands off to (chooser when unset). */
     val preferredExternalPlayer: ExternalPlayerApp = ExternalPlayerApp.SYSTEM_CHOOSER,

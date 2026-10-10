@@ -84,6 +84,42 @@ class QuickActionsPolicyTest {
     }
 
     @Test
+    fun `cw toggle offers HIDE for video types and flips to SHOW when hidden`() {
+        val actions = item(MediaType.MOVIE).quickActions(
+            MediaQuickActionScope.HOME,
+            includeCwToggle = true,
+        )
+        assertTrue(QuickAction.HIDE_FROM_CONTINUE_WATCHING in actions)
+        assertFalse(QuickAction.SHOW_FROM_CONTINUE_WATCHING in actions)
+
+        val hidden = item(MediaType.EPISODE).quickActions(
+            MediaQuickActionScope.HOME,
+            includeCwToggle = true,
+            isHiddenFromContinueWatching = true,
+        )
+        assertTrue(QuickAction.SHOW_FROM_CONTINUE_WATCHING in hidden)
+        assertFalse(QuickAction.HIDE_FROM_CONTINUE_WATCHING in hidden)
+    }
+
+    @Test
+    fun `cw toggle stays off without the host gate and for non-video types`() {
+        // Without the gate (the default — every other host) nothing changes.
+        assertFalse(
+            QuickAction.HIDE_FROM_CONTINUE_WATCHING in
+                item(MediaType.MOVIE).quickActions(MediaQuickActionScope.HOME)
+        )
+        // The hidden set only filters the video resume rows, so a book card
+        // (whose hide lives on the detail ⋮ menu) never offers it here.
+        assertFalse(
+            QuickAction.HIDE_FROM_CONTINUE_WATCHING in
+                item(MediaType.BOOK).quickActions(
+                    MediaQuickActionScope.HOME,
+                    includeCwToggle = true,
+                )
+        )
+    }
+
+    @Test
     fun `base actions are always present for actionable types`() {
         val actions = item(MediaType.MOVIE).quickActions(
             MediaQuickActionScope.LIBRARY,

@@ -27,6 +27,13 @@ sealed interface AudioPlayerUiEvent {
     /** Removes the queue row at [index] (undoable — surfaces an undoEvents entry). */
     data class RemoveFromQueue(val index: Int) : AudioPlayerUiEvent
 
+    /**
+     * Moves the queue row at [fromIndex] to [toIndex] (drag-to-reorder /
+     * move-up/move-down) — undoable, pure state: the playing item never
+     * changes, the cursor follows per [com.raulshma.jellyplay.core.data.playback.AudioQueuePolicy.planMove].
+     */
+    data class MoveQueueItem(val fromIndex: Int, val toIndex: Int) : AudioPlayerUiEvent
+
     /** Deactivates the endless radio (queue + playback keep playing). */
     data object StopRadio : AudioPlayerUiEvent
 

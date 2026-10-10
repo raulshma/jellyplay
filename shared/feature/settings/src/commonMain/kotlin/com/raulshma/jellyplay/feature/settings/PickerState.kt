@@ -86,6 +86,8 @@ sealed interface PickerState<out T> {
         override val title: String,
         val initialText: String,
         val helperText: String = "",
+        /** Shown in the empty field (e.g. an example snippet). Locale-neutral code samples stay untranslated. */
+        val placeholder: String = "",
         val onSave: (String) -> Unit,
     ) : PickerState<String>
 }
@@ -180,6 +182,7 @@ internal fun SettingsPickerDialog(
             title = state.title,
             initialText = state.initialText,
             helperText = state.helperText,
+            placeholder = state.placeholder,
             onDismiss = onDismiss,
             onSave = { text ->
                 state.onSave(text)

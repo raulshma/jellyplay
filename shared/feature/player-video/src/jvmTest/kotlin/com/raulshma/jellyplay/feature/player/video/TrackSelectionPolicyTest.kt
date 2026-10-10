@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.player.video
 import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.core.model.RememberedTrack
 import com.raulshma.jellyplay.core.model.StreamType
+import com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind
 import com.raulshma.jellyplay.feature.player.video.engine.TrackBadge
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -290,6 +291,59 @@ class TrackSelectionPolicyTest {
         val target = MediaStream(index = 5, type = StreamType.SUBTITLE, displayTitle = "English")
         val match = policy.resolveByStreamIndex(tracks, streamIndex = 5, targetStream = target)
         assertEquals(0, match?.index)
+    }
+
+    // ─── side-loaded subtitle id grammar: build/parse round-trips ────────────
+    //
+    // The five-prefix vocabulary the session stamps onto SubtitleSource.id
+    // (`external:` / `offline:` here; `streaming:` since the streaming-store
+    // side-load joined the grammar; `local:` / `provider:` live beside
+    // SubtitleManager). The builders and parsers must stay exact inverses per
+    // prefix and must reject every foreign prefix — selection policy keys on
+    // these strings, so a shape drift would silently break restore ladders.
+
+    @Test
+    fun subtitleId_external_roundTrips() {
+        assertEquals("external:7", externalSubtitleTrackId(7))
+        assertEquals(7, externalSubtitleTrackStreamIndex(externalSubtitleTrackId(7)))
+    }
+
+    @Test
+    fun subtitleId_offline_roundTrips() {
+        assertEquals("offline:3", offlineSubtitleTrackId(3))
+        // The offline prefix has no parser of its own (offline restore matches
+        // resolveByOfflineSubtitleId directly); the external parse must
+        // still reject it.
+        assertNull(externalSubtitleTrackStreamIndex(offlineSubtitleTrackId(3)))
+    }
+
+    @Test
+    fun subtitleId_streaming_roundTrips() {
+        val id = streamingSubtitleTrackId(SubtitleProviderKind.OPENSUBTITLES, "7200")
+        assertEquals("streaming:OPENSUBTITLES:7200", id)
+        assertEquals("OPENSUBTITLES:7200", streamingSubtitleTrackRowKey(id))
+    }
+
+    @Test
+    fun subtitleId_streaming_parseCarriesCompoundProviderSubtitleIds() {
+        // The provider id itself may contain separators — the row key is the
+        // whole remainder after the streaming: prefix, never a split.
+        val id = streamingSubtitleTrackId(SubtitleProviderKind.WYZIE, "a:b:c")
+        assertEquals("WYZIE:a:b:c", streamingSubtitleTrackRowKey(id))
+    }
+
+    @Test
+    fun subtitleId_parsersRejectForeignPrefixes() {
+        assertNull(externalSubtitleTrackStreamIndex(streamingSubtitleTrackId(SubtitleProviderKind.WYZIE, "1")))
+        assertNull(externalSubtitleTrackStreamIndex("local:1728000000"))
+        assertNull(externalSubtitleTrackStreamIndex("provider:WYZIE:1"))
+        assertNull(externalSubtitleTrackStreamIndex("no-prefix"))
+        assertNull(streamingSubtitleTrackRowKey(externalSubtitleTrackId(1)))
+        assertNull(streamingSubtitleTrackRowKey(offlineSubtitleTrackId(1)))
+        assertNull(streamingSubtitleTrackRowKey("local:1728000000"))
+        // provider: and streaming: differ only after the prefix — the parse
+        // must not confuse the two namespaces.
+        assertNull(streamingSubtitleTrackRowKey("provider:WYZIE:1"))
     }
 
     // ─── resolveMediaStreamIndex: offline persistence path ────────────────────

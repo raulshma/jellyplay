@@ -161,7 +161,7 @@ open class VideoPlayerViewModelHarness {
         viewModel = VideoPlayerViewModel(
             platform = FakePlatform(),
             mediaRepository = mediaRepository,
-            mediaExtrasReads = mockk(relaxed = true),
+            libraryApiClient = mockk(relaxed = true),
             lyricsRepository = mockk(relaxed = true),
             playbackRepository = playbackRepository,
             playbackIdentity = mockk<PlaybackIdentity>(relaxed = true).apply {
@@ -261,6 +261,6 @@ open class VideoPlayerViewModelHarness {
             getCurrentPlaybackMode: () -> com.raulshma.jellyplay.core.model.PlaybackMode,
             getSessionState: () -> PlayerSessionState,
         ): PlayerCastController = NoOpPlayerCastController()
-        override fun createBecomingNoisy(getEngine: () -> MediaEngine?): VideoPlayerAudio = NoOpVideoPlayerAudio
+        override fun createBecomingNoisy(getEngine: () -> MediaEngine?, isResumeOnPlugEnabled: () -> Boolean): VideoPlayerAudio = NoOpVideoPlayerAudio
     }
 }

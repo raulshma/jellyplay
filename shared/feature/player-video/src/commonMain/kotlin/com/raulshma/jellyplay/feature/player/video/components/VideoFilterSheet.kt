@@ -1,7 +1,5 @@
 package com.raulshma.jellyplay.feature.player.video.components
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -11,14 +9,10 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
@@ -58,16 +52,12 @@ import com.raulshma.jellyplay.feature.player.video.generated.resources.player_vi
 
 
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
-import com.raulshma.jellyplay.core.ui.components.PlayerModalBottomSheet
-import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
-import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.core.ui.tv.components.TvOrTouchSlider
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.model.VideoEffectsConfig
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.ColorSwatch
-import com.raulshma.jellyplay.core.ui.components.SheetHeader
 import com.raulshma.jellyplay.core.ui.components.SheetSection
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -77,10 +67,6 @@ fun VideoFilterSheet(
     onEffectsChange: (VideoEffectsConfig) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val sheetState = rememberModalBottomSheetState()
-    val isTv = LocalTvMode.current
-    val focusRequester = remember { FocusRequester() }
-
     var brightness by remember { mutableFloatStateOf(currentEffects.brightness) }
     var contrast by remember { mutableFloatStateOf(currentEffects.contrast) }
     var saturation by remember { mutableFloatStateOf(currentEffects.saturation) }
@@ -105,161 +91,148 @@ fun VideoFilterSheet(
         gaussianBlur = blur,
     )
 
-    LaunchedEffect(isTv) {
-        if (isTv) {
-            focusRequester.tryRequestFocus("sheet")
-        }
-    }
+    val resetAllFocusState = rememberTvFocusState(focusedScale = 1.05f)
 
-    PlayerModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
-                .padding(bottom = 32.dp),
-        ) {
-            val resetAllFocusState = rememberTvFocusState(focusedScale = 1.05f)
-            SheetHeader(
-                title = stringResource(Res.string.player_video_video_filters),
-                icon = Tabler.Outline.ColorSwatch,
-                trailing = {
-                    val pillShape = ShapeCache.smoothPill
-                    Box(
-                        modifier = Modifier
-                            .clip(pillShape)
-                            .then(resetAllFocusState.focusModifier)
-                            .tvFocusIndicator(resetAllFocusState, pillShape)
-                            .clickable {
-                                brightness = 0f
-                                contrast = 1f
-                                saturation = 1f
-                                sharpness = 0f
-                                hue = 0f
-                                rotation = 0f
-                                redGain = 1f
-                                greenGain = 1f
-                                blueGain = 1f
-                                blur = 0f
-                                onEffectsChange(VideoEffectsConfig())
-                            }
-                            .padding(horizontal = 12.dp, vertical = 6.dp),
-                    ) {
-                        Text(
-                            text = stringResource(Res.string.player_video_reset_all),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.tertiary,
-                            fontWeight = FontWeight.SemiBold,
-                        )
+    PickerSheetScaffold(
+        title = stringResource(Res.string.player_video_video_filters),
+        icon = Tabler.Outline.ColorSwatch,
+        onDismiss = onDismiss,
+        // A dozen sliders pack more vertical content than any picker list —
+        // the body column scrolls instead of delegating to a LazyColumn.
+        scrollable = true,
+        contentTopGap = 8.dp,
+        headerTrailing = {
+            val pillShape = ShapeCache.smoothPill
+            Box(
+                modifier = Modifier
+                    .clip(pillShape)
+                    .then(resetAllFocusState.focusModifier)
+                    .tvFocusIndicator(resetAllFocusState, pillShape)
+                    .clickable {
+                        brightness = 0f
+                        contrast = 1f
+                        saturation = 1f
+                        sharpness = 0f
+                        hue = 0f
+                        rotation = 0f
+                        redGain = 1f
+                        greenGain = 1f
+                        blueGain = 1f
+                        blur = 0f
+                        onEffectsChange(VideoEffectsConfig())
                     }
-                },
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-
-            SheetSection(modifier = Modifier.padding(horizontal = 16.dp)) {
-                FilterSlider(
-                    label = stringResource(Res.string.player_video_brightness),
-                    value = brightness,
-                    valueRange = -1f..1f,
-                    valueLabel = String.format("%+.1f", brightness),
-                    onValueChange = { brightness = it; onEffectsChange(emit()) },
-                    onReset = { brightness = 0f; onEffectsChange(emit()) },
-                    isTv = isTv,
-                    focusRequester = focusRequester,
-                )
-                FilterSpacer()
-                FilterSlider(
-                    label = stringResource(Res.string.player_video_contrast),
-                    value = contrast,
-                    valueRange = 0.5f..2f,
-                    valueLabel = String.format("%.1f", contrast),
-                    onValueChange = { contrast = it; onEffectsChange(emit()) },
-                    onReset = { contrast = 1f; onEffectsChange(emit()) },
-                    isTv = isTv,
-                )
-                FilterSpacer()
-                FilterSlider(
-                    label = stringResource(Res.string.player_video_saturation),
-                    value = saturation,
-                    valueRange = 0f..3f,
-                    valueLabel = String.format("%.1f", saturation),
-                    onValueChange = { saturation = it; onEffectsChange(emit()) },
-                    onReset = { saturation = 1f; onEffectsChange(emit()) },
-                    isTv = isTv,
-                )
-                FilterSpacer()
-                FilterSlider(
-                    label = stringResource(Res.string.player_video_sharpness),
-                    value = sharpness,
-                    valueRange = 0f..1f,
-                    valueLabel = String.format("%.1f", sharpness),
-                    onValueChange = { sharpness = it; onEffectsChange(emit()) },
-                    onReset = { sharpness = 0f; onEffectsChange(emit()) },
-                    isTv = isTv,
-                )
-                FilterSpacer()
-                FilterSlider(
-                    label = stringResource(Res.string.player_video_hue),
-                    value = hue,
-                    valueRange = 0f..360f,
-                    valueLabel = String.format("%.0f°", hue),
-                    onValueChange = { hue = it; onEffectsChange(emit()) },
-                    onReset = { hue = 0f; onEffectsChange(emit()) },
-                    isTv = isTv,
-                )
-                FilterSpacer()
-                FilterSlider(
-                    label = stringResource(Res.string.player_video_rotation),
-                    value = rotation,
-                    valueRange = -180f..180f,
-                    valueLabel = String.format("%.0f°", rotation),
-                    onValueChange = { rotation = it; onEffectsChange(emit()) },
-                    onReset = { rotation = 0f; onEffectsChange(emit()) },
-                    isTv = isTv,
-                )
-                FilterSpacer()
-                FilterSlider(
-                    label = stringResource(Res.string.player_video_red_gain),
-                    value = redGain,
-                    valueRange = 0f..2f,
-                    valueLabel = String.format("%.2f", redGain),
-                    onValueChange = { redGain = it; onEffectsChange(emit()) },
-                    onReset = { redGain = 1f; onEffectsChange(emit()) },
-                    isTv = isTv,
-                )
-                FilterSpacer()
-                FilterSlider(
-                    label = stringResource(Res.string.player_video_green_gain),
-                    value = greenGain,
-                    valueRange = 0f..2f,
-                    valueLabel = String.format("%.2f", greenGain),
-                    onValueChange = { greenGain = it; onEffectsChange(emit()) },
-                    onReset = { greenGain = 1f; onEffectsChange(emit()) },
-                    isTv = isTv,
-                )
-                FilterSpacer()
-                FilterSlider(
-                    label = stringResource(Res.string.player_video_blue_gain),
-                    value = blueGain,
-                    valueRange = 0f..2f,
-                    valueLabel = String.format("%.2f", blueGain),
-                    onValueChange = { blueGain = it; onEffectsChange(emit()) },
-                    onReset = { blueGain = 1f; onEffectsChange(emit()) },
-                    isTv = isTv,
-                )
-                FilterSpacer()
-                FilterSlider(
-                    label = stringResource(Res.string.player_video_gaussian_blur),
-                    value = blur,
-                    valueRange = 0f..10f,
-                    valueLabel = String.format("%.1f", blur),
-                    onValueChange = { blur = it; onEffectsChange(emit()) },
-                    onReset = { blur = 0f; onEffectsChange(emit()) },
-                    isTv = isTv,
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+            ) {
+                Text(
+                    text = stringResource(Res.string.player_video_reset_all),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.tertiary,
+                    fontWeight = FontWeight.SemiBold,
                 )
             }
+        },
+    ) { isTv, focusRequester ->
+        SheetSection(modifier = Modifier.padding(horizontal = 16.dp)) {
+            FilterSlider(
+                label = stringResource(Res.string.player_video_brightness),
+                value = brightness,
+                valueRange = -1f..1f,
+                valueLabel = String.format("%+.1f", brightness),
+                onValueChange = { brightness = it; onEffectsChange(emit()) },
+                onReset = { brightness = 0f; onEffectsChange(emit()) },
+                isTv = isTv,
+                focusRequester = focusRequester,
+            )
+            FilterSpacer()
+            FilterSlider(
+                label = stringResource(Res.string.player_video_contrast),
+                value = contrast,
+                valueRange = 0.5f..2f,
+                valueLabel = String.format("%.1f", contrast),
+                onValueChange = { contrast = it; onEffectsChange(emit()) },
+                onReset = { contrast = 1f; onEffectsChange(emit()) },
+                isTv = isTv,
+            )
+            FilterSpacer()
+            FilterSlider(
+                label = stringResource(Res.string.player_video_saturation),
+                value = saturation,
+                valueRange = 0f..3f,
+                valueLabel = String.format("%.1f", saturation),
+                onValueChange = { saturation = it; onEffectsChange(emit()) },
+                onReset = { saturation = 1f; onEffectsChange(emit()) },
+                isTv = isTv,
+            )
+            FilterSpacer()
+            FilterSlider(
+                label = stringResource(Res.string.player_video_sharpness),
+                value = sharpness,
+                valueRange = 0f..1f,
+                valueLabel = String.format("%.1f", sharpness),
+                onValueChange = { sharpness = it; onEffectsChange(emit()) },
+                onReset = { sharpness = 0f; onEffectsChange(emit()) },
+                isTv = isTv,
+            )
+            FilterSpacer()
+            FilterSlider(
+                label = stringResource(Res.string.player_video_hue),
+                value = hue,
+                valueRange = 0f..360f,
+                valueLabel = String.format("%.0f°", hue),
+                onValueChange = { hue = it; onEffectsChange(emit()) },
+                onReset = { hue = 0f; onEffectsChange(emit()) },
+                isTv = isTv,
+            )
+            FilterSpacer()
+            FilterSlider(
+                label = stringResource(Res.string.player_video_rotation),
+                value = rotation,
+                valueRange = -180f..180f,
+                valueLabel = String.format("%.0f°", rotation),
+                onValueChange = { rotation = it; onEffectsChange(emit()) },
+                onReset = { rotation = 0f; onEffectsChange(emit()) },
+                isTv = isTv,
+            )
+            FilterSpacer()
+            FilterSlider(
+                label = stringResource(Res.string.player_video_red_gain),
+                value = redGain,
+                valueRange = 0f..2f,
+                valueLabel = String.format("%.2f", redGain),
+                onValueChange = { redGain = it; onEffectsChange(emit()) },
+                onReset = { redGain = 1f; onEffectsChange(emit()) },
+                isTv = isTv,
+            )
+            FilterSpacer()
+            FilterSlider(
+                label = stringResource(Res.string.player_video_green_gain),
+                value = greenGain,
+                valueRange = 0f..2f,
+                valueLabel = String.format("%.2f", greenGain),
+                onValueChange = { greenGain = it; onEffectsChange(emit()) },
+                onReset = { greenGain = 1f; onEffectsChange(emit()) },
+                isTv = isTv,
+            )
+            FilterSpacer()
+            FilterSlider(
+                label = stringResource(Res.string.player_video_blue_gain),
+                value = blueGain,
+                valueRange = 0f..2f,
+                valueLabel = String.format("%.2f", blueGain),
+                onValueChange = { blueGain = it; onEffectsChange(emit()) },
+                onReset = { blueGain = 1f; onEffectsChange(emit()) },
+                isTv = isTv,
+            )
+            FilterSpacer()
+            FilterSlider(
+                label = stringResource(Res.string.player_video_gaussian_blur),
+                value = blur,
+                valueRange = 0f..10f,
+                valueLabel = String.format("%.1f", blur),
+                onValueChange = { blur = it; onEffectsChange(emit()) },
+                onReset = { blur = 0f; onEffectsChange(emit()) },
+                isTv = isTv,
+            )
         }
     }
 }

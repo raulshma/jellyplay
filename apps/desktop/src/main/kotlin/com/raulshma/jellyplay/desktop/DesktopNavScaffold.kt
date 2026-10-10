@@ -62,7 +62,6 @@ import com.raulshma.jellyplay.feature.player.video.DesktopVideoSurfaceBridge
 import com.raulshma.jellyplay.feature.player.video.VideoPlayerScreen
 import com.raulshma.jellyplay.feature.shell.UserMessageDuration
 import com.raulshma.jellyplay.feature.shell.navigation.ShellAdminHooks
-import com.raulshma.jellyplay.feature.shell.navigation.ShellAudioSource
 import com.raulshma.jellyplay.feature.shell.navigation.ShellHomeHooks
 import com.raulshma.jellyplay.feature.shell.navigation.ShellSearchHooks
 import com.raulshma.jellyplay.feature.shell.navigation.ShellSettingsHooks
@@ -72,7 +71,6 @@ import com.raulshma.jellyplay.feature.shell.navigation.rememberShellAudioClicks
 import com.raulshma.jellyplay.feature.shell.navigation.rememberShellHost
 import com.raulshma.jellyplay.feature.shell.rememberShellUserMessages
 import java.util.concurrent.atomic.AtomicReference
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 
@@ -119,6 +117,10 @@ internal fun DesktopNavScaffold(
     // The ComposeWindow handle (Main.kt's AWT ref) — the remote
     // navigation ladder's select synthesis posts AWT key events through it.
     windowRef: AtomicReference<ComposeWindow?>? = null,
+    //  open-with: Main.kt's pending link-open queue — the argv seed,
+    // the Ctrl+Shift+V clipboard accelerator and the second-instance forward
+    // watcher all feed it; the drain effect below is its ONE consumer.
+    linkOpens: DesktopLinkOpenQueue? = null,
 ) {
     val navigation = rememberNavigationState(
         startRoute = Route.Home,
@@ -230,6 +232,34 @@ internal fun DesktopNavScaffold(
         )
     }
 
+    //  open-with drain: the ONE consumer of Main.kt's pending link-open
+    // queue. Parsed targets route through the guarded navigator (top-level
+    // destinations switch the tab; details push on the current stack) and a
+    // parsed-but-unroutable target (SyncPlayJoin — the Discord Rich Presence
+    // join payload, see DesktopLinkOpenPolicy.targetRoute) or a clipboard
+    // miss surfaces as this scaffold's own snackbar, so the accelerator never
+    // feels dead. Events that arrived BEFORE this composition (the argv seed
+    // waiting out session restore) are delivered on the first pass — the
+    // channel's replay is the point; the signed-out branch drops its events
+    // instead (see DesktopAppRoot), so nothing stale replays across a
+    // sign-in.
+    LaunchedEffect(linkOpens, guardedNavigator) {
+        linkOpens?.pending?.collect { event ->
+            when (event) {
+                is DesktopOpenLinkEvent.Link -> {
+                    val route = DesktopLinkOpenPolicy.targetRoute(event.target)
+                    if (route != null) {
+                        guardedNavigator.navigate(route)
+                    } else {
+                        snackbarHostState.showSnackbar(DesktopLinkOpenMessages.NO_DESKTOP_ROUTE)
+                    }
+                }
+                DesktopOpenLinkEvent.NoLinkFound ->
+                    snackbarHostState.showSnackbar(DesktopLinkOpenMessages.NO_LINK_IN_CLIPBOARD)
+            }
+        }
+    }
+
     // User-message host (the shared seam): ONE collector behind every message
     // source this shell shows — the shared [UserMessageBus] flow, the
     // DesktopMusicMessageBus relay AND the remote-control receiver's
@@ -290,18 +320,15 @@ internal fun DesktopNavScaffold(
     // fresh per recomposition (the groups are data classes and compare
     // structurally) as long as its members are remembered/stable (the
     // discipline the factory's KDoc states): the audio bundle comes from the
-    // shared rememberShellAudioClicks over this shell's ShellAudioSource
-    // adapter (click-time reads of the desktop audio core —
-    // DesktopAudioQueueManager — never collected values), and the session
+    // shared rememberShellAudioClicks over the desktop audio core —
+    // DesktopAudioQueueManager, which IS the shared NowPlayingSurface
+    // (click-time reads, never collected values) — and the session
     // bundles wrap the shared ShellSessionController the holder constructed —
     // the same values, same lazy reads the old inline entryProvider captured.
     // The graph below rebuilds only when these identities change (the
     // guarded navigator, homeMode, a DesktopShellServices rebuild re-issuing
     // them).
-    val audioSource = remember(audioQueueManager) {
-        DesktopQueueShellAudioSource(audioQueueManager)
-    }
-    val audioClicks = rememberShellAudioClicks(guardedNavigator, audioSource)
+    val audioClicks = rememberShellAudioClicks(guardedNavigator, audioQueueManager)
     val onCheckForUpdates: () -> Unit = remember(services) {
         services.updateCheckController::checkForUpdate
     }
@@ -585,21 +612,4 @@ private fun DesktopRailItem(
         icon = { Icon(icon, contentDescription = label) },
         label = { Text(label) },
     )
-}
-
-/**
- * This shell's [ShellAudioSource] over [DesktopAudioQueueManager] — the
- * manager's four StateFlow members forwarded verbatim (the Android twin
- * adapts AudioPlaybackManager the same way beside MainContent). Remembered
- * on the manager at the call site: a fresh-per-recomposition adapter would
- * churn the rememberShellAudioClicks helper's remember keys (the discipline
- * its KDoc owns).
- */
-private class DesktopQueueShellAudioSource(
-    private val manager: DesktopAudioQueueManager,
-) : ShellAudioSource {
-    override val currentPlayingItemId: StateFlow<String?> get() = manager.currentPlayingItemId
-    override val albumArtUrl: StateFlow<String> get() = manager.albumArtUrl
-    override val title: StateFlow<String> get() = manager.title
-    override val artist: StateFlow<String> get() = manager.artist
 }

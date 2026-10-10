@@ -70,6 +70,23 @@ interface LivePlayerEngine {
      */
     fun refreshLiveWindow()
 
+    /**
+     * Current raw playback volume (0..1), or null while no native audio
+     * handle is attached (released engine / state-only double).
+     */
+    fun volume(): Float?
+
+    /**
+     * Real mute — engine state, not a volume write. Implementations host the
+     * shared volume/mute template
+     * ([com.raulshma.jellyplay.feature.player.video.engine.VolumeCommandTemplates]):
+     * mute captures the pre-mute level and silences the native handle, unmute
+     * restores that exact level, and a load/track volume reset re-asserts
+     * silence instead of silently un-muting (the former volume-zero hack's
+     * desync).
+     */
+    fun setMuted(muted: Boolean)
+
     /** Tear down player resources. Idempotent. */
     fun release()
 }

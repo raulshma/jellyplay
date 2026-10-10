@@ -1,6 +1,12 @@
 package com.raulshma.jellyplay.feature.details
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -205,9 +211,11 @@ internal fun DetailActionButtons(
 
     // Shared click handler — identical for vertical and horizontal so the two
     // branches can never diverge in play-resolution logic.
+    val playConfirmHaptic = rememberConfirmHaptic()
     val onPlay = remember(canPlayPrimary, isBook, isAlbum, isAudio, target, item, detail, state.selectedVersionId, callbacks, state.albumTracks) {
         {
             if (!canPlayPrimary) return@remember
+            playConfirmHaptic()
             if (isBook) {
                 callbacks.playback.onReadClick(item.id, null, null)
             } else if (isAlbum && state.albumTracks.isNotEmpty()) {
@@ -585,6 +593,11 @@ private fun FavoriteButton(
     } else {
         Modifier.size(56.dp)
     }
+    // Heart swap: a tiny scale crossfade between outline/filled, so the toggle
+    // reads as an event rather than an icon swap. Specs captured in composition
+    // (transitionSpec is not composable).
+    val heartFadeSpec = MaterialTheme.motionScheme.fastEffectsSpec<Float>()
+    val heartScaleSpec = MaterialTheme.motionScheme.fastSpatialSpec<Float>()
 
     Box(
         contentAlignment = Alignment.Center,
@@ -596,11 +609,31 @@ private fun FavoriteButton(
             .then(Modifier.tvFocusIndicator(focusState, shape))
             .clickable(interactionSource = interactionSource, indication = null, onClick = { confirmHaptic(); onClick() }),
     ) {
-        Icon(
-            if (isFavorite) Tabler.Filled.Heart else Tabler.Outline.Heart,
-            contentDescription = stringResource(Res.string.detail_cd_favorite),
-            tint = if (isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-        )
+        AnimatedContent(
+            targetState = isFavorite,
+            transitionSpec = {
+                (
+                    fadeIn(animationSpec = heartFadeSpec) +
+                        scaleIn(
+                            initialScale = 0.7f,
+                            animationSpec = heartScaleSpec,
+                        )
+                    ).togetherWith(
+                    fadeOut(animationSpec = heartFadeSpec) +
+                        scaleOut(
+                            targetScale = 0.7f,
+                            animationSpec = heartScaleSpec,
+                        ),
+                )
+            },
+            label = "favoriteHeartSwap",
+        ) { favorite ->
+            Icon(
+                if (favorite) Tabler.Filled.Heart else Tabler.Outline.Heart,
+                contentDescription = stringResource(Res.string.detail_cd_favorite),
+                tint = if (favorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+            )
+        }
     }
 }
 

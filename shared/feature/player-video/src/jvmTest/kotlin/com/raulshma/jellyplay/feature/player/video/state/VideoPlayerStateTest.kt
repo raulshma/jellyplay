@@ -69,13 +69,17 @@ class VideoPlayerStateTest {
     @Test
     fun gesturePrefsState_defaultValuesAndCopy() {
         val state = GesturePrefsState()
-        assertTrue(state.tapGesturesEnabled)
+        val gates = PlayerInputGates.of(state.inputMap)
+        assertTrue(gates.tap)
         assertTrue(state.holdSpeedEnabled)
         assertEquals(2.0f, state.holdSpeedMultiplier, 0.001f)
         assertEquals(10_000L, state.seekDurationMs)
 
         val updated = state.copy(gestureMode = GestureMode.NONE, holdSpeedMultiplier = 3.0f)
-        assertFalse(updated.tapGesturesEnabled)
+        // The mode alone is no longer a gate — the mapping's flags are. A
+        // NONE-mode record with an untouched mapping keeps the rows; the
+        // preset only flips rows when applied through the store.
+        assertEquals(gates, PlayerInputGates.of(updated.inputMap))
         assertEquals(3.0f, updated.holdSpeedMultiplier, 0.001f)
     }
 

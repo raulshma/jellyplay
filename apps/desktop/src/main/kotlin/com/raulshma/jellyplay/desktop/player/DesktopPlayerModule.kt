@@ -162,7 +162,9 @@ val desktopPlayerModule: Module = module {
     single<AudioQueueFacade> {
         DefaultAudioQueueFacade(
             queueManager = get(),
-            musicCatalogue = get(),
+            // The facade's catalogue reads moved to the LibraryApiClient
+            // family (shared/core/data's mix fetch is the getInstantMix read).
+            libraryApiClient = get(),
             imageUrlProvider = get(),
             radioScope = get(DatastoreQualifiers.applicationScope),
         )
