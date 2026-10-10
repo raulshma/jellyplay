@@ -338,6 +338,20 @@ class DataKoinModulesTest {
             // ExperimentalStore from datastoreCommonModule, and the shared
             // application scope.
             assertResolves<com.raulshma.jellyplay.core.data.whatsnew.WhatsNewRepository>(koin)
+
+            // ── Wave-2 settings-backup slice sources ────────────
+            // The four ExternalBackupSlice impls (integrations / itemprefs /
+            // playlists / widget) resolve as a set from
+            // dataSettingsBackupSlicesModule, and the UserPreferencesStore
+            // single (datastoreCommonModule) folds them in via getAll — the
+            // core:data → core:datastore backup crossing, verified end to end
+            // in the production graph shape.
+            assertEquals(
+                4,
+                koin.getAll<com.raulshma.jellyplay.core.datastore.settings.ExternalBackupSlice>().size,
+                "the four wave-2 backup slice sources must resolve as one set",
+            )
+            assertResolves<com.raulshma.jellyplay.core.datastore.UserPreferencesStore>(koin)
         } finally {
             database.close()
             stopKoin()

@@ -84,5 +84,8 @@ val dataJvmModule: Module = module {
         dataSeerrArrModule,
         dataAdminModule,
         dataWhatsNewModule,
+        // Wave-2 settings-backup slice sources (ExternalBackupSlice impls over
+        // the Room DAOs + the integration/widget config surfaces).
+        dataSettingsBackupSlicesModule,
     )
 }

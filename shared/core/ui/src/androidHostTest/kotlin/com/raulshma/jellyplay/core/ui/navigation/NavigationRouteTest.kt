@@ -82,7 +82,7 @@ class NavigationRouteTest {
         Route.BackupSettings(),
         Route.ExperimentalSettings(),
         Route.FactoryReset(),
-        Route.ImportPreview(uri = "content://media/document/backup.json"),
+        Route.RestoreWizard(uri = "content://media/document/backup.json"),
         Route.Integrations(),
         Route.ArrSettings(),
         Route.SubtitleProviderSettings(),

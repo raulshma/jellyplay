@@ -99,6 +99,7 @@ class JellyPlayLiveResyncConnectorResumeTest {
         override suspend fun getSnapshots() = error("unused")
         override suspend fun createSnapshot() = error("unused")
         override suspend fun restoreSnapshot(id: String) = error("unused")
+        override suspend fun getSnapshotContent(id: String) = error("unused")
         override suspend fun exportSettings() = error("unused")
         override suspend fun importSettings(bundleJson: String, deviceId: String?) = error("unused")
 

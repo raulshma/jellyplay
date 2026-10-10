@@ -172,12 +172,15 @@ fun createPreferenceProjections(
 /**
  * Builds a [UserPreferencesStore] wired to all of its domain-store collaborators,
  * each sharing the same `"user_prefs"` DataStore. Keeps tests in sync as new
- * domain stores are added to the facade constructor.
+ * domain stores are added to the facade constructor. [externalSlices] injects
+ * the Wave-2 external backup slices (fake sources in the migration tests);
+ * the default keeps the pre-Wave-2 shape (no external slices).
  */
 @Suppress("TestFunctionName")
 fun createUserPreferencesStore(
     scope: CoroutineScope,
     dataStore: DataStore<Preferences>,
+    externalSlices: List<com.raulshma.jellyplay.core.datastore.settings.ExternalBackupSlice> = emptyList(),
 ): UserPreferencesStore {
     val g = createPreferenceSliceGraph(scope, dataStore)
     return UserPreferencesStore(
@@ -203,5 +206,6 @@ fun createUserPreferencesStore(
         g.experimentalStore,
         g.volumeProfileStore,
         g.appRuntimeStateStore,
+        externalSlices,
     )
 }

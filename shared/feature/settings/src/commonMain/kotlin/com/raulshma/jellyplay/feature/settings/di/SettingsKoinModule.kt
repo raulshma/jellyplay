@@ -8,7 +8,7 @@ import com.raulshma.jellyplay.feature.settings.ArrSettingsViewModel
 import com.raulshma.jellyplay.feature.settings.AudioSettingsViewModel
 import com.raulshma.jellyplay.feature.settings.ExperimentalSettingsViewModel
 import com.raulshma.jellyplay.feature.settings.FactoryResetViewModel
-import com.raulshma.jellyplay.feature.settings.ImportPreviewViewModel
+import com.raulshma.jellyplay.feature.settings.RestoreWizardViewModel
 import com.raulshma.jellyplay.feature.settings.LanguageSettingsViewModel
 import com.raulshma.jellyplay.feature.settings.LicensesViewModel
 import com.raulshma.jellyplay.feature.settings.DiscoverRowsViewModel
@@ -21,6 +21,7 @@ import com.raulshma.jellyplay.feature.settings.LibraryLayoutViewModel
 import com.raulshma.jellyplay.feature.settings.NotificationSettingsViewModel
 import com.raulshma.jellyplay.feature.settings.PlaybackSettingsViewModel
 import com.raulshma.jellyplay.feature.settings.PrivacyDataViewModel
+import com.raulshma.jellyplay.feature.settings.SecretsBackupAssembler
 import com.raulshma.jellyplay.feature.settings.SecuritySettingsViewModel
 import com.raulshma.jellyplay.feature.settings.SeerrSettingsViewModel
 import com.raulshma.jellyplay.feature.settings.ServerManagementViewModel
@@ -93,6 +94,19 @@ val settingsModule: Module = module {
             .apply { warm() }
     }
 
+    // The Wave-3 secrets-block gather/apply seam, shared by the export
+    // (SettingsViewModel) and the restore wizard's file arm. Resolves
+    // the three secure credential stores (datastore platform modules) plus
+    // core:data's ServerBackupMetadataStore (the token-free server-list seam).
+    single {
+        SecretsBackupAssembler(
+            arrStore = get(),
+            seerrStore = get(),
+            subtitleStore = get(),
+            serverMetadataStore = get(),
+        )
+    }
+
     viewModel {
         SettingsViewModel(
             settingsBackupIo = get(),
@@ -108,6 +122,8 @@ val settingsModule: Module = module {
             jellyPlayEventsRepository = get(),
             jellyPlayFeatureGate = get(),
             jellyPlayPushRepository = get(),
+            secretsBackupAssembler = get(),
+            serverIdentityStore = get(),
         )
     }
 
@@ -152,9 +168,6 @@ val settingsModule: Module = module {
             pluginApiClient = get(),
             deviceRegistry = get(),
             statusStore = get(),
-            // The export/import file IO seam (the backup screen's platform
-            // seam, reused for the sync bundle's import file pick).
-            backupIo = get(),
             // The background flush scheduler — the disable edge de-arms the
             // 12h catch-up periodic (ADR 0011: armed only while enabled).
             syncScheduler = get(),
@@ -218,10 +231,18 @@ val settingsModule: Module = module {
         FactoryResetViewModel(
             snapshotReader = get(),
             editor = get(),
+            // Wave 6: the pre-reset safety restore point's api + gate seams.
+            pluginApiClient = get(),
+            statusStore = get(),
         )
     }
+    // The unified restore wizard (Wave 5): ONE flow for restoring settings
+    // regardless of source. Replaces the retired ImportPreviewViewModel (the
+    // file arm ports its parser/diff/restore logic verbatim over the same
+    // seams) and absorbs the sync screen's import + one-click snapshot
+    // restore rows.
     viewModel {
-        ImportPreviewViewModel(
+        RestoreWizardViewModel(
             settingsBackupIo = get(),
             userPreferencesStore = get(),
             // The live diff snapshot rides the factory-reset review's seam —
@@ -229,6 +250,18 @@ val settingsModule: Module = module {
             // of enumerating the stores here, so a new slice extends the
             // bundle, not this definition.
             snapshotReader = get(),
+            // The Wave-3 secrets seam: unlock preview counts + the explicit
+            // apply fan-out.
+            secretsBackupAssembler = get(),
+            // The server arm: restore points, current-state diff, apply batch,
+            // plus the Wave-6 pre-apply safety capture.
+            pluginApiClient = get(),
+            statusStore = get(),
+            syncRepository = get(),
+            // The Wave-3 cross-account warning vs the staged backup's origin ids.
+            serverIdentityStore = get(),
+            // The Wave-6 warning surface (safety-capture misses + summaries).
+            messageBus = get(),
         )
     }
     // ──: storage / privacy / server / security / integrations / about ──

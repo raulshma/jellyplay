@@ -376,13 +376,20 @@ sealed class Route : NavKey {
     }
 
     /**
-     * Import preview screen. Shows a before/after diff of every setting from
-     * the selected backup file (current vs incoming) with per-category and
-     * import-all actions. Reached from [BackupSettings] after a file is picked.
+     * The unified restore wizard — ONE flow for restoring settings regardless
+     * of source: pick source (server restore point / backup file) → diff vs
+     * the live state → select categories → confirm → automatic pre-apply
+     * snapshot → apply. Reached from the backup screen (a picked file rides
+     * in [uri]) and the sync screen (a tapped restore point rides in
+     * [snapshotId]; a bare entry opens the wizard's own source step).
      *
-     * @param uri the `Uri` of the picked backup file, as an encoded string.
+     * Replaces the retired `ImportPreview` route (the per-file preview) and
+     * the sync screen's one-click snapshot restore + import-from-file rows.
      */
-    @Serializable data class ImportPreview(val uri: String) : Route()
+    @Serializable data class RestoreWizard(
+        val uri: String? = null,
+        val snapshotId: String? = null,
+    ) : Route()
 
     /**
      * Integrations hub — top-level list of every third-party service JellyPlay

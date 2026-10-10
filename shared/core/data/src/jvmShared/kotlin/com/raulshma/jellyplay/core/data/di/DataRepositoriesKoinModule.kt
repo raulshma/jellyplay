@@ -26,6 +26,7 @@ import com.raulshma.jellyplay.core.data.repository.SeenMediaRepository
 import com.raulshma.jellyplay.core.data.repository.SeenMediaRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.SelfSignedTrustRepository
 import com.raulshma.jellyplay.core.data.repository.SelfSignedTrustRepositoryImpl
+import com.raulshma.jellyplay.core.data.repository.ServerBackupMetadataStore
 import com.raulshma.jellyplay.core.data.repository.ServerDiscoveryRepository
 import com.raulshma.jellyplay.core.data.repository.ServerDiscoveryRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.SmartPlaylistRepository
@@ -73,6 +74,19 @@ internal val dataRepositoriesModule: Module = module {
     // The realtime-socket view of the same AuthRepositoryImpl singleton (the
     // legacy bindRealtimeConnection @Binds, one instance — not a second socket).
     single<RealtimeConnection> { get<AuthRepositoryImpl>() }
+
+    // The settings-backup server-list seam (the AuthRepositorySurfaceTest
+    // ratchet's narrow-collaborator rule): gathers server rows + user names
+    // and upserts token-free server rows for the secrets block restore —
+    // never a token path (see the class KDoc).
+    single {
+        ServerBackupMetadataStore(
+            database = get(),
+            serverDao = get(),
+            userDao = get(),
+            json = get(),
+        )
+    }
 
     // Auth-cluster narrow seam (the AuthRepositorySurfaceTest ratchet's named
     // escape hatch for a genuinely new auth capability): the self-signed

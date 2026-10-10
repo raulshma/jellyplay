@@ -26,8 +26,13 @@ import com.composables.icons.tabler.outline.ShieldLock
 import com.composables.icons.tabler.outline.Subtitles
 import com.composables.icons.tabler.outline.Volume
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
+import com.raulshma.jellyplay.core.datastore.BackupSliceKey
 import com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeState
 import com.raulshma.jellyplay.core.datastore.settings.PreferenceSliceSnapshot
+import com.composables.icons.tabler.outline.AdjustmentsHorizontal
+import com.composables.icons.tabler.outline.LayoutGrid
+import com.composables.icons.tabler.outline.Plug
+import com.composables.icons.tabler.outline.Playlist
 import com.raulshma.jellyplay.core.model.CheckFrequency
 import com.raulshma.jellyplay.core.model.EqualizerSettings
 import com.raulshma.jellyplay.core.model.GestureIndicatorSide
@@ -127,7 +132,7 @@ class DiffField<V>(
  * omitted even though the store's reset key list still covers them.
  *
  * Callers pass the current and baseline [PreferenceDiffSnapshot]s once (the
- * [FactoryResetViewModel] / [ImportPreviewViewModel] expose them) so labels
+ * [FactoryResetViewModel] / [RestoreWizardViewModel] expose them) so labels
  * aren't re-resolved per field; use [changedFields] for the diff subset and
  * [totalFields] for the full count.
  */
@@ -591,6 +596,91 @@ suspend fun resolveDiffLabels(resources: List<StringResource>): (StringResource)
         runCatchingRethrowingCancellation { getString(res) }.getOrElse { res.toString() }
     }
     return { res -> resolved[res] ?: res.toString() }
+}
+
+// ---------------------------------------------------------------------------
+// External backup slices (Wave 2) — the Room-backed / allowlisted-config
+// cards the import preview renders beside the category cards. Like the
+// app-runtime fields above, they live here because the presentation registry
+// is this file and the slice KEYS are stable wire contracts owned by
+// core:datastore (no UI dep).
+// ---------------------------------------------------------------------------
+
+/** Card presentation for one external slice: its wire [ExternalSliceCardView.key], icon and human label. */
+@Immutable
+data class ExternalSliceCardView(
+    val key: String,
+    val icon: ImageVector,
+    val nameRes: StringResource,
+)
+
+/**
+ * The four Wave-2 external slices in card order. A backup from an app version
+ * without them simply carries none of these keys — the preview renders no
+ * cards (the old-preview forward-compat rule: unknown/missing slice keys are
+ * ignored, never a crash).
+ */
+val ExternalSliceCardViews: List<ExternalSliceCardView> = listOf(
+    ExternalSliceCardView(BackupSliceKey.INTEGRATIONS, Tabler.Outline.Plug, Res.string.settings_import_slice_integrations),
+    ExternalSliceCardView(BackupSliceKey.ITEM_PREFS, Tabler.Outline.AdjustmentsHorizontal, Res.string.settings_import_slice_item_prefs),
+    ExternalSliceCardView(BackupSliceKey.PLAYLISTS, Tabler.Outline.Playlist, Res.string.settings_import_slice_playlists),
+    ExternalSliceCardView(BackupSliceKey.WIDGET, Tabler.Outline.LayoutGrid, Res.string.settings_import_slice_widget),
+)
+
+/** Every label resource the external-slice cards need (VM-side one-shot resolution workload). */
+val ExternalSliceLabelResources: List<StringResource> =
+    (ExternalSliceCardViews.map { it.nameRes } + listOf(
+        Res.string.settings_import_slice_entry_absent,
+        Res.string.settings_import_slice_entry_removed,
+    )).distinct()
+
+/** One rendered external-slice card: its identity, icon/label, and the entry diff rows. */
+@Immutable
+data class ExternalSliceDiff(
+    val view: ExternalSliceCardView,
+    val changed: List<PreferenceField>,
+    val total: Int,
+)
+
+/**
+ * Builds the external-slice cards for one staged backup: a card only for a
+ * slice the backup actually carries (absent = the exporting device had
+ * nothing — importing must not wipe, so nothing to preview), with one
+ * [PreferenceField] per entry key. Entry labels are the raw keys (item ids /
+ * allowlist names); values are primitives verbatim and non-primitives as
+ * compact JSON — the diff string comparison is then exactly element equality.
+ * [currentElement] null means the live domain has nothing to back up (every
+ * incoming entry is new); an entry missing from one side renders the
+ * localized absent/removed label.
+ */
+fun buildExternalSliceDiffs(
+    currentSlices: Map<String, kotlinx.serialization.json.JsonElement?>,
+    incomingSlices: Map<String, kotlinx.serialization.json.JsonElement?>,
+    resolve: (StringResource) -> String,
+): List<ExternalSliceDiff> = ExternalSliceCardViews.mapNotNull { view ->
+    val incoming = incomingSlices[view.key] as? kotlinx.serialization.json.JsonObject
+        ?: return@mapNotNull null
+    val current = currentSlices[view.key] as? kotlinx.serialization.json.JsonObject
+    val absentLabel = resolve(Res.string.settings_import_slice_entry_absent)
+    val removedLabel = resolve(Res.string.settings_import_slice_entry_removed)
+    val entryKeys = (current?.keys ?: emptySet()) + incoming.keys
+    val fields = entryKeys.sorted().map { entryKey ->
+        val incomingValue = incoming[entryKey]
+        val currentValue = current?.get(entryKey)
+        PreferenceField(
+            label = entryKey,
+            currentValue = currentValue.renderExternalEntry(removedLabel),
+            factoryValue = incomingValue.renderExternalEntry(absentLabel),
+        )
+    }
+    ExternalSliceDiff(view, fields.filter { it.changed }, fields.size)
+}
+
+/** Entry text: primitives verbatim, non-primitives as compact JSON, absent sides as the localized label. */
+private fun kotlinx.serialization.json.JsonElement?.renderExternalEntry(absentLabel: String): String = when (this) {
+    null -> absentLabel
+    is kotlinx.serialization.json.JsonPrimitive -> content
+    else -> toString()
 }
 
 // ---------------------------------------------------------------------------

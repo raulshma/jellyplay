@@ -67,7 +67,6 @@ class JellyPlaySyncViewModelTest {
     private lateinit var deviceRegistry: JellyPlayDeviceRegistryRoutes
     private lateinit var statusStore: JellyPlayPluginStatusStore
     private lateinit var syncRepository: ProfileSyncRepository
-    private lateinit var backupIo: SettingsBackupIo
     private val pluginStatus = MutableStateFlow(JellyPlayPluginStatus.UNAVAILABLE)
 
     /** Recorded route/engine calls — the awaitUntil-friendly observation seam. */
@@ -75,8 +74,7 @@ class JellyPlaySyncViewModelTest {
     private val renameCalls = mutableListOf<Pair<String, String?>>()
     private val revokeCalls = mutableListOf<String>()
     private val createCalls = mutableListOf<Int>()
-    private val restoreCalls = mutableListOf<String>()
-    private val imports = mutableListOf<String>()
+    private val resetCalls = mutableListOf<String>()
 
     @BeforeTest
     fun setUp() {
@@ -85,7 +83,6 @@ class JellyPlaySyncViewModelTest {
         deviceRegistry = mockk(relaxed = true)
         statusStore = mockk(relaxed = true)
         syncRepository = mockk(relaxed = true)
-        backupIo = mockk(relaxed = true)
         every { statusStore.status } returns pluginStatus
         every { syncRepository.activeNamespaces } returns listOf("prefs", "books")
         // The pending face's baseline: no pending keys anywhere.
@@ -122,7 +119,7 @@ class JellyPlaySyncViewModelTest {
         every { statusStore.hasFeature(JellyPlayPluginFeatures.SettingsSync) } returns true
     }
 
-    private fun viewModel() = JellyPlaySyncViewModel(syncRepository, pluginApi, deviceRegistry, statusStore, backupIo)
+    private fun viewModel() = JellyPlaySyncViewModel(syncRepository, pluginApi, deviceRegistry, statusStore)
 
     @Test
     fun setSyncEnabled_off_deArmsThePeriodicCatchUp() {
@@ -135,7 +132,7 @@ class JellyPlaySyncViewModelTest {
             }
         }
 
-        JellyPlaySyncViewModel(syncRepository, pluginApi, deviceRegistry, statusStore, backupIo, scheduler)
+        JellyPlaySyncViewModel(syncRepository, pluginApi, deviceRegistry, statusStore, syncScheduler = scheduler)
             .setSyncEnabled(enabled = false)
 
         coVerify(exactly = 1) { syncRepository.setEnabled(false) }
@@ -153,7 +150,7 @@ class JellyPlaySyncViewModelTest {
             }
         }
 
-        JellyPlaySyncViewModel(syncRepository, pluginApi, deviceRegistry, statusStore, backupIo, scheduler)
+        JellyPlaySyncViewModel(syncRepository, pluginApi, deviceRegistry, statusStore, syncScheduler = scheduler)
             .setSyncEnabled(enabled = true)
         advanceUntilIdle()
 
@@ -244,7 +241,7 @@ class JellyPlaySyncViewModelTest {
         coEvery { pluginApi.getSnapshots() } returns Result.success(
             listOf(
                 com.raulshma.jellyplay.core.network.api.JellyPlaySnapshot(
-                    id = "s1", createdAt = 1_700_000_000_000, origin = "manual", keys = 4, bytes = 900,
+                    id = 1L, createdAt = 1_700_000_000_000, origin = "manual", keys = 4, bytes = 900,
                 ),
             ),
         )
@@ -353,21 +350,11 @@ class JellyPlaySyncViewModelTest {
     }
 
     @Test
-    fun snapshotActions_createAndRestore_guardAndRefresh_importRidesTheIoSeam() = runTest {
+    fun snapshotActions_createGuardsAndRefreshes() = runTest {
         gateOpen()
-        val importBundle = """{"profiles":[]}"""
         coEvery { pluginApi.createSnapshot() } coAnswers {
             createCalls += 1
-            Result.success(com.raulshma.jellyplay.core.network.api.JellyPlaySnapshotCreated("s9"))
-        }
-        coEvery { pluginApi.restoreSnapshot(any()) } coAnswers {
-            restoreCalls += arg<String>(0)
-            Result.success(com.raulshma.jellyplay.core.network.api.JellyPlaySettingsBatchResult())
-        }
-        coEvery { backupIo.readImportPayload("content://pick") } returns importBundle
-        coEvery { pluginApi.importSettings(any(), any()) } coAnswers {
-            imports += arg<String>(0)
-            Result.success(com.raulshma.jellyplay.core.network.api.JellyPlaySettingsBatchResult())
+            Result.success(com.raulshma.jellyplay.core.network.api.JellyPlaySnapshotCreated(9L))
         }
 
         val viewModel = viewModel()
@@ -377,19 +364,38 @@ class JellyPlaySyncViewModelTest {
         viewModel.createSnapshot()
         awaitUntil { createCalls.size == 1 }
         assertFalse(viewModel.uiState.value.actionError)
+    }
 
-        viewModel.restoreSnapshot("s9")
-        awaitUntil { restoreCalls.size == 1 }
-        assertEquals("s9", restoreCalls.single())
+    @Test
+    fun resetNamespace_capturesSafetySnapshotFirst_andWarnsOnMiss() = runTest {
+        gateOpen()
+        coEvery { pluginApi.resetNamespace(any(), any()) } coAnswers {
+            resetCalls += arg<String>(0)
+            Result.success(Unit)
+        }
+        // A failed capture must warn through the one-shot face — and never block the reset.
+        coEvery { pluginApi.createSnapshot() } returns Result.failure(IllegalStateException("500"))
 
-        viewModel.importFromUri("content://pick")
-        awaitUntil { imports.size == 1 }
-        assertEquals(importBundle, imports.single())
-        assertFalse(viewModel.uiState.value.actionError)
+        val viewModel = viewModel()
+        viewModel.resetNamespace()
+        awaitUntil { resetCalls.size == 1 }
 
-        // A failed import (unreadable file) raises the quiet action-error face.
-        coEvery { backupIo.readImportPayload("content://bad") } returns null
-        viewModel.importFromUri("content://bad")
-        awaitUntil { viewModel.uiState.value.actionError }
+        assertTrue(viewModel.uiState.value.safetySnapshotMissed, "a missed capture must surface the warning face")
+        assertEquals("prefs", resetCalls.single(), "the reset still ran — the miss never blocks")
+
+        viewModel.clearSafetySnapshotMissed()
+        assertFalse(viewModel.uiState.value.safetySnapshotMissed)
+    }
+
+    @Test
+    fun resetNamespace_gateClosed_captureSucceedsQuietly() = runTest {
+        // Probe UNAVAILABLE: the gate is closed, no api call may fire at all —
+        // and the closed gate is NOT a capture failure.
+        val viewModel = viewModel()
+        viewModel.resetNamespace()
+        advanceUntilIdle()
+
+        assertEquals(0, resetCalls.size)
+        assertFalse(viewModel.uiState.value.safetySnapshotMissed)
     }
 }

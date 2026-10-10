@@ -252,22 +252,98 @@
     <string name="factory_reset_cat_misc_app">Miscellaneous</string>
     <string name="factory_reset_cat_app_state">App State</string>
 
-    <!-- ImportPreviewScreen.kt -->
-    <string name="settings_import_preview_title">Import Preview</string>
-    <string name="settings_import_preview_loading">Loading backup…</string>
+    <!-- RestoreWizardScreen.kt (the unified restore wizard; retired the
+         per-file ImportPreviewScreen — its error/summary/version/security
+         strings ride on below, still rendered by the wizard). -->
     <string name="settings_import_preview_error">Could not read backup file</string>
     <string name="settings_import_preview_summary_card">%1$d of %2$d settings will change</string>
-    <string name="settings_import_preview_import_all">Import All</string>
-    <string name="settings_import_preview_import_category">Import Category</string>
     <string name="settings_import_preview_security_option">Also restore PIN / biometric lock</string>
     <string name="settings_import_preview_version_warning">Backup was exported from a newer app version (%1$d). Some settings may be ignored.</string>
-    <string name="settings_import_preview_confirm">Import</string>
-    <string name="settings_import_preview_confirm_all_title">Import All Settings?</string>
-    <string name="settings_import_preview_confirm_all_message">This will overwrite all current settings with the values from the backup. This cannot be undone.</string>
-    <string name="settings_import_preview_confirm_category_title">Import This Category?</string>
-    <string name="settings_import_preview_confirm_category_message">Only the settings in this category will be overwritten from the backup.</string>
-    <string name="settings_import_preview_confirm_extras_title">Import App State?</string>
-    <string name="settings_import_preview_confirm_extras_message">This will overwrite favorite channels, last channel, Watch Later playlist and onboarding state from the backup.</string>
+    <!-- Wave-2 external backup slices (Integrations / item prefs / playlists / widget config cards).
+         Default locale only, like the diff_* residue — untranslated locales fall back. -->
+    <string name="settings_import_slice_integrations">Integrations</string>
+    <string name="settings_import_slice_item_prefs">Per-Item Playback Preferences</string>
+    <string name="settings_import_slice_playlists">Smart &amp; Mood Playlists</string>
+    <string name="settings_import_slice_widget">Home-Screen Widgets</string>
+    <string name="settings_import_slice_entry_absent">Not backed up</string>
+    <string name="settings_import_slice_entry_removed">Removed on import</string>
+    <!-- Wave-3 passphrase-encrypted secrets block (local file backup only).
+         Default locale only, like the diff_* residue — untranslated locales fall back. -->
+    <string name="settings_export_settings_secrets">Export with Secrets</string>
+    <string name="settings_export_settings_secrets_subtitle">Include API keys and the saved server list, encrypted with a passphrase</string>
+    <string name="settings_backup_passphrase_export_title">Encrypt Backup Secrets</string>
+    <string name="settings_backup_passphrase_export_message">Your API keys and saved server list are encrypted with AES-256-GCM under this passphrase. It is never stored — if you lose it, the secrets block cannot be recovered.</string>
+    <string name="settings_backup_passphrase_export_confirm">Encrypt &amp; Export</string>
+    <string name="settings_backup_passphrase_field">Passphrase</string>
+    <string name="settings_backup_passphrase_confirm_field">Confirm passphrase</string>
+    <string name="settings_backup_passphrase_cancel">Cancel</string>
+    <string name="settings_backup_passphrase_mismatch">Passphrases do not match</string>
+    <string name="settings_backup_passphrase_short_warning">Short passphrases are easier to crack — 8+ characters recommended</string>
+    <string name="settings_import_secrets_title">Secrets (encrypted)</string>
+    <string name="settings_import_secrets_subtitle">This backup carries passphrase-encrypted secrets. Unlock to preview what will be restored.</string>
+    <string name="settings_import_secrets_unlock_button">Unlock</string>
+    <string name="settings_import_secrets_unlock_title">Unlock Secrets</string>
+    <string name="settings_import_secrets_unlock_message">Enter the passphrase this backup was encrypted with.</string>
+    <string name="settings_import_secrets_unlock_confirm">Unlock</string>
+    <string name="settings_import_secrets_wrong_passphrase">Wrong passphrase — try again</string>
+    <string name="settings_import_secrets_apply">Restore Secrets</string>
+    <string name="settings_import_secrets_confirm_title">Restore Secrets?</string>
+    <string name="settings_import_secrets_confirm_message">The decrypted credentials will be written to this device\u2019s encrypted storage. Entries with the same ids are overwritten; your other entries are kept.</string>
+    <string name="settings_import_secrets_counts_servers">%1$d saved server(s)</string>
+    <string name="settings_import_secrets_counts_arr">%1$d Radarr/Sonarr server(s)</string>
+    <string name="settings_import_secrets_counts_subtitle">%1$d subtitle provider(s)</string>
+    <string name="settings_import_secrets_counts_seerr_yes">Seerr credentials included</string>
+    <string name="settings_import_secrets_counts_seerr_no">No Seerr credentials</string>
+
+    <!-- RestoreWizardScreen.kt — the unified restore wizard (file + server restore points).
+         Default locale only, like the diff_* residue — untranslated locales fall back. -->
+    <string name="wizard_title">Restore</string>
+    <string name="wizard_source_server_title">Server restore point</string>
+    <string name="wizard_source_server_subtitle">Roll back to a synced snapshot held on the server</string>
+    <string name="wizard_source_server_unavailable_title">Server restore points are unavailable</string>
+    <string name="wizard_source_server_unavailable_subtitle">Settings sync is off, the server plugin is unavailable, or it predates restore points. Enable sync (Settings → Sync) and try again.</string>
+    <string name="wizard_source_file_title">Backup file</string>
+    <string name="wizard_source_file_subtitle">Restore from an exported settings backup file</string>
+    <string name="wizard_snapshot_preview_short">Preview &amp; restore</string>
+    <string name="wizard_snapshot_entry_subtitle">%1$d settings</string>
+    <string name="wizard_loading">Loading…</string>
+    <string name="wizard_diff_parent_preferences">Preferences</string>
+    <string name="wizard_diff_parent_slices">External data</string>
+    <string name="wizard_diff_restore_selected">Restore selected</string>
+    <string name="wizard_diff_nothing_to_restore">Nothing to restore — this source matches the current settings.</string>
+    <string name="wizard_domain_videoplayer">Video Player</string>
+    <string name="wizard_domain_other">Other preferences</string>
+    <string name="wizard_group_counts">changed %1$d, added %2$d, removed %3$d</string>
+    <string name="wizard_row_kind_changed">Changed</string>
+    <string name="wizard_row_kind_added">Added</string>
+    <string name="wizard_row_kind_removed">Removed</string>
+    <string name="wizard_value_removed">removed</string>
+    <string name="wizard_value_absent">not set</string>
+    <string name="wizard_load_failed">Could not load the restore point</string>
+    <string name="wizard_preview_unavailable_title">Preview unavailable</string>
+    <string name="wizard_preview_unavailable_message">The server\u2019s plugin predates restore previews, so the contents cannot be shown. You can still restore this restore point wholesale.</string>
+    <string name="wizard_full_restore">Full restore</string>
+    <string name="wizard_confirm_title">Restore Settings?</string>
+    <string name="wizard_confirm_message">Restore %1$d categories — current values are overwritten. This cannot be undone.</string>
+    <string name="wizard_confirm_full_message">The synced settings are rolled back to this restore point on the server. This cannot be undone.</string>
+    <string name="wizard_confirm_cross_account">This backup was exported from another account or server. Restoring mixes its settings into the current session.</string>
+    <string name="wizard_safety_snapshot_failed">Could not capture a safety restore point before applying — continuing without one.</string>
+    <string name="wizard_secrets_done">Secrets restored</string>
+    <string name="wizard_summary_categories">%1$d preference categories</string>
+    <string name="wizard_summary_extras">App state</string>
+    <string name="wizard_summary_slices">%1$d sections</string>
+    <string name="wizard_done_file">Restored: %1$s</string>
+    <string name="wizard_done_snapshot">Restored %1$d settings across %2$s</string>
+    <string name="wizard_done_full_restore">Restore point re-applied (%1$d settings)</string>
+    <string name="wizard_summary_rejected">— %1$d rejected: %2$s</string>
+    <string name="wizard_reject_bucket_stale_write">changed elsewhere</string>
+    <string name="wizard_reject_bucket_clock_skew">clock skew</string>
+    <string name="wizard_reject_bucket_quota">quota exceeded</string>
+    <string name="wizard_reject_bucket_ns_quota">namespace quota exceeded</string>
+    <string name="wizard_reject_bucket_key_too_large">key too large</string>
+    <string name="wizard_reject_bucket_key_limit">key limit reached</string>
+    <string name="wizard_reject_bucket_device_revoked">device revoked</string>
+    <string name="wizard_reject_bucket_other">rejected</string>
 
     <!-- ActiveDevicesRow.kt -->
     <string name="settings_active_devices">Active Devices</string>

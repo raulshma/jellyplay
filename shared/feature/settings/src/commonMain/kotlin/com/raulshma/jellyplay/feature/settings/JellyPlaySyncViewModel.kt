@@ -106,6 +106,12 @@ data class JellyPlaySyncUiState(
     val actionInFlight: Boolean = false,
     /** The last snapshot/export/import action failed — the banner's second face; cleared by the next action. */
     val actionError: Boolean = false,
+    /**
+     * One-shot Wave-6 warning: the pre-destructive safety restore point could
+     * not be captured before the namespace reset (the reset still ran — the
+     * miss never blocks). Cleared by [JellyPlaySyncViewModel.clearSafetySnapshotMissed].
+     */
+    val safetySnapshotMissed: Boolean = false,
 )
 
 /**
@@ -113,7 +119,12 @@ data class JellyPlaySyncUiState(
  * engine's toggle + manual cycles ([ProfileSyncRepository]) beside the
  * server-side usage / history / admin-overview reads, the conflict-resolution
  * intents, the selective-sync toggles, the device registry actions
- * (rename/revoke), the restore points, and the JSON export/import.
+ * (rename/revoke), the restore points (create only — restores route through
+ * the unified [RestoreWizardViewModel]), and the JSON export.
+ *
+ * Wave 6: the destructive namespace reset captures a best-effort safety
+ * restore point first ([captureSafetySnapshot] — the same helper the wizard
+ * and the factory reset run); a miss surfaces as a one-shot warning face.
  *
  * The screen is reachable ONLY through the settings root's capability-gated
  * "Sync" entry (plugin probe AVAILABLE + the `settings-sync` meta feature key
@@ -128,8 +139,6 @@ class JellyPlaySyncViewModel(
     private val pluginApiClient: JellyPlaySettingsSyncRoutes,
     private val deviceRegistry: JellyPlayDeviceRegistryRoutes,
     private val statusStore: JellyPlayPluginStatusStore,
-    /** The export/import file IO seam (Android SAF / desktop files) — the backup screen's seam, reused. */
-    private val backupIo: SettingsBackupIo,
     /**
      * The background flush scheduler (ADR 0011) — the disable edge of the
      * sync toggle de-arms its 12h catch-up periodic here. Null in
@@ -245,13 +254,24 @@ class JellyPlaySyncViewModel(
      * the tombstone batch on its next cycle and resets the synced prefs to
      * their defaults (the prefs adapter's inbound-tombstone rule). Confirmed
      * by the screen's destructive dialog before reaching here.
+     *
+     * Wave 6 hook #2: a best-effort safety restore point is captured first —
+     * a miss surfaces as the one-shot warning face, never a blocker.
      */
     fun resetNamespace() {
         scope.launch {
             if (!syncGateOpen()) return@launch
+            if (!captureSafetySnapshot(pluginApiClient, statusStore)) {
+                _uiState.update { it.copy(safetySnapshotMissed = true) }
+            }
             pluginApiClient.resetNamespace(SYNCED_NAMESPACE)
                 .onSuccess { refresh() }
         }
+    }
+
+    /** Acknowledges the one-shot Wave-6 warning (the screen surfaced it). */
+    fun clearSafetySnapshotMissed() {
+        _uiState.update { it.copy(safetySnapshotMissed = false) }
     }
 
     /**
@@ -319,11 +339,6 @@ class JellyPlaySyncViewModel(
         scope.launch { runSnapshotAction { pluginApiClient.createSnapshot() } }
     }
 
-    /** Restores [snapshotId] (server-orchestrated tombstone batch + re-apply). */
-    fun restoreSnapshot(snapshotId: String) {
-        scope.launch { runSnapshotAction { pluginApiClient.restoreSnapshot(snapshotId) } }
-    }
-
     /**
      * Fetches the settings export bundle and hands the raw JSON to [onReady]
      * (the screen's share seam). A failed read raises [JellyPlaySyncUiState.actionError].
@@ -342,31 +357,7 @@ class JellyPlaySyncViewModel(
         }
     }
 
-    /**
-     * Reads the picked import file ([uri] via the platform IO seam) and hands
-     * the bundle to the server. A failed read or import raises
-     * [JellyPlaySyncUiState.actionError]; a success re-pulls everything.
-     */
-    fun importFromUri(uri: String) {
-        scope.launch {
-            if (!syncGateOpen()) return@launch
-            _uiState.update { it.copy(actionInFlight = true, actionError = false) }
-            val payload = runCatchingRethrowingCancellation { backupIo.readImportPayload(uri) }
-            val bundle = payload.getOrNull()
-            val result = bundle?.let { text ->
-                runCatchingRethrowingCancellation {
-                    pluginApiClient.importSettings(text, deviceId = _uiState.value.thisDeviceId)
-                }.getOrNull()
-            }
-            _uiState.update {
-                if (result?.getOrNull() != null) it.copy(actionInFlight = false)
-                else it.copy(actionInFlight = false, actionError = true)
-            }
-            if (result?.getOrNull() != null) refresh()
-        }
-    }
-
-    /** The shared guard for the snapshot create/restore pair: gate + in-flight + error face + refresh. */
+    /** The shared guard for the snapshot create action: gate + in-flight + error face + refresh. */
     private suspend fun runSnapshotAction(action: suspend () -> Result<*>) {
         if (!syncGateOpen()) return
         _uiState.update { it.copy(actionInFlight = true, actionError = false) }

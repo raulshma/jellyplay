@@ -63,8 +63,9 @@ class SettingsSearchCatalogTest {
         // plugin wave (the per-feature switch rows + their group), re-pinned
         // there and again through the sync-screen consolidation (zero net);
         // +1 for the push wave's 13th per-feature switch row; +1 for the
-        // analytics wave's 14th per-feature switch row.
-        assertEquals(330, items.size)
+        // analytics wave's 14th per-feature switch row; +1 for the Wave-3
+        // "Export with Secrets" backup row.
+        assertEquals(331, items.size)
         // Curated flat order starts with the account/session pair that used to
         // open the old registry, and the aggregation is a pure concatenation
         // of the decorated per-screen groups (no dedup, no reordering).

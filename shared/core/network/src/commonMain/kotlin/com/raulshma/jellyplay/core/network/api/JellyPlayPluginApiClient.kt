@@ -359,10 +359,14 @@ data class JellyPlaySyncAdminUser(
 // payload trimmed by an older plugin decoding.
 // ---------------------------------------------------------------------------
 
-/** One restore point: a server-held settings snapshot (newest-first list order). */
+/**
+ * One restore point: a server-held settings snapshot (newest-first list order).
+ * The id is a NUMERIC wire value (the plugin's `long Id` serializes as an
+ * unquoted JSON number) — a String here would fail the strict decode.
+ */
 @Serializable
 data class JellyPlaySnapshot(
-    val id: String,
+    val id: Long,
     val createdAt: Long = 0,
     /** `manual` | `admin-push` | `profile-copy` — loosely matched by the UI. */
     val origin: String = "",
@@ -370,9 +374,32 @@ data class JellyPlaySnapshot(
     val bytes: Long = 0,
 )
 
-/** The create-snapshot response — the new restore point's handle. */
+/** The create-snapshot response — the new restore point's handle (numeric, see [JellyPlaySnapshot.id]). */
 @Serializable
-data class JellyPlaySnapshotCreated(val id: String)
+data class JellyPlaySnapshotCreated(val id: Long)
+
+/**
+ * One restore point's full row content (`GET jellyplay/settings/snapshots/{id}`
+ * — the restore-preview read): the stored rows grouped per device profile
+ * exactly like the export bundle's `profiles` half, so the client parses it
+ * with the same mindset. No modes map — a snapshot stores rows only.
+ */
+@Serializable
+data class JellyPlaySnapshotContent(
+    val id: Long,
+    val createdAt: Long = 0,
+    /** `manual` | `admin-push` | `profile-copy` — loosely matched by the UI. */
+    val origin: String = "",
+    val profiles: List<JellyPlaySnapshotProfile> = emptyList(),
+)
+
+/** One device profile's slice of a snapshot's stored rows. */
+@Serializable
+data class JellyPlaySnapshotProfile(
+    /** Device profile: `""` base, `desktop`, `phone`, `tv`. */
+    val profile: String = "",
+    val settings: List<JellyPlaySettingsEntry> = emptyList(),
+)
 
 // ---------------------------------------------------------------------------
 // admin analytics (the `jellyplay/admin/analytics/*` wave) — the play-history

@@ -11,7 +11,7 @@ import com.raulshma.jellyplay.core.datastore.search.SettingsRecentsStore
 import com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections
 import com.raulshma.jellyplay.core.ui.platform.pickAwtFile
 import com.raulshma.jellyplay.desktop.DesktopPaths
-import com.raulshma.jellyplay.feature.settings.ImportPreviewViewModel
+import com.raulshma.jellyplay.feature.settings.RestoreWizardViewModel
 import com.raulshma.jellyplay.feature.settings.SettingsBackupIo
 import com.raulshma.jellyplay.feature.settings.SettingsViewModel
 import java.io.File
@@ -57,13 +57,12 @@ import kotlinx.serialization.json.jsonPrimitive
  *     machinery.
  *  3. DIALOG_IMPORT_LOAD — the LOAD-mode dialog, same Robot mechanism,
  *     picking the file the export just wrote (the production round trip).
- *  4. IMPORT_VM_STAGE_CONFIRM — [SettingsViewModel.importSettings] stages the
- *     dialog-picked uri (the stage-and-navigate signal) and the production
- *     import path — [ImportPreviewViewModel.loadBackup] +
- *     [ImportPreviewViewModel.importAll] — parses the same file back through
- *     the pure BackupParser (v2, not legacy, no version mismatch) and lands
- *     the "AllImported" event with the security-sensitive gate off, exactly
- *     what a confirmed import does on the preview screen.
+ *  4. IMPORT_VM_STAGE_CONFIRM — the unified restore wizard's file arm
+ *     ([RestoreWizardViewModel.loadBackupFile]) re-reads the dialog-picked uri
+ *     through the pure BackupParser (v2, not legacy, no version mismatch) and
+ *     a confirmed [RestoreWizardViewModel.restoreSelected] of every category
+ *     — the security-sensitive gate off — completes, exactly what a confirmed
+ *     restore does in the wizard.
  *  5. DIALOG_CANCEL_ESC — a LOAD dialog dismissed with ESC (native cancel):
  *     [pickAwtFile] returns null, so the production picker fires no callback
  *     and the VM's backup-restore state is untouched — the live twin of the
@@ -126,7 +125,7 @@ object DesktopNativeDialogHarness {
      */
     class DialogPassDeps(
         val settingsViewModel: SettingsViewModel,
-        val importPreviewViewModel: ImportPreviewViewModel,
+        val restoreWizardViewModel: RestoreWizardViewModel,
     )
 
     /**
@@ -169,7 +168,7 @@ object DesktopNativeDialogHarness {
         private val logsDir: Path = DesktopPaths.resolve().logsDirNio
 
         private val vm: SettingsViewModel get() = deps.settingsViewModel
-        private val preview: ImportPreviewViewModel get() = deps.importPreviewViewModel
+        private val wizard: RestoreWizardViewModel get() = deps.restoreWizardViewModel
 
         private val runner = HarnessRunner(
             logTag = "dialogpass",
@@ -297,36 +296,31 @@ object DesktopNativeDialogHarness {
             }
             fatalStop = fatalStop || !dialogLoadOk
 
-            // ── 4. staging + the surviving preview-VM import path ─────────────
+            // ── 4. the wizard's file arm on the dialog-picked uri ─────────────
             val importVmOk = !fatalStop && runner.step("IMPORT_VM_STAGE_CONFIRM") {
                 val uri = exportTargetFile.toURI().toString()
-                vm.importSettings(uri)
-                check(runner.awaitUntil(15_000) { vm.stagedImportUri != null }) {
-                    "import uri never staged (status='${vm.backupRestoreStatus}')"
+                // The production restore path: the wizard re-reads the same
+                // dialog-produced uri through the pure BackupParser, stages the
+                // file diff, then a confirmed restore of every category with
+                // the security gate off — the exact calls the wizard makes.
+                wizard.loadBackupFile(uri)
+                check(runner.awaitUntil(15_000) { wizard.uiState.file != null || wizard.uiState.loadError }) {
+                    "the export was never parsed by the restore wizard"
                 }
-                check(vm.stagedImportUri == uri) { "staged uri '${vm.stagedImportUri}' != dialog-picked '$uri'" }
-                // The production import path: the preview VM re-reads the same
-                // dialog-produced uri through the pure BackupParser, then
-                // imports everything with the security gate off — the exact
-                // calls the import preview screen makes on a confirmed import.
-                preview.loadBackup(uri)
-                check(runner.awaitUntil(15_000) { preview.incomingPrefs != null || preview.error != null }) {
-                    "the export was never parsed by the import preview"
+                check(!wizard.uiState.loadError) { "restore wizard failed to load: ${wizard.lastLoadErrorMessage}" }
+                val file = wizard.uiState.file
+                check(file != null) { "the wizard staged no file diff" }
+                check(!file.versionMismatch) {
+                    "version mismatch on our own fresh export (schema ${file.schemaVersion})"
                 }
-                check(preview.error == null) { "import preview failed to load: ${preview.error}" }
-                check(!preview.versionMismatch) {
-                    "version mismatch on our own fresh export (schema ${preview.schemaVersion})"
-                }
-                preview.importAll(restoreSecuritySensitive = false) { }
-                check(runner.awaitUntil(15_000) {
-                    preview.importEvent is ImportPreviewViewModel.ImportEvent.AllImported
-                }) {
-                    "import never completed (event='${preview.importEvent}')"
+                wizard.toggleAllCategories()
+                wizard.restoreSelected()
+                check(runner.awaitUntil(15_000) { wizard.uiState.completed }) {
+                    "restore never completed (applying=${wizard.uiState.applying} error=${wizard.uiState.applyError})"
                 }
                 mapOf(
-                    "stagedSchemaVersion" to preview.schemaVersion.toString(),
-                    "hasSecuritySensitive" to preview.hasSecuritySensitive.toString(),
-                    "vmStatus" to preview.importStatus.orEmpty(),
+                    "stagedSchemaVersion" to file.schemaVersion.toString(),
+                    "hasSecuritySensitive" to file.hasSecuritySensitive.toString(),
                 )
             }
             fatalStop = fatalStop || !importVmOk
@@ -335,7 +329,6 @@ object DesktopNativeDialogHarness {
             if (!fatalStop) {
                 runner.step("DIALOG_CANCEL_ESC") {
                     val statusBefore = vm.backupRestoreStatus
-                    val stagedBefore = vm.stagedImportUri
                     val picked = driveAndPick(
                         title = "Import settings",
                         save = false,
@@ -345,7 +338,7 @@ object DesktopNativeDialogHarness {
                         shotName = "dialog-cancel-esc",
                     )
                     check(picked == null) { "ESC left a pick behind: ${picked?.path}" }
-                    check(vm.backupRestoreStatus == statusBefore && vm.stagedImportUri == stagedBefore) {
+                    check(vm.backupRestoreStatus == statusBefore) {
                         "VM state moved on a cancelled dialog (callback fired without a pick?)"
                     }
                     mapOf(
@@ -410,7 +403,7 @@ object DesktopNativeDialogHarness {
  * Composition-site sugar so DesktopAppRoot hosts the dialog harness in one
  * call. Internal — only the desktop shell uses it. Gated by
  * [DesktopNativeDialogHarness.requested] at the call site so a normal boot composes
- * nothing here. The [SettingsViewModel] and [ImportPreviewViewModel]
+ * nothing here. The [SettingsViewModel] and [RestoreWizardViewModel]
  * are built from the same Koin singles the settings module's viewModel
  * definitions inject (harness-owned instances; no settings screen composes in
  * this mode) — plain `get()` on a viewModel definition is deliberately avoided
@@ -444,7 +437,7 @@ internal fun DesktopNativeDialogHarnessHost() {
                     editor = editor,
                     recentsStore = recentsStore,
                 ),
-                importPreviewViewModel = ImportPreviewViewModel(
+                restoreWizardViewModel = RestoreWizardViewModel(
                     settingsBackupIo = settingsBackupIo,
                     userPreferencesStore = preferencesStore,
                     snapshotReader = snapshotReader,

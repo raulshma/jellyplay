@@ -44,6 +44,7 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_fact
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_factory_reset_category_done
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_factory_reset_category_message
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_reset
+import com.raulshma.jellyplay.feature.settings.generated.resources.wizard_safety_snapshot_failed
 
 /**
  * Factory-reset review screen. Lists every preference category with a
@@ -99,7 +100,9 @@ fun FactoryResetScreen(
 
     JellyPlayScreenScaffold(
         title = stringResource(Res.string.settings_factory_reset),
-        onBack = onBack,
+        // Back is dead while a confirmed reset runs its safety capture:
+        // leaving mid-capture would look like an abandoned reset.
+        onBack = { if (!viewModel.resetRunning) onBack() },
         backgroundColorState = backgroundColorState,
     ) { innerPadding ->
         LazyColumn(
@@ -187,6 +190,15 @@ fun FactoryResetScreen(
         LaunchedEffect(res) {
             bus.info(text)
             message = null
+        }
+    }
+
+    // ---- Wave 6: the pre-reset safety capture missed — warn once, never block.
+    if (viewModel.safetySnapshotMissed) {
+        val warn = stringResource(Res.string.wizard_safety_snapshot_failed)
+        LaunchedEffect(Unit) {
+            bus.error(warn)
+            viewModel.clearSafetySnapshotMissed()
         }
     }
 }

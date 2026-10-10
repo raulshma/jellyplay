@@ -6,6 +6,7 @@ import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.session.JellyPlayFeatureGate
 import com.raulshma.jellyplay.core.datastore.PreferencesEditor
+import com.raulshma.jellyplay.core.datastore.BackupSecretsCodec
 import com.raulshma.jellyplay.core.datastore.SettingsBackup
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.datastore.search.SettingsRecentsStore
@@ -65,6 +66,19 @@ class SettingsViewModel(
      * disabled). Same nullable-with-default discipline as the seams above.
      */
     private val jellyPlayPushRepository: com.raulshma.jellyplay.core.data.repository.JellyPushRepository? = null,
+    /**
+     * The Wave-3 secrets-block seam: gathers the device's secret material for
+     * the "Export with secrets" flow. Nullable-with-default keeps the
+     * direct-construction test harnesses compiling; a null seam with secrets
+     * requested fails the export with a clear message.
+     */
+    private val secretsBackupAssembler: SecretsBackupAssembler? = null,
+    /**
+     * Session identity — stamps [SettingsBackup.originUserId]/[originServerId]
+     * at secrets export so a cross-account restore can warn.
+     * Same nullable-with-default discipline as the seams above.
+     */
+    private val serverIdentityStore: com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore? = null,
 ) : SettingsEditorViewModel(editor) {
 
     private val preferencesFlow: kotlinx.coroutines.flow.StateFlow<SettingsScreenPreferences> =
@@ -403,17 +417,23 @@ class SettingsViewModel(
         private set
 
     /**
-     * The stage-and-navigate signal of the import flow: the picked backup uri
-     * string between the file picker and the backup screen's navigation into
-     * the import preview. Nothing is read or decoded here — the preview
-     * screen's [ImportPreviewViewModel] re-reads the file through the pure
-     * [com.raulshma.jellyplay.core.datastore.BackupParser] and owns
-     * classification, security-gating and the restore itself.
+     * Exports the v2 backup to [uri]. With [includeSecrets] the Wave-3
+     * secrets block rides along: the payload is gathered from the secure
+     * stores + server list, encrypted under [passphrase]
+     * ([BackupSecretsCodec], PBKDF2-600k → AES-256-GCM), and attached to the
+     * envelope together with the exporting session's origin ids. Without it
+     * the written document carries no `secrets` key at all — byte-shape as
+     * every pre-Wave-3 export.
+     *
+     * [passphrase] is consumed and zeroed before this returns; it is never
+     * persisted anywhere. The KDF runs on [Dispatchers.Default] — a
+     * 600,000-iteration PBKDF2 must not pin the main thread.
      */
-    var stagedImportUri by composeState<String?>(null)
-        private set
-
-    fun exportSettings(uri: String) {
+    fun exportSettings(
+        uri: String,
+        includeSecrets: Boolean = false,
+        passphrase: CharArray? = null,
+    ) {
         launch {
             backupRestoreStatus = null
             runCatching {
@@ -421,7 +441,27 @@ class SettingsViewModel(
                 // No buildUserPreferences round-trip — the per-store slices are
                 // the canonical payload.
                 val snapshot = preferencesStore.snapshotForBackup()
-                val backup = SettingsBackup(slices = snapshot.slices, extras = snapshot.extras)
+                var backup = SettingsBackup(slices = snapshot.slices, extras = snapshot.extras)
+                if (includeSecrets) {
+                    val assembler = secretsBackupAssembler
+                        ?: throw IllegalStateException("Secrets export is unavailable")
+                    val chars = passphrase ?: throw IllegalStateException("A passphrase is required")
+                    try {
+                        val secrets = assembler.gather()
+                        val envelope = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                            BackupSecretsCodec.encrypt(secrets, chars)
+                        }
+                        val identity = serverIdentityStore?.identity?.value
+                        backup = backup.copy(
+                            secrets = envelope,
+                            originUserId = identity?.activeUserId?.takeIf { it.isNotBlank() },
+                            originServerId = identity?.activeServerId?.takeIf { it.isNotBlank() },
+                        )
+                    } finally {
+                        // Zero the passphrase material regardless of outcome.
+                        chars.fill('\u0000')
+                    }
+                }
                 val jsonString = com.raulshma.jellyplay.core.datastore.PreferencesJson.export
                     .encodeToString(SettingsBackup.serializer(), backup)
                 if (!settingsBackupIo.writeExportPayload(uri, jsonString)) {
@@ -432,23 +472,6 @@ class SettingsViewModel(
                 backupRestoreStatus = "Export failed: ${it.message}"
             }
         }
-    }
-
-    /**
-     * Stages the picked backup [uri] as the stage-and-navigate signal
-     * ([stagedImportUri]); the backup screen navigates to the import preview
-     * and consumes the signal. Deliberately no file read or decode here —
-     * the preview ViewModel re-reads the source and reports its own load
-     * failures, so the two paths cannot drift on classification.
-     */
-    fun importSettings(uri: String) {
-        backupRestoreStatus = null
-        stagedImportUri = uri
-    }
-
-    /** Discards the staged import uri after navigation (or a failed navigation). */
-    fun cancelImport() {
-        stagedImportUri = null
     }
 
     fun clearBackupRestoreStatus() {

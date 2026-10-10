@@ -55,9 +55,14 @@ class SeerrPreferencesStore constructor(
     // Single source of truth for Seerr preference defaults: the read path
     // ([readSeerrPreferences]) falls back to these for absent/corrupt values,
     // and [disconnect] writes them back — mapOf preserves insertion order, so
-    // the reset write order is stable. Identity keys (server URL, auth method,
-    // username, email) are not listed: disconnect removes those and the read
-    // path re-applies their inline fallbacks.
+    // the reset write order is stable. The sync surface's reset face
+    // ([syncApply] with a `null`) writes each allowlisted entry's declared
+    // default too: value-presence resets roam as value writes, absence does
+    // not (see [syncApply]). Identity keys (server URL, auth method,
+    // username, email) are not listed: their resets write the blank
+    // connection state directly (see [disconnect] and the SyncTypedKeys
+    // declarations) — the read paths treat the written blanks exactly like
+    // absence (blank degrades to the inline fallback).
     // buildMap, not `key to value`: DataStore's infix Preferences.Pair `to`
     // on Key<T> would shadow kotlin's Pair `to` and break the map literal.
     private val BOOLEAN_DEFAULTS: Map<Preferences.Key<Boolean>, Boolean> = buildMap {
@@ -178,15 +183,108 @@ class SeerrPreferencesStore constructor(
         dataStore.edit { it[Keys.DISCOVER_REGION] = region }
     }
 
+    /**
+     * Resets every direct-connection preference to its default and clears the
+     * secure credentials. Every reset WRITES its default value instead of
+     * removing the key (value-presence resets): the identity keys sit in the
+     * sync allowlist below and the integrations adapter is value-only, so a
+     * removal would never roam — the engine's next adopt pass would
+     * re-install the server's still-standing rows and silently undo the
+     * disconnect. The written blanks roam as ordinary value writes; the read
+     * paths treat them exactly like absence (a blank server URL keeps
+     * [isConnected] false, a blank auth method degrades to
+     * [SeerrAuthMethod.API_KEY]). The settings-surface bridge mode
+     * ([SeerrPreferences.useServerBridge]) is deliberately untouched — the
+     * pane choice, not a connection setting.
+     */
     suspend fun disconnect() {
         secureCredentialsStore.clearAll()
         dataStore.edit { prefs ->
-            prefs.remove(Keys.SERVER_URL)
-            prefs.remove(Keys.AUTH_METHOD)
-            prefs.remove(Keys.USERNAME)
-            prefs.remove(Keys.EMAIL)
+            prefs[Keys.SERVER_URL] = ""
+            prefs[Keys.AUTH_METHOD] = ""
+            prefs[Keys.USERNAME] = ""
+            prefs[Keys.EMAIL] = ""
             BOOLEAN_DEFAULTS.forEach { (key, default) -> prefs[key] = default }
             STRING_DEFAULTS.forEach { (key, default) -> prefs[key] = default }
         }
     }
+
+    // ------------------------------------------------------------------
+    // SYNC-ONLY SURFACE (jellyplay-plugin-jellyplay settings sync, the
+    // `integrations` namespace): a minimal allowlisted read/write pair the
+    // sync adapter translates into wire values. NOT a general editing API —
+    // the UI setters above remain the only user-facing write path. The
+    // allowlist below is the SINGLE SOURCE OF TRUTH for which key names may
+    // ever leave the device or be written by sync; the secure credentials
+    // (api key / password / session cookie) live in the separate encrypted
+    // store and are deliberately absent — they can never sync.
+    // ------------------------------------------------------------------
+
+    /**
+     * The sync allowlist: raw key name → its typed read/write entry (the
+     * shared [SyncEntry] builders — see SyncAllowlist.kt). Key names are
+     * private to this store (the adapter never hardcodes them); this map is
+     * where renames land. The identity entries' blank defaults mirror the
+     * read path's inline fallbacks ([isConnected] maps the blank server URL
+     * to false; a blank auth method degrades to [SeerrAuthMethod.API_KEY]) —
+     * the same blanks [disconnect] writes.
+     */
+    private val SyncTypedKeys = SyncAllowlist(
+        mapOf(
+            "seerr_server_url" to stringEntry(Keys.SERVER_URL, default = "") { it.trim() },
+            "seerr_auth_method" to stringEntry(Keys.AUTH_METHOD, default = ""),
+            "seerr_username" to stringEntry(Keys.USERNAME, default = "") { it.trim() },
+            "seerr_email" to stringEntry(Keys.EMAIL, default = "") { it.trim() },
+            "seerr_enabled" to booleanEntry(Keys.ENABLED, BOOLEAN_DEFAULTS.getValue(Keys.ENABLED)),
+            "seerr_search_enabled" to booleanEntry(Keys.SEARCH_ENABLED, BOOLEAN_DEFAULTS.getValue(Keys.SEARCH_ENABLED)),
+            "seerr_recommendations_enabled" to booleanEntry(
+                Keys.RECOMMENDATIONS_ENABLED,
+                BOOLEAN_DEFAULTS.getValue(Keys.RECOMMENDATIONS_ENABLED),
+            ),
+            "seerr_discover_enabled" to booleanEntry(Keys.DISCOVER_ENABLED, BOOLEAN_DEFAULTS.getValue(Keys.DISCOVER_ENABLED)),
+            "seerr_discover_trending" to booleanEntry(Keys.DISCOVER_TRENDING, BOOLEAN_DEFAULTS.getValue(Keys.DISCOVER_TRENDING)),
+            "seerr_discover_popular_movies" to booleanEntry(
+                Keys.DISCOVER_POPULAR_MOVIES,
+                BOOLEAN_DEFAULTS.getValue(Keys.DISCOVER_POPULAR_MOVIES),
+            ),
+            "seerr_discover_popular_tv" to booleanEntry(Keys.DISCOVER_POPULAR_TV, BOOLEAN_DEFAULTS.getValue(Keys.DISCOVER_POPULAR_TV)),
+            "seerr_discover_upcoming_movies" to booleanEntry(
+                Keys.DISCOVER_UPCOMING_MOVIES,
+                BOOLEAN_DEFAULTS.getValue(Keys.DISCOVER_UPCOMING_MOVIES),
+            ),
+            "seerr_discover_upcoming_tv" to booleanEntry(Keys.DISCOVER_UPCOMING_TV, BOOLEAN_DEFAULTS.getValue(Keys.DISCOVER_UPCOMING_TV)),
+            "seerr_streaming_region" to stringEntry(Keys.STREAMING_REGION, STRING_DEFAULTS.getValue(Keys.STREAMING_REGION)),
+            "seerr_discover_region" to stringEntry(Keys.DISCOVER_REGION, STRING_DEFAULTS.getValue(Keys.DISCOVER_REGION)),
+        ),
+    )
+
+    /**
+     * The raw key names [syncSnapshot]/[syncApply] may ever touch — the sync
+     * allowlist (all non-secret Seerr configuration; see [SyncTypedKeys]).
+     */
+    val SyncKeys: Set<String> get() = SyncTypedKeys.keys
+
+    /**
+     * The raw stored value per allowlisted key (`null` = the key is absent —
+     * readers fall back to that key's default). The sync adapter's snapshot
+     * face; a corrupt DataStore read degrades to all-absent per the module's
+     * corrupt-read policy.
+     */
+    suspend fun syncSnapshot(): Map<String, String?> = SyncTypedKeys.snapshotFrom(dataStore)
+
+    /**
+     * Writes one allowlisted raw value (the sync adapter's adopt face), or
+     * resets the key when [value] is `null` — the reset WRITES the entry's
+     * default (never a removal: value-presence resets roam as value writes
+     * through the value-only adapter, absence does not, so a removal would
+     * leave the server's still-standing row to re-adopt on a later cycle and
+     * undo the reset). Unallowlisted keys are ignored in BOTH directions (a
+     * hostile or stale server row can never write a key this store does not
+     * sync); an uncoercible value (e.g. a non-boolean string for a boolean
+     * key) skips the write, leaving the local value — the prefs-adapter
+     * coercion rule. String identity fields get the same trim normalization
+     * their UI setters apply.
+     */
+    suspend fun syncApply(key: String, value: String?) =
+        SyncTypedKeys.applyTo(dataStore, key, value)
 }

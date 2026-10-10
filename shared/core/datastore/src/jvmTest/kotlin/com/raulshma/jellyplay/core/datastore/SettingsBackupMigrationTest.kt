@@ -4,7 +4,9 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import com.raulshma.jellyplay.core.datastore.runtime.AppRuntimeState
+import com.raulshma.jellyplay.core.datastore.settings.ExternalBackupSlice
 import com.raulshma.jellyplay.core.model.PlayerType
+import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.platformEngineSupport
 import kotlinx.coroutines.CoroutineScope
@@ -13,11 +15,16 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlin.test.BeforeTest
 import kotlin.test.Test
+import kotlin.test.assertNull
 
 /**
  * Backs the v2 settings-backup split: export/import round-trips through
@@ -177,6 +184,128 @@ class SettingsBackupMigrationTest {
     }
 
     // ------------------------------------------------------------------
+    // Wave 2 — external backup slices (the ExternalBackupSlice seam)
+    // ------------------------------------------------------------------
+
+    @Test
+    fun `external slice rides the snapshot and restores through restoreV2`() = runTest {
+        val external = RecordingExternalSlice(BackupSliceKey.WIDGET)
+        val externalStore = createUserPreferencesStore(scope, dataStore, listOf(external))
+        external.state = buildJsonObject { put("widget_config", "set") }
+        drainStore(externalStore)
+
+        val snapshot = externalStore.snapshotForBackup()
+        assertTrue(BackupSliceKey.WIDGET in snapshot.slices, "a non-null external read must ride the envelope")
+
+        // Alter + restore: the incoming element lands at the source.
+        external.state = null
+        val backup = SettingsBackup(slices = snapshot.slices, extras = snapshot.extras)
+        externalStore.restoreV2(backup, restoreSecuritySensitive = true)
+        drainStore(externalStore)
+
+        assertEquals(
+            snapshot.slices.getValue(BackupSliceKey.WIDGET),
+            external.state,
+            "restoreV2 must fan the slice element back to the source",
+        )
+    }
+
+    @Test
+    fun `external slice with a null read is omitted from the snapshot`() = runTest {
+        val external = RecordingExternalSlice(BackupSliceKey.PLAYLISTS)
+        val externalStore = createUserPreferencesStore(scope, dataStore, listOf(external))
+        drainStore(externalStore)
+
+        val snapshot = externalStore.snapshotForBackup()
+
+        assertFalse(BackupSliceKey.PLAYLISTS in snapshot.slices, "null read = nothing to back up")
+    }
+
+    @Test
+    fun `restoreV2 tolerates a backup without the external slice`() = runTest {
+        val external = RecordingExternalSlice(BackupSliceKey.ITEM_PREFS)
+        val externalStore = createUserPreferencesStore(scope, dataStore, listOf(external))
+        external.state = buildJsonObject { put("ITEM/item-1", "payload") }
+        drainStore(externalStore)
+
+        // A v2 backup WITHOUT the external key (an older export) must not
+        // touch the external domain — omitted slice, never a wipe.
+        val snapshot = externalStore.snapshotForBackup()
+        val partial = snapshot.slices.toMutableMap().apply { remove(BackupSliceKey.ITEM_PREFS) }.toMap()
+        externalStore.restoreV2(SettingsBackup(slices = partial, extras = snapshot.extras))
+        drainStore(externalStore)
+
+        assertEquals(
+            buildJsonObject { put("ITEM/item-1", "payload") },
+            external.state,
+            "a missing external slice key must leave the domain untouched",
+        )
+    }
+
+    @Test
+    fun `restoreV2Categories leaves external slices to the includeExtras arm`() = runTest {
+        val external = RecordingExternalSlice(BackupSliceKey.INTEGRATIONS)
+        val externalStore = createUserPreferencesStore(scope, dataStore, listOf(external))
+        drainStore(externalStore)
+        val backup = SettingsBackup(
+            slices = mapOf(BackupSliceKey.INTEGRATIONS to buildJsonObject { put("seerr_enabled", true) }),
+            extras = AppRuntimeState(),
+        )
+
+        externalStore.restoreV2Categories(
+            backup,
+            categories = setOf(PreferenceResetCategory.APPEARANCE),
+            includeExtras = false,
+        )
+        drainStore(externalStore)
+        assertNull(external.state, "a category import must never touch the not-category-bound external slices")
+
+        externalStore.restoreV2Categories(
+            backup,
+            categories = setOf(PreferenceResetCategory.APPEARANCE),
+            includeExtras = true,
+        )
+        drainStore(externalStore)
+        assertEquals(buildJsonObject { put("seerr_enabled", true) }, external.state)
+    }
+
+    @Test
+    fun `restoreExternalSlice restores just the named slice`() = runTest {
+        val integrations = RecordingExternalSlice(BackupSliceKey.INTEGRATIONS)
+        val widget = RecordingExternalSlice(BackupSliceKey.WIDGET)
+        val externalStore = createUserPreferencesStore(scope, dataStore, listOf(integrations, widget))
+        drainStore(externalStore)
+        val backup = SettingsBackup(
+            slices = mapOf(
+                BackupSliceKey.INTEGRATIONS to buildJsonObject { put("seerr_enabled", true) },
+                BackupSliceKey.WIDGET to buildJsonObject { put("widget_config", true) },
+            ),
+            extras = AppRuntimeState(),
+        )
+
+        externalStore.restoreExternalSlice(backup, BackupSliceKey.INTEGRATIONS)
+        drainStore(externalStore)
+
+        assertEquals(buildJsonObject { put("seerr_enabled", true) }, integrations.state)
+        assertNull(widget.state, "the unnamed sibling slice must stay untouched")
+    }
+
+    @Test
+    fun `externalSliceSnapshot reports the live external slices with null for empty domains`() = runTest {
+        val filled = RecordingExternalSlice(BackupSliceKey.WIDGET)
+        val empty = RecordingExternalSlice(BackupSliceKey.PLAYLISTS)
+        val externalStore = createUserPreferencesStore(scope, dataStore, listOf(filled, empty))
+        filled.state = buildJsonObject { put("widget_config", true) }
+        drainStore(externalStore)
+
+        val snapshot = externalStore.externalSliceSnapshot()
+
+        assertEquals(setOf(BackupSliceKey.WIDGET, BackupSliceKey.PLAYLISTS), snapshot.keys)
+        assertEquals(buildJsonObject { put("widget_config", true) }, snapshot.getValue(BackupSliceKey.WIDGET))
+        assertNull(snapshot.getValue(BackupSliceKey.PLAYLISTS))
+    }
+
+    // ------------------------------------------------------------------
     // Helpers
     // ------------------------------------------------------------------
 
@@ -186,6 +315,11 @@ class SettingsBackupMigrationTest {
 
     private fun drainAfterWrite() {
         runBlocking { store.snapshotForBackup() }
+    }
+
+    /** Same drain for a store variant constructed per-test (external slices). */
+    private suspend fun drainStore(target: UserPreferencesStore) {
+        target.snapshotForBackup()
     }
 
     private suspend fun loadSecurityLocked() {
@@ -230,3 +364,18 @@ suspend fun UserPreferencesStore.securityStoreSnapshot(): com.raulshma.jellyplay
             snap.slices.getValue(BackupSliceKey.SECURITY),
         )
     }
+
+/**
+ * Minimal in-memory [ExternalBackupSlice]: the state the source "persists" is
+ * just a settable element, so the tests can observe exactly what the store
+ * fans in and out without Room.
+ */
+private class RecordingExternalSlice(override val key: String) : ExternalBackupSlice {
+    var state: JsonElement? = null
+
+    override suspend fun read(): JsonElement? = state
+
+    override suspend fun restore(element: JsonElement) {
+        state = element as? JsonObject ?: state
+    }
+}

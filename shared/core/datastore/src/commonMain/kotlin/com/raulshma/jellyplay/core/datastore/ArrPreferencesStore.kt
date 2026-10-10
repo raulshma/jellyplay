@@ -78,7 +78,7 @@ class ArrPreferencesStore constructor(
 
     suspend fun setPollIntervalSeconds(seconds: Int) {
         dataStore.edit {
-            it[Keys.POLL_INTERVAL_SECONDS] = seconds.coerceAtLeast(15)
+            it[Keys.POLL_INTERVAL_SECONDS] = seconds.coerceAtLeast(MIN_POLL_INTERVAL_SECONDS)
         }
     }
 
@@ -87,8 +87,68 @@ class ArrPreferencesStore constructor(
         manualServersTick.value = secureCredentialsStore.getManualServers()
     }
 
+    // ------------------------------------------------------------------
+    // SYNC-ONLY SURFACE (jellyplay-plugin-jellyplay settings sync, the
+    // `integrations` namespace): a minimal allowlisted read/write pair the
+    // sync adapter translates into wire values. NOT a general editing API —
+    // the setters above remain the only user-facing write path. The manual
+    // *arr servers (API keys) live in [ArrSecureCredentialsStore] and are
+    // deliberately absent from the allowlist — they can never sync.
+    // ------------------------------------------------------------------
+
+    /**
+     * The sync allowlist: raw key name → its typed read/write entry (the
+     * shared [SyncEntry] builders — see SyncAllowlist.kt). Key names are
+     * private to this store (the adapter never hardcodes them); this map is
+     * where renames land. The defaults mirror the read path's inline
+     * fallbacks above.
+     */
+    private val SyncTypedKeys = SyncAllowlist(
+        mapOf(
+            "arr_use_seerr_discovery" to booleanEntry(Keys.USE_SEERR_DISCOVERY, default = true),
+            "arr_poll_interval_seconds" to intEntry(
+                Keys.POLL_INTERVAL_SECONDS,
+                default = ArrPreferences.DEFAULT_POLL_INTERVAL_SECONDS,
+                floor = MIN_POLL_INTERVAL_SECONDS,
+            ),
+        ),
+    )
+
+    /**
+     * The raw key names [syncSnapshot]/[syncApply] may ever touch — the sync
+     * allowlist (all non-secret *arr configuration; see [SyncTypedKeys]).
+     */
+    val SyncKeys: Set<String> get() = SyncTypedKeys.keys
+
+    /**
+     * The raw stored value per allowlisted key (`null` = the key is absent —
+     * readers fall back to that key's default). The sync adapter's snapshot
+     * face; a corrupt DataStore read degrades to all-absent per the module's
+     * corrupt-read policy.
+     */
+    suspend fun syncSnapshot(): Map<String, String?> = SyncTypedKeys.snapshotFrom(dataStore)
+
+    /**
+     * Writes one allowlisted raw value (the sync adapter's adopt face), or
+     * resets the key when [value] is `null` — the reset WRITES the entry's
+     * default (never a removal: value-presence resets roam as value writes
+     * through the value-only adapter, absence does not, so a removal would
+     * leave the server's still-standing row to re-adopt on a later cycle and
+     * undo the reset). The poll-interval floor holds on the sync path too.
+     * Unallowlisted keys are ignored in BOTH directions; an uncoercible value
+     * skips the write, leaving the local value (the prefs-adapter coercion
+     * rule).
+     */
+    suspend fun syncApply(key: String, value: String?) =
+        SyncTypedKeys.applyTo(dataStore, key, value)
+
     private data class SimpleArrPrefs(
         val useSeerrDiscovery: Boolean,
         val pollIntervalSeconds: Int,
     )
+
+    private companion object {
+        /** The poll-interval floor [setPollIntervalSeconds] and [syncApply] enforce. */
+        const val MIN_POLL_INTERVAL_SECONDS = 15
+    }
 }

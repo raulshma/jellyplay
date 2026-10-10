@@ -149,6 +149,12 @@ class JellyPlayPluginApiClientImpl(
         json.decodeFromString<JellyPlaySettingsBatchResult>(text)
     }
 
+    override suspend fun getSnapshotContent(id: String): Result<JellyPlaySnapshotContent?> = runCatchingIO {
+        val text = requester.getBodyText("/jellyplay/settings/snapshots/" + java.net.URLEncoder.encode(id, "UTF-8"))
+            ?: return@runCatchingIO null
+        json.decodeFromString<JellyPlaySnapshotContent>(text)
+    }
+
     override suspend fun exportSettings(): Result<String?> = runCatchingIO {
         requester.getBodyText("/jellyplay/settings/export")
     }

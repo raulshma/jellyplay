@@ -93,6 +93,41 @@ class BackupParserTest {
     }
 
     // ------------------------------------------------------------------
+    // Wave 2 — the additive external slices parse as ordinary v2 slices
+    // ------------------------------------------------------------------
+
+    @Test
+    fun `v2 backup containing the wave-2 slice keys parses and keeps them`() {
+        val json = v2BackupJson(
+            slices = mapOf(
+                BackupSliceKey.PLAYBACK to buildJsonObject { put("preferredPlayer", "MPV") },
+                BackupSliceKey.INTEGRATIONS to buildJsonObject { put("seerr_enabled", true) },
+                BackupSliceKey.ITEM_PREFS to buildJsonObject {
+                    put("ITEM/item-1", buildJsonObject { put("audioLanguage", "deu") })
+                },
+                BackupSliceKey.PLAYLISTS to buildJsonObject {
+                    put("smart/pl-1", buildJsonObject { put("name", "Night Movies") })
+                },
+                BackupSliceKey.WIDGET to buildJsonObject {
+                    put("widget_config", buildJsonObject { put("continueWatchingItemCount", 12) })
+                },
+            ),
+        )
+
+        val parsed = BackupParser.parse(json)
+
+        val v2 = assertIs<BackupParser.Parsed.V2>(parsed)
+        assertFalse(v2.hasSecuritySensitive)
+        assertEquals(
+            setOf(
+                BackupSliceKey.PLAYBACK, BackupSliceKey.INTEGRATIONS, BackupSliceKey.ITEM_PREFS,
+                BackupSliceKey.PLAYLISTS, BackupSliceKey.WIDGET,
+            ),
+            v2.backup.slices.keys,
+        )
+    }
+
+    // ------------------------------------------------------------------
     // Legacy v0/v1 — rejected at parse since the v0.11 sunset
     // ------------------------------------------------------------------
 

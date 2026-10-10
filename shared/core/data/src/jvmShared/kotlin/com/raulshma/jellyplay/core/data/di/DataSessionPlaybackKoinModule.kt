@@ -16,6 +16,9 @@ import com.raulshma.jellyplay.core.data.repository.JellyPlayBookmarksSyncAdapter
 import com.raulshma.jellyplay.core.data.repository.JellyPlayCwSyncAdapter
 import com.raulshma.jellyplay.core.data.repository.JellyPlayEventsRepository
 import com.raulshma.jellyplay.core.data.repository.JellyPlayHomeLayoutSyncAdapter
+import com.raulshma.jellyplay.core.data.repository.JellyPlayIntegrationsSyncAdapter
+import com.raulshma.jellyplay.core.data.repository.JellyPlayItemPrefsSyncAdapter
+import com.raulshma.jellyplay.core.data.repository.JellyPlayPlaylistsSyncAdapter
 import com.raulshma.jellyplay.core.data.repository.JellyPlayPreferencesSyncAdapter
 import com.raulshma.jellyplay.core.data.repository.JellyPlayReaderSyncAdapter
 import com.raulshma.jellyplay.core.data.repository.JellyPlaySearchHistorySyncAdapter
@@ -319,6 +322,51 @@ internal val dataSessionPlaybackModule: Module = module {
         )
     }
 
+    // The NON-SECRET integration settings under the general sync protocol
+    // (the settings-backup wave): the `integrations` namespace adapter over
+    // the Seerr / *arr / subtitle-provider preference stores' sync-only
+    // surfaces — the stores' allowlists are the single source of truth for
+    // what may ride the wire (the credentials live in the encrypted stores
+    // and can never sync). VALUE-ONLY like prefs: a local reset/disconnect
+    // means "back to defaults", never "deleted everywhere"; a remote JsonNull
+    // resets the key locally.
+    single {
+        JellyPlayIntegrationsSyncAdapter(
+            seerrPreferencesStore = get(),
+            arrPreferencesStore = get(),
+            subtitleProviderPreferencesStore = get(),
+            mirrorStore = get(com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers.userPreferencesDataStore),
+        )
+    }
+
+    // The per-item/per-series playback preferences under the general sync
+    // protocol (the settings-backup wave): the `itemprefs` namespace adapter
+    // over the Room `item_playback_preferences` store — one `"{scope}/{key}"`
+    // key per row, the full row as the payload, deletes roaming. The roam set
+    // is capped at the 100 most-recent rows by updatedAt (the Room store
+    // stays unbounded; a row aged out of the window roams a delete too —
+    // intended).
+    single {
+        JellyPlayItemPrefsSyncAdapter(
+            dao = get(),
+            mirrorStore = get(com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers.userPreferencesDataStore),
+        )
+    }
+
+    // The playlist DEFINITIONS under the general sync protocol (the
+    // settings-backup wave): the `playlists` namespace adapter over the Room
+    // smart/mood playlist stores — smart/{id}, mood/{id} and
+    // moodpref/{playlistId} keys, whole definition rows as payloads (no
+    // cached item lists anywhere), deletes roaming so a deleted playlist
+    // roams to every device.
+    single {
+        JellyPlayPlaylistsSyncAdapter(
+            smartPlaylistDao = get(),
+            moodPlaylistDao = get(),
+            mirrorStore = get(com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers.userPreferencesDataStore),
+        )
+    }
+
     single {
         val dataStore: androidx.datastore.core.DataStore<androidx.datastore.preferences.core.Preferences> =
             get(com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers.userPreferencesDataStore)
@@ -338,6 +386,9 @@ internal val dataSessionPlaybackModule: Module = module {
                 get<JellyPlayCwSyncAdapter>(),
                 get<JellyPlayReaderSyncAdapter>(),
                 get<JellyPlayHomeLayoutSyncAdapter>(),
+                get<JellyPlayIntegrationsSyncAdapter>(),
+                get<JellyPlayItemPrefsSyncAdapter>(),
+                get<JellyPlayPlaylistsSyncAdapter>(),
             ),
             deviceProfile = detectDeviceProfile(),
             deviceIdProvider = jpsyncDeviceIdProvider(dataStore),

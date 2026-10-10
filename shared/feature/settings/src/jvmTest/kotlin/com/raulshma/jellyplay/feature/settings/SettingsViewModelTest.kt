@@ -33,11 +33,10 @@ import kotlin.test.assertTrue
 
 /**
  * Pins the settings-root ViewModel's non-Composable surface: the cache-size
- * computation off the [SettingsBackupIo] seam, the import stage-and-navigate
- * signal (uri staging only — decoding/classification/the restore live on the
- * import preview path, pinned by [ImportPreviewViewModelTest]), the
- * destructive guard rails (cancel → nothing restored), and the recent-settings
- * tracking.
+ * computation off the [SettingsBackupIo] seam, the secrets-carrying export
+ * pass, and the recent-settings tracking. (The import flow moved wholly into
+ * the unified restore wizard — [RestoreWizardViewModelTest] pins it — so the
+ * ViewModel no longer stages import uris.)
  *
  * Stores/repositories are mockk'd with real [MutableStateFlow] stubs for the
  * init-block collectors. Main-dispatcher rule inlined
@@ -130,38 +129,6 @@ class SettingsViewModelTest {
         advanceUntilIdle()
 
         assertEquals(false, vm.preferences.showAdvancedSettings, "the collector must stay live")
-    }
-
-    // ------------------------------------------------------------ staged import
-
-    @Test
-    fun `importSettings stages the uri without reading or writing anything`() = runTest(testDispatcher) {
-        val vm = viewModel()
-        advanceUntilIdle()
-
-        vm.importSettings("backup:any")
-        advanceUntilIdle()
-
-        assertEquals("backup:any", vm.stagedImportUri, "the stage-and-navigate signal carries the picked uri")
-        assertNull(vm.backupRestoreStatus)
-        // The dead twin used to read + classify here; the surviving path owns
-        // all of that — staging must not touch the file or any store.
-        coVerify(exactly = 0) { settingsBackupIo.readImportPayload(any()) }
-        coVerify(exactly = 0) { preferencesStore.restoreV2(any(), any()) }
-        coVerify(exactly = 0) { preferencesStore.restoreV2(any(), any()) }
-    }
-
-    @Test
-    fun `cancelImport discards the staged import without restoring`() = runTest(testDispatcher) {
-        val vm = viewModel()
-        advanceUntilIdle()
-        vm.importSettings("backup:any")
-
-        vm.cancelImport()
-
-        assertNull(vm.stagedImportUri)
-        coVerify(exactly = 0) { preferencesStore.restoreV2(any(), any()) }
-        coVerify(exactly = 0) { preferencesStore.restoreV2(any(), any()) }
     }
 
     // ------------------------------------------------------------ session surface

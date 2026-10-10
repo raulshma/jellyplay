@@ -111,6 +111,16 @@ interface JellyPlaySettingsSyncRoutes {
     suspend fun restoreSnapshot(id: String): Result<JellyPlaySettingsBatchResult?>
 
     /**
+     * One restore point's full row content (the restore-preview read): the
+     * stored rows grouped per device profile exactly like the export bundle,
+     * values verbatim. null = the id is unknown or not the caller's, or the
+     * server's plugin predates the read (pre-wave 404) — callers degrade
+     * quietly (hide the snapshot PREVIEW; full restore via [restoreSnapshot]
+     * stays available), never error.
+     */
+    suspend fun getSnapshotContent(id: String): Result<JellyPlaySnapshotContent?>
+
+    /**
      * The caller's whole synced store as one JSON export bundle (all profiles
      * + resolved modes + catalog stamp), verbatim — the payload is opaque to
      * the client (share/save it; hand it back to [importSettings]). null =

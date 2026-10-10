@@ -17,6 +17,14 @@ interface ItemPlaybackPreferenceDao {
     @Query("SELECT * FROM item_playback_preferences WHERE scope = :scope AND key = :key LIMIT 1")
     suspend fun getByKey(scope: String, key: String): ItemPlaybackPreferenceEntity?
 
+    /**
+     * Every row, newest-write first — the settings-sync adapter's snapshot
+     * face (it takes the most-recent slice under its roam cap). Query only:
+     * no entity change, so no schema/version bump.
+     */
+    @Query("SELECT * FROM item_playback_preferences ORDER BY updatedAt DESC")
+    suspend fun getAll(): List<ItemPlaybackPreferenceEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(entity: ItemPlaybackPreferenceEntity)
 

@@ -7,7 +7,7 @@ import com.raulshma.jellyplay.core.ui.navigation.Navigator
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.feature.settings.AboutScreen
 import com.raulshma.jellyplay.feature.settings.ArrSettingsScreen
-import com.raulshma.jellyplay.feature.settings.ImportPreviewScreen
+import com.raulshma.jellyplay.feature.settings.RestoreWizardScreen
 import com.raulshma.jellyplay.feature.settings.InputBindingsScreen
 import com.raulshma.jellyplay.feature.settings.SubtitleProviderSettingsScreen
 import com.raulshma.jellyplay.feature.settings.AppearanceSettingsScreen
@@ -217,7 +217,7 @@ fun EntryProviderScope<NavKey>.settingsSection(
         BackupSettingsScreen(
             onBack = { navigator.goBack() },
             onFactoryReset = { navigator.navigate(Route.FactoryReset()) },
-            onImportPreview = { uri -> navigator.navigate(Route.ImportPreview(uri)) },
+            onRestoreWizard = { uri -> navigator.navigate(Route.RestoreWizard(uri = uri)) },
             highlightSettingId = entry.highlightSettingId,
         )
     }
@@ -229,10 +229,11 @@ fun EntryProviderScope<NavKey>.settingsSection(
         )
     }
 
-    entry<Route.ImportPreview> { entry ->
-        ImportPreviewScreen(
+    entry<Route.RestoreWizard> { entry ->
+        RestoreWizardScreen(
             onBack = { navigator.goBack() },
             uri = entry.uri,
+            snapshotId = entry.snapshotId,
         )
     }
 
@@ -276,6 +277,8 @@ fun EntryProviderScope<NavKey>.settingsSection(
     entry<Route.JellyPlaySync> {
         JellyPlaySyncScreen(
             onBack = { navigator.goBack() },
+            onRestoreWizard = { navigator.navigate(Route.RestoreWizard()) },
+            onRestoreSnapshot = { id -> navigator.navigate(Route.RestoreWizard(snapshotId = id)) },
         )
     }
 

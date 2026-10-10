@@ -209,6 +209,8 @@ class ProfileSyncRepositoryTest {
             Result.failure(IllegalStateException("unused"))
         override suspend fun restoreSnapshot(id: String): Result<com.raulshma.jellyplay.core.network.api.JellyPlaySettingsBatchResult?> =
             Result.failure(IllegalStateException("unused"))
+        override suspend fun getSnapshotContent(id: String): Result<com.raulshma.jellyplay.core.network.api.JellyPlaySnapshotContent?> =
+            Result.failure(IllegalStateException("unused"))
         override suspend fun exportSettings(): Result<String?> =
             Result.failure(IllegalStateException("unused"))
         override suspend fun importSettings(bundleJson: String, deviceId: String?): Result<com.raulshma.jellyplay.core.network.api.JellyPlaySettingsBatchResult?> =

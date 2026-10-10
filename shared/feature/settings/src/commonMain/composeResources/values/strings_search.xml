@@ -518,6 +518,8 @@
     <string name="ss_auto_lock_timer_subtitle">Time before app locks after leaving</string>
     <string name="ss_backup_export_title">Export Settings Backup</string>
     <string name="ss_backup_export_subtitle">Export current configuration settings to a JSON file</string>
+    <string name="ss_backup_export_secrets_title">Export Backup with Secrets</string>
+    <string name="ss_backup_export_secrets_subtitle">Export settings plus passphrase-encrypted API keys and the saved server list</string>
     <string name="ss_backup_import_title">Import Settings Backup</string>
     <string name="ss_backup_import_subtitle">Restore configurations from a previously exported settings backup</string>
     <string name="ss_factory_reset_title">Factory Reset</string>

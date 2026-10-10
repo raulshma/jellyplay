@@ -65,6 +65,7 @@ import com.raulshma.jellyplay.core.ui.components.formatIntPattern
 import com.raulshma.jellyplay.core.ui.components.relativeDayLabel
 import com.raulshma.jellyplay.core.ui.components.rememberConfirmState
 import com.raulshma.jellyplay.core.ui.components.rememberScreenBackgroundColorState
+import com.raulshma.jellyplay.core.ui.message.LocalUserMessageBus
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import kotlinx.datetime.toKotlinLocalDate
 import kotlinx.datetime.toKotlinLocalTime
@@ -105,8 +106,6 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jell
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_history_retention
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_history_rejects
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_history_title
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_import_confirm_message
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_import_confirm_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_import_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_import_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_in_flight
@@ -132,9 +131,6 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jell
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_reset_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_reset_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_snapshot_entry
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_snapshot_restore_confirm
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_snapshot_restore_message
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_snapshot_restore_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_snapshots_create_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_snapshots_create_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jellyplay_sync_snapshots_empty
@@ -145,6 +141,8 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_jell
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_reset
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_sync_across_devices
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_sync_never
+import com.raulshma.jellyplay.feature.settings.generated.resources.wizard_safety_snapshot_failed
+import com.raulshma.jellyplay.feature.settings.generated.resources.wizard_snapshot_preview_short
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_sync_now
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_jellyplay_sync_enabled_subtitle
 import org.jetbrains.compose.resources.stringResource
@@ -154,14 +152,16 @@ import org.koin.compose.viewmodel.koinViewModel
  * The JellyPlay companion-plugin's settings-sync screen (ADR 0010) — the sync
  * engine's whole UI under one roof, top to bottom: the opt-in toggle + sync-now
  * (the old settings-root rows' mechanism, untouched), the error banner (the
- * engine's `lastError`/`rejectedKeys` + the snapshot/export/import action
+ * engine's `lastError`/`rejectedKeys` + the snapshot/export action
  * failures), the server-side usage (quota bars + the per-namespace
  * selective-sync toggles with their pending counts), the conflict list (the
  * last cycle's `stale-write` rejects with ours/theirs previews), the merged
  * device list (rename this device, revoke others), this device's resolved
  * profile, the sync history ledger with its retention footer, the server's
- * restore points, and the namespace-reset / force-re-pull / export-import
- * actions.
+ * restore points (each opening the unified restore wizard — Wave 5), and the
+ * namespace-reset / force-re-pull / export / restore-from-file actions (the
+ * file arm reroutes into the wizard; the namespace reset captures a Wave-6
+ * safety restore point first).
  *
  * TV (`LocalTvMode`) collapses the screen to its d-pad essentials: the status
  * + sync-now, the error banner, and the namespace toggles only.
@@ -177,6 +177,10 @@ import org.koin.compose.viewmodel.koinViewModel
 @Composable
 fun JellyPlaySyncScreen(
     onBack: () -> Unit,
+    /** The actions group's import row: opens the unified restore wizard's file arm. */
+    onRestoreWizard: () -> Unit = {},
+    /** A tapped restore point: opens the wizard's snapshot arm (preview / degrade / confirm / apply). */
+    onRestoreSnapshot: (String) -> Unit = {},
     viewModel: JellyPlaySyncViewModel = koinViewModel(),
 ) {
     val backgroundColorState = rememberScreenBackgroundColorState()
@@ -184,22 +188,26 @@ fun JellyPlaySyncScreen(
     val syncState by viewModel.syncState.collectAsStateWithLifecycle()
     val isTv = LocalTvMode.current
     val platformIntents = rememberPlatformIntents()
+    val bus = LocalUserMessageBus.current
 
     // Freshness on open: one pull per visit (the messages screen's idiom);
     // manual actions re-pull through the ViewModel.
     LaunchedEffect(Unit) { viewModel.refresh() }
 
+    // Wave 6: the pre-reset safety capture missed — warn once, never block.
+    val safetyMissedText = stringResource(Res.string.wizard_safety_snapshot_failed)
+    LaunchedEffect(uiState.safetySnapshotMissed) {
+        if (uiState.safetySnapshotMissed) {
+            bus.error(safetyMissedText)
+            viewModel.clearSafetySnapshotMissed()
+        }
+    }
+
     val resetConfirm = rememberConfirmState()
     val revokeConfirm = rememberConfirmState()
-    val restoreConfirm = rememberConfirmState()
     var showRenameDialog by remember { mutableStateOf(false) }
     var renameText by remember { mutableStateOf("") }
     var expandedConflictKey by remember { mutableStateOf<String?>(null) }
-    var pendingImportUri by remember { mutableStateOf<String?>(null) }
-    val importPicker = rememberBackupFilePicker(
-        onExportUriSelected = {},
-        onImportUriSelected = { uri -> pendingImportUri = uri },
-    )
 
     // The export share's pre-resolved texts (the share call fires from a
     // non-composable callback).
@@ -434,27 +442,24 @@ fun JellyPlaySyncScreen(
                                     snapshot.bytes.formatBytes(),
                                 ),
                                 subtitle = formatSyncTimestamp(snapshot.createdAt),
-                                onClick = { restoreConfirm.request { viewModel.restoreSnapshot(snapshot.id) } },
+                                trailingText = stringResource(Res.string.wizard_snapshot_preview_short),
+                                onClick = { onRestoreSnapshot(snapshot.id.toString()) },
                             )
                         }
                     }
                 }
 
-                // ── h. Actions: the destructive namespace reset (confirmed),
-                //      the pull-dominant recovery cycle, and the JSON
-                //      export/import pair (import rides the platform file
-                //      picker + a confirm; hidden when the platform offers no
-                //      picker). Screen-local rows with no declaration (the
-                //      recovery actions live only here — the documented
-                //      non-derivable total, ADR 0009 rule 2). ──
+                // ── h. Actions: the destructive namespace reset (confirmed;
+                //      Wave-6 safety capture inside the VM), the pull-dominant
+                //      recovery cycle, the JSON export, and the restore-from-
+                //      file entry (rerouted into the unified restore wizard —
+                //      Wave 5; the old in-screen import confirm is gone). ──
                 item(key = "actions_label") { SectionLabel(
                     stringResource(Res.string.settings_jellyplay_sync_actions_title),
                     Modifier.padding(top = 8.dp, start = 4.dp),
                 ) }
                 item(key = "actions_group") {
-                    // reset + force-re-pull + export (+ import when the
-                    // platform offers a picker).
-                    SettingsItemList(total = if (importPicker != null) 4 else 3) {
+                    SettingsItemList(total = 4) {
                         SettingListItem(
                             icon = Tabler.Outline.Trash,
                             title = stringResource(Res.string.settings_jellyplay_sync_reset_title),
@@ -482,16 +487,12 @@ fun JellyPlaySyncScreen(
                                 }
                             },
                         )
-                        if (importPicker != null) {
-                            SettingListItem(
-                                icon = Tabler.Outline.Download,
-                                title = stringResource(Res.string.settings_jellyplay_sync_import_title),
-                                subtitle = stringResource(Res.string.settings_jellyplay_sync_import_subtitle),
-                                onClick = {
-                                    if (!uiState.actionInFlight) importPicker.launchOpenImport()
-                                },
-                            )
-                        }
+                        SettingListItem(
+                            icon = Tabler.Outline.Download,
+                            title = stringResource(Res.string.settings_jellyplay_sync_import_title),
+                            subtitle = stringResource(Res.string.settings_jellyplay_sync_import_subtitle),
+                            onClick = onRestoreWizard,
+                        )
                     }
                 }
             }
@@ -515,34 +516,6 @@ fun JellyPlaySyncScreen(
         tone = ConfirmTone.DESTRUCTIVE,
         icon = Tabler.Outline.Ban,
     )
-
-    restoreConfirm.ConfirmDialog(
-        title = stringResource(Res.string.settings_jellyplay_sync_snapshot_restore_title),
-        message = stringResource(Res.string.settings_jellyplay_sync_snapshot_restore_message),
-        confirmText = stringResource(Res.string.settings_jellyplay_sync_snapshot_restore_confirm),
-        dismissText = stringResource(Res.string.settings_cancel),
-        tone = ConfirmTone.WARNING,
-        icon = Tabler.Outline.Clock,
-    )
-
-    // The picked import file's confirm: the bundle applies server-now-stamped,
-    // so the user should know what "import" overwrites before it does.
-    pendingImportUri?.let { uri ->
-        ConfirmDialog(
-            title = stringResource(Res.string.settings_jellyplay_sync_import_confirm_title),
-            message = stringResource(Res.string.settings_jellyplay_sync_import_confirm_message),
-            confirmText = stringResource(Res.string.settings_jellyplay_sync_import_title),
-            dismissText = stringResource(Res.string.settings_cancel),
-            tone = ConfirmTone.WARNING,
-            icon = Tabler.Outline.Download,
-            confirmLoading = uiState.actionInFlight,
-            onConfirm = {
-                pendingImportUri = null
-                viewModel.importFromUri(uri)
-            },
-            onDismiss = { pendingImportUri = null },
-        )
-    }
 
     if (showRenameDialog) {
         RenameDeviceDialog(

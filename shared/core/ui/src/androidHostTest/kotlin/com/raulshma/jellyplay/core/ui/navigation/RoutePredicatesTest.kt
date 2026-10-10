@@ -92,7 +92,7 @@ class RoutePredicatesTest {
         Route.SecuritySettings(),
         Route.PrivacyData(),
         Route.BackupSettings(),
-        Route.ImportPreview("content://test"),
+        Route.RestoreWizard("content://test"),
         Route.ExperimentalSettings(),
         Route.FactoryReset(),
         Route.Integrations(),
@@ -230,7 +230,7 @@ class RoutePredicatesTest {
                 "DiscoverRows", "DiscoverRowEditor",
                 "PlaybackSettings", "InputBindings", "AudioSettings", "LanguageSettings",
                 "NotificationSettings", "StorageSettings", "SecuritySettings",
-                "PrivacyData", "BackupSettings", "ImportPreview",
+                "PrivacyData", "BackupSettings", "RestoreWizard",
                 "ExperimentalSettings", "FactoryReset",
                 // JellyPlay companion-plugin screens (ADR 0010) — Settings-root
                 // capability-gated entries, deliberately unclassified

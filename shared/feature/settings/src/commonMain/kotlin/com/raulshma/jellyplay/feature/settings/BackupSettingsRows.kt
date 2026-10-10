@@ -12,8 +12,12 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_expo
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_export_settings_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_factory_reset
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_factory_reset_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_export_settings_secrets
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_export_settings_secrets_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_import_settings
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_import_settings_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_backup_export_secrets_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_backup_export_secrets_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_backup_export_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_backup_export_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_backup_import_subtitle
@@ -45,6 +49,23 @@ internal object BackupRows {
         searchTitleRes = Res.string.ss_backup_export_title,
         searchSubtitleRes = Res.string.ss_backup_export_subtitle,
         keywords = listOf("backup", "export", "save config", "migration"),
+        route = Route.BackupSettings(),
+    )
+
+    /**
+     * Wave 3 — the secrets-carrying export: same file sink as [BackupExport],
+     * plus the passphrase-encrypted secrets block (third-party API keys + the
+     * saved Jellyfin server list; never access tokens). Opens the passphrase
+     * dialog between the file pick and the write.
+     */
+    val BackupExportSecrets = SettingsRow(
+        id = "backup_export_secrets",
+        icon = Tabler.Outline.Lock,
+        titleRes = Res.string.settings_export_settings_secrets,
+        subtitleRes = Res.string.settings_export_settings_secrets_subtitle,
+        searchTitleRes = Res.string.ss_backup_export_secrets_title,
+        searchSubtitleRes = Res.string.ss_backup_export_secrets_subtitle,
+        keywords = listOf("backup", "export", "secrets", "api keys", "passphrase", "encrypted"),
         route = Route.BackupSettings(),
     )
 
@@ -93,6 +114,7 @@ private val backupCategory = CoreUiRes.string.ss_cat_backup_restore
 
 internal val BackupRowsList: List<SettingsRow> = listOf(
     BackupRows.BackupExport,
+    BackupRows.BackupExportSecrets,
     BackupRows.BackupImport,
     BackupRows.FactoryReset,
 )
