@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.edit
 import com.raulshma.jellyplay.core.datastore.TestDataStoreProvider
 import com.raulshma.jellyplay.core.model.GestureIndicatorSide
 import com.raulshma.jellyplay.core.model.GestureMode
+import com.raulshma.jellyplay.core.model.InputPattern
 import com.raulshma.jellyplay.core.model.MediaSegmentType
 import com.raulshma.jellyplay.core.model.OrientationMode
 import com.raulshma.jellyplay.core.model.PlayerInputDefaults
@@ -21,6 +22,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -209,6 +211,32 @@ class VideoPlayerStoreTest {
         // An unchanged candidate writes nothing (the stored map is unchanged).
         store.updateVideoInputBindings { it.withBindingEnabled("no-such-id", false) }
         assertEquals(stored, store.videoPlayer.first().videoInputBindings)
+    }
+
+    @Test
+    fun `a locked-out stored map is healed on read and persisted by the next mapping write`() = runTest {
+        // The broken-editor fallout (issue #171): every summon surface off —
+        // the controls can never be shown. The heal rides the read, so the
+        // projection is repaired even though the stored blob is not.
+        val locked = PlayerInputDefaults.defaultMap()
+            .withBindingEnabled(PlayerInputDefaults.ID_TAP, enabled = false)
+            .withBindingEnabled(PlayerInputDefaults.ID_EDGE_SWIPE_LEFT, enabled = false)
+            .withBindingEnabled(PlayerInputDefaults.ID_EDGE_SWIPE_RIGHT, enabled = false)
+            .withBindingEnabled(PlayerInputDefaults.ID_DPAD_UP, enabled = false)
+            .withBindingEnabled(PlayerInputDefaults.ID_DPAD_DOWN, enabled = false)
+            .withBindingEnabled(PlayerInputDefaults.ID_DPAD_SELECT, enabled = false)
+        store.setVideoInputBindings(locked)
+
+        val healed = store.videoPlayer.first().videoInputBindings
+        assertNotEquals(locked, healed)
+        assertTrue(healed.bindings.first { it.pattern == InputPattern.Tap }.enabled)
+        // Deliberate narrow choices ride along untouched.
+        assertFalse(healed.bindings.first { it.id == PlayerInputDefaults.ID_EDGE_SWIPE_LEFT }.enabled)
+
+        // The RMW verb transforms the HEALED current, so any editor write
+        // persists the repair — the identity transform suffices.
+        store.updateVideoInputBindings { it }
+        assertEquals(healed, store.videoPlayer.first().videoInputBindings)
     }
 
     @Test

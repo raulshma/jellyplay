@@ -20,6 +20,7 @@ import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import com.raulshma.jellyplay.core.model.PreloadBufferSize
 import com.raulshma.jellyplay.core.model.SegmentBehavior
 import com.raulshma.jellyplay.core.model.StillWatchingMode
+import com.raulshma.jellyplay.core.model.ensureControlsSummonable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.serializer
 
@@ -288,6 +289,11 @@ object VideoPlayerPreferenceSpecs {
         default = PlayerInputDefaults.defaultMap(),
         resetCategory = PreferenceResetCategory.PLAYBACK,
         read = { prefs, raw ->
+            // The summon guarantee rides the ONE decode point: the projection
+            // the editor renders, the slice the player seeds from, and the
+            // current the RMW verb transforms all pass through readFrom, so a
+            // locked-out stored map is repaired everywhere at once and the
+            // next mapping write persists the repair.
             PreferenceCodec.cachedJson(
                 raw = raw,
                 cache = cachedInputBindings,
@@ -296,7 +302,7 @@ object VideoPlayerPreferenceSpecs {
                 onNull = { legacyInputBindings(prefs) },
                 cacheRef = { cachedInputBindings = it },
                 nullPolicy = CachedJsonNullPolicy.NoMemoOnNull,
-            )
+            ).ensureControlsSummonable()
         },
         encode = { map ->
             PreferenceCodec.encodeDefaultsJson.encodeToString(

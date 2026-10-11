@@ -373,3 +373,48 @@ data class PlayerInputMap(
         return if (changed) PlayerInputMap(newBindings) else this
     }
 }
+
+/**
+ * The summon surfaces a map can offer and the actions that count as "summons"
+ * on each — the exact question [PlayerInputMap.ensureControlsSummonable]
+ * asks. Action sets mirror the fire sites: `TOGGLE_CONTROLS` toggles from
+ * everywhere; `BACK_OR_HIDE` SUMMONS only at the edge-swipe site (the D-pad
+ * BACK arm and the executor's arm EXIT when the controls are hidden), so it
+ * counts only for the edge rows.
+ */
+internal val SUMMON_SURFACES: List<Pair<InputPattern, Set<PlayerAction>>> = listOf(
+    InputPattern.Tap to setOf(PlayerAction.TOGGLE_CONTROLS),
+    InputPattern.EdgeSwipe(SwipeEdge.LEFT) to setOf(PlayerAction.TOGGLE_CONTROLS, PlayerAction.BACK_OR_HIDE),
+    InputPattern.EdgeSwipe(SwipeEdge.RIGHT) to setOf(PlayerAction.TOGGLE_CONTROLS, PlayerAction.BACK_OR_HIDE),
+    InputPattern.DPad(DpadControl.UP) to setOf(PlayerAction.TOGGLE_CONTROLS),
+    InputPattern.DPad(DpadControl.DOWN) to setOf(PlayerAction.TOGGLE_CONTROLS),
+    InputPattern.DPad(DpadControl.SELECT) to setOf(PlayerAction.TOGGLE_CONTROLS),
+)
+
+/**
+ * Repair for the one unrecoverable binding state (issue #171's broken-editor
+ * fallout): a map where NO summon surface carries an enabled, summon-capable
+ * action — the controls can never be shown again on any input family (touch,
+ * remote, both), and no in-player UI exists to fix the mapping. Any narrower
+ * choice (say, tap off with an edge swipe alive) is indistinguishable from
+ * intent and stays untouched.
+ *
+ * The heal restores the default Tap row (`TOGGLE_CONTROLS`, enabled) via
+ * [PlayerInputMap.withBindingAdded] — an existing drifted row keeps its id,
+ * a missing row is appended — so the next mapping write persists the repair.
+ * Idempotent: a healed map (and every healthy map) returns unchanged.
+ */
+fun PlayerInputMap.ensureControlsSummonable(): PlayerInputMap {
+    val summonable = SUMMON_SURFACES.any { (pattern, actions) ->
+        enabledBindingFor(pattern)?.let { it.action in actions } == true
+    }
+    if (summonable) return this
+    return withBindingAdded(
+        PlayerBinding(
+            id = PlayerInputDefaults.ID_TAP,
+            pattern = InputPattern.Tap,
+            action = PlayerAction.TOGGLE_CONTROLS,
+            enabled = true,
+        ),
+    )
+}

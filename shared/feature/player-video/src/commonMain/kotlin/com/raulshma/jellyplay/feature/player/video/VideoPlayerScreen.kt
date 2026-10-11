@@ -755,12 +755,20 @@ fun VideoPlayerScreen(
 
     // Live-read wrappers for the pointerInput tiers (tap-and-zoom, gesture
     // overlay): a pointerInput block freezes whatever lambda it captured at
-    // launch until one of its keys changes, so the tiers must read the
+    // launch until one of its keys change, so the tiers must read the
     // executor/resolver THROUGH these delegates (the file's reader-lambda
     // rule) — the captured values inside them (isPlaying, uiState fields)
-    // would otherwise go stale mid-session.
+    // would otherwise go stale mid-session. seekState/gestureController are
+    // plain local vals — NOT delegated — so the arms that touch them directly
+    // need their own delegates: the executor is remember(gestureController)-
+    // keyed and the controller remember(engine, …)-keyed, and a rebuild mints
+    // new instances the frozen lambdas must follow (a captured seekState kept
+    // the double-tap/wheel arms feeding a dead chip while the screen rendered
+    // the new one).
     val currentResolvePatternAction by rememberUpdatedState(resolvePatternAction)
     val currentExecutePlayerAction by rememberUpdatedState(actionExecutor::executeAction)
+    val currentSeekState by rememberUpdatedState(seekState)
+    val currentGestureController by rememberUpdatedState(gestureController)
 
     //  deterministic desktop delivery (desktop only — the seam is
     // Android-inert, see [grabsKeyboardFocusWithControlsVisible]): publish the
@@ -863,7 +871,7 @@ fun VideoPlayerScreen(
                             )
                         },
                         onVolumeNotch = { direction ->
-                            gestureController.onVolumeWheelNotch(direction)
+                            currentGestureController.onVolumeWheelNotch(direction)
                         },
                         onSeekNotch = { direction ->
                             // The double-tap commit pattern (addOffset + immediate
@@ -871,10 +879,10 @@ fun VideoPlayerScreen(
                             // per-notch commit, and the chip auto-resets via the
                             // shared GESTURE_SEEK_LINGER collector.
                             if (direction > 0) {
-                                seekState.addOffset(1, currentSeekDurationMs)
+                                currentSeekState.addOffset(1, currentSeekDurationMs)
                                 currentDoSeekForward()
                             } else {
-                                seekState.addOffset(-1, currentSeekDurationMs)
+                                currentSeekState.addOffset(-1, currentSeekDurationMs)
                                 currentDoSeekBack()
                             }
                             performConfirmHaptic()
@@ -896,12 +904,12 @@ fun VideoPlayerScreen(
                         startHoldSpeed = { viewModel.onEvent(VideoPlayerUiEvent.StartHoldSpeed) },
                         toggleControls = { showControls = !showControls },
                         onDoubleTapSeekBack = {
-                            seekState.addOffset(-1, currentSeekDurationMs)
+                            currentSeekState.addOffset(-1, currentSeekDurationMs)
                             currentDoSeekBack()
                             performConfirmHaptic()
                         },
                         onDoubleTapSeekForward = {
-                            seekState.addOffset(1, currentSeekDurationMs)
+                            currentSeekState.addOffset(1, currentSeekDurationMs)
                             currentDoSeekForward()
                             performConfirmHaptic()
                         },
@@ -1493,8 +1501,13 @@ fun VideoPlayerScreen(
     // Single long-lived collector replaces a fresh LaunchedEffect keyed on
     // seekState.timestamp (which changes per D-pad seek → coroutine create/cancel
     // per event, thrashing during hold-and-repeat seeking). The reset side-effect
-    // body is unchanged; only the dispatch mechanism changes.
-    LaunchedEffect(Unit) {
+    // body is unchanged; only the dispatch mechanism changes. KEYED ON THE
+    // seekState INSTANCE: `actionExecutor` is remember(gestureController)-keyed
+    // and the controller is remember(engine, …)-keyed, so an engine/cast/
+    // swipe-max change mints a NEW DpadSeekState — a Unit key would leave this
+    // collector resetting the dead instance while the chip renders from the new
+    // one and never hides.
+    LaunchedEffect(seekState) {
         snapshotFlow { seekState.timestamp to seekState.direction }
             .filter { (_, direction) -> direction != 0 }
             .collectLatest {
@@ -1512,9 +1525,11 @@ fun VideoPlayerScreen(
     // Commits route through the same seekState → doSeekTo funnel the D-pad
     // uses, then the chip lingers out via the reset effect above. One
     // long-lived collector, not a per-press LaunchedEffect — the same
-    // dispatch-shape reason the D-pad linger effect above cites.
-    LaunchedEffect(Unit) {
-        snapshotFlow { actionExecutor.keyboardSeekStamp }
+    // dispatch-shape reason the D-pad linger effect above cites. Keyed on the
+    // executor instance for the same reason that effect keys on seekState.
+    LaunchedEffect(actionExecutor) {
+        val executor = actionExecutor
+        snapshotFlow { executor.keyboardSeekStamp }
             .filter { it > 0 }
             .collectLatest {
                 delay(KEYBOARD_SEEK_COMMIT_DELAY_MS)
@@ -1522,7 +1537,7 @@ fun VideoPlayerScreen(
                 // contribution (drag/swipe/double-tap seek inside the commit
                 // window) — a commit from the keyboard's stale base position
                 // would yank playback back over the newer seek.
-                if (seekState.timestamp != actionExecutor.lastKeyboardSeekChipTimestamp) {
+                if (seekState.timestamp != executor.lastKeyboardSeekChipTimestamp) {
                     return@collectLatest
                 }
                 when (seekState.direction) {

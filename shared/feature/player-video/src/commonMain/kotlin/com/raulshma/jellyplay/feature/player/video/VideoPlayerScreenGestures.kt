@@ -476,11 +476,6 @@ internal fun Modifier.playerTapAndZoomGestures(
             val touchSlopPx = viewConfiguration.touchSlop
             val longPressTimeoutMs = viewConfiguration.longPressTimeoutMillis
             val doubleTapTimeoutMs = viewConfiguration.doubleTapTimeoutMillis
-            // This Compose version exposes no public double-tap distance slop
-            // (the retired `doubleTapMinSlopMillis`) — the touch slop is the
-            // standard stand-in for "roughly the same spot" in hand-rolled
-            // double-tap detectors.
-            val doubleTapSlopPx = touchSlopPx
             var press = awaitFirstDown(requireUnconsumed = false)
             while (true) {
                 // ── Phase A: resolve this press — tap, long-press, or moved. ──
@@ -498,16 +493,19 @@ internal fun Modifier.playerTapAndZoomGestures(
                     }
                     PressOutcome.Tapped -> {}
                 }
-                // ── Phase B: the double-tap window. Same pointer id, within the
-                // window and the double-tap slop of the first press — a second
-                // down outside the slop is a NEW first press (two slow,
-                // far-apart taps are two single taps), so loop around with it.
+                // ── Phase B: the double-tap window. ANY new down within the
+                // window is the second press — foundation's detectTapGestures
+                // semantics. NO pointer-id match: Android pointer ids are only
+                // stable WITHIN one touch sequence, and a new tap legally (and
+                // often, depending on the panel) carries a fresh id — an
+                // id-strict wait swallows the second tap and degrades every
+                // double tap to a delayed single tap.
                 val second = withTimeoutOrNull(doubleTapTimeoutMs) {
                     var down: PointerInputChange?
                     do {
                         down = awaitPointerEvent()
                             .changes
-                            .firstOrNull { it.id == press.id && it.changedToDown() }
+                            .firstOrNull { it.changedToDown() }
                     } while (down == null)
                     down
                 }
@@ -525,15 +523,10 @@ internal fun Modifier.playerTapAndZoomGestures(
                     }
                     return@awaitEachGesture
                 }
-                val secondIsNearFirst =
-                    abs(second.position.x - press.position.x) <= doubleTapSlopPx &&
-                        abs(second.position.y - press.position.y) <= doubleTapSlopPx
-                if (!secondIsNearFirst) {
-                    press = second
-                    continue
-                }
                 // ── Phase C: the double tap. Zone from the second press's down
-                // position (the same 35%/65% split the inline handler used).
+                // position (the same 35%/65% split the inline handler used) —
+                // no same-spot gate: foundation's second-down wait has none, and
+                // a loose double tap is still a double tap.
                 val zone = DoubleTapHoldSeekPolicy.seekZone(second.position.x, size.width)
                 when (awaitPressOutcome(second, touchSlopPx, longPressTimeoutMs)) {
                     PressOutcome.Moved -> return@awaitEachGesture
