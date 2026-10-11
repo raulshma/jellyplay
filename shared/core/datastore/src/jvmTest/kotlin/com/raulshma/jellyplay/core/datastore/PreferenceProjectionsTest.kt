@@ -11,9 +11,11 @@ import com.raulshma.jellyplay.core.model.DownloadPreferences
 import com.raulshma.jellyplay.core.model.ExperimentalFeature
 import com.raulshma.jellyplay.core.model.ExperimentalPreferences
 import com.raulshma.jellyplay.core.model.GestureMode
+import com.raulshma.jellyplay.core.model.InputPattern
 import com.raulshma.jellyplay.core.model.LanguagePreferences
 import com.raulshma.jellyplay.core.model.NavigationCustomizationPreferences
 import com.raulshma.jellyplay.core.model.PlaybackPreferences
+import com.raulshma.jellyplay.core.model.PlayerInputDefaults
 import com.raulshma.jellyplay.core.model.SecurityPreferences
 import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.SubtitlePreferences
@@ -143,6 +145,32 @@ class PreferenceProjectionsTest {
         assertEquals(!playbackBefore.cinemaModeEnabled, playbackAfter.cinemaModeEnabled)
         // The audio projection must be unaffected by a playback-only write.
         assertEquals(audioBefore, projections.audioPreferences.first())
+    }
+
+    @Test
+    fun `an input-bindings write is reflected in the playback projection`() = runTest {
+        // The binding editor reads the map through this projection; a missing
+        // field here left the editor rendering the factory map — toggles
+        // persisted but snapped back on screen, and rows silently disabled in
+        // the stored blob (dead tap gestures) still displayed enabled.
+        val disabledTap = PlayerInputDefaults.defaultMap()
+            .withBindingEnabled(PlayerInputDefaults.ID_TAP, enabled = false)
+        graph.videoPlayerStore.setVideoInputBindings(disabledTap)
+
+        val projected = projections.playbackPreferences.first().videoInputBindings
+        assertEquals(disabledTap, projected)
+        assertEquals(
+            false,
+            projected.bindings.firstOrNull { it.pattern == InputPattern.Tap }?.enabled,
+            "the projection must carry the stored map, not the factory default",
+        )
+
+        // A follow-up editor-shaped RMW flip must also surface.
+        graph.videoPlayerStore.updateVideoInputBindings {
+            it.withBindingEnabled(PlayerInputDefaults.ID_TAP, enabled = true)
+        }
+        val after = projections.playbackPreferences.first().videoInputBindings
+        assertEquals(true, after.enabledBindingFor(InputPattern.Tap)?.enabled)
     }
 
     @Test

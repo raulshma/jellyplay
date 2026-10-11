@@ -58,6 +58,11 @@ internal data class PlaybackCoreBundle(
         videoHideOsdOnPause = video.videoHideOsdOnPause,
         videoResumeOnHeadsetPlug = video.videoResumeOnHeadsetPlug,
         videoGestureMode = video.videoGestureMode,
+        // The binding editor renders from this projection; omitting the map
+        // here read as the factory default on every emission, so every editor
+        // toggle snapped back while the write itself landed in the store
+        // (issue #171: "gesture detailed settings are unresponsive").
+        videoInputBindings = video.videoInputBindings,
         videoDoubleTapHoldSeekEnabled = video.videoDoubleTapHoldSeekEnabled,
         videoHoldSpeedEnabled = video.videoHoldSpeedEnabled,
         videoHoldSpeedMultiplier = video.videoHoldSpeedMultiplier,
