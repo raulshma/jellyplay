@@ -32,7 +32,6 @@ import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.playerOnScrim
 import com.raulshma.jellyplay.core.designsystem.theme.playerScrimColor
-import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaSegment
 import com.raulshma.jellyplay.core.model.SegmentBehavior
 import com.raulshma.jellyplay.core.model.TrickplayInfo
@@ -87,10 +86,14 @@ internal data class CenterOverlayInputs(
     val shouldShowUpNext: Boolean,
     val isInPipMode: Boolean,
     val tvSkipSegmentFocusRequester: FocusRequester,
-    val nextEpisode: MediaItem?,
-    val nextEpisodeImageUrl: String?,
-    /** The manual queue's head when it holds items — the up-next card shows it (queue-first). */
-    val queuedNext: com.raulshma.jellyplay.core.data.playback.VideoQueueItem? = null,
+    /**
+     * The Up Next card — the Up Next controller's projection, already resolved
+     * with the ADVANCE's precedence (queue head beats the episode sibling, null
+     * under SyncPlay). The overlay never re-decides precedence from raw state.
+     */
+    val upNextCard: UpNextCard?,
+    /** The card's artwork: the queue row's image, or the episode item's resolved url. */
+    val upNextImageUrl: String?,
     val isNextEpisodeLoading: Boolean,
     val tvNextEpisodeFocusRequester: FocusRequester,
     val isPlaying: Boolean,
@@ -187,20 +190,18 @@ internal fun BoxScope.PlayerCenterOverlayTier(
         }
     }
 
-    if (inputs.nextEpisode != null || inputs.queuedNext != null) {
-        // The confirm overlay suppresses the up-next card while visible —
-        // the answer decides the advance, the card must not race it. The
-        // queue head (movie queued from the details screen) shows when there
-        // is no episode sibling — queue-first semantics.
-        val queued = inputs.queuedNext
-        val episode = inputs.nextEpisode
+    // The Up Next card: the controller's projection (queue head beats the
+    // episode sibling — the SAME precedence the advance applies). The confirm
+    // overlay suppresses the card while visible — the answer decides the
+    // advance, the card must not race it.
+    inputs.upNextCard?.let { card ->
         NextEpisodeOverlay(
             isVisible = inputs.shouldShowUpNext && inputs.stillWatchingPrompt == null,
-            episodeTitle = episode?.name ?: queued?.title.orEmpty(),
-            seriesName = episode?.seriesName ?: queued?.subtitle,
-            seasonNumber = episode?.seasonNumber,
-            episodeNumber = episode?.episodeNumber,
-            thumbnailUrl = inputs.nextEpisodeImageUrl ?: queued?.imageUrl,
+            episodeTitle = card.title,
+            seriesName = card.subtitle,
+            seasonNumber = card.seasonNumber,
+            episodeNumber = card.episodeNumber,
+            thumbnailUrl = inputs.upNextImageUrl,
             countdownSeconds = uiState.autoplay.autoPlayCountdownSec,
             autoplayEnabled = uiState.autoplay.videoAutoplayNext,
             onPlayNext = { viewModel.onEvent(VideoPlayerUiEvent.PlayNextEpisode) },

@@ -21,7 +21,6 @@ class SegmentCalculatorTest {
         autoplayCancelled: Boolean = false,
         isInSyncPlaySession: Boolean = false,
         hasNextEpisode: Boolean = false,
-        seriesId: String? = null,
     ) = SegmentCalculatorInput(
         segments = segments,
         chapters = chapters,
@@ -30,7 +29,6 @@ class SegmentCalculatorTest {
         autoplayCancelled = autoplayCancelled,
         isInSyncPlaySession = isInSyncPlaySession,
         hasNextEpisode = hasNextEpisode,
-        seriesId = seriesId,
     )
 
     // ms → ticks helper. 1 ms == 10_000 ticks.
@@ -121,7 +119,7 @@ class SegmentCalculatorTest {
     @Test
     fun shouldShowUpNext_falseWhenAutoplayCancelled() {
         val result = SegmentCalculator.shouldShowUpNext(
-            input(autoplayCancelled = true, hasNextEpisode = true, seriesId = "s1"),
+            input(autoplayCancelled = true, hasNextEpisode = true),
             positionMs = 0,
         )
         assertFalse(result)
@@ -130,7 +128,7 @@ class SegmentCalculatorTest {
     @Test
     fun shouldShowUpNext_falseWhenInSyncPlay() {
         val result = SegmentCalculator.shouldShowUpNext(
-            input(isInSyncPlaySession = true, hasNextEpisode = true, seriesId = "s1"),
+            input(isInSyncPlaySession = true, hasNextEpisode = true),
             positionMs = 0,
         )
         assertFalse(result)
@@ -139,7 +137,7 @@ class SegmentCalculatorTest {
     @Test
     fun shouldShowUpNext_trueWhenWithin30sOfEnd() {
         val result = SegmentCalculator.shouldShowUpNext(
-            input(durationMs = 100_000, hasNextEpisode = true, seriesId = "s1"),
+            input(durationMs = 100_000, hasNextEpisode = true),
             positionMs = 80_000, // > 100_000 - 30_000
         )
         assertTrue(result)
@@ -148,19 +146,55 @@ class SegmentCalculatorTest {
     @Test
     fun shouldShowUpNext_falseWhenNoNextEpisode() {
         val result = SegmentCalculator.shouldShowUpNext(
-            input(durationMs = 100_000, hasNextEpisode = false, seriesId = "s1"),
+            input(durationMs = 100_000, hasNextEpisode = false),
             positionMs = 99_000,
         )
         assertFalse(result)
     }
 
+    // ── The projection fold (what "a next exists" means) ───────────────────
+    // The calculator's `hasNextEpisode` is a FOLD the projection performs:
+    // an episode sibling OR the Up Next controller's queue mirror. The
+    // calculator itself is pure time-window math (no queue/series inputs —
+    // the former hasQueuedNext + queued-movie bypass inputs were removed
+    // with the Up Next module's card projection); the fold is pinned here
+    // because it is the display side of queue-first semantics.
+
+    private fun projectionState(
+        nextEpisode: com.raulshma.jellyplay.core.model.MediaItem? = null,
+        hasQueuedNext: Boolean = false,
+    ) = VideoPlayerUiState(
+        episodes = com.raulshma.jellyplay.feature.player.video.state.EpisodeBrowserState(
+            nextEpisode = nextEpisode,
+        ),
+        hasQueuedNext = hasQueuedNext,
+    )
+
     @Test
-    fun shouldShowUpNext_falseWhenNoSeriesId() {
-        val result = SegmentCalculator.shouldShowUpNext(
-            input(durationMs = 100_000, hasNextEpisode = true, seriesId = null),
-            positionMs = 99_000,
+    fun projection_fold_countsAQueuedMovieAsNext_withoutAnySibling() {
+        // The headline case: a movie has no series sibling — only the queue.
+        val proj = SegmentProjection(projectionState(hasQueuedNext = true))
+        assertTrue(proj.toSegmentInput(durationMs = 100_000).hasNextEpisode)
+    }
+
+    @Test
+    fun projection_fold_movieWithoutQueueOrSibling_hasNoNext() {
+        val proj = SegmentProjection(projectionState())
+        assertFalse(proj.toSegmentInput(durationMs = 100_000).hasNextEpisode)
+    }
+
+    @Test
+    fun projection_fold_siblingCounts_evenWhenQueueIsEmpty() {
+        val proj = SegmentProjection(
+            projectionState(
+                nextEpisode = com.raulshma.jellyplay.core.model.MediaItem(
+                    id = "ep3",
+                    name = "ep3",
+                    mediaType = com.raulshma.jellyplay.core.model.MediaType.EPISODE,
+                ),
+            ),
         )
-        assertFalse(result)
+        assertTrue(proj.toSegmentInput(durationMs = 100_000).hasNextEpisode)
     }
 
     @Test

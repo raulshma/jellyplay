@@ -22,10 +22,6 @@ import com.raulshma.jellyplay.core.ui.generated.resources.ss_cat_playback
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchItem
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_input_bindings
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_input_bindings_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_input_bindings_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_input_bindings_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_advanced_config
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_delay
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_device
@@ -55,8 +51,6 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_cine
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_controls_timeout
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_controls_timeout_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_debanding
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_double_tap_hold_seek
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_double_tap_hold_seek_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_decoder
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_decoder_fallback
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_decoder_threads
@@ -68,6 +62,8 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_defa
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_default_speed_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dialogue_boost
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_dialogue_boost_strength
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_double_tap_hold_seek
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_double_tap_hold_seek_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_downmix_boost
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_drop_late_frames
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_duck_on_phone_call
@@ -91,6 +87,8 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hold
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hold_to_seek_speed_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hwdec_override
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_incognito_mode
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_input_bindings
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_input_bindings_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_interpolation
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_interpolation_tscale
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_join_behavior
@@ -115,17 +113,18 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_play
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_playback_metadata
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_player_engine
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_player_engine_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_resume_headset_plug
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_resume_headset_plug_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_preferred_codecs
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_preferred_renderer
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_preferred_renderer_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_preload_buffer
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_preload_buffer_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_raw_mpv_options
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_refresh_rate_match
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_remember_brightness
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_render_quality
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_reset_to_defaults
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_resume_headset_plug
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_resume_headset_plug_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_scaler
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_seek_duration
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_seek_duration_subtitle
@@ -164,7 +163,6 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_audio_dela
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_audio_passthrough_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_audio_passthrough_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_auto_pip_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_auto_pip_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_autoplay_countdown_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_autoplay_countdown_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_autoplay_trailers_subtitle
@@ -180,9 +178,7 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_cinema_mod
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_controls_timeout_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_controls_timeout_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_decoder_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_double_tap_hold_seek_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_decoder_title
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_double_tap_hold_seek_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_default_aspect_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_default_aspect_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_default_brightness_level_subtitle
@@ -192,6 +188,7 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_default_sp
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_dialogue_boost_strength_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_dialogue_boost_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_dialogue_boost_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_double_tap_hold_seek_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_downmix_boost_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_duck_on_transient_focus_loss_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_duck_on_transient_focus_loss_title
@@ -218,7 +215,6 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_exo_skip_s
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_exo_video_scaling_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_exo_video_scaling_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_external_player_app_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_external_player_app_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_frame_rate_matching_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_frame_rate_matching_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_gesture_indicator_side_subtitle
@@ -226,7 +222,6 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_gesture_in
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_gestures_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_gestures_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_hide_osd_on_pause_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_hide_osd_on_pause_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_hold_speed_multiplier_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_hold_speed_multiplier_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_incognito_mode_subtitle
@@ -250,7 +245,6 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_mpv_buffer
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_mpv_buffer_size_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_mpv_debanding_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_mpv_debanding_title
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_mpv_extra_config_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_mpv_frame_drop_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_mpv_frame_drop_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_mpv_hdr_passthrough_subtitle
@@ -285,8 +279,6 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_playback_m
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_playback_metadata_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_player_engine_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_player_engine_title
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_resume_headset_plug_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_resume_headset_plug_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_preferred_renderer_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_preferred_renderer_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_preload_buffer_subtitle
@@ -296,6 +288,7 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_remember_b
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_remember_volume_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_remember_volume_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_reset_engine_defaults_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_resume_headset_plug_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_seek_duration_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_seek_duration_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_show_clock_player_subtitle
@@ -306,9 +299,7 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_skip_back_
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_skip_back_on_resume_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_skip_segments_on_seek_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_still_watching_episodes_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_still_watching_episodes_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_still_watching_mode_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_still_watching_mode_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_streaming_quality_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_streaming_quality_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_swipe_seek_range_subtitle
@@ -327,7 +318,6 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_tv_zoom_mo
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_tv_zoom_mode_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_video_autoplay_next_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_video_autoplay_next_title
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_video_cache_size_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_vlc_audio_output_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_vlc_audio_output_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_vlc_audio_time_stretch_subtitle
@@ -430,7 +420,6 @@ internal object PlaybackRows {
         icon = Tabler.Outline.PlayerTrackNext,
         titleRes = Res.string.settings_double_tap_hold_seek,
         subtitleRes = Res.string.settings_double_tap_hold_seek_subtitle,
-        searchTitleRes = Res.string.ss_double_tap_hold_seek_title,
         searchSubtitleRes = Res.string.ss_double_tap_hold_seek_subtitle,
         platforms = platformsForCapability(settingsCapabilities.supportsTouchGestures),
         gate = RowAdmission.Platform(RowAdmissionCapability.TouchGestures),
@@ -447,8 +436,7 @@ internal object PlaybackRows {
         icon = Tabler.Outline.Settings,
         titleRes = Res.string.settings_input_bindings,
         subtitleRes = Res.string.settings_input_bindings_subtitle,
-        searchTitleRes = Res.string.ss_input_bindings_title,
-        searchSubtitleRes = Res.string.ss_input_bindings_subtitle,
+        searchSubtitleRes = Res.string.settings_input_bindings_subtitle,
         gate = RowAdmission.Always,
     )
 
@@ -492,7 +480,6 @@ internal object PlaybackRows {
         icon = Tabler.Outline.EyeCheck,
         titleRes = Res.string.settings_still_watching_mode,
         subtitleRes = Res.string.settings_still_watching_mode_subtitle,
-        searchTitleRes = Res.string.ss_still_watching_mode_title,
         searchSubtitleRes = Res.string.ss_still_watching_mode_subtitle,
         gate = RowAdmission.WhenOn(PlaybackRows.VideoAutoplayNext.id),
     )
@@ -502,7 +489,6 @@ internal object PlaybackRows {
         icon = Tabler.Outline.Clock,
         titleRes = Res.string.settings_still_watching_episodes,
         subtitleRes = Res.string.settings_still_watching_episodes_subtitle,
-        searchTitleRes = Res.string.ss_still_watching_episodes_title,
         searchSubtitleRes = Res.string.ss_still_watching_episodes_subtitle,
         gate = RowAdmission.WhenOn(PlaybackRows.VideoAutoplayNext.id),
     )
@@ -524,7 +510,6 @@ internal object PlaybackRows {
         icon = Tabler.Outline.EyeOff,
         titleRes = Res.string.settings_hide_osd_on_pause,
         subtitleRes = Res.string.settings_hide_osd_on_pause_subtitle,
-        searchTitleRes = Res.string.ss_hide_osd_on_pause_title,
         searchSubtitleRes = Res.string.ss_hide_osd_on_pause_subtitle,
     )
 
@@ -571,7 +556,6 @@ internal object PlaybackRows {
         icon = Tabler.Outline.Headphones,
         titleRes = Res.string.settings_resume_headset_plug,
         subtitleRes = Res.string.settings_resume_headset_plug_subtitle,
-        searchTitleRes = Res.string.ss_resume_headset_plug_title,
         searchSubtitleRes = Res.string.ss_resume_headset_plug_subtitle,
     )
 
@@ -646,7 +630,7 @@ internal object PlaybackRows {
         icon = Tabler.Outline.Database,
         titleRes = Res.string.settings_video_cache_size,
         subtitleRes = Res.string.settings_video_cache_size_subtitle,
-        searchSubtitleRes = Res.string.ss_video_cache_size_subtitle,
+        searchSubtitleRes = Res.string.settings_video_cache_size_subtitle,
     )
 
     val BackgroundAudio = SettingsRow(
@@ -665,7 +649,6 @@ internal object PlaybackRows {
         id = "auto_enter_pip",
         icon = Tabler.Outline.PictureInPicture,
         titleRes = Res.string.settings_auto_pip,
-        searchTitleRes = Res.string.ss_auto_pip_title,
         searchSubtitleRes = Res.string.ss_auto_pip_subtitle,
         gate = RowAdmission.All(RowAdmission.Advanced, RowAdmission.Platform(RowAdmissionCapability.Pip)),
     )
@@ -1130,7 +1113,7 @@ internal object PlaybackRows {
         id = "mpv_extra_config",
         icon = Tabler.Outline.Code,
         titleRes = Res.string.settings_advanced_config,
-        searchSubtitleRes = Res.string.ss_mpv_extra_config_subtitle,
+        searchSubtitleRes = Res.string.settings_raw_mpv_options,
         keywords = listOf("mpv", "advanced", "config", "raw", "options", "editor", "custom"),
         route = Route.PlaybackSettings(),
         isAdvanced = true,
@@ -1337,7 +1320,6 @@ internal object PlaybackRows {
         icon = Tabler.Outline.Devices,
         titleRes = Res.string.settings_external_player_app,
         subtitleRes = Res.string.settings_external_player_app_subtitle,
-        searchTitleRes = Res.string.ss_external_player_app_title,
         searchSubtitleRes = Res.string.ss_external_player_app_subtitle,
     )
 

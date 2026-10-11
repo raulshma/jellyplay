@@ -88,7 +88,7 @@ internal class MediaContentProjector(
     private val setChapters: (List<ChapterInfo>) -> Unit,
     /** The media slice's artwork URL (the `getImageUrl(id, 400)` seam). */
     private val artworkUrl: (itemId: String) -> String,
-    /** The episode-slice adoption ([EpisodeContinuationController.adoptSeasonOf]). */
+    /** The episode-slice adoption ([UpNextController.adoptSeasonOf]). */
     private val adoptSeasonOf: (MediaDetail) -> Unit,
     /** The active engine (volume-memory restore + capture arm). */
     private val getEngine: () -> MediaEngine?,

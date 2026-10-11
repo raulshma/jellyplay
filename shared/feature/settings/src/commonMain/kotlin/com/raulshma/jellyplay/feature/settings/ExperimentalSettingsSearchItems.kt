@@ -9,11 +9,11 @@ import com.raulshma.jellyplay.core.ui.generated.resources.Res as CoreUiRes
 import com.raulshma.jellyplay.core.ui.generated.resources.ss_cat_experimental
 import com.raulshma.jellyplay.core.ui.generated.resources.ss_cat_integrations
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_exp_press_hold_preview_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_DIRECT_ARR_INTEGRATION_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_DIRECT_ARR_INTEGRATION_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_HOME_CARD_CLIPPING_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_HOME_CARD_CLIPPING_title
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_MEDIA_CARD_PEEK_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_MEDIA_CARD_PEEK_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_arr_settings_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_arr_settings_title
@@ -77,7 +77,7 @@ internal val ExperimentalSettingsSearchItems: List<SettingsSearchItem> =
             SettingsSearchBinding(
                 id = ExperimentalSettingsIds.MEDIA_CARD_PEEK,
                 titleRes = Res.string.ss_MEDIA_CARD_PEEK_title,
-                subtitleRes = Res.string.ss_MEDIA_CARD_PEEK_subtitle,
+                subtitleRes = Res.string.settings_exp_press_hold_preview_subtitle,
                 categoryRes = CoreUiRes.string.ss_cat_experimental,
                 icon = Tabler.Outline.HandFinger,
             ),

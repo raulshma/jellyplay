@@ -55,7 +55,6 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_volu
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_volume_normalization
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_audio_autoplay_next_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_audio_autoplay_next_title
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_audio_cache_clear_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_audio_cache_network_policy_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_audio_cache_network_policy_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_audio_cache_size_subtitle
@@ -66,7 +65,6 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_audio_defa
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_audio_default_speed_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_audio_description_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_audio_description_title
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_audio_prefetch_backfill_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_audio_prefetch_lookahead_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_audio_prefetch_lookahead_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_audio_preload_buffer_subtitle
@@ -515,7 +513,7 @@ internal object AudioRows {
         icon = Tabler.Outline.Music,
         titleRes = Res.string.settings_audio_prefetch_backfill,
         subtitleRes = Res.string.settings_audio_prefetch_backfill_subtitle,
-        searchSubtitleRes = Res.string.ss_audio_prefetch_backfill_subtitle,
+        searchSubtitleRes = Res.string.settings_audio_prefetch_backfill_subtitle,
         keywords = listOf("audio", "prefetch", "backfill", "buffering", "music", "previous"),
         route = Route.AudioSettings(),
         isAdvanced = true,
@@ -527,7 +525,7 @@ internal object AudioRows {
         icon = Tabler.Outline.Trash,
         titleRes = Res.string.settings_audio_cache_clear,
         subtitleRes = Res.string.settings_audio_cache_clear_subtitle,
-        searchSubtitleRes = Res.string.ss_audio_cache_clear_subtitle,
+        searchSubtitleRes = Res.string.settings_audio_cache_clear_subtitle,
         keywords = listOf("audio", "cache", "clear", "music", "storage", "wipe"),
         route = Route.AudioSettings(),
         isAdvanced = true,

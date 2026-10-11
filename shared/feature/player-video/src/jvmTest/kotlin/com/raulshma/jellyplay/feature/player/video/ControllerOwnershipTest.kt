@@ -14,7 +14,7 @@ import java.io.File
  *    `AbRepeatController`, `SyncPlayBridge`, `PlaybackSession`,
  *    `EpisodeNavigator`, `SubtitlePreviewController`,
  *    `SubtitleStyleController`, `MediaContentProjector`, `RenderControls`,
- *    `EpisodeContinuationController`, `PipTransportController`,
+ *    `UpNextController`, `PipTransportController`,
  *    `EngineAttachController`,
  *    `StillWatchingController`, `MediaDetailProjection`, `EngineConfigSync`,
  *    `InputBindingToggleController`, `PlayerActionExecutor`)
@@ -62,7 +62,7 @@ class ControllerOwnershipTest {
         "SubtitleStyleController.kt",
         "MediaContentProjector.kt",
         "RenderControls.kt",
-        "EpisodeContinuationController.kt",
+        "UpNextController.kt",
         "PipTransportController.kt",
         "EngineAttachController.kt",
         "StillWatchingController.kt",

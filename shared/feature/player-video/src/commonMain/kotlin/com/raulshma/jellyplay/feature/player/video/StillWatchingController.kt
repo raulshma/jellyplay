@@ -7,7 +7,7 @@ import kotlinx.coroutines.flow.asStateFlow
 /**
  * Owns the "Still watching?" confirm overlay's prompt lifecycle (feature 1.3)
  * — the cluster extracted from [VideoPlayerViewModel] (the
- * [EpisodeContinuationController] shape): the prompt StateFlow and the
+ * [UpNextController] shape): the prompt StateFlow and the
  * show / continue / stop / tick choreography, moved verbatim.
  *
  * The pure decisions stay beside it: [StillWatchingGate] (when the overlay

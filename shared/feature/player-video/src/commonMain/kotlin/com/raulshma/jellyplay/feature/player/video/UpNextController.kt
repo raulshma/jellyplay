@@ -1,20 +1,29 @@
 package com.raulshma.jellyplay.feature.player.video
 
+import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue
 import com.raulshma.jellyplay.core.data.log.Log
+import com.raulshma.jellyplay.core.data.playback.VideoQueueController
+import com.raulshma.jellyplay.core.data.playback.VideoQueueItem
 import com.raulshma.jellyplay.core.model.MediaDetail
+import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.SyncPlayGroup
 import com.raulshma.jellyplay.feature.player.video.state.EpisodeBrowserState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.atomic.AtomicBoolean
@@ -26,9 +35,45 @@ private const val MIN_DURATION_FOR_SMART_DELETE_MS = 5 * 60 * 1000L
 private const val QUEUE_ADVANCE_LOG_TAG = "UpNextQueue"
 
 /**
- * Owns the episode-continuation cluster extracted from [VideoPlayerViewModel]:
- * the [EpisodeNavigator] stack (season/episode browsing, adjacent discovery,
- * previous/next choreography with the #146 single-flight latch), the
+ * The Up Next card projection: what the overlay renders as "up next", resolved
+ * ONCE with the same precedence the advance applies. The queue head wins over
+ * the episode sibling — a queued movie is the headline case (it has no
+ * sibling, yet the old display read `episode?.name ?: queued?.title`, which
+ * shows nothing for it and shows the SIBLING's name when both exist while the
+ * advance plays the head).
+ *
+ * Display fields only ([VideoQueueItem]'s shape): playback always goes through
+ * the item id. `seasonNumber`/`episodeNumber` ride along so the episode card
+ * keeps its "S1 · E2" subtitle line; `imageUrl` carries the queue row's own
+ * artwork (an episode card's artwork is resolved from [itemId] by the screen,
+ * which owns the image-url seam).
+ */
+@Immutable
+data class UpNextCard(
+    val itemId: String,
+    val title: String,
+    val subtitle: String? = null,
+    val imageUrl: String? = null,
+    val source: Source,
+    val seasonNumber: Int? = null,
+    val episodeNumber: Int? = null,
+) {
+    /** Where the card's item came from — mirrors the advance's precedence ladder. */
+    enum class Source {
+        /** The manual up-next queue's head (wins over the episode sibling). */
+        QUEUE,
+
+        /** The navigator's adjacent-episode sibling. */
+        EPISODE,
+    }
+}
+
+/**
+ * The Up Next module extracted from [VideoPlayerViewModel] (glossary:
+ * "Up Next" — the whole what-plays-next surface): the [EpisodeNavigator] stack
+ * (season/episode browsing, adjacent discovery, previous/next choreography
+ * with the #146 single-flight latch), the QUEUE-FIRST advance, the manual
+ * queue-row activation, the card + has-queued-next projections, the
  * "mark watched & skip" / "mark unwatched & quit" overflow orchestration, the
  * autoplay-cancel wiring behind the Up Next overlay, the overlay's
  * next-episode loading flag, and the smart-download cleanup.
@@ -41,16 +86,26 @@ private const val QUEUE_ADVANCE_LOG_TAG = "UpNextQueue"
  * injected [updateEpisodes] seam, and the mark/advance effects stay the
  * caller-supplied verbs they were before the move.
  *
- * Load-bearing invariants (pinned by [EpisodeContinuationControllerTest]):
+ * ONE consume protocol (the invariant the queue sheet's old
+ * consume-then-initialize ordering violated — a failed "play now" silently
+ * deleted the row): every queue consumption happens ONLY after the session
+ * settles on the item, guarded so the row is removed only while it is still
+ * the row that was started ([consumeIfHead] for the head arm, the settle-time
+ * re-peek guard in [playQueueItem] for the mid-list arm). A load that errors,
+ * times out, or is superseded leaves the queue intact.
+ *
+ * Load-bearing invariants (pinned by [UpNextControllerTest]):
  *  - the mark arms mirror the watched-threshold callback exactly — incognito
  *    routes the watched mark to the offline-local record and skips the
  *    unwatched mark entirely ([decideWatchedActions]);
  *  - "mark watched & skip" reuses [playNextEpisode], so the SyncPlay
  *    group-queue routing and the #146 single-flight latch apply unchanged;
  *  - the autoplay cancel flips the decision clock AND the overlay mirror in
- *    that order, so a cancelled countdown can never auto-advance.
+ *    that order, so a cancelled countdown can never auto-advance;
+ *  - the card's precedence matches the advance's: queue head over episode
+ *    sibling, and null under SyncPlay ownership of order.
  */
-internal class EpisodeContinuationController(
+internal class UpNextController(
     private val scope: CoroutineScope,
     // ── The navigator stack (the controller owns the EpisodeNavigator) ─────
     private val sessionState: StateFlow<PlayerSessionState>,
@@ -62,7 +117,16 @@ internal class EpisodeContinuationController(
      * the server-side group queue owns the order there. Null only in test
      * graphs that don't exercise the queue.
      */
-    val videoQueue: com.raulshma.jellyplay.core.data.playback.VideoQueueController? = null,
+    val videoQueue: VideoQueueController? = null,
+    /**
+     * The uiState's SyncPlay-membership mirror as a flow — the REACTIVE gate
+     * behind the display projections ([upNextCard] / [hasQueuedNext]). The
+     * advance keeps the manager-flag [isInSyncPlayGroup] read (the same split
+     * the mark decision already applies): a display projection gating on the
+     * mirror stays consistent with the overlay math, which reads the same
+     * mirror through [SegmentCalculatorInput].
+     */
+    private val syncPlaySessionMirror: Flow<Boolean>,
     /** The resolved media detail of the playing item (the VM's mediaDetail field). */
     private val getDetail: () -> MediaDetail?,
     /** The browsing anchor series (detail's series, else the media mirror's). */
@@ -117,6 +181,32 @@ internal class EpisodeContinuationController(
 ) {
 
     /**
+     * The adjacent-episode snapshot, tapped from the navigator's single-writer
+     * seam: every slice write the navigator makes crosses
+     * [tapAdjacentEpisode], so this mirror tracks
+     * [EpisodeBrowserState.nextEpisode] with no second source. Feeds the card
+     * projection ([upNextCard]).
+     *
+     * Declared BEFORE the navigator — the navigator's construction captures
+     * the wrapped seam (Kotlin initialises properties in declaration order).
+     */
+    private val adjacentEpisode = MutableStateFlow<MediaItem?>(null)
+
+    /**
+     * The [updateEpisodes] seam wrapped to tap the adjacent-episode snapshot
+     * into [adjacentEpisode] on the way through — the navigator's writes stay
+     * the ONLY thing that can change it, so the card needs no separate
+     * sibling flow and can never disagree with the browsing slice.
+     */
+    private val tapAdjacentEpisode: (((EpisodeBrowserState) -> EpisodeBrowserState) -> Unit) = { update ->
+        updateEpisodes { state ->
+            val next = update(state)
+            adjacentEpisode.value = next.nextEpisode
+            next
+        }
+    }
+
+    /**
      * The navigation module (season/episode browsing state, adjacent-episode
      * discovery, and the previous/next choreography) — constructed here with
      * the seams above; the verbs below are its funnels.
@@ -141,13 +231,80 @@ internal class EpisodeContinuationController(
         },
         reportLoadError = reportLoadError,
         initializeItem = initializeItem,
-        updateEpisodes = updateEpisodes,
+        updateEpisodes = tapAdjacentEpisode,
     )
+
+    /**
+     * The queue flow behind the reactive projections, defaulted to an
+     * always-empty flow for the test graphs that pass a null [videoQueue]
+     * (never written there).
+     */
+    private val queueItems: StateFlow<List<VideoQueueItem>> =
+        videoQueue?.queue ?: MutableStateFlow(emptyList())
+
+    /**
+     * The Up Next card projection — the display truth for "what plays next".
+     * Queue head beats episode sibling (matching [playNextEpisode]'s advance
+     * precedence); null while a SyncPlay group owns the order. Recomputes on
+     * queue writes, adjacent-episode writes (both StateFlow-backed) and
+     * SyncPlay-membership flips.
+     */
+    val upNextCard: StateFlow<UpNextCard?> = combine(
+        queueItems,
+        adjacentEpisode,
+        syncPlaySessionMirror,
+    ) { queue, sibling, inSyncPlay ->
+        when {
+            inSyncPlay -> null
+            queue.isNotEmpty() -> queue.first().let { head ->
+                UpNextCard(
+                    itemId = head.itemId,
+                    title = head.title,
+                    subtitle = head.subtitle,
+                    imageUrl = head.imageUrl,
+                    source = UpNextCard.Source.QUEUE,
+                )
+            }
+            sibling != null -> UpNextCard(
+                itemId = sibling.id,
+                title = sibling.name,
+                subtitle = sibling.seriesName,
+                source = UpNextCard.Source.EPISODE,
+                seasonNumber = sibling.seasonNumber,
+                episodeNumber = sibling.episodeNumber,
+            )
+            else -> null
+        }
+    }.stateIn(scope, SharingStarted.Eagerly, null)
+
+    /**
+     * The reactive has-queued-next gate — the queue's non-emptiness under the
+     * SyncPlay suppression, as a flow. The single source the VM's uiState
+     * mirror, the segment projection and the end-of-playback autoplay gate
+     * all read (the advance itself peeks the queue live in [playNextEpisode];
+     * this surface exists for the decision inputs).
+     */
+    val hasQueuedNext: StateFlow<Boolean> = combine(
+        queueItems,
+        syncPlaySessionMirror,
+    ) { queue, inSyncPlay ->
+        !inSyncPlay && queue.isNotEmpty()
+    }.stateIn(scope, SharingStarted.Eagerly, false)
 
     /** Latch for the queue-first advance (the navigator's #146 latch, queue arm). */
     private val queueAdvanceInFlight = AtomicBoolean(false)
 
-    /** How the queue-first advance's settle wait resolved. */
+    /**
+     * Latch for the manual queue-row activation ([playQueueItem]) — separate
+     * from [queueAdvanceInFlight] ON PURPOSE: a manual "play now" is a
+     * deliberate pick and legitimately preempts an auto-advance that is still
+     * settling (the advance's settle guard then sees a different bind and
+     * leaves its row queued). Only re-taps of the manual activation itself
+     * are single-flighted.
+     */
+    private val manualQueuePlayInFlight = AtomicBoolean(false)
+
+    /** How a queue consumption's settle wait resolved. */
     private enum class AdvanceSettled { SETTLED, FAILED }
 
     /** True while a next-episode advance is in flight and unsettled (#146). */
@@ -212,19 +369,47 @@ internal class EpisodeContinuationController(
      * navigator's #146 latch: re-taps while an advance is settling are
      * dropped rather than double-initializing the same head.
      */
-    private fun playQueuedHead(head: com.raulshma.jellyplay.core.data.playback.VideoQueueItem) {
+    private fun playQueuedHead(head: VideoQueueItem) {
         if (!queueAdvanceInFlight.compareAndSet(false, true)) {
             Log.d(QUEUE_ADVANCE_LOG_TAG, "queue advance ignored (in flight): ${head.itemId}")
             return
         }
         Log.d(QUEUE_ADVANCE_LOG_TAG, "queue-first advance -> ${head.itemId}")
-        initializeItem(head.itemId, 0L)
+        launchSettleWatch(
+            itemId = head.itemId,
+            latch = queueAdvanceInFlight,
+            arm = "queue advance",
+        ) {
+            videoQueue?.consumeIfHead(head.itemId)
+        }
+    }
+
+    /**
+     * The settle-watch both queue arms share — the ONE consume protocol's
+     * engine: start [itemId], then wait until the session either settles on
+     * it ([AdvanceSettled.SETTLED]) or reports a failed load
+     * ([AdvanceSettled.FAILED]), bounded by NEXT_EPISODE_SETTLE_TIMEOUT_MS
+     * (a timeout reads as not-settled). The caller has already CAS'd [latch]
+     * and logged its arm line; this releases the latch in the finally and
+     * runs [onSettled] — the arm's consume step — only on SETTLED, so a
+     * failed load, the player closing mid-load or a superseded bind leaves
+     * the queue exactly as it was (the consume-then-initialize ordering
+     * lost the head that way; both arms consume AFTER settle for that
+     * reason).
+     */
+    private fun launchSettleWatch(
+        itemId: String,
+        latch: AtomicBoolean,
+        arm: String,
+        onSettled: () -> Unit,
+    ) {
+        initializeItem(itemId, 0L)
         scope.launch {
             try {
                 val settled = withTimeoutOrNull(NEXT_EPISODE_SETTLE_TIMEOUT_MS) {
                     merge(
                         sessionState.map { state ->
-                            if (state.currentItemId == head.itemId) AdvanceSettled.SETTLED else null
+                            if (state.currentItemId == itemId) AdvanceSettled.SETTLED else null
                         }.filterNotNull(),
                         sessionEvents.map { event ->
                             if (event is SessionEvent.ShowError) AdvanceSettled.FAILED else null
@@ -232,17 +417,57 @@ internal class EpisodeContinuationController(
                     ).first()
                 }
                 if (settled == AdvanceSettled.SETTLED) {
-                    videoQueue?.consumeIfHead(head.itemId)
+                    onSettled()
                 }
-                Log.d(QUEUE_ADVANCE_LOG_TAG, "queue advance settled=$settled item=${head.itemId}")
+                Log.d(QUEUE_ADVANCE_LOG_TAG, "$arm settled=$settled item=$itemId")
             } finally {
-                queueAdvanceInFlight.set(false)
+                latch.set(false)
             }
         }
     }
 
-    /** Whether a queue head exists (the autoplay gate's queue arm). */
-    fun hasQueuedNext(): Boolean = !isInSyncPlayGroup() && videoQueue?.peekHead() != null
+    /**
+     * The queue sheet's "play now" for the row at [index] — the MANUAL
+     * activation arm, running the SAME settle-then-consume protocol as the
+     * head arm (this replaces the old consume-then-initialize ordering that
+     * deleted the row on a failed load): PEEK the row at [index], start it,
+     * and remove it only after the session settles on it — with the
+     * settle-time re-peek guard, because the row may have MOVED (another
+     * action re-ordered or drained the queue while the load ran): the row is
+     * consumed only while the row at [index] is still the item that was
+     * started; otherwise the queue is left intact (deleting an unrelated row
+     * for an item that already played would be the lost-head bug in mirror
+     * image). A failed load ([SessionEvent.ShowError]), the settle timeout or
+     * a superseded bind keeps the row.
+     *
+     * Single-flighted on [manualQueuePlayInFlight] (re-taps while the load
+     * settles are dropped, #146); a queue-head ADVANCE in flight does not
+     * block a manual pick — see the latch's KDoc.
+     */
+    fun playQueueItem(index: Int) {
+        val item = queueItems.value.getOrNull(index) ?: return
+        if (!manualQueuePlayInFlight.compareAndSet(false, true)) {
+            Log.d(QUEUE_ADVANCE_LOG_TAG, "manual queue play ignored (in flight): ${item.itemId}")
+            return
+        }
+        Log.d(QUEUE_ADVANCE_LOG_TAG, "manual queue play[$index] -> ${item.itemId}")
+        launchSettleWatch(
+            itemId = item.itemId,
+            latch = manualQueuePlayInFlight,
+            arm = "manual queue play",
+        ) {
+            // The settle-time re-peek: consume only while the row at [index]
+            // is STILL the item that was started.
+            val stillTheSameRow = queueItems.value.getOrNull(index)?.itemId == item.itemId
+            if (stillTheSameRow) {
+                videoQueue?.consumeAt(index)
+            }
+            Log.d(
+                QUEUE_ADVANCE_LOG_TAG,
+                "manual queue play consumed=$stillTheSameRow item=${item.itemId}",
+            )
+        }
+    }
 
     /** Writes the adjacent-episode snapshot (session-load + mini-player hydration hook). */
     fun refreshAdjacent(detail: MediaDetail) = navigator.refreshAdjacent(detail)

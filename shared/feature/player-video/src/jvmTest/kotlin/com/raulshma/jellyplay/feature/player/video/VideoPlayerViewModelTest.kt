@@ -35,7 +35,7 @@ import kotlin.test.Test
  *    the session/resolver and is pinned there now
  *    (PlaybackSessionResumeTicksTest / PlaybackSourceTest);
  *  - the next-episode single-flight latch tests (#146) re-land against
- *    [EpisodeContinuationControllerTest]'s controller-level pinning; the
+ *    [UpNextControllerTest]'s controller-level pinning; the
  *    latch's happy path is re-pinned here once at the VM level.
  */
 @OptIn(ExperimentalCoroutinesApi::class)

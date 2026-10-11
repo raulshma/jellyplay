@@ -765,7 +765,6 @@
     <string name="settings_sync_never">Mai sincronizzato</string>
     <string name="ss_jellyplay_sync_enabled_title">Sincronizza le impostazioni tra dispositivi</string>
     <string name="ss_jellyplay_sync_enabled_subtitle">Impostazioni, layout e preferenze seguono il tuo account Jellyfin tramite il plugin JellyPlay</string>
-    <string name="ss_jellyplay_sync_now_title">Sincronizza ora</string>
     <string name="ss_jellyplay_sync_now_subtitle">Invia e ricevi subito le impostazioni sincronizzate</string>
     <string name="settings_jellyplay_sync_last_sync">Ultima sincronizzazione %1$s</string>
     <string name="settings_jellyplay_sync_in_flight">Sincronizzazione…</string>

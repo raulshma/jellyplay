@@ -156,6 +156,72 @@ class PlaybackSpecDerivationTest {
         )
     }
 
+    @Test
+    fun `searchEntries is exactly the searchable rows' entries plus the standalone codec entries`() {
+        // 1:1 totality: the catalog is the rows' declared search specs (in `all`
+        // order) plus the five hand-only per-codec passthrough catalog facts —
+        // nothing re-listed, nothing dropped, nothing hand-appended beyond the
+        // standalones. Order is pinned as declaration order (the settings
+        // feature matches entries to rows BY ID and owns the catalog order).
+        val standaloneIds = listOf(
+            "passthrough_codec_ac3",
+            "passthrough_codec_eac3",
+            "passthrough_codec_dts",
+            "passthrough_codec_dtshd",
+            "passthrough_codec_truehd",
+        )
+        val entries = PlaybackPreferenceSpecs.searchEntries
+        assertEquals(
+            PlaybackPreferenceSpecs.all.mapNotNull { it.search }.map { it.id } + standaloneIds,
+            entries.map { it.id },
+        )
+        // …and no entry id is declared twice.
+        assertEquals(entries.size, entries.map { it.id }.toSet().size, "a search id is declared twice")
+    }
+
+    @Test
+    fun `every slice default equals its spec default`() {
+        // The single-default ratchet: each [PlaybackSlice] property's default
+        // reads its row's `.default`, so the value below IS the row's — if a
+        // future edit restates a literal here (or on the slice) and the two
+        // drift, this fails. PREFERRED_PLAYER's row default is deliberately the
+        // pre-clamp value (the row's read degrades to the platform default on
+        // absence; the declared default stays platform-neutral), which is what
+        // the slice always served.
+        val slice = PlaybackSlice()
+        assertEquals(PlaybackPreferenceSpecs.PREFERRED_PLAYER.default, slice.preferredPlayer)
+        assertEquals(PlaybackPreferenceSpecs.PREFERRED_EXTERNAL_PLAYER.default, slice.preferredExternalPlayer)
+        assertEquals(PlaybackPreferenceSpecs.STREAMING_QUALITY.default, slice.streamingQuality)
+        assertEquals(PlaybackPreferenceSpecs.CELLULAR_STREAMING_QUALITY.default, slice.cellularStreamingQuality)
+        assertEquals(PlaybackPreferenceSpecs.PLAYBACK_MODE.default, slice.playbackMode)
+        assertEquals(PlaybackPreferenceSpecs.LIVE_STREAM_OPTION.default, slice.liveStreamOption)
+        assertEquals(PlaybackPreferenceSpecs.OFFLINE_PLAYBACK_PREFERENCE.default, slice.offlinePlaybackPreference)
+        assertEquals(PlaybackPreferenceSpecs.DECODER_MODE.default, slice.decoderMode)
+        assertEquals(PlaybackPreferenceSpecs.AUDIO_PASSTHROUGH.default, slice.audioPassthrough)
+        assertEquals(PlaybackPreferenceSpecs.AUDIO_PASSTHROUGH_CODECS.default, slice.audioPassthroughCodecs)
+        assertEquals(PlaybackPreferenceSpecs.MAX_AUDIO_CHANNELS.default, slice.maxAudioChannels)
+        assertEquals(PlaybackPreferenceSpecs.DOWNMIX_BOOST_DB.default, slice.downmixBoostDb)
+        assertEquals(PlaybackPreferenceSpecs.FRAME_RATE_MATCHING.default, slice.frameRateMatching)
+        assertEquals(PlaybackPreferenceSpecs.REFRESH_RATE_MODE.default, slice.refreshRateMode)
+        assertEquals(PlaybackPreferenceSpecs.KEEP_SCREEN_ON_DURING_VIDEO.default, slice.keepScreenOnDuringVideo)
+        assertEquals(PlaybackPreferenceSpecs.PAUSE_ON_AUDIO_FOCUS_LOSS.default, slice.pauseOnAudioFocusLoss)
+        assertEquals(PlaybackPreferenceSpecs.DUCK_ON_TRANSIENT_FOCUS_LOSS.default, slice.duckOnTransientFocusLoss)
+        assertEquals(PlaybackPreferenceSpecs.AUTO_PLAY_COUNTDOWN_SEC.default, slice.autoPlayCountdownSec)
+        assertEquals(PlaybackPreferenceSpecs.BACKGROUND_VIDEO_AUDIO_ENABLED.default, slice.backgroundVideoAudioEnabled)
+        assertEquals(PlaybackPreferenceSpecs.AUTO_ENTER_PIP.default, slice.autoEnterPip)
+        assertEquals(PlaybackPreferenceSpecs.PGS_SUBTITLE_DIRECT_PLAY.default, slice.pgsSubtitleDirectPlay)
+        assertEquals(PlaybackPreferenceSpecs.USER_DATA_SYNC_ENABLED.default, slice.userDataSyncEnabled)
+        assertEquals(PlaybackPreferenceSpecs.ANDROID_TV_WATCH_NEXT_ENABLED.default, slice.androidTvWatchNextEnabled)
+        // Totality: the 23 pinned properties are ALL the slice's fields (24
+        // rows - the legacy-only force_direct_play with no slice property). A
+        // field added without a spec-default pin above (and without bumping
+        // this count) fails here. Statics (the @Serializable Companion,
+        // Compose's $stable) don't count.
+        val instanceFields = PlaybackSlice()::class.java.declaredFields
+            .count { !java.lang.reflect.Modifier.isStatic(it.modifiers) }
+        assertEquals(23, instanceFields)
+    }
+
     /** Writes [spec]'s default through its derived write (the default IS the row's T). */
     @Suppress("UNCHECKED_CAST")
     private fun PreferenceSpec<*>.writeDefault(prefs: MutablePreferences) {

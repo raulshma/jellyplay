@@ -12,7 +12,7 @@ import com.raulshma.jellyplay.feature.player.video.state.VideoFxState
  * unlisted leaf can never ride a stale slice object across the switch.
  *
  * Single-writer ordering: this rebuild runs BEFORE
- * [EpisodeContinuationController.resetForItemSwitch] in the item-switch
+ * [UpNextController.resetForItemSwitch] in the item-switch
  * teardown. It wipes the whole state, the episode slice included; the
  * navigator — the episode slice's single writer — then re-derives that slice
  * through its seam from the post-rebuild state. Resetting the episode slice

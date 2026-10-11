@@ -34,6 +34,15 @@ consume it from there.
 
 ## Playback
 
+**Up Next module** — everything "what plays next" knows about itself:
+queue-vs-sibling advance precedence, the Up Next card projection, and the
+one settle-then-consume protocol for activating a queue row. The card and
+the advance read the same precedence verdict — queue head over episode
+sibling. The SyncPlay gate is the one deliberate split: the display
+projections gate on the uiState mirror, the advance on the manager flag.
+Segment display math (`SegmentCalculator`) and the autoplay gate consume
+the precedence verdict; neither carries queue fragments.
+
 **mpv core** — the commonMain implementation of the mpv engine choreography:
 load, seek, track selection, subtitle style application, property intake,
 ordering rules. Platform code shrinks to a **mpv binding** — an adapter over

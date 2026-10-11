@@ -52,7 +52,8 @@ class ExperimentalSettingsSearchItemsTest {
         val peek = items[2]
         assertEquals("MEDIA_CARD_PEEK", peek.id)
         assertEquals("ss_MEDIA_CARD_PEEK_title", peek.titleRes.key)
-        assertEquals("ss_MEDIA_CARD_PEEK_subtitle", peek.subtitleRes.key)
+        // One-key family: the verbatim ss_ twin was deleted — the screen-face key survives.
+        assertEquals("settings_exp_press_hold_preview_subtitle", peek.subtitleRes.key)
         assertEquals("ss_cat_experimental", peek.categoryRes.key)
         assertEquals(listOf("press", "hold", "peek", "preview", "media card", "long press", "experimental"), peek.keywords)
         assertEquals(Route.ExperimentalSettings(), peek.route)

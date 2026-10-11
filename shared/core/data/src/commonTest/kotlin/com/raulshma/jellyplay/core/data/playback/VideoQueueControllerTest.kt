@@ -54,25 +54,6 @@ class VideoQueueControllerTest {
     }
 
     @Test
-    fun consumeHead_removesAndReturnsHead() {
-        val controller = VideoQueueController()
-        controller.enqueueLast(item("a"))
-        controller.enqueueLast(item("b"))
-
-        val head = controller.consumeHead()
-
-        assertEquals("a", head?.itemId)
-        assertEquals(listOf("b"), controller.queue.value.map { it.itemId })
-    }
-
-    @Test
-    fun consumeHead_emptyQueue_returnsNull() {
-        val controller = VideoQueueController()
-
-        assertNull(controller.consumeHead())
-    }
-
-    @Test
     fun consumeIfHead_removesOnlyWhenItemIsHead() {
         val controller = VideoQueueController()
         controller.enqueueLast(item("a"))

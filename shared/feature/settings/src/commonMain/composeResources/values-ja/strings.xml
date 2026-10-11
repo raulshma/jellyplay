@@ -762,7 +762,6 @@
     <string name="settings_sync_never">未同期</string>
     <string name="ss_jellyplay_sync_enabled_title">設定をデバイス間で同期</string>
     <string name="ss_jellyplay_sync_enabled_subtitle">設定・レイアウト・環境設定が JellyPlay プラグイン経由で Jellyfin アカウントに追従します</string>
-    <string name="ss_jellyplay_sync_now_title">今すぐ同期</string>
     <string name="ss_jellyplay_sync_now_subtitle">同期済みの設定を即時に送受信します</string>
     <string name="settings_jellyplay_sync_last_sync">最終同期 %1$s</string>
     <string name="settings_jellyplay_sync_in_flight">同期中…</string>

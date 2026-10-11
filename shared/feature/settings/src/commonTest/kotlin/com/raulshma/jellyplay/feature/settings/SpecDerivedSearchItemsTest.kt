@@ -105,7 +105,9 @@ class SpecDerivedSearchItemsTest {
         assertEquals(1, items.size)
         val item = items.single()
         assertEquals(PlaybackRows.ExternalPlayerApp.id, item.id)
-        assertEquals("ss_external_player_app_title", item.titleRes.key)
+        // One-key family: the row's search title folds to the screen title — the
+        // verbatim ss_ twin was deleted, the spec's titleKey names the settings_ key.
+        assertEquals("settings_external_player_app", item.titleRes.key)
         assertEquals(Route.PlaybackSettings(), item.route)
         assertFalse(item.isAdvanced)
         assertEquals(PlatformKind.entries.toSet(), item.platforms)

@@ -31,8 +31,6 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_quick_conn
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_quick_connect_authorize_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_remote_control_enabled_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_remote_control_enabled_title
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_remote_display_content_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_remote_display_content_title
 
 /**
  * The security domain's fused row declarations — the feature-side single home
@@ -123,8 +121,7 @@ internal object SecurityRows {
         icon = Tabler.Outline.DeviceTv,
         titleRes = Res.string.settings_remote_display_content,
         subtitleRes = Res.string.settings_remote_display_content_subtitle,
-        searchTitleRes = Res.string.ss_remote_display_content_title,
-        searchSubtitleRes = Res.string.ss_remote_display_content_subtitle,
+        searchSubtitleRes = Res.string.settings_remote_display_content_subtitle,
         keywords = listOf("remote", "display content", "browse", "remote browse", "cast", "details"),
         route = Route.SecuritySettings(),
         gate = RowAdmission.ContentGated,

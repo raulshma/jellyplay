@@ -22,7 +22,6 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_activity_q
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_favorites_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_favorites_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_requests_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_requests_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_upcoming_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_upcoming_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_watch_progress_heatmap_subtitle
@@ -94,7 +93,6 @@ internal object ActivityInsightsRows {
         icon = Tabler.Outline.Inbox,
         titleRes = Res.string.settings_requests,
         subtitleRes = Res.string.settings_requests_subtitle,
-        searchTitleRes = Res.string.ss_requests_title,
         searchSubtitleRes = Res.string.ss_requests_subtitle,
         keywords = listOf("requests", "seerr", "jellyseerr", "pending", "approve"),
         route = Route.Requests,

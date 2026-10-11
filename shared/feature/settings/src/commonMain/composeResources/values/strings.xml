@@ -788,7 +788,6 @@
     <string name="settings_sync_never">Never synced</string>
     <string name="ss_jellyplay_sync_enabled_title">Sync settings across devices</string>
     <string name="ss_jellyplay_sync_enabled_subtitle">Settings, layouts and preferences follow your Jellyfin account via the JellyPlay plugin</string>
-    <string name="ss_jellyplay_sync_now_title">Sync now</string>
     <string name="ss_jellyplay_sync_now_subtitle">Push and pull synced settings immediately</string>
 
     <!-- JellyPlay companion-plugin settings-sync screen (ADR 0010). The whole

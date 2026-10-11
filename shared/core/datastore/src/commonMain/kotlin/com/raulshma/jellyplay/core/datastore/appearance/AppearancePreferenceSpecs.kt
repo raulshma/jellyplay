@@ -489,7 +489,8 @@ object AppearancePreferenceSpecs {
         resetCategory = PreferenceResetCategory.APPEARANCE,
         search = PreferenceSearchSpec(
             id = "layout_mode",
-            titleKey = "ss_layout_mode_title",
+            // One-key family: the verbatim ss_* twin was deleted — the screen-face key survives.
+            titleKey = "settings_layout_mode",
             subtitleKey = "ss_layout_mode_subtitle",
             categoryKey = "ss_cat_appearance",
             keywords = listOf("layout", "tablet", "phone", "adaptive", "two pane", "window", "compact", "expanded"),
@@ -511,7 +512,8 @@ object AppearancePreferenceSpecs {
         resetCategory = PreferenceResetCategory.APPEARANCE,
         search = PreferenceSearchSpec(
             id = "screen_fit",
-            titleKey = "ss_screen_fit_title",
+            // One-key family: the verbatim ss_* twin was deleted — the screen-face key survives.
+            titleKey = "settings_screen_fit",
             subtitleKey = "ss_screen_fit_subtitle",
             categoryKey = "ss_cat_appearance",
             keywords = listOf("screen fit", "overscan", "safe area", "tv", "edge", "cut off", "calibration", "display", "border"),

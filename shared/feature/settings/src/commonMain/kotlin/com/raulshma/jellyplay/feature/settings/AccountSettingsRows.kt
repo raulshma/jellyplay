@@ -19,8 +19,6 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_logout_sub
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_logout_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_server_management_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_server_management_title
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_sign_out_from_server_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_sign_out_from_server_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_user_management_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_user_management_title
 
@@ -57,8 +55,7 @@ internal object AccountRows {
         icon = Tabler.Outline.Logout,
         titleRes = Res.string.settings_sign_out_from_server,
         subtitleRes = Res.string.settings_sign_out_from_server_subtitle,
-        searchTitleRes = Res.string.ss_sign_out_from_server_title,
-        searchSubtitleRes = Res.string.ss_sign_out_from_server_subtitle,
+        searchSubtitleRes = Res.string.settings_sign_out_from_server_subtitle,
         keywords = listOf("sign out", "server", "remove device", "revoke", "session", "remote", "disconnect"),
         route = Route.Settings,
     )

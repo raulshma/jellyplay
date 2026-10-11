@@ -49,7 +49,8 @@ import com.raulshma.jellyplay.core.ui.model.preferenceEnumLabelResources
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.getString
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
-// The diff rows' label sources: the existing settings-search titles (ss_*)
+// The diff rows' label sources: the settings-search titles (ss_* — plus the
+// settings_* keys whose verbatim ss_* twins collapsed into one key family)
 // plus the diff_* residue — extension accessors on Res.string, imported in bulk.
 import com.raulshma.jellyplay.feature.settings.generated.resources.*
 
@@ -234,7 +235,7 @@ private val appearanceDiffFields: List<DiffField<*>> = listOf(
     DiffField(Res.string.ss_oled_mode_title, { it.appearance.oledMode }, Boolean::onOff),
     DiffField(Res.string.ss_contrast_title, { it.appearance.contrastLevel }, { v -> v.enumDisplay() }),
     DiffField(Res.string.ss_style_accent_title, { it.appearance.accentColorSwatch }, ::identity),
-    DiffField(Res.string.ss_theme_style_title, { it.appearance.colorStyle }, { v -> v.enumDisplay() }),
+    DiffField(Res.string.settings_theme_style, { it.appearance.colorStyle }, { v -> v.enumDisplay() }),
     DiffField(Res.string.ss_performance_mode_title, { it.appearance.performanceMode }, Boolean::onOff),
     DiffField(Res.string.ss_reduce_motion_title, { it.appearance.reduceMotionEnabled }, Boolean::onOff),
     DiffField(Res.string.diff_synthwave_mode, { it.appearance.themeVariant == "synthwave" }, Boolean::onOff),
@@ -287,7 +288,7 @@ private val playbackDiffFields: List<DiffField<*>> = listOf(
     DiffField(Res.string.ss_episode_browser_title, { it.videoPlayer.videoEpisodeBrowserEnabled }, Boolean::onOff),
     DiffField(Res.string.ss_playback_metadata_title, { it.videoPlayer.videoShowPlaybackMetadata }, Boolean::onOff),
     DiffField(Res.string.ss_background_audio_title, { it.playback.backgroundVideoAudioEnabled }, Boolean::onOff),
-    DiffField(Res.string.ss_auto_pip_title, { it.playback.autoEnterPip }, Boolean::onOff),
+    DiffField(Res.string.settings_auto_pip, { it.playback.autoEnterPip }, Boolean::onOff),
     DiffField(Res.string.ss_autoplay_countdown_title, { it.playback.autoPlayCountdownSec }, Int::toString),
     DiffField(Res.string.ss_keep_screen_on_title, { it.playback.keepScreenOnDuringVideo }, Boolean::onOff),
     DiffField(Res.string.ss_incognito_mode_title, { it.videoPlayer.incognitoModeEnabled }, Boolean::onOff),
@@ -330,7 +331,7 @@ private val audioDiffFields: List<DiffField<*>> = listOf(
     DiffField(Res.string.ss_night_mode_title, { it.audioEffects.nightModeEnabled }, Boolean::onOff),
     DiffField(Res.string.ss_night_mode_strength_title, { it.audioEffects.nightModeStrength }, { v -> v.enumDisplay() }),
     DiffField(Res.string.ss_dialogue_boost_title, { it.audioEffects.dialogueBoostEnabled }, Boolean::onOff),
-    DiffField(Res.string.ss_dialogue_boost_strength_title, { it.audioEffects.dialogueBoostStrength }, { v -> v.enumDisplay() }),
+    DiffField(Res.string.settings_dialogue_boost_strength, { it.audioEffects.dialogueBoostStrength }, { v -> v.enumDisplay() }),
     DiffField(Res.string.ss_sleep_timer_title, { it.audio.sleepTimerDurationMs }, Long::millisToMinutes),
     DiffField(Res.string.diff_sleep_timer_end_of_episode, { it.audio.sleepTimerEndOfEpisode }, Boolean::onOff),
     DiffField(Res.string.diff_lyrics_visible, { it.audio.audioLyricsVisible }, Boolean::onOff),
@@ -384,7 +385,7 @@ private val homeDiscoveryDiffFields: List<DiffField<*>> = listOf(
     DiffField(Res.string.diff_library_home_overrides, { it.homeDiscovery.libraryHomeSectionOverrides.size }, Int::toString),
     DiffField(Res.string.ss_library_view_mode_title, { it.library.libraryViewMode }, { v -> v.enumDisplay() }),
     DiffField(Res.string.ss_nav_labels_title, { it.navigation.navBarShowLabels }, Boolean::onOff),
-    DiffField(Res.string.ss_nav_hide_on_scroll_title, { it.navigation.hideBottomNavOnScroll }, Boolean::onOff),
+    DiffField(Res.string.settings_nav_hide_on_scroll, { it.navigation.hideBottomNavOnScroll }, Boolean::onOff),
     DiffField(Res.string.diff_nav_item_order, { it.navigation.navItemOrder.size }, Int::toString),
     DiffField(Res.string.diff_hidden_nav_items, { it.navigation.hiddenNavItems.size }, Int::toString),
     DiffField(Res.string.ss_show_unwatched_badge_title, { it.homeDiscovery.showUnwatchedBadge }, Boolean::onOff),
@@ -405,8 +406,8 @@ private val homeDiscoveryDiffFields: List<DiffField<*>> = listOf(
     DiffField(Res.string.ss_hide_episode_thumbnails_title, { it.library.hideEpisodeThumbnails }, Boolean::onOff),
     DiffField(Res.string.diff_episodes_descending, { it.library.episodesDescending }, Boolean::onOff),
     DiffField(Res.string.ss_skip_specials_title, { it.library.skipSpecials }, Boolean::onOff),
-    DiffField(Res.string.ss_show_missing_episodes_title, { it.library.showMissingEpisodes }, Boolean::onOff),
-    DiffField(Res.string.ss_prefer_logos_title, { it.library.preferLogos }, Boolean::onOff),
+    DiffField(Res.string.settings_show_missing_episodes, { it.library.showMissingEpisodes }, Boolean::onOff),
+    DiffField(Res.string.settings_prefer_logos, { it.library.preferLogos }, Boolean::onOff),
     DiffField(Res.string.ss_clock_home_title, { it.homeDiscovery.showClockOnHome }, Boolean::onOff),
     DiffField(Res.string.ss_settings_in_home_search_title, { it.homeDiscovery.showSettingsInHomeSearch }, Boolean::onOff),
 )
@@ -415,7 +416,7 @@ private val audioCacheDiffFields: List<DiffField<*>> = listOf(
     DiffField(Res.string.ss_audio_caching_enabled_title, { it.audioCache.audioCachingEnabled }, Boolean::onOff),
     DiffField(Res.string.ss_audio_cache_size_title, { it.audioCache.audioCacheSizeMb }, Int::toString),
     DiffField(Res.string.ss_audio_prefetch_lookahead_title, { it.audioCache.audioPrefetchLookahead }, Int::toString),
-    DiffField(Res.string.ss_audio_prefetch_backfill_title, { it.audioCache.audioPrefetchBackfill }, Int::toString),
+    DiffField(Res.string.settings_audio_prefetch_backfill, { it.audioCache.audioPrefetchBackfill }, Int::toString),
     DiffField(Res.string.ss_audio_cache_network_policy_title, { it.audioCache.audioCacheNetworkPolicy }, { v -> v.enumDisplay() }),
     DiffField(Res.string.diff_audio_cache_cellular_cap, { it.audioCache.audioCacheCellularMonthlyCapMb }, Int::toString),
 )
@@ -443,17 +444,17 @@ private val notificationsDiffFields: List<DiffField<*>> = listOf(
 )
 
 private val screensaverDiffFields: List<DiffField<*>> = listOf(
-    DiffField(Res.string.ss_screensaver_categories_title, { it.screensaver.dreamImageCategories.size }, Int::toString),
-    DiffField(Res.string.ss_screensaver_transition_style_title, { it.screensaver.dreamTransitionStyle }, { v -> v.enumDisplay() }),
-    DiffField(Res.string.ss_screensaver_ken_burns_title, { it.screensaver.dreamKenBurnsEnabled }, Boolean::onOff),
-    DiffField(Res.string.ss_screensaver_show_title_title, { it.screensaver.dreamShowTitle }, Boolean::onOff),
-    DiffField(Res.string.ss_screensaver_slideshow_interval_title, { it.screensaver.dreamSlideshowIntervalMs }, Long::millisToSeconds),
+    DiffField(Res.string.settings_categories, { it.screensaver.dreamImageCategories.size }, Int::toString),
+    DiffField(Res.string.settings_transition_style, { it.screensaver.dreamTransitionStyle }, { v -> v.enumDisplay() }),
+    DiffField(Res.string.settings_ken_burns, { it.screensaver.dreamKenBurnsEnabled }, Boolean::onOff),
+    DiffField(Res.string.settings_show_title, { it.screensaver.dreamShowTitle }, Boolean::onOff),
+    DiffField(Res.string.settings_slideshow_interval, { it.screensaver.dreamSlideshowIntervalMs }, Long::millisToSeconds),
 )
 
 private val newsletterDiffFields: List<DiffField<*>> = listOf(
     DiffField(Res.string.ss_newsletter_enabled_title, { it.notification.newsletterEnabled }, Boolean::onOff),
     DiffField(Res.string.ss_newsletter_delivery_day_title, { it.notification.newsletterDayOfWeek }, Int::toString),
-    DiffField(Res.string.ss_newsletter_sections_title, { it.notification.enabledNewsletterSections.size }, Int::toString),
+    DiffField(Res.string.settings_newsletter_config, { it.notification.enabledNewsletterSections.size }, Int::toString),
     DiffField(Res.string.diff_newsletter_section_order, { it.notification.newsletterSectionOrder.size }, Int::toString),
     DiffField(Res.string.diff_newsletter_last_viewed, { it.notification.newsletterLastViewedMs }, ::lastViewed),
 )

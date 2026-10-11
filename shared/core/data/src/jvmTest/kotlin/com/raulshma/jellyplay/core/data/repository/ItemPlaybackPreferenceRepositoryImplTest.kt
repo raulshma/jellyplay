@@ -5,6 +5,7 @@ import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import com.raulshma.jellyplay.core.database.JellyPlayDatabase
 import com.raulshma.jellyplay.core.database.entity.ItemPlaybackPreferenceEntity
 import com.raulshma.jellyplay.core.model.EffectStrength
+import com.raulshma.jellyplay.core.model.ItemPlaybackPreference
 import com.raulshma.jellyplay.core.model.MpvRenderOverrides
 import com.raulshma.jellyplay.core.model.MpvShaderPack
 import com.raulshma.jellyplay.core.model.MpvToneMapping
@@ -507,5 +508,93 @@ class ItemPlaybackPreferenceRepositoryImplTest {
         val pref = repository.get(PlaybackPrefScope.ITEM, "item-1")!!
         assertEquals("ger", pref.audioLanguage)
         assertEquals("source-4k", pref.preferredMediaSourceId)
+    }
+
+    // ── Row survival: the emptiness predicate must know every column ────
+
+    @Test
+    fun `a row survives with a single preference column set - every column probed individually`() = runTest {
+        // The emptiness predicate (hasNoPreferences) is the single check every
+        // clear path funnels through: it treats a row as empty — and DELETES
+        // it — only when every preference column is null. A column added to
+        // the entity but missed by the predicate makes any clear pass silently
+        // drop a row that still remembers that column. Each probe below sets
+        // EXACTLY ONE preference column (via its own write verb) on a fresh
+        // key, so a predicate blind to that column drops the row and the
+        // per-field assertion fails loudly naming it.
+        for ((field, probe) in singleFieldProbes) {
+            val key = "probe-$field"
+            writeProbe(PlaybackPrefScope.ITEM, key, probe)
+
+            val readBack = assertNotNull(
+                repository.get(PlaybackPrefScope.ITEM, key),
+                "$field set alone must keep the row alive",
+            )
+            assertEquals(
+                probeValueOf(probe),
+                probeValueOf(readBack),
+                "$field must survive its save/get round-trip",
+            )
+        }
+    }
+
+    /**
+     * The row-survival probes: one fully-default [ItemPlaybackPreference]
+     * copy per preference-bearing column, that column ALONE non-default
+     * (`false` counts — non-default means "not the null default", which is
+     * exactly what the emptiness predicate must respect, e.g.
+     * `preferAudioDescription` = false is an explicit non-AD pin, not "unset").
+     * A new preference column extends this list in the same change set that
+     * extends the predicate.
+     */
+    private val singleFieldProbes: List<Pair<String, ItemPlaybackPreference>> = listOf(
+        "audioLanguage" to ItemPlaybackPreference(PlaybackPrefScope.ITEM, "probe", audioLanguage = "deu"),
+        "subtitleLanguage" to ItemPlaybackPreference(PlaybackPrefScope.ITEM, "probe", subtitleLanguage = "eng"),
+        "subtitleForced" to ItemPlaybackPreference(PlaybackPrefScope.ITEM, "probe", subtitleForced = true),
+        "subtitleHearingImpaired" to ItemPlaybackPreference(PlaybackPrefScope.ITEM, "probe", subtitleHearingImpaired = false),
+        "subtitleDisabled" to ItemPlaybackPreference(PlaybackPrefScope.ITEM, "probe", subtitleDisabled = true),
+        "preferAudioDescription" to ItemPlaybackPreference(PlaybackPrefScope.ITEM, "probe", preferAudioDescription = false),
+        "dialogueBoostStrength" to ItemPlaybackPreference(PlaybackPrefScope.ITEM, "probe", dialogueBoostStrength = EffectStrength.MODERATE),
+        "rememberedAudioTrack" to ItemPlaybackPreference(PlaybackPrefScope.ITEM, "probe", rememberedAudioTrack = RememberedTrack("English · 5.1", "eng", 0, codec = "eac3")),
+        "rememberedSubtitleTrack" to ItemPlaybackPreference(PlaybackPrefScope.ITEM, "probe", rememberedSubtitleTrack = RememberedTrack("English SDH", "eng", 1, codec = "srt")),
+        "renderProfile" to ItemPlaybackPreference(PlaybackPrefScope.ITEM, "probe", renderProfile = MpvRenderOverrides(shaderPack = MpvShaderPack.ANIME4K_A)),
+        "preferredMediaSourceId" to ItemPlaybackPreference(PlaybackPrefScope.ITEM, "probe", preferredMediaSourceId = "source-4k"),
+    )
+
+    /** Writes [probe]'s single non-default field through its own repository verb. */
+    private suspend fun writeProbe(scope: PlaybackPrefScope, key: String, probe: ItemPlaybackPreference) {
+        // A local copy so the null-check smart-casts into the non-null
+        // `disabled` parameter (a cross-module val property would not).
+        val disabled = probe.subtitleDisabled
+        when {
+            probe.audioLanguage != null -> repository.save(scope, key, audioLanguage = probe.audioLanguage)
+            probe.subtitleLanguage != null -> repository.save(scope, key, subtitleLanguage = probe.subtitleLanguage)
+            probe.subtitleForced != null -> repository.save(scope, key, subtitleForced = probe.subtitleForced)
+            probe.subtitleHearingImpaired != null -> repository.save(scope, key, subtitleHearingImpaired = probe.subtitleHearingImpaired)
+            probe.dialogueBoostStrength != null -> repository.save(scope, key, dialogueBoostStrength = probe.dialogueBoostStrength)
+            disabled != null -> repository.setSubtitleDisabled(scope, key, disabled)
+            probe.preferAudioDescription != null -> repository.setPreferAudioDescription(scope, key, probe.preferAudioDescription)
+            probe.rememberedAudioTrack != null -> repository.saveRememberedTrack(scope, key, TrackType.AUDIO, probe.rememberedAudioTrack)
+            probe.rememberedSubtitleTrack != null -> repository.saveRememberedTrack(scope, key, TrackType.SUBTITLE, probe.rememberedSubtitleTrack)
+            probe.renderProfile != null -> repository.setRenderProfile(scope, key, probe.renderProfile)
+            probe.preferredMediaSourceId != null -> repository.setPreferredMediaSource(scope, key, probe.preferredMediaSourceId)
+            else -> error("a survival probe must set exactly one preference field")
+        }
+    }
+
+    /** The probe's single non-default preference value; null = nothing set (the probe did not survive). */
+    private fun probeValueOf(pref: ItemPlaybackPreference): Any? = when {
+        pref.audioLanguage != null -> pref.audioLanguage
+        pref.subtitleLanguage != null -> pref.subtitleLanguage
+        pref.subtitleForced != null -> pref.subtitleForced
+        pref.subtitleHearingImpaired != null -> pref.subtitleHearingImpaired
+        pref.subtitleDisabled != null -> pref.subtitleDisabled
+        pref.preferAudioDescription != null -> pref.preferAudioDescription
+        pref.dialogueBoostStrength != null -> pref.dialogueBoostStrength
+        pref.rememberedAudioTrack != null -> pref.rememberedAudioTrack
+        pref.rememberedSubtitleTrack != null -> pref.rememberedSubtitleTrack
+        pref.renderProfile != null -> pref.renderProfile
+        pref.preferredMediaSourceId != null -> pref.preferredMediaSourceId
+        else -> null
     }
 }

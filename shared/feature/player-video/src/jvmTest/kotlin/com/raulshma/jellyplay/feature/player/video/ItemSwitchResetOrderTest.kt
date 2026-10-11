@@ -19,14 +19,14 @@ import kotlin.test.Test
  * leaf-by-leaf; the two ORDER constraints below are observable neither
  * through the final state (the navigator's reset writes the same episode
  * slice the rebuild just wiped, so both orders converge) nor through
- * injectable seams (the episode continuation controller and the session
+ * injectable seams (the Up Next controller and the session
  * teardown halves are wiring-built, so the EngineAttachControllerTest
  * callLog idiom does not reach them) — they are pinned at the source, the
  * ControllerOwnershipTest.constructionOrderConvention_wiringPhaseOneBeforeArm
  * precedent:
  *
  * 1. the [keepAcrossItems] rebuild runs BEFORE
- *    `episodeContinuation.resetForItemSwitch()` — the rebuild wipes the
+ *    `upNext.resetForItemSwitch()` — the rebuild wipes the
  *    whole state (episode slice included) and the navigator, the episode
  *    slice's single writer, re-derives that slice from the post-rebuild
  *    state (the declared contract on [keepAcrossItems]);
@@ -64,12 +64,12 @@ class ItemSwitchResetOrderTest {
             .substringBefore("override fun clearTrickplay()")
 
         val rebuild = body.indexOf("uiState.update { it.keepAcrossItems() }")
-        val navigatorReset = body.indexOf("episodeContinuation.resetForItemSwitch()")
+        val navigatorReset = body.indexOf("upNext.resetForItemSwitch()")
         assertTrue(rebuild >= 0, "the keepAcrossItems rebuild is missing from releaseInternalsVmPart")
         assertTrue(navigatorReset >= 0, "the episode-slice reset is missing from releaseInternalsVmPart")
         assertTrue(
             rebuild < navigatorReset,
-            "the keepAcrossItems rebuild must run BEFORE episodeContinuation.resetForItemSwitch: the " +
+            "the keepAcrossItems rebuild must run BEFORE upNext.resetForItemSwitch: the " +
                 "rebuild wipes the whole state (episode slice included) and the navigator — the slice's " +
                 "single writer — re-derives it from the post-rebuild state; a reset that ran first would " +
                 "write into the outgoing state only for the rebuild to clobber it",

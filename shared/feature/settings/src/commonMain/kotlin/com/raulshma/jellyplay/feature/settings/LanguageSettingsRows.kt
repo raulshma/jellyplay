@@ -59,8 +59,6 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_subtitle_l
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_subtitle_language_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_subtitle_sync_offset_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_subtitle_sync_offset_title
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_subtitle_tester_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_subtitle_tester_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_subtitle_vertical_position_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_subtitle_vertical_position_title
 
@@ -252,8 +250,7 @@ internal object LanguageRows {
         icon = Tabler.Outline.EyeCheck,
         titleRes = Res.string.settings_open_subtitle_tester,
         subtitleRes = Res.string.settings_open_subtitle_tester_subtitle,
-        searchTitleRes = Res.string.ss_subtitle_tester_title,
-        searchSubtitleRes = Res.string.ss_subtitle_tester_subtitle,
+        searchSubtitleRes = Res.string.settings_open_subtitle_tester_subtitle,
         keywords = listOf("subtitle", "tester", "preview", "sample", "test", "style"),
         route = Route.SubtitleTester,
         gate = RowAdmission.Always,

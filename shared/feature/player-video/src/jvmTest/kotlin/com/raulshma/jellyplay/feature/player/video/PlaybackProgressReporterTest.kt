@@ -57,6 +57,7 @@ class PlaybackProgressReporterTest {
     private var positionTicks: MutableList<Long> = mutableListOf()
     private var watchedThresholdItemIds: MutableList<String> = mutableListOf()
     private var autoSkips: MutableList<MediaSegment> = mutableListOf()
+    private var endedNoNextCount = 0
 
     /** Injectable wall clock backing the stalled-finish detector. */
     private var nowMs = 1_000L
@@ -75,6 +76,7 @@ class PlaybackProgressReporterTest {
         positionTicks.clear()
         watchedThresholdItemIds.clear()
         autoSkips.clear()
+        endedNoNextCount = 0
         nowMs = 1_000L
 
         every { mediaEngine.positionFlow } returns flowOf(0L, 5_000L, 95_000L)
@@ -102,7 +104,7 @@ class PlaybackProgressReporterTest {
         getMediaEngine = { mediaEngine },
         getIncognitoModeEnabled = { incognito },
         onAutoSkip = { autoSkips.add(it) },
-        onPlaybackEndedNoNext = {},
+        onPlaybackEndedNoNext = { endedNoNextCount++ },
         onWatchedThresholdReached = { watchedThresholdItemIds.add(it) },
         onPositionPersisted = { positionTicks.add(it) },
         onEnginePositionUpdate = { _, _, _, _ -> },
@@ -115,6 +117,48 @@ class PlaybackProgressReporterTest {
 
         assertTrue(positionTicks.contains(95_000L))
         assertTrue(watchedThresholdItemIds.contains("movie-123"))
+    }
+
+    // ── Genuine-EOF no-next safety net (queue-first parity) ─────────
+    // The tick path fires "ended with nothing next" only when BOTH the
+    // episode sibling and the Up Next queue are empty — a queued head means
+    // the engine-ENDED path (the Up Next advance) owns the continuation and
+    // this safety net must not close the player out from under it.
+
+    @Test
+    fun endedNoNext_noSiblingAndNoQueue_firesAtEof() = runTest {
+        every { mediaEngine.positionFlow } returns flowOf(100_000L)
+        reporter.startPositionTracking()
+
+        assertEquals(1, endedNoNextCount, "nothing next — the close/cinema arm fires")
+    }
+
+    @Test
+    fun endedNoNext_withQueuedHead_standsDownForTheAdvance() = runTest {
+        uiState.update { it.copy(hasQueuedNext = true) }
+        every { mediaEngine.positionFlow } returns flowOf(100_000L)
+        reporter.startPositionTracking()
+
+        assertEquals(0, endedNoNextCount, "a queued head means playback is not over")
+    }
+
+    @Test
+    fun endedNoNext_withEpisodeSibling_standsDown() = runTest {
+        uiState.update {
+            it.copy(
+                episodes = it.episodes.copy(
+                    nextEpisode = com.raulshma.jellyplay.core.model.MediaItem(
+                        id = "ep2",
+                        name = "S1E2",
+                        mediaType = com.raulshma.jellyplay.core.model.MediaType.EPISODE,
+                    ),
+                ),
+            )
+        }
+        every { mediaEngine.positionFlow } returns flowOf(100_000L)
+        reporter.startPositionTracking()
+
+        assertEquals(0, endedNoNextCount, "the sibling is the advance's target")
     }
 
     // ── Per-type auto-skip delay ────────────────────────────────────

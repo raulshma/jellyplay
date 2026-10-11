@@ -177,7 +177,7 @@ internal class PlaybackSession(
      */
     private val clock: () -> Long = { System.currentTimeMillis() },
 
-    /** Manual up-next queue (details screen "play next/last"); drained by the continuation controller's queue-first advance. */
+    /** Manual up-next queue (details screen "play next/last"); drained by the Up Next controller's queue-first advance. */
     val videoQueue: VideoQueueController = VideoQueueController(),
 
     // ── Engine-room test seams ───────────────────────────────────────────────
@@ -626,7 +626,7 @@ internal class PlaybackSession(
             uiState.update { it.copy(chapters = chapters) }
         },
         artworkUrl = { itemId -> imageUrlProvider.getImageUrl(itemId, maxWidth = 400) },
-        adoptSeasonOf = { detail -> episodeContinuation.adoptSeasonOf(detail) },
+        adoptSeasonOf = { detail -> upNext.adoptSeasonOf(detail) },
         getEngine = { playerSessionManager.engine },
     )
 
@@ -669,12 +669,12 @@ internal class PlaybackSession(
         getEngine = { playerSessionManager.engine },
         routedPlay = { play -> host.routedPlay(play) },
         seekByStep = { direction -> host.seekByStep(direction) },
-        playNextEpisode = { episodeContinuation.playNextEpisode() },
+        playNextEpisode = { upNext.playNextEpisode() },
     )
 
     /**
      * The "Still watching?" confirm overlay's prompt lifecycle (feature 1.3) —
-     * the [EpisodeContinuationController] shape: the prompt StateFlow and the
+     * the [UpNextController] shape: the prompt StateFlow and the
      * show/continue/stop/tick choreography live in [StillWatchingController];
      * the VM raises the overlay (the end-of-playback gate's episode arm in
      * its handlePlaybackEnded, the session's hours arm via
@@ -684,10 +684,10 @@ internal class PlaybackSession(
     internal val stillWatching = StillWatchingController(
         getCountdownSeconds = { uiState.value.autoplay.autoPlayCountdownSec },
         onUserInteraction = { autoplayController.onUserInteraction() },
-        playNextEpisode = { episodeContinuation.playNextEpisode() },
+        playNextEpisode = { upNext.playNextEpisode() },
         resumePlayback = { host.resumePlayback() },
         pauseEngine = { playerSessionManager.engine?.pause() },
-        cancelAutoplay = { episodeContinuation.cancelAutoplay() },
+        cancelAutoplay = { upNext.cancelAutoplay() },
     )
 
     /**
@@ -713,7 +713,7 @@ internal class PlaybackSession(
                 // Forwarded into the episode-continuation controller declared
                 // below — the lambda only runs long after construction, so its
                 // (lazy) read of the not-yet-initialised property is safe.
-                episodeContinuation.handleSmartDownloadCleanup(itemId)
+                upNext.handleSmartDownloadCleanup(itemId)
                 // Closes the gap where playback crossed the watched threshold but no
                 // clean Stop telemetry reached the server (process kill / crash),
                 // leaving the item unplayed server-side.
@@ -832,8 +832,8 @@ internal class PlaybackSession(
         },
         startPositionTracking = { progressReporter.startPositionTracking() },
         startProgressReporting = { progressReporter.startProgressReporting() },
-        fetchAdjacentEpisodes = { detail -> episodeContinuation.refreshAdjacent(detail) },
-        loadSeriesEpisodes = { detail -> episodeContinuation.loadSeries(detail) },
+        fetchAdjacentEpisodes = { detail -> upNext.refreshAdjacent(detail) },
+        loadSeriesEpisodes = { detail -> upNext.loadSeries(detail) },
         // No terminal-outcome action today; stated explicitly here so a
         // future consumer is a construction-site change, not a hidden
         // default somewhere else.
@@ -868,24 +868,24 @@ internal class PlaybackSession(
         )
 
     /**
-     * Episode continuation — the extracted module behind the season/episode
-     * browsing, adjacent discovery, previous/next choreography with the #146
-     * single-flight latch, the "mark watched & skip" / "mark unwatched & quit"
-     * overflow orchestration, the autoplay-cancel wiring, the Up Next
-     * overlay's loading flag and the smart-download cleanup
-     * ([EpisodeContinuationController]); the VM keeps thin funnels for the
-     * screen, the PiP transport and the end-of-playback autoplay decision.
-     *
+     * Up Next — the extracted module behind the queue-first advance, the
+     * manual queue-row activation, the card + has-queued-next projections,
+     * the season/episode browsing, adjacent discovery, previous/next
+     * choreography with the #146 single-flight latch, the "mark watched &
+     * skip" / "mark unwatched & quit" overflow orchestration, the
+     * autoplay-cancel wiring, the Up Next overlay's loading flag and the
+     * smart-download cleanup ([UpNextController]); the VM keeps thin funnels
+     * for the screen, the PiP transport and the end-of-playback decision.
      * Declared after the engine room (the navigator latches onto the
-     * session's events). The lambdas capture only stable handles and read
-     * later-declared collaborators lazily — invoked long after construction.
+     * session's events); lambdas read later-declared collaborators lazily.
      */
-    internal val episodeContinuation = EpisodeContinuationController(
+    internal val upNext = UpNextController(
         scope = scope,
         sessionState = playerSessionManager.sessionState,
         sessionEvents = events,
         episodeCatalogue = itemContent.episodeCatalogue,
         videoQueue = videoQueue,
+        syncPlaySessionMirror = syncPlay.state.map { it.isInSyncPlaySession }.distinctUntilChanged(),
         getDetail = { mediaDetail },
         getSeriesId = { mediaDetail?.item?.seriesId ?: uiState.value.media.seriesId },
         updateEpisodes = { update ->
@@ -2697,8 +2697,8 @@ internal class PlaybackSession(
         // their old order — segments (the pipeline's offline-first fetch,
         // shared with the load spine) then the episode fetches.
         sessionLoadPipeline.fetchMediaSegments(scope, itemId)
-        episodeContinuation.refreshAdjacent(detail)
-        episodeContinuation.loadSeries(detail)
+        upNext.refreshAdjacent(detail)
+        upNext.loadSeries(detail)
     }
 
     override fun releaseMiniPlayerState() {
@@ -2750,9 +2750,9 @@ internal class PlaybackSession(
         // not reset — by its owning controller above. The surviving leaves are
         // declared in [keepAcrossItems].
         uiState.update { it.keepAcrossItems() }
-        // The episode-slice reset goes through the continuation controller's
+        // The episode-slice reset goes through the Up Next controller's
         // seam — the navigator is the slice's single writer (CONTEXT.md).
-        episodeContinuation.resetForItemSwitch()
+        upNext.resetForItemSwitch()
 
         // Clear the high-frequency display streams the seek bar reads. They live
         // outside uiState (to avoid ~4 Hz whole-screen recomposition) and are

@@ -14,11 +14,7 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_inte
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_seerr_integration
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_seerr_integration_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_integrations_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_integrations_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_seerr_settings_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_seerr_settings_title
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_subtitle_provider_settings_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_subtitle_provider_settings_title
 
 /**
  * The integrations domain's fused row declarations — the feature-side single
@@ -42,7 +38,6 @@ internal object IntegrationsRows {
         icon = Tabler.Outline.Puzzle,
         titleRes = Res.string.settings_seerr_integration,
         subtitleRes = Res.string.settings_seerr_integration_subtitle,
-        searchTitleRes = Res.string.ss_seerr_settings_title,
         searchSubtitleRes = Res.string.ss_seerr_settings_subtitle,
         keywords = listOf("seerr", "jellyseerr", "request", "movies", "shows", "approve", "integration"),
         route = Route.SeerrSettings(),
@@ -52,7 +47,6 @@ internal object IntegrationsRows {
         id = "integrations",
         icon = Tabler.Outline.Plug,
         titleRes = Res.string.settings_integrations,
-        searchTitleRes = Res.string.ss_integrations_title,
         searchSubtitleRes = Res.string.ss_integrations_subtitle,
         keywords = listOf("integrations", "jellyseerr", "overseerr", "arr", "sonarr", "radarr", "request"),
         route = Route.Integrations().withHighlightSettingId("integrations"),
@@ -63,8 +57,7 @@ internal object IntegrationsRows {
         icon = Tabler.Outline.Language,
         titleRes = Res.string.settings_integrations_subtitles,
         subtitleRes = Res.string.settings_integrations_subtitles_subtitle,
-        searchTitleRes = Res.string.ss_subtitle_provider_settings_title,
-        searchSubtitleRes = Res.string.ss_subtitle_provider_settings_subtitle,
+        searchSubtitleRes = Res.string.settings_integrations_subtitles_subtitle,
         keywords = listOf("subtitle", "provider", "opensubtitles", "opensubtitles.com", "tvsubs", "manager", "extensions"),
         route = Route.Integrations().withHighlightSettingId("subtitle_provider_settings"),
         isAdvanced = true,

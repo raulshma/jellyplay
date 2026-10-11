@@ -51,6 +51,16 @@ import org.jetbrains.compose.resources.stringResource
  *    spec-backed rows, [isAdvanced] for residuals);
  *    [RowAdmission.ContentGated] declares the exception whose visibility
  *    rides content state the flags vocabulary does not carry.
+ *
+ * One-key family (the search-face dedup rule): a search face may bind the
+ * SAME resource as the row's screen face — when it does, the spec's
+ * titleKey/subtitleKey name that screen-face key too, and the former `ss_*`
+ * catalog twin (verbatim-identical in every locale) is deleted. One string,
+ * one key: the fold ([searchTitleRes] = null → [titleRes]; a
+ * [searchSubtitleRes] aliasing [subtitleRes]) is how a row declares it, and
+ * [verifyRowResourceKey] holds because the surviving key is declared on both
+ * sides. Never re-introduce an `ss_*` key that only restates an existing
+ * `settings_*` string — point both faces at the survivor instead.
  */
 internal data class SettingsRow(
     /** The stable catalog id — the deep-link `highlightSettingId` target. */

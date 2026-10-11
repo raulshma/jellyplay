@@ -61,7 +61,8 @@ object ExperimentalPreferenceSpecs {
     private val searchMediaCardPeek = PreferenceSearchSpec(
         id = "MEDIA_CARD_PEEK",
         titleKey = "ss_MEDIA_CARD_PEEK_title",
-        subtitleKey = "ss_MEDIA_CARD_PEEK_subtitle",
+        // One-key family: the verbatim ss_* twin was deleted — the screen-face key survives.
+        subtitleKey = "settings_exp_press_hold_preview_subtitle",
         categoryKey = "ss_cat_experimental",
         keywords = listOf("press", "hold", "peek", "preview", "media card", "long press", "experimental"),
         routeKind = ROUTE_EXPERIMENTAL_SETTINGS,

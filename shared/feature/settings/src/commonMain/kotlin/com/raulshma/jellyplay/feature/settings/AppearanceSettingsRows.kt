@@ -41,13 +41,15 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hide
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hide_episode_thumbnails_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hide_search_history
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hide_search_history_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_library_view_mode
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_layout_mode
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_layout_mode_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_library_view_mode
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_morning_starts_at
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_morning_starts_at_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_nav_bar_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_nav_hide_on_scroll
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_nav_hide_on_scroll_on
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_newsletter_config
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_newsletter_delivery_day
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_newsletter_delivery_day_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_night_starts_at
@@ -69,13 +71,15 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_share_media_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_skip_special_episodes
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_skip_special_episodes_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_theme_mode
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_theme_style
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_theme_style_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_blue_light_filter_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_blue_light_filter_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_blue_light_strength_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_blue_light_strength_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_color_blind_mode_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_color_blind_mode_title
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_compact_episode_list_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_contrast_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_contrast_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_date_format_subtitle
@@ -93,12 +97,10 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_hide_episo
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_hide_search_history_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_hide_search_history_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_layout_mode_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_layout_mode_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_library_view_mode_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_library_view_mode_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_nav_bar_customization_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_nav_bar_customization_title
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_nav_hide_on_scroll_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_nav_labels_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_nav_labels_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_newsletter_delivery_day_subtitle
@@ -106,13 +108,11 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_newsletter
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_newsletter_enabled_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_newsletter_enabled_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_newsletter_sections_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_newsletter_sections_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_oled_mode_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_oled_mode_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_performance_mode_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_performance_mode_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_prefer_logos_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_prefer_logos_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_reduce_motion_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_reduce_motion_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_scheduled_end_subtitle
@@ -120,18 +120,12 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_scheduled_
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_scheduled_start_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_scheduled_start_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_screen_fit_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_screen_fit_title
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_show_missing_episodes_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_show_missing_episodes_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_show_share_media_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_show_share_media_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_skip_specials_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_skip_specials_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_style_accent_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_style_accent_title
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_theme_mode
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_theme_style
-import com.raulshma.jellyplay.feature.settings.generated.resources.settings_theme_style_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_theme_mode_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_theme_mode_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_theme_music_subtitle
@@ -315,7 +309,6 @@ internal object AppearanceRows {
         icon = Tabler.Outline.Devices,
         titleRes = Res.string.settings_layout_mode,
         subtitleRes = Res.string.settings_layout_mode_subtitle,
-        searchTitleRes = Res.string.ss_layout_mode_title,
         searchSubtitleRes = Res.string.ss_layout_mode_subtitle,
         gate = RowAdmission.All(RowAdmission.Advanced, RowAdmission.NotTv),
     )
@@ -332,7 +325,6 @@ internal object AppearanceRows {
         icon = Tabler.Outline.DeviceTv,
         titleRes = Res.string.settings_screen_fit,
         subtitleRes = Res.string.settings_screen_fit_subtitle,
-        searchTitleRes = Res.string.ss_screen_fit_title,
         searchSubtitleRes = Res.string.ss_screen_fit_subtitle,
         gate = RowAdmission.Tv,
     )
@@ -418,7 +410,7 @@ internal object AppearanceRows {
         id = "nav_hide_on_scroll",
         icon = Tabler.Outline.EyeOff,
         titleRes = Res.string.settings_nav_hide_on_scroll,
-        searchSubtitleRes = Res.string.ss_nav_hide_on_scroll_subtitle,
+        searchSubtitleRes = Res.string.settings_nav_hide_on_scroll_on,
         keywords = listOf("navigation", "hide", "scroll", "auto hide", "bottom bar", "collapsible"),
         route = Route.AppearanceSettings(),
     )
@@ -447,7 +439,7 @@ internal object AppearanceRows {
         icon = Tabler.Outline.List,
         titleRes = Res.string.settings_compact_episode_list,
         subtitleRes = Res.string.settings_compact_episode_list_subtitle,
-        searchSubtitleRes = Res.string.ss_compact_episode_list_subtitle,
+        searchSubtitleRes = Res.string.settings_compact_episode_list_subtitle,
         keywords = listOf("episode", "list", "compact", "vertical", "layout", "rows", "dense"),
         route = Route.AppearanceSettings(),
         gate = RowAdmission.Always,
@@ -475,8 +467,7 @@ internal object AppearanceRows {
         icon = Tabler.Outline.Eye,
         titleRes = Res.string.settings_show_missing_episodes,
         subtitleRes = Res.string.settings_show_missing_episodes_subtitle,
-        searchTitleRes = Res.string.ss_show_missing_episodes_title,
-        searchSubtitleRes = Res.string.ss_show_missing_episodes_subtitle,
+        searchSubtitleRes = Res.string.settings_show_missing_episodes_subtitle,
         keywords = listOf("missing", "episode", "unaired", "virtual", "placeholder", "season", "show"),
         route = Route.AppearanceSettings(),
         isAdvanced = true,
@@ -490,7 +481,6 @@ internal object AppearanceRows {
         icon = Tabler.Outline.Photo,
         titleRes = Res.string.settings_prefer_logos,
         subtitleRes = Res.string.settings_prefer_logos_subtitle,
-        searchTitleRes = Res.string.ss_prefer_logos_title,
         searchSubtitleRes = Res.string.ss_prefer_logos_subtitle,
         keywords = listOf("logo", "clear logo", "title", "artwork", "image", "banner", "details", "prefer"),
         route = Route.AppearanceSettings(),
@@ -609,7 +599,7 @@ internal object AppearanceRows {
     val NewsletterSections = SettingsRow(
         id = "newsletter_sections",
         icon = Tabler.Outline.Mail,
-        searchTitleRes = Res.string.ss_newsletter_sections_title,
+        searchTitleRes = Res.string.settings_newsletter_config,
         searchSubtitleRes = Res.string.ss_newsletter_sections_subtitle,
         keywords = listOf(
             "newsletter", "sections", "recently added", "activity log", "library stats",

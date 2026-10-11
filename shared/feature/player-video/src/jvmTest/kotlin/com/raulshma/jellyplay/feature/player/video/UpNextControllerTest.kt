@@ -13,6 +13,8 @@ import io.mockk.mockk
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -27,26 +29,30 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * Tests for [EpisodeContinuationController] — the episode-continuation
- * cluster extracted from the ViewModel (the navigator stack, the
- * mark-watched/unwatched overflow orchestration, the autoplay-cancel wiring,
- * the Up Next loading flag and the smart-download cleanup). Drives it through
- * its constructor lambdas faked here (the [SubtitleStyleControllerTest]
- * shape); the navigator inside is exercised through the controller's own
- * verbs. No ViewModel, no uiState.
+ * Tests for [UpNextController] — the Up Next module extracted from the
+ * ViewModel (the navigator stack, the QUEUE-FIRST advance + manual queue-row
+ * activation, the card + has-queued-next projections, the mark-watched/
+ * unwatched overflow orchestration, the autoplay-cancel wiring, the Up Next
+ * loading flag and the smart-download cleanup). Drives it through its
+ * constructor lambdas faked here (the [SubtitleStyleControllerTest] shape);
+ * the navigator inside is exercised through the controller's own verbs. No
+ * ViewModel, no uiState.
  *
  * Pins the load-bearing invariants: the mark arms mirror the watched-threshold
  * callback's two paths (server vs offline-local, incognito-gated); the
  * watched-and-skip advance reuses the navigator (single-flight latch +
  * SyncPlay routing intact); cancel flips the autoplay clock and the overlay
  * mirror; the smart-download cleanup is gated by the pref and the duration
- * floor.
+ * floor; the card's precedence matches the advance's (queue head over episode
+ * sibling, null under SyncPlay); and BOTH queue consumption arms run
+ * settle-then-consume, so a failed load never deletes a row.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
-class EpisodeContinuationControllerTest {
+class UpNextControllerTest {
 
     private val dispatcher = StandardTestDispatcher()
     private val catalogue: EpisodeCatalogue = mockk(relaxed = true)
@@ -55,6 +61,7 @@ class EpisodeContinuationControllerTest {
     private val sessionEvents = MutableSharedFlow<SessionEvent>(extraBufferCapacity = 8)
     private lateinit var episodes: EpisodeBrowserState
     private var videoQueue: VideoQueueController? = null
+    private val syncPlayMirrorFlow = MutableStateFlow(false)
 
     // Mirror fakes (the VM-side state the lambdas read/write).
     private var detail: MediaDetail? = seriesDetail()
@@ -81,8 +88,6 @@ class EpisodeContinuationControllerTest {
     private var deleteAttempts = 0
     private var deletedNotices = 0
 
-    private lateinit var controller: EpisodeContinuationController
-
     private fun seriesDetail(): MediaDetail = MediaDetail(
         item = MediaItem(
             id = "ep2",
@@ -103,13 +108,27 @@ class EpisodeContinuationControllerTest {
         coEvery { catalogue.loadSeasonEpisodes("series-1", "season-1", any()) } returns Result.success(items.toList())
     }
 
-    private fun controller(scope: CoroutineScope): EpisodeContinuationController =
-        EpisodeContinuationController(
-            scope = scope,
+    /**
+     * The Up Next module's reactive projections ([UpNextController.upNextCard]
+     * / [UpNextController.hasQueuedNext]) are Eagerly-shared collectors that
+     * park on never-completing StateFlows BY DESIGN (the queue, the
+     * adjacent-episode mirror, the SyncPlay mirror). Launched as children of
+     * the runTest coroutine they trip UncompletedCoroutinesError in every
+     * test; a dedicated scope cancelled in teardown is the
+     * EngineAttachControllerTest pattern (SyncPlayBridgeTest before it). The
+     * VERBS (advance, queue consumption, marks) keep their normal launch
+     * timing — the shared [dispatcher] drives this scope and runTest's alike.
+     */
+    private val controllerScope = CoroutineScope(SupervisorJob() + dispatcher)
+
+    private fun controller(): UpNextController =
+        UpNextController(
+            scope = controllerScope,
             sessionState = sessionState,
             sessionEvents = sessionEvents,
             episodeCatalogue = catalogue,
             videoQueue = videoQueue,
+            syncPlaySessionMirror = syncPlayMirrorFlow,
             getDetail = { detail },
             getSeriesId = { detail?.item?.seriesId },
             updateEpisodes = { update -> episodes = update(episodes) },
@@ -147,6 +166,9 @@ class EpisodeContinuationControllerTest {
 
     @AfterTest
     fun tearDown() {
+        // Kill the never-completing projection collectors the controller
+        // launched — the structural counterpart of the dedicated scope above.
+        controllerScope.cancel()
         Dispatchers.resetMain()
     }
 
@@ -155,7 +177,7 @@ class EpisodeContinuationControllerTest {
     @Test
     fun `playNextEpisode advances to the sibling and settles the overlay flag`() = runTest(dispatcher) {
         stubSeason(episode("ep1"), episode("ep2"), episode("ep3"))
-        val c = controller(this)
+        val c = controller()
 
         c.playNextEpisode()
         // Complete the settle wait by binding the new item (the latch holds
@@ -170,7 +192,7 @@ class EpisodeContinuationControllerTest {
     @Test
     fun `playNextEpisode flips the overlay flag on and holds it until settle`() = runTest(dispatcher) {
         stubSeason(episode("ep2"), episode("ep3"))
-        val c = controller(this)
+        val c = controller()
 
         c.playNextEpisode()
         // runCurrent (not advanceUntilIdle): the settle timeout is under test.
@@ -198,7 +220,7 @@ class EpisodeContinuationControllerTest {
                 playingPlaylistItemId = "pl-3",
                 playlistItemMap = mapOf("pl-2" to "ep2", "pl-3" to "ep3"),
             )
-            val c = controller(this)
+            val c = controller()
 
             c.playNextEpisode()
             advanceUntilIdle()
@@ -218,7 +240,7 @@ class EpisodeContinuationControllerTest {
     fun `playNextEpisode with a queued head plays the head without episode resolution`() =
         runTest(dispatcher) {
             queuedMovie("movie-1")
-            val c = controller(this)
+            val c = controller()
 
             c.playNextEpisode()
             runCurrent()
@@ -230,7 +252,7 @@ class EpisodeContinuationControllerTest {
     @Test
     fun `queue advance settles on the head and consumes it`() = runTest(dispatcher) {
         queuedMovie("movie-1")
-        val c = controller(this)
+        val c = controller()
 
         c.playNextEpisode()
         sessionState.value = sessionState.value.copy(currentItemId = "movie-1")
@@ -242,7 +264,7 @@ class EpisodeContinuationControllerTest {
     @Test
     fun `queue advance that errors keeps the head queued`() = runTest(dispatcher) {
         queuedMovie("movie-1")
-        val c = controller(this)
+        val c = controller()
 
         c.playNextEpisode()
         runCurrent()
@@ -250,14 +272,14 @@ class EpisodeContinuationControllerTest {
         advanceUntilIdle()
 
         assertTrue(queued("movie-1"), "a failed advance leaves the queue intact")
-        assertTrue(c.hasQueuedNext())
+        assertTrue(c.hasQueuedNext.value, "the reactive gate still counts the kept head")
     }
 
     @Test
     fun `queue advance superseded by another item keeps the head`() = runTest(dispatcher) {
         queuedMovie("movie-1")
         stubSeason(episode("ep2"), episode("ep3"))
-        val c = controller(this)
+        val c = controller()
 
         c.playNextEpisode()
         runCurrent()
@@ -278,7 +300,7 @@ class EpisodeContinuationControllerTest {
     @Test
     fun `queue advance re-tap while settling does not double-initialize`() = runTest(dispatcher) {
         queuedMovie("movie-1")
-        val c = controller(this)
+        val c = controller()
 
         c.playNextEpisode()
         runCurrent()
@@ -305,17 +327,212 @@ class EpisodeContinuationControllerTest {
         stubSeason(episode("ep2"), episode("ep3"))
         syncGroupLive = true
         group = null // group with no map: the SyncPlay route falls through to the sibling
-        val c = controller(this)
+        // A live group session also flips the uiState SyncPlay mirror in
+        // production (PlaybackSession's arm collector) — the reactive
+        // projections gate on THAT mirror, the advance on the manager flag.
+        syncPlayMirrorFlow.value = true
+        val c = controller()
 
         c.playNextEpisode()
         advanceUntilIdle()
 
         assertTrue(queued("movie-1"), "SyncPlay owns the order — the queue is untouched")
         assertEquals(listOf("ep3" to 0L), initialized, "the episode sibling plays instead")
+        assertFalse(c.hasQueuedNext.value, "the reactive gate mirrors the SyncPlay suppression")
+        assertNull(c.upNextCard.value, "the card is suppressed with the gate")
     }
 
     private fun queued(id: String): Boolean =
         videoQueue?.queue?.value?.any { it.itemId == id } == true
+
+    // ── the Up Next card projection (display precedence == advance) ─────────
+
+    @Test
+    fun `upNextCard queue head beats the episode sibling`() = runTest(dispatcher) {
+        queuedMovie("movie-1")
+        stubSeason(episode("ep1"), episode("ep2"), episode("ep3"))
+        val c = controller()
+
+        c.refreshAdjacent(seriesDetail())
+        advanceUntilIdle()
+
+        val card = c.upNextCard.value
+        assertTrue(card != null, "a card is projected")
+        assertEquals(UpNextCard.Source.QUEUE, card!!.source, "the queue head WINS over the sibling")
+        assertEquals("movie-1", card.itemId)
+        assertEquals("movie-1", card.title)
+    }
+
+    @Test
+    fun `upNextCard shows the queued movie when there is no episode sibling`() = runTest(dispatcher) {
+        // The headline case the old `episode?.name ?: queued?.title` display
+        // read failed: a movie has no sibling, yet the card must show it.
+        queuedMovie("movie-1")
+        val c = controller()
+        advanceUntilIdle()
+
+        val card = c.upNextCard.value
+        assertTrue(card != null, "the queued movie alone projects a card")
+        assertEquals(UpNextCard.Source.QUEUE, card!!.source)
+        assertEquals("movie-1", card.itemId)
+        assertEquals("movie-1", card.title)
+    }
+
+    @Test
+    fun `upNextCard falls back to the episode sibling when the queue is empty`() = runTest(dispatcher) {
+        stubSeason(episode("ep1"), episode("ep2"), episode("ep3"))
+        val c = controller()
+
+        c.refreshAdjacent(seriesDetail())
+        advanceUntilIdle()
+
+        val card = c.upNextCard.value
+        assertTrue(card != null, "the sibling alone projects a card")
+        assertEquals(UpNextCard.Source.EPISODE, card!!.source)
+        assertEquals("ep3", card.itemId, "the navigator's adjacent snapshot is the card source")
+    }
+
+    @Test
+    fun `upNextCard is null with no queue and no sibling`() = runTest(dispatcher) {
+        val c = controller()
+        advanceUntilIdle()
+
+        assertNull(c.upNextCard.value, "nothing to play next — no card")
+    }
+
+    @Test
+    fun `upNextCard is null while a SyncPlay session owns the order and returns on leave`() =
+        runTest(dispatcher) {
+            queuedMovie("movie-1")
+            val c = controller()
+            advanceUntilIdle()
+            assertTrue(c.upNextCard.value != null, "the card is up before the group joins")
+
+            syncPlayMirrorFlow.value = true
+            advanceUntilIdle()
+            assertNull(c.upNextCard.value, "the group's server-side queue owns the order — no card")
+            assertFalse(c.hasQueuedNext.value, "the has-queued gate suppresses with the card")
+
+            syncPlayMirrorFlow.value = false
+            advanceUntilIdle()
+            assertTrue(c.upNextCard.value != null, "leaving the group restores the card")
+        }
+
+    // ── manual queue-row activation (the settle-then-consume protocol) ─────
+
+    @Test
+    fun `playQueueItem settles on the row and consumes it`() = runTest(dispatcher) {
+        videoQueue = VideoQueueController().apply {
+            enqueueLast(VideoQueueItem(itemId = "a", title = "a"))
+            enqueueLast(VideoQueueItem(itemId = "b", title = "b"))
+        }
+        val c = controller()
+
+        c.playQueueItem(1)
+        runCurrent()
+        assertEquals(listOf("b" to 0L), initialized, "the row is STARTED, not yet consumed")
+        assertTrue(queued("b"), "a mid-list row is not consumed before the session settles")
+
+        sessionState.value = sessionState.value.copy(currentItemId = "b")
+        advanceUntilIdle()
+
+        assertFalse(queued("b"), "settling on the row consumes it")
+        assertTrue(queued("a"), "the other rows stay untouched")
+    }
+
+    @Test
+    fun `playQueueItem that errors keeps the row`() = runTest(dispatcher) {
+        videoQueue = VideoQueueController().apply {
+            enqueueLast(VideoQueueItem(itemId = "a", title = "a"))
+            enqueueLast(VideoQueueItem(itemId = "b", title = "b"))
+        }
+        val c = controller()
+
+        c.playQueueItem(1)
+        runCurrent()
+        sessionEvents.tryEmit(SessionEvent.ShowError(error = "boom", retryable = true))
+        advanceUntilIdle()
+
+        assertTrue(queued("a") && queued("b"), "a failed play-now leaves the queue intact")
+        assertTrue(c.hasQueuedNext.value, "the reactive gate keeps counting the queue")
+    }
+
+    @Test
+    fun `playQueueItem with a moved row leaves the queue intact`() = runTest(dispatcher) {
+        videoQueue = VideoQueueController().apply {
+            enqueueLast(VideoQueueItem(itemId = "a", title = "a"))
+            enqueueLast(VideoQueueItem(itemId = "b", title = "b"))
+            enqueueLast(VideoQueueItem(itemId = "c", title = "c"))
+        }
+        val c = controller()
+
+        c.playQueueItem(1) // starts "b"
+        runCurrent()
+        // The row moves before the load settles: index 1 now holds "c".
+        videoQueue?.removeAt(0)
+        sessionState.value = sessionState.value.copy(currentItemId = "b")
+        advanceUntilIdle()
+
+        assertTrue(queued("b"), "the started item has moved off index 1 — nothing of it left there")
+        assertTrue(queued("c"), "the UNRELATED row that moved into index 1 must NOT be consumed for b")
+        assertEquals(listOf("b", "c"), videoQueue?.queue?.value?.map { it.itemId })
+    }
+
+    @Test
+    fun `playQueueItem re-tap while settling does not double-initialize`() = runTest(dispatcher) {
+        videoQueue = VideoQueueController().apply {
+            enqueueLast(VideoQueueItem(itemId = "a", title = "a"))
+            enqueueLast(VideoQueueItem(itemId = "b", title = "b"))
+        }
+        val c = controller()
+
+        c.playQueueItem(1)
+        runCurrent()
+        c.playQueueItem(1)
+        runCurrent()
+        assertEquals(1, initialized.size, "the manual activation is single-flight")
+
+        sessionState.value = sessionState.value.copy(currentItemId = "b")
+        advanceUntilIdle()
+        assertFalse(queued("b"), "settling consumed the row")
+    }
+
+    @Test
+    fun `playQueueItem out of bounds starts nothing`() = runTest(dispatcher) {
+        videoQueue = VideoQueueController().apply {
+            enqueueLast(VideoQueueItem(itemId = "a", title = "a"))
+        }
+        val c = controller()
+
+        c.playQueueItem(5)
+        runCurrent()
+        advanceUntilIdle()
+
+        assertTrue(initialized.isEmpty(), "no row, no load")
+        assertTrue(queued("a"), "the queue is untouched")
+    }
+
+    @Test
+    fun `playQueueItem during a settling advance preempts it`() = runTest(dispatcher) {
+        // A manual "play now" is a deliberate pick: it must NOT be dropped
+        // because the queue-head ADVANCE happens to be settling (separate
+        // latches — the advance's settle guard then keeps its row).
+        queuedMovie("movie-1")
+        val c = controller()
+
+        c.playNextEpisode()
+        runCurrent()
+        videoQueue?.enqueueLast(VideoQueueItem(itemId = "movie-2", title = "movie-2"))
+        c.playQueueItem(1)
+        runCurrent()
+        assertEquals(listOf("movie-1", "movie-2"), initialized.map { it.first }, "the manual pick is not dropped")
+
+        // Settling on the manual pick consumes only that row.
+        sessionState.value = sessionState.value.copy(currentItemId = "movie-2")
+        advanceUntilIdle()
+        assertTrue(queued("movie-1"), "the superseded advance keeps its head")
+        assertFalse(queued("movie-2"), "the manual pick is consumed on settle")
+    }
 
     // ── mark watched & skip ────────────────────────────────────────────────
 
@@ -324,7 +541,7 @@ class EpisodeContinuationControllerTest {
         runTest(dispatcher) {
             stubSeason(episode("ep1"), episode("ep2"), episode("ep3"))
             hasNext = true
-            val c = controller(this)
+            val c = controller()
 
             c.markWatchedAndSkip()
             runCurrent()
@@ -342,7 +559,7 @@ class EpisodeContinuationControllerTest {
         runTest(dispatcher) {
             hasNext = false
             syncPlayMirror = false
-            val c = controller(this)
+            val c = controller()
 
             c.markWatchedAndSkip()
             runCurrent()
@@ -358,7 +575,7 @@ class EpisodeContinuationControllerTest {
             stubSeason(episode("ep2"), episode("ep3"))
             hasNext = true
             incognito = true
-            val c = controller(this)
+            val c = controller()
 
             c.markWatchedAndSkip()
             runCurrent()
@@ -374,7 +591,7 @@ class EpisodeContinuationControllerTest {
 
     @Test
     fun `markUnwatchedAndQuit clears the played flag and closes the player`() = runTest(dispatcher) {
-        val c = controller(this)
+        val c = controller()
 
         c.markUnwatchedAndQuit()
         runCurrent()
@@ -387,7 +604,7 @@ class EpisodeContinuationControllerTest {
     @Test
     fun `markUnwatchedAndQuit in incognito is a no-op mark that still closes`() = runTest(dispatcher) {
         incognito = true
-        val c = controller(this)
+        val c = controller()
 
         c.markUnwatchedAndQuit()
         runCurrent()
@@ -400,7 +617,7 @@ class EpisodeContinuationControllerTest {
 
     @Test
     fun `cancelAutoplay flips the decision clock and the overlay mirror`() = runTest(dispatcher) {
-        val c = controller(this)
+        val c = controller()
 
         c.cancelAutoplay()
 
@@ -415,7 +632,7 @@ class EpisodeContinuationControllerTest {
         smartDownloadsEnabled = true
         durationMs = 6 * 60 * 1000L
         deleteResult = true
-        val c = controller(this)
+        val c = controller()
 
         c.handleSmartDownloadCleanup("ep2")
         advanceUntilIdle()
@@ -426,7 +643,7 @@ class EpisodeContinuationControllerTest {
 
     @Test
     fun `smartDownloadCleanup is gated by the preference and the duration floor`() = runTest(dispatcher) {
-        val c = controller(this)
+        val c = controller()
 
         // Gate 1: the pref is off.
         smartDownloadsEnabled = false

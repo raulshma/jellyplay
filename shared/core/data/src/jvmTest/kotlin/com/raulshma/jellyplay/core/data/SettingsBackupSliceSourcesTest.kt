@@ -220,6 +220,55 @@ class SettingsBackupSliceSourcesTest {
     }
 
     @Test
+    fun itemPrefs_payloadMappersRoundTripEveryColumn() = runBlocking {
+        // The GOLDEN PARITY row: every ItemPlaybackPreference column
+        // non-default (respecting the one local-write invariant —
+        // subtitleDisabled rides only alongside subtitleLanguage == null), so
+        // entity → payload → wire JSON → payload → entity must come back
+        // EQUAL. The contract this pins: whenever a column is added to
+        // ItemPlaybackPreference + ItemPlaybackPreferenceEntity, this fixture
+        // gains a non-default value for it IN THE SAME CHANGE SET as the
+        // ItemPlaybackPreferencePayload field and the toPayload/entityFrom
+        // mappers — a column mapped on one side only decodes back as its
+        // default and fails this equality loudly (the silent-omission
+        // regression the preferAudioDescription adoption once risked).
+        val original = ItemPlaybackPreferenceEntity(
+            scope = "SERIES",
+            key = "series-golden",
+            audioLanguage = "deu",
+            subtitleLanguage = null,
+            subtitleDisabled = true,
+            subtitleForced = true,
+            subtitleHearingImpaired = false,
+            preferAudioDescription = false,
+            dialogueBoostStrength = "MODERATE",
+            rememberedAudioLabel = "English · 5.1",
+            rememberedAudioLanguage = "eng",
+            rememberedAudioIndex = 2,
+            rememberedAudioCodec = "eac3",
+            rememberedSubtitleLabel = "English SDH",
+            rememberedSubtitleLanguage = "eng",
+            rememberedSubtitleIndex = 1,
+            rememberedSubtitleCodec = "srt",
+            renderProfile = "{\"shaderPack\":\"anime4k\"}",
+            preferredMediaSourceId = "source-4k",
+            updatedAt = 5_000L,
+        )
+
+        // Mapper-direct: entity → payload → entity.
+        val payload = original.toPayload()
+        assertEquals(false, payload.preferAudioDescription)
+        assertEquals(original, entityFrom(payload, original.scope, original.key))
+
+        // And through the actual wire codec (SliceJson's
+        // encodeDefaults/ignoreUnknownKeys stance), as both adoption paths
+        // really decode it.
+        val decoded = SliceJson.encodeToJsonElement(payload)
+            .toPayloadOrNull(ItemPlaybackPreferencePayload.serializer())!!
+        assertEquals(original, entityFrom(decoded, original.scope, original.key))
+    }
+
+    @Test
     fun itemPrefs_localSliceIsNotRoamCapped() = runBlocking {
         val dao = database.itemPlaybackPreferenceDao()
         repeat(120) { index -> dao.upsert(row("ITEM", "item-$index", updatedAt = index.toLong())) }

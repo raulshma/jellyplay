@@ -446,8 +446,11 @@ fun VideoPlayerScreen(
     // The "Still watching?" confirm overlay (feature 1.3) — collected at the
     // root like the other controller-owned slices and passed into the tier.
     val stillWatchingPrompt by viewModel.stillWatchingPrompt.collectAsStateWithLifecycle()
-    // Manual up-next queue: the overflow entry shows the count; the Queue
-    // sheet re-collects the full list inside its router branch.
+    // Manual up-next queue: the overflow entry shows the count (the Queue
+    // sheet re-collects the full list inside its router branch). The Up Next
+    // CARD does not read this list — it renders the Up Next controller's
+    // projection (upNextCard), which resolves queue-head-over-sibling with the
+    // advance's precedence.
     val videoQueue by viewModel.videoQueueItems.collectAsStateWithLifecycle()
 
     LaunchedEffect(aspectRatio, detectedAspectRatio, engine) {
@@ -458,13 +461,22 @@ fun VideoPlayerScreen(
 
     val playMethod = uiState.media.playMethod
     val subtitleStyle = uiState.subtitleStyle
-    val nextEpisode = uiState.episodes.nextEpisode
-    val nextEpisodeImageUrl = remember(nextEpisode) {
-        nextEpisode?.let { viewModel.getImageUrl(it.id, 300) }
+    // The Up Next card: the controller's projection (queue head beats the
+    // episode sibling, null under SyncPlay) — the single display source for
+    // the overlay; the screen only resolves the artwork.
+    val upNextCard by viewModel.upNextCard.collectAsStateWithLifecycle()
+    val upNextImageUrl = remember(upNextCard) {
+        when (val card = upNextCard) {
+            null -> null
+            else -> when (card.source) {
+                UpNextCard.Source.QUEUE -> card.imageUrl
+                UpNextCard.Source.EPISODE -> viewModel.getImageUrl(card.itemId, 300)
+            }
+        }
     }
     val isInSyncPlaySession = uiState.isInSyncPlaySession
 
-    val isNextEpisodeVisible = nextEpisode != null && shouldShowUpNext
+    val isNextEpisodeVisible = upNextCard != null && shouldShowUpNext
     val isCinemaIntroVisible = cinemaIntroState != null && !isInPipMode
     val isSkipSegmentVisible = isSkipSegmentButtonVisible(
         activeSegment = activeSegment,
@@ -1108,8 +1120,8 @@ fun VideoPlayerScreen(
                 shouldShowUpNext,
                 isInPipMode,
                 tvSkipSegmentFocusRequester,
-                nextEpisode,
-                nextEpisodeImageUrl,
+                upNextCard,
+                upNextImageUrl,
                 isNextEpisodeLoading,
                 tvNextEpisodeFocusRequester,
                 isPlaying,
@@ -1132,9 +1144,8 @@ fun VideoPlayerScreen(
                     shouldShowUpNext = shouldShowUpNext,
                     isInPipMode = isInPipMode,
                     tvSkipSegmentFocusRequester = tvSkipSegmentFocusRequester,
-                    nextEpisode = nextEpisode,
-                    nextEpisodeImageUrl = nextEpisodeImageUrl,
-                    queuedNext = videoQueue.firstOrNull(),
+                    upNextCard = upNextCard,
+                    upNextImageUrl = upNextImageUrl,
                     isNextEpisodeLoading = isNextEpisodeLoading,
                     tvNextEpisodeFocusRequester = tvNextEpisodeFocusRequester,
                     isPlaying = isPlaying,
@@ -1214,9 +1225,12 @@ fun VideoPlayerScreen(
             val episodeBrowserEnabled = uiState.episodes.videoEpisodeBrowserEnabled
             // Previous/Next center-button availability. Derived from the
             // adjacency snapshot fetchAdjacentEpisodes writes alongside
-            // nextEpisode, so these stay consistent with the up-next overlay.
+            // nextEpisode — plus the Up Next queue mirror, because the
+            // PlayNextEpisode advance is QUEUE-FIRST (a queued movie is a
+            // valid target with no sibling at all), keeping the button's
+            // availability consistent with the up-next overlay's card.
             val hasPreviousEpisode = uiState.episodes.previousEpisode != null
-            val hasNextEpisode = uiState.episodes.nextEpisode != null
+            val hasNextEpisode = uiState.episodes.nextEpisode != null || uiState.hasQueuedNext
 
             // Hoist PlayerControls callbacks into remembered lambdas.
             // Each fresh `{ ... }` passed inline below allocated a new lambda

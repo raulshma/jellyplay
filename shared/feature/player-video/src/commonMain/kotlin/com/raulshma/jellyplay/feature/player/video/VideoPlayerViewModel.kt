@@ -6,11 +6,15 @@ import com.raulshma.jellyplay.core.data.log.Log
 import com.raulshma.jellyplay.core.data.playback.PlayerLifecycleManager
 import com.raulshma.jellyplay.core.data.playback.SleepCountdown
 import com.raulshma.jellyplay.core.data.playback.VideoMiniPlayerState
+import com.raulshma.jellyplay.core.data.playback.VideoQueueController
+import com.raulshma.jellyplay.core.data.playback.VideoQueueItem
 import com.raulshma.jellyplay.core.data.network.NetworkMonitor
 import com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager
+import com.raulshma.jellyplay.core.data.playback.NowPlayingReporter
 import com.raulshma.jellyplay.core.data.playback.PipController
 import com.raulshma.jellyplay.core.data.playback.dischargePipDismissal
 import com.raulshma.jellyplay.core.data.playback.PlaybackIdentity
+import com.raulshma.jellyplay.core.data.playback.PlaybackSourceResolver
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.ItemPlaybackPreferenceRepository
 import com.raulshma.jellyplay.core.data.repository.LyricsRepository
@@ -133,7 +137,7 @@ class VideoPlayerViewModel(
      * below falls back to a private in-memory instance so the player's queue
      * semantics work identically without DI.
      */
-    videoQueue: com.raulshma.jellyplay.core.data.playback.VideoQueueController? = null,
+    videoQueue: VideoQueueController? = null,
     private val streamingSubtitleStore: com.raulshma.jellyplay.core.data.repository.StreamingSubtitleStore,
     private val imageUrlProvider: ImageUrlProvider,
     private val downloadRepository: DownloadRepository,
@@ -147,7 +151,7 @@ class VideoPlayerViewModel(
      * and [PlayerSessionManager] consumes
      * [com.raulshma.jellyplay.core.data.playback.PlaybackSourceResolver.resolveUsableDownload]).
      */
-    private val playbackSourceResolver: com.raulshma.jellyplay.core.data.playback.PlaybackSourceResolver,
+    private val playbackSourceResolver: PlaybackSourceResolver,
     /**
      * The consolidated series seasons/episodes snapshot. [resolveSeasons] and
      * [resolveEpisodes] delegate here (online and offline), so the player's
@@ -200,7 +204,7 @@ class VideoPlayerViewModel(
      * [NowPlayingReporter.clear] on the full release — NOT on the per-item
      * re-initialization, where the session manager's release also runs).
      */
-    private val nowPlayingReporter: com.raulshma.jellyplay.core.data.playback.NowPlayingReporter,
+    private val nowPlayingReporter: NowPlayingReporter,
 ) : JellyPlayViewModel() {
 
     private val _uiState = stateFlow(VideoPlayerUiState())
@@ -270,8 +274,8 @@ class VideoPlayerViewModel(
             proj.toSegmentInput(dur).also {
                 Log.d(
                     UP_NEXT_LOG_TAG,
-                    "segInput rebuilt: queued=${it.hasQueuedNext} hasNextEpisode=${it.hasNextEpisode} " +
-                        "durationMs=$dur seriesId=${it.seriesId} cancelled=${it.autoplayCancelled} " +
+                    "segInput rebuilt: queued=${proj.hasQueuedNext} hasNextEpisode=${it.hasNextEpisode} " +
+                        "durationMs=$dur cancelled=${it.autoplayCancelled} " +
                         "syncPlay=${it.isInSyncPlaySession}",
                 )
             }
@@ -378,7 +382,7 @@ class VideoPlayerViewModel(
         scope = scope,
         platform = platform,
         stores = stores,
-        videoQueue = videoQueue ?: com.raulshma.jellyplay.core.data.playback.VideoQueueController(),
+        videoQueue = videoQueue ?: VideoQueueController(),
         imageUrlProvider = imageUrlProvider,
         itemPlaybackPreferenceRepository = itemPlaybackPreferenceRepository,
         castManager = castManager,
@@ -449,11 +453,14 @@ class VideoPlayerViewModel(
         // the full teardown ([PlaybackSession.performRelease]).
         castManager.acquireConsumer()
         playbackSession.arm()
-        // Warm-resolve the next episode while the Up Next card counts down:
+        // Warm-resolve the Up Next card's item while the card counts down:
         // its detail/segments land in the repository caches and the PlaybackInfo
         // resolution is stored for the advance to consume (PlayerSessionManager).
-        // SyncPlay excluded — the group's advance follows the server queue, and
-        // offline resolve degrades silently inside the warmer.
+        // The CARD is the target — the queue head beats the episode sibling,
+        // exactly like the advance, so the warm-up never pre-runs an item the
+        // advance would skip. SyncPlay excluded — the group's advance follows
+        // the server queue, and offline resolve degrades silently inside the
+        // warmer.
         launch {
             segmentOverlayState.collect { overlay ->
                 val state = uiState.value
@@ -465,22 +472,23 @@ class VideoPlayerViewModel(
                     )
                 }
                 if (overlay.shouldShowUpNext && !state.isInSyncPlaySession) {
-                    state.episodes.nextEpisode?.id?.let { nextId ->
+                    playbackSession.upNext.upNextCard.value?.itemId?.let { nextId ->
                         playbackSession.playerSessionManager.warmNextEpisode(nextId)
                     }
                 }
             }
         }
         // Queue mirror: the up-next overlay and the autoplay gate read
-        // hasQueuedNext from the uiState projection; the controller is the
-        // truth. distinct-guarded so an unrelated uiState write doesn't churn.
+        // hasQueuedNext from the uiState projection; the Up Next controller's
+        // flow IS the truth (queue non-empty under the SyncPlay gate). The
+        // mirror survives item switches via keepAcrossItems — the controller's
+        // flow won't re-emit to re-set a dropped mirror.
         launch {
-            playbackSession.videoQueue.queue.collect { items ->
-                val queued = items.isNotEmpty()
+            playbackSession.upNext.hasQueuedNext.collect { queued ->
                 if (_uiState.value.hasQueuedNext != queued) {
                     Log.d(
                         UP_NEXT_LOG_TAG,
-                        "queue mirror -> $queued (size=${items.size}, head=${items.firstOrNull()?.itemId})",
+                        "queue mirror -> $queued (head=${playbackSession.upNext.upNextCard.value?.itemId})",
                     )
                     _uiState.update { it.copy(hasQueuedNext = queued) }
                 }
@@ -524,7 +532,7 @@ class VideoPlayerViewModel(
             is VideoPlayerUiEvent.PlayEpisode -> {
                 // Manual episode navigation resets the still-watching streak.
                 playbackSession.autoplayController.onUserInteraction()
-                playbackSession.episodeContinuation.playEpisode(event.episodeId, event.startPositionTicks)
+                playbackSession.upNext.playEpisode(event.episodeId, event.startPositionTicks)
             }
             is VideoPlayerUiEvent.RestartPlayback -> restartPlayback()
             is VideoPlayerUiEvent.RetryPlayback -> retryPlayback()
@@ -548,19 +556,19 @@ class VideoPlayerViewModel(
             is VideoPlayerUiEvent.PlayPreviousEpisode -> {
                 // Manual navigation: the still-watching streak restarts.
                 playbackSession.autoplayController.onUserInteraction()
-                playbackSession.episodeContinuation.playPreviousEpisode()
+                playbackSession.upNext.playPreviousEpisode()
             }
             is VideoPlayerUiEvent.PlayNextEpisode -> {
                 // Manual navigation: the still-watching streak restarts.
                 playbackSession.autoplayController.onUserInteraction()
-                playbackSession.episodeContinuation.playNextEpisode()
+                playbackSession.upNext.playNextEpisode()
             }
             is VideoPlayerUiEvent.MarkWatchedAndSkip -> {
                 // A deliberate user advance — resets the still-watching streak.
                 playbackSession.autoplayController.onUserInteraction()
-                playbackSession.episodeContinuation.markWatchedAndSkip()
+                playbackSession.upNext.markWatchedAndSkip()
             }
-            is VideoPlayerUiEvent.MarkUnwatchedAndQuit -> playbackSession.episodeContinuation.markUnwatchedAndQuit()
+            is VideoPlayerUiEvent.MarkUnwatchedAndQuit -> playbackSession.upNext.markUnwatchedAndQuit()
             is VideoPlayerUiEvent.ToggleDialogueBoost -> toggleDialogueBoost()
             is VideoPlayerUiEvent.SetDialogueBoostStrength -> setDialogueBoostStrength(event.strength)
             is VideoPlayerUiEvent.ToggleVideoStats -> toggleVideoStats()
@@ -583,7 +591,7 @@ class VideoPlayerViewModel(
             is VideoPlayerUiEvent.SetSeriesSubtitleDisabled -> setSeriesSubtitleDisabled(event.disabled)
             is VideoPlayerUiEvent.SetSeriesAudioDescriptionPreference ->
                 setSeriesPreferAudioDescription(event.remember)
-            is VideoPlayerUiEvent.PlayQueueItem -> playQueueItem(event.index)
+            is VideoPlayerUiEvent.PlayQueueItem -> playbackSession.upNext.playQueueItem(event.index)
             is VideoPlayerUiEvent.RemoveQueueItem -> playbackSession.videoQueue.removeAt(event.index)
             is VideoPlayerUiEvent.MoveQueueItem -> playbackSession.videoQueue.move(event.fromIndex, event.toIndex)
             VideoPlayerUiEvent.ClearQueue -> playbackSession.videoQueue.clear()
@@ -599,7 +607,7 @@ class VideoPlayerViewModel(
             is VideoPlayerUiEvent.SetRenderQuality -> setRenderQuality(event.quality)
             is VideoPlayerUiEvent.ClearRenderOverride -> clearRenderOverride()
             is VideoPlayerUiEvent.CycleDeinterlace -> cycleDeinterlace()
-            is VideoPlayerUiEvent.CancelAutoplay -> playbackSession.episodeContinuation.cancelAutoplay()
+            is VideoPlayerUiEvent.CancelAutoplay -> playbackSession.upNext.cancelAutoplay()
             is VideoPlayerUiEvent.StillWatchingContinue -> playbackSession.stillWatching.onContinue()
             is VideoPlayerUiEvent.StillWatchingStop -> playbackSession.stillWatching.onStop()
             is VideoPlayerUiEvent.StillWatchingTick -> playbackSession.stillWatching.onTick()
@@ -607,7 +615,7 @@ class VideoPlayerViewModel(
             is VideoPlayerUiEvent.SetInputBindingEnabled -> playbackSession.inputBindingToggle.setEnabled(event.bindingId, event.enabled)
             is VideoPlayerUiEvent.SetSyncPlayRepeatMode -> setSyncPlayRepeatMode(event.mode)
             is VideoPlayerUiEvent.SetSyncPlayShuffleMode -> setSyncPlayShuffleMode(event.mode)
-            is VideoPlayerUiEvent.LoadSeasonEpisodes -> playbackSession.episodeContinuation.loadSeason(event.seasonId)
+            is VideoPlayerUiEvent.LoadSeasonEpisodes -> playbackSession.upNext.loadSeason(event.seasonId)
         }
     }
 
@@ -715,7 +723,7 @@ class VideoPlayerViewModel(
     private fun executeSegmentSkip(target: SegmentSkipTarget, userInitiated: Boolean) {
         when (target) {
             is SegmentSkipTarget.SeekToPosition -> seekTo(target.positionMs, userInitiated)
-            SegmentSkipTarget.SkipToNextEpisode -> playbackSession.episodeContinuation.playNextEpisode()
+            SegmentSkipTarget.SkipToNextEpisode -> playbackSession.upNext.playNextEpisode()
             SegmentSkipTarget.AdvanceCinemaIntro -> playbackSession.advanceCinemaIntro()
             SegmentSkipTarget.None -> Unit
         }
@@ -873,7 +881,7 @@ class VideoPlayerViewModel(
     // twin).
 
     /** True while a next-episode advance is in flight and unsettled (#146). */
-    val isNextEpisodeLoading: StateFlow<Boolean> get() = playbackSession.episodeContinuation.isNextEpisodeLoading
+    val isNextEpisodeLoading: StateFlow<Boolean> get() = playbackSession.upNext.isNextEpisodeLoading
 
     val hapticsEnabled: Boolean get() = stores.appearance.appearance.value.hapticsEnabled
 
@@ -1124,15 +1132,21 @@ class VideoPlayerViewModel(
 
     // ── Manual up-next queue (the queue sheet's funnel) ───────────────────
 
-    /** Plays the queue row at [index] now — consumed from the queue first. */
-    private fun playQueueItem(index: Int) {
-        val item = playbackSession.videoQueue.consumeAt(index) ?: return
-        playbackSession.episodeContinuation.playEpisode(item.itemId, 0L)
-    }
+    // "Play now" on a queue row routes to the Up Next controller's
+    // settle-then-consume protocol (playQueueItem) — the old
+    // consume-then-play body here silently deleted the row on a failed load.
 
     /** The queue rows for the queue sheet (the controller is the single truth). */
-    val videoQueueItems: StateFlow<List<com.raulshma.jellyplay.core.data.playback.VideoQueueItem>>
+    val videoQueueItems: StateFlow<List<VideoQueueItem>>
         get() = playbackSession.videoQueue.queue
+
+    /**
+     * The Up Next card (queue head beats the episode sibling, null under
+     * SyncPlay) — the screen-facing alias of the controller's projection,
+     * alongside [videoQueueItems]; the screen renders the overlay from this.
+     */
+    val upNextCard: StateFlow<com.raulshma.jellyplay.feature.player.video.UpNextCard?>
+        get() = playbackSession.upNext.upNextCard
     // -----------------------------------------------------------------------
 
     private fun setAspectRatio(ratio: AspectRatio) {
@@ -1382,7 +1396,7 @@ class VideoPlayerViewModel(
         // the autoplay/advance decision so shell hooks see ended-then-started.
         nowPlayingReporter.markEnded()
         val autoplayNext = _uiState.value.episodes.nextEpisode
-        val queuedNext = playbackSession.episodeContinuation.hasQueuedNext()
+        val queuedNext = playbackSession.upNext.hasQueuedNext.value
         Log.d(
             UP_NEXT_LOG_TAG,
             "ended: nextEpisode=${autoplayNext?.id} hasQueuedNext=$queuedNext " +
@@ -1410,7 +1424,7 @@ class VideoPlayerViewModel(
                 playbackSession.stillWatching.show(StillWatchingReason.EPISODE_COUNT)
             } else {
                 playbackSession.autoplayController.recordAutoAdvance()
-                playbackSession.episodeContinuation.playNextEpisode()
+                playbackSession.upNext.playNextEpisode()
             }
         } else {
             onEndedWithNoNext()

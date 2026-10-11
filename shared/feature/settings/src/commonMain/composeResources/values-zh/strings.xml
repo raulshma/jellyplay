@@ -764,7 +764,6 @@
     <string name="settings_sync_never">从未同步</string>
     <string name="ss_jellyplay_sync_enabled_title">跨设备同步设置</string>
     <string name="ss_jellyplay_sync_enabled_subtitle">设置、布局和偏好通过 JellyPlay 插件跟随你的 Jellyfin 账号</string>
-    <string name="ss_jellyplay_sync_now_title">立即同步</string>
     <string name="ss_jellyplay_sync_now_subtitle">立即上传并下载已同步的设置</string>
     <string name="settings_jellyplay_sync_last_sync">上次同步 %1$s</string>
     <string name="settings_jellyplay_sync_in_flight">正在同步…</string>

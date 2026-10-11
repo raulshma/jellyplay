@@ -12,7 +12,6 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_sync
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_jellyplay_sync_enabled_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_jellyplay_sync_enabled_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_jellyplay_sync_now_subtitle
-import com.raulshma.jellyplay.feature.settings.generated.resources.ss_jellyplay_sync_now_title
 
 /**
  * The JellyPlay companion-plugin sync rows (ADR 0010) — residual rows (the
@@ -39,7 +38,6 @@ internal object JellyPlaySyncRows {
         id = "jellyplay_sync_now",
         icon = Tabler.Outline.Refresh,
         titleRes = Res.string.settings_sync_now,
-        searchTitleRes = Res.string.ss_jellyplay_sync_now_title,
         searchSubtitleRes = Res.string.ss_jellyplay_sync_now_subtitle,
         keywords = listOf("sync", "refresh", "pull", "push", "jellyplay", "plugin"),
         route = Route.JellyPlaySync,

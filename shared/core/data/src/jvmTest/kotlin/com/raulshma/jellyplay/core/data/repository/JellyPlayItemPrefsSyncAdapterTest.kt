@@ -103,6 +103,7 @@ class JellyPlayItemPrefsSyncAdapterTest {
         put("subtitleDisabled", entity.subtitleDisabled)
         put("subtitleForced", entity.subtitleForced)
         put("subtitleHearingImpaired", entity.subtitleHearingImpaired)
+        put("preferAudioDescription", entity.preferAudioDescription)
         put("dialogueBoostStrength", entity.dialogueBoostStrength)
         put("rememberedAudioLabel", entity.rememberedAudioLabel)
         put("rememberedAudioLanguage", entity.rememberedAudioLanguage)
@@ -274,6 +275,10 @@ class JellyPlayItemPrefsSyncAdapterTest {
                     put("audioLanguage", "jpn")
                     put("subtitleLanguage", "eng")
                     put("subtitleForced", true)
+                    put("subtitleHearingImpaired", false)
+                    // The pin's FALSE arm rides the adopt verbatim too (an
+                    // explicit non-AD preference, not "unset").
+                    put("preferAudioDescription", false)
                     put("dialogueBoostStrength", "HIGH")
                     put("rememberedAudioLabel", "English · 5.1")
                     put("rememberedAudioLanguage", "eng")
@@ -290,6 +295,8 @@ class JellyPlayItemPrefsSyncAdapterTest {
         assertEquals("jpn", row.audioLanguage)
         assertEquals("eng", row.subtitleLanguage)
         assertEquals(true, row.subtitleForced)
+        assertEquals(false, row.subtitleHearingImpaired)
+        assertEquals(false, row.preferAudioDescription)
         assertEquals("HIGH", row.dialogueBoostStrength)
         assertEquals("English · 5.1", row.rememberedAudioLabel)
         assertEquals(2, row.rememberedAudioIndex)

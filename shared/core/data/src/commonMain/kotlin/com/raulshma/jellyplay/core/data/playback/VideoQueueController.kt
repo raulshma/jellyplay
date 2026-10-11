@@ -24,8 +24,9 @@ data class VideoQueueItem(
  * the details screen, drained by the player). Session-scoped by design —
  * unlike the audio queue there is no Room persistence, no engine playlist
  * mirror, and no shuffle/repeat: the list is the single truth, the player
- * consumes the head on advance ([consumeHead]), and the episode chain takes
- * over when the queue empties (queue-first semantics).
+ * consumes the head only after the session settles on it ([consumeIfHead]),
+ * and the episode chain takes over when the queue empties (queue-first
+ * semantics).
  *
  * Suppressed during SyncPlay by the player's advance routing (the group's
  * server-side queue owns the order there).
@@ -89,16 +90,6 @@ class VideoQueueController {
     fun peekHead(): VideoQueueItem? = _queue.value.firstOrNull()
 
     /**
-     * Removes and returns the head — the advance verb. Callers that play a
-     * mid-list row use [consumeAt] instead.
-     */
-    fun consumeHead(): VideoQueueItem? {
-        val head = _queue.value.firstOrNull() ?: return null
-        _queue.update { queue -> queue.drop(1) }
-        return head
-    }
-
-    /**
      * Removes [itemId] only while it is still the head — the settle-time
      * consume for the queue-first advance: the caller starts the item first
      * and consumes here once the session binds it, so an advance that dies
@@ -114,7 +105,14 @@ class VideoQueueController {
         return true
     }
 
-    /** Removes and returns the item at [index] ("play now" from the queue sheet). */
+    /**
+     * Removes and returns the item at [index] ("play now" from the queue
+     * sheet). Caller protocol is settle-then-consume (see
+     * UpNextController.playQueueItem): start the item first and call this
+     * only after the session settles on it, re-checking that the row at
+     * [index] is still the item that was started — a blind consume here is
+     * the exact ordering that once lost the head on failed loads.
+     */
     fun consumeAt(index: Int): VideoQueueItem? {
         val item = _queue.value.getOrNull(index) ?: return null
         removeAt(index)
