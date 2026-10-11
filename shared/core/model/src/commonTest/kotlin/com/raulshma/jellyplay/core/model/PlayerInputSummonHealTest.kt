@@ -7,10 +7,13 @@ import kotlin.test.assertTrue
 
 /**
  * Pins [ensureControlsSummonable] — the read-time repair for the one
- * unrecoverable binding state (issue #171's broken-editor fallout): no
- * summon surface left enabled, so the controls can never be shown and no
- * in-player UI exists to fix the mapping. Any NARROWER disabled set is
- * indistinguishable from intent and must pass through untouched.
+ * unrecoverable binding state (issue #171's broken-editor fallout): NO
+ * family (touch / remote) has a summon left enabled, so the controls can
+ * never be shown and no in-player UI exists to fix the mapping. Anything
+ * narrower — a one-family lockout reachable through the normal UI, or a
+ * summon rebound onto a pattern the default map doesn't carry it on — is
+ * indistinguishable from intent (or already alive) and must pass through
+ * untouched.
  */
 class PlayerInputSummonHealTest {
 
@@ -19,6 +22,16 @@ class PlayerInputSummonHealTest {
             map.withBindingEnabled(id, enabled = false)
         }
 
+    /** Every default summon surface (touch + remote) — the total-lockout set. */
+    private val allSummonIds = arrayOf(
+        PlayerInputDefaults.ID_TAP,
+        PlayerInputDefaults.ID_EDGE_SWIPE_LEFT,
+        PlayerInputDefaults.ID_EDGE_SWIPE_RIGHT,
+        PlayerInputDefaults.ID_DPAD_UP,
+        PlayerInputDefaults.ID_DPAD_DOWN,
+        PlayerInputDefaults.ID_DPAD_SELECT,
+    )
+
     @Test
     fun healthy_default_map_is_unchanged() {
         val map = PlayerInputDefaults.defaultMap()
@@ -26,23 +39,18 @@ class PlayerInputSummonHealTest {
     }
 
     @Test
-    fun locked_out_map_restores_the_tap_row() {
+    fun total_lockout_restores_both_family_rows() {
         // The broken-editor lockout: every touch summon surface AND every
-        // D-pad summon control off — the user can never show controls again.
-        val locked = disabled(
-            PlayerInputDefaults.ID_TAP,
-            PlayerInputDefaults.ID_EDGE_SWIPE_LEFT,
-            PlayerInputDefaults.ID_EDGE_SWIPE_RIGHT,
-            PlayerInputDefaults.ID_DPAD_UP,
-            PlayerInputDefaults.ID_DPAD_DOWN,
-            PlayerInputDefaults.ID_DPAD_SELECT,
-        )
+        // D-pad summon control off — neither family can show controls again.
+        val locked = disabled(*allSummonIds)
         val healed = locked.ensureControlsSummonable()
         assertNotEquals(locked, healed)
         val tap = healed.bindings.first { it.pattern == InputPattern.Tap }
         assertTrue(tap.enabled, "tap row must wake up")
         assertEquals(PlayerAction.TOGGLE_CONTROLS, tap.action)
         assertEquals(PlayerInputDefaults.ID_TAP, tap.id, "the existing row keeps its id")
+        val select = healed.bindings.first { it.pattern == InputPattern.DPad(DpadControl.SELECT) }
+        assertTrue(select.enabled, "the remote family's summon row must wake up too")
     }
 
     @Test
@@ -54,13 +62,30 @@ class PlayerInputSummonHealTest {
     }
 
     @Test
-    fun touch_all_off_with_dpad_summon_alive_is_intent_not_a_lockout() {
-        val tvOnly = disabled(
+    fun touch_lockout_with_remote_alive_is_intent_not_a_lockout() {
+        // GestureMode.NONE (and a deliberate per-row kill of the touch
+        // summons) leaves the touch family dead while the D-pad rows stay
+        // untouched by presets — a one-family lockout is reachable through
+        // the normal UI, so the heal must NOT fight it (a spurious heal
+        // would re-enable the preset's rows on every read).
+        val touchLocked = disabled(
             PlayerInputDefaults.ID_TAP,
             PlayerInputDefaults.ID_EDGE_SWIPE_LEFT,
             PlayerInputDefaults.ID_EDGE_SWIPE_RIGHT,
         )
-        assertEquals(tvOnly, tvOnly.ensureControlsSummonable())
+        assertEquals(touchLocked, touchLocked.ensureControlsSummonable())
+    }
+
+    @Test
+    fun remote_lockout_with_touch_alive_is_intent_not_a_lockout() {
+        // A TV user disabled every D-pad summon control. Deliberate — the
+        // tap row stays untouched, and so must the D-pad rows.
+        val remoteLocked = disabled(
+            PlayerInputDefaults.ID_DPAD_UP,
+            PlayerInputDefaults.ID_DPAD_DOWN,
+            PlayerInputDefaults.ID_DPAD_SELECT,
+        )
+        assertEquals(remoteLocked, remoteLocked.ensureControlsSummonable())
     }
 
     @Test
@@ -68,13 +93,7 @@ class PlayerInputSummonHealTest {
         // Tap rebound to play/pause + everything else off: re-ENABLING the
         // row alone would still leave no summon — the heal must restore the
         // TOGGLE_CONTROLS action too.
-        val rebound = PlayerInputDefaults.defaultMap()
-            .withBindingEnabled(PlayerInputDefaults.ID_TAP, enabled = false)
-            .withBindingEnabled(PlayerInputDefaults.ID_EDGE_SWIPE_LEFT, enabled = false)
-            .withBindingEnabled(PlayerInputDefaults.ID_EDGE_SWIPE_RIGHT, enabled = false)
-            .withBindingEnabled(PlayerInputDefaults.ID_DPAD_UP, enabled = false)
-            .withBindingEnabled(PlayerInputDefaults.ID_DPAD_DOWN, enabled = false)
-            .withBindingEnabled(PlayerInputDefaults.ID_DPAD_SELECT, enabled = false)
+        val rebound = disabled(*allSummonIds)
             .withBindingAction(PlayerInputDefaults.ID_TAP, PlayerAction.TOGGLE_PLAY_PAUSE)
         val healed = rebound.ensureControlsSummonable()
         val tap = healed.bindings.first { it.pattern == InputPattern.Tap }
@@ -83,16 +102,41 @@ class PlayerInputSummonHealTest {
     }
 
     @Test
+    fun rebound_double_tap_center_to_toggle_controls_counts_as_a_summon() {
+        // The summon guarantee asks ACTIONS, not a pattern table: the
+        // executor's TOGGLE_CONTROLS arm fires from every rebound arm, so a
+        // center double tap rebound to it is a live touch summon — the heal
+        // must NOT fire (a spurious heal would rewrite user data on read).
+        val rebound = disabled(*allSummonIds)
+            .withBindingAction(PlayerInputDefaults.ID_DOUBLE_TAP_CENTER, PlayerAction.TOGGLE_CONTROLS)
+        assertEquals(rebound, rebound.ensureControlsSummonable())
+    }
+
+    @Test
+    fun back_or_hide_on_a_dpad_row_does_not_count_as_a_summon() {
+        // BACK_OR_HIDE exits when the controls are hidden at every site but
+        // the edge swipe — a rebound onto D-pad BACK is no summon. With it
+        // the remote family is still locked out and gets its row back.
+        val rebound = disabled(*allSummonIds)
+            .withBindingAction(PlayerInputDefaults.ID_DPAD_BACK, PlayerAction.BACK_OR_HIDE)
+        val healed = rebound.ensureControlsSummonable()
+        assertTrue(
+            healed.bindings.first { it.pattern == InputPattern.DPad(DpadControl.SELECT) }.enabled,
+            "the rebound-to-BACK_OR_HIDE D-pad row is no summon; the heal must fire",
+        )
+    }
+
+    @Test
     fun none_bound_summon_rows_do_not_count_as_alive() {
         // Explicit Unbound (NONE) on the tap row reads as OFF for the
         // guarantee, even though the row is 'enabled'.
-        val unbound = PlayerInputDefaults.defaultMap()
-            .withBindingAction(PlayerInputDefaults.ID_TAP, PlayerAction.NONE)
-            .withBindingEnabled(PlayerInputDefaults.ID_EDGE_SWIPE_LEFT, enabled = false)
-            .withBindingEnabled(PlayerInputDefaults.ID_EDGE_SWIPE_RIGHT, enabled = false)
-            .withBindingEnabled(PlayerInputDefaults.ID_DPAD_UP, enabled = false)
-            .withBindingEnabled(PlayerInputDefaults.ID_DPAD_DOWN, enabled = false)
-            .withBindingEnabled(PlayerInputDefaults.ID_DPAD_SELECT, enabled = false)
+        val unbound = disabled(
+            PlayerInputDefaults.ID_EDGE_SWIPE_LEFT,
+            PlayerInputDefaults.ID_EDGE_SWIPE_RIGHT,
+            PlayerInputDefaults.ID_DPAD_UP,
+            PlayerInputDefaults.ID_DPAD_DOWN,
+            PlayerInputDefaults.ID_DPAD_SELECT,
+        ).withBindingAction(PlayerInputDefaults.ID_TAP, PlayerAction.NONE)
         val healed = unbound.ensureControlsSummonable()
         assertEquals(PlayerAction.TOGGLE_CONTROLS, healed.bindings.first { it.pattern == InputPattern.Tap }.action)
     }
@@ -106,16 +150,7 @@ class PlayerInputSummonHealTest {
                 .bindings
                 .filterNot { it.pattern == InputPattern.Tap }
                 .map { binding ->
-                    if (binding.pattern == InputPattern.EdgeSwipe(SwipeEdge.LEFT) ||
-                        binding.pattern == InputPattern.EdgeSwipe(SwipeEdge.RIGHT) ||
-                        binding.pattern == InputPattern.DPad(DpadControl.UP) ||
-                        binding.pattern == InputPattern.DPad(DpadControl.DOWN) ||
-                        binding.pattern == InputPattern.DPad(DpadControl.SELECT)
-                    ) {
-                        binding.copy(enabled = false)
-                    } else {
-                        binding
-                    }
+                    if (binding.id in allSummonIds) binding.copy(enabled = false) else binding
                 },
         )
         val healed = stripped.ensureControlsSummonable()
@@ -125,14 +160,7 @@ class PlayerInputSummonHealTest {
 
     @Test
     fun heal_is_idempotent() {
-        val locked = disabled(
-            PlayerInputDefaults.ID_TAP,
-            PlayerInputDefaults.ID_EDGE_SWIPE_LEFT,
-            PlayerInputDefaults.ID_EDGE_SWIPE_RIGHT,
-            PlayerInputDefaults.ID_DPAD_UP,
-            PlayerInputDefaults.ID_DPAD_DOWN,
-            PlayerInputDefaults.ID_DPAD_SELECT,
-        )
+        val locked = disabled(*allSummonIds)
         val healed = locked.ensureControlsSummonable()
         assertEquals(healed, healed.ensureControlsSummonable())
     }

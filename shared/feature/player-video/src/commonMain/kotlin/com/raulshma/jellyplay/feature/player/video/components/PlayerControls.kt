@@ -567,8 +567,9 @@ internal fun PlayerControls(
                 // prev/next → a chip-less episode jump) instead of the seek
                 // arms. TV keeps the full row: D-pad focus navigation has no
                 // touch zones to collide with, and episode skipping needs a
-                // focusable target. Touch episode nav lives in the episode
-                // browser and the ⋮ menu.
+                // focusable target. Touch episode nav lives in the ⋮ menu
+                // (previous episode as a menu item; next rides
+                // mark-watched-&-skip) and the episode browser.
                 if (isTv) {
                     val tvPreviousEpisodeFocusState = rememberTvFocusState(focusedScale = 1.08f)
                     FilledTonalIconButton(
@@ -948,6 +949,11 @@ internal fun PlayerControls(
                 sheets.onToggleAudioOnly()
             },
             hasNextEpisode = transport.hasNextEpisode,
+            hasPreviousEpisode = transport.hasPreviousEpisode,
+            onPreviousEpisode = {
+                showOverflow = false
+                transport.onPreviousEpisode()
+            },
             incognitoModeEnabled = sheets.incognitoModeEnabled,
             onMarkWatchedAndSkip = {
                 showOverflow = false

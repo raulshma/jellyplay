@@ -375,44 +375,63 @@ data class PlayerInputMap(
 }
 
 /**
- * The summon surfaces a map can offer and the actions that count as "summons"
- * on each — the exact question [PlayerInputMap.ensureControlsSummonable]
- * asks. Action sets mirror the fire sites: `TOGGLE_CONTROLS` toggles from
- * everywhere; `BACK_OR_HIDE` SUMMONS only at the edge-swipe site (the D-pad
- * BACK arm and the executor's arm EXIT when the controls are hidden), so it
- * counts only for the edge rows.
+ * Whether an ENABLED row carrying [action] on [pattern] can SHOW the controls
+ * when they are hidden — the semantics [PlayerInputMap.ensureControlsSummonable]
+ * needs. Asked of actions, not of a pattern table, so a rebound summon counts
+ * wherever it lives: every rebound arm routes to the shared executor, whose
+ * `TOGGLE_CONTROLS` arm toggles unconditionally — EXCEPT the continuous
+ * detectors, which never consult a rebound discrete action (the swipe halves
+ * resolve only `SWIPE_BRIGHTNESS`/`SWIPE_VOLUME`, the pinch gate only zoom),
+ * so a row there is a saved dead binding. `BACK_OR_HIDE` SUMMONS only at the
+ * edge-swipe site; the executor's arm and the D-pad BACK arm EXIT when the
+ * controls are hidden.
  */
-internal val SUMMON_SURFACES: List<Pair<InputPattern, Set<PlayerAction>>> = listOf(
-    InputPattern.Tap to setOf(PlayerAction.TOGGLE_CONTROLS),
-    InputPattern.EdgeSwipe(SwipeEdge.LEFT) to setOf(PlayerAction.TOGGLE_CONTROLS, PlayerAction.BACK_OR_HIDE),
-    InputPattern.EdgeSwipe(SwipeEdge.RIGHT) to setOf(PlayerAction.TOGGLE_CONTROLS, PlayerAction.BACK_OR_HIDE),
-    InputPattern.DPad(DpadControl.UP) to setOf(PlayerAction.TOGGLE_CONTROLS),
-    InputPattern.DPad(DpadControl.DOWN) to setOf(PlayerAction.TOGGLE_CONTROLS),
-    InputPattern.DPad(DpadControl.SELECT) to setOf(PlayerAction.TOGGLE_CONTROLS),
-)
+private fun summonsControls(action: PlayerAction, pattern: InputPattern): Boolean = when (action) {
+    PlayerAction.TOGGLE_CONTROLS -> when (pattern) {
+        is InputPattern.VerticalSwipe, is InputPattern.HorizontalSwipe, is InputPattern.Pinch -> false
+        else -> true
+    }
+    PlayerAction.BACK_OR_HIDE -> pattern is InputPattern.EdgeSwipe
+    else -> false
+}
+
+/** Which input family a pattern speaks for: remotes press [Key]/[DPad], everything else is touch/pointer. */
+private val InputPattern.isRemoteFamily: Boolean
+    get() = this is InputPattern.Key || this is InputPattern.DPad
 
 /**
  * Repair for the one unrecoverable binding state (issue #171's broken-editor
- * fallout): a map where NO summon surface carries an enabled, summon-capable
- * action — the controls can never be shown again on any input family (touch,
- * remote, both), and no in-player UI exists to fix the mapping. Any narrower
- * choice (say, tap off with an edge swipe alive) is indistinguishable from
- * intent and stays untouched.
+ * fallout): a map where NO input family (touch, remote) has an enabled,
+ * summon-capable row — the controls can never be shown again on any device,
+ * and no in-player UI exists to fix the mapping. TOTAL lockout only: a
+ * one-family lockout is reachable through the normal UI (GestureMode.NONE
+ * kills every touch row on purpose; a remote user can disable the D-pad
+ * summon controls) and is indistinguishable from intent — healing it would
+ * fight the preset on every read.
  *
- * The heal restores the default Tap row (`TOGGLE_CONTROLS`, enabled) via
- * [PlayerInputMap.withBindingAdded] — an existing drifted row keeps its id,
- * a missing row is appended — so the next mapping write persists the repair.
- * Idempotent: a healed map (and every healthy map) returns unchanged.
+ * The heal restores BOTH default summon rows — the Tap row (touch family)
+ * and the D-pad SELECT row (remote family) — via
+ * [PlayerInputMap.withBindingAdded]: an existing drifted row keeps its id,
+ * a missing row is appended, so the next mapping write persists the repair
+ * and the fix holds for either device. Idempotent: a healed map (and every
+ * healthy map) returns unchanged.
  */
 fun PlayerInputMap.ensureControlsSummonable(): PlayerInputMap {
-    val summonable = SUMMON_SURFACES.any { (pattern, actions) ->
-        enabledBindingFor(pattern)?.let { it.action in actions } == true
+    val summonable = bindings.any { binding ->
+        binding.enabled && summonsControls(binding.action, binding.pattern)
     }
     if (summonable) return this
     return withBindingAdded(
         PlayerBinding(
             id = PlayerInputDefaults.ID_TAP,
             pattern = InputPattern.Tap,
+            action = PlayerAction.TOGGLE_CONTROLS,
+            enabled = true,
+        ),
+    ).withBindingAdded(
+        PlayerBinding(
+            id = PlayerInputDefaults.ID_DPAD_SELECT,
+            pattern = InputPattern.DPad(DpadControl.SELECT),
             action = PlayerAction.TOGGLE_CONTROLS,
             enabled = true,
         ),

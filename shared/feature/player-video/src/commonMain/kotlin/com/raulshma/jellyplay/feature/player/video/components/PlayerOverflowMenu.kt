@@ -62,6 +62,7 @@ import com.raulshma.jellyplay.feature.player.video.generated.resources.player_vi
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_passthrough
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_playback_mode
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_playback_mode_on
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_previous_episode
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_set_a_point
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_set_a_point_at
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_set_b_point
@@ -74,35 +75,6 @@ import com.raulshma.jellyplay.feature.player.video.generated.resources.player_vi
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_version
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_video_filters
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_video_filters_on
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.ChannelMixMode
@@ -212,6 +184,11 @@ internal fun BoxScope.PlayerOverflowMenu(
     // "…& skip" (a next episode exists) and "…& exit" (it doesn't) — one
     // action, the VM's markWatchedAndSkip owns the advance-vs-close branch.
     hasNextEpisode: Boolean = false,
+    // The transport row hides the prev/next episode buttons on touch (the
+    // row collides with the double-tap seek zones), so this is the touch
+    // in-player path back one episode. TV keeps the row and doesn't need it.
+    hasPreviousEpisode: Boolean = false,
+    onPreviousEpisode: () -> Unit = {},
     // Incognito leaves no watch state — the unwatched variant hides.
     incognitoModeEnabled: Boolean = false,
     onMarkWatchedAndSkip: () -> Unit = {},
@@ -686,6 +663,12 @@ internal fun BoxScope.PlayerOverflowMenu(
             // Mark-and-exit actions. TV reaches them through the same
             // overflow focus path as every other item (the panel is one
             // scrollable focus column).
+            OverflowMenuItem(
+                icon = Tabler.Outline.PlayerSkipBack,
+                label = stringResource(Res.string.player_video_previous_episode),
+                onClick = onPreviousEpisode,
+                enabled = hasPreviousEpisode,
+            )
             OverflowMenuItem(
                 icon = Tabler.Outline.Checks,
                 label = if (hasNextEpisode) stringResource(Res.string.player_video_mark_watched_and_skip)
