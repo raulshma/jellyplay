@@ -11,4 +11,17 @@
 
     <!-- Exclude sensitive/temporary data -->
     <exclude domain="sharedpref" path="device.xml"/>
+
+    <!-- EncryptedSharedPreferences files: the master key lives in
+         AndroidKeystore and is NEVER backed up, so a restored ciphertext is
+         undecryptable forever and only poisons the next launch (issue #171's
+         fresh-install crash loop — every read threw "Signature/MAC
+         verification failed" out of the startup Koin graph). Excluded here
+         and in data_extraction_rules; the storage seam additionally wipes a
+         poisoned file if one still arrives (OEM transfer paths that ignore
+         these rules). -->
+    <exclude domain="sharedpref" path="seerr_secure_prefs.xml"/>
+    <exclude domain="sharedpref" path="arr_secure_prefs.xml"/>
+    <exclude domain="sharedpref" path="subtitle_provider_secure_prefs.xml"/>
+    <exclude domain="sharedpref" path="client_certificate_secure_prefs.xml"/>
 </full-backup-content>
