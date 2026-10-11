@@ -184,9 +184,9 @@ internal fun BoxScope.PlayerOverflowMenu(
     // "…& skip" (a next episode exists) and "…& exit" (it doesn't) — one
     // action, the VM's markWatchedAndSkip owns the advance-vs-close branch.
     hasNextEpisode: Boolean = false,
-    // The transport row hides the prev/next episode buttons on touch (the
-    // row collides with the double-tap seek zones), so this is the touch
-    // in-player path back one episode. TV keeps the row and doesn't need it.
+    // The transport row's prev button is only enabled when a previous episode
+    // exists; this menu item mirrors it as a discoverable, labelled path (the
+    // row buttons are icon-only and disabled state carries no explanation).
     hasPreviousEpisode: Boolean = false,
     onPreviousEpisode: () -> Unit = {},
     // Incognito leaves no watch state — the unwatched variant hides.

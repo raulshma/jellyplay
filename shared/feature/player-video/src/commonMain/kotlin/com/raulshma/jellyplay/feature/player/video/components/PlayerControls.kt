@@ -559,37 +559,31 @@ internal fun PlayerControls(
                         } else Modifier
                     ),
             ) {
-                // Touch keeps ONLY the play/pause button centered. The full
-                // prev/play/next row spans ~60% of a portrait phone's width —
-                // far past both double-tap seek zones (the 35%/65% split) —
-                // so with the controls open, side double-taps hit these
-                // buttons (play/pause → the reported pause/resume,
-                // prev/next → a chip-less episode jump) instead of the seek
-                // arms. TV keeps the full row: D-pad focus navigation has no
-                // touch zones to collide with, and episode skipping needs a
-                // focusable target. Touch episode nav lives in the ⋮ menu
-                // (previous episode as a menu item; next rides
-                // mark-watched-&-skip) and the episode browser.
-                if (isTv) {
-                    val tvPreviousEpisodeFocusState = rememberTvFocusState(focusedScale = 1.08f)
-                    FilledTonalIconButton(
-                        onClick = transport.onPreviousEpisode,
-                        enabled = transport.hasPreviousEpisode,
-                        modifier = Modifier
-                            .size(IconButtonDefaults.mediumContainerSize())
-                            .then(tvPreviousEpisodeFocusState.focusModifier)
-                            .tvFocusIndicator(tvPreviousEpisodeFocusState, IconButtonDefaults.largeRoundShape),
-                        shape = IconButtonDefaults.largeRoundShape,
-                        colors = IconButtonDefaults.filledTonalIconButtonColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                            contentColor = MaterialTheme.colorScheme.onSurface,
-                        ),
-                    ) {
-                        Icon(
-                            Tabler.Outline.PlayerSkipBack, stringResource(Res.string.player_video_previous_episode),
-                            modifier = Modifier.size(IconButtonDefaults.mediumIconSize),
-                        )
-                    }
+                // The full prev/play/next row renders on every form factor.
+                // TV needs it: D-pad episode skipping requires focusable
+                // targets. Touch keeps it too — the buttons only intercept
+                // taps while the controls are visible (they auto-hide), and
+                // the double-tap seek zones stay reachable whenever the
+                // chrome is dismissed. The ⋮ menu carries the same episode
+                // verbs (previous-episode item; next rides mark-watched-&-skip).
+                val tvPreviousEpisodeFocusState = rememberTvFocusState(focusedScale = 1.08f)
+                FilledTonalIconButton(
+                    onClick = transport.onPreviousEpisode,
+                    enabled = transport.hasPreviousEpisode,
+                    modifier = Modifier
+                        .size(IconButtonDefaults.mediumContainerSize())
+                        .then(tvPreviousEpisodeFocusState.focusModifier)
+                        .tvFocusIndicator(tvPreviousEpisodeFocusState, IconButtonDefaults.largeRoundShape),
+                    shape = IconButtonDefaults.largeRoundShape,
+                    colors = IconButtonDefaults.filledTonalIconButtonColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        contentColor = MaterialTheme.colorScheme.onSurface,
+                    ),
+                ) {
+                    Icon(
+                        Tabler.Outline.PlayerSkipBack, stringResource(Res.string.player_video_previous_episode),
+                        modifier = Modifier.size(IconButtonDefaults.mediumIconSize),
+                    )
                 }
 
                 val tvPlayPauseFocusState = rememberTvFocusState(focusedScale = 1.08f)
@@ -613,26 +607,24 @@ internal fun PlayerControls(
                     )
                 }
 
-                if (isTv) {
-                    val tvNextEpisodeFocusState = rememberTvFocusState(focusedScale = 1.08f)
-                    FilledTonalIconButton(
-                        onClick = transport.onNextEpisode,
-                        enabled = transport.hasNextEpisode,
-                        modifier = Modifier
-                            .size(IconButtonDefaults.mediumContainerSize())
-                            .then(tvNextEpisodeFocusState.focusModifier)
-                            .tvFocusIndicator(tvNextEpisodeFocusState, IconButtonDefaults.largeRoundShape),
-                        shape = IconButtonDefaults.largeRoundShape,
-                        colors = IconButtonDefaults.filledTonalIconButtonColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                            contentColor = MaterialTheme.colorScheme.onSurface,
-                        ),
-                    ) {
-                        Icon(
-                            Tabler.Outline.PlayerSkipForward, stringResource(Res.string.player_video_next_episode),
-                            modifier = Modifier.size(IconButtonDefaults.mediumIconSize),
-                        )
-                    }
+                val tvNextEpisodeFocusState = rememberTvFocusState(focusedScale = 1.08f)
+                FilledTonalIconButton(
+                    onClick = transport.onNextEpisode,
+                    enabled = transport.hasNextEpisode,
+                    modifier = Modifier
+                        .size(IconButtonDefaults.mediumContainerSize())
+                        .then(tvNextEpisodeFocusState.focusModifier)
+                        .tvFocusIndicator(tvNextEpisodeFocusState, IconButtonDefaults.largeRoundShape),
+                    shape = IconButtonDefaults.largeRoundShape,
+                    colors = IconButtonDefaults.filledTonalIconButtonColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        contentColor = MaterialTheme.colorScheme.onSurface,
+                    ),
+                ) {
+                    Icon(
+                        Tabler.Outline.PlayerSkipForward, stringResource(Res.string.player_video_next_episode),
+                        modifier = Modifier.size(IconButtonDefaults.mediumIconSize),
+                    )
                 }
             }
         }
