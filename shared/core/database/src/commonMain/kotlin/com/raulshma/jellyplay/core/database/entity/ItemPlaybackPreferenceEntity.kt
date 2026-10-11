@@ -49,6 +49,10 @@ import androidx.room3.PrimaryKey
  * pinned for this item/series in the player's "Version" sheet, so the next
  * playback starts on that version instead of the server's first. Nullable:
  * NULL = "no version remembered". Added in migration 57→58.
+ *
+ * `preferAudioDescription` pins the audio-description preference per
+ * item/series (three-state: TRUE = prefer AD narration, FALSE = explicitly
+ * prefer non-AD, NULL = follow the global setting). Added in migration 60→61.
  */
 @Entity(
     tableName = "item_playback_preferences",
@@ -66,6 +70,7 @@ data class ItemPlaybackPreferenceEntity(
     val subtitleDisabled: Boolean? = null,
     val subtitleForced: Boolean? = null,
     val subtitleHearingImpaired: Boolean? = null,
+    val preferAudioDescription: Boolean? = null,
     val dialogueBoostStrength: String? = null,
     val rememberedAudioLabel: String? = null,
     val rememberedAudioLanguage: String? = null,

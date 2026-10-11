@@ -230,6 +230,9 @@
     <string name="settings_media_segments_summary">%1$d auto-skip, %2$d show button</string>
     <string name="settings_skip_segments_on_seek">Skip Segments on Seek</string>
     <string name="settings_skip_segments_on_seek_on">Forward seeks past auto-skip segments</string>
+    <string name="settings_segment_skip_delay">Auto-skip delay</string>
+    <string name="settings_segment_skip_delay_off">Off</string>
+    <string name="settings_segment_skip_delay_seconds">%1$d s</string>
     <string name="settings_skip_segments_on_seek_off">Off</string>
     <string name="settings_syncplay_join_summary">Join behavior: %1$s</string>
     <string name="settings_join_behavior">Join Behavior</string>

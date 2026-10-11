@@ -202,6 +202,9 @@
     <string name="settings_media_segments_summary">%1$d saut auto, %2$d afficher bouton</string>
     <string name="settings_skip_segments_on_seek">Passer les segments lors d&#39;une avance</string>
     <string name="settings_skip_segments_on_seek_on">Les avances rapides sautent les segments à saut automatique</string>
+    <string name="settings_segment_skip_delay">Délai de saut automatique</string>
+    <string name="settings_segment_skip_delay_off">Désactivé</string>
+    <string name="settings_segment_skip_delay_seconds">%1$d s</string>
     <string name="settings_skip_segments_on_seek_off">Désactivé</string>
     <string name="settings_syncplay_join_summary">Comportement de jonction : %1$s</string>
     <string name="settings_join_behavior">Comportement de jonction</string>

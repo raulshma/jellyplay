@@ -110,6 +110,8 @@
 
     <!-- ── Add to Playlist picker ──────────────────────────────────────── -->
     <string name="detail_option_add_to_playlist">Add to Playlist</string>
+    <string name="detail_option_play_next">Play next</string>
+    <string name="detail_option_play_last">Play last</string>
     <string name="detail_playlist_picker_title">Add to Playlist</string>
     <string name="detail_playlist_watch_later">Watch Later</string>
     <string name="detail_playlist_create_new">Create new playlist</string>

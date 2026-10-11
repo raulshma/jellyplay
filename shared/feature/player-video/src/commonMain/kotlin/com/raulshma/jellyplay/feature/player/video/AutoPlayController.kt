@@ -106,11 +106,12 @@ internal class AutoPlayController {
         )
 
     /**
-     * Natural end-of-playback rule: advance only when a next episode exists,
-     * autoplay is enabled, and the countdown was not cancelled.
+     * Natural end-of-playback rule: advance only when a next episode exists
+     * (a queued up-next item counts — queue-first semantics), autoplay is
+     * enabled, and the countdown was not cancelled.
      */
-    fun shouldAutoPlayNext(nextEpisode: MediaItem?): Boolean =
-        nextEpisode != null && enabled && !cancelled
+    fun shouldAutoPlayNext(nextEpisode: MediaItem?, hasQueuedNext: Boolean = false): Boolean =
+        (nextEpisode != null || hasQueuedNext) && enabled && !cancelled
 
     /**
      * Explicit skip-credits rule: advance when a next episode exists and

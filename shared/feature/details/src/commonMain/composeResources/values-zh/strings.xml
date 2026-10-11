@@ -93,6 +93,8 @@
 
     <!-- ── Add to Playlist picker ──────────────────────────────────────── -->
     <string name="detail_option_add_to_playlist">添加到播放列表</string>
+    <string name="detail_option_play_next">播放下一集</string>
+    <string name="detail_option_play_last">添加到最后</string>
     <string name="detail_playlist_picker_title">添加到播放列表</string>
     <string name="detail_playlist_watch_later">稍后观看</string>
     <string name="detail_playlist_create_new">创建新播放列表</string>

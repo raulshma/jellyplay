@@ -89,6 +89,8 @@ internal data class CenterOverlayInputs(
     val tvSkipSegmentFocusRequester: FocusRequester,
     val nextEpisode: MediaItem?,
     val nextEpisodeImageUrl: String?,
+    /** The manual queue's head when it holds items — the up-next card shows it (queue-first). */
+    val queuedNext: com.raulshma.jellyplay.core.data.playback.VideoQueueItem? = null,
     val isNextEpisodeLoading: Boolean,
     val tvNextEpisodeFocusRequester: FocusRequester,
     val isPlaying: Boolean,
@@ -185,16 +187,20 @@ internal fun BoxScope.PlayerCenterOverlayTier(
         }
     }
 
-    if (inputs.nextEpisode != null) {
+    if (inputs.nextEpisode != null || inputs.queuedNext != null) {
         // The confirm overlay suppresses the up-next card while visible —
-        // the answer decides the advance, the card must not race it.
+        // the answer decides the advance, the card must not race it. The
+        // queue head (movie queued from the details screen) shows when there
+        // is no episode sibling — queue-first semantics.
+        val queued = inputs.queuedNext
+        val episode = inputs.nextEpisode
         NextEpisodeOverlay(
             isVisible = inputs.shouldShowUpNext && inputs.stillWatchingPrompt == null,
-            episodeTitle = inputs.nextEpisode.name,
-            seriesName = inputs.nextEpisode.seriesName,
-            seasonNumber = inputs.nextEpisode.seasonNumber,
-            episodeNumber = inputs.nextEpisode.episodeNumber,
-            thumbnailUrl = inputs.nextEpisodeImageUrl,
+            episodeTitle = episode?.name ?: queued?.title.orEmpty(),
+            seriesName = episode?.seriesName ?: queued?.subtitle,
+            seasonNumber = episode?.seasonNumber,
+            episodeNumber = episode?.episodeNumber,
+            thumbnailUrl = inputs.nextEpisodeImageUrl ?: queued?.imageUrl,
             countdownSeconds = uiState.autoplay.autoPlayCountdownSec,
             autoplayEnabled = uiState.autoplay.videoAutoplayNext,
             onPlayNext = { viewModel.onEvent(VideoPlayerUiEvent.PlayNextEpisode) },

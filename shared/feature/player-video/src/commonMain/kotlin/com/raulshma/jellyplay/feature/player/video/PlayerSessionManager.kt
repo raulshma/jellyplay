@@ -516,6 +516,88 @@ internal class PlayerSessionManager(
         publishNowPlayingMeta()
     }
 
+    // ── Next-episode warm resolve ────────────────────────────────────────────
+
+    /**
+     * Single-slot warm resolve behind the Up-Next card (the autoplay handoff).
+     * While the card is visible, [warmNextEpisode] pre-runs the next item's
+     * media-detail and segments fetches through the same repository caches
+     * [loadOnline] reads (their cost lands during the countdown, not after),
+     * and stores the PlaybackInfo resolution for single-consume reuse in
+     * [loadOnline] — removing the server round-trips from the
+     * episode-to-episode switch. Engine-agnostic: mpv/VLC ride the same
+     * pipeline. Byte pre-caching is deliberately out of scope.
+     *
+     * One slot, keyed by item: a new warm call replaces the previous one.
+     * The stored resolution is consumed only when the freshly-built
+     * [PlaybackResolveRequest] equals the warmed one — any input drift
+     * (bitrate estimate, playback mode, player type) silently re-resolves.
+     * A stale entry for an item the user never plays is harmless: it is
+     * overwritten by the next warm call and never read otherwise.
+     */
+    private var warmNextJob: Job? = null
+    private var warmNextItemId: String? = null
+    private var warmNextResolution: Pair<PlaybackResolveRequest, PlaybackResolution>? = null
+
+    fun warmNextEpisode(itemId: String) {
+        if (itemId == warmNextItemId) return
+        warmNextJob?.cancel()
+        warmNextItemId = itemId
+        warmNextResolution = null
+        warmNextJob = scope.launch { warmNextNow(itemId) }
+    }
+
+    private suspend fun warmNextNow(itemId: String) {
+        // Detail + segments warm through the repository's own per-item caches
+        // (single-flight detail read, session-scoped segments cache), so the
+        // warming call is the exact call loadOnline/fetchMediaSegments make —
+        // they hit the warm entries with no integration.
+        val detail = mediaRepository.getMediaDetail(itemId).getOrNull() ?: run {
+            // Offline miss / vanished item: drop the slot so a later trigger
+            // can re-attempt, and stay silent (autoplay re-resolves anyway).
+            warmNextItemId = null
+            return
+        }
+        playbackRepository.getMediaSegments(itemId)
+
+        val agg = aggregateStore.aggregateRaw.first()
+        val source = detail.preferredMediaSource(
+            getPreferredMediaSourceId(itemId, detail.item.seriesId),
+        )
+        // The auto-advance path always starts at 0.
+        val request = buildResolveRequest(itemId, source, startTimeTicks = 0L, agg = agg)
+        warmNextResolution = request to playbackRepository.resolvePlayable(request)
+    }
+
+    /** Single-consume: reuse the warmed resolution only on an exact request match. */
+    private fun takeWarmResolution(request: PlaybackResolveRequest): PlaybackResolution? {
+        val (warmRequest, resolution) = warmNextResolution ?: return null
+        if (warmRequest != request) return null
+        warmNextResolution = null
+        warmNextItemId = null
+        return resolution
+    }
+
+    /**
+     * One builder for the resolve request, called by both the warm slot and
+     * the live path — the warm hit is an exact-equality guard, so the two
+     * sites must never drift apart on how the request is shaped.
+     */
+    private fun buildResolveRequest(
+        itemId: String,
+        source: MediaSource?,
+        startTimeTicks: Long,
+        agg: VideoPlayerAggregate,
+    ): PlaybackResolveRequest = PlaybackResolveRequest(
+        itemId = itemId,
+        mediaSourceId = source?.id ?: "",
+        startTimeTicks = startTimeTicks,
+        maxStreamingBitrateBits = adaptiveBitrateManager.resolveEffectiveMaxBitrate(),
+        mode = agg.playback.playbackMode,
+        playerType = agg.playback.preferredPlayer,
+        staticFallbackLiveStreamId = source?.liveStreamId,
+    )
+
     private suspend fun loadOnline(
         itemId: String,
         mediaSourceId: String?,
@@ -547,7 +629,6 @@ internal class PlayerSessionManager(
         // flow blocks until the real DataStore values arrive.
         val agg = aggregateStore.aggregateRaw.first()
         val playerType = agg.playback.preferredPlayer
-        val sourceId = source?.id ?: ""
 
         // Consult the PlaybackInfo endpoint so the server decides Direct
         // Play / Direct Stream / Transcode based on the device profile and
@@ -556,18 +637,17 @@ internal class PlayerSessionManager(
         // request falls through to the static direct URL with the
         // DIRECT_PLAY default (preserving the historical behaviour for
         // non-conforming sources).
-        val maxBitrate = adaptiveBitrateManager.resolveEffectiveMaxBitrate()
-        val resolution = playbackRepository.resolvePlayable(
-            PlaybackResolveRequest(
-                itemId = itemId,
-                mediaSourceId = sourceId,
-                startTimeTicks = startPositionTicks,
-                maxStreamingBitrateBits = maxBitrate,
-                mode = agg.playback.playbackMode,
-                playerType = playerType,
-                staticFallbackLiveStreamId = source?.liveStreamId,
-            ),
+        val resolveRequest = buildResolveRequest(
+            itemId = itemId,
+            source = source,
+            startTimeTicks = startPositionTicks,
+            agg = agg,
         )
+        // Warm-slot first (the Up-Next card pre-resolved this exact request
+        // during the countdown); any input drift falls through to the live
+        // resolve, so this is never a correctness rung — only a latency one.
+        val resolution = takeWarmResolution(resolveRequest)
+            ?: playbackRepository.resolvePlayable(resolveRequest)
         // Resolved rides as-is; StaticFallback is the fold above; Unplayable
         // is a live-only miss and cannot reach a request without a
         // liveStreamOption — the empty sentinel keeps the type exhaustive.
@@ -686,6 +766,7 @@ internal class PlayerSessionManager(
             headers = headers,
             preferredAudioLanguage = ruleResolution?.audioLanguage
                 ?: agg.subtitle.preferredAudioLanguage,
+            preferAudioDescription = agg.subtitle.preferAudioDescription,
             // A rule-driven OFF keeps the engine's native subtitle preference
             // unset — the helper's ladder enforces the Off itself.
             preferredSubtitleLanguage = if (ruleResolution?.subtitleDisabled == true) {

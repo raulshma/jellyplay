@@ -47,6 +47,7 @@ import com.raulshma.jellyplay.feature.player.video.generated.resources.player_vi
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_channel_mixing
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_gestures
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_gestures_on
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_queue_open
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_clear_ab_repeat
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_deinterlace
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_decoder
@@ -189,6 +190,11 @@ internal fun BoxScope.PlayerOverflowMenu(
     // row buttons are icon-only and disabled state carries no explanation).
     hasPreviousEpisode: Boolean = false,
     onPreviousEpisode: () -> Unit = {},
+    // The manual up-next queue entry: visible when the queue holds items and
+    // no SyncPlay group session owns the order (its queue sheet replaces it).
+    queueItemCount: Int = 0,
+    isInSyncPlaySession: Boolean = false,
+    onQueueClick: () -> Unit = {},
     // Incognito leaves no watch state — the unwatched variant hides.
     incognitoModeEnabled: Boolean = false,
     onMarkWatchedAndSkip: () -> Unit = {},
@@ -669,6 +675,13 @@ internal fun BoxScope.PlayerOverflowMenu(
                 onClick = onPreviousEpisode,
                 enabled = hasPreviousEpisode,
             )
+            if (queueItemCount > 0 && !isInSyncPlaySession) {
+                OverflowMenuItem(
+                    icon = Tabler.Outline.ListDetails,
+                    label = stringResource(Res.string.player_video_queue_open, queueItemCount),
+                    onClick = onQueueClick,
+                )
+            }
             OverflowMenuItem(
                 icon = Tabler.Outline.Checks,
                 label = if (hasNextEpisode) stringResource(Res.string.player_video_mark_watched_and_skip)

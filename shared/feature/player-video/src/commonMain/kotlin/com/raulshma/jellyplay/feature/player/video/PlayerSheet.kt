@@ -23,6 +23,13 @@ sealed class PlayerSheet {
     data object AVSync : PlayerSheet() { override val key = "AVSync" }
     data object Decoder : PlayerSheet() { override val key = "Decoder" }
     data object Episodes : PlayerSheet() { override val key = "Episodes" }
+
+    /**
+     * The manual up-next queue (the details screen's "play next/last" list):
+     * reorder, remove, play-now. Hidden while a SyncPlay group session owns
+     * the order.
+     */
+    data object Queue : PlayerSheet() { override val key = "Queue" }
     data object SyncPlay : PlayerSheet() { override val key = "SyncPlay" }
     data object Quality : PlayerSheet() { override val key = "Quality" }
     data object PlaybackMode : PlayerSheet() { override val key = "PlaybackMode" }
@@ -69,6 +76,7 @@ private val ALL_SHEETS: List<PlayerSheet> = listOf(
     PlayerSheet.AVSync,
     PlayerSheet.Decoder,
     PlayerSheet.Episodes,
+    PlayerSheet.Queue,
     PlayerSheet.SyncPlay,
     PlayerSheet.Quality,
     PlayerSheet.PlaybackMode,

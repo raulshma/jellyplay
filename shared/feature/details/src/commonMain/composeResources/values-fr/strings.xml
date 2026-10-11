@@ -94,6 +94,8 @@
 
     <!-- ── Add to Playlist picker ──────────────────────────────────────── -->
     <string name="detail_option_add_to_playlist">Ajouter à la playlist</string>
+    <string name="detail_option_play_next">Lire le suivant</string>
+    <string name="detail_option_play_last">Lire en dernier</string>
     <string name="detail_playlist_picker_title">Ajouter à la playlist</string>
     <string name="detail_playlist_watch_later">À regarder plus tard</string>
     <string name="detail_playlist_create_new">Créer une nouvelle playlist</string>

@@ -106,6 +106,7 @@ class ItemSwitchResetOrderTest {
             subtitleStyle = SubtitleStyle(fontSize = 40),
             dialogueBoostEnabled = true,
             dialogueBoostStrength = EffectStrength.HIGH,
+            hasQueuedNext = true,
             uiPrefs = seed.uiPrefs.copy(controlsTimeoutMs = 12_345L, showVideoStats = true),
             gestures = seed.gestures.copy(seekDurationMs = 20_000L, isHoldSpeedActive = true),
             segmentState = seed.segmentState.copy(
@@ -127,6 +128,11 @@ class ItemSwitchResetOrderTest {
         )
         assertEquals(25f, after.videoFx.tvZoomModePercent)
         assertEquals(SubtitleStyle(fontSize = 40), after.subtitleStyle)
+        assertTrue(
+            after.hasQueuedNext,
+            "the queue mirror carries across the item switch: the queue is process-scoped " +
+                "and the queue flow does not re-emit to re-set a dropped mirror",
+        )
 
         // Everything else resets: slice defaults, the per-item dialogue-boost
         // zeroing, and the episode slice (the navigator re-derives it through

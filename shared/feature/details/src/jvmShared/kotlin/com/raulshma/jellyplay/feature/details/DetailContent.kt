@@ -114,7 +114,31 @@ internal fun DetailContent(
         chooserTitle = stringResource(Res.string.detail_share_via),
     )
 
+    // Manual up-next queue (the player drains it queue-first). The controller
+    // is process-wide, so "play next" here feeds the player's queue sheet even
+    // before the player opens. koinInject — the book feature's desktop-host
+    // precedent for a process-wide core:data single a screen consumes directly.
+    val videoQueue = org.koin.compose.koinInject<com.raulshma.jellyplay.core.data.playback.VideoQueueController>()
+    val imageUrlProvider = org.koin.compose.koinInject<com.raulshma.jellyplay.core.data.util.ImageUrlProvider>()
+    fun enqueueInQueue(item: com.raulshma.jellyplay.core.model.MediaItem?, next: Boolean) {
+        if (item == null) return
+        val queueItem = com.raulshma.jellyplay.core.data.playback.VideoQueueItem(
+            itemId = item.id,
+            title = item.name,
+            subtitle = item.seriesName ?: item.year?.toString(),
+            imageUrl = imageUrlProvider.getImageUrl(item.id, maxWidth = 300),
+            runTimeTicks = item.runTimeTicks,
+        )
+        if (next) videoQueue.enqueueNext(queueItem) else videoQueue.enqueueLast(queueItem)
+    }
+
     val mediaOptions = rememberMediaOptions(
+        onPlayNextInQueue = {
+            enqueueInQueue(item, next = true)
+        },
+        onPlayLastInQueue = {
+            enqueueInQueue(item, next = false)
+        },
         item = item,
         detail = state.detail,
         itemId = state.itemId,

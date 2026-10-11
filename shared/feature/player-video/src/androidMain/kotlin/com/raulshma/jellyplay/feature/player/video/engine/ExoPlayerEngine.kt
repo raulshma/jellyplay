@@ -751,6 +751,13 @@ class ExoPlayerEngine(
         if (request.preferredSubtitleLanguage != null) {
             params.setPreferredTextLanguage(request.preferredSubtitleLanguage)
         }
+        if (request.preferAudioDescription) {
+            // Engine-level AD bias: prefer narrated tracks without removing the
+            // plain track from contention (no AD track → the language match
+            // stands). The selection policy's title-bridge remains the
+            // authoritative rung; this only aligns the platform selector.
+            params.setPreferredAudioRoleFlags(C.ROLE_FLAG_DESCRIBES_VIDEO)
+        }
         if (request.maxVideoBitrate != null) {
             // Local val captures the non-null value: maxVideoBitrate now lives
             // in :feature:player:core (different module), so Kotlin can no
@@ -1014,6 +1021,10 @@ class ExoPlayerEngine(
     override fun stop() = runOnPlayerThread { player?.stop() }
     override fun seekTo(positionMs: Long) = runOnPlayerThread { player?.seekTo(positionMs) }
     override fun setPlaybackSpeed(speed: Float) = runOnPlayerThread { player?.setPlaybackSpeed(speed) }
+
+    override fun onScrubbingChanged(active: Boolean) = runOnPlayerThread {
+        player?.setScrubbingModeEnabled(active)
+    }
 
     override val volume: Float get() = cachedVolume
 

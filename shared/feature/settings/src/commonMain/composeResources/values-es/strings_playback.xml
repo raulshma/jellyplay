@@ -202,6 +202,9 @@
     <string name="settings_media_segments_summary">%1$d auto-saltar, %2$d mostrar botón</string>
     <string name="settings_skip_segments_on_seek">Omitir segmentos al buscar</string>
     <string name="settings_skip_segments_on_seek_on">Las búsquedas hacia adelante saltan los segmentos con auto-omisión</string>
+    <string name="settings_segment_skip_delay">Retardo de salto automático</string>
+    <string name="settings_segment_skip_delay_off">No</string>
+    <string name="settings_segment_skip_delay_seconds">%1$d s</string>
     <string name="settings_skip_segments_on_seek_off">No</string>
     <string name="settings_syncplay_join_summary">Comportamiento al unirse: %1$s</string>
     <string name="settings_join_behavior">Comportamiento al unirse</string>

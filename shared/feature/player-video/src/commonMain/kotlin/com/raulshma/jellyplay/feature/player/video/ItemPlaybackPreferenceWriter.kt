@@ -109,6 +109,19 @@ internal class ItemPlaybackPreferenceWriter(
     }
 
     /**
+     * Saves/clears the per-series audio-description pin. `null` means "follow
+     * global" (the explicit clear runs). SERIES-only: a standalone movie has
+     * no series row to pin onto — the global setting already covers it.
+     */
+    fun setSeriesPreferAudioDescription(value: Boolean?) {
+        val key = resolveKey(ScopePolicy.SERIES_ONLY) ?: return
+        scope.launch {
+            repository.setPreferAudioDescription(key.scope, key.key, value)
+            onPreferencesChanged()
+        }
+    }
+
+    /**
      * Saves/clears the dialogue-boost strength under [ScopePolicy.SERIES_THEN_ITEM]
      * (SERIES applies to all episodes, ITEM pins the standalone movie).
      * [EffectStrength.NONE] means "forget" — the explicit clear runs.

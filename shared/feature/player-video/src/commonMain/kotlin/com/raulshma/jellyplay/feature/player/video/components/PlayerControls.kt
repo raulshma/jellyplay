@@ -269,6 +269,11 @@ internal data class SheetControls(
     val onDeinterlaceCycle: () -> Unit = {},
     /** Opens the Version sheet (multi-version items only — the overflow menu gates on the track fact). */
     val onVersionClick: () -> Unit = {},
+    // The manual up-next queue entry: shown when the queue holds items and no
+    // SyncPlay group session owns the order (its server-side queue replaces it).
+    val queueItemCount: Int = 0,
+    val isInSyncPlaySession: Boolean = false,
+    val onQueueClick: () -> Unit = {},
 )
 
 /**
@@ -945,6 +950,12 @@ internal fun PlayerControls(
             onPreviousEpisode = {
                 showOverflow = false
                 transport.onPreviousEpisode()
+            },
+            queueItemCount = sheets.queueItemCount,
+            isInSyncPlaySession = sheets.isInSyncPlaySession,
+            onQueueClick = {
+                showOverflow = false
+                sheets.onQueueClick()
             },
             incognitoModeEnabled = sheets.incognitoModeEnabled,
             onMarkWatchedAndSkip = {

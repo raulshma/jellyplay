@@ -202,6 +202,9 @@
     <string name="settings_media_segments_summary">%1$d Auto-Skip, %2$d Button zeigen</string>
     <string name="settings_skip_segments_on_seek">Segmente beim Spulen überspringen</string>
     <string name="settings_skip_segments_on_seek_on">Vorwärtssprünge überspringen Auto-Skip-Segmente</string>
+    <string name="settings_segment_skip_delay">Auto-Skip-Verzögerung</string>
+    <string name="settings_segment_skip_delay_off">Aus</string>
+    <string name="settings_segment_skip_delay_seconds">%1$d s</string>
     <string name="settings_skip_segments_on_seek_off">Aus</string>
     <string name="settings_syncplay_join_summary">Beitrittsverhalten: %1$s</string>
     <string name="settings_join_behavior">Beitrittsverhalten</string>

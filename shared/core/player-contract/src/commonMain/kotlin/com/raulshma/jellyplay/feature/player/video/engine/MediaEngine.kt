@@ -30,6 +30,15 @@ data class PlaybackRequest(
     val headers: Map<String, String> = emptyMap(),
     val preferredAudioLanguage: String? = null,
     val preferredSubtitleLanguage: String? = null,
+    /**
+     * Engine-level audio-description bias: when true the Exo adapter adds
+     * `ROLE_FLAG_DESCRIBES_VIDEO` to its preferred audio role flags, so the
+     * platform track selector starts out leaning toward AD narration before
+     * the helper's label-bridge rung makes the authoritative pick. Engines
+     * without a role-flag concept (mpv/VLC) ignore it — their AD handling is
+     * title-based in the selection policy.
+     */
+    val preferAudioDescription: Boolean = false,
     val maxVideoBitrate: Int? = null,
     val serverUrl: String? = null,
     val authToken: String? = null,
@@ -456,6 +465,18 @@ interface MediaEngine :
     override val currentPositionMs: Long
     override fun selectTrack(type: TrackType, index: Int)
     override fun setMaxVideoBitrate(bps: Int?)
+
+    // ── Scrubbing ──
+    /**
+     * Notifies the engine that a user-driven scrub session started or ended
+     * (seek-bar drag, swipe seek, double-tap-hold repeat seek). Media3's
+     * adapter maps this to `ExoPlayer.setScrubbingModeEnabled` — decode-only
+     * frames + dynamic scheduling while the drag is live — so the many
+     * preview seeks feel instant; engines without a scrubbing concept
+     * (mpv/VLC — their absolute seeks are already precise) inherit the no-op.
+     * Purely advisory: the committed seek still goes through [seekTo].
+     */
+    fun onScrubbingChanged(active: Boolean) {}
 
     // ── Identity ──
     /**

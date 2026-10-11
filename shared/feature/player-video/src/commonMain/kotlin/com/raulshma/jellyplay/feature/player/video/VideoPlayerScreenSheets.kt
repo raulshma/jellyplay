@@ -20,6 +20,7 @@ import com.raulshma.jellyplay.core.ui.components.PlayerModalBottomSheet
 import com.raulshma.jellyplay.feature.player.video.components.AVSyncSheet
 import com.raulshma.jellyplay.feature.player.video.components.AspectRatioSheet
 import com.raulshma.jellyplay.feature.player.video.components.ChapterPickerSheet
+import com.raulshma.jellyplay.feature.player.video.components.VideoQueueSheet
 import com.raulshma.jellyplay.feature.player.video.components.DecoderPickerSheet
 import com.raulshma.jellyplay.feature.player.video.components.EpisodePickerSheet
 import com.raulshma.jellyplay.feature.player.video.components.PlaybackInfoOverlay
@@ -37,6 +38,7 @@ import com.raulshma.jellyplay.feature.player.video.components.VideoFilterSheet
 import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvSubtitleOwnership
 import com.raulshma.jellyplay.feature.player.video.generated.resources.Res
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_audio
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_remember_audio_description
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_remember_audio_language
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_remember_subtitle_language
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_remember_subtitles_off
@@ -128,6 +130,18 @@ internal fun PlayerSheetRouter(
                                     VideoPlayerUiEvent.SetSeriesAudioLanguagePreference(
                                         seriesAudioPreferenceIntent(trackState.audioTracks, remember),
                                     )
+                                )
+                            },
+                        )
+                        // Per-series audio-description pin: on = prefer AD
+                        // narration for every episode; off = follow the global
+                        // setting again. Independent of the language row above.
+                        RememberPreferenceToggle(
+                            label = stringResource(Res.string.player_video_remember_audio_description),
+                            checked = trackState.hasSeriesAudioDescriptionPref,
+                            onToggle = { remember ->
+                                viewModel.onEvent(
+                                    VideoPlayerUiEvent.SetSeriesAudioDescriptionPreference(remember)
                                 )
                             },
                         )
@@ -254,6 +268,9 @@ internal fun PlayerSheetRouter(
                 // shows the Tracks tab with the new selection, otherwise it
                 // stays on Get while the pending selection auto-applies.
                 onUseSubtitle = { rowKey -> viewModel.useDownloadedSubtitle(rowKey) },
+                onSaveSubtitleToServer = { rowKey ->
+                    viewModel.playbackSession.subtitles.retryUploadSubtitle(rowKey)
+                },
                 isUploading = subtitleState.isUploadingSubtitle,
                 onUpload = { uriStr, fileName, language, isForced, isHearingImpaired ->
                     // KMP seam: the sheets hand the picked SAF
@@ -276,8 +293,12 @@ internal fun PlayerSheetRouter(
             // Collect position only while the chapter sheet is open, so
             // the router itself stays a low-frequency scope when no sheet (or
             // a non-chapter sheet) is shown.
+            val chapterImages = remember(uiState.chapters) {
+                viewModel.chapterImageUrls(uiState.chapters)
+            }
             ChapterPickerBinder(
                 chapters = uiState.chapters,
+                chapterImages = chapterImages,
                 currentPositionFlow = inputs.currentPositionFlow,
                 onSelect = { positionTicks ->
                     inputs.doSeekTo(positionTicks / 10_000)
@@ -363,6 +384,22 @@ internal fun PlayerSheetRouter(
                 },
                 onDismiss = inputs.dismissSheet,
                 getImageUrl = { id -> viewModel.getImageUrl(id, 300) },
+            )
+        }
+        is PlayerSheet.Queue -> {
+            // Queue slice: collected inside the branch so the router stays
+            // low-frequency when no sheet (or another sheet) is shown.
+            val videoQueueItems by viewModel.videoQueueItems.collectAsStateWithLifecycle()
+            VideoQueueSheet(
+                queue = videoQueueItems,
+                onSelect = { index ->
+                    viewModel.onEvent(VideoPlayerUiEvent.PlayQueueItem(index))
+                    inputs.onSheetChange(PlayerSheet.None)
+                },
+                onRemove = { viewModel.onEvent(VideoPlayerUiEvent.RemoveQueueItem(it)) },
+                onMove = { from, to -> viewModel.onEvent(VideoPlayerUiEvent.MoveQueueItem(from, to)) },
+                onClear = { viewModel.onEvent(VideoPlayerUiEvent.ClearQueue) },
+                onDismiss = inputs.dismissSheet,
             )
         }
         is PlayerSheet.SyncPlay -> {
@@ -494,6 +531,7 @@ internal fun PlayerSheetRouter(
 @Composable
 private fun ChapterPickerBinder(
     chapters: List<com.raulshma.jellyplay.core.model.ChapterInfo>,
+    chapterImages: List<String?>,
     currentPositionFlow: StateFlow<Long>,
     onSelect: (Long) -> Unit,
     onDismiss: () -> Unit,
@@ -504,6 +542,7 @@ private fun ChapterPickerBinder(
         currentPositionMs = currentPositionMs,
         onSelect = onSelect,
         onDismiss = onDismiss,
+        chapterImages = chapterImages,
     )
 }
 

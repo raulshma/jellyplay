@@ -1,6 +1,8 @@
 package com.raulshma.jellyplay.feature.player.video
 
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue
+import com.raulshma.jellyplay.core.data.playback.VideoQueueController
+import com.raulshma.jellyplay.core.data.playback.VideoQueueItem
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
@@ -14,6 +16,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
@@ -51,6 +54,7 @@ class EpisodeContinuationControllerTest {
     private lateinit var sessionState: MutableStateFlow<PlayerSessionState>
     private val sessionEvents = MutableSharedFlow<SessionEvent>(extraBufferCapacity = 8)
     private lateinit var episodes: EpisodeBrowserState
+    private var videoQueue: VideoQueueController? = null
 
     // Mirror fakes (the VM-side state the lambdas read/write).
     private var detail: MediaDetail? = seriesDetail()
@@ -105,6 +109,7 @@ class EpisodeContinuationControllerTest {
             sessionState = sessionState,
             sessionEvents = sessionEvents,
             episodeCatalogue = catalogue,
+            videoQueue = videoQueue,
             getDetail = { detail },
             getSeriesId = { detail?.item?.seriesId },
             updateEpisodes = { update -> episodes = update(episodes) },
@@ -202,6 +207,115 @@ class EpisodeContinuationControllerTest {
             assertTrue(initialized.isEmpty(), "no local reload when the group holds the sibling")
             assertFalse(c.isNextEpisodeLoading.value)
         }
+
+    // ── queue-first advance (the manual up-next queue arm) ──────────────────
+
+    private fun queuedMovie(id: String) {
+        videoQueue = VideoQueueController().apply { enqueueLast(VideoQueueItem(itemId = id, title = id)) }
+    }
+
+    @Test
+    fun `playNextEpisode with a queued head plays the head without episode resolution`() =
+        runTest(dispatcher) {
+            queuedMovie("movie-1")
+            val c = controller(this)
+
+            c.playNextEpisode()
+            runCurrent()
+
+            assertEquals(listOf("movie-1" to 0L), initialized, "the queue arm never resolves seasons")
+            assertTrue(queued("movie-1"), "the head is NOT consumed before the session settles")
+        }
+
+    @Test
+    fun `queue advance settles on the head and consumes it`() = runTest(dispatcher) {
+        queuedMovie("movie-1")
+        val c = controller(this)
+
+        c.playNextEpisode()
+        sessionState.value = sessionState.value.copy(currentItemId = "movie-1")
+        advanceUntilIdle()
+
+        assertFalse(queued("movie-1"), "settling on the head consumes it")
+    }
+
+    @Test
+    fun `queue advance that errors keeps the head queued`() = runTest(dispatcher) {
+        queuedMovie("movie-1")
+        val c = controller(this)
+
+        c.playNextEpisode()
+        runCurrent()
+        sessionEvents.tryEmit(SessionEvent.ShowError(error = "boom", retryable = true))
+        advanceUntilIdle()
+
+        assertTrue(queued("movie-1"), "a failed advance leaves the queue intact")
+        assertTrue(c.hasQueuedNext())
+    }
+
+    @Test
+    fun `queue advance superseded by another item keeps the head`() = runTest(dispatcher) {
+        queuedMovie("movie-1")
+        stubSeason(episode("ep2"), episode("ep3"))
+        val c = controller(this)
+
+        c.playNextEpisode()
+        runCurrent()
+        // The session binds a DIFFERENT item (user navigated elsewhere while
+        // the head was loading) — never settles on the head.
+        sessionState.value = sessionState.value.copy(currentItemId = "other")
+        advanceTimeBy(NEXT_EPISODE_SETTLE_TIMEOUT_MS + 1)
+        advanceUntilIdle()
+
+        assertTrue(queued("movie-1"), "a superseded advance keeps the head")
+        // And the latch is released: a fresh advance goes through (queue is
+        // untouched, so it re-initializes the head).
+        c.playNextEpisode()
+        runCurrent()
+        assertEquals(listOf("movie-1", "movie-1"), initialized.map { it.first })
+    }
+
+    @Test
+    fun `queue advance re-tap while settling does not double-initialize`() = runTest(dispatcher) {
+        queuedMovie("movie-1")
+        val c = controller(this)
+
+        c.playNextEpisode()
+        runCurrent()
+        c.playNextEpisode()
+        runCurrent()
+        assertEquals(1, initialized.size, "the queue arm is single-flight")
+
+        sessionState.value = sessionState.value.copy(currentItemId = "movie-1")
+        advanceUntilIdle()
+        assertFalse(queued("movie-1"), "settling consumed the head")
+
+        // Latch released: a fresh head advances again (the previous item is a
+        // movie — the episode navigator has no sibling for it, so the queue
+        // arm is the only advance path here).
+        videoQueue?.enqueueLast(VideoQueueItem(itemId = "movie-2", title = "movie-2"))
+        c.playNextEpisode()
+        runCurrent()
+        assertEquals(listOf("movie-1", "movie-2"), initialized.map { it.first })
+    }
+
+    @Test
+    fun `queue arm is suppressed during SyncPlay even with a head`() = runTest(dispatcher) {
+        queuedMovie("movie-1")
+        stubSeason(episode("ep2"), episode("ep3"))
+        syncGroupLive = true
+        group = null // group with no map: the SyncPlay route falls through to the sibling
+        val c = controller(this)
+
+        c.playNextEpisode()
+        advanceUntilIdle()
+
+        assertTrue(queued("movie-1"), "SyncPlay owns the order — the queue is untouched")
+        assertEquals(listOf("ep3" to 0L), initialized, "the episode sibling plays instead")
+    }
+
+    private fun queued(id: String): Boolean =
+        videoQueue?.queue?.value?.any { it.itemId == id } == true
 
     // ── mark watched & skip ────────────────────────────────────────────────
 

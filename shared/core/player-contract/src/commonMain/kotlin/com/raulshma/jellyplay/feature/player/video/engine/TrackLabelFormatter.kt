@@ -12,6 +12,8 @@ enum class TrackBadge {
     DEFAULT,
     /** Hearing-impaired / SDH caption track. */
     SDH,
+    /** Audio-description (visually-impaired narration) audio track. */
+    AD,
 }
 
 /**
@@ -80,7 +82,7 @@ object TrackLabelFormatter {
     /**
      * @return the ordered badges to render, or empty when none apply. Forced and
      *         SDH are mutually meaningful and both may show; Default is only
-     *         surfaced when the track isn't also Forced/SDH (avoids noise).
+     *         surfaced when the track isn't also Forced/SDH/AD (avoids noise).
      *
      * When the engine/server doesn't expose explicit flags (common for
      * side-loaded and container subs), the title text is inspected for the usual
@@ -91,12 +93,35 @@ object TrackLabelFormatter {
         val title = info.title.orEmpty()
         val isForced = info.isForced || FORCED_MARKER.containsMatchIn(title)
         val isSdh = info.isHearingImpaired || SDH_MARKER.containsMatchIn(title)
+        val isAd = isAudioDescriptionTitle(title)
         return buildList {
             if (isForced) add(TrackBadge.FORCED)
             if (isSdh) add(TrackBadge.SDH)
-            if (info.isDefault && !isForced && !isSdh) add(TrackBadge.DEFAULT)
+            if (isAd) add(TrackBadge.AD)
+            if (info.isDefault && !isForced && !isSdh && !isAd) add(TrackBadge.DEFAULT)
         }
     }
+
+    /**
+     * The single audio-description title heuristic shared by every consumer:
+     * the track picker's [TrackBadge.AD] badge, the selection policy's
+     * preferred-audio-description match, and the label-based engine bridge.
+     *
+     * Jellyfin's `MediaStream` carries `IsHearingImpaired` but no
+     * visually-impaired flag, so AD tracks are only recognizable from their
+     * title/label text. Tokens: the description family (`description`,
+     * `descriptive`, `described`), narration (`narration`, `narrated`),
+     * `DVS`, trailing `AD`, and bracketed `AD`/`VI` — bare `AD`/`VI` as words
+     * are deliberately NOT matched (`VI` collides with the Roman numeral, so
+     * only the bracketed forms count).
+     */
+    fun isAudioDescriptionTitle(title: String?): Boolean =
+        title != null && AD_MARKER.containsMatchIn(title)
+
+    /** Title markers that imply an audio-description track, case-insensitive. */
+    private val AD_MARKER = Regex(
+        """(?i)(\bdescri(?:ption|ptive|bed)\b|\bnarration\b|\bnarrated\b|\bdvs\b|\(ad\)|\[ad\]|\(vi\)|\[vi\]|\bad\b$)"""
+    )
 
     /**
      * Maps a Media3 sample mime, Matroska/MPEG codec string, or side-loaded

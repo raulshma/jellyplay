@@ -151,6 +151,12 @@ data class PlaybackPreferences(
     val trickplayEnabled: Boolean = true,
     val trickplayOnSeekGesture: Boolean = true,
     val segmentBehaviors: Map<MediaSegmentType, SegmentBehavior> = SegmentBehavior.DEFAULT_BEHAVIORS,
+    /**
+     * Per-type auto-skip delay (ms) added on top of a segment's start before
+     * an AUTO_SKIP behavior fires; all zero by default (skip at start).
+     * Only consulted for types whose [segmentBehaviors] entry is AUTO_SKIP.
+     */
+    val segmentSkipDelaysMs: Map<MediaSegmentType, Long> = MediaSegmentType.DEFAULT_SKIP_DELAYS_MS,
     /** Skip-on-forward-seek. Default off — see `VideoPlayerSlice`. */
     val skipSegmentsOnSeek: Boolean = false,
     val videoEpisodeBrowserEnabled: Boolean = true,

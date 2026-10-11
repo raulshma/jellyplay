@@ -783,6 +783,47 @@ object VideoPlayerPreferenceSpecs {
         },
     )
 
+    /** Upper bound for [SEGMENT_SKIP_DELAYS_MS] values — stored values are clamped to it. */
+    private const val MAX_SEGMENT_SKIP_DELAY_MS = 60_000L
+
+    /**
+     * Per-segment-type auto-skip delay, in milliseconds, added on top of a
+     * segment's start before an AUTO_SKIP behavior fires — the "let the intro
+     * play for a couple of seconds, then skip" preference. Only consulted for
+     * types whose [SEGMENT_BEHAVIORS] entry is AUTO_SKIP; all types default to
+     * 0 (skip at segment start). Blob shape mirrors [SEGMENT_BEHAVIORS]: a
+     * JSON object keyed by enum name; absent types and unparsable blobs fall
+     * back to the all-zero default (no legacy keys — this knob is newer than
+     * the blob migration).
+     */
+    val SEGMENT_SKIP_DELAYS_MS: PreferenceSpec<Map<MediaSegmentType, Long>> = PreferenceSpec.derived(
+        keyName = "segment_skip_delays_ms",
+        default = MediaSegmentType.DEFAULT_SKIP_DELAYS_MS,
+        resetCategory = PreferenceResetCategory.PLAYBACK,
+        read = { _, raw ->
+            if (raw == null) {
+                MediaSegmentType.DEFAULT_SKIP_DELAYS_MS
+            } else {
+                try {
+                    val stored = PreferenceCodec.json.decodeFromString<Map<String, Long>>(raw)
+                    val parsed = stored.mapNotNull { (typeStr, delayMs) ->
+                        val type = typeStr.toEnumOrNull<MediaSegmentType>() ?: return@mapNotNull null
+                        type to delayMs.coerceIn(0L, MAX_SEGMENT_SKIP_DELAY_MS)
+                    }.toMap()
+                    MediaSegmentType.DEFAULT_SKIP_DELAYS_MS + parsed
+                } catch (_: Exception) {
+                    MediaSegmentType.DEFAULT_SKIP_DELAYS_MS
+                }
+            }
+        },
+        encode = { delays ->
+            PreferenceCodec.encodeDefaultsJson.encodeToString(
+                serializer<Map<MediaSegmentType, Long>>(),
+                delays,
+            )
+        },
+    )
+
     /**
      * The four legacy string-keyed skip booleans the [SEGMENT_BEHAVIORS] read
      * falls back from. Not [VideoPlayerSlice] fields — declared so their wire
@@ -994,6 +1035,7 @@ object VideoPlayerPreferenceSpecs {
         TV_ZOOM_MODE_PERCENT,
         INCOGNITO_MODE_ENABLED,
         SEGMENT_BEHAVIORS,
+        SEGMENT_SKIP_DELAYS_MS,
         SKIP_INTRO_ENABLED,
         SKIP_OUTRO_ENABLED,
         AUTO_SKIP_INTRO,

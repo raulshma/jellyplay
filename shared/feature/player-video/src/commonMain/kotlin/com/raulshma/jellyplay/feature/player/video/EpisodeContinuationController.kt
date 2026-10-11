@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.player.video
 
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue
+import com.raulshma.jellyplay.core.data.log.Log
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.SyncPlayGroup
 import com.raulshma.jellyplay.feature.player.video.state.EpisodeBrowserState
@@ -9,10 +10,20 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
+import java.util.concurrent.atomic.AtomicBoolean
 
 /** Minimum resolved duration (ms) before smart-download auto-cleanup may fire. */
 private const val MIN_DURATION_FOR_SMART_DELETE_MS = 5 * 60 * 1000L
+
+/** Debug tag for the queue-first advance — one grep-able trace across the player. */
+private const val QUEUE_ADVANCE_LOG_TAG = "UpNextQueue"
 
 /**
  * Owns the episode-continuation cluster extracted from [VideoPlayerViewModel]:
@@ -45,6 +56,13 @@ internal class EpisodeContinuationController(
     private val sessionState: StateFlow<PlayerSessionState>,
     private val sessionEvents: SharedFlow<SessionEvent>,
     private val episodeCatalogue: EpisodeCatalogue,
+    /**
+     * The manual up-next queue; the advance is QUEUE-FIRST (head consumed
+     * before the episode sibling) but suppressed during a SyncPlay group —
+     * the server-side group queue owns the order there. Null only in test
+     * graphs that don't exercise the queue.
+     */
+    val videoQueue: com.raulshma.jellyplay.core.data.playback.VideoQueueController? = null,
     /** The resolved media detail of the playing item (the VM's mediaDetail field). */
     private val getDetail: () -> MediaDetail?,
     /** The browsing anchor series (detail's series, else the media mirror's). */
@@ -126,6 +144,12 @@ internal class EpisodeContinuationController(
         updateEpisodes = updateEpisodes,
     )
 
+    /** Latch for the queue-first advance (the navigator's #146 latch, queue arm). */
+    private val queueAdvanceInFlight = AtomicBoolean(false)
+
+    /** How the queue-first advance's settle wait resolved. */
+    private enum class AdvanceSettled { SETTLED, FAILED }
+
     /** True while a next-episode advance is in flight and unsettled (#146). */
     val isNextEpisodeLoading: StateFlow<Boolean> get() = navigator.isNextEpisodeLoading
 
@@ -162,7 +186,63 @@ internal class EpisodeContinuationController(
 
     fun playPreviousEpisode() = navigator.previous()
 
-    fun playNextEpisode() = navigator.next()
+    /**
+     * QUEUE-FIRST advance: when the manual up-next queue holds an item (and no
+     * SyncPlay group owns the order), its head plays instead of the episode
+     * sibling. Movies in the queue are the point — they have no sibling. The
+     * #146 single-flight latch still rides [next] for the episode-sibling path.
+     */
+    fun playNextEpisode() {
+        if (!isInSyncPlayGroup()) {
+            videoQueue?.peekHead()?.let { head ->
+                playQueuedHead(head)
+                return
+            }
+        }
+        navigator.next()
+    }
+
+    /**
+     * The queue arm of the advance. The head is NOT consumed up front: it is
+     * consumed only when the session settles on the item ([consumeIfHead]), so
+     * an advance that dies before playback — a failed load, the player closing
+     * mid-load, the user backing out — leaves the queue intact instead of
+     * silently dropping the item (the consume-then-initialize ordering lost
+     * the head exactly that way). A single-flight latch mirrors the
+     * navigator's #146 latch: re-taps while an advance is settling are
+     * dropped rather than double-initializing the same head.
+     */
+    private fun playQueuedHead(head: com.raulshma.jellyplay.core.data.playback.VideoQueueItem) {
+        if (!queueAdvanceInFlight.compareAndSet(false, true)) {
+            Log.d(QUEUE_ADVANCE_LOG_TAG, "queue advance ignored (in flight): ${head.itemId}")
+            return
+        }
+        Log.d(QUEUE_ADVANCE_LOG_TAG, "queue-first advance -> ${head.itemId}")
+        initializeItem(head.itemId, 0L)
+        scope.launch {
+            try {
+                val settled = withTimeoutOrNull(NEXT_EPISODE_SETTLE_TIMEOUT_MS) {
+                    merge(
+                        sessionState.map { state ->
+                            if (state.currentItemId == head.itemId) AdvanceSettled.SETTLED else null
+                        }.filterNotNull(),
+                        sessionEvents.map { event ->
+                            if (event is SessionEvent.ShowError) AdvanceSettled.FAILED else null
+                        }.filterNotNull(),
+                    ).first()
+                }
+                if (settled == AdvanceSettled.SETTLED) {
+                    videoQueue?.consumeIfHead(head.itemId)
+                }
+                Log.d(QUEUE_ADVANCE_LOG_TAG, "queue advance settled=$settled item=${head.itemId}")
+            } finally {
+                queueAdvanceInFlight.set(false)
+            }
+        }
+    }
+
+    /** Whether a queue head exists (the autoplay gate's queue arm). */
+    fun hasQueuedNext(): Boolean = !isInSyncPlayGroup() && videoQueue?.peekHead() != null
 
     /** Writes the adjacent-episode snapshot (session-load + mini-player hydration hook). */
     fun refreshAdjacent(detail: MediaDetail) = navigator.refreshAdjacent(detail)

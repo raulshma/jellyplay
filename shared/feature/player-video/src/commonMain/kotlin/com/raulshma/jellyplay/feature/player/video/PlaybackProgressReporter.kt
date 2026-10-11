@@ -212,6 +212,12 @@ internal class PlaybackProgressReporter(
         val behavior = SegmentCalculator.behaviorForType(input, seg.type)
         if (behavior != SegmentBehavior.AUTO_SKIP) return
         if (seg.id in autoSkippedSegments) return
+        // Per-type delay: hold the skip until startMs + delay. Checking before
+        // the once-guard add keeps the gate re-evaluated on every tick while we
+        // wait, and a seek past the delayed target fires immediately (the tick
+        // lands at/after target on the next sample).
+        val delayMs = input.segmentSkipDelaysMs[seg.type] ?: 0L
+        if (delayMs > 0L && currentPositionMs < seg.startMs + delayMs) return
         autoSkippedSegments.add(seg.id)
         onAutoSkip(seg)
     }

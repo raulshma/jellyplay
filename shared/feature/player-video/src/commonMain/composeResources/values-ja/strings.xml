@@ -11,6 +11,7 @@
 
     <string name="track_badge_forced">強制</string>
     <string name="track_badge_sdh">SDH</string>
+    <string name="track_badge_ad">AD</string>
     <string name="track_badge_default">デフォルト</string>
 
     <!-- Companion dashboard -->
@@ -152,7 +153,17 @@
     <string name="player_video_subtitle_hub_section_get">取得</string>
     <string name="player_video_subtitle_hub_section_delay">遅延</string>
     <string name="player_video_subtitle_downloaded_device_only">デバイスにのみ保存（オフライン）</string>
+    <string name="player_video_subtitle_save_to_server">サーバーに保存</string>
     <string name="player_video_chapters">チャプター</string>
+    <string name="player_video_scrub_slow">遅い</string>
+    <string name="player_video_queue_title">再生キュー</string>
+    <string name="player_video_queue_subtitle">キューに %1$d 件</string>
+    <string name="player_video_queue_clear">キューをクリア</string>
+    <string name="player_video_queue_up_next">次に再生</string>
+    <string name="player_video_queue_move_up">上へ移動</string>
+    <string name="player_video_queue_move_down">下へ移動</string>
+    <string name="player_video_queue_remove">キューから削除</string>
+    <string name="player_video_queue_open">再生キュー (%1$d)</string>
     <string name="player_video_episodes">エピソード</string>
     <string name="player_video_syncplay">SyncPlay</string>
     <string name="player_video_aspect_ratio_label">アスペクト比</string>
@@ -265,6 +276,7 @@
     <string name="player_video_hdr_label">HDR: %1$s</string>
     <string name="player_video_duration">時間</string>
     <string name="player_video_remember_audio_language">このシリーズの音声言語を記憶</string>
+    <string name="player_video_remember_audio_description">このシリーズは音声解説を優先</string>
     <string name="player_video_remember_subtitle_language">このシリーズの字幕言語を記憶</string>
     <string name="player_video_remember_subtitles_off">このシリーズの字幕をオフのままにする</string>
     <string name="player_video_error_offline_file_missing">エラー: オフラインファイルが見つかりません</string>

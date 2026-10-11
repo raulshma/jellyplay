@@ -917,6 +917,94 @@ internal class SubtitleManager(
     }
 
     /**
+     * Re-attempts the server upload for a provider download that previously
+     * landed as [SubtitleDownloadState.DOWNLOADED_DEVICE_ONLY] (the upload leg
+     * failed — server unreachable, plugin error, …). Reads the durable local
+     * copy back from [StreamingSubtitleStore], re-encodes and re-uploads it,
+     * then refreshes media detail and attributes the new server stream exactly
+     * like the original download's upload branch — the subtitle flips to
+     * [SubtitleDownloadState.DOWNLOADED] so every device on the server sees it.
+     *
+     * No-op unless [rowKey] currently resolves to a device-only download backed
+     * by a persisted local copy.
+     */
+    fun retryUploadSubtitle(rowKey: String) {
+        val itemId = getCurrentItemId() ?: return
+        val status = _state.value.downloadingSubtitles[rowKey]?.state
+        if (status != SubtitleDownloadState.DOWNLOADED_DEVICE_ONLY) return
+
+        // Reverse of providerSubtitleRowKey — "provider:id". Unknown provider
+        // names (older builds, renamed enum) resolve to no saved copy and no-op.
+        val providerName = rowKey.substringBefore(':', "")
+        val providerSubtitleId = rowKey.substringAfter(':', "")
+        val provider = SubtitleProviderKind.entries.firstOrNull { it.name == providerName } ?: return
+
+        markDownloadStatus(rowKey, SubtitleDownloadState.DOWNLOADING)
+        scope.launch {
+            val result = try {
+                runCatchingRethrowingCancellation {
+                    val saved = streamingSubtitleStore
+                        .loadAll(itemId)
+                        .firstOrNull {
+                            it.provider == provider && it.providerSubtitleId == providerSubtitleId
+                        } ?: error("No local copy for $rowKey")
+                    val durableFile = streamingSubtitleStore.fileFor(itemId, saved)
+                    val base64 = withContext(Dispatchers.IO) {
+                        val bytes = durableFile.readBytes()
+                        if (bytes.isEmpty()) throw java.io.IOException("Local subtitle copy is empty")
+                        if (bytes.size > MAX_SUBTITLE_UPLOAD_BYTES) {
+                            throw java.io.IOException(
+                                "Subtitle file is too large (${bytes.size / 1024} KB). Limit is ${MAX_SUBTITLE_UPLOAD_BYTES / 1024} KB.",
+                            )
+                        }
+                        java.util.Base64.getEncoder().encodeToString(bytes)
+                    }
+                    val preUploadExternalIndices = getMediaStreams().externalSubtitleIndices()
+                    playbackRepository.uploadSubtitle(
+                        itemId = itemId,
+                        data = base64,
+                        fileName = saved.fileName,
+                        language = saved.language,
+                        isForced = saved.isForced,
+                        isHearingImpaired = saved.isHearingImpaired,
+                    ).getOrThrow()
+                    saved to preUploadExternalIndices
+                }
+            } catch (e: Throwable) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                Result.failure(e)
+            }
+            result.fold(
+                onSuccess = { (saved, preUploadExternalIndices) ->
+                    // Forced refresh so the uploaded stream lands in the cached
+                    // detail + track picker now (single-flight cache otherwise
+                    // serves the pre-upload snapshot — see uploadSubtitle).
+                    mediaRepository.getMediaDetail(itemId, force = true).getOrNull()?.let { detail ->
+                        onMediaDetailRefreshed(MediaDetailRefresh(detail, attachToEngine = false))
+                        detail.mediaSources.firstOrNull()?.mediaStreams?.let { streams ->
+                            streamingSubtitleStore.attributeUploadedSubtitle(
+                                itemId = itemId,
+                                saved = saved,
+                                streamsAfterUpload = streams,
+                                preUploadExternalIndices = preUploadExternalIndices,
+                            )
+                        }
+                    }
+                    userMessageBus.info("Subtitle added")
+                    markDownloadStatus(rowKey, SubtitleDownloadState.DOWNLOADED)
+                },
+                onFailure = { e ->
+                    // Still usable on-device — fall back to the device-only
+                    // status again rather than a hard failure.
+                    val msg = UserErrorMessages.resolve(e, "Server unavailable")
+                    userMessageBus.error(msg)
+                    markDownloadStatus(rowKey, SubtitleDownloadState.DOWNLOADED_DEVICE_ONLY, msg)
+                },
+            )
+        }
+    }
+
+    /**
      * Seeds [SubtitleState.defaultSearchLanguage] from the user's preferred
      * subtitle language (ISO 639-2/3). The former projection lived in
      * [SettingsProjector]; it moves here because the field's home moved.

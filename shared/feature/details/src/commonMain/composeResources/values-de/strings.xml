@@ -94,6 +94,8 @@
 
     <!-- ── Add to Playlist picker ──────────────────────────────────────── -->
     <string name="detail_option_add_to_playlist">Zur Wiedergabeliste hinzufügen</string>
+    <string name="detail_option_play_next">Nächstes abspielen</string>
+    <string name="detail_option_play_last">Am Ende anfügen</string>
     <string name="detail_playlist_picker_title">Zur Wiedergabeliste hinzufügen</string>
     <string name="detail_playlist_watch_later">Später ansehen</string>
     <string name="detail_playlist_create_new">Neue Wiedergabeliste erstellen</string>

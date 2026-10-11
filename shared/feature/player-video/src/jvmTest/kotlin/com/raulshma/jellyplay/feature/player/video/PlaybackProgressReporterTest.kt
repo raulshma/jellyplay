@@ -1,8 +1,12 @@
 package com.raulshma.jellyplay.feature.player.video
 
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
+import com.raulshma.jellyplay.core.model.MediaSegment
+import com.raulshma.jellyplay.core.model.MediaSegmentType
 import com.raulshma.jellyplay.core.model.PlayMethod
+import com.raulshma.jellyplay.core.model.SegmentBehavior
 import com.raulshma.jellyplay.core.ui.viewmodel.StateFlowHandle
+import com.raulshma.jellyplay.feature.player.video.state.SegmentState
 import com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState
 import com.raulshma.jellyplay.feature.player.video.engine.EngineVideoStats
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
@@ -52,6 +56,7 @@ class PlaybackProgressReporterTest {
 
     private var positionTicks: MutableList<Long> = mutableListOf()
     private var watchedThresholdItemIds: MutableList<String> = mutableListOf()
+    private var autoSkips: MutableList<MediaSegment> = mutableListOf()
 
     /** Injectable wall clock backing the stalled-finish detector. */
     private var nowMs = 1_000L
@@ -69,6 +74,7 @@ class PlaybackProgressReporterTest {
 
         positionTicks.clear()
         watchedThresholdItemIds.clear()
+        autoSkips.clear()
         nowMs = 1_000L
 
         every { mediaEngine.positionFlow } returns flowOf(0L, 5_000L, 95_000L)
@@ -95,7 +101,7 @@ class PlaybackProgressReporterTest {
         getResolvedPlayMethod = { PlayMethod.DIRECT_PLAY },
         getMediaEngine = { mediaEngine },
         getIncognitoModeEnabled = { incognito },
-        onAutoSkip = {},
+        onAutoSkip = { autoSkips.add(it) },
         onPlaybackEndedNoNext = {},
         onWatchedThresholdReached = { watchedThresholdItemIds.add(it) },
         onPositionPersisted = { positionTicks.add(it) },
@@ -109,6 +115,76 @@ class PlaybackProgressReporterTest {
 
         assertTrue(positionTicks.contains(95_000L))
         assertTrue(watchedThresholdItemIds.contains("movie-123"))
+    }
+
+    // ── Per-type auto-skip delay ────────────────────────────────────
+
+    /** INTRO 10 s → 30 s, seeded AUTO_SKIP so [checkAutoSkip] reaches the delay gate. */
+    private val introSegment = MediaSegment(
+        id = "intro-1",
+        itemId = "movie-123",
+        type = MediaSegmentType.INTRO,
+        startTicks = 100_000_000L,
+        endTicks = 300_000_000L,
+    )
+
+    private fun seedAutoSkipState(
+        delayMs: Long,
+        behavior: SegmentBehavior = SegmentBehavior.AUTO_SKIP,
+    ) {
+        uiState.update {
+            it.copy(
+                segmentState = SegmentState(
+                    segments = listOf(introSegment),
+                    segmentBehaviors = mapOf(MediaSegmentType.INTRO to behavior),
+                    segmentSkipDelaysMs = if (delayMs > 0L) {
+                        mapOf(MediaSegmentType.INTRO to delayMs)
+                    } else {
+                        MediaSegmentType.DEFAULT_SKIP_DELAYS_MS
+                    },
+                ),
+            )
+        }
+    }
+
+    @Test
+    fun autoSkipDelay_holdsFireUntilStartPlusDelay_thenFiresOnce() = runTest {
+        seedAutoSkipState(delayMs = 5_000L) // target = 15 s
+        every { mediaEngine.positionFlow } returns flowOf(12_000L, 14_000L, 16_000L)
+
+        reporter.startPositionTracking()
+
+        assertTrue(autoSkips.map { it.id } == listOf("intro-1"), "must fire exactly once, only after the 15 s target")
+    }
+
+    @Test
+    fun autoSkipDelay_seekPastDelayedTarget_firesImmediately() = runTest {
+        seedAutoSkipState(delayMs = 5_000L)
+        every { mediaEngine.positionFlow } returns flowOf(12_000L, 29_000L)
+
+        reporter.startPositionTracking()
+
+        assertTrue(autoSkips.size == 1)
+    }
+
+    @Test
+    fun autoSkipDelay_zeroDelay_firesAtFirstTickInsideSegment() = runTest {
+        seedAutoSkipState(delayMs = 0L)
+        every { mediaEngine.positionFlow } returns flowOf(11_000L)
+
+        reporter.startPositionTracking()
+
+        assertTrue(autoSkips.size == 1)
+    }
+
+    @Test
+    fun autoSkipDelay_showButtonBehavior_delayNeverConsulted() = runTest {
+        seedAutoSkipState(delayMs = 5_000L, behavior = SegmentBehavior.SHOW_BUTTON)
+        every { mediaEngine.positionFlow } returns flowOf(12_000L, 16_000L, 29_000L)
+
+        reporter.startPositionTracking()
+
+        assertTrue(autoSkips.isEmpty(), "SHOW_BUTTON must not auto-skip regardless of the delay")
     }
 
     @Test

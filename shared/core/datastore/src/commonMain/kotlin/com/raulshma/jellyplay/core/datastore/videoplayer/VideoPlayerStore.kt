@@ -117,6 +117,7 @@ class VideoPlayerStore constructor(
         val INCOGNITO_MODE_ENABLED = booleanPreferencesKey(VideoPlayerPreferenceSpecs.INCOGNITO_MODE_ENABLED.keyName)
 
         val SEGMENT_BEHAVIORS = stringPreferencesKey(VideoPlayerPreferenceSpecs.SEGMENT_BEHAVIORS.keyName)
+        val SEGMENT_SKIP_DELAYS_MS = stringPreferencesKey(VideoPlayerPreferenceSpecs.SEGMENT_SKIP_DELAYS_MS.keyName)
         val SKIP_INTRO_ENABLED = stringPreferencesKey(VideoPlayerPreferenceSpecs.SKIP_INTRO_ENABLED.keyName)
         val SKIP_OUTRO_ENABLED = stringPreferencesKey(VideoPlayerPreferenceSpecs.SKIP_OUTRO_ENABLED.keyName)
         val AUTO_SKIP_INTRO = stringPreferencesKey(VideoPlayerPreferenceSpecs.AUTO_SKIP_INTRO.keyName)
@@ -178,6 +179,7 @@ class VideoPlayerStore constructor(
         tvZoomModePercent = VideoPlayerPreferenceSpecs.TV_ZOOM_MODE_PERCENT.readFrom(prefs),
         incognitoModeEnabled = VideoPlayerPreferenceSpecs.INCOGNITO_MODE_ENABLED.readFrom(prefs),
         segmentBehaviors = VideoPlayerPreferenceSpecs.SEGMENT_BEHAVIORS.readFrom(prefs),
+        segmentSkipDelaysMs = VideoPlayerPreferenceSpecs.SEGMENT_SKIP_DELAYS_MS.readFrom(prefs),
         skipSegmentsOnSeek = VideoPlayerPreferenceSpecs.SKIP_SEGMENTS_ON_SEEK.readFrom(prefs),
     )
 
@@ -419,6 +421,23 @@ class VideoPlayerStore constructor(
         }
     }
 
+    suspend fun setSegmentSkipDelays(delays: Map<MediaSegmentType, Long>) {
+        dataStore.edit { VideoPlayerPreferenceSpecs.SEGMENT_SKIP_DELAYS_MS.writeTo(it, delays) }
+    }
+
+    /**
+     * Updates a single segment type's auto-skip delay, read-modify-writing the
+     * stored map (merged over the all-zero defaults) so callers don't have to
+     * reconstruct the whole map — the [setSegmentBehavior] precedent.
+     */
+    suspend fun setSegmentSkipDelay(type: MediaSegmentType, delayMs: Long) {
+        dataStore.edit { prefs ->
+            val current = VideoPlayerPreferenceSpecs.SEGMENT_SKIP_DELAYS_MS.readFrom(prefs).toMutableMap()
+            current[type] = delayMs
+            VideoPlayerPreferenceSpecs.SEGMENT_SKIP_DELAYS_MS.writeTo(prefs, current)
+        }
+    }
+
     /**
      * Keys owned by this store, for factory-reset participation. Derived as the
      * union of the [resetKeysFor] category lists (in enum declaration order) —
@@ -481,6 +500,7 @@ class VideoPlayerStore constructor(
             VideoPlayerPreferenceSpecs.TRICKPLAY_ENABLED.writeTo(prefs, slice.trickplayEnabled)
             VideoPlayerPreferenceSpecs.TRICKPLAY_ON_SEEK_GESTURE.writeTo(prefs, slice.trickplayOnSeekGesture)
             VideoPlayerPreferenceSpecs.SEGMENT_BEHAVIORS.writeTo(prefs, slice.segmentBehaviors)
+            VideoPlayerPreferenceSpecs.SEGMENT_SKIP_DELAYS_MS.writeTo(prefs, slice.segmentSkipDelaysMs)
             VideoPlayerPreferenceSpecs.VIDEO_EPISODE_BROWSER_ENABLED.writeTo(prefs, slice.videoEpisodeBrowserEnabled)
             VideoPlayerPreferenceSpecs.VIDEO_SHOW_PLAYBACK_METADATA.writeTo(prefs, slice.videoShowPlaybackMetadata)
             VideoPlayerPreferenceSpecs.VIDEO_PRELOAD_BUFFER_SIZE.writeTo(prefs, slice.videoPreloadBufferSize)
@@ -567,6 +587,7 @@ data class VideoPlayerSlice(
     val tvZoomModePercent: Float = 0f,
     val incognitoModeEnabled: Boolean = false,
     val segmentBehaviors: Map<MediaSegmentType, SegmentBehavior> = SegmentBehavior.DEFAULT_BEHAVIORS,
+    val segmentSkipDelaysMs: Map<MediaSegmentType, Long> = MediaSegmentType.DEFAULT_SKIP_DELAYS_MS,
     /**
      * Skip-on-forward-seek. Default **off**: opt-in, because silently
      * remapping a user's seek target is a behavior change they must ask for.

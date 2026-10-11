@@ -11,6 +11,7 @@
 
     <string name="track_badge_forced">Forcés</string>
     <string name="track_badge_sdh">SDH</string>
+    <string name="track_badge_ad">AD</string>
     <string name="track_badge_default">Par défaut</string>
 
     <!-- Companion dashboard -->
@@ -152,7 +153,17 @@
     <string name="player_video_subtitle_hub_section_get">Obtenir</string>
     <string name="player_video_subtitle_hub_section_delay">Décalage</string>
     <string name="player_video_subtitle_downloaded_device_only">Enregistré sur l'appareil uniquement (hors ligne)</string>
+    <string name="player_video_subtitle_save_to_server">Enregistrer sur le serveur</string>
     <string name="player_video_chapters">Chapitres</string>
+    <string name="player_video_scrub_slow">lent</string>
+    <string name="player_video_queue_title">File d'attente</string>
+    <string name="player_video_queue_subtitle">%1$d dans la file</string>
+    <string name="player_video_queue_clear">Vider la file</string>
+    <string name="player_video_queue_up_next">À suivre</string>
+    <string name="player_video_queue_move_up">Monter</string>
+    <string name="player_video_queue_move_down">Descendre</string>
+    <string name="player_video_queue_remove">Retirer de la file</string>
+    <string name="player_video_queue_open">File d'attente (%1$d)</string>
     <string name="player_video_episodes">Épisodes</string>
     <string name="player_video_syncplay">SyncPlay</string>
     <string name="player_video_aspect_ratio_label">Format d'image</string>
@@ -265,6 +276,7 @@
     <string name="player_video_hdr_label">HDR : %1$s</string>
     <string name="player_video_duration">Durée</string>
     <string name="player_video_remember_audio_language">Mémoriser la langue audio pour cette série</string>
+    <string name="player_video_remember_audio_description">Préférer l'audiodescription pour cette série</string>
     <string name="player_video_remember_subtitle_language">Mémoriser la langue des sous-titres pour cette série</string>
     <string name="player_video_remember_subtitles_off">Garder les sous-titres désactivés pour cette série</string>
     <string name="player_video_error_offline_file_missing">Erreur : fichier hors ligne manquant</string>

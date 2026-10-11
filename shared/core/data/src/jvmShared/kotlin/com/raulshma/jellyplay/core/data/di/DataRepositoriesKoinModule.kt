@@ -134,6 +134,11 @@ internal val dataRepositoriesModule: Module = module {
     single { ItemPlaybackPreferenceRepositoryImpl(get(), get(), get()) }
     single<ItemPlaybackPreferenceRepository> { get<ItemPlaybackPreferenceRepositoryImpl>() }
 
+    // Manual up-next queue for video playback: process-wide so the details
+    // screen's "play next/last" entries feed the same list the player drains.
+    // Session-scoped by design (no persistence) — see VideoQueueController.
+    single { com.raulshma.jellyplay.core.data.playback.VideoQueueController() }
+
     single { MetadataEditorRepositoryImpl(get(), get(), get()) }
     single<MetadataEditorRepository> { get<MetadataEditorRepositoryImpl>() }
 

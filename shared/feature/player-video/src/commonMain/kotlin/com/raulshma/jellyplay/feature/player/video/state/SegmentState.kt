@@ -14,4 +14,5 @@ import com.raulshma.jellyplay.core.model.SegmentBehavior
 data class SegmentState(
     val segments: List<MediaSegment> = emptyList(),
     val segmentBehaviors: Map<MediaSegmentType, SegmentBehavior> = SegmentBehavior.DEFAULT_BEHAVIORS,
+    val segmentSkipDelaysMs: Map<MediaSegmentType, Long> = MediaSegmentType.DEFAULT_SKIP_DELAYS_MS,
 )

@@ -446,6 +446,9 @@ fun VideoPlayerScreen(
     // The "Still watching?" confirm overlay (feature 1.3) — collected at the
     // root like the other controller-owned slices and passed into the tier.
     val stillWatchingPrompt by viewModel.stillWatchingPrompt.collectAsStateWithLifecycle()
+    // Manual up-next queue: the overflow entry shows the count; the Queue
+    // sheet re-collects the full list inside its router branch.
+    val videoQueue by viewModel.videoQueueItems.collectAsStateWithLifecycle()
 
     LaunchedEffect(aspectRatio, detectedAspectRatio, engine) {
         // The engine maps the enum to its native mode (media3 resize mode / mpv
@@ -925,6 +928,8 @@ fun VideoPlayerScreen(
                             videoZoom = (videoZoom * delta).coerceIn(1f, 3f)
                             viewModel.onEvent(VideoPlayerUiEvent.UserInteraction)
                         },
+                        onScrubbingStarted = { viewModel.setScrubbing(true) },
+                        onScrubbingEnded = { viewModel.setScrubbing(false) },
                     )
                 ),
         ) {
@@ -1129,6 +1134,7 @@ fun VideoPlayerScreen(
                     tvSkipSegmentFocusRequester = tvSkipSegmentFocusRequester,
                     nextEpisode = nextEpisode,
                     nextEpisodeImageUrl = nextEpisodeImageUrl,
+                    queuedNext = videoQueue.firstOrNull(),
                     isNextEpisodeLoading = isNextEpisodeLoading,
                     tvNextEpisodeFocusRequester = tvNextEpisodeFocusRequester,
                     isPlaying = isPlaying,
@@ -1242,6 +1248,12 @@ fun VideoPlayerScreen(
                 })
             }
             val onSeekStart by remember { mutableStateOf({ isSeeking = true }) }
+            // Seek-bar drag + TV D-pad seek bracket a scrub session through the
+            // same isSeeking flag the trickplay gating reads; the swipe-seek
+            // tier and double-tap-hold hold bracket it at their call sites.
+            LaunchedEffect(isSeeking) {
+                viewModel.setScrubbing(isSeeking)
+            }
             val onSeekPositionChange by remember { mutableStateOf({ positionMs: Long -> seekPositionMs = positionMs }) }
             // Primary subtitle button opens the hub on the Tracks tab. No
             // reset (deliberate — reopening on the same item keeps prior
@@ -1425,6 +1437,9 @@ fun VideoPlayerScreen(
                     },
                     onDeinterlaceCycle = { viewModel.onEvent(VideoPlayerUiEvent.CycleDeinterlace) },
                     onVersionClick = { openSheet(PlayerSheet.Version) },
+                    queueItemCount = videoQueue.size,
+                    isInSyncPlaySession = uiState.isInSyncPlaySession,
+                    onQueueClick = { openSheet(PlayerSheet.Queue) },
                 ),
                 tracks = TrackControls(
                     streamingQuality = uiState.uiPrefs.streamingQuality,

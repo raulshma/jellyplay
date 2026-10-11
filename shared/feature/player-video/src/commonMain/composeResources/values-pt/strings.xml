@@ -11,6 +11,7 @@
 
     <string name="track_badge_forced">Forçada</string>
     <string name="track_badge_sdh">SDH</string>
+    <string name="track_badge_ad">AD</string>
     <string name="track_badge_default">Predefinido</string>
 
     <!-- Companion dashboard -->
@@ -152,7 +153,17 @@
     <string name="player_video_subtitle_hub_section_get">Obter</string>
     <string name="player_video_subtitle_hub_section_delay">Atraso</string>
     <string name="player_video_subtitle_downloaded_device_only">Salvo apenas no dispositivo (offline)</string>
+    <string name="player_video_subtitle_save_to_server">Salvar no servidor</string>
     <string name="player_video_chapters">Capítulos</string>
+    <string name="player_video_scrub_slow">lento</string>
+    <string name="player_video_queue_title">Fila de reprodução</string>
+    <string name="player_video_queue_subtitle">%1$d na fila</string>
+    <string name="player_video_queue_clear">Limpar fila</string>
+    <string name="player_video_queue_up_next">A seguir</string>
+    <string name="player_video_queue_move_up">Mover para cima</string>
+    <string name="player_video_queue_move_down">Mover para baixo</string>
+    <string name="player_video_queue_remove">Remover da fila</string>
+    <string name="player_video_queue_open">Fila de reprodução (%1$d)</string>
     <string name="player_video_episodes">Episódios</string>
     <string name="player_video_syncplay">SyncPlay</string>
     <string name="player_video_aspect_ratio_label">Proporção da tela</string>
@@ -265,6 +276,7 @@
     <string name="player_video_hdr_label">HDR: %1$s</string>
     <string name="player_video_duration">Duração</string>
     <string name="player_video_remember_audio_language">Memorizar idioma de áudio para esta série</string>
+    <string name="player_video_remember_audio_description">Preferir audiodescrição para esta série</string>
     <string name="player_video_remember_subtitle_language">Memorizar idioma de legendas para esta série</string>
     <string name="player_video_remember_subtitles_off">Manter legendas desativadas para esta série</string>
     <string name="player_video_error_offline_file_missing">Erro: ficheiro offline em falta</string>

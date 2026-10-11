@@ -504,6 +504,10 @@ internal class TrackSelectionHelper(
             val resolvedLang = playbackPreferenceResolver.resolved.value?.audioLanguage
                 ?: resolution?.audioLanguage
                 ?: sub.preferredAudioLanguage ?: "eng"
+            // Same precedence for the audio-description pin: the per-series
+            // three-state pin (TRUE/FALSE) wins; null falls back to the global
+            // toggle.
+            val resolvedPref = playbackPreferenceResolver.resolved.value?.preferAudioDescription
             // The full precedence ladder — G5 scoring pre-pass →
             // audio-description preference → language match — lives in
             // TrackSelectionPolicy now. Returns null when no match
@@ -515,7 +519,7 @@ internal class TrackSelectionHelper(
                     tracks = tracks.filteredByAllowList(sub.languageRules, StreamType.AUDIO),
                     streams = streams,
                     resolvedLang = resolvedLang,
-                    preferAudioDescription = sub.preferAudioDescription,
+                    preferAudioDescription = resolvedPref ?: sub.preferAudioDescription,
                     remembered = rememberedAudioTrack,
                 ),
             )
@@ -948,6 +952,7 @@ internal class TrackSelectionHelper(
         val newSub = isSeries && (pref.subtitleLanguage != null || pref.subtitleDisabled == true)
         val newSubOff = isSeries && pref.subtitleDisabled == true
         val newBoost = isSeries && pref.dialogueBoostStrength != null
+        val newAdPin = isSeries && pref.preferAudioDescription == true
         // The preferred-version memory applies at BOTH scopes (a standalone
         // movie pins its own ITEM row), so it is not series-gated like the
         // language/boost flags above.
@@ -955,6 +960,7 @@ internal class TrackSelectionHelper(
         val s = _state.value
         if (s.hasSeriesAudioPref != newAudio || s.hasSeriesSubtitlePref != newSub ||
             s.hasSeriesSubtitleOffPref != newSubOff || s.hasSeriesDialogueBoostPref != newBoost ||
+            s.hasSeriesAudioDescriptionPref != newAdPin ||
             s.hasPreferredMediaSource != newPreferredSource
         ) {
             _state.update {
@@ -963,6 +969,7 @@ internal class TrackSelectionHelper(
                     hasSeriesSubtitlePref = newSub,
                     hasSeriesSubtitleOffPref = newSubOff,
                     hasSeriesDialogueBoostPref = newBoost,
+                    hasSeriesAudioDescriptionPref = newAdPin,
                     hasPreferredMediaSource = newPreferredSource,
                 )
             }

@@ -16,6 +16,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -448,6 +449,9 @@ internal fun Modifier.playerTapAndZoomGestures(
     onDoubleTapSeekForward: () -> Unit,
     onDoubleTapCenter: () -> Unit,
     applyZoomDelta: (Float) -> Unit,
+    /** Scrubbing-session brackets around the double-tap-hold repeat seek. */
+    onScrubbingStarted: () -> Unit = {},
+    onScrubbingEnded: () -> Unit = {},
 ): Modifier {
     // One tap-class arm — the D-pad helper's discreteArm shape with
     // "unbound/disabled does nothing" instead of fall-through: the DEFAULT
@@ -562,6 +566,7 @@ internal fun Modifier.playerTapAndZoomGestures(
                                 // shape).
                                 val stepSeek = if (zoneAction == PlayerAction.SEEK_FORWARD) onDoubleTapSeekForward else onDoubleTapSeekBack
                                 stepSeek()
+                                onScrubbingStarted()
                                 val repeatJob = holdRepeatScope.launch {
                                     var repeats = 0
                                     while (isActive) {
@@ -577,6 +582,7 @@ internal fun Modifier.playerTapAndZoomGestures(
                                     }
                                 } finally {
                                     repeatJob.cancel()
+                                    onScrubbingEnded()
                                 }
                             }
                             zoneAction != null -> executePlayerAction(zoneAction)
@@ -746,6 +752,16 @@ internal fun PlayerGestureOverlayTier(
     // would freeze until this composable recomposes with a new lambda.
     val currentShowControls by androidx.compose.runtime.rememberUpdatedState(showControls)
     val currentOnBack by androidx.compose.runtime.rememberUpdatedState(onBack)
+    // Horizontal-swipe seek is a scrub session like the seek-bar drag: the
+    // first seek move opens it, the commit/cancel closes it. The flag lives
+    // here (not in the controller) so the engine notification is UI-policy.
+    var swipeScrubActive by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    fun endSwipeScrub() {
+        if (swipeScrubActive) {
+            swipeScrubActive = false
+            viewModel.setScrubbing(false)
+        }
+    }
     GestureOverlay(
         seekState = seekState,
         brightnessFlow = gestureController.brightnessOverlay,
@@ -759,12 +775,19 @@ internal fun PlayerGestureOverlayTier(
             edgeSwipeRight = gates.edgeRight && !isScreenLocked,
         ),
         swipeSeekMaxMs = swipeSeekMaxMs,
-        onSeekGesture = remember(gestureController) { { totalDeltaMs -> gestureController.onSeekGesture(totalDeltaMs) } },
+        onSeekGesture = remember(gestureController) { { totalDeltaMs ->
+            if (!swipeScrubActive) {
+                swipeScrubActive = true
+                viewModel.setScrubbing(true)
+            }
+            gestureController.onSeekGesture(totalDeltaMs)
+        } },
         onBrightnessGesture = remember(gestureController) { { delta -> gestureController.onBrightnessGesture(delta) } },
         onVolumeGesture = remember(gestureController) { { delta -> gestureController.onVolumeGesture(delta) } },
         onClearOverlays = remember(gestureController, seekState) {
             {
                 gestureController.onClearOverlays()
+                endSwipeScrub()
                 seekState.reset()
             }
         },
@@ -810,6 +833,7 @@ internal fun PlayerGestureOverlayTier(
         onCancelOverlays = remember(gestureController, seekState) {
             {
                 gestureController.onCancelOverlays()
+                endSwipeScrub()
                 seekState.reset()
             }
         },

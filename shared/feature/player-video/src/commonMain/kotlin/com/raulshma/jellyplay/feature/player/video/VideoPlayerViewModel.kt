@@ -24,6 +24,7 @@ import com.raulshma.jellyplay.core.model.SyncPlayRepeatMode
 import com.raulshma.jellyplay.core.model.SyncPlayShuffleMode
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerAggregate
 import com.raulshma.jellyplay.core.model.EffectStrength
+import com.raulshma.jellyplay.core.model.ChapterInfo
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaSegment
 import com.raulshma.jellyplay.core.model.MediaSegmentType
@@ -126,6 +127,13 @@ class VideoPlayerViewModel(
     private val playbackRepository: PlaybackRepository,
     private val playbackIdentity: PlaybackIdentity,
     private val subtitleProviderRepository: com.raulshma.jellyplay.core.data.repository.SubtitleProviderRepository,
+    /**
+     * The process-wide manual up-next queue (the details screen's "play
+     * next/last" feeds it). Defaulted null for test graphs — the accessor
+     * below falls back to a private in-memory instance so the player's queue
+     * semantics work identically without DI.
+     */
+    videoQueue: com.raulshma.jellyplay.core.data.playback.VideoQueueController? = null,
     private val streamingSubtitleStore: com.raulshma.jellyplay.core.data.repository.StreamingSubtitleStore,
     private val imageUrlProvider: ImageUrlProvider,
     private val downloadRepository: DownloadRepository,
@@ -258,7 +266,16 @@ class VideoPlayerViewModel(
         combine(
             durationMs,
             uiState.map(::SegmentProjection).distinctUntilChanged(),
-        ) { dur, proj -> proj.toSegmentInput(dur) },
+        ) { dur, proj ->
+            proj.toSegmentInput(dur).also {
+                Log.d(
+                    UP_NEXT_LOG_TAG,
+                    "segInput rebuilt: queued=${it.hasQueuedNext} hasNextEpisode=${it.hasNextEpisode} " +
+                        "durationMs=$dur seriesId=${it.seriesId} cancelled=${it.autoplayCancelled} " +
+                        "syncPlay=${it.isInSyncPlaySession}",
+                )
+            }
+        },
     ) { pos, input ->
         computeOverlay(pos, input)
     },
@@ -361,6 +378,7 @@ class VideoPlayerViewModel(
         scope = scope,
         platform = platform,
         stores = stores,
+        videoQueue = videoQueue ?: com.raulshma.jellyplay.core.data.playback.VideoQueueController(),
         imageUrlProvider = imageUrlProvider,
         itemPlaybackPreferenceRepository = itemPlaybackPreferenceRepository,
         castManager = castManager,
@@ -431,6 +449,43 @@ class VideoPlayerViewModel(
         // the full teardown ([PlaybackSession.performRelease]).
         castManager.acquireConsumer()
         playbackSession.arm()
+        // Warm-resolve the next episode while the Up Next card counts down:
+        // its detail/segments land in the repository caches and the PlaybackInfo
+        // resolution is stored for the advance to consume (PlayerSessionManager).
+        // SyncPlay excluded — the group's advance follows the server queue, and
+        // offline resolve degrades silently inside the warmer.
+        launch {
+            segmentOverlayState.collect { overlay ->
+                val state = uiState.value
+                if (overlay.shouldShowUpNext) {
+                    Log.d(
+                        UP_NEXT_LOG_TAG,
+                        "card show=${overlay.shouldShowUpNext} queued=${state.hasQueuedNext} " +
+                            "nextEpisode=${state.episodes.nextEpisode?.id} seg=${overlay.activeSegment?.type}",
+                    )
+                }
+                if (overlay.shouldShowUpNext && !state.isInSyncPlaySession) {
+                    state.episodes.nextEpisode?.id?.let { nextId ->
+                        playbackSession.playerSessionManager.warmNextEpisode(nextId)
+                    }
+                }
+            }
+        }
+        // Queue mirror: the up-next overlay and the autoplay gate read
+        // hasQueuedNext from the uiState projection; the controller is the
+        // truth. distinct-guarded so an unrelated uiState write doesn't churn.
+        launch {
+            playbackSession.videoQueue.queue.collect { items ->
+                val queued = items.isNotEmpty()
+                if (_uiState.value.hasQueuedNext != queued) {
+                    Log.d(
+                        UP_NEXT_LOG_TAG,
+                        "queue mirror -> $queued (size=${items.size}, head=${items.firstOrNull()?.itemId})",
+                    )
+                    _uiState.update { it.copy(hasQueuedNext = queued) }
+                }
+            }
+        }
     }
 
     /**
@@ -526,6 +581,12 @@ class VideoPlayerViewModel(
             is VideoPlayerUiEvent.SetSeriesSubtitlePreference ->
                 setSeriesSubtitlePreference(event.language, event.forced, event.hearingImpaired)
             is VideoPlayerUiEvent.SetSeriesSubtitleDisabled -> setSeriesSubtitleDisabled(event.disabled)
+            is VideoPlayerUiEvent.SetSeriesAudioDescriptionPreference ->
+                setSeriesPreferAudioDescription(event.remember)
+            is VideoPlayerUiEvent.PlayQueueItem -> playQueueItem(event.index)
+            is VideoPlayerUiEvent.RemoveQueueItem -> playbackSession.videoQueue.removeAt(event.index)
+            is VideoPlayerUiEvent.MoveQueueItem -> playbackSession.videoQueue.move(event.fromIndex, event.toIndex)
+            VideoPlayerUiEvent.ClearQueue -> playbackSession.videoQueue.clear()
             is VideoPlayerUiEvent.SetAspectRatio -> setAspectRatio(event.ratio)
             is VideoPlayerUiEvent.SetSubtitleStyle -> playbackSession.subtitleStyleController.setStyle(event.style)
             is VideoPlayerUiEvent.ToggleSubtitles -> playbackSession.trackSelectionHelper.toggleSubtitles()
@@ -1051,6 +1112,27 @@ class VideoPlayerViewModel(
     private fun setSeriesSubtitleDisabled(disabled: Boolean) {
         playbackSession.playbackPreferenceWriter.setSeriesSubtitleDisabled(disabled)
     }
+
+    /**
+     * Saves/clears the per-series audio-description pin. `remember = true`
+     * prefers AD narration for every episode; `false` clears the pin so the
+     * global setting stands again. No-op when the current item has no series.
+     */
+    private fun setSeriesPreferAudioDescription(remember: Boolean) {
+        playbackSession.playbackPreferenceWriter.setSeriesPreferAudioDescription(if (remember) true else null)
+    }
+
+    // ── Manual up-next queue (the queue sheet's funnel) ───────────────────
+
+    /** Plays the queue row at [index] now — consumed from the queue first. */
+    private fun playQueueItem(index: Int) {
+        val item = playbackSession.videoQueue.consumeAt(index) ?: return
+        playbackSession.episodeContinuation.playEpisode(item.itemId, 0L)
+    }
+
+    /** The queue rows for the queue sheet (the controller is the single truth). */
+    val videoQueueItems: StateFlow<List<com.raulshma.jellyplay.core.data.playback.VideoQueueItem>>
+        get() = playbackSession.videoQueue.queue
     // -----------------------------------------------------------------------
 
     private fun setAspectRatio(ratio: AspectRatio) {
@@ -1299,7 +1381,19 @@ class VideoPlayerViewModel(
         // App-wide now-playing seam's Ended event (feature 4.2): fires before
         // the autoplay/advance decision so shell hooks see ended-then-started.
         nowPlayingReporter.markEnded()
-        if (playbackSession.autoplayController.shouldAutoPlayNext(_uiState.value.episodes.nextEpisode)) {
+        val autoplayNext = _uiState.value.episodes.nextEpisode
+        val queuedNext = playbackSession.episodeContinuation.hasQueuedNext()
+        Log.d(
+            UP_NEXT_LOG_TAG,
+            "ended: nextEpisode=${autoplayNext?.id} hasQueuedNext=$queuedNext " +
+                "enabled=${playbackSession.autoplayController.enabled} " +
+                "cancelled=${playbackSession.autoplayController.cancelled}",
+        )
+        if (playbackSession.autoplayController.shouldAutoPlayNext(
+                autoplayNext,
+                hasQueuedNext = queuedNext,
+            )
+        ) {
             // End-of-episode sleep timer outranks the advance/still-watching
             // gates; an explicit skip-credits press still wins (deliberate).
             if (playbackSession.sleepTimer.interceptsAutoAdvance()) {
@@ -1365,6 +1459,31 @@ class VideoPlayerViewModel(
 
     fun getImageUrl(itemId: String, maxWidth: Int = 400): String =
         imageUrlProvider.getImageUrl(itemId, maxWidth = maxWidth)
+
+    /**
+     * Scrubbing-session bracket for the engine (seek-bar drag, swipe seek,
+     * double-tap-hold). Media3's adapter maps this to
+     * `setScrubbingModeEnabled` — decode-only frames while the drag is live —
+     * other engines no-op. See [MediaEngine.onScrubbingChanged].
+     */
+    fun setScrubbing(active: Boolean) {
+        playbackSession.playerSessionManager.engine?.onScrubbingChanged(active)
+    }
+
+    /**
+     * Chapter thumbnail URLs for the chapter sheet, parallel to [chapters].
+     * Entries are null when the chapter carries no server-extracted
+     * `imageTag` (the sheet falls back to a text-only row) or no item is
+     * loaded. URL building is pure string assembly (LRU-cached in
+     * [ImageUrlProvider]) — no network happens here.
+     */
+    fun chapterImageUrls(chapters: List<ChapterInfo>): List<String?> {
+        val itemId = playbackSession.playerSessionManager.sessionState.value.currentItemId
+            ?: return List(chapters.size) { null }
+        return chapters.mapIndexed { index, chapter ->
+            chapter.imageTag?.let { imageUrlProvider.getChapterImageUrl(itemId, index, it) }
+        }
+    }
 
     /**
      * "Use" action for a downloaded-subtitle row: activates that subtitle as
@@ -1514,5 +1633,12 @@ class VideoPlayerViewModel(
          * the full path: `adb logcat -s SubtitleUse`.
          */
         const val USE_LOG_TAG = "SubtitleUse"
+
+        /**
+         * Up Next card + manual queue trace (the queue mirror, the card's
+         * overlay flag, the end-of-playback autoplay decision): one filter,
+         * `adb logcat -s UpNext UpNextQueue`, covers the whole chain.
+         */
+        const val UP_NEXT_LOG_TAG = "UpNext"
     }
 }

@@ -82,6 +82,7 @@ internal data class PlaybackCoreBundle(
         trickplayEnabled = video.trickplayEnabled,
         trickplayOnSeekGesture = video.trickplayOnSeekGesture,
         segmentBehaviors = video.segmentBehaviors,
+        segmentSkipDelaysMs = video.segmentSkipDelaysMs,
         skipSegmentsOnSeek = video.skipSegmentsOnSeek,
         videoEpisodeBrowserEnabled = video.videoEpisodeBrowserEnabled,
         videoShowPlaybackMetadata = video.videoShowPlaybackMetadata,

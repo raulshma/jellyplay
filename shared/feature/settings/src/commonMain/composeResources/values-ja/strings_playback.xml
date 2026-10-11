@@ -202,6 +202,9 @@
     <string name="settings_media_segments_summary">%1$d 自動スキップ、%2$d ボタン表示</string>
     <string name="settings_skip_segments_on_seek">シーク時にセグメントをスキップ</string>
     <string name="settings_skip_segments_on_seek_on">前方シークが自動スキップ対象に重なった場合にスキップします</string>
+    <string name="settings_segment_skip_delay">自動スキップの遅延</string>
+    <string name="settings_segment_skip_delay_off">オフ</string>
+    <string name="settings_segment_skip_delay_seconds">%1$d 秒</string>
     <string name="settings_skip_segments_on_seek_off">オフ</string>
     <string name="settings_syncplay_join_summary">参加動作：%1$s</string>
     <string name="settings_join_behavior">参加動作</string>

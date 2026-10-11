@@ -202,6 +202,9 @@
     <string name="settings_media_segments_summary">%1$d 자동 건너뛰기, %2$d 버튼 표시</string>
     <string name="settings_skip_segments_on_seek">탐색 시 세그먼트 건너뛰기</string>
     <string name="settings_skip_segments_on_seek_on">앞으로 탐색이 자동 건너뛰기 세그먼트에 닿으면 건너뜁니다</string>
+    <string name="settings_segment_skip_delay">자동 건너뛰기 지연</string>
+    <string name="settings_segment_skip_delay_off">끔</string>
+    <string name="settings_segment_skip_delay_seconds">%1$d초</string>
     <string name="settings_skip_segments_on_seek_off">끔</string>
     <string name="settings_syncplay_join_summary">참여 동작: %1$s</string>
     <string name="settings_join_behavior">참여 동작</string>

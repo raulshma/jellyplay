@@ -14,6 +14,8 @@ import com.composables.icons.tabler.outline.InfoCircle
 import com.composables.icons.tabler.outline.ListDetails
 import com.composables.icons.tabler.outline.Pencil
 import com.composables.icons.tabler.outline.Playlist
+import com.composables.icons.tabler.outline.PlayerTrackNext
+import com.composables.icons.tabler.outline.PlayerTrackPrev
 import com.composables.icons.tabler.outline.Refresh
 import com.composables.icons.tabler.outline.Search
 import com.composables.icons.tabler.outline.Share
@@ -43,6 +45,8 @@ import com.raulshma.jellyplay.feature.details.generated.resources.detail_option_
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_option_edit
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_option_hide_detail_up_next
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_option_identify
+import com.raulshma.jellyplay.feature.details.generated.resources.detail_option_play_last
+import com.raulshma.jellyplay.feature.details.generated.resources.detail_option_play_next
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_option_hide_from_continue_watching
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_option_hide_from_next_up
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_option_instant_mix
@@ -134,6 +138,9 @@ internal fun rememberMediaOptions(
     /** The item is version-merged (more than one media source) — offers Split. */
     canSplitVersions: Boolean = false,
     onSplitVersions: () -> Unit = {},
+    /** Enqueues the item onto the player's manual up-next queue (head / tail). */
+    onPlayNextInQueue: () -> Unit = {},
+    onPlayLastInQueue: () -> Unit = {},
 ): List<MediaOption> {
     // Download status / progress, resolved once for both the label and the
     // enabled flag so the two menus stay in lock-step.
@@ -178,6 +185,8 @@ internal fun rememberMediaOptions(
     val labelVersion = stringResource(Res.string.detail_option_version)
     val labelMergeVersions = stringResource(Res.string.detail_option_merge_versions)
     val labelSplitVersions = stringResource(Res.string.detail_option_split_versions)
+    val labelPlayNextInQueue = stringResource(Res.string.detail_option_play_next)
+    val labelPlayLastInQueue = stringResource(Res.string.detail_option_play_last)
 
     return remember(item, detail, itemId, isAudio, isSeries, seasons, preferences.showShareMediaOption,
         preferences.nextUpExcludedSeriesIds, preferences.hiddenCwItemIds, preferences.showDetailUpNext,
@@ -187,7 +196,8 @@ internal fun rememberMediaOptions(
         canPickVersion, canMergeVersions, canSplitVersions, labelManageSeries,
         labelRefreshMetadata, labelIdentify, labelStartRadio, labelVersion, labelMergeVersions, labelSplitVersions,
         labelAddToPlaylist, labelDeleteDownloads, labelInstantMix, labelAddToCollection,
-        labelHideDetailUpNext, labelShowDetailUpNext, labelWatchParty) {
+        labelHideDetailUpNext, labelShowDetailUpNext, labelWatchParty,
+        labelPlayNextInQueue, labelPlayLastInQueue) {
         buildList {
             // Metadata editor is a remote-only action (feature matrix: local = No);
             // gated on remoteDiscovery so a local origin never offers a server
@@ -307,6 +317,18 @@ internal fun rememberMediaOptions(
             if (canAddToCollection && item != null && (item.mediaType.isVideoType || item.mediaType == MediaType.SERIES)) {
                 add(MediaOption(labelAddToCollection, Tabler.Outline.Stack2) {
                     onClose(); onAddToCollection()
+                })
+            }
+            // Play next / Play last: enqueue onto the player's manual up-next
+            // queue (session-scoped; the player drains it queue-first). Video
+            // items only — a series has nothing playable of its own, audio has
+            // the audio queue.
+            if (item != null && item.mediaType.isVideoType) {
+                add(MediaOption(labelPlayNextInQueue, Tabler.Outline.PlayerTrackNext) {
+                    onClose(); onPlayNextInQueue()
+                })
+                add(MediaOption(labelPlayLastInQueue, Tabler.Outline.PlayerTrackPrev) {
+                    onClose(); onPlayLastInQueue()
                 })
             }
             // Instant Mix: audio-only. Builds a shuffled track queue seeded from

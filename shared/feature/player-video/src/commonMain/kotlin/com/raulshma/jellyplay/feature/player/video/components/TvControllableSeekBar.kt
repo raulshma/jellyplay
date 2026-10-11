@@ -16,7 +16,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -38,6 +40,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.model.ChapterInfo
 import com.raulshma.jellyplay.core.model.MediaSegment
+import com.raulshma.jellyplay.feature.player.video.generated.resources.Res
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_scrub_slow
 import com.raulshma.jellyplay.feature.player.video.PlatformBitmap
 import com.raulshma.jellyplay.feature.player.video.SeekBarBufferBands
 import com.raulshma.jellyplay.feature.player.video.formatDuration
@@ -48,6 +52,13 @@ import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import org.jetbrains.compose.resources.stringResource
+
+/** Vertical pull (from the touch-down point) that enters the precision stage. */
+private const val PRECISION_DRAG_THRESHOLD_DP = 40
+
+/** Per-pixel scrub-rate multiplier while the precision stage is active. */
+private const val PRECISION_SCRUB_RATE = 0.15f
 
 // ── Section split: the scrubber + trickplay preview ───────────────────────
 // The TV-controllable seek bar (band shading, segment/chapter/A-B markers,
@@ -152,6 +163,11 @@ internal fun TvControllableSeekBar(
 
     val tvFocusState = rememberTvFocusState(focusedScale = 1f)
 
+    // Precision-scrub stage: set by the touch drag loop when the finger pulls
+    // vertically away from the bar (YouTube-style). Display-only — the commit
+    // is the single onDragEnd seek either way.
+    var isPrecisionDrag by remember { mutableStateOf(false) }
+
     // The 30s-TV / 10s-touch seek-step divergence — the policy lives on
     // TvSeekController.tvSeekStepFraction (jvmTest-pinned); the controller's
     // D-pad handlers are clamped by this fraction per tick.
@@ -252,6 +268,13 @@ internal fun TvControllableSeekBar(
                     } else {
                         Modifier.pointerInput(duration) {
                             if (duration <= 0) return@pointerInput
+                            // Precision-scrub: pulling the finger vertically
+                            // away from the bar (YouTube-style) drops the scrub
+                            // rate to ~15%, so fine positions are reachable on a
+                            // full-width bar without overshooting. The
+                            // accumulated fraction re-anchors to the raw touch
+                            // fraction when the finger returns to the bar.
+                            val precisionThresholdPx = PRECISION_DRAG_THRESHOLD_DP.dp.toPx()
                             awaitPointerEventScope {
                                 while (true) {
                                     val downEvent = awaitFirstDown()
@@ -259,16 +282,32 @@ internal fun TvControllableSeekBar(
                                     var fraction = (downEvent.position.x / size.width).coerceIn(0f, 1f)
                                     seekController.onDragStart(fraction)
 
+                                    var lastRawFraction = fraction
+                                    var preciseFraction = fraction
+                                    var precisionActive = false
                                     do {
                                         val event = awaitPointerEvent()
                                         val change = event.changes.firstOrNull { it.id == downEvent.id }
                                         if (change != null) {
-                                            fraction = (change.position.x / size.width).coerceIn(0f, 1f)
+                                            val rawFraction = (change.position.x / size.width).coerceIn(0f, 1f)
+                                            val verticalOffset = kotlin.math.abs(change.position.y - downEvent.position.y)
+                                            precisionActive = verticalOffset > precisionThresholdPx
+                                            fraction = if (precisionActive) {
+                                                preciseFraction = (preciseFraction + (rawFraction - lastRawFraction) * PRECISION_SCRUB_RATE)
+                                                    .coerceIn(0f, 1f)
+                                                preciseFraction
+                                            } else {
+                                                preciseFraction = rawFraction
+                                                rawFraction
+                                            }
+                                            lastRawFraction = rawFraction
+                                            isPrecisionDrag = precisionActive
                                             seekController.onDragTo(fraction)
                                             change.consume()
                                         }
                                     } while (change?.pressed == true)
 
+                                    isPrecisionDrag = false
                                     seekController.onDragEnd()
                                 }
                             }
@@ -442,6 +481,13 @@ internal fun TvControllableSeekBar(
                     ),
                     color = MaterialTheme.colorScheme.onSurface,
                 )
+                if (isPrecisionDrag) {
+                    Text(
+                        "  ·  " + stringResource(Res.string.player_video_scrub_slow),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
         } else {
             Row(

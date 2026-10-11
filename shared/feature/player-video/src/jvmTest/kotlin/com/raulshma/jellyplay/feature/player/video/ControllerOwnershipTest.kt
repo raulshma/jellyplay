@@ -209,12 +209,14 @@ class ControllerOwnershipTest {
         // The composition-root companion to videoPlayerViewModel_totalLineCeiling:
         // the C6 collapse folded the former PlayerWiring builder INTO the
         // session, making it the player's largest surface, so its TOTAL line
-        // count is a one-way ratchet too. Baseline: 3_054 — the current
-        // 3_053 lines by this suite's lineSequence count plus one line of
+        // count is a one-way ratchet too. Baseline: 3_022 — the current
+        // line count by this suite's lineSequence count plus one line of
         // slack, pinned EXACTLY like every other ratchet in this suite.
-        // Lower the ceiling when a cluster moves out; never raise it to
-        // admit growth.
-        val maxPlaybackSessionLines = 3_054
+        // Lowered from 3_054 when the pure resume resolver
+        // (resolveResumeTicks + its staleness constant) moved out to
+        // ResumeTicks.kt. Lower the ceiling when a cluster moves out; never
+        // raise it to admit growth.
+        val maxPlaybackSessionLines = 3_022
         val session = mainSources().first { it.name == "PlaybackSession.kt" }
         val lines = session.sourceText().lineSequence().count()
         assertTrue(

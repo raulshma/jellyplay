@@ -93,6 +93,8 @@
 
     <!-- ── Add to Playlist picker ──────────────────────────────────────── -->
     <string name="detail_option_add_to_playlist">プレイリストに追加</string>
+    <string name="detail_option_play_next">次を再生</string>
+    <string name="detail_option_play_last">最後に追加</string>
     <string name="detail_playlist_picker_title">プレイリストに追加</string>
     <string name="detail_playlist_watch_later">後で見る</string>
     <string name="detail_playlist_create_new">新しいプレイリストを作成</string>

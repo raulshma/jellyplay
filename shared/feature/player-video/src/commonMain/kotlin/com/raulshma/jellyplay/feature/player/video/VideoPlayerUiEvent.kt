@@ -219,6 +219,25 @@ sealed interface VideoPlayerUiEvent {
     /** Saves/clears the per-series "subtitles off" intent. */
     data class SetSeriesSubtitleDisabled(val disabled: Boolean) : VideoPlayerUiEvent
 
+    /**
+     * Saves/clears the per-series audio-description pin. `remember = true`
+     * prefers AD narration for every episode of this series; `false` clears
+     * the pin (the global setting stands again).
+     */
+    data class SetSeriesAudioDescriptionPreference(val remember: Boolean) : VideoPlayerUiEvent
+
+    /** Plays the up-next queue row at [index] now (removing it from the queue). */
+    data class PlayQueueItem(val index: Int) : VideoPlayerUiEvent
+
+    /** Removes the up-next queue row at [index]. */
+    data class RemoveQueueItem(val index: Int) : VideoPlayerUiEvent
+
+    /** Reorders the up-next queue (the queue sheet's move buttons). */
+    data class MoveQueueItem(val fromIndex: Int, val toIndex: Int) : VideoPlayerUiEvent
+
+    /** Empties the up-next queue. */
+    data object ClearQueue : VideoPlayerUiEvent
+
     /** Changes the aspect-ratio resize mode. */
     data class SetAspectRatio(val ratio: AspectRatio) : VideoPlayerUiEvent
 

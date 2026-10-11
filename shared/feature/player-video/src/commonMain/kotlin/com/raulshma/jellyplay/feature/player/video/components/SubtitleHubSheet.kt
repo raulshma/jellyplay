@@ -146,6 +146,8 @@ internal fun SubtitleHubSheet(
     configuredProviders: Set<SubtitleProviderKind>,
     onSearchAllProviders: (String) -> Unit,
     onDownloadProviderSubtitle: (SubtitleSearchResult) -> Unit,
+    /** Re-attempts the server upload for a device-only provider download row. */
+    onSaveSubtitleToServer: (String) -> Unit = {},
     downloadingSubtitles: Map<String, SubtitleDownloadStatus>,
     /**
      * Activates the downloaded subtitle identified by [rowKey]. Returns true
@@ -316,6 +318,7 @@ internal fun SubtitleHubSheet(
                     configuredProviders = configuredProviders,
                     onSearchAllProviders = onSearchAllProviders,
                     onDownloadProviderSubtitle = onDownloadProviderSubtitle,
+                    onSaveSubtitleToServer = onSaveSubtitleToServer,
                     downloadingSubtitles = downloadingSubtitles,
                     // "Use" activates the downloaded subtitle as the current
                     // track (host callback) and jumps to the Tracks tab so the

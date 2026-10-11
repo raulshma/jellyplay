@@ -202,6 +202,9 @@
     <string name="settings_media_segments_summary">%1$d 自动跳过，%2$d 显示按钮</string>
     <string name="settings_skip_segments_on_seek">跳转时跳过片段</string>
     <string name="settings_skip_segments_on_seek_on">向前跳转落在自动跳过片段内时自动跳过</string>
+    <string name="settings_segment_skip_delay">自动跳过延迟</string>
+    <string name="settings_segment_skip_delay_off">关闭</string>
+    <string name="settings_segment_skip_delay_seconds">%1$d 秒</string>
     <string name="settings_skip_segments_on_seek_off">关闭</string>
     <string name="settings_syncplay_join_summary">加入行为：%1$s</string>
     <string name="settings_join_behavior">加入行为</string>

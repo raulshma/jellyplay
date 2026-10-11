@@ -50,18 +50,22 @@ internal data class SegmentProjection(
     val segments: List<MediaSegment>,
     val chapters: List<ChapterInfo>,
     val segmentBehaviors: Map<MediaSegmentType, SegmentBehavior>,
+    val segmentSkipDelaysMs: Map<MediaSegmentType, Long>,
     val autoplayCancelled: Boolean,
     val isInSyncPlaySession: Boolean,
     val nextEpisode: MediaItem?,
+    val hasQueuedNext: Boolean,
     val seriesId: String?,
 ) {
     constructor(state: VideoPlayerUiState) : this(
         segments = state.segmentState.segments,
         chapters = state.chapters,
         segmentBehaviors = state.segmentState.segmentBehaviors,
+        segmentSkipDelaysMs = state.segmentState.segmentSkipDelaysMs,
         autoplayCancelled = state.autoplay.autoplayCancelled,
         isInSyncPlaySession = state.isInSyncPlaySession,
         nextEpisode = state.episodes.nextEpisode,
+        hasQueuedNext = state.hasQueuedNext,
         seriesId = state.media.seriesId,
     )
 
@@ -75,10 +79,12 @@ internal data class SegmentProjection(
         segments = segments,
         chapters = chapters,
         segmentBehaviors = segmentBehaviors,
+        segmentSkipDelaysMs = segmentSkipDelaysMs,
         durationMs = durationMs,
         autoplayCancelled = autoplayCancelled,
         isInSyncPlaySession = isInSyncPlaySession,
         hasNextEpisode = nextEpisode != null,
+        hasQueuedNext = hasQueuedNext,
         seriesId = seriesId,
     )
 }
@@ -233,6 +239,13 @@ data class VideoPlayerUiState(
      */
     val segmentState: SegmentState = SegmentState(),
     val isInSyncPlaySession: Boolean = false,
+    /**
+     * The manual up-next queue holds an item — the up-next overlay and the
+     * autoplay gate count it as "next" (queue-first semantics, incl. movies).
+     * Mirrored from the queue controller by the ViewModel's collector; a
+     * [SegmentProjection] input (the overlay computation reads it).
+     */
+    val hasQueuedNext: Boolean = false,
     val engineCapabilities: EngineCapabilities = EngineCapabilities(),
     val playerError: String? = null,
     /**

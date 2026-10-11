@@ -6,6 +6,7 @@ import com.raulshma.jellyplay.core.model.RememberedTrack
 import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.isLanguageMatch
 import com.raulshma.jellyplay.core.model.subtitle.SubtitleProviderKind
+import com.raulshma.jellyplay.feature.player.video.engine.TrackLabelFormatter
 
 /**
  * Side-loaded streaming subtitle id: `"external:{server stream index}"`.
@@ -376,7 +377,7 @@ internal class TrackSelectionPolicy {
                 val targetLabel = targetStream?.displayTitle ?: targetStream?.title
                 val match = selectable.firstOrNull { opt ->
                     opt.label == targetLabel || (targetLabel != null && opt.label.contains(targetLabel, ignoreCase = true))
-                } ?: selectable.firstOrNull { opt -> isAudioDescriptionLabel(opt.label) }
+                } ?: selectable.firstOrNull { opt -> TrackLabelFormatter.isAudioDescriptionTitle(opt.label) }
                 if (match != null) return match
             }
         }
@@ -386,16 +387,7 @@ internal class TrackSelectionPolicy {
     /** Heuristics for detecting audio-description tracks from titles/labels. */
     private fun isAudioDescriptionStream(stream: MediaStream): Boolean {
         val title = stream.displayTitle ?: stream.title ?: return false
-        return isAudioDescriptionLabel(title)
-    }
-
-    private fun isAudioDescriptionLabel(label: String): Boolean {
-        val lower = label.lowercase()
-        return lower.contains("description") ||
-            lower.contains("descriptive") ||
-            lower.contains("narration") ||
-            lower.contains(" dvs") ||
-            lower.endsWith(" ad")
+        return TrackLabelFormatter.isAudioDescriptionTitle(title)
     }
 }
 

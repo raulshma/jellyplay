@@ -49,6 +49,7 @@ import com.raulshma.jellyplay.feature.player.video.TrackOption
 import com.raulshma.jellyplay.feature.player.video.engine.TrackBadge
 import com.raulshma.jellyplay.feature.player.video.generated.resources.Res
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_reset_to_auto
+import com.raulshma.jellyplay.feature.player.video.generated.resources.track_badge_ad
 import com.raulshma.jellyplay.feature.player.video.generated.resources.track_badge_default
 import com.raulshma.jellyplay.feature.player.video.generated.resources.track_badge_forced
 import com.raulshma.jellyplay.feature.player.video.generated.resources.track_badge_sdh
@@ -231,6 +232,7 @@ private fun TrackItem(
 @Composable
 private fun TrackBadgeChip(badge: TrackBadge, isSelected: Boolean) {
     val text = when (badge) {
+        TrackBadge.AD -> stringResource(Res.string.track_badge_ad)
         TrackBadge.FORCED -> stringResource(Res.string.track_badge_forced)
         TrackBadge.SDH -> stringResource(Res.string.track_badge_sdh)
         TrackBadge.DEFAULT -> stringResource(Res.string.track_badge_default)
