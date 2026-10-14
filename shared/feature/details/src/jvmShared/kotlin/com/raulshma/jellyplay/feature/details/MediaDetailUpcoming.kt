@@ -1,7 +1,12 @@
 package com.raulshma.jellyplay.feature.details
 
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -18,11 +23,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -30,10 +38,13 @@ import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Bell
 import com.composables.icons.tabler.outline.BellOff
+import com.raulshma.jellyplay.core.designsystem.theme.LocalThemeVariant
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.designsystem.theme.detailCardBorder
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.ui.components.shortMonthDayYear
+import com.raulshma.jellyplay.core.ui.feedback.rememberConfirmHaptic
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
@@ -53,6 +64,12 @@ import org.jetbrains.compose.resources.stringResource
  * episode badge vocabulary ([MissingEpisodeBadge.Airs]) as the in-thumbnail
  * "Airs <date>" chip and a countdown subtitle under the title.
  *
+ * On compact / phone screens ([isCompact] = true), the card expands to utilize
+ * the full available width in a horizontal card layout mirroring [UpNextSection]
+ * — 16:9 thumbnail on the left, metadata in the center, and the notify bell trailing.
+ * On TV and wide screens ([isCompact] = false), it retains the fixed-width
+ * horizontal rail geometry.
+ *
  * The trailing slot is deliberate: each row carries a "Notify me" bell
  * (D12) composed to the card's right, so [UpcomingEpisodeCard] accepts an
  * optional [UpcomingEpisodeCard.trailingContent] and keeps its own width
@@ -65,111 +82,242 @@ internal fun UpcomingEpisodeCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     trailingContent: (@Composable () -> Unit)? = null,
+    isCompact: Boolean = false,
 ) {
-    val focusState = rememberTvFocusState(focusedScale = 1.03f)
-    Row(
-        modifier = modifier,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(
-            modifier = Modifier
-                .width(UPCOMING_CARD_WIDTH)
+    val focusState = rememberTvFocusState(focusedScale = if (isCompact) 1.02f else 1.03f)
+    val confirmHaptic = rememberConfirmHaptic()
+
+    val episodeContext = remember(episode.seasonNumber, episode.episodeNumber) {
+        buildString {
+            episode.seasonNumber?.let { append("S$it") }
+            episode.episodeNumber?.let {
+                if (isNotEmpty()) append(" · ")
+                append("E$it")
+            }
+        }
+    }
+
+    val countdownDays = remember(episode.premiereDate) {
+        airingCountdownDays(episode.premiereDate, Clock.System.todayIn(TimeZone.currentSystemDefault()))
+    }
+
+    if (isCompact) {
+        val cardInteractionSource = remember { MutableInteractionSource() }
+        val isCardPressed by cardInteractionSource.collectIsPressedAsState()
+        val cardScale by animateFloatAsState(
+            targetValue = if (isCardPressed) 0.98f else 1f,
+            animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
+            label = "upcomingCardScale",
+        )
+
+        val themeVariant = LocalThemeVariant.current
+        val primaryColor = MaterialTheme.colorScheme.primary
+        val secondaryColor = MaterialTheme.colorScheme.secondary
+        val outlineColor = MaterialTheme.colorScheme.outline
+        val borderModifier = remember(themeVariant, primaryColor, secondaryColor, outlineColor) {
+            themeVariant.detailCardBorder(primaryColor, secondaryColor, outlineColor, includeAurora = false)
+                ?.let { Modifier.border(it, ShapeCache.smooth16) }
+                ?: Modifier
+        }
+
+        Row(
+            modifier = modifier
+                .fillMaxWidth()
+                .then(borderModifier)
+                .clip(ShapeCache.smooth16)
+                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
+                .graphicsLayer { scaleX = cardScale; scaleY = cardScale }
                 .then(focusState.focusModifier)
-                .then(Modifier.tvFocusIndicator(focusState, ShapeCache.smooth12))
-                .clickable(onClick = onClick),
+                .then(Modifier.tvFocusIndicator(focusState, ShapeCache.smooth16))
+                .clickable(
+                    interactionSource = cardInteractionSource,
+                    indication = null,
+                    onClick = {
+                        confirmHaptic()
+                        onClick()
+                    },
+                ),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Box(
+            UpcomingThumbnail(
+                episode = episode,
+                imageUrl = imageUrl,
+                shape = ShapeCache.smooth16,
+                modifier = Modifier.size(width = 160.dp, height = 90.dp),
+            )
+
+            Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(UPCOMING_THUMBNAIL_ASPECT)
-                    .clip(ShapeCache.smooth12)
-                    .background(MaterialTheme.colorScheme.surfaceVariant),
-                contentAlignment = Alignment.Center,
+                    .weight(1f)
+                    .padding(12.dp),
+                verticalArrangement = Arrangement.Center,
             ) {
-                MediaImage(
-                    url = imageUrl,
-                    contentDescription = episode.name,
-                    blurHash = episode.blurHashes.primary,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop,
-                )
-                upcomingAirBadge(episode.premiereDate)?.let { badge ->
-                    val label = when (badge) {
-                        is MissingEpisodeBadge.Airs ->
-                            stringResource(Res.string.detail_airs_date_format, shortMonthDayYear(badge.date))
-                        // An upcoming episode is never "missing" — the badge
-                        // fold above returns null without a parseable date.
-                        MissingEpisodeBadge.Missing -> null
-                    }
-                    if (label != null) {
-                        Surface(
-                            modifier = Modifier
-                                .align(Alignment.BottomStart)
-                                .padding(6.dp),
-                            color = Color.Black.copy(alpha = 0.55f),
-                            contentColor = Color.White.copy(alpha = 0.9f),
-                            shape = ShapeCache.smooth12,
-                        ) {
-                            Text(
-                                text = label,
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                            )
-                        }
-                    }
+                if (episodeContext.isNotEmpty()) {
+                    Text(
+                        text = episodeContext,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Spacer(Modifier.height(4.dp))
                 }
-            }
-            Spacer(Modifier.height(6.dp))
-            val episodeContext = remember(episode.seasonNumber, episode.episodeNumber) {
-                buildString {
-                    episode.seasonNumber?.let { append("S$it") }
-                    episode.episodeNumber?.let {
-                        if (isNotEmpty()) append(" · ")
-                        append("E$it")
-                    }
-                }
-            }
-            if (episodeContext.isNotEmpty()) {
                 Text(
-                    text = episodeContext,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    text = episode.name,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-            }
-            Text(
-                text = episode.name,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            // Countdown subtitle: "Today" / "in N d" — null (no line) without
-            // a parseable future air date. `today` resolves once per card
-            // composition; the strip's lifetime comfortably outlives any
-            // midnight rollover concern the staleness would introduce.
-            val today = remember(episode.premiereDate) {
-                Clock.System.todayIn(TimeZone.currentSystemDefault())
-            }
-            airingCountdownDays(episode.premiereDate, today)?.let { days ->
-                Text(
-                    text = if (days == 0L) {
-                        stringResource(Res.string.detail_airs_countdown_today)
-                    } else {
-                        stringResource(Res.string.detail_airs_countdown_format, days)
-                    },
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary,
+                UpcomingCountdownText(
+                    countdownDays = countdownDays,
                     modifier = Modifier.padding(top = 2.dp),
                 )
             }
+
+            if (trailingContent != null) {
+                Box(
+                    modifier = Modifier.padding(end = 12.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    trailingContent()
+                }
+            }
         }
-        if (trailingContent != null) {
-            Spacer(Modifier.width(8.dp))
-            trailingContent()
+    } else {
+        Row(
+            modifier = modifier,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(
+                modifier = Modifier
+                    .width(UPCOMING_CARD_WIDTH)
+                    .then(focusState.focusModifier)
+                    .then(Modifier.tvFocusIndicator(focusState, ShapeCache.smooth12))
+                    .clickable {
+                        confirmHaptic()
+                        onClick()
+                    },
+            ) {
+                UpcomingThumbnail(
+                    episode = episode,
+                    imageUrl = imageUrl,
+                    shape = ShapeCache.smooth12,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(UPCOMING_THUMBNAIL_ASPECT),
+                )
+                Spacer(Modifier.height(6.dp))
+                if (episodeContext.isNotEmpty()) {
+                    Text(
+                        text = episodeContext,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                Text(
+                    text = episode.name,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                UpcomingCountdownText(
+                    countdownDays = countdownDays,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+            }
+            if (trailingContent != null) {
+                Spacer(Modifier.width(8.dp))
+                trailingContent()
+            }
+        }
+    }
+}
+
+/**
+ * The card's 16:9 thumbnail — cropped episode still with the "Airs <date>"
+ * badge pinned bottom-start. Both card layouts share it; only the size/shape
+ * chrome differs per branch.
+ */
+@Composable
+private fun UpcomingThumbnail(
+    episode: MediaItem,
+    imageUrl: String,
+    shape: Shape,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier
+            .clip(shape)
+            .background(MaterialTheme.colorScheme.surfaceVariant),
+        contentAlignment = Alignment.Center,
+    ) {
+        MediaImage(
+            url = imageUrl,
+            contentDescription = episode.name,
+            blurHash = episode.blurHashes.primary,
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Crop,
+        )
+        UpcomingAirBadge(
+            premiereDate = episode.premiereDate,
+            modifier = Modifier.align(Alignment.BottomStart),
+        )
+    }
+}
+
+/** The "in N days / today" subtitle under the episode title; nothing when unparseable or past. */
+@Composable
+private fun UpcomingCountdownText(
+    countdownDays: Long?,
+    modifier: Modifier = Modifier,
+) {
+    countdownDays?.let { days ->
+        Text(
+            text = if (days == 0L) {
+                stringResource(Res.string.detail_airs_countdown_today)
+            } else {
+                stringResource(Res.string.detail_airs_countdown_format, days)
+            },
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = modifier,
+        )
+    }
+}
+
+@Composable
+private fun UpcomingAirBadge(
+    premiereDate: String?,
+    modifier: Modifier = Modifier,
+) {
+    upcomingAirBadge(premiereDate)?.let { badge ->
+        val label = when (badge) {
+            is MissingEpisodeBadge.Airs ->
+                stringResource(Res.string.detail_airs_date_format, shortMonthDayYear(badge.date))
+            // An upcoming episode is never "missing" — the badge
+            // fold above returns null without a parseable date.
+            MissingEpisodeBadge.Missing -> null
+        }
+        if (label != null) {
+            Surface(
+                modifier = modifier.padding(6.dp),
+                color = Color.Black.copy(alpha = 0.55f),
+                contentColor = Color.White.copy(alpha = 0.9f),
+                shape = ShapeCache.smooth12,
+            ) {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                )
+            }
         }
     }
 }
@@ -205,13 +353,17 @@ internal fun UpcomingEpisodeNotifyBell(
     onClick: () -> Unit,
 ) {
     val focusState = rememberTvFocusState(focusedScale = 1.12f)
+    val confirmHaptic = rememberConfirmHaptic()
     Box(
         modifier = Modifier
             .size(32.dp)
             .clip(ShapeCache.smooth8)
             .then(focusState.focusModifier)
             .tvFocusIndicator(focusState, ShapeCache.smooth8)
-            .clickable(onClick = onClick),
+            .clickable {
+                confirmHaptic()
+                onClick()
+            },
         contentAlignment = Alignment.Center,
     ) {
         Icon(

@@ -1077,10 +1077,6 @@ private fun HomeDockArea(
     val dockOnShowSyncDetails = remember(viewModel) {
         { onShowSyncDetails() }
     }
-    // H15 inline toggle — the dock overflow's anti-spoiler checkmark.
-    val dockOnToggleAntiSpoiler = remember(viewModel) {
-        { enabled: Boolean -> viewModel.onEvent(HomeUiEvent.SetAntiSpoilerHome(enabled)) }
-    }
 
     HomeTopDockScrim(
         settingsSearch = viewModel::settingsSearchResults,
@@ -1102,8 +1098,6 @@ private fun HomeDockArea(
             homeHeroEnabled = state.homeHeroEnabled,
             hasFeaturedItem = heroHasFeaturedItem,
             hideTopHeaderOnScroll = state.hideTopHeaderOnScroll,
-            // H15: the dock overflow's anti-spoiler checkmark state.
-            antiSpoilerHome = state.antiSpoilerHome,
         ),
         dockCallbacks = HomeDockCallbacks(
             onUserSwitch = onUserSwitch,
@@ -1113,7 +1107,6 @@ private fun HomeDockArea(
             onClearSearch = dockOnClearSearch,
             onToggleOffline = dockOnToggleOffline,
             onShowSyncDetails = dockOnShowSyncDetails,
-            onToggleAntiSpoiler = dockOnToggleAntiSpoiler,
         ),
         onHeroFocusDown = remember(heroFocusRequester) {
             { heroFocusRequester.tryRequestFocus("top_dock_down_hero") }

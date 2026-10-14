@@ -120,9 +120,6 @@
     <string name="my_media_hidden_unknown">未知媒体库</string>
     <string name="a11y_mode_video">视频模式</string>
     <string name="a11y_mode_music">音乐模式</string>
-    <!-- Home top-dock overflow menu (H15 inline anti-spoiler toggle). -->
-    <string name="home_more_options">更多选项</string>
-    <string name="home_anti_spoiler_mode">防剧透模式</string>
 
     <!-- H17 personal stats card ("Your library week"). -->
     <string name="home_stats_card_title">你的媒体库一周</string>

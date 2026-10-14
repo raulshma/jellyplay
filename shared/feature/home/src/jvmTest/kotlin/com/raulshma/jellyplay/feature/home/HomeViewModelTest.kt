@@ -486,7 +486,7 @@ class HomeViewModelTest {
         assertTrue(viewModel.uiState.value.sections.isEmpty())
     }
 
-    // ── H17 stats card / H18 genre rail / H15 anti-spoiler toggle ──────────
+    // ── H17 stats card / H18 genre rail ──────────────────────────────────────
 
     @Test
     fun statsCard_loadsOnlyWhenPrefOn_andMirrorsLoaderResult() = vmTest {
@@ -549,20 +549,6 @@ class HomeViewModelTest {
         offlineModeFlow.value = OfflineMode.OFFLINE_MANUAL
         runCurrent()
         assertTrue(viewModel.uiState.value.genreChips.isEmpty())
-    }
-
-    @Test
-    fun setAntiSpoilerHome_writesTheStoreCommand() = vmTest {
-        viewModel = buildViewModel()
-
-        viewModel.onEvent(HomeUiEvent.SetAntiSpoilerHome(true))
-        runCurrent()
-
-        coVerify { homeDiscoveryStore.setAntiSpoilerHome(true) }
-
-        viewModel.onEvent(HomeUiEvent.SetAntiSpoilerHome(false))
-        runCurrent()
-        coVerify { homeDiscoveryStore.setAntiSpoilerHome(false) }
     }
 
     @Test

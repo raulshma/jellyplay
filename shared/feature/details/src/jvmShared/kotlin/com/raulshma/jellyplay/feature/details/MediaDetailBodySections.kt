@@ -868,13 +868,15 @@ internal fun DetailOverviewSection(
         links = externalLinks,
     )
 
+    val overview = item.overview?.takeIf { it.isNotBlank() }
+    if (overview == null && !showExternalLinks) return
+
     StaggeredDetailSection(visible = true, delayIndex = delayIndex) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = bodyContentPad),
         ) {
-            val overview = item.overview?.takeIf { it.isNotBlank() }
             if (overview != null) {
                 FadingItem {
                     // F5: cap the overview so long synopses don't push everything
@@ -1071,6 +1073,39 @@ internal fun DetailUpcomingEpisodesSection(
     // Admission guarantees the strip has rows (and the preference on); the
     // empty gate here mirrors the sibling renderers' content check.
     val upcoming = state.upcomingEpisodes
+    val adaptiveInfo = LocalAdaptiveInfo.current
+    val isTv = LocalTvMode.current
+    val isCompact = !isTv && adaptiveInfo.windowSizeClass == WindowSizeClass.Compact
+
+    // D12: the per-row bell rides the slot D7 reserved for it —
+    // hidden outright on desktop (no notification stack) and
+    // keyed to the strip's one shared per-series state.
+    val bellVisible = showsSeriesNotifyBell(
+        platformSupported = platformHasNotificationStack,
+        mediaType = state.detail?.item?.mediaType,
+    )
+    val bellEnabledLabel = stringResource(Res.string.detail_option_stop_notify_new_episodes)
+    val bellDisabledLabel = stringResource(Res.string.detail_option_notify_new_episodes)
+    val bellContent: (@Composable () -> Unit)? = if (bellVisible) {
+        {
+            UpcomingEpisodeNotifyBell(
+                enabled = state.seriesNotificationsEnabled,
+                contentDescription = if (state.seriesNotificationsEnabled) {
+                    bellEnabledLabel
+                } else {
+                    bellDisabledLabel
+                },
+                onClick = {
+                    callbacks.userData.onToggleSeriesNotifications(
+                        !state.seriesNotificationsEnabled,
+                    )
+                },
+            )
+        }
+    } else {
+        null
+    }
+
     StaggeredDetailSection(visible = upcoming.isNotEmpty(), delayIndex = delayIndex) {
         Column {
             FadingItem {
@@ -1083,53 +1118,49 @@ internal fun DetailUpcomingEpisodesSection(
                     color = MaterialTheme.colorScheme.onSurface,
                 )
             }
-            Spacer(Modifier.height(16.dp))
-            TvFocusableItemRow(
-                items = upcoming,
-                key = { "upcoming_${it.id}" },
-                contentPadding = PaddingValues(horizontal = bodyContentPad),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                onFocusedIndexChange = { index ->
-                    upcoming.getOrNull(index)?.let(callbacks.screen.onFocusedMediaItem)
-                },
-            ) { _, episode, focusModifier ->
-                val episodeClick = remember(episode.id) { { callbacks.navigation.onItemClick(episode.id) } }
-                val episodeImageUrl = remember(episode.id) { callbacks.artwork.getImageUrl(episode.id) }
-                // D12: the per-row bell rides the slot D7 reserved for it —
-                // hidden outright on desktop (no notification stack) and
-                // keyed to the strip's one shared per-series state.
-                val bellVisible = showsSeriesNotifyBell(
-                    platformSupported = platformHasNotificationStack,
-                    mediaType = state.detail?.item?.mediaType,
-                )
-                val bellEnabledLabel = stringResource(Res.string.detail_option_stop_notify_new_episodes)
-                val bellDisabledLabel = stringResource(Res.string.detail_option_notify_new_episodes)
-                val bellContent: (@Composable () -> Unit)? = if (bellVisible) {
-                    {
-                        UpcomingEpisodeNotifyBell(
-                            enabled = state.seriesNotificationsEnabled,
-                            contentDescription = if (state.seriesNotificationsEnabled) {
-                                bellEnabledLabel
-                            } else {
-                                bellDisabledLabel
-                            },
-                            onClick = {
-                                callbacks.userData.onToggleSeriesNotifications(
-                                    !state.seriesNotificationsEnabled,
-                                )
-                            },
-                        )
+            Spacer(Modifier.height(if (isCompact) 12.dp else 16.dp))
+            if (isCompact) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = bodyContentPad),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    upcoming.forEach { episode ->
+                        val episodeClick = remember(episode.id) { { callbacks.navigation.onItemClick(episode.id) } }
+                        val episodeImageUrl = remember(episode.id) { callbacks.artwork.getImageUrl(episode.id) }
+                        FadingItem {
+                            UpcomingEpisodeCard(
+                                episode = episode,
+                                imageUrl = episodeImageUrl,
+                                onClick = episodeClick,
+                                trailingContent = bellContent,
+                                isCompact = true,
+                            )
+                        }
                     }
-                } else {
-                    null
                 }
-                UpcomingEpisodeCard(
-                    episode = episode,
-                    imageUrl = episodeImageUrl,
-                    onClick = episodeClick,
-                    modifier = focusModifier,
-                    trailingContent = bellContent,
-                )
+            } else {
+                TvFocusableItemRow(
+                    items = upcoming,
+                    key = { "upcoming_${it.id}" },
+                    contentPadding = PaddingValues(horizontal = bodyContentPad),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    onFocusedIndexChange = { index ->
+                        upcoming.getOrNull(index)?.let(callbacks.screen.onFocusedMediaItem)
+                    },
+                ) { _, episode, focusModifier ->
+                    val episodeClick = remember(episode.id) { { callbacks.navigation.onItemClick(episode.id) } }
+                    val episodeImageUrl = remember(episode.id) { callbacks.artwork.getImageUrl(episode.id) }
+                    UpcomingEpisodeCard(
+                        episode = episode,
+                        imageUrl = episodeImageUrl,
+                        onClick = episodeClick,
+                        modifier = focusModifier,
+                        trailingContent = bellContent,
+                        isCompact = false,
+                    )
+                }
             }
         }
     }
@@ -1146,10 +1177,13 @@ internal fun DetailSeasonsSection(
     isLocalOrigin: Boolean,
     bodyContentPad: Dp,
 ) {
+    // Media-type membership is the admission fold's job (SEASONS admits only
+    // SERIES/EPISODE/SEASON); what remains here is the content-presence half.
+    val showSeasons = state.seasons.isNotEmpty()
+    if (!showSeasons) return
+
     StaggeredDetailSection(visible = true, delayIndex = delayIndex) {
-        val showSeasons = showsSeasonTree(item.mediaType) && state.seasons.isNotEmpty()
-        if (showSeasons) {
-            CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
+        CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
                 // The section's presentation (skip-specials filter + hide-
                 // thumbnails neutralization for a LOCAL origin, the downloaded-
                 // episode three-way fold, the SEASON entry filter, the
@@ -1209,7 +1243,6 @@ internal fun DetailSeasonsSection(
             }
         }
     }
-}
 
 // ── Collection (delayIndex 7) ─────────────────────────────────────────────
 
@@ -1218,44 +1251,46 @@ internal fun DetailCollectionItemsSection(
     delayIndex: Int,
     state: DetailContentState,
     callbacks: DetailContentCallbacks,
-    item: MediaItem,
     bodyContentPad: Dp,
 ) {
+    // COLLECTION membership is the admission fold's job; what remains here
+    // is the content-presence half.
+    val showCollection = state.collectionItems.isNotEmpty()
+    if (!showCollection) return
+
     StaggeredDetailSection(visible = true, delayIndex = delayIndex) {
-        if (item.mediaType == MediaType.COLLECTION && state.collectionItems.isNotEmpty()) {
-            Column {
-                FadingItem {
-                    Text(
-                        text = stringResource(Res.string.detail_section_items),
-                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-                        modifier = Modifier
-                            .padding(horizontal = bodyContentPad)
-                            .semantics { heading() },
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                }
-                Spacer(Modifier.height(16.dp))
-                TvFocusableItemRow(
-                    items = state.collectionItems,
-                    key = { "collection_${it.id}" },
-                    contentPadding = PaddingValues(horizontal = bodyContentPad),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    onFocusedIndexChange = { index ->
-                        state.collectionItems.getOrNull(index)?.let(callbacks.screen.onFocusedMediaItem)
-                    },
-                ) { _, collectionItem, focusModifier ->
-                    val collectionClick = remember(collectionItem.id) { { callbacks.navigation.onItemClick(collectionItem.id) } }
-                    val collectionProgress = collectionItem.progressFraction()
-                    val collectionImageUrl = remember(collectionItem.id) { callbacks.artwork.getImageUrl(collectionItem.id) }
-                    PosterCard(
-                        item = collectionItem,
-                        imageUrl = collectionImageUrl,
-                        onClick = collectionClick,
-                        showProgress = collectionProgress != null && collectionProgress > 0f,
-                        progressPercent = collectionProgress ?: 0f,
-                        modifier = focusModifier.width(160.dp),
-                    )
-                }
+        Column {
+            FadingItem {
+                Text(
+                    text = stringResource(Res.string.detail_section_items),
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+                    modifier = Modifier
+                        .padding(horizontal = bodyContentPad)
+                        .semantics { heading() },
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+            Spacer(Modifier.height(16.dp))
+            TvFocusableItemRow(
+                items = state.collectionItems,
+                key = { "collection_${it.id}" },
+                contentPadding = PaddingValues(horizontal = bodyContentPad),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                onFocusedIndexChange = { index ->
+                    state.collectionItems.getOrNull(index)?.let(callbacks.screen.onFocusedMediaItem)
+                },
+            ) { _, collectionItem, focusModifier ->
+                val collectionClick = remember(collectionItem.id) { { callbacks.navigation.onItemClick(collectionItem.id) } }
+                val collectionProgress = collectionItem.progressFraction()
+                val collectionImageUrl = remember(collectionItem.id) { callbacks.artwork.getImageUrl(collectionItem.id) }
+                PosterCard(
+                    item = collectionItem,
+                    imageUrl = collectionImageUrl,
+                    onClick = collectionClick,
+                    showProgress = collectionProgress != null && collectionProgress > 0f,
+                    progressPercent = collectionProgress ?: 0f,
+                    modifier = focusModifier.width(160.dp),
+                )
             }
         }
     }
@@ -1281,9 +1316,11 @@ internal fun DetailCastSection(
     item: MediaItem,
     bodyContentPad: Dp,
 ) {
-    StaggeredDetailSection(visible = item.mediaType != MediaType.BOOK, delayIndex = delayIndex) {
-        if (detail.people.isNotEmpty()) {
-            Column {
+    val showCast = item.mediaType != MediaType.BOOK && detail.people.isNotEmpty()
+    if (!showCast) return
+
+    StaggeredDetailSection(visible = true, delayIndex = delayIndex) {
+        Column {
                 // "See all" appears only when the cast is large enough to hide
                 // people behind the single row, and only for a navigable (remote)
                 // origin — the Cast & Crew screen re-fetches the full people list.
@@ -1358,7 +1395,6 @@ internal fun DetailCastSection(
                     }
                 }
             }
-        }
     }
 }
 

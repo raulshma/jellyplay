@@ -58,7 +58,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Surface
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
@@ -79,10 +78,7 @@ import com.raulshma.jellyplay.core.ui.components.rememberWallClockTimeString
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.ArrowLeft
 import com.composables.icons.tabler.outline.Cast
-import com.composables.icons.tabler.outline.Check
-import com.composables.icons.tabler.outline.DotsVertical
 import com.composables.icons.tabler.outline.Download
-import com.composables.icons.tabler.outline.EyeOff
 import com.composables.icons.tabler.outline.Search
 import com.composables.icons.tabler.outline.Settings
 import com.composables.icons.tabler.outline.Users
@@ -96,8 +92,6 @@ import org.jetbrains.compose.resources.stringResource
 import com.composables.icons.tabler.outline.Clock
 import com.composables.icons.tabler.outline.Refresh
 import com.raulshma.jellyplay.feature.home.generated.resources.sync_icon_content_description
-import com.raulshma.jellyplay.feature.home.generated.resources.home_anti_spoiler_mode
-import com.raulshma.jellyplay.feature.home.generated.resources.home_more_options
 import com.raulshma.jellyplay.feature.home.generated.resources.home_switch_user
 import com.raulshma.jellyplay.feature.home.generated.resources.home_search_placeholder
 import com.raulshma.jellyplay.feature.home.generated.resources.home_search
@@ -134,12 +128,6 @@ internal data class HomeDockState(
     val hasFeaturedItem: Boolean = false,
     /** Scrim-side auto-hide gate; not read by the dock body itself. */
     val hideTopHeaderOnScroll: Boolean = false,
-    /**
-     * H15 anti-spoiler home master switch — the dock overflow's checkmark
-     * state (mirrored from [HomeUiState.antiSpoilerHome], which folds the
-     * `anti_spoiler_home` pref snapshot).
-     */
-    val antiSpoilerHome: Boolean = false,
 )
 
 /** The dock's whole interaction surface — see [HomeDockState]. */
@@ -152,12 +140,6 @@ internal data class HomeDockCallbacks(
     val onClearSearch: () -> Unit,
     val onToggleOffline: () -> Unit,
     val onShowSyncDetails: () -> Unit = {},
-    /**
-     * H15 inline toggle — writes the same `HomeDiscoveryStore.setAntiSpoilerHome`
-     * command Settings' Home-Cards row routes through (the VM's edit-scope
-     * pattern). Carries the NEW state.
-     */
-    val onToggleAntiSpoiler: (Boolean) -> Unit = {},
 )
 
 @Composable
@@ -578,127 +560,6 @@ private fun CollapsedDockContent(
                         tint = appBarIconColorFaded,
                         modifier = Modifier.size(22.dp),
                     )
-                }
-            }
-            // H15 inline quick toggle: the home top-dock overflow (⋮) hosting
-            // the "Anti-spoiler mode" checkmark — the cheap, high-value
-            // inline override for the shared-screen spoiler suppression.
-            DockOverflowMenu(
-                antiSpoilerHome = state.antiSpoilerHome,
-                onToggleAntiSpoiler = callbacks.onToggleAntiSpoiler,
-                iconTint = appBarIconColorFaded,
-            )
-        }
-    }
-}
-
-/**
- * The home top-dock's overflow menu (⋮) — the DetailTopBar overflow-menu
- * idiom (touch `DropdownMenu` + TV `TvSafeSheet`, one shared option set).
- * H15's "Anti-spoiler mode" checkmark item is the first entry: tapping
- * toggles the pref through [onToggleAntiSpoiler] (the neighboring toggles'
- * store-command pattern) and closes the menu; the check reflects the passed
- * [antiSpoilerHome] state.
- */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun DockOverflowMenu(
-    antiSpoilerHome: Boolean,
-    onToggleAntiSpoiler: (Boolean) -> Unit,
-    iconTint: Color,
-) {
-    val isTv = LocalTvMode.current
-    var menuExpanded by remember { mutableStateOf(false) }
-    var showTvMenu by remember { mutableStateOf(false) }
-    val antiSpoilerLabel = stringResource(Res.string.home_anti_spoiler_mode)
-
-    val overflowFocusState = rememberTvFocusState()
-    Box {
-        Box(
-            modifier = Modifier
-                .then(overflowFocusState.focusModifier)
-                .tvFocusIndicator(overflowFocusState, CircleShape)
-        ) {
-            IconButton(
-                onClick = {
-                    if (isTv) showTvMenu = true else menuExpanded = true
-                },
-                modifier = Modifier.size(38.dp),
-            ) {
-                Icon(
-                    Tabler.Outline.DotsVertical,
-                    contentDescription = stringResource(Res.string.home_more_options),
-                    tint = iconTint,
-                    modifier = Modifier.size(22.dp),
-                )
-            }
-        }
-        if (!isTv) {
-            DropdownMenu(
-                expanded = menuExpanded,
-                onDismissRequest = { menuExpanded = false },
-            ) {
-                DropdownMenuItem(
-                    text = { Text(antiSpoilerLabel) },
-                    onClick = {
-                        menuExpanded = false
-                        onToggleAntiSpoiler(!antiSpoilerHome)
-                    },
-                    trailingIcon = {
-                        // The "checkmark" item shape: the check renders only
-                        // while the mode is on (like the settings toggle it
-                        // mirrors), and the row itself is always tappable.
-                        if (antiSpoilerHome) {
-                            Icon(
-                                Tabler.Outline.Check,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp),
-                            )
-                        }
-                    },
-                )
-            }
-        }
-    }
-
-    if (isTv && showTvMenu) {
-        TvSafeSheet(
-            onDismissRequest = { showTvMenu = false },
-            title = stringResource(Res.string.home_more_options),
-        ) {
-            Surface(
-                onClick = {
-                    showTvMenu = false
-                    onToggleAntiSpoiler(!antiSpoilerHome)
-                },
-                shape = ShapeCache.smooth12,
-                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
-                ) {
-                    Icon(
-                        imageVector = Tabler.Outline.EyeOff,
-                        contentDescription = null,
-                        modifier = Modifier.size(24.dp),
-                    )
-                    Text(
-                        text = antiSpoilerLabel,
-                        style = MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier.weight(1f),
-                    )
-                    if (antiSpoilerHome) {
-                        Icon(
-                            imageVector = Tabler.Outline.Check,
-                            contentDescription = null,
-                            modifier = Modifier.size(20.dp),
-                        )
-                    }
                 }
             }
         }

@@ -383,7 +383,6 @@ internal fun DetailSectionRenderer(
                 delayIndex = section.delayIndex,
                 state = state,
                 callbacks = callbacks,
-                item = item,
                 bodyContentPad = bodyContentPad,
             )
 
@@ -483,21 +482,20 @@ private fun DetailRelatedVideosSection(
     state: DetailContentState,
     callbacks: DetailContentCallbacks,
 ) {
+    if (state.trailers.isEmpty()) return
     StaggeredDetailSection(visible = true, delayIndex = delayIndex) {
-        if (state.trailers.isNotEmpty()) {
-            VideosSection(
-                trailers = state.trailers,
-                getImageUrl = callbacks.artwork.getImageUrl,
-                onVideoClick = callbacks.seerr.onVideoClick,
-                onPlayLocal = { trailerId ->
-                    // D3: a local (server-hosted) trailer plays through the
-                    // full player session — the same route the Play button
-                    // takes (the libmpv engine on desktop), never the
-                    // WebView embed.
-                    callbacks.playback.onPlayClick(trailerId, null, 0L)
-                },
-            )
-        }
+        VideosSection(
+            trailers = state.trailers,
+            getImageUrl = callbacks.artwork.getImageUrl,
+            onVideoClick = callbacks.seerr.onVideoClick,
+            onPlayLocal = { trailerId ->
+                // D3: a local (server-hosted) trailer plays through the
+                // full player session — the same route the Play button
+                // takes (the libmpv engine on desktop), never the
+                // WebView embed.
+                callbacks.playback.onPlayClick(trailerId, null, 0L)
+            },
+        )
     }
 }
 

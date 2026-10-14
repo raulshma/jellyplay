@@ -41,7 +41,8 @@ internal enum class DetailSectionKind(val delayIndex: Int) {
      */
     MEDIA_INFO(2),
 
-    /** Expandable synopsis. Always admitted; the overview-null gate is render-side. */
+    /** Expandable synopsis + external-link chips. Always admitted; the
+     *  nothing-to-show gate (no synopsis, no visible links) is render-side. */
     OVERVIEW(3),
 
     /** JellyPlay companion plugin's aggregated external-ratings chip row (ADR 0010). */
@@ -63,10 +64,10 @@ internal enum class DetailSectionKind(val delayIndex: Int) {
      *  contract: no rows, no slot). */
     UPCOMING_EPISODES(6),
 
-    /** Season tabs + episode lists for SERIES/EPISODE/SEASON. Always admitted; empty gate is render-side. */
+    /** Season tabs + episode lists for SERIES/EPISODE/SEASON. Admitted only when showsSeasonTree(mediaType). */
     SEASONS(6),
 
-    /** Collection members row. Always admitted; empty gate is render-side. */
+    /** Collection members row. Admitted only for COLLECTION items. */
     COLLECTION_ITEMS(7),
 
     /** Cast & crew row. Admitted for every non-BOOK item; the empty-people gate is render-side. */
@@ -119,15 +120,19 @@ internal enum class DetailSectionKind(val delayIndex: Int) {
  *
  * 1. **Admission** (this fold) — whether the section's [StaggeredDetailSection]
  *    slot exists at all. Each slot contributes a child to the body Column
- *    (spacedBy 24.dp gap) even when its content renders nothing, so admission
- *    must match the former `visible` / outer-`if` predicates EXACTLY — a
- *    section that used to emit an empty staggered box (SEASONS on a movie,
- *    OVERVIEW without a synopsis, CAST with no people, ...) must stay admitted
- *    or the vertical rhythm of every detail screen changes.
+ *    (spacedBy 24.dp gap) even when its content renders nothing, so a section
+ *    keyed to one media family owns that gate here in full: SEASONS renders
+ *    only for SERIES/EPISODE/SEASON, COLLECTION_ITEMS only for COLLECTION —
+ *    everywhere else there is no slot and no gap, not an admitted-but-empty
+ *    one. The renderers must not re-state the media-type half of an admission
+ *    rule; they check only content presence.
  * 2. **Render-side gates** — content-presence checks inside an admitted slot
  *    (overview null, seasons empty, people empty, media-source branch selection,
  *    chip-row takeIfs, ...). They stay in the section renderers; the admission
- *    rows below document them so the split is auditable.
+ *    rows below document them so the split is auditable. A renderer may still
+ *    return before emitting its slot when it has nothing at all to show
+ *    (OVERVIEW without a synopsis or links) — the empty-slot gap is then gone,
+ *    which is the point.
  */
 internal data class DetailSectionAdmission(
     /** Media family of the loaded item — drives the book/music/series/collection forks. */
@@ -238,8 +243,8 @@ internal data class DetailSectionAdmission(
             DetailSectionKind.UPCOMING_EPISODES,
             showUpcomingStrip && hasUpcomingEpisodes,
         )
-        admit(DetailSectionKind.SEASONS, admitted = true)
-        admit(DetailSectionKind.COLLECTION_ITEMS, admitted = true)
+        admit(DetailSectionKind.SEASONS, showsSeasonTree(mediaType))
+        admit(DetailSectionKind.COLLECTION_ITEMS, mediaType == MediaType.COLLECTION)
         admit(DetailSectionKind.CAST, mediaType != MediaType.BOOK)
         admit(DetailSectionKind.RELATED_VIDEOS, admitted = true)
         admit(
@@ -330,8 +335,8 @@ internal data class DetailSectionAdmission(
 }
 
 /**
- * The render-side gate of the SEASONS slot ([DetailSectionAdmission] admits
- * the slot for every item; this predicate is the render half): which detail
+ * The admission gate of the SEASONS slot ([DetailSectionAdmission] applies
+ * it; the renderers check only `state.seasons` emptiness): which detail
  * entry types render the season tabs + episode tree. SERIES (the tree's
  * owner), EPISODE (the parent series' context tree), and — since #168 —
  * SEASON (the entry season's own tree: a season arriving from the home rows

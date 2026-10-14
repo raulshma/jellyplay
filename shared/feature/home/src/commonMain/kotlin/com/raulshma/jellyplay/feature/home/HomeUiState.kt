@@ -222,13 +222,6 @@ data class HomeUiState(
     /** The `home_genre_rail` pref mirror — the rail's render gate. */
     val genreRailEnabled: Boolean = false,
     /**
-     * H15 anti-spoiler home master switch mirror — the home top-dock
-     * overflow's checkmark reads this; its toggle writes the same
-     * [com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore]
-     * command Settings' Home-Cards row does.
-     */
-    val antiSpoilerHome: Boolean = false,
-    /**
      * The `home_focus_backdrop` pref mirror (H10) — the TV focus-driven
      * ambient backdrop's render gate. Default off; the backdrop region gates
      * the focus choreography on it (beside the existing backdrop gates).

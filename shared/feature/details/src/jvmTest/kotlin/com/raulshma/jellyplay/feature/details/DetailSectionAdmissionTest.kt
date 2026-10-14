@@ -18,11 +18,9 @@ import kotlin.test.assertTrue
  * former inline emission exactly.
  *
  * Two classes of behavior are pinned here:
- *  1. membership — including the sections that are admitted even when their
- *     content renders nothing (SEASONS on a movie, OVERVIEW without a synopsis,
- *     COLLECTION_ITEMS off a collection, CAST with no people): each admitted
- *     slot contributes a spacedBy gap to the body Column, so dropping them
- *     would visibly reflow every detail screen;
+ *  1. membership — sections admitted for the specific media family (SEASONS
+ *     for series/episodes/seasons, COLLECTION_ITEMS for collections,
+ *     ALBUM_TRACKS for audio, BOOK_READING_CARD for books);
  *  2. the stagger indices — byte-identical to the literals the body used to
  *     pass to [StaggeredDetailSection] (they drive the shared entrance
  *     animation arithmetic).
@@ -127,10 +125,6 @@ class DetailSectionAdmissionTest {
                 DetailSectionKind.MEDIA_INFO,
                 DetailSectionKind.OVERVIEW,
                 DetailSectionKind.CHAPTERS_OR_TOC,
-                // Empty-slot sections: admitted even with no seasons/collection
-                // items/people/related rows — each still contributes its gap.
-                DetailSectionKind.SEASONS,
-                DetailSectionKind.COLLECTION_ITEMS,
                 DetailSectionKind.CAST,
                 DetailSectionKind.RELATED_VIDEOS,
                 DetailSectionKind.MORE_LIKE_THIS,
@@ -142,7 +136,7 @@ class DetailSectionAdmissionTest {
             admission(MediaType.MOVIE, hasAttachedDownload = false),
         )
         assertEquals(
-            listOf(0, 1, 2, 3, 4, 6, 7, 8, 9, 10, 11, 12, 13, 14),
+            listOf(0, 1, 2, 3, 4, 8, 9, 10, 11, 12, 13, 14),
             admission(MediaType.MOVIE).indices(),
         )
     }
@@ -171,8 +165,6 @@ class DetailSectionAdmissionTest {
                 DetailSectionKind.MEDIA_INFO,
                 DetailSectionKind.OVERVIEW,
                 DetailSectionKind.CHAPTERS_OR_TOC,
-                DetailSectionKind.SEASONS,
-                DetailSectionKind.COLLECTION_ITEMS,
                 DetailSectionKind.CAST,
                 DetailSectionKind.RELATED_VIDEOS,
                 DetailSectionKind.MORE_LIKE_THIS,
@@ -203,7 +195,7 @@ class DetailSectionAdmissionTest {
         assertFalse(sections.contains(DetailSectionKind.ACTION_ROW))
         assertEquals(0, sections.first().delayIndex)
         // Everything else keeps its exact slot.
-        assertEquals(listOf(0, 2, 3, 4, 6, 7, 8, 9, 10, 11, 12, 13, 14), sections.indices())
+        assertEquals(listOf(0, 2, 3, 4, 8, 9, 10, 11, 12, 13, 14), sections.indices())
     }
 
     @Test
@@ -241,10 +233,11 @@ class DetailSectionAdmissionTest {
     fun remoteEpisode_seasonsAdmitted_upNextNever() {
         val sections = admission(MediaType.EPISODE)
         assertTrue(sections.contains(DetailSectionKind.SEASONS))
+        assertFalse(sections.contains(DetailSectionKind.COLLECTION_ITEMS))
         assertFalse(sections.contains(DetailSectionKind.UP_NEXT))
         assertFalse(sections.contains(DetailSectionKind.BOOK_READING_CARD))
         assertEquals(
-            listOf(0, 1, 2, 3, 4, 6, 7, 8, 9, 10, 11, 12, 13, 14),
+            listOf(0, 1, 2, 3, 4, 6, 8, 9, 10, 11, 12, 13, 14),
             sections.indices(),
         )
     }
@@ -333,8 +326,6 @@ class DetailSectionAdmissionTest {
                 DetailSectionKind.MEDIA_INFO,
                 DetailSectionKind.OVERVIEW,
                 DetailSectionKind.CHAPTERS_OR_TOC,
-                DetailSectionKind.SEASONS,
-                DetailSectionKind.COLLECTION_ITEMS,
                 // RELATED_VIDEOS / MORE_LIKE_THIS stay admitted: their list
                 // choice (localRelatedItems vs relatedItems) and empty gates
                 // are render-side, exactly as before.
@@ -347,6 +338,8 @@ class DetailSectionAdmissionTest {
         assertEquals(2, sections[2].delayIndex)
         assertEquals(2, sections[3].delayIndex)
         assertFalse(sections.contains(DetailSectionKind.CAST))
+        assertFalse(sections.contains(DetailSectionKind.SEASONS))
+        assertFalse(sections.contains(DetailSectionKind.COLLECTION_ITEMS))
     }
 
     @Test
@@ -400,8 +393,6 @@ class DetailSectionAdmissionTest {
                 DetailSectionKind.ACTION_ROW,
                 DetailSectionKind.OVERVIEW,
                 DetailSectionKind.ALBUM_TRACKS,
-                DetailSectionKind.SEASONS,
-                DetailSectionKind.COLLECTION_ITEMS,
                 DetailSectionKind.CAST,
                 DetailSectionKind.RELATED_VIDEOS,
                 DetailSectionKind.MORE_LIKE_THIS,
@@ -413,6 +404,8 @@ class DetailSectionAdmissionTest {
             sections,
         )
         assertEquals(5, sections.first { it == DetailSectionKind.ALBUM_TRACKS }.delayIndex)
+        assertFalse(sections.contains(DetailSectionKind.SEASONS))
+        assertFalse(sections.contains(DetailSectionKind.COLLECTION_ITEMS))
     }
 
     @Test
@@ -426,12 +419,13 @@ class DetailSectionAdmissionTest {
     // ── COLLECTION ────────────────────────────────────────────────────────
 
     @Test
-    fun remoteCollection_itemsSlotAlwaysAdmitted() {
+    fun remoteCollection_itemsSlotAdmittedOnlyForCollections() {
         val sections = admission(MediaType.COLLECTION)
         assertTrue(sections.contains(DetailSectionKind.COLLECTION_ITEMS))
+        assertFalse(sections.contains(DetailSectionKind.SEASONS))
         assertEquals(7, sections.first { it == DetailSectionKind.COLLECTION_ITEMS }.delayIndex)
-        // The empty-items gate is render-side: the slot exists regardless.
-        assertTrue(admission(MediaType.COLLECTION).contains(DetailSectionKind.COLLECTION_ITEMS))
+        // The empty-items gate is render-side: admission checks only the
+        // media type, never the collection members.
     }
 
     // ── Seerr / special-features / reviews gates ──────────────────────────

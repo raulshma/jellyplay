@@ -120,9 +120,6 @@
     <string name="my_media_hidden_unknown">Libreria sconosciuta</string>
     <string name="a11y_mode_video">Modalità video</string>
     <string name="a11y_mode_music">Modalità musica</string>
-    <!-- Home top-dock overflow menu (H15 inline anti-spoiler toggle). -->
-    <string name="home_more_options">Altre opzioni</string>
-    <string name="home_anti_spoiler_mode">Modalità anti-spoiler</string>
 
     <!-- H17 personal stats card ("Your library week"). -->
     <string name="home_stats_card_title">La tua settimana in libreria</string>

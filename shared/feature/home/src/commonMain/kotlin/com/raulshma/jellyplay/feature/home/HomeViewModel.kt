@@ -590,11 +590,9 @@ internal class HomeViewModel(
                     showSettingsInHomeSearch = prefs.home.showSettingsInHomeSearch,
                     hideTopHeaderOnScroll = prefs.home.hideTopHeaderOnScroll,
                     continueWatchingClickBehavior = prefs.home.continueWatchingClickBehavior,
-                    // H17/H18 render gates + H15 dock-toggle mirror — the
-                    // same snapshot the fetch collectors below read.
+                    // H17/H18 render gates — the same snapshot the fetch collectors below read.
                     statsCardEnabled = prefs.home.homeStatsCard,
                     genreRailEnabled = prefs.home.homeGenreRail,
-                    antiSpoilerHome = prefs.home.antiSpoilerHome,
                     // H10/H13 render gates — the TV focus-backdrop and the
                     // wide-card trickplay peek, same snapshot posture.
                     focusBackdropEnabled = prefs.home.homeFocusBackdrop,
@@ -934,7 +932,6 @@ internal class HomeViewModel(
             is HomeUiEvent.EnsurePendingItemDetails -> ensurePendingItemDetails(event.itemIds)
             is HomeUiEvent.PlaySeries -> resolveSeriesPlay(event)
             is HomeUiEvent.DownloadItem -> downloadItem(event)
-            is HomeUiEvent.SetAntiSpoilerHome -> setAntiSpoilerHome(event.enabled)
             is HomeUiEvent.DismissPresenceChip -> dismissPresenceChip(event)
             is HomeUiEvent.JoinPresenceWatchParty -> joinPresenceWatchParty(event)
         }
@@ -1217,18 +1214,6 @@ internal class HomeViewModel(
      */
     private fun setLibrarySectionVisible(libraryId: String, type: HomeSectionType, visible: Boolean) {
         launch { prefs.homeDiscovery.setLibrarySectionVisible(libraryId, type, visible) }
-    }
-
-    /**
-     * H15 inline toggle — the top-dock overflow's "Anti-spoiler mode"
-     * checkmark. Same store-command seam as the neighboring pref toggles
-     * ([setSectionVisible] and friends): the write goes through
-     * [HomeDiscoveryStore.setAntiSpoilerHome] and the prefs collector's
-     * snapshot fold re-mirrors [HomeUiState.antiSpoilerHome] — no local
-     * optimistic write to drift.
-     */
-    private fun setAntiSpoilerHome(enabled: Boolean) {
-        launch { prefs.homeDiscovery.setAntiSpoilerHome(enabled) }
     }
 
     /**

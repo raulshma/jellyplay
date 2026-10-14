@@ -125,10 +125,6 @@
     <string name="a11y_mode_video">Video mode</string>
     <string name="a11y_mode_music">Music mode</string>
 
-    <!-- Home top-dock overflow menu (H15 inline anti-spoiler toggle). -->
-    <string name="home_more_options">More options</string>
-    <string name="home_anti_spoiler_mode">Anti-spoiler mode</string>
-
     <!-- H17 personal stats card ("Your library week"). -->
     <string name="home_stats_card_title">Your library week</string>
     <string name="home_stats_card_counts">%1$d played · %2$d unplayed</string>

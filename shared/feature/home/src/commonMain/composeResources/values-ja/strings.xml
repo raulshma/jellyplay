@@ -120,9 +120,6 @@
     <string name="my_media_hidden_unknown">不明なライブラリ</string>
     <string name="a11y_mode_video">動画モード</string>
     <string name="a11y_mode_music">音楽モード</string>
-    <!-- Home top-dock overflow menu (H15 inline anti-spoiler toggle). -->
-    <string name="home_more_options">その他のオプション</string>
-    <string name="home_anti_spoiler_mode">ネタバレ防止モード</string>
 
     <!-- H17 personal stats card ("Your library week"). -->
     <string name="home_stats_card_title">今週のライブラリ</string>

@@ -160,15 +160,6 @@ sealed interface HomeUiEvent {
     ) : HomeUiEvent
 
     /**
-     * H15 inline toggle — the home top-dock overflow's "Anti-spoiler mode"
-     * checkmark. Writes the same [com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore]
-     * command Settings' Home-Cards row routes through; the prefs collector
-     * re-folds the changed snapshot (and the card-suppression reads pick it
-     * up from the composition local).
-     */
-    data class SetAntiSpoilerHome(val enabled: Boolean) : HomeUiEvent
-
-    /**
      * H19 inline dismiss of one presence chip. The session id lands in the
      * controller's in-memory, session-scoped set (never persisted) AND the
      * row folds the chip out immediately — the next poll re-filters with the
