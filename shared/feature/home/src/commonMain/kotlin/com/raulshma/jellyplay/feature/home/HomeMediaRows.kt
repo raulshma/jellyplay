@@ -532,7 +532,7 @@ internal fun HomeMediaRow(
     homeLastVisitEpochMs: Long = 0L,
     /**
      * H4: renders each card's air-date chip ([HomeAirsDateChip], the details
-     * screen's "Airs <date>" vocabulary) over the poster's bottom-start
+     * screen's "Airs <date>" vocabulary) in the poster's top-start
      * corner. The Upcoming row is the only caller — its items are unaired
      * episodes whose [MediaItem.premiereDate] is the point of the row.
      */
@@ -656,53 +656,36 @@ internal fun HomeMediaRow(
                 seriesBackdropResolver = seriesBackdropResolver,
                 showEpisodeSeriesBadge = showEpisodeSeriesBadge,
             )
-            // H4: the card slot splits so the air-date chip can overlay the
-            // poster (the card itself stays a pure renderer — the chip is the
-            // row's decision, same split as the NEW badge). No chip → the
-            // card renders exactly as before.
-            val card: @Composable (Modifier) -> Unit = { cardModifier ->
-                PosterCard(
-                    item = item,
-                    imageUrl = cardImage.imageUrl,
-                    fallbackUrls = cardImage.fallbackUrls,
-                    onClick = memoizedClick,
-                    modifier = cardModifier,
-                    showProgress = item.hasPlaybackPosition,
-                    progressPercent = progressPercent,
-                    // Continue Reading rows decode the book fraction against the
-                    // TOC cache's page count; hand the same value to the footer so
-                    // the "% complete" label matches the card's progress bar.
-                    // Book admission lives in bookFooterPercent.
-                    bookProgressFractionOverride = progressPercent,
-                    blurHash = cardImage.blurHash,
-                    onPlayClick = memoizedPlayClick,
-                    sharedElementKey = "poster_${item.id}",
-                    photoFolderChildImageUrls = photoFolderChildImageUrls,
-                    clipToShape = clippingEnabled,
-                    showEpisodeSeriesBadge = cardImage.showSeriesBadge,
-                    gradientBrush = posterScrimBrush,
-                    showNewBadge = showNewBadge,
-                )
-            }
-            if (showAirDateChips) {
-                val airDate = remember(item.id, item.premiereDate) { upcomingAirDate(item.premiereDate) }
-                Box(modifier = mod.width(cardWidth)) {
-                    card(Modifier.fillMaxWidth())
-                    if (airDate != null) {
-                        // Bottom-start: the TopStart overlay stack is the NEW
-                        // badge's / rating's home (H12/H11), so the air chip
-                        // takes the corner the LATEST episode chip uses.
-                        HomeAirsDateChip(
-                            date = airDate,
-                            modifier = Modifier
-                                .align(Alignment.BottomStart)
-                                .padding(start = 6.dp, bottom = 6.dp),
-                        )
-                    }
-                }
-            } else {
-                card(mod.width(cardWidth))
-            }
+            // H4: Upcoming air-date badge — rendered in the poster's top-left
+            // overlay stack via [PosterCard.topStartBadge].
+            val airDate = if (showAirDateChips) {
+                remember(item.id, item.premiereDate) { upcomingAirDate(item.premiereDate) }
+            } else null
+            PosterCard(
+                item = item,
+                imageUrl = cardImage.imageUrl,
+                fallbackUrls = cardImage.fallbackUrls,
+                onClick = memoizedClick,
+                modifier = mod.width(cardWidth),
+                showProgress = item.hasPlaybackPosition,
+                progressPercent = progressPercent,
+                // Continue Reading rows decode the book fraction against the
+                // TOC cache's page count; hand the same value to the footer so
+                // the "% complete" label matches the card's progress bar.
+                // Book admission lives in bookFooterPercent.
+                bookProgressFractionOverride = progressPercent,
+                blurHash = cardImage.blurHash,
+                onPlayClick = memoizedPlayClick,
+                sharedElementKey = "poster_${item.id}",
+                photoFolderChildImageUrls = photoFolderChildImageUrls,
+                clipToShape = clippingEnabled,
+                showEpisodeSeriesBadge = cardImage.showSeriesBadge,
+                gradientBrush = posterScrimBrush,
+                showNewBadge = showNewBadge,
+                topStartBadge = if (airDate != null) {
+                    { HomeAirsDateChip(date = airDate) }
+                } else null,
+            )
         }
     }
 }
@@ -857,8 +840,8 @@ internal fun upcomingAirDate(premiereDate: String?): LocalDate? =
  * screen's `MissingEpisodeBadge.Airs` tag (the same dark-scrim Surface, the
  * same labelSmall bold label) so the two surfaces read as one vocabulary;
  * the details module is not imported (home replicates the look, it does not
- * depend on it). Overlay-only: rendered on top of the poster's bottom-start
- * corner, never inline with the card text.
+ * depend on it). Overlay-only: rendered in the poster's top-start corner,
+ * never inline with the card text.
  */
 @Composable
 internal fun HomeAirsDateChip(

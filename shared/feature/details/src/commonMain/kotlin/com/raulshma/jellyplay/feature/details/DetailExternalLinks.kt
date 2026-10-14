@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.details
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.MaterialTheme
@@ -38,7 +39,7 @@ import com.raulshma.jellyplay.core.ui.components.focusIndicator
 internal fun DetailExternalLinksRow(
     links: List<ExternalUrl>,
     modifier: Modifier = Modifier,
-    // The Seerr family centers its three brand chips; the media-detail header
+    // The Seerr family centers its three brand chips; the media-detail screen
     // overrides this to a start-aligned arrangement matching its chip rows.
     arrangement: Arrangement.Horizontal =
         Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
@@ -46,10 +47,10 @@ internal fun DetailExternalLinksRow(
     if (links.isEmpty()) return
     val uriHandler = LocalUriHandler.current
 
-    Row(
+    FlowRow(
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = arrangement,
-        verticalAlignment = Alignment.CenterVertically
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         links.forEach { link ->
             val brandColor = externalLinkBrandColor(link.url)
@@ -157,10 +158,10 @@ internal fun buildDetailExternalLinks(
 }
 
 /**
- * The pure admission decision behind the detail header's link row: the
+ * The pure admission decision behind the detail screen's external-link row: the
  * preference is on, the origin is not LOCAL (an offline detail would offer
  * chips describing nothing reachable), and the merged list is non-empty.
- * Null origin (snapshot not yet landed — the header never renders then, but
+ * Null origin (snapshot not yet landed — the section never renders then, but
  * stay defensive) counts as remote. Pure → directly unit-testable (the
  * [preferLogoTitleEnabled] pattern).
  */

@@ -3,12 +3,18 @@ package com.raulshma.jellyplay.feature.home
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
+import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -258,10 +264,18 @@ internal class HomePresenceChipsController(
 }
 
 /**
- * The H19 presence-chip row — a LazyRow of [HomePresenceChipEntry]s, mounted
- * under the top dock (the first HomeScreen-owned slot of the content column,
- * above the H17 stats card). Hidden by the caller whenever the list is empty
- * (pref off, offline, probe failure, no qualifying sessions).
+ * Phone layout: not TV and a compact window — the H19 row's Column-vs-LazyRow
+ * switch. Pure over its inputs so the layout test pins this predicate, not a
+ * re-implementation of it.
+ */
+internal fun isPhoneLayout(isTv: Boolean, windowSizeClass: WindowSizeClass): Boolean =
+    !isTv && windowSizeClass == WindowSizeClass.Compact
+
+/**
+ * The H19 presence-chip row — a LazyRow of [HomePresenceChipEntry]s (or a full-width
+ * Column in phone layout), mounted under the top dock (the first HomeScreen-owned
+ * slot of the content column, above the H17 stats card). Hidden by the caller whenever
+ * the list is empty (prop off, offline, probe failure, no qualifying sessions).
  */
 @Composable
 internal fun HomePresenceChipRow(
@@ -271,19 +285,35 @@ internal fun HomePresenceChipRow(
     onDismiss: (HomePresenceChip) -> Unit,
     contentPad: Dp,
     modifier: Modifier = Modifier,
+    isPhone: Boolean = isPhoneLayout(LocalTvMode.current, LocalAdaptiveInfo.current.windowSizeClass),
 ) {
-    LazyRow(
-        contentPadding = PaddingValues(horizontal = contentPad),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        modifier = modifier,
-    ) {
-        items(chips, key = { it.sessionId }) { chip ->
-            HomePresenceChipEntry(
-                chip = chip,
-                onChipClick = onChipClick,
-                onJoinClick = onJoinClick,
-                onDismiss = onDismiss,
-            )
+    @Composable
+    fun entry(chip: HomePresenceChip) {
+        HomePresenceChipEntry(
+            chip = chip,
+            onChipClick = onChipClick,
+            onJoinClick = onJoinClick,
+            onDismiss = onDismiss,
+            isPhone = isPhone,
+        )
+    }
+
+    if (isPhone) {
+        Column(
+            modifier = modifier
+                .fillMaxWidth()
+                .padding(horizontal = contentPad),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            chips.forEach { chip -> entry(chip) }
+        }
+    } else {
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = contentPad),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = modifier.fillMaxWidth(),
+        ) {
+            items(chips, key = { it.sessionId }) { chip -> entry(chip) }
         }
     }
 }
@@ -300,11 +330,13 @@ private fun HomePresenceChipEntry(
     onChipClick: (HomePresenceChip) -> Unit,
     onJoinClick: (HomePresenceChip) -> Unit,
     onDismiss: (HomePresenceChip) -> Unit,
+    isPhone: Boolean = false,
+    modifier: Modifier = Modifier,
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
-        modifier = Modifier
+        modifier = (if (isPhone) modifier.fillMaxWidth() else modifier.widthIn(max = 340.dp))
             .clip(ShapeCache.smooth20)
             .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.6f))
             .focusIndicator()
@@ -323,7 +355,9 @@ private fun HomePresenceChipEntry(
             color = MaterialTheme.colorScheme.onSurface,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(vertical = 4.dp),
+            modifier = Modifier
+                .weight(1f, fill = isPhone)
+                .padding(vertical = 4.dp),
         )
         if (chip.joinableGroupId != null) {
             Row(

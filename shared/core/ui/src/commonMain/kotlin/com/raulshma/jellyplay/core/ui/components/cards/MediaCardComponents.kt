@@ -289,6 +289,11 @@ fun PosterCard(
      * [CardDisplayPreferences.showNewBadges]; the card stays a pure renderer).
      */
     showNewBadge: Boolean = false,
+    /**
+     * Optional badge rendered in the poster's top-left overlay stack above
+     * ratings and quality chips (e.g. the air-date badge on Upcoming cards).
+     */
+    topStartBadge: (@Composable () -> Unit)? = null,
 ) {
     val isTv = LocalJellyPlayUi.current.isTv
     val cardPrefs = LocalCardDisplayPreferences.current
@@ -425,17 +430,18 @@ fun PosterCard(
                 }
             }
 
-            // Top-left info stack: the NEW arrival chip above the rating and
-            // the H11 quality chips, in one column so the corner's badges
-            // coexist (a lone child renders exactly where the former
-            // standalone rating badge sat). Rating badges are never spoilers
-            // — they render in anti-spoiler mode too.
+            // Top-left info stack: optional top-start badge (e.g. air date),
+            // the NEW arrival chip above the rating and the H11 quality chips,
+            // in one column so the corner's badges coexist (a lone child renders
+            // exactly where the former standalone rating badge sat). Rating
+            // badges are never spoilers — they render in anti-spoiler mode too.
             Column(
                 verticalArrangement = Arrangement.spacedBy(4.dp),
                 modifier = Modifier
                     .align(Alignment.TopStart)
                     .padding(6.dp),
             ) {
+                topStartBadge?.invoke()
                 if (showNewBadge) {
                     NewBadge()
                 }

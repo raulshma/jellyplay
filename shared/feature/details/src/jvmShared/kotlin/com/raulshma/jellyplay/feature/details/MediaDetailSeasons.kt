@@ -73,6 +73,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.sharedElementBoundsSpec
 import com.raulshma.jellyplay.core.model.EpisodeStreamInfo
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MissingEpisodeReason
+import com.raulshma.jellyplay.core.model.hasDisplayableBadges
 import com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator
 import com.raulshma.jellyplay.core.ui.components.LocalSharedTransitionScope
 import com.raulshma.jellyplay.core.ui.components.MediaCardProgressOverlay
@@ -1193,8 +1194,9 @@ private fun EpisodePlayedBar(modifier: Modifier = Modifier) {
 
 /**
  * The episode row's metadata stack — title ("N. Name"), the runtime line
- * ("Xm left • 42m", or a bare "42m"), and the last-watched relative
- * timestamp. Shared by [EpisodeCard] and [CompactEpisodeRow]; the caller
+ * ("Xm left • 42m", or a bare "42m") with stream-info badges (D11) on the
+ * right side of the time, the TMDB score chip (ADR 0010), and the last-watched
+ * relative timestamp. Shared by [EpisodeCard] and [CompactEpisodeRow]; the caller
  * picks the type scale and the runtime line's top padding (the only
  * per-layout differences) and keeps its own column padding/geometry.
  * Extension on [ColumnScope] so the texts join the caller's column directly
@@ -1225,47 +1227,53 @@ private fun ColumnScope.EpisodeMetaLines(
     )
     val remainingTime = presentation.remainingTime
     val totalTime = presentation.totalTime
-    if (remainingTime != null && totalTime != null) {
+    val hasTime = remainingTime != null || totalTime != null
+    val streamInfo = if (showStreamBadges) episode.episodeStreamInfo else null
+    val hasBadges = streamInfo?.hasDisplayableBadges == true
+
+    if (hasTime || hasBadges) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            modifier = Modifier.padding(top = runtimeTopPadding)
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.padding(top = runtimeTopPadding),
         ) {
-            Text(
-                text = stringResource(Res.string.detail_time_left_format, remainingTime),
-                style = metaStyle,
-                color = MaterialTheme.colorScheme.primary,
-            )
-            Text(
-                text = "•",
-                style = metaStyle,
-                color = MaterialTheme.colorScheme.outlineVariant,
-            )
-            Text(
-                text = totalTime,
-                style = metaStyle,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    } else if (totalTime != null) {
-        Text(
-            text = totalTime,
-            style = metaStyle,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = runtimeTopPadding)
-        )
-    }
+            // remainingTime derives from runtimeTicks, which also produces
+            // totalTime — a remaining-without-total case can't occur.
+            if (remainingTime != null && totalTime != null) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Text(
+                        text = stringResource(Res.string.detail_time_left_format, remainingTime),
+                        style = metaStyle,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    Text(
+                        text = "•",
+                        style = metaStyle,
+                        color = MaterialTheme.colorScheme.outlineVariant,
+                    )
+                    Text(
+                        text = totalTime,
+                        style = metaStyle,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            } else if (totalTime != null) {
+                Text(
+                    text = totalTime,
+                    style = metaStyle,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
 
-    // Stream-info badge row (D11): CC / audio layout / audio-language count,
-    // from the per-season fetch's MediaStreams projection. Rendered between
-    // the runtime line and the TMDB chip; NOTHING renders when the info is
-    // absent (all-episodes path, older servers) so the row keeps its shape.
-    if (showStreamBadges) {
-        episode.episodeStreamInfo?.let { info ->
-            EpisodeStreamBadges(
-                info = info,
-                modifier = Modifier.padding(top = 4.dp),
-            )
+            // Stream-info badge row (D11): CC / audio layout / audio-language count,
+            // from the per-season fetch's MediaStreams projection. Rendered along the
+            // right side of the episode runtime line.
+            if (hasBadges) {
+                EpisodeStreamBadges(info = streamInfo)
+            }
         }
     }
 

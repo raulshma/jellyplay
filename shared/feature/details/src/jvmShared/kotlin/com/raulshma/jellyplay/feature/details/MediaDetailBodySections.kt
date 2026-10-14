@@ -678,45 +678,6 @@ internal fun DetailHeaderSection(
                 )
             }
 
-            // D1: external-link chips — the server's externalUrls first, then
-            // TMDB/IMDb constructed from the provider ids, deduped by host so
-            // a server-sourced entry outranks its constructed twin. The whole
-            // row hides when the merged list is empty, when the origin is
-            // LOCAL (offline detail: nothing reachable to open) or when the
-            // show_external_links preference is off.
-            val tmdbLinkLabel = stringResource(Res.string.detail_link_tmdb)
-            val imdbLinkLabel = stringResource(Res.string.detail_link_imdb)
-            // Memoized on exactly the inputs the merge reads (the SeasonsSection
-            // note: collection keys, not the whole detail's data-class equality).
-            val externalLinks = remember(
-                detail.externalUrls,
-                detail.providerIds,
-                item.mediaType,
-                tmdbLinkLabel,
-                imdbLinkLabel,
-            ) {
-                buildDetailExternalLinks(
-                    detail = detail,
-                    mediaType = if (item.mediaType == MediaType.MOVIE) "movie" else "tv",
-                    tmdbLabel = tmdbLinkLabel,
-                    imdbLabel = imdbLinkLabel,
-                )
-            }
-            if (detailExternalLinksVisible(
-                    showExternalLinks = state.preferences.showExternalLinks,
-                    origin = state.origin,
-                    links = externalLinks,
-                )
-            ) {
-                Spacer(Modifier.height(10.dp))
-                DetailExternalLinksRow(
-                    links = externalLinks,
-                    // Start-aligned so the row reads as one more header chip
-                    // row rather than the Seerr screen's centered brand strip.
-                    arrangement = Arrangement.spacedBy(12.dp),
-                )
-            }
-
             // ── Aggregate local-series header ("N episodes · size") ──
             // Mirrors OfflineSeriesScreen. Rendered only for a local series
             // (detailContext.seriesAggregate != null on a SERIES item). Placed
@@ -873,23 +834,71 @@ internal fun DetailMediaInfoSection(
 internal fun DetailOverviewSection(
     delayIndex: Int,
     state: DetailContentState,
+    detail: MediaDetail,
     item: MediaItem,
     bodyContentPad: Dp,
 ) {
+    // D1: external-link chips — the server's externalUrls first, then
+    // TMDB/IMDb constructed from the provider ids, deduped by host so
+    // a server-sourced entry outranks its constructed twin. The whole
+    // row hides when the merged list is empty, when the origin is
+    // LOCAL (offline detail: nothing reachable to open) or when the
+    // show_external_links preference is off. Shown after the media description.
+    val tmdbLinkLabel = stringResource(Res.string.detail_link_tmdb)
+    val imdbLinkLabel = stringResource(Res.string.detail_link_imdb)
+    // Memoized on exactly the inputs the merge reads (the SeasonsSection
+    // note: collection keys, not the whole detail's data-class equality).
+    val externalLinks = remember(
+        detail.externalUrls,
+        detail.providerIds,
+        item.mediaType,
+        tmdbLinkLabel,
+        imdbLinkLabel,
+    ) {
+        buildDetailExternalLinks(
+            detail = detail,
+            mediaType = if (item.mediaType == MediaType.MOVIE) "movie" else "tv",
+            tmdbLabel = tmdbLinkLabel,
+            imdbLabel = imdbLinkLabel,
+        )
+    }
+    val showExternalLinks = detailExternalLinksVisible(
+        showExternalLinks = state.preferences.showExternalLinks,
+        origin = state.origin,
+        links = externalLinks,
+    )
+
     StaggeredDetailSection(visible = true, delayIndex = delayIndex) {
-        item.overview?.let { overview ->
-            FadingItem {
-                // F5: cap the overview so long synopses don't push everything
-                // below the fold, with a "Read more" toggle (collapsed=4 lines).
-                ExpandableText(
-                    text = overview,
-                    collapsedMaxLines = 4,
-                    style = MaterialTheme.typography.bodyLarge.copy(
-                        lineHeight = androidx.compose.ui.unit.TextUnit(24f, androidx.compose.ui.unit.TextUnitType.Sp),
-                    ),
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
-                    modifier = Modifier.padding(horizontal = bodyContentPad),
-                )
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = bodyContentPad),
+        ) {
+            val overview = item.overview?.takeIf { it.isNotBlank() }
+            if (overview != null) {
+                FadingItem {
+                    // F5: cap the overview so long synopses don't push everything
+                    // below the fold, with a "Read more" toggle (collapsed=4 lines).
+                    ExpandableText(
+                        text = overview,
+                        collapsedMaxLines = 4,
+                        style = MaterialTheme.typography.bodyLarge.copy(
+                            lineHeight = androidx.compose.ui.unit.TextUnit(24f, androidx.compose.ui.unit.TextUnitType.Sp),
+                        ),
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
+                    )
+                }
+            }
+            if (showExternalLinks) {
+                if (overview != null) {
+                    Spacer(Modifier.height(12.dp))
+                }
+                FadingItem {
+                    DetailExternalLinksRow(
+                        links = externalLinks,
+                        arrangement = Arrangement.spacedBy(12.dp),
+                    )
+                }
             }
         }
     }

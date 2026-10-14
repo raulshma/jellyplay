@@ -62,6 +62,7 @@ import com.composables.icons.tabler.outline.PlayerPlay
 import com.raulshma.jellyplay.core.designsystem.theme.detailEntrance
 import com.raulshma.jellyplay.core.designsystem.theme.rememberDetailEntrance
 import com.raulshma.jellyplay.core.model.ContinueWatchingClickBehavior
+import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.MediaItem
@@ -192,6 +193,11 @@ internal data class HomeContentState(
      * screen wires `uiState.homeLastVisitEpochMs` through) badges nothing.
      */
     val homeLastVisitEpochMs: Long = 0L,
+    val presenceChips: List<HomePresenceChip> = emptyList(),
+    val statsCard: HomeStatsCardData? = null,
+    val statsCardEnabled: Boolean = false,
+    val genreChips: List<Genre> = emptyList(),
+    val genreRailEnabled: Boolean = false,
 ) {
     /** The online feed, null while the offline branch renders. */
     val online: HomeFeed.Online? get() = feed as? HomeFeed.Online
@@ -240,6 +246,11 @@ internal data class HomeContentCallbacks(
     val onRollDiscoverRow: (String) -> Unit = {},
     /** Edge-pull refresh of ONE section row (section id) — see [HomeRefresher.refreshSectionRow]. */
     val onRefreshSection: (String) -> Unit = {},
+    val onPresenceChipClick: (HomePresenceChip) -> Unit = {},
+    val onPresenceJoinClick: (HomePresenceChip) -> Unit = {},
+    val onPresenceDismiss: (HomePresenceChip) -> Unit = {},
+    val onStatsCardClick: (() -> Unit)? = null,
+    val onGenreClick: (String) -> Unit = {},
 )
 
 /**
@@ -438,15 +449,57 @@ internal fun HomeContentList(
                 item(key = "hero_spacer") { Spacer(Modifier.height(100.dp)) }
             }
 
+            // ── H19 presence chips ("Alex is watching Dune — join") ──────
+            val showPresenceChips = state.online != null && state.presenceChips.isNotEmpty()
+            if (showPresenceChips) {
+                item(key = "presence_chips") {
+                    HomePresenceChipRow(
+                        chips = state.presenceChips,
+                        onChipClick = callbacks.onPresenceChipClick,
+                        onJoinClick = callbacks.onPresenceJoinClick,
+                        onDismiss = callbacks.onPresenceDismiss,
+                        contentPad = state.contentPad,
+                        isPhone = isPhoneLayout(isTv, adaptiveInfo.windowSizeClass),
+                        modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
+                    )
+                }
+            }
+
+            // ── H17 stats card ("Your library week") ─────────────────────
+            val showStatsCard = state.online != null && state.statsCardEnabled && state.statsCard != null
+            if (showStatsCard) {
+                item(key = "stats_card") {
+                    HomeStatsCard(
+                        data = state.statsCard,
+                        onClick = callbacks.onStatsCardClick,
+                    )
+                }
+            }
+
+            // ── H18 genre rail ──────────────────────────────────────────
+            val showGenreRail = state.online != null && state.genreRailEnabled && state.genreChips.isNotEmpty()
+            if (showGenreRail) {
+                item(key = "genre_rail") {
+                    HomeGenreRail(
+                        genres = state.genreChips,
+                        onGenreClick = callbacks.onGenreClick,
+                        contentPad = state.contentPad,
+                        modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
+                    )
+                }
+            }
+
             // Non-blocking informational banner (implicit-offline fallback notice).
-            if (state.statusBanner != null) {
+            val showStatusBanner = state.statusBanner != null
+            if (showStatusBanner) {
                 item(key = "status_banner") {
                     HomeStatusBannerRow(text = state.statusBanner, contentPad = state.contentPad)
                 }
             }
 
             // Non-blocking notice when some home sections failed to load.
-            if (state.online?.partialLoadError == true) {
+            val showPartialLoadBanner = state.online?.partialLoadError == true
+            if (showPartialLoadBanner) {
                 item(key = "partial_load_banner") {
                     HomeStatusBannerRow(
                         text = stringResource(Res.string.home_sections_load_failed),
@@ -456,7 +509,8 @@ internal fun HomeContentList(
                 }
             }
 
-            if (state.online?.newsletterBannerVisible == true) {
+            val showNewsletterBanner = state.online?.newsletterBannerVisible == true
+            if (showNewsletterBanner) {
                 item(key = "newsletter_banner") {
                     NewsletterBanner(
                         onClick = callbacks.onNewsletterClick,
@@ -465,24 +519,20 @@ internal fun HomeContentList(
                 }
             }
 
+            // The hero-merge treatment (background gradient + zero top padding)
+            // applies to the first section only when it directly follows the
+            // hero — i.e. nothing above renders between the two. Derived from
+            // the same admission booleans so the two can't drift apart.
+            val firstSectionFollowsHero = state.featuredItem != null && state.homeHeroEnabled &&
+                !showPresenceChips && !showStatsCard && !showGenreRail &&
+                !showStatusBanner && !showPartialLoadBanner && !showNewsletterBanner
+
             items(count = sections.size, key = { sections[it].id }, contentType = { "homeSection_${sections[it].type}" }) { index ->
                 val section = sections[index]
-                val isFirstAfterHero = index == 0 && state.featuredItem != null && state.homeHeroEnabled
-                val sectionIndexInList = index + (if (state.featuredItem != null && state.homeHeroEnabled) 1 else 0)
-                // Per-item visibility: a single shared IntRange derivedStateOf
-                // invalidated every composed section item on every boundary
-                // crossing (the range value changed even for items whose own
-                // visibility didn't). Reading each item's own visibility as a
-                // Boolean means only the item that entered/left recomposes.
-                //
-                // Keyed on sectionIndexInList: if the hero presence toggles
-                // (featuredItem becomes null, or homeHeroEnabled flips), every
-                // item's offset shifts by 1 and the captured index would
-                // otherwise track the wrong item's visibility. The key discards
-                // the stale derivedStateOf and rebuilds it for the new offset.
-                val isCurrentlyVisible by remember(sectionIndexInList) {
+                val isFirstAfterHero = index == 0 && firstSectionFollowsHero
+                val isCurrentlyVisible by remember(section.id) {
                     derivedStateOf {
-                        listState.layoutInfo.visibleItemsInfo.any { it.index == sectionIndexInList }
+                        listState.layoutInfo.visibleItemsInfo.any { it.key == section.id }
                     }
                 }
 

@@ -194,6 +194,15 @@ data class EpisodeStreamInfo(
 )
 
 /**
+ * Whether this stream summary carries any displayable badge: CC
+ * ([hasSubtitles]), a high-end audio layout ([audioLayout]), or more than
+ * one audio language ([audioLanguageCount]). The season rows' badge row
+ * (D11) renders nothing when false.
+ */
+val EpisodeStreamInfo.hasDisplayableBadges: Boolean
+    get() = hasSubtitles || audioLayout != null || audioLanguageCount > 1
+
+/**
  * Why a virtual ([MediaItem.isVirtual]) episode has no playable file: it
  * hasn't aired yet ([UNAIRED], premiere date in the future), or the file is
  * simply absent from the library ([MISSING_FILE]). Derived at map time from

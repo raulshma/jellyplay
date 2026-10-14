@@ -6,6 +6,7 @@ import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.SessionInfo
 import com.raulshma.jellyplay.core.model.SessionNowPlayingItem
 import com.raulshma.jellyplay.core.model.SyncPlayGroup
+import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -265,5 +266,13 @@ class HomePresenceChipsTest {
         val chips = buildController().refresh(currentUserId = "me")
 
         assertEquals("Living Room TV", chips.single().userName)
+    }
+
+    @Test
+    fun isPhoneLayout_compactNonTv_isTrue() {
+        assertTrue(isPhoneLayout(isTv = false, windowSizeClass = WindowSizeClass.Compact))
+        assertFalse(isPhoneLayout(isTv = true, windowSizeClass = WindowSizeClass.Compact))
+        assertFalse(isPhoneLayout(isTv = false, windowSizeClass = WindowSizeClass.Medium))
+        assertFalse(isPhoneLayout(isTv = false, windowSizeClass = WindowSizeClass.Expanded))
     }
 }

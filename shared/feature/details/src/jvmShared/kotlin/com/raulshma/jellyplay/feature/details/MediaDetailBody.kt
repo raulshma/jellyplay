@@ -321,6 +321,7 @@ internal fun DetailSectionRenderer(
             DetailOverviewSection(
                 delayIndex = section.delayIndex,
                 state = state,
+                detail = detail,
                 item = item,
                 bodyContentPad = bodyContentPad,
             )

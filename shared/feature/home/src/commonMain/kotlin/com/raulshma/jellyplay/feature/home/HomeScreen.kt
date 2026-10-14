@@ -888,73 +888,6 @@ private fun HomeSurfaceContent(
             } else {
                 null
             }
-            Column(modifier = Modifier.fillMaxSize()) {
-                // ── H19 presence chips ───────────────────────────────────
-                // The first HomeScreen-owned slot of the content column —
-                // the closest mount to the plan's "under the top dock" (the
-                // dock itself is the overlay above this column). Online-feed
-                // only, same suppression posture as the two surfaces below;
-                // empty (pref off / offline / probe failure / nobody
-                // watching) renders nothing.
-                if (onlineFeed && state.presenceChips.isNotEmpty()) {
-                    HomePresenceChipRow(
-                        chips = state.presenceChips,
-                        onChipClick = remember(callbacks) {
-                            { chip: HomePresenceChip ->
-                                callbacks.onItemClick(chip.itemId, chip.mediaType, null, chip.itemName)
-                            }
-                        },
-                        // Join → the VM's SyncPlay seam, then the player (the
-                        // screen owns navigation; the bridge attaches to the
-                        // now-active watch party — the detail screen's
-                        // create→open-player shape).
-                        onJoinClick = remember(viewModel, callbacks) {
-                            { chip: HomePresenceChip ->
-                                viewModel.onEvent(
-                                    HomeUiEvent.JoinPresenceWatchParty(chip) { startPositionTicks ->
-                                        callbacks.onPlayClick(
-                                            chip.itemId,
-                                            null,
-                                            startPositionTicks,
-                                            chip.mediaType,
-                                            null,
-                                            chip.itemName,
-                                        )
-                                    },
-                                )
-                            }
-                        },
-                        onDismiss = remember(viewModel) {
-                            { chip: HomePresenceChip ->
-                                viewModel.onEvent(HomeUiEvent.DismissPresenceChip(chip.sessionId))
-                            }
-                        },
-                        contentPad = contentPad,
-                        // The content column sits under the status-bar touch
-                        // frame (only the dock overlay insets itself); without
-                        // this the chip's dismiss X lands in the inset and taps
-                        // never reach it. No-op on TV (zero status-bar inset).
-                        modifier = Modifier
-                            .statusBarsPadding()
-                            .padding(top = 4.dp, bottom = 4.dp),
-                    )
-                }
-                if (onlineFeed && state.statsCardEnabled && statsCardData != null) {
-                    HomeStatsCard(
-                        data = statsCardData,
-                        onClick = statsCardClick,
-                    )
-                }
-                if (onlineFeed && state.genreRailEnabled && state.genreChips.isNotEmpty()) {
-                    HomeGenreRail(
-                        genres = state.genreChips,
-                        onGenreClick = remember(callbacks) {
-                            { genre: String -> callbacks.onOpenRoute(homeGenreRoute(genre)) }
-                        },
-                        contentPad = contentPad,
-                        modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
-                    )
-                }
             HomeContentList(
                 state = HomeContentState(
                     // WHAT renders was decided by the fold — the
@@ -997,6 +930,11 @@ private fun HomeSurfaceContent(
                     // H12 visit memory (the sibling one-liner): the
                     // NEW-badge predicate's previous-visit threshold.
                     homeLastVisitEpochMs = state.homeLastVisitEpochMs,
+                    presenceChips = state.presenceChips,
+                    statsCard = statsCardData,
+                    statsCardEnabled = state.statsCardEnabled,
+                    genreChips = state.genreChips,
+                    genreRailEnabled = state.genreRailEnabled,
                 ),
                 callbacks = HomeContentCallbacks(
                     onRetrySectionLoad = remember(viewModel) { { viewModel.onEvent(HomeUiEvent.Refresh) } },
@@ -1024,12 +962,41 @@ private fun HomeSurfaceContent(
                     onFocusedMediaItem = onFocusedMediaItem,
                     onRollDiscoverRow = remember(viewModel) { { rowId: String -> viewModel.onEvent(HomeUiEvent.RollDiscoverRow(rowId)) } },
                     onRefreshSection = remember(viewModel) { { sectionId: String -> viewModel.onEvent(HomeUiEvent.RefreshSection(sectionId)) } },
+                    onPresenceChipClick = remember(callbacks) {
+                        { chip: HomePresenceChip ->
+                            callbacks.onItemClick(chip.itemId, chip.mediaType, null, chip.itemName)
+                        }
+                    },
+                    onPresenceJoinClick = remember(viewModel, callbacks) {
+                        { chip: HomePresenceChip ->
+                            viewModel.onEvent(
+                                HomeUiEvent.JoinPresenceWatchParty(chip) { startPositionTicks ->
+                                    callbacks.onPlayClick(
+                                        chip.itemId,
+                                        null,
+                                        startPositionTicks,
+                                        chip.mediaType,
+                                        null,
+                                        chip.itemName,
+                                    )
+                                },
+                            )
+                        }
+                    },
+                    onPresenceDismiss = remember(viewModel) {
+                        { chip: HomePresenceChip ->
+                            viewModel.onEvent(HomeUiEvent.DismissPresenceChip(chip.sessionId))
+                        }
+                    },
+                    onStatsCardClick = statsCardClick,
+                    onGenreClick = remember(callbacks) {
+                        { genre: String -> callbacks.onOpenRoute(homeGenreRoute(genre)) }
+                    },
                 ),
                 renderInputs = renderInputs,
                 listState = listState,
                 density = density,
             )
-            } // end Column(H17 stats card + H18 genre rail + content list)
         }
     }
 }
