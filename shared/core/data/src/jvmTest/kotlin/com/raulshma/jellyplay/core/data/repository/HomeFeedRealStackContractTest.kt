@@ -102,6 +102,7 @@ class HomeFeedRealStackContractTest {
         val continueWatchingResults = ArrayDeque<Result<List<MediaItem>>>()
         val continueReadingResults = ArrayDeque<Result<List<MediaItem>>>()
         val nextUpResults = ArrayDeque<Result<List<MediaItem>>>()
+        val upcomingResults = ArrayDeque<Result<List<MediaItem>>>()
         val foldersResults = ArrayDeque<Result<List<LibraryFolder>>>()
         val latestResults = ArrayDeque<Result<List<MediaItem>>>()
         val similarResults = ArrayDeque<Result<List<MediaItem>>>()
@@ -117,14 +118,17 @@ class HomeFeedRealStackContractTest {
             return queue.removeFirstOrNull() ?: Result.success(empty())
         }
 
-        override suspend fun getContinueWatching(limit: Int, classicRows: Boolean): Result<List<MediaItem>> =
-            resolve(continueWatchingResults, "cw:$limit:$classicRows") { emptyList() }
+        override suspend fun getContinueWatching(limit: Int, classicRows: Boolean, excludeActiveSessions: Boolean): Result<List<MediaItem>> =
+            resolve(continueWatchingResults, "cw:$limit:$classicRows:$excludeActiveSessions") { emptyList() }
 
         override suspend fun getContinueReading(limit: Int): Result<List<MediaItem>> =
             resolve(continueReadingResults, "cr:$limit") { emptyList() }
 
         override suspend fun getNextUp(limit: Int, enableRewatching: Boolean, maxDays: Int): Result<List<MediaItem>> =
             resolve(nextUpResults, "nu:$limit:$enableRewatching:$maxDays") { emptyList() }
+
+        override suspend fun getUpcoming(userId: String?, parentId: String?, limit: Int): Result<List<MediaItem>> =
+            resolve(upcomingResults, "upcoming:$userId:$parentId:$limit") { emptyList() }
 
         override suspend fun getLibraryFolders(): Result<List<LibraryFolder>> =
             resolve(foldersResults, "folders") { emptyList() }

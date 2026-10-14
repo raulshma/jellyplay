@@ -166,4 +166,6 @@
     <string name="settings_hide_top_header_on_scroll_off">L'en-tête reste visible</string>
     <string name="settings_next_up_hidden">Masqué de À suivre</string>
     <string name="settings_next_up_hidden_brief">Voir et restaurer les séries retirées de la rangée À suivre</string>
+    <string name="settings_hidden_libraries">Bibliothèques masquées</string>
+    <string name="settings_hidden_libraries_brief">Afficher et restaurer les bibliothèques masquées de la ligne Mes médias</string>
 </resources>

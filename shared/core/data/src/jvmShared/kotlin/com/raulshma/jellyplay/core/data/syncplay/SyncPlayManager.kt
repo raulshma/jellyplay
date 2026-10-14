@@ -379,6 +379,43 @@ class SyncPlayManager(
                 ?: groups.firstOrNull { it.groupName == groupName }
         }
 
+    // ── H19 home presence-chip join seam ─────────────────────────────────
+
+    /**
+     * The join-availability predicate behind the home presence chips: the
+     * visible group currently playing [itemId], or null. Pure so the test
+     * suite pins "group present vs absent" without any client doubles.
+     * A blank [itemId] never matches (a session without a resolvable
+     * now-playing id can't be joined).
+     */
+    fun groupPlayingItem(groups: List<SyncPlayGroup>, itemId: String): SyncPlayGroup? =
+        groups.firstOrNull { itemId.isNotBlank() && it.playingItemId == itemId }
+
+    /**
+     * One group-list read — the availability probe the home presence chips
+     * run per poll (the same read [createGroup] snapshots and
+     * [discoverCreatedGroup] polls; SyncPlay's group list is server-wide, so
+     * other users' groups are visible here).
+     */
+    suspend fun visibleGroups(): List<SyncPlayGroup> =
+        syncPlayApiClient.getSyncPlayGroups().getOrNull().orEmpty()
+
+    /**
+     * The H19 JOIN flow — the counterpart of [createGroup]'s create flow for
+     * a group that already exists: resolves the visible group playing
+     * [itemId] (via [groupPlayingItem]) and joins it with [joinGroup]. No
+     * matching group is a failure (never a silent no-op — the caller learns
+     * the join didn't happen); the joined group is the Result's value so the
+     * caller can read its snapshot (position, participants) for navigation.
+     */
+    suspend fun joinGroupPlayingItem(itemId: String): Result<SyncPlayGroup> {
+        val group = groupPlayingItem(visibleGroups(), itemId)
+            ?: return Result.failure(
+                IllegalStateException("No SyncPlay group is playing item $itemId"),
+            )
+        return joinGroup(group.groupId).map { group }
+    }
+
     private fun startPingReporting() {
         pingReportJob?.cancel()
         pingReportJob = scope.launch {

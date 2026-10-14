@@ -27,6 +27,8 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_quie
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_quiet_start_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_respect_system_dnd
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_respect_system_dnd_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_series_notifications
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_series_notifications_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_sound
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_sound_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_system_notification_settings
@@ -57,6 +59,8 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_quiet_star
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_quiet_start_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_respect_system_dnd_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_respect_system_dnd_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_series_notifications_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_series_notifications_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_system_notification_settings_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_system_notification_settings_title
 
@@ -260,6 +264,26 @@ internal object NotificationRows {
     )
 
     /**
+     * D12: the per-series new-episode notification management entry — opens
+     * the "Series notifications" sheet next to the per-library list (the same
+     * gate shape: notifications on + advanced). Android-only: no desktop
+     * notification stack exists.
+     */
+    val NotificationSeries = SettingsRow(
+        id = "notification_series",
+        icon = Tabler.Outline.Bell,
+        titleRes = Res.string.settings_series_notifications,
+        subtitleRes = Res.string.settings_series_notifications_subtitle,
+        searchTitleRes = Res.string.ss_series_notifications_title,
+        searchSubtitleRes = Res.string.ss_series_notifications_subtitle,
+        keywords = listOf("series", "new episodes", "notify", "bell", "per series", "sonarr", "notification"),
+        route = Route.NotificationSettings(),
+        isAdvanced = true,
+        platforms = ANDROID_ONLY_PLATFORMS,
+        gate = RowAdmission.All(RowAdmission.WhenOn(NotificationRows.NotificationsEnable.id), RowAdmission.Advanced),
+    )
+
+    /**
      * Every fused notifications row — the ratchet's vocabulary. A computed accessor
      * (not an initializer): the group row lists are top-level vals declared
      * later in this file, and an eager field would turn the
@@ -293,6 +317,7 @@ internal val NotificationRowsList: List<SettingsRow> = listOf(
     NotificationRows.NotificationNewEpisodes,
     NotificationRows.MaxPerCheck,
     NotificationRows.NotificationLibraries,
+    NotificationRows.NotificationSeries,
 )
 
 /**

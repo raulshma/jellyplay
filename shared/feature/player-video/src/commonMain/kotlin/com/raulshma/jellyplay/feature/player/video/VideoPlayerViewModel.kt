@@ -138,6 +138,13 @@ class VideoPlayerViewModel(
      * semantics work identically without DI.
      */
     videoQueue: VideoQueueController? = null,
+    /**
+     * D14 "Play (with pre-rolls)": the process-wide one-shot Cinema Mode
+     * override the detail screen arms; forwarded to the session, whose
+     * user-open funnel consumes it into the load request. Nullable like
+     * [videoQueue] so test graphs that don't wire it keep compiling.
+     */
+    cinemaModeOverride: com.raulshma.jellyplay.core.data.playback.CinemaModeOverride? = null,
     private val streamingSubtitleStore: com.raulshma.jellyplay.core.data.repository.StreamingSubtitleStore,
     private val imageUrlProvider: ImageUrlProvider,
     private val downloadRepository: DownloadRepository,
@@ -383,6 +390,7 @@ class VideoPlayerViewModel(
         platform = platform,
         stores = stores,
         videoQueue = videoQueue ?: VideoQueueController(),
+        cinemaModeOverride = cinemaModeOverride,
         imageUrlProvider = imageUrlProvider,
         itemPlaybackPreferenceRepository = itemPlaybackPreferenceRepository,
         castManager = castManager,

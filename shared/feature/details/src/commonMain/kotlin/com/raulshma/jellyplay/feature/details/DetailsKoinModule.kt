@@ -43,7 +43,7 @@ import org.koin.dsl.module
  */
 val detailsModule: Module = module {
     single<DetailStrings> { detailStrings() }
-    single { DetailStores(get(), get(), get(), get(), get()) }
+    single { DetailStores(get(), get(), get(), get(), get(), get()) }
     single { RemoteDiscoveryClients(get(), get(), get(), get()) }
     single { PlaylistTargets.Factory(get(), get()) }
 
@@ -56,6 +56,12 @@ val detailsModule: Module = module {
         CastAndCrewViewModel(
             mediaRepository = get(),
             imageUrlProvider = get(),
+        )
+    }
+    viewModel {
+        ReviewsViewModel(
+            mediaRepository = get(),
+            seerrRepository = get(),
         )
     }
     viewModel {

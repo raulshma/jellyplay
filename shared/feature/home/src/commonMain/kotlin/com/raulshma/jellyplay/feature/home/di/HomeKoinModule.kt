@@ -1,9 +1,15 @@
 package com.raulshma.jellyplay.feature.home.di
 
+import com.raulshma.jellyplay.feature.home.HomeGenreRailCache
+import com.raulshma.jellyplay.feature.home.HomeHeroVideoLoader
+import com.raulshma.jellyplay.feature.home.HomeClock
+import com.raulshma.jellyplay.feature.home.HomePresenceChipsController
+import com.raulshma.jellyplay.feature.home.HomeStatsCardLoader
 import com.raulshma.jellyplay.feature.home.HomeStores
 import com.raulshma.jellyplay.feature.home.HomeRefresherFactory
 import com.raulshma.jellyplay.feature.home.HomeSheetsFactory
 import com.raulshma.jellyplay.feature.home.HomeViewModel
+import com.raulshma.jellyplay.feature.home.MyMediaHiddenViewModel
 import com.raulshma.jellyplay.feature.home.NextUpExcludedViewModel
 import org.koin.compose.viewmodel.dsl.viewModel
 import org.koin.core.module.Module
@@ -60,6 +66,53 @@ val homeModule: Module = module {
             offlineRepository = get(),
         )
     }
+    // H17 stats card: the non-admin-safe primitives live on the user-scoped
+    // MediaInfoApiClient single; the richer admin+plugin upgrade reads the
+    // core:data AdminStatisticsRepository single (consumed as-is).
+    single {
+        HomeStatsCardLoader(
+            mediaInfoApiClient = get(),
+            adminStatisticsRepository = get(),
+        )
+    }
+    // H18 genre rail: the VM-scoped TTL cache over the user-scoped
+    // LibraryApiClient single, stamped by the same HomeClock bean the
+    // refresher's throttle/TTL math reads. A FACTORY (not a single) so each
+    // HomeViewModel instance owns its cache — a shared singleton would serve
+    // a previous user's genre list across user switches within the TTL.
+    factory {
+        HomeGenreRailCache(
+            libraryApiClient = get(),
+            clock = get(),
+        )
+    }
+    // H7 hero video billboard: the TTL-memoised clip probe (ThemeVideo →
+    // trailer-embed fallback) behind the hero's ambient video. A SINGLE
+    // (unlike the genre cache) because the hero composable has no VM identity
+    // to key a factory on — the user-switch staleness the factory avoids is
+    // handled inside the loader instead (the memo holds metadata only; stream
+    // URLs are re-shaped against the active session at serve time).
+    single {
+        HomeHeroVideoLoader(
+            libraryApiClient = get(),
+            playbackRepository = get(),
+            mediaRepository = get(),
+            seerrRepository = get(),
+            clock = { get<HomeClock>().nowEpochMillis() },
+        )
+    }
+    // H19 presence chips: the VM-scoped controller (probe-once /Sessions
+    // verdict + per-chip dismiss memory — see its KDoc), FACTORY for the
+    // same reason as HomeGenreRailCache above: the memory must die with the
+    // home session, never leak across user switches. Consumes the core:data
+    // AdminRepository single (getSessions) and the SyncPlayManager single
+    // (the join seam) as-is.
+    factory {
+        HomePresenceChipsController(
+            adminRepository = get(),
+            syncPlayManager = get(),
+        )
+    }
     viewModel {
         HomeViewModel(
             episodeCatalogue = get(),
@@ -74,6 +127,7 @@ val homeModule: Module = module {
             bookTocCacheRepository = get(),
             offlineModeManager = get(),
             newsletterTriggerManager = get(),
+            clock = get(),
             prefs = HomeStores(
                 homeDiscovery = get(),
                 appearance = get(),
@@ -90,6 +144,9 @@ val homeModule: Module = module {
             homeRefresherFactory = get(),
             syncStatusStateHolderFactory = get(),
             homeSheetsFactory = get(),
+            statsCardLoader = get(),
+            genreRailCache = get(),
+            presenceChips = get(),
         )
     }
     viewModel {
@@ -98,6 +155,13 @@ val homeModule: Module = module {
             editor = get(),
             mediaRepository = get(),
             imageUrlProvider = get(),
+        )
+    }
+    viewModel {
+        MyMediaHiddenViewModel(
+            homeDiscoveryStore = get(),
+            editor = get(),
+            mediaRepository = get(),
         )
     }
 }

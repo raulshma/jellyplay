@@ -28,9 +28,9 @@ class SpecDerivedSearchItemsTest {
     // ── Playback ────────────────────────────────────────────────────────
 
     @Test
-    fun `playback player list keeps its 41-row order and projects the spec faces`() {
+    fun `playback player list keeps its 42-row order and projects the spec faces`() {
         val items = PlaybackSettingsSearchItems
-        assertEquals(41, items.size)
+        assertEquals(42, items.size)
         assertEquals(PlaybackRows.PlayerEngine.id, items.first().id)
         assertEquals(PlaybackRows.RememberVolumePerContentType.id, items.last().id)
 
@@ -173,21 +173,39 @@ class SpecDerivedSearchItemsTest {
     }
 
     @Test
-    fun `appearance library list keeps its 8-row order with the five residuals in place`() {
+    fun `appearance library list keeps its 23-row order with the five residuals in place`() {
         // The home-discovery watch-state quartet moved to HomeCardsSearchItems
-        // (PS-4); the appearance side keeps the five library residuals plus
-        // the haptics / share-media / hide-search-history spec-backed trio.
+        // (PS-4); the appearance side keeps the library residuals, the
+        // haptics / share-media / hide-search-history spec-backed trio, and
+        // the D-series detail-display toggles the plan parks in Library &
+        // Cards (badges, stream-info, tagline, theme-music, external links,
+        // reviews, trailers, promoted actions, download progress, D6/D7/D18/D20).
         val items = AppearanceLibrarySearchItems
-        assertEquals(8, items.size)
+        assertEquals(23, items.size)
         assertEquals(
             listOf(
                 AppearanceRows.HideEpisodeThumbnails.id,
+                AppearanceRows.QualityBadges.id,
+                AppearanceRows.NewBadges.id,
                 AppearanceRows.CompactEpisodeList.id,
+                AppearanceRows.ShowEpisodeStreamBadges.id,
                 AppearanceRows.SkipSpecials.id,
                 AppearanceRows.ShowMissingEpisodes.id,
                 AppearanceRows.PreferLogos.id,
+                AppearanceRows.ShowTagline.id,
+                AppearanceRows.PlayThemeMusic.id,
                 AppearanceRows.HapticsEnabled.id,
                 AppearanceRows.ShowShareMedia.id,
+                AppearanceRows.ShowExternalLinks.id,
+                AppearanceRows.ShowReviews.id,
+                AppearanceRows.PreferLocalTrailers.id,
+                AppearanceRows.TrailerPreviewOnFocus.id,
+                AppearanceRows.ShowPromotedActionsLandscape.id,
+                AppearanceRows.ShowDownloadProgress.id,
+                AppearanceRows.ShowUpcomingStrip.id,
+                AppearanceRows.ShowMoreInCollection.id,
+                AppearanceRows.ShowFilmographyRoles.id,
+                AppearanceRows.ShowFrequentCostars.id,
                 AppearanceRows.HideSearchHistory.id,
             ),
             items.map { it.id },
@@ -215,12 +233,20 @@ class SpecDerivedSearchItemsTest {
 
     @Test
     fun `home lists keep their sizes and derive their routes from the spec kinds`() {
-        assertEquals(10, HomeDisplaySearchItems.size)
+        // The display group grew by the H7 hero-video pair, H11/H12 badge
+        // rows' new-section/continue-watching knobs, the H17 stats card, the
+        // H18 genre rail and the H19 presence chips (17 rows), plus the H5
+        // hidden-libraries restore row (18).
+        assertEquals(18, HomeDisplaySearchItems.size)
         assertEquals(HomeRows.HomeMode.id, HomeDisplaySearchItems.first().id)
         assertEquals(HomeRows.UnhideCw.id, HomeDisplaySearchItems.last().id)
-        assertEquals(3, HomeNextUpSearchItems.size)
-        assertEquals(4, HomeLayoutSearchItems.size)
-        assertEquals(4, HomeCardsSearchItems.size)
+        // H6's exclude-active-sessions toggle joined the Next Up quartet.
+        assertEquals(4, HomeNextUpSearchItems.size)
+        // H14's layout auto-push row joined the layout drill-ins.
+        assertEquals(5, HomeLayoutSearchItems.size)
+        // The cards group is the PS-4 moved quartet plus the home-wave
+        // badge/spoiler toggles and the TV-gated trickplay fork (8 rows).
+        assertEquals(8, HomeCardsSearchItems.size)
 
         // The drill-in rows resolve their routes through the spec route kinds.
         assertIs<Route.PinnedHomeSections>(HomeLayoutSearchItems.single { it.id == HomeRows.PinnedHomeSections.id }.route)
@@ -228,6 +254,7 @@ class SpecDerivedSearchItemsTest {
         assertIs<Route.LibraryHomeSections>(HomeLayoutSearchItems.single { it.id == HomeRows.ConfigureLibraries.id }.route)
         assertIs<Route.DiscoverRows>(HomeLayoutSearchItems.single { it.id == HomeRows.DiscoverRows.id }.route)
         assertIs<Route.NextUpExcluded>(HomeDisplaySearchItems.single { it.id == HomeRows.NextUpHidden.id }.route)
+        assertIs<Route.MyMediaHidden>(HomeDisplaySearchItems.single { it.id == HomeRows.HiddenLibraries.id }.route)
         // The cards group (the PS-4 moved quartet) deep-links into the hub…
         assertIs<Route.HomeSettings>(HomeCardsSearchItems.first().route)
         // …and every home row renders unconditionally (no advanced flags).

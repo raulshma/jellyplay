@@ -1,9 +1,11 @@
 package com.raulshma.jellyplay.core.network.api
 
 import com.raulshma.jellyplay.core.model.seerr.SeerrRelatedVideo
+import com.raulshma.jellyplay.core.model.seerr.TmdbDetails
 import com.raulshma.jellyplay.core.model.seerr.TmdbReview
 import com.raulshma.jellyplay.core.network.seerr.arrSeerrWireJson
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.json.Json
 
 /**
@@ -38,9 +40,27 @@ internal data class TmdbVideoWire(
     val site: String? = null,
 )
 
+/** `TmdbApiClientImpl.TmdbDetailsResponse`. */
+@Serializable
+internal data class TmdbDetailsResponseWire(
+    val overview: String? = null,
+    @SerialName("vote_average") val voteAverage: Double? = null,
+    @SerialName("vote_count") val voteCount: Int? = null,
+)
+
 /** `parseTmdbReviews` (jvmShared): parses a TMDB `/reviews` response body. */
 internal fun parseTmdbReviewsWire(text: String): List<TmdbReview> =
     arrSeerrWireJson.decodeFromString<TmdbReviewsResponseWire>(text).results
+
+/** `parseTmdbDetails` (jvmShared): parses a TMDB `/3/{movie|tv}/{id}` details body. */
+internal fun parseTmdbDetailsWire(text: String): TmdbDetails {
+    val dto = arrSeerrWireJson.decodeFromString<TmdbDetailsResponseWire>(text)
+    return TmdbDetails(
+        voteAverage = dto.voteAverage,
+        voteCount = dto.voteCount,
+        overview = dto.overview,
+    )
+}
 
 /**
  * `TmdbApiClientImpl.getVideos`' result mapping, verbatim: the watch URL is

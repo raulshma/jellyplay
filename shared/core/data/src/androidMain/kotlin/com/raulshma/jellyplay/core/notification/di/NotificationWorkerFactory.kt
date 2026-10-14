@@ -24,11 +24,13 @@ class NotificationWorkerFactory : WorkerFactory() {
             NewMediaCheckWorker::class.simpleName -> NewMediaCheckWorker(
                 context, workerParameters,
                 mediaRepository = koin().get(),
+                seriesNotificationReads = koin().get(),
                 seenMediaRepository = koin().get(),
                 notificationStore = koin().get(),
                 dispatcher = koin().get(),
                 scheduler = koin().get(),
                 timeSource = koin().get(),
+                arrRepository = koin().get(),
             )
             else -> null
         }

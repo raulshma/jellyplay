@@ -60,6 +60,7 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_quie
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_quiet_hours_start
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_quiet_start
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_respect_system_dnd
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_series_notifications_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_sound
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_system_notification_settings
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_vibrate
@@ -81,6 +82,8 @@ sealed class NotificationSettingsDialog {
     object QuietStartPicker : NotificationSettingsDialog()
     object QuietEndPicker : NotificationSettingsDialog()
     object LibrariesPicker : NotificationSettingsDialog()
+    /** D12: the per-series new-episode notification management sheet. */
+    object SeriesNotifications : NotificationSettingsDialog()
 }
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
@@ -307,6 +310,21 @@ fun NotificationSettingsScreen(
                                 highlighted = highlightSettingId == NotificationRows.NotificationLibraries.id,
                                 onClick = { activeDialog = NotificationSettingsDialog.LibrariesPicker },
                             )
+                            // D12: the per-series counterpart of the libraries
+                            // list — same link pattern (dialog state → sheet),
+                            // placed directly beside it.
+                            if (SettingsScreenGroups.notifications.rowAdmitted(NotificationRows.NotificationSeries.id, rowFlags)) {
+                                SettingListItem(
+                                    icon = rowIcon(NotificationRows.NotificationSeries),
+                                    title = rowTitle(NotificationRows.NotificationSeries),
+                                    subtitle = stringResource(
+                                        Res.string.settings_series_notifications_subtitle,
+                                        notifPrefs.seriesConfigs.size,
+                                    ),
+                                    highlighted = highlightSettingId == NotificationRows.NotificationSeries.id,
+                                    onClick = { activeDialog = NotificationSettingsDialog.SeriesNotifications },
+                                )
+                            }
                         }
                     }
                     }
@@ -406,6 +424,13 @@ fun NotificationSettingsScreen(
                 ) { Text(stringResource(Res.string.settings_done)) }
             }
         }
+    }
+
+    if (activeDialog is NotificationSettingsDialog.SeriesNotifications) {
+        SeriesNotificationsSheet(
+            onDismiss = { activeDialog = NotificationSettingsDialog.None },
+            viewModel = viewModel,
+        )
     }
 
 }

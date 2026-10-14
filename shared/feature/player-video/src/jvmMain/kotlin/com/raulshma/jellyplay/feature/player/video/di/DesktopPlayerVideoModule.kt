@@ -67,6 +67,9 @@ val desktopPlayerVideoModule: Module = module {
     single<ActivePlayerController> { DesktopActivePlayerController(get()) }
     single<PipController> { NoOpPipController() }
     single<PlayerVideoMessageBus> { NoOpPlayerVideoMessageBus }
+    // D14 "Play (with pre-rolls)": the one-shot Cinema Mode override the
+    // detail screen arms before the play dispatch (core:player-contract).
+    single { com.raulshma.jellyplay.core.data.playback.CinemaModeOverride() }
     single<FontProvider> { NoOpFontProvider }
     single<SubtitlePreviewRepository> { NoOpSubtitlePreviewRepository }
     viewModel { params ->
@@ -79,6 +82,7 @@ val desktopPlayerVideoModule: Module = module {
             playbackIdentity = get(),
             subtitleProviderRepository = get(),
             videoQueue = get(),
+            cinemaModeOverride = get(),
             streamingSubtitleStore = get(),
             imageUrlProvider = get(),
             downloadRepository = get(),

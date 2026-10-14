@@ -12,19 +12,43 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.Res
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_classic_rows
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_configure_libraries
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_configure_libraries_desc
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_anti_spoiler_home
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_anti_spoiler_home_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_continue_watching_tap
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_continue_watching_tap_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discover_rows
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discover_rows_helper
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_exclude_active_sessions
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_exclude_active_sessions_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hidden_libraries
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hidden_libraries_brief
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hide_top_header_on_scroll
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hide_watched_items
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hide_watched_items_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_backdrop
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_focus_backdrop
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_focus_backdrop_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_genre_rail
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_genre_rail_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_hero_video
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_hero_video_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_hero_video_tv
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_hero_video_tv_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_layout_autopush
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_layout_autopush_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_layout_presets
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_layout_presets_brief
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_mode
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_presence_chips
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_presence_chips_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_stats_card
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_stats_card_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_trickplay_preview
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_trickplay_preview_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_merge_continue_next_up
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_new_section_announcements
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_new_section_announcements_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_next_up_hidden
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_next_up_hidden_brief
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_next_up_time_window
@@ -36,6 +60,10 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_external_ratings
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_external_ratings_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_hero_section
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_new_badges
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_new_badges_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_quality_badges
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_quality_badges_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_settings_in_home_search
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_unwatched_badge
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_unwatched_badge_subtitle
@@ -65,6 +93,8 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_home_layou
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_home_mode_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_home_mode_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_merge_continue_next_up_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_hidden_libraries_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_hidden_libraries_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_merge_continue_next_up_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_next_up_hidden_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_next_up_hidden_title
@@ -106,7 +136,9 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_unhide_cw_
  */
 internal object HomeRows {
 
-    // -- The "Home Display" group's ten rows, in catalog order (every row spec-backed). --
+    // -- The "Home Display" group's rows (the display toggles, the home-wave
+    //    H7/H10/H17/H18/H19/H21 features, and the CW/Next-Up curation trio),
+    //    in catalog order (every row spec-backed). --
 
     val HomeMode = SettingsRow(
         id = "home_mode",
@@ -130,6 +162,70 @@ internal object HomeRows {
         titleRes = Res.string.settings_home_backdrop,
         searchTitleRes = Res.string.ss_home_backdrop_title,
         searchSubtitleRes = Res.string.ss_home_backdrop_subtitle,
+    )
+
+    /**
+     * H7 video hero billboard (touch/default form factors): muted looping
+     * ThemeVideo → trailer-embed fallback on dwell. Default off. The search
+     * title folds to the screen title (the one-key family: the spec's
+     * titleKey names the `settings_*` resource — no ss_* twin).
+     */
+    val HeroVideo = SettingsRow(
+        id = "home_hero_video",
+        icon = Tabler.Outline.Video,
+        titleRes = Res.string.settings_home_hero_video,
+        searchSubtitleRes = Res.string.settings_home_hero_video_subtitle,
+    )
+
+    /** H7's TV form-factor twin — same clip pipeline, separate switch. */
+    val HeroVideoTv = SettingsRow(
+        id = "home_hero_video_tv",
+        icon = Tabler.Outline.DeviceTv,
+        titleRes = Res.string.settings_home_hero_video_tv,
+        searchSubtitleRes = Res.string.settings_home_hero_video_tv_subtitle,
+    )
+
+    /**
+     * H10 focus-driven ambient backdrop (Android TV): the focused card
+     * repaints the ambient backdrop. Default off.
+     */
+    val FocusBackdrop = SettingsRow(
+        id = "home_focus_backdrop",
+        icon = Tabler.Outline.Focus,
+        titleRes = Res.string.settings_home_focus_backdrop,
+        searchSubtitleRes = Res.string.settings_home_focus_backdrop_subtitle,
+    )
+
+    /** H17 personal stats card ("Your library week") between hero and the first row. Default off. */
+    val StatsCard = SettingsRow(
+        id = "home_stats_card",
+        icon = Tabler.Outline.ChartBar,
+        titleRes = Res.string.settings_home_stats_card,
+        searchSubtitleRes = Res.string.settings_home_stats_card_subtitle,
+    )
+
+    /** H18 genre quick-access rail (chips above the first row). Default off. */
+    val GenreRail = SettingsRow(
+        id = "home_genre_rail",
+        icon = Tabler.Outline.Category,
+        titleRes = Res.string.settings_home_genre_rail,
+        searchSubtitleRes = Res.string.settings_home_genre_rail_subtitle,
+    )
+
+    /** H19 watch-party / presence chips ("Alex is watching Dune — join"). Default off; admin-gated. */
+    val PresenceChips = SettingsRow(
+        id = "home_presence_chips",
+        icon = Tabler.Outline.Users,
+        titleRes = Res.string.settings_home_presence_chips,
+        searchSubtitleRes = Res.string.settings_home_presence_chips_subtitle,
+    )
+
+    /** H21 new-section announcement toast ("New on Home: … — Customize"). Default on. */
+    val NewSectionAnnouncements = SettingsRow(
+        id = "home_new_section_announcements",
+        icon = Tabler.Outline.Speakerphone,
+        titleRes = Res.string.settings_new_section_announcements,
+        searchSubtitleRes = Res.string.settings_new_section_announcements_subtitle,
     )
 
     val ClockHome = SettingsRow(
@@ -191,6 +287,20 @@ internal object HomeRows {
         gate = RowAdmission.ContentGated,
     )
 
+    /**
+     * H5's restore surface: libraries hidden from the My Media tiles row (the
+     * per-library config sheet's hide action), with per-library and bulk
+     * restore behind the Route.MyMediaHidden drill-in.
+     */
+    val HiddenLibraries = SettingsRow(
+        id = "hidden_libraries",
+        icon = Tabler.Outline.Folders,
+        titleRes = Res.string.settings_hidden_libraries,
+        subtitleRes = Res.string.settings_hidden_libraries_brief,
+        searchTitleRes = Res.string.ss_hidden_libraries_title,
+        searchSubtitleRes = Res.string.ss_hidden_libraries_subtitle,
+    )
+
     // -- The "Continue Watching & Next Up" group's three rows, in catalog order. --
 
     val MergeContinueNextUp = SettingsRow(
@@ -218,7 +328,19 @@ internal object HomeRows {
         searchSubtitleRes = Res.string.ss_next_up_rewatching_subtitle,
     )
 
-    // -- The "Home Screen Layout" group's four drill-in rows, in catalog order. --
+    /**
+     * H6 active-session-aware Continue Watching: don't offer "continue" for an
+     * item currently playing on another device. Default off.
+     */
+    val ExcludeActiveSessions = SettingsRow(
+        id = "home_cw_exclude_active_sessions",
+        icon = Tabler.Outline.Ban,
+        titleRes = Res.string.settings_exclude_active_sessions,
+        searchSubtitleRes = Res.string.settings_exclude_active_sessions_subtitle,
+    )
+
+    // -- The "Home Screen Layout" group's four drill-in rows + the H20
+    //    auto-push toggle, in catalog order. --
 
     val PinnedHomeSections = SettingsRow(
         id = "pinned_home_sections",
@@ -256,7 +378,16 @@ internal object HomeRows {
         searchSubtitleRes = Res.string.ss_discover_rows_subtitle,
     )
 
-    // -- The "Cards" group's four rows (the PS-4 moved card-display quartet), in catalog order. --
+    /** H20 layout DisplayPreferences auto-push (after any layout-writing command, debounced). Default off. */
+    val LayoutAutopush = SettingsRow(
+        id = "home_layout_autopush",
+        icon = Tabler.Outline.CloudUpload,
+        titleRes = Res.string.settings_home_layout_autopush,
+        searchSubtitleRes = Res.string.settings_home_layout_autopush_subtitle,
+    )
+
+    // -- The "Cards" group's rows: the PS-4 moved card-display quartet plus
+    //    the home-wave badge/spoiler/trickplay toggles, in catalog order. --
 
     val ShowUnwatchedBadge = SettingsRow(
         id = "show_unwatched_badge",
@@ -294,6 +425,46 @@ internal object HomeRows {
         searchSubtitleRes = Res.string.ss_show_external_ratings_subtitle,
     )
 
+    /** H11 quality badges (4K / HDR / DV / Atmos) on poster + wide cards. Default on. */
+    val ShowQualityBadges = SettingsRow(
+        id = "show_quality_badges",
+        icon = Tabler.Outline.Badge4k,
+        titleRes = Res.string.settings_show_quality_badges,
+        subtitleRes = Res.string.settings_show_quality_badges_subtitle,
+        searchSubtitleRes = Res.string.settings_show_quality_badges_subtitle,
+    )
+
+    /** H12 "NEW" badges for items added since the last home visit. Default on. */
+    val ShowNewBadges = SettingsRow(
+        id = "show_new_badges",
+        icon = Tabler.Outline.Sparkles,
+        titleRes = Res.string.settings_show_new_badges,
+        subtitleRes = Res.string.settings_show_new_badges_subtitle,
+        searchSubtitleRes = Res.string.settings_show_new_badges_subtitle,
+    )
+
+    /**
+     * H13 trickplay preview on wide (resume/next-up) cards — TV-only v1: the
+     * row renders only on the TV form factor ([RowAdmission.Tv]; the spec's
+     * ANDROID_ONLY tag keeps the search hit off desktop). Default on.
+     */
+    val TrickplayPreview = SettingsRow(
+        id = "home_trickplay_preview",
+        icon = Tabler.Outline.Movie,
+        titleRes = Res.string.settings_home_trickplay_preview,
+        searchSubtitleRes = Res.string.settings_home_trickplay_preview_subtitle,
+        gate = RowAdmission.Tv,
+    )
+
+    /** H15 anti-spoiler home master switch — force-hides watch-state spoilers across home. Default off. */
+    val AntiSpoilerHome = SettingsRow(
+        id = "anti_spoiler_home",
+        icon = Tabler.Outline.EyeOff,
+        titleRes = Res.string.settings_anti_spoiler_home,
+        subtitleRes = Res.string.settings_anti_spoiler_home_subtitle,
+        searchSubtitleRes = Res.string.settings_anti_spoiler_home_subtitle,
+    )
+
     /**
      * Every fused home row — the ratchet's vocabulary. A computed accessor
      * (not an initializer): the group row lists are top-level vals declared
@@ -313,6 +484,7 @@ internal object HomeRows {
 private val searchRoutes: Map<String, Route> = mapOf(
     HomeDiscoveryPreferenceSpecs.ROUTE_HOME_SETTINGS to Route.HomeSettings(),
     HomeDiscoveryPreferenceSpecs.ROUTE_NEXT_UP_EXCLUDED to Route.NextUpExcluded,
+    HomeDiscoveryPreferenceSpecs.ROUTE_MY_MEDIA_HIDDEN to Route.MyMediaHidden,
     HomeDiscoveryPreferenceSpecs.ROUTE_PINNED_HOME_SECTIONS to Route.PinnedHomeSections(),
     HomeDiscoveryPreferenceSpecs.ROUTE_HOME_LAYOUT_PRESETS to Route.HomeLayoutPresets(),
     HomeDiscoveryPreferenceSpecs.ROUTE_LIBRARY_HOME_SECTIONS to Route.LibraryHomeSections(),
@@ -326,13 +498,21 @@ private val homeCategory = CoreUiRes.string.ss_cat_home
 internal val HomeDisplayRows: List<SettingsRow> = listOf(
     HomeRows.HomeMode,
     HomeRows.HeroSection,
+    HomeRows.HeroVideo,
+    HomeRows.HeroVideoTv,
     HomeRows.HomeBackdrop,
+    HomeRows.FocusBackdrop,
     HomeRows.ClockHome,
     HomeRows.HideTopHeader,
     HomeRows.SettingsInHomeSearch,
+    HomeRows.StatsCard,
+    HomeRows.GenreRail,
+    HomeRows.PresenceChips,
+    HomeRows.NewSectionAnnouncements,
     HomeRows.ContinueWatchingClick,
     HomeRows.ClassicRows,
     HomeRows.NextUpHidden,
+    HomeRows.HiddenLibraries,
     HomeRows.UnhideCw,
 )
 
@@ -340,6 +520,7 @@ internal val HomeNextUpRows: List<SettingsRow> = listOf(
     HomeRows.MergeContinueNextUp,
     HomeRows.NextUpMaxDays,
     HomeRows.NextUpRewatching,
+    HomeRows.ExcludeActiveSessions,
 )
 
 internal val HomeLayoutRows: List<SettingsRow> = listOf(
@@ -347,6 +528,7 @@ internal val HomeLayoutRows: List<SettingsRow> = listOf(
     HomeRows.HomeLayoutPresets,
     HomeRows.ConfigureLibraries,
     HomeRows.DiscoverRows,
+    HomeRows.LayoutAutopush,
 )
 
 internal val HomeCardsRows: List<SettingsRow> = listOf(
@@ -354,6 +536,10 @@ internal val HomeCardsRows: List<SettingsRow> = listOf(
     HomeRows.ShowWatchedCheckmark,
     HomeRows.HideWatchedItems,
     HomeRows.ShowExternalRatings,
+    HomeRows.ShowQualityBadges,
+    HomeRows.ShowNewBadges,
+    HomeRows.TrickplayPreview,
+    HomeRows.AntiSpoilerHome,
 )
 
 /**

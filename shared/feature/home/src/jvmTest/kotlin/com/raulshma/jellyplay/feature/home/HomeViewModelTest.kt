@@ -45,6 +45,7 @@ import com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore
 import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.HomeSectionsResult
+import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.NetworkStatus
@@ -76,6 +77,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
@@ -204,6 +206,16 @@ class HomeViewModelTest {
     private val userFlow = MutableStateFlow<UserInfo?>(null)
 
     /**
+     * H17/H18/H19 loader doubles — relaxed mocks (the default pref state is
+     * off, so the VM's collectors never fire for them) with defensive
+     * null/empty stubs so an unexpected trigger can't throw from an
+     * unstubbed suspend.
+     */
+    private val statsCardLoader: HomeStatsCardLoader = mockk(relaxed = true)
+    private val genreRailCache: HomeGenreRailCache = mockk(relaxed = true)
+    private val presenceChips: HomePresenceChipsController = mockk(relaxed = true)
+
+    /**
      * Identity plumbing for the VM's HomeSession collector (the single
      * identity detector): a mock AuthApiClient exposes a real atomic
      * session flow, and the shared real [HomeSession] runs on the rule's test
@@ -296,6 +308,9 @@ class HomeViewModelTest {
         every { offlineRepository.getOfflineEpisodes() } returns flowOf(emptyList())
         coEvery { homeFeed.getOfflineHomeLayout() } returns null
         every { newsletterTriggerManager.shouldShowBanner() } returns flowOf(false)
+        coEvery { statsCardLoader.load(any(), any()) } returns null
+        coEvery { genreRailCache.genres(any(), any()) } returns emptyList()
+        coEvery { presenceChips.refresh(any()) } returns emptyList()
     }
 
     @AfterTest
@@ -315,6 +330,7 @@ class HomeViewModelTest {
         offlineRepository = offlineRepository,
         offlineModeManager = offlineModeManager,
         newsletterTriggerManager = newsletterTriggerManager,
+        clock = fakeTimeSource,
         prefs = HomeStores(
             homeDiscovery = homeDiscoveryStore,
             appearance = appearanceStore,
@@ -355,6 +371,9 @@ class HomeViewModelTest {
             userMessageBus = userMessageBus,
             offlineRepository = offlineRepository,
         ),
+        statsCardLoader = statsCardLoader,
+        genreRailCache = genreRailCache,
+        presenceChips = presenceChips,
     )
 
     /**
@@ -465,6 +484,85 @@ class HomeViewModelTest {
         runCurrent()
 
         assertTrue(viewModel.uiState.value.sections.isEmpty())
+    }
+
+    // ── H17 stats card / H18 genre rail / H15 anti-spoiler toggle ──────────
+
+    @Test
+    fun statsCard_loadsOnlyWhenPrefOn_andMirrorsLoaderResult() = vmTest {
+        coEvery {
+            homeFeed.getHomeSections(any(), any<Boolean>())
+        } returns Result.success(HomeSectionsResult(sections = listOf(section(HomeSectionType.LATEST_MEDIA))))
+        val card = HomeStatsCardData(playedCount = 5, unplayedCount = 6, approximateWatchMinutes = 60)
+        coEvery { statsCardLoader.load("u1", false) } returns card
+        homeDiscoveryFlow.value = HomeDiscoverySlice(homeStatsCard = true)
+        viewModel = buildViewModel()
+        signIn("u1")
+        runCurrent()
+
+        assertEquals(card, viewModel.uiState.value.statsCard)
+        assertTrue(viewModel.uiState.value.statsCardEnabled)
+
+        // Pref off → the card folds away with the next snapshot.
+        homeDiscoveryFlow.value = HomeDiscoverySlice(homeStatsCard = false)
+        runCurrent()
+        assertNull(viewModel.uiState.value.statsCard)
+    }
+
+    @Test
+    fun statsCard_loaderFailure_hidesTheCardSilently() = vmTest {
+        // Defensive harness stub already answers null (the loader's failure
+        // shape); the VM must mirror that as a hidden card, no error state.
+        // signIn drives a user-switch refresh, so the feed read needs its
+        // explicit stub like every other signing-in test (the relaxed mock's
+        // generic Result answer is not a real HomeSectionsResult).
+        coEvery {
+            homeFeed.getHomeSections(any(), any<Boolean>())
+        } returns Result.success(HomeSectionsResult(sections = emptyList()))
+        homeDiscoveryFlow.value = HomeDiscoverySlice(homeStatsCard = true)
+        viewModel = buildViewModel()
+        signIn("u1")
+        runCurrent()
+
+        assertNull(viewModel.uiState.value.statsCard)
+        assertNull(viewModel.uiState.value.error)
+    }
+
+    @Test
+    fun genreRail_loadsChipsWhenOnlineWithSections_andClearsOffline() = vmTest {
+        coEvery {
+            homeFeed.getHomeSections(any(), any<Boolean>())
+        } returns Result.success(
+            HomeSectionsResult(sections = listOf(section(HomeSectionType.LATEST_MEDIA, items = listOf(item("i1"))))),
+        )
+        val chips = listOf(Genre("g1", "Drama"), Genre("g2", "Action"))
+        coEvery { genreRailCache.genres(any(), any()) } returns chips
+        homeDiscoveryFlow.value = HomeDiscoverySlice(homeGenreRail = true)
+        viewModel = buildViewModel()
+        signIn("u1")
+        runCurrent()
+
+        assertTrue(viewModel.uiState.value.genreRailEnabled)
+        assertEquals(chips, viewModel.uiState.value.genreChips)
+
+        // Online-only suppression: the offline emission clears the chips.
+        offlineModeFlow.value = OfflineMode.OFFLINE_MANUAL
+        runCurrent()
+        assertTrue(viewModel.uiState.value.genreChips.isEmpty())
+    }
+
+    @Test
+    fun setAntiSpoilerHome_writesTheStoreCommand() = vmTest {
+        viewModel = buildViewModel()
+
+        viewModel.onEvent(HomeUiEvent.SetAntiSpoilerHome(true))
+        runCurrent()
+
+        coVerify { homeDiscoveryStore.setAntiSpoilerHome(true) }
+
+        viewModel.onEvent(HomeUiEvent.SetAntiSpoilerHome(false))
+        runCurrent()
+        coVerify { homeDiscoveryStore.setAntiSpoilerHome(false) }
     }
 
     @Test
@@ -607,6 +705,168 @@ class HomeViewModelTest {
         runCurrent()
 
         assertTrue(viewModel.uiState.value.homeBackdropEnabled)
+    }
+
+    // ── H21: new-section announcement (announce-once state machine) ─────────
+
+    /** Gate-state slice: the read union contributed sections at stored version 3. */
+    private fun announcedSlice(announcedVersion: Int = 0) = HomeDiscoverySlice(
+        homeNewSectionAnnouncements = true,
+        enabledHomeSectionTypesVersion = 3,
+        sectionsAddedByUnion = setOf(HomeSectionType.DISCOVER, HomeSectionType.CONTINUE_READING),
+        homeAnnouncedVersion = announcedVersion,
+    )
+
+    @Test
+    fun firstPrefsLoad_announcesOnce_andTheButtonTapStampsTheVersion() = vmTest {
+        val announcements = mutableListOf<HomeSectionAnnouncement>()
+        viewModel = buildViewModel()
+        backgroundScope.launch { viewModel.sectionAnnouncements.collect { announcements += it } }
+        runCurrent()
+
+        homeDiscoveryFlow.value = announcedSlice()
+        runCurrent()
+
+        // Sections in enum order (CONTINUE_READING precedes DISCOVER); the
+        // display text is the screen's job now — the VM emits the structural
+        // event only.
+        assertEquals(1, announcements.size, "the gate announces exactly once per VM lifetime")
+        assertEquals(
+            listOf(HomeSectionType.CONTINUE_READING, HomeSectionType.DISCOVER),
+            announcements[0].addedSections,
+        )
+
+        // The snackbar's Customize tap: the stamp is persisted …
+        announcements[0].stampAnnounced()
+        runCurrent()
+        coVerify { homeDiscoveryStore.setHomeAnnouncedVersion(3) }
+
+        // … and the durable half of announce-once: the stamped re-emission
+        // (any later prefs change re-derives the slice) stays silent.
+        homeDiscoveryFlow.value = announcedSlice(announcedVersion = 3)
+        runCurrent()
+        assertEquals(1, announcements.size, "a stamped version must never announce again")
+    }
+
+    @Test
+    fun announcementDismissal_stampsTheVersionToo() = vmTest {
+        val announcements = mutableListOf<HomeSectionAnnouncement>()
+        viewModel = buildViewModel()
+        backgroundScope.launch { viewModel.sectionAnnouncements.collect { announcements += it } }
+
+        homeDiscoveryFlow.value = announcedSlice()
+        runCurrent()
+        assertEquals(1, announcements.size)
+
+        // Timeout/swipe dismissal — the OTHER terminal outcome; the stamp must
+        // land through it as well, or the snackbar would re-announce forever.
+        announcements[0].stampAnnounced()
+        runCurrent()
+        coVerify { homeDiscoveryStore.setHomeAnnouncedVersion(3) }
+
+        homeDiscoveryFlow.value = announcedSlice(announcedVersion = 3)
+        runCurrent()
+        assertEquals(1, announcements.size)
+    }
+
+    @Test
+    fun announcementsToggledOff_neverAnnounceOrStamp() = vmTest {
+        val announcements = mutableListOf<HomeSectionAnnouncement>()
+        viewModel = buildViewModel()
+        backgroundScope.launch { viewModel.sectionAnnouncements.collect { announcements += it } }
+
+        homeDiscoveryFlow.value = announcedSlice().copy(homeNewSectionAnnouncements = false)
+        runCurrent()
+
+        assertTrue(announcements.isEmpty(), "the master toggle off suppresses the announcement entirely")
+        coVerify(exactly = 0) { homeDiscoveryStore.setHomeAnnouncedVersion(any()) }
+    }
+
+    // ── H12: visit memory (dwell stamp + the previous-visit mirror) ─────────
+
+    /** Sections-ready stub: one rendered row, loader down after the fetch. */
+    private fun stubReadyHome() {
+        coEvery {
+            homeFeed.getHomeSections(any(), any<Boolean>())
+        } returns Result.success(
+            HomeSectionsResult(sections = listOf(section(HomeSectionType.LATEST_MEDIA))),
+        )
+    }
+
+    @Test
+    fun previousVisitStamp_isFoldedOnce_andSurvivesThisSessionsOwnStamp() = vmTest {
+        // A previous session left a stamp; the badge mirror must carry THAT
+        // value for the whole session — the dwell timer's own write below
+        // may never flow back into the comparison input.
+        homeDiscoveryFlow.value = HomeDiscoverySlice(homeLastVisitEpochMs = 42L)
+        stubReadyHome()
+        viewModel = buildViewModel()
+        signIn("u1")
+        runCurrent()
+
+        assertEquals(42L, viewModel.uiState.value.homeLastVisitEpochMs)
+
+        fakeTimeSource.nowMs = 5_000L
+        advanceTimeBy(HOME_VISIT_STAMP_DWELL_MS)
+        runCurrent()
+
+        coVerify(exactly = 1) { homeDiscoveryStore.setHomeLastVisitEpochMs(5_000L) }
+        assertEquals(
+            42L,
+            viewModel.uiState.value.homeLastVisitEpochMs,
+            "the badge predicate keeps the PREVIOUS visit's stamp",
+        )
+    }
+
+    @Test
+    fun dwellTimer_stampsOnlyAfterContentStaysReadyForTheDwell() = vmTest {
+        stubReadyHome()
+        viewModel = buildViewModel()
+        signIn("u1")
+
+        // Not yet dwelled: no stamp at ready-time …
+        runCurrent()
+        coVerify(exactly = 0) { homeDiscoveryStore.setHomeLastVisitEpochMs(any()) }
+
+        // … and the stamp lands exactly when the dwell elapses, reading the
+        // injected clock.
+        fakeTimeSource.nowMs = 9_000L
+        advanceTimeBy(HOME_VISIT_STAMP_DWELL_MS)
+        runCurrent()
+        coVerify(exactly = 1) { homeDiscoveryStore.setHomeLastVisitEpochMs(9_000L) }
+    }
+
+    @Test
+    fun emptyHome_neverStamps() = vmTest {
+        coEvery {
+            homeFeed.getHomeSections(any(), any<Boolean>())
+        } returns Result.success(HomeSectionsResult(sections = emptyList()))
+        viewModel = buildViewModel()
+        signIn("u1")
+        runCurrent()
+
+        advanceTimeBy(HOME_VISIT_STAMP_DWELL_MS * 2)
+        runCurrent()
+
+        coVerify(exactly = 0) { homeDiscoveryStore.setHomeLastVisitEpochMs(any()) }
+    }
+
+    @Test
+    fun dwellTimer_stampsAtMostOncePerSession() = vmTest {
+        stubReadyHome()
+        viewModel = buildViewModel()
+        signIn("u1")
+        runCurrent()
+
+        fakeTimeSource.nowMs = 5_000L
+        advanceTimeBy(HOME_VISIT_STAMP_DWELL_MS)
+        runCurrent()
+        // Content refreshes / re-emissions must not re-arm the timer.
+        fakeTimeSource.nowMs = 60_000L
+        advanceTimeBy(HOME_VISIT_STAMP_DWELL_MS * 3)
+        runCurrent()
+
+        coVerify(exactly = 1) { homeDiscoveryStore.setHomeLastVisitEpochMs(any()) }
     }
 
     @Test

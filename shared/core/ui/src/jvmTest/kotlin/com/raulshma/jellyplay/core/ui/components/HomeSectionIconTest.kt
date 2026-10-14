@@ -3,10 +3,12 @@ package com.raulshma.jellyplay.core.ui.components
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Book
 import com.composables.icons.tabler.outline.Bookmark
+import com.composables.icons.tabler.outline.CalendarTime
 import com.composables.icons.tabler.outline.Clock
 import com.composables.icons.tabler.outline.Compass
 import com.composables.icons.tabler.outline.DeviceTv
 import com.composables.icons.tabler.outline.Download
+import com.composables.icons.tabler.outline.Folders
 import com.composables.icons.tabler.outline.LayersLinked
 import com.composables.icons.tabler.outline.Pinned
 import com.composables.icons.tabler.outline.PlayerPlay
@@ -36,6 +38,8 @@ class HomeSectionIconTest {
         assertEquals(Tabler.Outline.PlayerPlay, homeSectionIcon(HomeSectionType.CONTINUE_WATCHING))
         assertEquals(Tabler.Outline.Book, homeSectionIcon(HomeSectionType.CONTINUE_READING))
         assertEquals(Tabler.Outline.PlayerSkipForward, homeSectionIcon(HomeSectionType.NEXT_UP))
+        assertEquals(Tabler.Outline.CalendarTime, homeSectionIcon(HomeSectionType.UPCOMING))
+        assertEquals(Tabler.Outline.Folders, homeSectionIcon(HomeSectionType.MY_MEDIA))
         assertEquals(Tabler.Outline.Clock, homeSectionIcon(HomeSectionType.RECENTLY_ADDED))
         assertEquals(Tabler.Outline.LayersLinked, homeSectionIcon(HomeSectionType.LATEST_MEDIA))
         assertEquals(Tabler.Outline.Bookmark, homeSectionIcon(HomeSectionType.FAVORITES))
@@ -51,8 +55,9 @@ class HomeSectionIconTest {
     fun mapping_isExhaustiveOverTheEnum() {
         // If a new HomeSectionType is added this fails on the distinct-icon
         // count unless the mapping gains a branch (compiler enforces the when;
-        // this pins the test-side inventory).
-        assertEquals(HomeSectionType.entries.size, 12)
+        // this pins the test-side inventory). H4 (UPCOMING) + H5 (MY_MEDIA)
+        // grew the registry to 14.
+        assertEquals(HomeSectionType.entries.size, 14)
     }
 
     @Test

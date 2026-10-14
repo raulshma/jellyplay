@@ -6,8 +6,10 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
@@ -30,6 +32,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -84,9 +87,12 @@ import org.jetbrains.compose.resources.stringResource
  * and [MediaInformationSection] widened from `private` to `internal`
  * because their callers ([SeerrDetailBody] / [SeerrDetailContent]) stayed
  * in the screen file; the row-level helpers keep `private` (single in-file
- * consumers). No behaviour change. The video CARD body is the shared
- * [YouTubeVideoCard] (DetailSectionVocabulary) — collapsed with the media
- * family's identical copy; only the row scaffolding stays family-local.
+ * consumers) — except the ratings strip, whose plain-value body is `internal`
+ * since D4 (the media-detail family renders the same chip vocabulary; the
+ * [SeerrRatings]-taking overload below is the family-local adapter). No
+ * behaviour change beyond D4's deep-linking chips. The video CARD body is the
+ * shared [YouTubeVideoCard] (DetailSectionVocabulary) — collapsed with the
+ * media family's identical copy; only the row scaffolding stays family-local.
  */
 @Composable
 internal fun VideosSection(
@@ -122,47 +128,92 @@ internal fun VideosSection(
 @Composable
 private fun RatingsRow(ratings: SeerrRatings?) {
     if (ratings == null) return
+    RatingsRow(
+        critics = ratings.rt?.criticsScore,
+        audience = ratings.rt?.audienceScore,
+        imdb = ratings.imdb?.criticsScore ?: ratings.imdb?.rating,
+        tmdb = ratings.tmdb?.rating,
+        rtUrl = ratings.rt?.url,
+        imdbUrl = ratings.imdb?.url,
+        tmdbUrl = ratings.tmdb?.url,
+    )
+}
 
-    // Build a list of only valid (non-null) rating items
-    val ratingItems = mutableListOf<@Composable () -> Unit>()
+/**
+ * The shared ratings strip (D4), extracted verbatim from the Seerr family's
+ * private `RatingsRow` and widened from a [SeerrRatings] payload to PLAIN
+ * values — the [DetailExternalRatings] tuple the media-detail family's
+ * enrichment resolves (Seerr first, TMDB-only fallback) and the same leg
+ * fields the Seerr payload carries, so one renderer covers both surfaces.
+ * Chips deep-link to the provider when their source carries a url (the
+ * [DetailExternalLinksRow] click vocabulary: [LocalUriHandler] + the TV
+ * focus indicator); url-less chips stay plain labels, exactly as before.
+ *
+ * The chips flow (`FlowRow`) instead of the former hand-rolled scrolling
+ * `Row`: with the four short chips either shape renders on one line at every
+ * realistic width, and the flow shape lets the strip nest as a group inside
+ * the media header's metadata FlowRow (D4) and the plugin ratings row's
+ * merged FlowRow (D9).
+ *
+ * Rendering order — RT critics, RT audience, IMDb, TMDB — is the
+ * [externalRatingChipSources] contract, pinned by DetailRatingsBlockTest.
+ */
+@Composable
+internal fun RatingsRow(
+    critics: Int?,
+    audience: Int?,
+    imdb: Float?,
+    tmdb: Float?,
+    modifier: Modifier = Modifier,
+    rtUrl: String? = null,
+    imdbUrl: String? = null,
+    tmdbUrl: String? = null,
+) {
+    val chips = externalRatingChipSources(
+        DetailExternalRatings(
+            critics = critics,
+            audience = audience,
+            imdb = imdb,
+            tmdb = tmdb,
+            rtUrl = rtUrl,
+            imdbUrl = imdbUrl,
+            tmdbUrl = tmdbUrl,
+        ),
+    )
+    if (chips.isEmpty()) return
+    val uriHandler = LocalUriHandler.current
 
-    // Rotten Tomatoes Critics
-    ratings.rt?.criticsScore?.let { score ->
-        ratingItems.add {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(text = "🍅", modifier = Modifier.padding(end = 4.dp))
-                Text(
-                    text = "$score%",
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-            }
-        }
-    }
+    FlowRow(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        chips.forEach { chip ->
+            when {
+                // Rotten Tomatoes Critics
+                chip.critics != null -> RatingChip(url = chip.rtUrl) {
+                    Text(text = "🍅", modifier = Modifier.padding(end = 4.dp))
+                    Text(
+                        text = "${chip.critics}%",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
 
-    // Rotten Tomatoes Audience
-    ratings.rt?.audienceScore?.let { score ->
-        ratingItems.add {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(text = "🍿", modifier = Modifier.padding(end = 4.dp))
-                Text(
-                    text = "$score%",
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-            }
-        }
-    }
+                // Rotten Tomatoes Audience
+                chip.audience != null -> RatingChip(url = chip.rtUrl) {
+                    Text(text = "🍿", modifier = Modifier.padding(end = 4.dp))
+                    Text(
+                        text = "${chip.audience}%",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
 
-    // IMDb
-    val imdbRating = ratings.imdb
-    if (imdbRating != null) {
-        val imdbScore = imdbRating.criticsScore ?: imdbRating.rating
-        if (imdbScore != null) {
-            ratingItems.add {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                // IMDb
+                chip.imdb != null -> RatingChip(url = chip.imdbUrl) {
                     Box(
                         modifier = Modifier
                             .background(BrandColors.imdb, ShapeCache.smooth4)
@@ -177,7 +228,37 @@ private fun RatingsRow(ratings: SeerrRatings?) {
                     }
                     Spacer(Modifier.width(6.dp))
                     Text(
-                        text = formatRatingOneDecimal(imdbScore),
+                        text = formatRatingOneDecimal(chip.imdb),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+
+                // TMDb
+                chip.tmdb != null -> RatingChip(url = chip.tmdbUrl) {
+                    // The badge background is a fixed mint-green (#90CEA1), which is light in
+                    // every theme variant, so the onSurface token (light in dark theme) would be
+                    // low-contrast. Derive the text color from the badge's own luminance instead.
+                    val tmdbBadgeColor = BrandColors.tmdbBackground
+                    val tmdbBadgeText = remember(tmdbBadgeColor) {
+                        if (isLightColor(tmdbBadgeColor)) Color.Black else Color.White
+                    }
+                    Box(
+                        modifier = Modifier
+                            .background(tmdbBadgeColor, ShapeCache.smooth4)
+                            .padding(horizontal = 4.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = "TMDB",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Black,
+                            color = tmdbBadgeText
+                        )
+                    }
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        text = "${(chip.tmdb * 10).toInt()}%",
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
@@ -186,52 +267,36 @@ private fun RatingsRow(ratings: SeerrRatings?) {
             }
         }
     }
+}
 
-    // TMDb
-    ratings.tmdb?.rating?.let { rating ->
-        ratingItems.add {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                // The badge background is a fixed mint-green (#90CEA1), which is light in
-                // every theme variant, so the onSurface token (light in dark theme) would be
-                // low-contrast. Derive the text color from the badge's own luminance instead.
-                val tmdbBadgeColor = BrandColors.tmdbBackground
-                val tmdbBadgeText = remember(tmdbBadgeColor) {
-                    if (isLightColor(tmdbBadgeColor)) Color.Black else Color.White
-                }
-                Box(
-                    modifier = Modifier
-                        .background(tmdbBadgeColor, ShapeCache.smooth4)
-                        .padding(horizontal = 4.dp, vertical = 2.dp)
-                ) {
-                    Text(
-                        text = "TMDB",
-                        style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Black,
-                            color = tmdbBadgeText
-                        )
-                }
-                Spacer(Modifier.width(6.dp))
-                Text(
-                    text = "${(rating * 10).toInt()}%",
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-            }
-        }
-    }
-
-    if (ratingItems.isEmpty()) return
-
+/**
+ * One chip shell of the shared strip: a vertically-centered row that gains the
+ * click + TV-focus vocabulary only when it carries a deep link (the
+ * [DetailExternalLinksRow] pattern); url-less chips render exactly as the
+ * former non-clickable strip did.
+ */
+@Composable
+private fun RatingChip(
+    url: String?,
+    content: @Composable RowScope.() -> Unit,
+) {
+    val uriHandler = LocalUriHandler.current
+    val focusState = rememberTvFocusState(focusedScale = 1.05f)
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
         modifier = Modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState())
-    ) {
-        ratingItems.forEach { it() }
-    }
+            .then(
+                if (url != null) {
+                    Modifier
+                        .then(focusState.focusModifier)
+                        .then(Modifier.tvFocusIndicator(focusState, ShapeCache.smoothPill))
+                        .clickable { uriHandler.openUri(url) }
+                } else {
+                    Modifier
+                },
+            ),
+        content = content,
+    )
 }
 
 @Composable

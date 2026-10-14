@@ -511,6 +511,8 @@
     <string name="ss_auto_delete_after_watch_subtitle">완전히 시청하면 다운로드 삭제</string>
     <string name="ss_next_up_hidden_title">"다음 시청"에서 숨김</string>
     <string name="ss_next_up_hidden_subtitle">"다음 시청" 행에서 제거한 시리즈를 보고 복원</string>
+    <string name="ss_hidden_libraries_title">숨긴 라이브러리</string>
+    <string name="ss_hidden_libraries_subtitle">내 미디어 행에서 제외한 라이브러리를 보고 복원합니다</string>
     <string name="ss_prefer_logos_subtitle">서버에 클리어 로고가 있으면 세부 페이지 제목에 사용합니다</string>
     <string name="ss_external_player_app_subtitle">재생을 열 외부 플레이어 앱을 선택</string>
     <string name="ss_still_watching_mode_subtitle">여러 에피소드 또는 몇 시간 후 계속하기 전에 확인</string>

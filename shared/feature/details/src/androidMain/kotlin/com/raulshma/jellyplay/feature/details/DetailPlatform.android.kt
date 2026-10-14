@@ -2,16 +2,32 @@ package com.raulshma.jellyplay.feature.details
 
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.graphics.SurfaceTexture
+import android.Manifest
+import android.os.Build
 import android.os.Environment
 import android.os.StatFs
+import android.view.Surface
+import android.view.TextureView
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.content.ContextCompat
+import com.raulshma.jellyplay.core.data.playback.AmbientVideoPlayer
 import com.raulshma.jellyplay.core.model.deeplink.DeepLinkGrammar
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.withContext
+import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.dsl.viewModel
 import org.koin.core.module.Module
 import org.koin.dsl.module
@@ -95,6 +111,9 @@ fun androidDetailsModule(context: Context): Module = module {
             pluginRecommendationsApi = get(),
             pluginMarkersApi = get(),
             jellyPlayFeatureGate = get(),
+            // D4: the direct-TMDB details fallback behind the externalRatings
+            // enrichment (core:network single, NetworkKoinModules).
+            tmdbApiClient = get(),
         )
     }
     // #147 merge: Collection/Person VMs left commonMain when their closure
@@ -115,6 +134,7 @@ fun androidDetailsModule(context: Context): Module = module {
             userDataMutator = get(),
             imageUrlProvider = get(),
             mediaDownloadActions = get(),
+            projections = get(),
         )
     }
 }
@@ -145,4 +165,92 @@ internal actual fun InlineTrailerPlayerHost(
         cropToFill = cropToFill,
         onEmbedFailed = onEmbedFailed,
     )
+}
+
+/**
+ * Android actual of the D22 ambient-clip seam: a `TextureView` whose
+ * `SurfaceTexture` is bound to the process-wide AmbientVideoPlayer single
+ * (feature/home's `AmbientHeroVideoSurface` twin — the same start/stop
+ * driver shape, url-guarded so a superseded hero's dispose cannot kill the
+ * mounted clip).
+ */
+@Composable
+internal actual fun AmbientThemeVideoSurface(url: String, modifier: Modifier) {
+    val player = koinInject<AmbientVideoPlayer>()
+    val currentPlayer by rememberUpdatedState(player)
+    var surfaceTexture by remember { mutableStateOf<SurfaceTexture?>(null) }
+
+    AndroidView(
+        modifier = modifier,
+        factory = { context ->
+            TextureView(context).apply {
+                surfaceTextureListener = object : TextureView.SurfaceTextureListener {
+                    override fun onSurfaceTextureAvailable(texture: SurfaceTexture, width: Int, height: Int) {
+                        surfaceTexture = texture
+                    }
+
+                    override fun onSurfaceTextureSizeChanged(texture: SurfaceTexture, width: Int, height: Int) = Unit
+
+                    override fun onSurfaceTextureDestroyed(destroyedTexture: SurfaceTexture): Boolean {
+                        surfaceTexture = null
+                        return true
+                    }
+
+                    override fun onSurfaceTextureUpdated(texture: SurfaceTexture) = Unit
+                }
+            }
+        },
+    )
+
+    LaunchedEffect(url, surfaceTexture) {
+        val texture = surfaceTexture
+        if (texture == null) {
+            currentPlayer.stop(url)
+            return@LaunchedEffect
+        }
+        val surface = Surface(texture)
+        try {
+            currentPlayer.start(url, surface)
+            awaitCancellation()
+        } finally {
+            currentPlayer.stop(url)
+            surface.release()
+        }
+    }
+}
+
+/**
+ * D12: Android/TV carries the full notification stack — the ⋮ menu's notify
+ * entry and the D7 rows' bell render here.
+ */
+internal actual val platformHasNotificationStack: Boolean = true
+
+/**
+ * D12: the app's cold-start permission prompt pattern (MainActivity:
+ * `checkSelfPermission(POST_NOTIFICATIONS)` → `launcher.launch`) mirrored
+ * into composition behind the activity-result launcher, so a first enable
+ * from the ⋮ menu or the bell raises the Android 13+ system dialog when the
+ * permission is not yet granted. Below API 33 (notifications on by default)
+ * and when already granted, the returned lambda no-ops — the pure gate
+ * ([shouldRequestPostNotifications]) decides.
+ */
+@Composable
+internal actual fun rememberSeriesNotificationPermissionRequest(): () -> Unit {
+    val context = LocalContext.current
+    val launcher = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
+    ) { /* grant/deny is read fresh at the next fire; the config written either way */ }
+    return remember(context, launcher) {
+        {
+            if (shouldRequestPostNotifications(
+                    sdkInt = Build.VERSION.SDK_INT,
+                    granted = ContextCompat.checkSelfPermission(
+                        context, Manifest.permission.POST_NOTIFICATIONS,
+                    ) == PackageManager.PERMISSION_GRANTED,
+                )
+            ) {
+                launcher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
+    }
 }

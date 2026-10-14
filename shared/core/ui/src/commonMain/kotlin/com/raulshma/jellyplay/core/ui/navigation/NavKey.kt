@@ -156,6 +156,11 @@ sealed class Route : NavKey {
         override val isDetail = true
     }
 
+    /** Full TMDB reviews screen reached from "All reviews (N)" on a detail screen's reviews preview (D9). */
+    @Serializable data class Reviews(val itemId: String) : Route() {
+        override val isDetail = true
+    }
+
     /** Sonarr-style series management screen (collapsible seasons, per-episode actions). */
     @Serializable data class ManageSeries(val seriesId: String) : Route() {
         override val isDetail = true
@@ -305,6 +310,14 @@ sealed class Route : NavKey {
      * Reached from the Home settings hub's "Hidden from Next Up" row.
      */
     @Serializable data object NextUpExcluded : Route()
+
+    /**
+     * "Hidden libraries" management screen — the libraries the user hid from
+     * the home My Media tiles row (the home-discovery store's
+     * `MY_MEDIA_HIDDEN_LIBRARY_IDS` set), with per-library and bulk restore.
+     * Reached from the Home settings hub's "Hidden libraries" row.
+     */
+    @Serializable data object MyMediaHidden : Route()
 
     @Serializable data class PlaybackSettings(val highlightSettingId: String? = null) : Route(),
         HighlightableRoute {

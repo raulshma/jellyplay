@@ -312,6 +312,15 @@
     <string name="detail_collection_empty_description">このコレクションに追加されたアイテムはここに表示されます。</string>
     <string name="detail_person_empty_title">タイトルが見つかりません</string>
     <string name="detail_person_empty_description">この人物には現在のフィルターに一致するタイトルがありません。</string>
+    <!-- D18: role-named, grouped filmography -->
+    <string name="detail_person_role_as">役名: %1$s</string>
+    <string name="detail_person_role_all">すべて</string>
+    <string name="detail_person_role_acting">出演</string>
+    <string name="detail_person_role_directing">監督</string>
+    <string name="detail_person_role_writing">脚本</string>
+    <string name="detail_person_role_other">その他</string>
+    <!-- D20: "frequently appears with" co-star row -->
+    <string name="detail_person_costars_title">よく共演する人物</string>
     <string name="detail_season_empty_title">エピソードはありません</string>
     <string name="detail_season_empty_description">エピソードが追加されるとここに表示されます。</string>
 
@@ -489,4 +498,6 @@
     <string name="jellyplay_det_filler_badge">フィラー</string>
     <string name="jellyplay_det_mixed_badge">複合</string>
     <string name="jellyplay_det_recap_badge">あらすじ</string>
+    <string name="detail_cd_theme_music_mute">テーマ曲をミュート</string>
+    <string name="detail_cd_theme_music_unmute">テーマ曲のミュート解除</string>
 </resources>

@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.details
 
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
 import com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager
+import com.raulshma.jellyplay.core.data.repository.DownloadProgress
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaDetailProvider
 import com.raulshma.jellyplay.core.data.util.DownloadResult
@@ -65,10 +66,23 @@ class DownloadLifecycleActionsTest {
     }
 
     /**
+     * The helper's launch scope. [UnconfinedTestDispatcher] is the faithful
+     * double for the production scope (the VM's Main.immediate): launches run
+     * eagerly up to their first suspension, so the tests' advanceUntilIdle
+     * calls observe the settled state. TestScope/backgroundScope cannot serve
+     * here — the D16 collector subscribing at construction never completes
+     * (hanging runTest on TestScope), and backgroundScope tasks only progress
+     * while the test body is suspended, which the advanceUntilIdle-driven
+     * bodies never do.
+     */
+    private fun helperScope(): CoroutineScope = CoroutineScope(UnconfinedTestDispatcher())
+
+    /**
      * Builds a [DownloadLifecycleActions] wired to the relaxed collaborators,
      * with an overridable session flow. Defaults: unmetered connection, an
-     * empty [DownloadsSlice] (→ ORIGINAL quality → null maxBitrate), and an
-     * expandSeason that records calls and returns empty.
+     * empty [DownloadsSlice] (→ ORIGINAL quality → null maxBitrate), an
+     * expandSeason that records calls and returns empty, and an empty live
+     * download-progress flow (the D16 collector subscribes at construction).
      */
     private fun makeActions(
         scope: CoroutineScope,
@@ -80,6 +94,8 @@ class DownloadLifecycleActionsTest {
         expandedEpisodes: (String) -> List<MediaItem> = { emptyList() },
         downloadsSlice: DownloadsSlice = DownloadsSlice(),
         unmetered: Boolean = true,
+        /** Backing flow of the D16 live-progress collector (tests push ticks into it). */
+        activeProgressFlow: MutableStateFlow<Map<String, DownloadProgress>> = MutableStateFlow(emptyMap()),
     ): DownloadLifecycleActions {
         val session = MutableStateFlow(
             DetailSession(
@@ -91,6 +107,7 @@ class DownloadLifecycleActionsTest {
         )
         every { downloadsStore.downloads } returns MutableStateFlow(downloadsSlice)
         every { adaptiveBitrateManager.isUnmeteredConnection() } returns unmetered
+        every { downloadRepository.getActiveDownloadProgress() } returns activeProgressFlow
         if (expandCalls != null) {
             coEvery { mediaDetailProvider.expandSeason(any(), any()) } coAnswers {
                 expandCalls += arg<String>(0) to arg<String>(1)
@@ -124,7 +141,7 @@ class DownloadLifecycleActionsTest {
         val gate = CompletableDeferred<DownloadResult>()
         coEvery { downloadIntake.start(any(), any(), any()) } coAnswers { gate.await() }
 
-        val h = makeActions(scope = this, detail = detail)
+        val h = makeActions(scope = helperScope(), detail = detail)
 
         h.startDownload()
         advanceUntilIdle() // runs the launch up to the suspended start() call
@@ -143,7 +160,7 @@ class DownloadLifecycleActionsTest {
     @Test
     fun `openDownloadPicker seeds pending quality from prefs and resets subtitle selection`() = runTest {
         val h = makeActions(
-            scope = this,
+            scope = helperScope(),
             downloadsSlice = DownloadsSlice(downloadQuality = DownloadQuality.HIGH_1080P),
         )
 
@@ -156,7 +173,7 @@ class DownloadLifecycleActionsTest {
 
     @Test
     fun `setPendingSubtitleSelection replaces the subtitle selection, with All restoring the default`() = runTest {
-        val h = makeActions(scope = this)
+        val h = makeActions(scope = helperScope())
         h.openDownloadPicker()
 
         h.setPendingSubtitleSelection(SubtitleSelection.Subset(setOf(2, 4)))
@@ -168,7 +185,7 @@ class DownloadLifecycleActionsTest {
 
     @Test
     fun `setPendingQuality updates the pending download quality`() = runTest {
-        val h = makeActions(scope = this)
+        val h = makeActions(scope = helperScope())
         h.openDownloadPicker()
 
         h.setPendingQuality(DownloadQuality.MEDIUM_720P)
@@ -178,7 +195,7 @@ class DownloadLifecycleActionsTest {
 
     @Test
     fun `dismissDownloadPicker hides the sheet without clearing the pending selection`() = runTest {
-        val h = makeActions(scope = this)
+        val h = makeActions(scope = helperScope())
         h.openDownloadPicker()
         h.setPendingSubtitleSelection(SubtitleSelection.Subset(setOf(1)))
 
@@ -209,7 +226,7 @@ class DownloadLifecycleActionsTest {
             ),
             error = null,
         )
-        val h = makeActions(scope = this, detail = detail)
+        val h = makeActions(scope = helperScope(), detail = detail)
 
         h.openDownloadPicker()
         h.setPendingQuality(DownloadQuality.HIGH_1080P) // → 8_000_000 bps
@@ -233,7 +250,7 @@ class DownloadLifecycleActionsTest {
         coEvery { downloadIntake.startSeries("series-1", null) } returns
             Result.success(listOf("d1", "d2", "d3"))
 
-        val h = makeActions(scope = this, detail = detail)
+        val h = makeActions(scope = helperScope(), detail = detail)
 
         h.downloadSeries()
         advanceUntilIdle()
@@ -250,7 +267,7 @@ class DownloadLifecycleActionsTest {
         // Ports the former DetailViewModelTest message-flow test: the no-detail
         // precondition must surface exactly one SeriesDownload error through the
         // shared message channel.
-        val h = makeActions(scope = this, detail = null)
+        val h = makeActions(scope = helperScope(), detail = null)
 
         h.downloadSeries()
         advanceUntilIdle()
@@ -275,7 +292,7 @@ class DownloadLifecycleActionsTest {
         val expandedCalls = mutableListOf<Pair<String, String>>()
 
         val h = makeActions(
-            scope = this,
+            scope = helperScope(),
             seasons = listOf(season1, season2),
             seriesId = "series-1",
             itemId = "item-1",
@@ -309,7 +326,7 @@ class DownloadLifecycleActionsTest {
         coEvery { downloadRepository.episodeIdsForSeries("series-1") } returns setOf("e1")
 
         val h = makeActions(
-            scope = this,
+            scope = helperScope(),
             seasons = listOf(season1),
             seriesId = "series-1",
             itemId = "item-1",
@@ -334,7 +351,7 @@ class DownloadLifecycleActionsTest {
     // region startDownload — precondition + cellular-warning guards
     @Test
     fun `startDownload with no loaded detail emits details-not-loaded and skips intake`() = runTest {
-        val h = makeActions(scope = this, detail = null)
+        val h = makeActions(scope = helperScope(), detail = null)
 
         h.startDownload()
         advanceUntilIdle()
@@ -346,7 +363,7 @@ class DownloadLifecycleActionsTest {
     @Test
     fun `startDownload with no media source emits no-source and skips intake`() = runTest {
         val detail = MediaDetail(item = MediaItem(id = "m1", name = "Movie", mediaType = MediaType.MOVIE))
-        val h = makeActions(scope = this, detail = detail)
+        val h = makeActions(scope = helperScope(), detail = detail)
 
         h.startDownload()
         advanceUntilIdle()
@@ -364,7 +381,7 @@ class DownloadLifecycleActionsTest {
             mediaSources = listOf(MediaSource(id = "src-1", name = "Source", size = 60L * 1024L * 1024L)),
         )
         val h = makeActions(
-            scope = this,
+            scope = helperScope(),
             detail = detail,
             unmetered = false,
             downloadsSlice = DownloadsSlice(cellularDownloadSizeWarningMb = 50),
@@ -391,7 +408,7 @@ class DownloadLifecycleActionsTest {
             error = null,
         )
         val h = makeActions(
-            scope = this,
+            scope = helperScope(),
             detail = detail,
             unmetered = false,
             downloadsSlice = DownloadsSlice(cellularDownloadSizeWarningMb = 50),
@@ -415,7 +432,7 @@ class DownloadLifecycleActionsTest {
             error = null,
         )
         val h = makeActions(
-            scope = this,
+            scope = helperScope(),
             detail = detail,
             unmetered = false,
             downloadsSlice = DownloadsSlice(cellularDownloadSizeWarningMb = 50),
@@ -438,7 +455,7 @@ class DownloadLifecycleActionsTest {
             mediaSources = listOf(MediaSource(id = "src-1", name = "Source", size = 60L * 1024L * 1024L)),
         )
         val h = makeActions(
-            scope = this,
+            scope = helperScope(),
             detail = detail,
             unmetered = false,
             downloadsSlice = DownloadsSlice(cellularDownloadSizeWarningMb = 50),
@@ -458,7 +475,7 @@ class DownloadLifecycleActionsTest {
     @Test
     fun `downloadSeries on a non-series emits not-a-series error`() = runTest {
         val movieDetail = MediaDetail(item = MediaItem(id = "m1", name = "Movie", mediaType = MediaType.MOVIE))
-        val h = makeActions(scope = this, detail = movieDetail)
+        val h = makeActions(scope = helperScope(), detail = movieDetail)
 
         h.downloadSeries()
         advanceUntilIdle()
@@ -474,7 +491,7 @@ class DownloadLifecycleActionsTest {
         val seriesDetail = MediaDetail(item = MediaItem(id = "series-1", name = "Series", mediaType = MediaType.SERIES))
         // A throwable with no message exercises the strings-fallback path.
         coEvery { downloadIntake.startSeries("series-1", null) } returns Result.failure(RuntimeException())
-        val h = makeActions(scope = this, detail = seriesDetail)
+        val h = makeActions(scope = helperScope(), detail = seriesDetail)
 
         h.downloadSeries()
         advanceUntilIdle()
@@ -492,7 +509,7 @@ class DownloadLifecycleActionsTest {
         val ep1 = MediaItem(id = "e1", name = "E1", mediaType = MediaType.EPISODE)
         val expandCalls = mutableListOf<Pair<String, String>>()
         val h = makeActions(
-            scope = this,
+            scope = helperScope(),
             itemId = "item-1",
             expandCalls = expandCalls,
             expandedEpisodes = { listOf(ep1) },
@@ -511,7 +528,7 @@ class DownloadLifecycleActionsTest {
     @Test
     fun `loadDownloadSheetEpisodes with a null session is a no-op`() = runTest {
         val actions = DownloadLifecycleActions(
-            scope = this,
+            scope = helperScope(),
             session = MutableStateFlow(null),
             messages = messages.flow,
             strings = strings,
@@ -533,7 +550,7 @@ class DownloadLifecycleActionsTest {
         val ep1 = MediaItem(id = "e1", name = "E1", mediaType = MediaType.EPISODE)
         val expandCalls = mutableListOf<Pair<String, String>>()
         val h = makeActions(
-            scope = this,
+            scope = helperScope(),
             itemId = "item-1",
             expandCalls = expandCalls,
             expandedEpisodes = { listOf(ep1) },
@@ -556,7 +573,7 @@ class DownloadLifecycleActionsTest {
         val inventory = mockk<com.raulshma.jellyplay.core.model.DownloadFileInventory>(relaxed = true)
         coEvery { downloadRepository.getDownloadFileInventory("m1") } returns inventory
         val detail = MediaDetail(item = MediaItem(id = "m1", name = "Movie", mediaType = MediaType.MOVIE))
-        val h = makeActions(scope = this, detail = detail)
+        val h = makeActions(scope = helperScope(), detail = detail)
 
         h.loadDownloadFileInventory()
         advanceUntilIdle()
@@ -568,12 +585,113 @@ class DownloadLifecycleActionsTest {
     @Test
     fun `clearDownloadFileInventory resets the sheet inventory`() = runTest {
         val detail = MediaDetail(item = MediaItem(id = "m1", name = "Movie", mediaType = MediaType.MOVIE))
-        val h = makeActions(scope = this, detail = detail)
+        val h = makeActions(scope = helperScope(), detail = detail)
 
         h.clearDownloadFileInventory()
 
         assertNull(h.state.value.downloadFileInventory)
         assertFalse(h.state.value.isLoadingDownloadFiles)
+    }
+    // endregion
+
+    // region episode download progress (D16 flow collection + merge)
+    @Test
+    fun `in-flight progress rows re-key onto episode ids with their fraction`() = runTest {
+        val progressFlow = MutableStateFlow(
+            mapOf(
+                "d1" to DownloadProgress(
+                    id = "d1", downloadedBytes = 250, speedBytesPerSec = 10,
+                    mediaItemId = "e1", totalSizeBytes = 1000,
+                ),
+            ),
+        )
+        val h = makeActions(scope = helperScope(), activeProgressFlow = progressFlow)
+        advanceUntilIdle()
+
+        assertEquals(mapOf("e1" to 0.25f), h.state.value.episodeDownloadProgress)
+    }
+
+    @Test
+    fun `progress ticks merge in-flight rows and absent rows drop out`() = runTest {
+        // Two in-flight rows; a row without the item join and a row with an
+        // unknown total (a PENDING row before its size probe) drop out.
+        val progressFlow = MutableStateFlow(
+            mapOf(
+                "d1" to DownloadProgress(
+                    id = "d1", downloadedBytes = 100, speedBytesPerSec = 10,
+                    mediaItemId = "e1", totalSizeBytes = 400,
+                ),
+                "d2" to DownloadProgress(
+                    id = "d2", downloadedBytes = 100, speedBytesPerSec = 10,
+                    mediaItemId = "e2", totalSizeBytes = 200,
+                ),
+                "d3" to DownloadProgress(
+                    id = "d3", downloadedBytes = 50, speedBytesPerSec = 10,
+                    mediaItemId = null, totalSizeBytes = 100,
+                ),
+                "d4" to DownloadProgress(
+                    id = "d4", downloadedBytes = 50, speedBytesPerSec = 10,
+                    mediaItemId = "e4", totalSizeBytes = 0,
+                ),
+            ),
+        )
+        val h = makeActions(scope = helperScope(), activeProgressFlow = progressFlow)
+        advanceUntilIdle()
+        assertEquals(mapOf("e1" to 0.25f, "e2" to 0.5f), h.state.value.episodeDownloadProgress)
+
+        // d1 completes: its row leaves the in-flight window on the next
+        // emission (an "absent" row for the map) while d2 keeps moving.
+        progressFlow.value = mapOf(
+            "d2" to DownloadProgress(
+                id = "d2", downloadedBytes = 200, speedBytesPerSec = 10,
+                mediaItemId = "e2", totalSizeBytes = 200,
+            ),
+        )
+        advanceUntilIdle()
+
+        assertEquals(mapOf("e2" to 1f), h.state.value.episodeDownloadProgress)
+    }
+
+    @Test
+    fun `two in-flight rows for one episode resolve to the latest emission`() = runTest {
+        assertEquals(
+            mapOf("e1" to 0.75f),
+            episodeDownloadProgress(
+                listOf(
+                    DownloadProgress("d1", 25, 0, mediaItemId = "e1", totalSizeBytes = 100),
+                    DownloadProgress("d2", 75, 0, mediaItemId = "e1", totalSizeBytes = 100),
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun `episode progress map is empty with no active downloads`() = runTest {
+        val h = makeActions(scope = helperScope())
+        advanceUntilIdle()
+
+        assertTrue(h.state.value.episodeDownloadProgress.isEmpty())
+        // Navigation reset leaves the live projection alone (rows self-remove
+        // when their transfer leaves the in-flight window); the default state
+        // equality in the resetForNavigation test pins the empty start.
+        h.resetForNavigation()
+        assertTrue(h.state.value.episodeDownloadProgress.isEmpty())
+    }
+
+    @Test
+    fun `download progress fraction is null while the total size is unknown`() {
+        assertNull(
+            DownloadProgress("d1", 50, 0, mediaItemId = "e1", totalSizeBytes = 0).progressFraction,
+        )
+        assertEquals(
+            0.5f,
+            DownloadProgress("d1", 50, 0, mediaItemId = "e1", totalSizeBytes = 100).progressFraction,
+        )
+        // A row overshooting its probe (size raced the completion write) clamps.
+        assertEquals(
+            1f,
+            DownloadProgress("d1", 200, 0, mediaItemId = "e1", totalSizeBytes = 100).progressFraction,
+        )
     }
     // endregion
 }

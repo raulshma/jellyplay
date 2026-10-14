@@ -13,7 +13,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.unit.Dp
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore
+import com.raulshma.jellyplay.core.model.CuratedHeroEntry
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.HomeMode
@@ -21,11 +24,14 @@ import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.ui.adaptive.AdaptiveHeroHeight
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
+import com.raulshma.jellyplay.core.ui.components.LocalPerformanceMode
 import com.raulshma.jellyplay.core.ui.components.LocalSurpriseOnLaunch
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
+import org.koin.compose.koinInject
 
 /**
  * Selects the hero "featured" candidate list from the home sections, in a single
@@ -66,16 +72,38 @@ internal fun selectFeaturedCandidates(sections: List<HomeSection>): List<MediaIt
  * sections. The music home is excluded to match the online music home, which
  * never renders a hero — and stale online sections painted by the user-switch
  * SWR path must not leak into it. Online rendering uses the server sections.
+ *
+ * H9: the plugin-curated billboards ride AHEAD of the local pool in the
+ * online branch ([mergeCuratedHeroCandidates] — server order, dedupe by item
+ * id, curated wins). Offline rendering never carries them: curated is
+ * server data and the offline hero features downloads only.
  */
 internal fun selectHomeHeroCandidates(
     renderingOffline: Boolean,
     homeMode: HomeMode,
     onlineSections: List<HomeSection>,
     offlineSections: List<HomeSection>,
+    curatedHero: List<CuratedHeroEntry> = emptyList(),
 ): List<MediaItem> = when {
     renderingOffline && homeMode != HomeMode.MUSIC -> selectFeaturedCandidates(offlineSections)
     renderingOffline -> emptyList()
-    else -> selectFeaturedCandidates(onlineSections)
+    else -> mergeCuratedHeroCandidates(curatedHero, selectFeaturedCandidates(onlineSections))
+}
+
+/**
+ * H9: the curated/local merge — the curated entries' items first (exactly the
+ * plugin's serve order; a duplicated curated id keeps its FIRST slot), then
+ * the local candidates minus every id the curated list already features
+ * (curated wins, no double rotation slot). Pure and synchronously testable.
+ */
+internal fun mergeCuratedHeroCandidates(
+    curated: List<CuratedHeroEntry>,
+    local: List<MediaItem>,
+): List<MediaItem> {
+    if (curated.isEmpty()) return local
+    val curatedIds = HashSet<String>()
+    val curatedItems = curated.mapNotNull { entry -> entry.item.takeIf { curatedIds.add(it.id) } }
+    return curatedItems + local.filter { it.id !in curatedIds }
 }
 
 /**
@@ -93,6 +121,98 @@ internal fun rememberHeroHeight(): Dp {
             else -> AdaptiveHeroHeight.PortraitCompact
         }
     }
+}
+
+/**
+ * H7: the hero video's user gates read AT the hero — the pref mirror
+ * (`home_hero_video_enabled` touch/default, `home_hero_video_tv_enabled` TV;
+ * the additive koinInject mirror, the HomeTrickplayPeek repository precedent,
+ * because the hero composable sits below the screen orchestrator that carries
+ * the HomeUiState pref mirrors) and performance mode (the app-provided
+ * [com.raulshma.jellyplay.core.ui.components.LocalPerformanceMode]).
+ */
+internal class HeroVideoGates(
+    /** The per-form-factor H7 pref: the feature master gate. Default off. */
+    val prefEnabled: Boolean,
+    /** Performance mode hard-gates the clip alongside the reduced-motion gate. */
+    val performanceMode: Boolean,
+)
+
+@Composable
+internal fun rememberHeroVideoGates(): HeroVideoGates {
+    val isTv = LocalTvMode.current
+    val homeDiscovery = koinInject<HomeDiscoveryStore>()
+    val discoverySlice by homeDiscovery.homeDiscovery.collectAsStateWithLifecycle()
+    val performanceMode = LocalPerformanceMode.current
+    return remember(isTv, discoverySlice, performanceMode) {
+        HeroVideoGates(
+            prefEnabled = if (isTv) discoverySlice.homeHeroVideoTvEnabled else discoverySlice.homeHeroVideoEnabled,
+            performanceMode = performanceMode,
+        )
+    }
+}
+
+/**
+ * H7's start gate, in its pure form (the [HeroController.rotationCadence]
+ * family of Compose-free decisions): the ambient clip plays only when the
+ * pref is on AND the platform can render it (desktop v1: static hero), the
+ * user has not paused it for the session, neither reduced-motion nor
+ * performance mode holds, the hero is visible AND prominent AND still holds
+ * focus (TV), the lifecycle is at least RESUMED, and the list is not
+ * scrolling. Any leg failing means the static image stays — the clip's
+ * absence must never be observable work.
+ */
+internal fun heroVideoShouldPlay(
+    prefEnabled: Boolean,
+    sessionPaused: Boolean,
+    reducedMotion: Boolean,
+    performanceMode: Boolean,
+    isVisible: Boolean,
+    isProminent: Boolean,
+    heroFocusHeld: Boolean,
+    lifecycleResumed: Boolean,
+    isScrolling: Boolean,
+    platformCapable: Boolean,
+): Boolean =
+    prefEnabled &&
+        platformCapable &&
+        !sessionPaused &&
+        !reducedMotion &&
+        !performanceMode &&
+        isVisible &&
+        isProminent &&
+        heroFocusHeld &&
+        lifecycleResumed &&
+        !isScrolling
+
+/**
+ * Reactive RESUMED read for the hero's clip gate (the rotation cadence reads
+ * the same lifecycle state, but non-reactively inside its snapshotFlow
+ * collector; the clip gate needs it as composition state so an app
+ * backgrounding unmounts the surface).
+ */
+@Composable
+internal fun rememberIsLifecycleResumed(): Boolean {
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var resumed by remember {
+        mutableStateOf(lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED))
+    }
+    LaunchedEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_RESUME -> resumed = true
+                Lifecycle.Event.ON_PAUSE -> resumed = false
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        try {
+            awaitCancellation()
+        } finally {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+    return resumed
 }
 
 /**

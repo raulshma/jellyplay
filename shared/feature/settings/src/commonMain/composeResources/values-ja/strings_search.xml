@@ -511,6 +511,8 @@
     <string name="ss_auto_delete_after_watch_subtitle">視聴完了後にダウンロードを削除</string>
     <string name="ss_next_up_hidden_title">「次のエピソード」から非表示</string>
     <string name="ss_next_up_hidden_subtitle">「次のエピソード」行から削除したシリーズの表示と復元</string>
+    <string name="ss_hidden_libraries_title">非表示のライブラリ</string>
+    <string name="ss_hidden_libraries_subtitle">マイメディア行から除外したライブラリを表示して復元します</string>
     <string name="ss_prefer_logos_subtitle">サーバーにクリアロゴがある場合、詳細ページのタイトルに使用します</string>
     <string name="ss_external_player_app_subtitle">再生を開く外部プレーヤーアプリを選択</string>
     <string name="ss_still_watching_mode_subtitle">複数エピソードまたは数時間後に続ける前に確認</string>

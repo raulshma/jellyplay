@@ -10,9 +10,11 @@ import com.raulshma.jellyplay.core.model.ManagedUserPolicy
 import com.raulshma.jellyplay.core.model.DvrSeriesTimer
 import com.raulshma.jellyplay.core.model.DvrTimer
 import com.raulshma.jellyplay.core.model.DvrTimerStatus
+import com.raulshma.jellyplay.core.model.EpisodeStreamInfo
 import com.raulshma.jellyplay.core.model.ImageBlurHashes
 import com.raulshma.jellyplay.core.model.GuideInfo
 import com.raulshma.jellyplay.core.model.ItemCounts
+import com.raulshma.jellyplay.core.model.ItemQualityBadge
 import com.raulshma.jellyplay.core.model.LiveTvChannel
 import com.raulshma.jellyplay.core.model.LiveTvProgram
 import com.raulshma.jellyplay.core.model.LiveTvRecording
@@ -98,7 +100,90 @@ internal fun BaseItemDto.toMediaItem() = MediaItem(
     unplayedItemCount = userData?.unplayedItemCount,
     isVirtual = locationType == LocationType.VIRTUAL,
     missingReason = deriveMissingEpisodeReason(locationType, premiereDate, DateTime.now()),
+    // Stream badges (D11): derived from the item's own MediaStreams when the
+    // fetch projected them (the per-season getEpisodes call); every listing
+    // without sources (all-episodes, list projections, older servers) has an
+    // empty/null mediaSources list → null info → the rows render nothing.
+    episodeStreamInfo = mediaSources?.firstOrNull()?.mediaStreams
+        ?.takeIf { it.isNotEmpty() }
+        ?.let(::toEpisodeStreamInfo),
+    // H12 NEW-badge input: the library-arrival timestamp, carried only where
+    // the fetch projected DateCreated (the HOME_ROW_PROJECTION_FIELDS rows).
+    dateCreatedEpochMs = dateCreated?.toEpochMillis(),
+    // H11 quality badges: the same projected-streams source as the episode
+    // stream info above — listings without MediaStreams map to null and the
+    // cards render nothing.
+    qualityBadges = mediaSources?.firstOrNull()?.mediaStreams
+        ?.takeIf { it.isNotEmpty() }
+        ?.let(::toQualityBadges),
+    // D18: the credited People, retained only where the fetch projected the
+    // People field (getItemsByPerson's filmography rows) — every other
+    // listing has a null list → empty → the person screen's role extraction
+    // degrades to null. Same projection shape as toMediaDetail.
+    people = (people?.map { person ->
+        PersonInfo(
+            id = person.id.toString(),
+            name = person.name ?: "",
+            role = person.role,
+            type = person.type?.serialName ?: "",
+            primaryImageTag = person.primaryImageTag,
+        )
+    } ?: emptyList()).distinctBy { it.id },
+    // H13: the trickplay sprite-sheet summary, carried only where the fetch
+    // projected `Trickplay` (the HOME_ROW_PROJECTION_FIELDS resume/next-up
+    // rows). The wire element is keyed by media-source id then width variant;
+    // a row item previews one source, so the widest variant — toMediaDetail's
+    // pick — is the one the preview requests. Listings without the field (and
+    // older servers that never generate it) map to null.
+    trickplayInfo = trickplay?.values
+        ?.asSequence()
+        ?.flatMap { it.values }
+        ?.maxByOrNull { it.width ?: 0 }
+        ?.toTrickplayInfo(),
 )
+
+/**
+ * Derives the episode rows' compact stream summary ([EpisodeStreamInfo], D11)
+ * from a projected [org.jellyfin.sdk.model.api.MediaStream] list. Pure so the
+ * subtitle/channel-layout/language-count derivations have a direct test
+ * surface (JellyfinDtoMappersTest).
+ *
+ *  - `hasSubtitles` — any SUBTITLE stream present.
+ *  - `audioLayout` — from the best (most-channelled, ties → first) AUDIO
+ *    stream: "Atmos" when its codec/profile/title advertise Dolby Atmos
+ *    (the player's PlaybackMetadataRow detection), else the channel-count
+ *    ladder the player already renders ("7.1" ≥ 8 ch, "5.1" ≥ 6 ch); stereo
+ *    and below stay null (not badge-worthy on a row).
+ *  - `audioLanguageCount` — distinct non-blank audio `language` codes,
+ *    case-insensitively (language tags are case-insensitive per BCP-47, so
+ *    a server mixing "eng"/"ENG" must not render as two languages).
+ *
+ * An empty stream list maps to null ("unknown") rather than a badge-less
+ * info, so callers cannot distinguish "no subtitles" from "not fetched".
+ */
+internal fun toEpisodeStreamInfo(
+    streams: List<org.jellyfin.sdk.model.api.MediaStream>,
+): EpisodeStreamInfo? {
+    if (streams.isEmpty()) return null
+    val audio = streams.filter { it.type == MediaStreamType.AUDIO }
+    val bestAudio = audio.maxByOrNull { it.channels ?: 0 }
+    val audioLayout = when {
+        hasAtmosAudio(streams) -> "Atmos"
+        bestAudio == null -> null
+        else -> when (val channels = bestAudio.channels ?: 0) {
+            in 8..Int.MAX_VALUE -> "7.1"
+            in 6..7 -> "5.1"
+            else -> null
+        }
+    }
+    return EpisodeStreamInfo(
+        hasSubtitles = streams.any { it.type == MediaStreamType.SUBTITLE },
+        audioLayout = audioLayout,
+        audioLanguageCount = audio.mapNotNull { it.language?.trim()?.lowercase()?.takeIf(String::isNotEmpty) }
+            .distinct()
+            .size,
+    )
+}
 
 /**
  * Derives [MissingEpisodeReason] from the wire `LocationType` + `PremiereDate`:
@@ -116,6 +201,94 @@ internal fun deriveMissingEpisodeReason(
     premiereDate != null && premiereDate.isAfter(now) -> MissingEpisodeReason.UNAIRED
     else -> MissingEpisodeReason.MISSING_FILE
 }
+
+/**
+ * The SDK's deserialized [DateTime] is a system-zone `LocalDateTime` (see
+ * [toIsoInstantString]) — re-attach the zone and read the epoch millis. The
+ * H12 NEW-badge comparison is always stamp-vs-stamp from this same device
+ * clock, so the system-zone anchoring is consistent on both sides.
+ */
+internal fun DateTime.toEpochMillis(): Long =
+    atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+
+/**
+ * Derives the cards' compact quality summary ([ItemQualityBadge], H11) from a
+ * projected [org.jellyfin.sdk.model.api.MediaStream] list. Pure so the
+ * resolution/codec/video-range ladder has a direct test surface
+ * (JellyfinDtoMappersTest). The list is built in render-priority order — one
+ * resolution tier first, then the format badges:
+ *
+ *  - resolution: 4K when the best video stream is ≥3800 wide or ≥2100 tall,
+ *    else HD at ≥1900 wide, else SD — exactly one tier, always present (a
+ *    video item always has a size);
+ *  - Dolby Vision beats HDR (a DoVi-with-HDR10 stream is DV, never both):
+ *    detected from the stream's range/range-type serials ("DoVi…"), its
+ *    profile text, or the server's `VideoDoViTitle`;
+ *  - HDR: the HDR* video-range types (`HDR10`, `HDR10Plus`), blocked to DV;
+ *  - Atmos: the SAME detection [toEpisodeStreamInfo] uses (any audio
+ *    stream's profile/title/display-title/codec text advertising it).
+ *
+ * A stream list with no VIDEO stream (music tracks, audio-only items) maps
+ * to null — no resolution ladder exists for it. An empty list maps to null
+ * too ("unknown"), same contract as [toEpisodeStreamInfo].
+ */
+internal fun toQualityBadges(
+    streams: List<org.jellyfin.sdk.model.api.MediaStream>,
+): List<ItemQualityBadge>? {
+    if (streams.isEmpty()) return null
+    val video = streams.firstOrNull { it.type == MediaStreamType.VIDEO } ?: return null
+
+    val width = video.width ?: 0
+    val height = video.height ?: 0
+    val rangeTypeText = video.videoRangeType?.serialName?.lowercase()
+    val rangeText = video.videoRange?.serialName?.lowercase()
+    val profileText = video.profile?.lowercase().orEmpty()
+
+    val badges = buildList {
+        if (width >= FOUR_K_MIN_WIDTH || height >= FOUR_K_MIN_HEIGHT) add(ItemQualityBadge.FOUR_K)
+        else if (width >= HD_MIN_WIDTH) add(ItemQualityBadge.HD)
+        else add(ItemQualityBadge.SD)
+
+        val isDoVi = rangeTypeText?.contains(DOVI_MARKER) == true ||
+            rangeText?.contains(DOVI_MARKER) == true ||
+            profileText.contains(DOVI_MARKER) ||
+            profileText.contains(DOLBY_VISION_MARKER) ||
+            !video.videoDoViTitle.isNullOrBlank()
+        when {
+            isDoVi -> add(ItemQualityBadge.DOLBY_VISION)
+            // HDR* range types (HDR10 / HDR10Plus); the DoVi-with-HDR10
+            // variants carry "dovi" in their serial and are blocked above.
+            rangeTypeText?.contains(HDR_MARKER) == true || rangeText?.contains(HDR_MARKER) == true ->
+                add(ItemQualityBadge.HDR)
+        }
+        // The Atmos detection is [toEpisodeStreamInfo]'s (any AUDIO stream's
+        // profile/title/display-title/codec text advertising it) — one shared
+        // predicate, not a copy.
+        if (hasAtmosAudio(streams)) add(ItemQualityBadge.ATMOS)
+    }
+    return badges
+}
+
+/** The resolution/format ladder's thresholds — see [toQualityBadges]. */
+private const val FOUR_K_MIN_WIDTH = 3800
+private const val FOUR_K_MIN_HEIGHT = 2100
+private const val HD_MIN_WIDTH = 1900
+private const val DOVI_MARKER = "dovi"
+private const val DOLBY_VISION_MARKER = "dolby vision"
+private const val HDR_MARKER = "hdr"
+private const val ATMOS_MARKER = "atmos"
+
+/**
+ * Whether any AUDIO stream's profile/title/display-title/codec text advertises
+ * Dolby Atmos — ONE predicate for the two consumers ([toEpisodeStreamInfo]'s
+ * audio layout and [toQualityBadges]'s badge), not a copied detection.
+ */
+private fun hasAtmosAudio(streams: List<org.jellyfin.sdk.model.api.MediaStream>): Boolean =
+    streams.filter { it.type == MediaStreamType.AUDIO }.any { stream ->
+        listOfNotNull(stream.profile, stream.title, stream.displayTitle, stream.codec)
+            .joinToString(" ")
+            .contains(ATMOS_MARKER, ignoreCase = true)
+    }
 
 /**
  * Maps a detail-projection [BaseItemDto] onto the domain [MediaDetail] —

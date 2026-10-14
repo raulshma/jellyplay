@@ -6,10 +6,12 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Book
 import com.composables.icons.tabler.outline.Bookmark
+import com.composables.icons.tabler.outline.CalendarTime
 import com.composables.icons.tabler.outline.Clock
 import com.composables.icons.tabler.outline.Compass
 import com.composables.icons.tabler.outline.DeviceTv
 import com.composables.icons.tabler.outline.Download
+import com.composables.icons.tabler.outline.Folders
 import com.composables.icons.tabler.outline.LayersLinked
 import com.composables.icons.tabler.outline.Pinned
 import com.composables.icons.tabler.outline.PlayerPlay
@@ -36,6 +38,8 @@ fun homeSectionIcon(type: HomeSectionType): ImageVector = when (type) {
     HomeSectionType.CONTINUE_WATCHING -> Tabler.Outline.PlayerPlay
     HomeSectionType.CONTINUE_READING -> Tabler.Outline.Book
     HomeSectionType.NEXT_UP -> Tabler.Outline.PlayerSkipForward
+    HomeSectionType.UPCOMING -> Tabler.Outline.CalendarTime
+    HomeSectionType.MY_MEDIA -> Tabler.Outline.Folders
     HomeSectionType.RECENTLY_ADDED -> Tabler.Outline.Clock
     HomeSectionType.LATEST_MEDIA -> Tabler.Outline.LayersLinked
     HomeSectionType.FAVORITES -> Tabler.Outline.Bookmark

@@ -55,10 +55,12 @@ import com.raulshma.jellyplay.core.network.library.toFilteredResumeRows
 import com.raulshma.jellyplay.core.network.library.toWireItemKind
 import org.jellyfin.sdk.model.api.BaseItemKind
 import org.jellyfin.sdk.model.api.CreatePlaylistDto
+import org.jellyfin.sdk.model.api.DisplayPreferencesDto
 import org.jellyfin.sdk.model.api.ImageType
 import org.jellyfin.sdk.model.api.ItemFields
 import org.jellyfin.sdk.model.api.ItemSortBy
 import org.jellyfin.sdk.model.api.MediaType as SdkMediaType
+import org.jellyfin.sdk.model.api.ScrollDirection
 import org.jellyfin.sdk.model.api.SortOrder
 import org.jellyfin.sdk.model.api.UpdatePlaylistDto
 import org.jellyfin.sdk.model.serializer.toUUID
@@ -298,11 +300,14 @@ class LibraryApiClientImpl(
                 // Series/Season/Episode container selection IS the feature.
                 // groupItems=true is the SDK/server default; passed explicitly
                 // so the two branches stay self-describing on the wire.
+                // Home-row projection (not the two-field minimum): the latest
+                // cards render the quality badges / NEW dot / trickplay
+                // preview from this same read (H11/H12/H13).
                 val response = api.userLibraryApi.getLatestMedia(
                     parentId = parentId.toUUID(),
                     limit = limit,
                     groupItems = true,
-                    fields = LIST_ITEM_FIELDS,
+                    fields = HOME_ROW_ITEM_FIELDS,
                 ).content ?: emptyList()
                 response.map { it.toMediaItem() }
                     .toFilteredLatestRows(engine.currentMaxParentalRating, allowedKinds = null)
@@ -334,7 +339,7 @@ class LibraryApiClientImpl(
             limit = classicEpisodePool,
             includeItemTypes = listOfNotNull(CLASSIC_TV_LATEST_MEDIA_TYPE.toWireItemKind()).toBaseItemKinds(),
             groupItems = false,
-            fields = LIST_ITEM_FIELDS,
+            fields = HOME_ROW_ITEM_FIELDS,
         ).content ?: emptyList()
         val cards = pool
             .map { it.toMediaItem() }
@@ -351,7 +356,7 @@ class LibraryApiClientImpl(
                 runCatchingRethrowingCancellation {
                     api.itemsApi.getItems(
                         ids = groupedSeriesIds.map { it.toUUID() },
-                        fields = LIST_ITEM_FIELDS,
+                        fields = HOME_ROW_ITEM_FIELDS,
                     ).content?.items.orEmpty()
                 }.getOrDefault(emptyList())
                     .map { it.toMediaItem() }
@@ -368,10 +373,25 @@ class LibraryApiClientImpl(
         }
     }
 
+    /**
+     * The [com.raulshma.jellyplay.core.network.library.HomeSectionSources]
+     * view of Next Up (the home fetcher's user-scoped 3-param shape) — a
+     * delegating overload of the full client member below, null-scoped (the
+     * server-default read the home rows always ran).
+     */
     override suspend fun getNextUp(
         limit: Int,
         enableRewatching: Boolean,
         maxDays: Int,
+    ): Result<List<MediaItem>> =
+        getNextUp(limit = limit, enableRewatching = enableRewatching, maxDays = maxDays, seriesId = null, enableResumable = null)
+
+    override suspend fun getNextUp(
+        limit: Int,
+        enableRewatching: Boolean,
+        maxDays: Int,
+        seriesId: String?,
+        enableResumable: Boolean?,
     ): Result<List<MediaItem>> = engine.withApi { api ->
         // The limit/projection shape is the shared resume spec (NextUp rides
         // it with no kind narrowing); the cutoff CLOCK stays here (JVM-side
@@ -390,6 +410,28 @@ class LibraryApiClientImpl(
             limit = spec.limit,
             enableRewatching = enableRewatching,
             nextUpDateCutoff = cutoff,
+            // Null keeps the server default (the home row's user-scoped
+            // read); the D12 series-scoped diff supplies both.
+            seriesId = seriesId?.let(java.util.UUID::fromString),
+            enableResumable = enableResumable,
+            fields = spec.fields.toItemFieldsList(),
+        ).content
+        (response?.items ?: emptyList()).toFilteredMediaItems(engine.currentMaxParentalRating)
+    }
+
+    override suspend fun getUpcoming(
+        userId: String?,
+        parentId: String?,
+        limit: Int,
+    ): Result<List<MediaItem>> = engine.withApi { api ->
+        // Same limit/projection shape as getNextUp (the shared resume spec —
+        // Upcoming rides it with no kind narrowing and no date cutoff; the
+        // home-row projection carries the card-overlay fields, H4/H12).
+        val spec = buildResumeQuerySpec(limit, kinds = null)
+        val response = api.tvShowsApi.getUpcomingEpisodes(
+            userId = userId?.toUUID(),
+            limit = spec.limit,
+            parentId = parentId?.toUUID(),
             fields = spec.fields.toItemFieldsList(),
         ).content
         (response?.items ?: emptyList()).toFilteredMediaItems(engine.currentMaxParentalRating)
@@ -398,13 +440,17 @@ class LibraryApiClientImpl(
     override suspend fun getContinueWatching(
         limit: Int,
         classicRows: Boolean,
+        excludeActiveSessions: Boolean,
     ): Result<List<MediaItem>> = engine.withApi { api ->
         // The wire request is the exact pre-12 shape in BOTH modes (no
         // IncludeItemTypes — the 10.x video resume row never narrowed).
-        val spec = buildResumeQuerySpec(limit, kinds = null)
+        // excludeActiveSessions (H6) threads through the shared spec so the
+        // batch and refresh arms send the identical flag.
+        val spec = buildResumeQuerySpec(limit, kinds = null, excludeActiveSessions = excludeActiveSessions)
         val response = api.itemsApi.getResumeItems(
             limit = spec.limit,
             fields = spec.fields.toItemFieldsList(),
+            excludeActiveSessions = spec.excludeActiveSessions,
         ).content
         // #157: the fold drops played rows the resume endpoint still reports —
         // see resumableOnly() for the full rationale. Classic rows (#168) add
@@ -592,6 +638,17 @@ class LibraryApiClientImpl(
         (response ?: emptyList()).toFilteredMediaItems(engine.currentMaxParentalRating)
     }
 
+    override suspend fun getLocalTrailers(itemId: String): Result<List<MediaItem>> = engine.withApi { api ->
+        // Same bare-List shape as getSpecialFeatures (the /Items/{id}/…
+        // companion endpoint emits a JSON array, not a query envelope).
+        val userId = engine.requireUserId().toUUID()
+        val response = api.userLibraryApi.getLocalTrailers(
+            itemId = itemId.toUUID(),
+            userId = userId,
+        ).content
+        (response ?: emptyList()).toFilteredMediaItems(engine.currentMaxParentalRating)
+    }
+
     override suspend fun getSearchHints(
         query: String,
         mediaTypes: List<MediaType>?,
@@ -706,12 +763,14 @@ class LibraryApiClientImpl(
     override suspend fun getPeople(
         searchTerm: String?,
         limit: Int,
+        appearsInItemId: String?,
     ): Result<List<PersonRef>> = engine.withApi { api ->
         val userId = engine.currentUserId()?.toUUID()
         val response = api.personsApi.getPersons(
             limit = limit,
             searchTerm = searchTerm?.takeIf { it.isNotBlank() },
             userId = userId,
+            appearsInItemId = appearsInItemId?.toUUID(),
         ).content
         response.items.map { item ->
             PersonRef(id = item.id.toString(), name = item.name ?: "")
@@ -786,19 +845,67 @@ class LibraryApiClientImpl(
 
     override suspend fun getItemsByPerson(personId: String, limit: Int): Result<List<MediaItem>> =
         engine.withApi { api ->
+            // + People (D18): the filmography rows extract the per-item role
+            // from the person entry matching this id. Bounded by the
+            // call-site limit (50) — one extra field on an existing query.
             val response = api.itemsApi.getItems(
                 personIds = listOf(personId.toUUID()),
                 limit = limit,
                 recursive = true,
-                fields = LIST_ITEM_FIELDS,
+                fields = LIST_ITEM_FIELDS + ItemFields.PEOPLE,
             ).content
             response.items.toFilteredMediaItems(engine.currentMaxParentalRating)
+        }
+
+    override suspend fun getBoxSetsContaining(itemId: String): Result<List<CollectionSummary>> =
+        engine.withApi { api ->
+            // D6 membership, resolved explicitly: Jellyfin never lists BoxSets
+            // among /Items/{id}/Ancestors (verified against 12.2 — an item's
+            // ancestors stop at the library folder), so enumerate the user's
+            // boxsets (same query shape as getCollections) and probe each one
+            // for the item. The probe is an id-filtered query under the
+            // boxset parent — 0 or 1 stub items per boxset, so cost scales
+            // with boxset count, not library size. No parental filter (mirrors
+            // findItemByProviderId): ids/names/poster tags feed a navigation
+            // row, and the server scopes the read to the authenticated user.
+            // Members resolve through getCollectionItems — not duplicated here.
+            val itemUuid = itemId.toUUID()
+            val boxSets = api.itemsApi.getItems(
+                includeItemTypes = listOf(BaseItemKind.BOX_SET),
+                recursive = true,
+                fields = listOf(ItemFields.CHILD_COUNT),
+            ).content.items
+            boxSets.filter { boxSet ->
+                api.itemsApi.getItems(
+                    parentId = boxSet.id,
+                    ids = listOf(itemUuid),
+                    limit = 1,
+                ).content.items.isNotEmpty()
+            }.map { item ->
+                CollectionSummary(
+                    id = item.id.toString(),
+                    name = item.name ?: "",
+                    itemCount = item.childCount ?: 0,
+                    imageTag = item.imageTags?.get(ImageType.PRIMARY)?.toString(),
+                )
+            }
         }
 
     override suspend fun getThemeSongs(itemId: String): Result<List<MediaItem>> =
         engine.withApi { api ->
             val response = api.libraryApi.getThemeSongs(
                 itemId = itemId.toUUID(),
+            ).content
+            response.items.toFilteredMediaItems(engine.currentMaxParentalRating)
+        }
+
+    override suspend fun getThemeVideos(itemId: String, inheritFromParent: Boolean): Result<List<MediaItem>> =
+        engine.withApi { api ->
+            // Same ThemeMediaResult envelope as getThemeSongs — the identical
+            // mapping and parental filter apply (H7 hero clip source).
+            val response = api.libraryApi.getThemeVideos(
+                itemId = itemId.toUUID(),
+                inheritFromParent = inheritFromParent,
             ).content
             response.items.toFilteredMediaItems(engine.currentMaxParentalRating)
         }
@@ -811,18 +918,32 @@ class LibraryApiClientImpl(
 
     override suspend fun getEpisodes(seriesId: String, seasonId: String, isMissing: Boolean?): Result<List<MediaItem>> =
         engine.withApi { api ->
+            // MediaStreams projection (D11): the episode rows derive the
+            // subtitle/audio badges from it. Per-season only — the
+            // all-episodes path below carries the same projection so the
+            // series-detail snapshot renders the badges too. MEDIA_SOURCES is
+            // the container the mapper reads (see getAllEpisodes).
             api.tvShowsApi.getEpisodes(
                 seriesId = seriesId.toUUID(),
                 seasonId = seasonId.toUUID(),
                 isMissing = isMissing,
+                fields = listOf(ItemFields.MEDIA_SOURCES, ItemFields.MEDIA_STREAMS),
             ).content.items.toFilteredMediaItems(engine.currentMaxParentalRating)
         }
 
     override suspend fun getAllEpisodes(seriesId: String, isMissing: Boolean?): Result<List<MediaItem>> =
         engine.withApi { api ->
+            // MediaStreams projection (D11): the series-detail catalogue serves
+            // its episode rows from this single round-trip, so the stream
+            // badges must ride along. MEDIA_SOURCES is the field the mapper
+            // actually reads (mediaSources.firstOrNull().mediaStreams) — on a
+            // real server MEDIA_STREAMS alone populates only the item-level
+            // flattened stream list, which the mapper ignores, and the badges
+            // stayed dead on-device until MEDIA_SOURCES joined the query.
             api.tvShowsApi.getEpisodes(
                 seriesId = seriesId.toUUID(),
                 isMissing = isMissing,
+                fields = listOf(ItemFields.MEDIA_SOURCES, ItemFields.MEDIA_STREAMS),
             ).content.items.toFilteredMediaItems(engine.currentMaxParentalRating)
         }
 
@@ -1132,6 +1253,66 @@ class LibraryApiClientImpl(
             UserDataWriteOutcome.Done
         }
     }
+
+    /**
+     * The home-layout DisplayPreferences slice (H20). Transport: the SDK's
+     * DisplayPreferencesApi keyed by (displayPreferencesId, user, client) —
+     * the client value ("jellyplay") namespaces our store away from
+     * jellyfin-web's; the payload rides the DTO's CustomPrefs string map
+     * under the HomeLayoutSync keys. The write is a single POST with a fresh
+     * DTO: this wrapper owns the whole namespace, so replacing the custom
+     * prefs is safe — no foreign keys to preserve, and no stale key can
+     * outlive a layout delete.
+     */
+    override suspend fun readHomeLayoutDisplayPreferences(userId: String): Result<HomeLayoutServerState> =
+        engine.withApi { api ->
+            val dto = api.displayPreferencesApi.getDisplayPreferences(
+                displayPreferencesId = HOME_LAYOUT_DISPLAY_PREFERENCES_ID,
+                userId = userId.toUUID(),
+                client = HOME_LAYOUT_CLIENT,
+            ).content
+            // Missing keys decode to null state (never synced / partial
+            // store) — a value, not a failure; the caller's lenient decode
+            // treats absent as "nothing on server".
+            HomeLayoutServerState(
+                json = dto.customPrefs[HOME_LAYOUT_JSON_KEY],
+                schemaVersion = dto.customPrefs[HOME_LAYOUT_SCHEMA_VERSION_KEY]?.toIntOrNull(),
+                savedAtEpochMillis = dto.customPrefs[HOME_LAYOUT_SAVED_AT_KEY]?.toLongOrNull(),
+            )
+        }
+
+    override suspend fun writeHomeLayoutDisplayPreferences(userId: String, json: String, schemaVersion: Int): Result<Unit> =
+        engine.withApi { api ->
+            // savedAt stamps the write-time client clock (the DisplayPreferences
+            // DTO carries no server timestamp) — the manual sync dialog's
+            // newer-copy signal, not a clock-sync guarantee.
+            api.displayPreferencesApi.updateDisplayPreferences(
+                displayPreferencesId = HOME_LAYOUT_DISPLAY_PREFERENCES_ID,
+                userId = userId.toUUID(),
+                client = HOME_LAYOUT_CLIENT,
+                data = DisplayPreferencesDto(
+                    id = userId,
+                    viewType = null,
+                    sortBy = null,
+                    indexBy = null,
+                    rememberIndexing = false,
+                    primaryImageHeight = 0,
+                    primaryImageWidth = 0,
+                    customPrefs = mapOf(
+                        HOME_LAYOUT_JSON_KEY to json,
+                        HOME_LAYOUT_SCHEMA_VERSION_KEY to schemaVersion.toString(),
+                        HOME_LAYOUT_SAVED_AT_KEY to timeSource.nowEpochMillis().toString(),
+                    ),
+                    scrollDirection = ScrollDirection.HORIZONTAL,
+                    showBackdrop = false,
+                    rememberSorting = false,
+                    sortOrder = SortOrder.ASCENDING,
+                    showSidebar = false,
+                    client = HOME_LAYOUT_CLIENT,
+                ),
+            ).content
+            Unit
+        }
 
     /**
      * The shared commonMain favorite-flag cache-aside choreography

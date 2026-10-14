@@ -273,6 +273,7 @@ private val playbackDiffFields: List<DiffField<*>> = listOf(
     DiffField(Res.string.ss_video_autoplay_next_title, { it.videoPlayer.videoAutoplayNext }, Boolean::onOff),
     DiffField(Res.string.ss_autoplay_trailers_title, { it.videoPlayer.trailerAutoplay }, Boolean::onOff),
     DiffField(Res.string.ss_cinema_mode_title, { it.videoPlayer.cinemaModeEnabled }, Boolean::onOff),
+    DiffField(Res.string.ss_play_trailer_before_movie_title, { it.videoPlayer.playTrailerBeforeMovie }, Boolean::onOff),
     DiffField(Res.string.ss_remember_brightness_title, { it.videoPlayer.videoRememberBrightness }, Boolean::onOff),
     DiffField(Res.string.diff_auto_skip_intro, { it.videoPlayer.videoAutoSkipIntro }, Boolean::onOff),
     DiffField(Res.string.diff_auto_skip_outro, { it.videoPlayer.videoAutoSkipOutro }, Boolean::onOff),
@@ -408,8 +409,37 @@ private val homeDiscoveryDiffFields: List<DiffField<*>> = listOf(
     DiffField(Res.string.ss_skip_specials_title, { it.library.skipSpecials }, Boolean::onOff),
     DiffField(Res.string.settings_show_missing_episodes, { it.library.showMissingEpisodes }, Boolean::onOff),
     DiffField(Res.string.settings_prefer_logos, { it.library.preferLogos }, Boolean::onOff),
+    DiffField(Res.string.settings_show_tagline, { it.library.showTagline }, Boolean::onOff),
+    DiffField(Res.string.settings_play_theme_music, { it.library.playThemeMusic }, Boolean::onOff),
+    DiffField(Res.string.settings_show_episode_stream_badges, { it.library.showEpisodeStreamBadges }, Boolean::onOff),
+    DiffField(Res.string.settings_show_external_links, { it.library.showExternalLinks }, Boolean::onOff),
+    DiffField(Res.string.settings_show_reviews, { it.library.showReviews }, Boolean::onOff),
+    DiffField(Res.string.settings_prefer_local_trailers, { it.library.preferLocalTrailers }, Boolean::onOff),
+    DiffField(Res.string.settings_trailer_preview_on_focus, { it.library.trailerPreviewOnFocus }, Boolean::onOff),
+    DiffField(Res.string.settings_show_promoted_actions_landscape, { it.library.showPromotedActionsLandscape }, Boolean::onOff),
+    DiffField(Res.string.settings_show_download_progress, { it.library.showDownloadProgress }, Boolean::onOff),
+    DiffField(Res.string.settings_show_upcoming_strip, { it.library.showUpcomingStrip }, Boolean::onOff),
+    DiffField(Res.string.settings_show_more_in_collection, { it.library.showMoreInCollection }, Boolean::onOff),
+    DiffField(Res.string.settings_show_filmography_roles, { it.library.showFilmographyRoles }, Boolean::onOff),
+    DiffField(Res.string.settings_show_frequent_costars, { it.library.showFrequentCostars }, Boolean::onOff),
     DiffField(Res.string.ss_clock_home_title, { it.homeDiscovery.showClockOnHome }, Boolean::onOff),
     DiffField(Res.string.ss_settings_in_home_search_title, { it.homeDiscovery.showSettingsInHomeSearch }, Boolean::onOff),
+    // The home-screen feature wave (H5-H21): one row per new user-facing
+    // toggle; the internal stamps and the not-yet-surfaced slices stay off
+    // the registry (internal bookkeeping keys are intentionally omitted).
+    DiffField(Res.string.settings_exclude_active_sessions, { it.homeDiscovery.excludeActiveSessions }, Boolean::onOff),
+    DiffField(Res.string.settings_home_hero_video, { it.homeDiscovery.homeHeroVideoEnabled }, Boolean::onOff),
+    DiffField(Res.string.settings_home_hero_video_tv, { it.homeDiscovery.homeHeroVideoTvEnabled }, Boolean::onOff),
+    DiffField(Res.string.settings_home_focus_backdrop, { it.homeDiscovery.homeFocusBackdrop }, Boolean::onOff),
+    DiffField(Res.string.settings_home_stats_card, { it.homeDiscovery.homeStatsCard }, Boolean::onOff),
+    DiffField(Res.string.settings_home_genre_rail, { it.homeDiscovery.homeGenreRail }, Boolean::onOff),
+    DiffField(Res.string.settings_home_presence_chips, { it.homeDiscovery.homePresenceChips }, Boolean::onOff),
+    DiffField(Res.string.settings_new_section_announcements, { it.homeDiscovery.homeNewSectionAnnouncements }, Boolean::onOff),
+    DiffField(Res.string.settings_home_layout_autopush, { it.homeDiscovery.homeLayoutAutopush }, Boolean::onOff),
+    DiffField(Res.string.settings_show_quality_badges, { it.homeDiscovery.showQualityBadges }, Boolean::onOff),
+    DiffField(Res.string.settings_show_new_badges, { it.homeDiscovery.showNewBadges }, Boolean::onOff),
+    DiffField(Res.string.settings_home_trickplay_preview, { it.homeDiscovery.homeTrickplayPreview }, Boolean::onOff),
+    DiffField(Res.string.settings_anti_spoiler_home, { it.homeDiscovery.antiSpoilerHome }, Boolean::onOff),
 )
 
 private val audioCacheDiffFields: List<DiffField<*>> = listOf(
@@ -441,6 +471,7 @@ private val notificationsDiffFields: List<DiffField<*>> = listOf(
     DiffField(Res.string.ss_notification_lights_title, { it.notification.notificationPreferences.lightsEnabled }, Boolean::onOff),
     DiffField(Res.string.ss_max_per_check_title, { it.notification.notificationPreferences.maxPerCheck }, Int::toString),
     DiffField(Res.string.ss_notification_libraries_title, { it.notification.notificationPreferences.libraryConfigs.size }, Int::toString),
+    DiffField(Res.string.ss_series_notifications_title, { it.notification.notificationPreferences.seriesConfigs.size }, Int::toString),
 )
 
 private val screensaverDiffFields: List<DiffField<*>> = listOf(

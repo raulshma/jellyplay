@@ -518,6 +518,20 @@ object VideoPlayerPreferenceSpecs {
                 isAdvanced = true,
             ),
         ),
+        PreferenceSpec.plainBoolean(
+            keyName = "play_trailer_before_movie",
+            default = false,
+            resetCategory = PreferenceResetCategory.PLAYBACK,
+            search = PreferenceSearchSpec(
+                id = "play_trailer_before_movie",
+                titleKey = "ss_play_trailer_before_movie_title",
+                subtitleKey = "ss_play_trailer_before_movie_subtitle",
+                categoryKey = "ss_cat_playback",
+                keywords = listOf("trailer", "movie", "preroll", "pre-roll", "cinema", "before", "feature"),
+                routeKind = PlaybackPreferenceSpecs.ROUTE_PLAYBACK_SETTINGS,
+                isAdvanced = true,
+            ),
+        ),
         PreferenceSpec.plainLong(
             keyName = "video_swipe_seek_max_ms",
             default = 120_000L,
@@ -1103,6 +1117,8 @@ object VideoPlayerPreferenceSpecs {
     val TRAILER_AUTOPLAY: PreferenceSpec<Boolean> get() = row("trailer_autoplay")
 
     val CINEMA_MODE_ENABLED: PreferenceSpec<Boolean> get() = row("cinema_mode_enabled")
+
+    val PLAY_TRAILER_BEFORE_MOVIE: PreferenceSpec<Boolean> get() = row("play_trailer_before_movie")
 
     val VIDEO_SWIPE_SEEK_MAX_MS: PreferenceSpec<Long> get() = row("video_swipe_seek_max_ms")
 

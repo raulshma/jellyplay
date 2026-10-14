@@ -270,9 +270,9 @@ interface JellyPlayMarkersRoutes {
 
 /**
  * The rows role — the admin-defined home rows (`custom-rows`,
- * `seasonal-rows`: catalog, per-row items, seasonal row). Main consumer: the
- * home fetcher's plugin-row transport
- * (`JellyPlayHomeSectionSources`, core:network library).
+ * `seasonal-rows`: catalog, per-row items, seasonal row) and the curated hero
+ * billboards (`hero`) beside them. Main consumer: the home fetcher's
+ * plugin-row transport (`JellyPlayHomeSectionSources`, core:network library).
  */
 interface JellyPlayRowsRoutes {
     /** null = the admin-defined row does not exist (plugin 404). */
@@ -283,6 +283,14 @@ interface JellyPlayRowsRoutes {
 
     /** null = seasonal rows unconfigured (no TMDB key / no keyword this season). */
     suspend fun getSeasonalRow(keyword: String? = null): Result<JellyPlayRowResult?>
+
+    /**
+     * The admin-curated hero billboards in the plugin's serve order (weight
+     * descending, config order breaking ties); null = the hero feature is
+     * absent on the installed plugin wave (plugin 404) — the caller degrades
+     * to the local candidate pool quietly, never an error.
+     */
+    suspend fun getCuratedHero(): Result<JellyPlayHeroResult?>
 }
 
 /**

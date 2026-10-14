@@ -36,6 +36,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -78,11 +79,16 @@ import com.raulshma.jellyplay.feature.details.generated.resources.detail_book_pa
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_book_percent_progress
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_cd_episode_play
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_episodes_count
+import com.raulshma.jellyplay.feature.details.generated.resources.detail_link_imdb
+import com.raulshma.jellyplay.feature.details.generated.resources.detail_link_tmdb
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_more_like_this_on_device
+import com.raulshma.jellyplay.feature.details.generated.resources.detail_option_notify_new_episodes
+import com.raulshma.jellyplay.feature.details.generated.resources.detail_option_stop_notify_new_episodes
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_section_cast_crew
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_section_chapters
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_section_items
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_section_more_like_this
+import com.raulshma.jellyplay.feature.details.generated.resources.detail_section_airing_next
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_section_seerr_recommendations
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_section_seerr_similar
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_section_special_features
@@ -244,6 +250,16 @@ private const val LOGO_TITLE_WIDTH_FRACTION = 0.5f
 /** Cinematic clear-logo aspect (the ratio Jellyfin documents for Logo art). */
 private const val LOGO_TITLE_ASPECT_RATIO = 2.39f
 
+/**
+ * The pure decision behind the detail header's tagline line (D2): the first
+ * non-blank tagline when the user opted into "show tagline", else null —
+ * and null on an empty/blank taglines list, so an older server (no Taglines
+ * on the wire) or an offline snapshot simply renders no line. Pure →
+ * directly unit-testable (the [preferLogoTitleEnabled] pattern).
+ */
+internal fun detailHeaderTagline(taglines: List<String>, showTagline: Boolean): String? =
+    if (showTagline) taglines.firstOrNull { it.isNotBlank() } else null
+
 
 // ── Header (delayIndex 0) ─────────────────────────────────────────────────
 
@@ -386,6 +402,28 @@ internal fun DetailHeaderSection(
                     }
                 }
 
+            // D2: the item's first tagline under the title — italic, muted,
+            // capped at two lines. Silent absence is the contract when the
+            // snapshot carries no taglines (older servers / offline) or the
+            // show_tagline preference is off.
+            detailHeaderTagline(
+                taglines = detail.taglines,
+                showTagline = state.preferences.showTagline,
+            )?.let { tagline ->
+                FadingItem {
+                    Column {
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            text = tagline,
+                            style = MaterialTheme.typography.bodyMedium.copy(fontStyle = FontStyle.Italic),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+            }
+
             // Book author line — the one credit a book carries. From
             // whichever field the server populated (person or artist item).
             if (isBook) {
@@ -479,6 +517,30 @@ internal fun DetailHeaderSection(
                                 )
                             }
                         }
+                    }
+                    // D4: the no-plugin ratings strip (Seerr first, TMDB
+                    // fallback), rendered after the critic chip. Standalone
+                    // placement only — when the plugin ratings row is present
+                    // the chips merge into THAT row's FlowRow instead
+                    // (DetailPluginRatingsSection, D9), so the strip never
+                    // renders twice. Chips deep-link to the provider when
+                    // their source carries a url (the shared RatingsRow).
+                    if (
+                        externalRatingsStandaloneInHeader(
+                            showExternalRatings = state.preferences.showExternalRatings,
+                            hasPluginRatings = state.pluginRatings.isNotEmpty(),
+                            external = state.externalRatings,
+                        )
+                    ) {
+                        RatingsRow(
+                            critics = state.externalRatings.critics,
+                            audience = state.externalRatings.audience,
+                            imdb = state.externalRatings.imdb,
+                            tmdb = state.externalRatings.tmdb,
+                            rtUrl = state.externalRatings.rtUrl,
+                            imdbUrl = state.externalRatings.imdbUrl,
+                            tmdbUrl = state.externalRatings.tmdbUrl,
+                        )
                     }
                     // Book meta: file format + reading progress (the
                     // video-oriented year/runtime/rating set above renders
@@ -613,6 +675,45 @@ internal fun DetailHeaderSection(
                             Route.StudioDetail(studio.id, studio.name),
                         )
                     },
+                )
+            }
+
+            // D1: external-link chips — the server's externalUrls first, then
+            // TMDB/IMDb constructed from the provider ids, deduped by host so
+            // a server-sourced entry outranks its constructed twin. The whole
+            // row hides when the merged list is empty, when the origin is
+            // LOCAL (offline detail: nothing reachable to open) or when the
+            // show_external_links preference is off.
+            val tmdbLinkLabel = stringResource(Res.string.detail_link_tmdb)
+            val imdbLinkLabel = stringResource(Res.string.detail_link_imdb)
+            // Memoized on exactly the inputs the merge reads (the SeasonsSection
+            // note: collection keys, not the whole detail's data-class equality).
+            val externalLinks = remember(
+                detail.externalUrls,
+                detail.providerIds,
+                item.mediaType,
+                tmdbLinkLabel,
+                imdbLinkLabel,
+            ) {
+                buildDetailExternalLinks(
+                    detail = detail,
+                    mediaType = if (item.mediaType == MediaType.MOVIE) "movie" else "tv",
+                    tmdbLabel = tmdbLinkLabel,
+                    imdbLabel = imdbLinkLabel,
+                )
+            }
+            if (detailExternalLinksVisible(
+                    showExternalLinks = state.preferences.showExternalLinks,
+                    origin = state.origin,
+                    links = externalLinks,
+                )
+            ) {
+                Spacer(Modifier.height(10.dp))
+                DetailExternalLinksRow(
+                    links = externalLinks,
+                    // Start-aligned so the row reads as one more header chip
+                    // row rather than the Seerr screen's centered brand strip.
+                    arrangement = Arrangement.spacedBy(12.dp),
                 )
             }
 
@@ -949,6 +1050,82 @@ internal fun DetailUpNextCardSection(
     }
 }
 
+// ── Airing next (D7, delayIndex 6, between up-next and seasons) ───────────
+
+@Composable
+internal fun DetailUpcomingEpisodesSection(
+    delayIndex: Int,
+    state: DetailContentState,
+    callbacks: DetailContentCallbacks,
+    bodyContentPad: Dp,
+) {
+    // Admission guarantees the strip has rows (and the preference on); the
+    // empty gate here mirrors the sibling renderers' content check.
+    val upcoming = state.upcomingEpisodes
+    StaggeredDetailSection(visible = upcoming.isNotEmpty(), delayIndex = delayIndex) {
+        Column {
+            FadingItem {
+                Text(
+                    text = stringResource(Res.string.detail_section_airing_next),
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+                    modifier = Modifier
+                        .padding(horizontal = bodyContentPad)
+                        .semantics { heading() },
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+            Spacer(Modifier.height(16.dp))
+            TvFocusableItemRow(
+                items = upcoming,
+                key = { "upcoming_${it.id}" },
+                contentPadding = PaddingValues(horizontal = bodyContentPad),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                onFocusedIndexChange = { index ->
+                    upcoming.getOrNull(index)?.let(callbacks.screen.onFocusedMediaItem)
+                },
+            ) { _, episode, focusModifier ->
+                val episodeClick = remember(episode.id) { { callbacks.navigation.onItemClick(episode.id) } }
+                val episodeImageUrl = remember(episode.id) { callbacks.artwork.getImageUrl(episode.id) }
+                // D12: the per-row bell rides the slot D7 reserved for it —
+                // hidden outright on desktop (no notification stack) and
+                // keyed to the strip's one shared per-series state.
+                val bellVisible = showsSeriesNotifyBell(
+                    platformSupported = platformHasNotificationStack,
+                    mediaType = state.detail?.item?.mediaType,
+                )
+                val bellEnabledLabel = stringResource(Res.string.detail_option_stop_notify_new_episodes)
+                val bellDisabledLabel = stringResource(Res.string.detail_option_notify_new_episodes)
+                val bellContent: (@Composable () -> Unit)? = if (bellVisible) {
+                    {
+                        UpcomingEpisodeNotifyBell(
+                            enabled = state.seriesNotificationsEnabled,
+                            contentDescription = if (state.seriesNotificationsEnabled) {
+                                bellEnabledLabel
+                            } else {
+                                bellDisabledLabel
+                            },
+                            onClick = {
+                                callbacks.userData.onToggleSeriesNotifications(
+                                    !state.seriesNotificationsEnabled,
+                                )
+                            },
+                        )
+                    }
+                } else {
+                    null
+                }
+                UpcomingEpisodeCard(
+                    episode = episode,
+                    imageUrl = episodeImageUrl,
+                    onClick = episodeClick,
+                    modifier = focusModifier,
+                    trailingContent = bellContent,
+                )
+            }
+        }
+    }
+}
+
 // ── Seasons (delayIndex 6, after up-next) ─────────────────────────────────
 
 @Composable
@@ -1176,6 +1353,40 @@ internal fun DetailCastSection(
     }
 }
 
+// ── More in this collection (D6, delayIndex 10, ahead of the similar rows) ─
+
+@Composable
+internal fun DetailMoreInCollectionSection(
+    delayIndex: Int,
+    state: DetailContentState,
+    callbacks: DetailContentCallbacks,
+    bodyContentPad: Dp,
+) {
+    // The admission fold admits the slot only for VISIBLE rows (the
+    // eye-hidden ones excluded), so the wrapper re-filters with the same
+    // predicate — a hidden row never composes.
+    val hidden = state.hiddenFranchiseCollections[state.itemId].orEmpty()
+    val rows = state.franchiseCollections.filterNot { it.id in hidden }
+    StaggeredDetailSection(visible = rows.isNotEmpty(), delayIndex = delayIndex) {
+        Column(verticalArrangement = Arrangement.spacedBy(24.dp)) {
+            rows.forEach { collection ->
+                FranchiseCollectionRow(
+                    collection = collection,
+                    bodyContentPad = bodyContentPad,
+                    onPlayCollectionInOrder = callbacks.playback.onPlayCollectionInOrder,
+                    onHideRow = { callbacks.userData.onHideFranchiseRow(collection.id) },
+                    onSeeAll = {
+                        callbacks.navigation.onNavigate(Route.CollectionDetail(collection.id))
+                    },
+                    onItemClick = callbacks.navigation.onItemClick,
+                    onItemFocus = callbacks.screen.onFocusedMediaItem,
+                    getImageUrl = callbacks.artwork.getImageUrl,
+                )
+            }
+        }
+    }
+}
+
 // ── More like this (delayIndex 10) ────────────────────────────────────────
 
 @Composable
@@ -1256,6 +1467,15 @@ internal fun DetailMoreLikeThisSection(
  * ("Source Score"). Silent absence is the plugin contract — the admission
  * gate (state.pluginRatings non-empty) means a failed/null probe simply
  * never admits this slot; there is no error or loading state by design.
+ *
+ * D9 consolidation: this row is the detail screen's single RATINGS block.
+ * The D4 no-plugin strip (state.externalRatings) merges into this same
+ * FlowRow when it resolved chips — plugin sources first, then TMDB/IMDb —
+ * standing down only while the enrichment's Ratings-feature probe says the
+ * plugin owns ratings (the [DetailUiState.pluginSimilarSuppressesStock]
+ * mirror: probe live AND this row actually rendering). When this row is
+ * absent the D4 strip stands alone in the header metadata row instead —
+ * [externalRatingsStandaloneInHeader] keeps the two placements exclusive.
  */
 @Composable
 internal fun DetailPluginRatingsSection(
@@ -1290,6 +1510,26 @@ internal fun DetailPluginRatingsSection(
                             containerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f),
                             contentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.95f),
                             enabled = false,
+                        )
+                    }
+                    // The D4 chips, after the plugin sources (the D9 merge
+                    // order). Suppressed while the probe says the plugin owns
+                    // ratings AND this row is rendering — never duplicated.
+                    if (
+                        externalRatingsMergedIntoPluginRow(
+                            hasPluginRatings = ratings.isNotEmpty(),
+                            external = state.externalRatings,
+                            externalSuppressedByPlugin = state.externalRatingsSuppressedByPlugin,
+                        )
+                    ) {
+                        RatingsRow(
+                            critics = state.externalRatings.critics,
+                            audience = state.externalRatings.audience,
+                            imdb = state.externalRatings.imdb,
+                            tmdb = state.externalRatings.tmdb,
+                            rtUrl = state.externalRatings.rtUrl,
+                            imdbUrl = state.externalRatings.imdbUrl,
+                            tmdbUrl = state.externalRatings.tmdbUrl,
                         )
                     }
                 }

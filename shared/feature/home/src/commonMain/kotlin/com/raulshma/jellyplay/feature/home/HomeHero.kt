@@ -2,6 +2,7 @@
 package com.raulshma.jellyplay.feature.home
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
@@ -41,9 +42,13 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -86,8 +91,10 @@ import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.tvHeroFocusExitHandler
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Heart
+import com.composables.icons.tabler.outline.PlayerPause
 import com.composables.icons.tabler.outline.PlayerPlay
 import com.raulshma.jellyplay.core.designsystem.theme.smoothCornerShape
+import com.raulshma.jellyplay.feature.home.generated.resources.home_hero_pause_video
 import com.raulshma.jellyplay.feature.home.generated.resources.home_resume
 import com.raulshma.jellyplay.feature.home.generated.resources.home_play
 import com.raulshma.jellyplay.feature.home.generated.resources.home_details
@@ -136,6 +143,10 @@ fun AnimatedHeroHeader(
     onFocusChange: (Boolean) -> Unit = {},
     requestInitialFocus: Boolean = true,
     focusRequester: FocusRequester? = null,
+    /** H9: the curated headline override; null renders the item's own title. */
+    headline: String? = null,
+    /** H9: the curated subhead (kicker) override; null renders nothing above the title. */
+    subhead: String? = null,
 ) {
     val isTv = LocalTvMode.current
     val bringIntoViewResponder = remember(listState) {
@@ -180,6 +191,18 @@ fun AnimatedHeroHeader(
     val heroIsProminent by remember {
         derivedStateOf { listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset < listState.layoutInfo.viewportSize.height / 2 }
     }
+    // H7: the clip's scroll-defer leg — while the list is scrolling the
+    // ambient video unmounts (the same posture the rotation cadence takes to
+    // scrolling). Derived like the gates above so it stays a draw-phase
+    // read, not a per-scroll-frame recomposition of the header.
+    val heroIsScrolling by remember(listState) {
+        derivedStateOf { listState.isScrollInProgress }
+    }
+    // H7 inline control: the pause-video chip's session memory. Hoisted here
+    // (outside AnimatedContent) so it survives hero rotations AND navigation
+    // (Home stays in the back stack) — per-hero-item state would reset on
+    // every rotation tick and per-process state would outlive its screen.
+    var heroVideoPausedForSession by rememberSaveable { mutableStateOf(false) }
 
     val slowEffects = MaterialTheme.motionScheme.slowEffectsSpec<Float>()
     val defaultEffects = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
@@ -218,7 +241,12 @@ fun AnimatedHeroHeader(
             requestInitialFocus = requestInitialFocus,
             isVisible = heroIsVisible,
             isProminent = heroIsProminent,
+            isScrolling = heroIsScrolling,
+            videoPausedForSession = heroVideoPausedForSession,
+            onPauseVideoForSession = { heroVideoPausedForSession = true },
             focusRequester = focusRequester,
+            headline = headline,
+            subhead = subhead,
         )
     }
 }
@@ -238,8 +266,18 @@ fun HeroHeader(
     onFocusChange: (Boolean) -> Unit = {},
     isVisible: Boolean = true,
     isProminent: Boolean = true,
+    /** H7: the list is mid-scroll — the clip's scroll-defer leg (rotation-cadence posture). */
+    isScrolling: Boolean = false,
+    /** H7: the pause-video chip's session latch (hoisted to [AnimatedHeroHeader]). */
+    videoPausedForSession: Boolean = false,
+    /** H7: chip tap — falls back to the static image for the session. */
+    onPauseVideoForSession: () -> Unit = {},
     requestInitialFocus: Boolean = true,
     focusRequester: FocusRequester? = null,
+    /** H9: the curated headline override; null renders the item's own title. */
+    headline: String? = null,
+    /** H9: the curated subhead (kicker) override; null renders nothing above the title. */
+    subhead: String? = null,
 ) {
     val isTv = LocalTvMode.current
     val adaptiveInfo = LocalAdaptiveInfo.current
@@ -290,6 +328,54 @@ fun HeroHeader(
     val ratingText = remember(item.id, item.communityRating) {
         item.communityRating?.let { formatFixed(it.toDouble(), 1) }
     }
+
+    // ── H7 video hero billboard ─────────────────────────────────────────
+    // The featured candidate's clip — the spec's two-tier source: the server
+    // ThemeVideo clip first, the muted YouTube trailer embed second. The
+    // loader effect runs as soon as the pref + platform gate hold (one
+    // TTL-memoised probe per candidate, so rotation revisit and pause-chip
+    // re-mount are free); the MOUNT below waits for the full
+    // [heroVideoShouldPlay] gate set — visibility, prominence, focus hold,
+    // RESUMED, not scrolling, reduced-motion/performance mode, session
+    // pause — so the clip plays only when the hero is actually the focal
+    // element. Desktop never gets here (platform-capable false → the static
+    // image stays).
+    val videoGates = rememberHeroVideoGates()
+    val lifecycleResumed = rememberIsLifecycleResumed()
+    // The whole metadata leg (loader injection + fetch effect) lives inside
+    // the capability+pref branch — the desktop / pref-off composition pays
+    // for nothing but the gate booleans (the HomeTrickplayPeek gate posture).
+    val heroClip: HomeHeroVideoLoader.HeroClip? = if (videoGates.prefEnabled && heroVideoPlatformCapable) {
+        val videoLoader = org.koin.compose.koinInject<HomeHeroVideoLoader>()
+        var clip by remember(item.id) { mutableStateOf<HomeHeroVideoLoader.HeroClip?>(null) }
+        LaunchedEffect(item.id) {
+            clip = videoLoader.heroClip(item.id, item.mediaType)
+        }
+        clip
+    } else {
+        null
+    }
+    val heroVideoUrl: String? = (heroClip as? HomeHeroVideoLoader.HeroClip.ThemeVideo)?.streamUrl
+    val heroTrailerKey: String? = (heroClip as? HomeHeroVideoLoader.HeroClip.TrailerEmbed)?.videoKey
+    // TV focus-hold: the clip is attention-grabbing, so on TV it must stop
+    // the moment D-pad focus leaves the hero buttons (the rotation cadence's
+    // focusInHero gate, read at the source). Touch has no focus traversal —
+    // the leg always holds there.
+    var heroButtonFocused by remember { mutableStateOf(false) }
+    val heroFocusHeld = !isTv || heroButtonFocused
+    val videoShouldPlay = heroVideoShouldPlay(
+        prefEnabled = videoGates.prefEnabled,
+        sessionPaused = videoPausedForSession,
+        reducedMotion = reducedMotion,
+        performanceMode = videoGates.performanceMode,
+        isVisible = isVisible,
+        isProminent = isProminent,
+        heroFocusHeld = heroFocusHeld,
+        lifecycleResumed = lifecycleResumed,
+        isScrolling = isScrolling,
+        platformCapable = heroVideoPlatformCapable,
+    )
+    val heroVideoCrossfadeSpec = MaterialTheme.motionScheme.slowEffectsSpec<Float>()
 
     RequestOrRestoreFocus(
         focusRequester = if (isTv && requestInitialFocus) heroPlayFocusRequester else null,
@@ -503,6 +589,38 @@ fun HeroHeader(
             size = CoilSize(1920, 1080),
         )
 
+        // H7: the ambient clip crossfades in OVER the static image (the mount
+        // point the plan pins: between the backdrop image and the legibility
+        // scrim). The Crossfade is the whole image→video swap — no separate
+        // opacity choreography — and nulling the target on any gate flip
+        // fades back to the untouched image beneath.
+        var trailerEmbedFailed by remember(item.id) { mutableStateOf(false) }
+        Crossfade(
+            targetState = if (videoShouldPlay) heroClip else null,
+            animationSpec = heroVideoCrossfadeSpec,
+            label = "heroVideo",
+            modifier = Modifier.fillMaxSize(),
+        ) { clip ->
+            when (clip) {
+                is HomeHeroVideoLoader.HeroClip.ThemeVideo ->
+                    AmbientHeroVideoSurface(url = clip.streamUrl, modifier = Modifier.fillMaxSize())
+
+                // H7's fallback leg: no ThemeVideo → the muted trailer embed
+                // (Android/TV; the desktop actual fails fast). An embed
+                // failure folds back to the static image for this candidate.
+                is HomeHeroVideoLoader.HeroClip.TrailerEmbed ->
+                    if (!trailerEmbedFailed) {
+                        HeroTrailerEmbedSurface(
+                            videoKey = clip.videoKey,
+                            modifier = Modifier.fillMaxSize(),
+                            onEmbedFailed = { trailerEmbedFailed = true },
+                        )
+                    }
+
+                null -> {}
+            }
+        }
+
         // Legibility scrim: darkens only the top third (title/overline sits at
         // the bottom, which is protected by the dissolve into the backdrop, and
         // the ambient backdrop itself is already dark). The bottom is left
@@ -543,14 +661,75 @@ fun HeroHeader(
                 )
         )
 
+        // H7 inline control: the pause-video chip — while the clip plays the
+        // hero gains a small top-end affordance; tapping it drops the video
+        // for the session (the latch lives on AnimatedHeroHeader). Touch-only
+        // on purpose: a focusable chip in the TV hero would inject a stop in
+        // the D-pad traversal (poster → play → details → rows), and the TV
+        // pref is a separate default-off row anyway.
+        if (heroClip != null && videoShouldPlay && !isTv) {
+            val pauseChipInteractionSource = remember { MutableInteractionSource() }
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = 12.dp, end = contentPadding)
+                    .clip(ShapeCache.smoothPill)
+                    .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f))
+                    .clickable(
+                        interactionSource = pauseChipInteractionSource,
+                        indication = null,
+                        onClick = onPauseVideoForSession,
+                    )
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+            ) {
+                androidx.compose.material3.Icon(
+                    Tabler.Outline.PlayerPause,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.size(14.dp),
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    stringResource(Res.string.home_hero_pause_video),
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+        }
+
         Column(
             modifier = Modifier
                 .align(Alignment.BottomStart)
                 .padding(horizontal = contentPadding)
                 .padding(bottom = 32.dp)
         ) {
+            // H9: the curated billboard's subhead — a kicker line above the
+            // headline. Rendered only when the featured candidate carries a
+            // curated subhead; the local hero's layout is unchanged otherwise.
+            if (!subhead.isNullOrBlank()) {
+                Text(
+                    text = subhead,
+                    style = MaterialTheme.typography.titleSmall.copy(
+                        fontWeight = FontWeight.SemiBold,
+                        shadow = androidx.compose.ui.graphics.Shadow(
+                            // The title sits at the protected (opaque) bottom
+                            // of the hero — the kicker carries the same
+                            // legibility shadow the headline below renders.
+                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.55f),
+                            offset = androidx.compose.ui.geometry.Offset(2f, 4f),
+                            blurRadius = 8f,
+                        ),
+                    ),
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Spacer(Modifier.height(6.dp))
+            }
+
             Text(
-                text = item.name,
+                text = headline?.takeIf { it.isNotBlank() } ?: item.name,
                 style = MaterialTheme.typography.displayMedium.copy(
                     fontWeight = FontWeight.ExtraBold,
                     letterSpacing = (-1.5).sp,
@@ -699,7 +878,9 @@ fun HeroHeader(
                             .ifElse(isTv, playTvFocusState.focusModifier)
                             .focusRequester(heroPlayFocusRequester)
                             .onFocusChanged { focusState ->
-                                onFocusChange(focusState.isFocused || focusState.hasFocus)
+                                val focused = focusState.isFocused || focusState.hasFocus
+                                heroButtonFocused = focused
+                                onFocusChange(focused)
                             }
                             .clickable(
                                 interactionSource = playInteractionSource,
@@ -744,7 +925,9 @@ fun HeroHeader(
                             .ifElse(isTv, detailsTvFocusState.focusModifier)
                             .focusRequester(heroDetailsFocusRequester)
                             .onFocusChanged { focusState ->
-                                onFocusChange(focusState.isFocused || focusState.hasFocus)
+                                val focused = focusState.isFocused || focusState.hasFocus
+                                heroButtonFocused = focused
+                                onFocusChange(focused)
                             }
                             .clickable(
                                 interactionSource = detailsInteractionSource,

@@ -147,6 +147,9 @@ class DetailViewModelTest {
         seerrRepository = mockk(relaxed = true)
         audioQueueFacade = mockk()
         themeMusicPlayer = mockk(relaxed = true)
+        // D8: the VM folds the seam's playing flow into uiState — a real
+        // StateFlow, not a relaxed mock.
+        every { themeMusicPlayer.isPlaying } returns MutableStateFlow(false)
 
         every { seerrRepository.preferences } returns MutableStateFlow(SeerrPreferences())
         // Default: online. Prevents the Seerr Local-skip from falsely firing on
@@ -159,6 +162,18 @@ class DetailViewModelTest {
         // launch doesn't crash casting the relaxed-mock Result default. Individual
         // tests override this to drive the specialFeatures list.
         coEvery { libraryApiClient.getSpecialFeatures(any()) } returns Result.success(emptyList())
+        // D6: the franchise rows' BoxSet-ancestor read — empty keeps every
+        // pre-D6 behavior (no ancestor → no rows). Individual tests override.
+        coEvery { libraryApiClient.getBoxSetsContaining(any()) } returns Result.success(emptyList())
+        // D7: the "Airing next" strip fetch — empty keeps the strip absent.
+        // Individual tests override.
+        coEvery { libraryApiClient.getUpcoming(any(), any(), any()) } returns Result.success(emptyList())
+        // D3: the merged trailer list's local leg — empty keeps the list
+        // remote-only (every pre-D3 shape). Individual tests override.
+        coEvery { libraryApiClient.getLocalTrailers(any()) } returns Result.success(emptyList())
+        // D22: the ambient ThemeVideo leg — empty keeps the hero on the
+        // embed/static (every pre-D22 shape). Individual tests override.
+        coEvery { libraryApiClient.getThemeVideos(any()) } returns Result.success(emptyList())
         // Default stub for the media-segments pre-warm fetch so its REMOTE
         // side-effect launch doesn't crash casting the relaxed-mock Result default.
         // Individual tests override this to drive the availability booleans.
@@ -168,6 +183,11 @@ class DetailViewModelTest {
         // casting the relaxed-mock Result default. Individual tests override these.
         coEvery { seerrRepository.getTmdbVideos(any(), any()) } returns Result.success(emptyList())
         coEvery { seerrRepository.getTmdbReviews(any(), any()) } returns Result.success(emptyList())
+        // D4: the externalRatings enrichment's Seerr leg — an empty payload
+        // keeps every pre-D4 behavior (the strip falls through to the TMDB
+        // seam, unwired in this harness, and stays absent).
+        coEvery { seerrRepository.getRatings(any(), any()) } returns
+            Result.success(com.raulshma.jellyplay.core.model.seerr.SeerrRatings())
         // Provider refresh is a no-op by default; tests that drive refresh override.
         coEvery { mediaDetailProvider.refresh(any()) } returns Unit
         every { mediaRepository.userDataChanges } returns userDataEvents
@@ -244,6 +264,11 @@ class DetailViewModelTest {
                 homeDiscoveryStore = homeDiscoveryStore,
                 experimentalStore = experimentalStore,
                 engineStore = engineStore,
+                notificationStore = mockk<com.raulshma.jellyplay.core.datastore.notification.NotificationStore>(relaxed = true).also {
+                    every { it.notification } returns MutableStateFlow(
+                        com.raulshma.jellyplay.core.datastore.notification.NotificationSlice(),
+                    )
+                },
             ),
             remoteDiscovery = RemoteDiscoveryClients(
                 seerrRepository = seerrRepository,

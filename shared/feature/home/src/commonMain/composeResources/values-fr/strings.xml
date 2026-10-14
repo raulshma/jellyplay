@@ -109,6 +109,30 @@
     <string name="next_up_hidden_restore_all_message">Les %1$d séries masquées réapparaîtront dans la rangée À suivre.</string>
     <string name="next_up_hidden_restore_cd">Restaurer %1$s dans À suivre</string>
     <string name="next_up_hidden_unknown">Série inconnue</string>
+    <string name="my_media_hidden_title">Bibliothèques masquées</string>
+    <string name="my_media_hidden_empty">Rien de masqué</string>
+    <string name="my_media_hidden_empty_subtitle">Les bibliothèques masquées de la ligne Mes médias apparaissent ici pour être restaurées.</string>
+    <string name="my_media_hidden_restore_all">Tout restaurer</string>
+    <string name="my_media_hidden_restore_all_cd">Restaurer toutes les bibliothèques masquées dans Mes médias</string>
+    <string name="my_media_hidden_restore_all_title">Restaurer toutes les bibliothèques ?</string>
+    <string name="my_media_hidden_restore_all_message">Les %1$d bibliothèques masquées réapparaîtront dans la ligne Mes médias.</string>
+    <string name="my_media_hidden_restore_cd">Restaurer %1$s dans Mes médias</string>
+    <string name="my_media_hidden_unknown">Bibliothèque inconnue</string>
     <string name="a11y_mode_video">Mode vidéo</string>
     <string name="a11y_mode_music">Mode musique</string>
+    <!-- Home top-dock overflow menu (H15 inline anti-spoiler toggle). -->
+    <string name="home_more_options">Plus d'options</string>
+    <string name="home_anti_spoiler_mode">Mode anti-spoiler</string>
+
+    <!-- H17 personal stats card ("Your library week"). -->
+    <string name="home_stats_card_title">Votre semaine de bibliothèque</string>
+    <string name="home_stats_card_counts">%1$d vus · %2$d non vus</string>
+    <string name="home_stats_card_watch_approx">~%1$s h regardées</string>
+    <string name="home_stats_card_watch_exact">%1$s h regardées</string>
+    <string name="home_stats_card_streak">série de %1$d jours</string>
+
+    <!-- H21 new-section announcement snackbar (the VM emits the structural
+         event; the screen resolves the text). -->
+    <string name="home_new_sections_announcement">Nouveautés sur l\'accueil : %1$s</string>
+    <string name="home_new_sections_customize">Personnaliser</string>
 </resources>

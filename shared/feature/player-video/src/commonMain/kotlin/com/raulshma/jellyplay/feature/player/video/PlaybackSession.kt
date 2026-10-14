@@ -180,6 +180,9 @@ internal class PlaybackSession(
     /** Manual up-next queue (details screen "play next/last"); drained by the Up Next controller's queue-first advance. */
     val videoQueue: VideoQueueController = VideoQueueController(),
 
+    /** D14 "Play (with pre-rolls)": the one-shot override the ⋮ action arms; the [initialize] funnel consumes it into [LoadRequest.forceCinemaMode]. Null in the behavioral test graphs (can never force). */
+    private val cinemaModeOverride: com.raulshma.jellyplay.core.data.playback.CinemaModeOverride? = null,
+
     // ── Engine-room test seams ───────────────────────────────────────────────
     //    Production builds each of these internally (the composition root's
     //    collaborator section below); the behavioral suites pass recording
@@ -1410,13 +1413,6 @@ internal class PlaybackSession(
     internal var playSessionId: String = java.util.UUID.randomUUID().toString()
 
     /**
-     * In-flight media-load coroutine, so a new initialize call can cancel the
-     * previous one before launching its own — prevents overlapping
-     * network/teardown side effects when a SyncPlay load event races a user
-     * navigation.
-     */
-
-    /**
      * Job returned from [initialize] when a hook early-returns before any
      * load was launched (remote "Play On" routing, same-item short-circuit):
      * callers get a uniformly typed, already-finished handle instead of a
@@ -1453,6 +1449,9 @@ internal class PlaybackSession(
                 mediaSourceId = mediaSourceId,
                 startPositionTicks = resolveStartTicksAfterProcessDeath(itemId, startPositionTicks),
                 allowCinemaMode = true,
+                // D14: consumed exactly once — later loads (and advanceCinemaIntro's
+                // direct request) follow the global pref again. See [LoadRequest.forceCinemaMode].
+                forceCinemaMode = cinemaModeOverride?.consume() == true,
                 subtitleStreamIndex = subtitleStreamIndex,
                 audioStreamIndex = audioStreamIndex,
             )

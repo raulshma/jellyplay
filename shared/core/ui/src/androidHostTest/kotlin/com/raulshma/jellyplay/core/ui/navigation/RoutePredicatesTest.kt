@@ -60,6 +60,7 @@ class RoutePredicatesTest {
         Route.SeerrDetail(tmdbId = 42, mediaType = "movie"),
         Route.PersonDetail("person-1"),
         Route.CastAndCrew("item-1"),
+        Route.Reviews("item-1"),
         Route.ManageSeries("series-1"),
         Route.CollectionDetail("collection-1"),
         Route.StudioDetail("studio-1"),

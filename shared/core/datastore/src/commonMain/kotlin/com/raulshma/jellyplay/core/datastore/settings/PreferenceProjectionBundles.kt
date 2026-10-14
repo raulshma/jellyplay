@@ -73,6 +73,7 @@ internal data class PlaybackCoreBundle(
         stillWatchingEpisodeThreshold = video.stillWatchingEpisodeThreshold,
         trailerAutoplay = video.trailerAutoplay,
         cinemaModeEnabled = video.cinemaModeEnabled,
+        playTrailerBeforeMovie = video.playTrailerBeforeMovie,
         videoSwipeSeekMaxMs = video.videoSwipeSeekMaxMs,
         videoRememberBrightness = video.videoRememberBrightness,
         videoBrightnessLevel = video.videoBrightnessLevel,

@@ -109,6 +109,30 @@
     <string name="next_up_hidden_restore_all_message">所有 %1$d 个隐藏的剧集将重新出现在“接下来播放”栏中。</string>
     <string name="next_up_hidden_restore_cd">将 %1$s 恢复到“接下来播放”</string>
     <string name="next_up_hidden_unknown">未知剧集</string>
+    <string name="my_media_hidden_title">已隐藏的媒体库</string>
+    <string name="my_media_hidden_empty">没有隐藏项</string>
+    <string name="my_media_hidden_empty_subtitle">从“我的媒体”行中隐藏的媒体库会显示在这里，可供恢复。</string>
+    <string name="my_media_hidden_restore_all">全部恢复</string>
+    <string name="my_media_hidden_restore_all_cd">将所有隐藏的媒体库恢复到“我的媒体”</string>
+    <string name="my_media_hidden_restore_all_title">恢复所有媒体库？</string>
+    <string name="my_media_hidden_restore_all_message">所有 %1$d 个隐藏的媒体库将重新出现在“我的媒体”行中。</string>
+    <string name="my_media_hidden_restore_cd">将 %1$s 恢复到“我的媒体”</string>
+    <string name="my_media_hidden_unknown">未知媒体库</string>
     <string name="a11y_mode_video">视频模式</string>
     <string name="a11y_mode_music">音乐模式</string>
+    <!-- Home top-dock overflow menu (H15 inline anti-spoiler toggle). -->
+    <string name="home_more_options">更多选项</string>
+    <string name="home_anti_spoiler_mode">防剧透模式</string>
+
+    <!-- H17 personal stats card ("Your library week"). -->
+    <string name="home_stats_card_title">你的媒体库一周</string>
+    <string name="home_stats_card_counts">已看 %1$d · 未看 %2$d</string>
+    <string name="home_stats_card_watch_approx">已观看约 %1$s 小时</string>
+    <string name="home_stats_card_watch_exact">已观看 %1$s 小时</string>
+    <string name="home_stats_card_streak">连续观看 %1$d 天</string>
+
+    <!-- H21 new-section announcement snackbar (the VM emits the structural
+         event; the screen resolves the text). -->
+    <string name="home_new_sections_announcement">主屏幕新内容：%1$s</string>
+    <string name="home_new_sections_customize">自定义</string>
 </resources>

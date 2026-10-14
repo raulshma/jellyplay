@@ -97,6 +97,7 @@ class VideoPlayerStore constructor(
         val STILL_WATCHING_EPISODE_THRESHOLD = intPreferencesKey(VideoPlayerPreferenceSpecs.STILL_WATCHING_EPISODE_THRESHOLD.keyName)
         val TRAILER_AUTOPLAY = booleanPreferencesKey(VideoPlayerPreferenceSpecs.TRAILER_AUTOPLAY.keyName)
         val CINEMA_MODE_ENABLED = booleanPreferencesKey(VideoPlayerPreferenceSpecs.CINEMA_MODE_ENABLED.keyName)
+        val PLAY_TRAILER_BEFORE_MOVIE = booleanPreferencesKey(VideoPlayerPreferenceSpecs.PLAY_TRAILER_BEFORE_MOVIE.keyName)
         val VIDEO_SWIPE_SEEK_MAX_MS = longPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_SWIPE_SEEK_MAX_MS.keyName)
         val VIDEO_REMEMBER_BRIGHTNESS = booleanPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_REMEMBER_BRIGHTNESS.keyName)
         val VIDEO_BRIGHTNESS_LEVEL = floatPreferencesKey(VideoPlayerPreferenceSpecs.VIDEO_BRIGHTNESS_LEVEL.keyName)
@@ -160,6 +161,7 @@ class VideoPlayerStore constructor(
         stillWatchingEpisodeThreshold = VideoPlayerPreferenceSpecs.STILL_WATCHING_EPISODE_THRESHOLD.readFrom(prefs),
         trailerAutoplay = VideoPlayerPreferenceSpecs.TRAILER_AUTOPLAY.readFrom(prefs),
         cinemaModeEnabled = VideoPlayerPreferenceSpecs.CINEMA_MODE_ENABLED.readFrom(prefs),
+        playTrailerBeforeMovie = VideoPlayerPreferenceSpecs.PLAY_TRAILER_BEFORE_MOVIE.readFrom(prefs),
         videoSwipeSeekMaxMs = VideoPlayerPreferenceSpecs.VIDEO_SWIPE_SEEK_MAX_MS.readFrom(prefs),
         videoRememberBrightness = VideoPlayerPreferenceSpecs.VIDEO_REMEMBER_BRIGHTNESS.readFrom(prefs),
         videoBrightnessLevel = VideoPlayerPreferenceSpecs.VIDEO_BRIGHTNESS_LEVEL.readFrom(prefs),
@@ -317,6 +319,11 @@ class VideoPlayerStore constructor(
 
     suspend fun setCinemaModeEnabled(enabled: Boolean) {
         dataStore.edit { VideoPlayerPreferenceSpecs.CINEMA_MODE_ENABLED.writeTo(it, enabled) }
+    }
+
+    /** Trailer-then-feature: seed the movie session queue with a trailer when one is available. */
+    suspend fun setPlayTrailerBeforeMovie(enabled: Boolean) {
+        dataStore.edit { VideoPlayerPreferenceSpecs.PLAY_TRAILER_BEFORE_MOVIE.writeTo(it, enabled) }
     }
 
     suspend fun setVideoSwipeSeekMaxMs(ms: Long) {
@@ -489,6 +496,7 @@ class VideoPlayerStore constructor(
             VideoPlayerPreferenceSpecs.STILL_WATCHING_EPISODE_THRESHOLD.writeTo(prefs, slice.stillWatchingEpisodeThreshold)
             VideoPlayerPreferenceSpecs.TRAILER_AUTOPLAY.writeTo(prefs, slice.trailerAutoplay)
             VideoPlayerPreferenceSpecs.CINEMA_MODE_ENABLED.writeTo(prefs, slice.cinemaModeEnabled)
+            VideoPlayerPreferenceSpecs.PLAY_TRAILER_BEFORE_MOVIE.writeTo(prefs, slice.playTrailerBeforeMovie)
             VideoPlayerPreferenceSpecs.VIDEO_SWIPE_SEEK_MAX_MS.writeTo(prefs, slice.videoSwipeSeekMaxMs)
             VideoPlayerPreferenceSpecs.VIDEO_REMEMBER_BRIGHTNESS.writeTo(prefs, slice.videoRememberBrightness)
             VideoPlayerPreferenceSpecs.VIDEO_BRIGHTNESS_LEVEL.writeTo(prefs, slice.videoBrightnessLevel)
@@ -572,6 +580,7 @@ data class VideoPlayerSlice(
     val stillWatchingEpisodeThreshold: Int = VideoPlayerPreferenceSpecs.STILL_WATCHING_EPISODE_THRESHOLD.default,
     val trailerAutoplay: Boolean = VideoPlayerPreferenceSpecs.TRAILER_AUTOPLAY.default,
     val cinemaModeEnabled: Boolean = VideoPlayerPreferenceSpecs.CINEMA_MODE_ENABLED.default,
+    val playTrailerBeforeMovie: Boolean = VideoPlayerPreferenceSpecs.PLAY_TRAILER_BEFORE_MOVIE.default,
     val videoSwipeSeekMaxMs: Long = VideoPlayerPreferenceSpecs.VIDEO_SWIPE_SEEK_MAX_MS.default,
     val videoRememberBrightness: Boolean = VideoPlayerPreferenceSpecs.VIDEO_REMEMBER_BRIGHTNESS.default,
     val videoBrightnessLevel: Float = VideoPlayerPreferenceSpecs.VIDEO_BRIGHTNESS_LEVEL.default,

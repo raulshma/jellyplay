@@ -136,6 +136,12 @@ data class PlaybackPreferences(
     val trailerAutoplay: Boolean = true,
     val cinemaModeEnabled: Boolean = false,
     /**
+     * Trailer-then-feature (opt-in): for MOVIE plays with a trailer available,
+     * the session queue is seeded with the trailer before the feature. Default
+     * off — today's feature-first behavior.
+     */
+    val playTrailerBeforeMovie: Boolean = false,
+    /**
      * "Still watching?" confirm prompt: which trigger arms are on
      * (see [StillWatchingMode]). The rows ride the autoplay toggle.
      */

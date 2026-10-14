@@ -33,6 +33,17 @@ internal sealed interface HomeRowChassis {
 
     /** Online poster row — everything the offline mirror does not claim. */
     data class OnlinePoster(override val section: HomeSection) : HomeRowChassis
+
+    /**
+     * H5: the online My Media tiles row — home's only non-poster shape. The
+     * section's items are the libraries mapped to FOLDER-typed MediaItems by
+     * the assembler; the renderer is [HomeLibraryTilesRow]. Offline the row is
+     * inert (the mirror's id re-resolution finds no downloads for library
+     * ids, so the mirrored row renders empty and drops) — the dispatch keeps
+     * that by construction: the offline-mirror clause claims every non-wide
+     * section before this arm is reachable.
+     */
+    data class OnlineTiles(override val section: HomeSection) : HomeRowChassis
 }
 
 /**
@@ -41,8 +52,8 @@ internal sealed interface HomeRowChassis {
  * in one pure, tested place. The order is today's: DOWNLOADED wins outright
  * (first predicate, online feed included); then, while the offline feed
  * renders, the mirror claims every non-wide section; Continue Watching /
- * Next Up route by feed source (wide rows), and anything else falls to the
- * online poster row.
+ * Next Up route by feed source (wide rows); the H5 My Media tiles claim their
+ * type online; and anything else falls to the online poster row.
  */
 internal fun homeRowChassis(section: HomeSection, hasOfflineContent: Boolean): HomeRowChassis {
     // The wide-row membership is the row registry's fact (Continue Watching /
@@ -53,6 +64,7 @@ internal fun homeRowChassis(section: HomeSection, hasOfflineContent: Boolean): H
             HomeRowChassis.OfflinePoster(section)
         isWide && hasOfflineContent -> HomeRowChassis.OfflineWide(section)
         isWide -> HomeRowChassis.OnlineWide(section)
+        section.type == HomeSectionType.MY_MEDIA -> HomeRowChassis.OnlineTiles(section)
         else -> HomeRowChassis.OnlinePoster(section)
     }
 }
@@ -73,7 +85,8 @@ internal fun sectionHasSeeAll(sectionType: HomeSectionType): Boolean =
  * fetching, so they cannot drift.
  *
  * Per type: the direct-query sections (Continue Watching / Continue Reading /
- * Next Up), the per-library latest rows, Recently Added (aggregate — its
+ * Next Up / the H4 Upcoming row), the per-library latest rows, Recently Added
+ * (aggregate — its
  * refetch re-runs the fan-out), the Jellyfin discover rows, the pinned rows
  * and the plugin rows (PLUGIN_ROW — the fetcher's single-row plugin arm)
  * all map to a single-row fetch (see `HomeSectionsFetcher.refreshSection`,
@@ -81,7 +94,9 @@ internal fun sectionHasSeeAll(sectionType: HomeSectionType): Boolean =
  * group gate/last-known-good batch path and are excluded (the `seerrItems`
  * guard below — the per-INSTANCE half of the gate; the type half is the
  * registry's [HomeRowModules]/edgeRefreshable fact). RECOMMENDATIONS' seed
- * chain is batch-shaped; FAVORITES, LIVE_TV and DOWNLOADED are never
+ * chain is batch-shaped; MY_MEDIA assembles the batch's shared folders read
+ * (a single-row refetch would buy nothing the batch didn't already fetch);
+ * FAVORITES, LIVE_TV and DOWNLOADED are never
  * constructed by the network (offline rows are excluded upstream — the
  * offline feed never arms the gesture).
  */

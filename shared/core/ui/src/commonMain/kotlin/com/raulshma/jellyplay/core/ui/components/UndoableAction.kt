@@ -30,17 +30,23 @@ import kotlinx.coroutines.flow.receiveAsFlow
  *
  * @param message Human-readable description, e.g. "Removed 'Pilot' from playlist".
  * @param onUndo Reverts the action. Runs on the main thread when the user taps
- * "Undo". Capture the snapshot needed to revert at emit time — by the time the
- * snackbar expires the data may have shifted.
+ * the action button. Capture the snapshot needed to revert at emit time — by the
+ * time the snackbar expires the data may have shifted. Doubles as the one-action
+ * callback for NON-undo snackbars (e.g. an announcement whose button navigates).
  * @param actionLabel Defaults to the shared `core_undo` ("Undo"); override only
  * for domain-specific verbs (e.g. "Restore").
  * @param duration Recoverable actions are not errors; keep them brief.
+ * @param onDismiss Runs when the snackbar left WITHOUT its button tapped
+ * (timeout or swipe); null = nothing to do. Never runs when the button was
+ * tapped ([onUndo] covers that outcome), so an emit-side announce-once gate can
+ * stamp "seen" on exactly one of the two terminal outcomes.
  */
 data class UndoableAction(
     val message: String,
     val onUndo: () -> Unit,
     val actionLabel: String? = null,
     val duration: SnackbarDuration = SnackbarDuration.Short,
+    val onDismiss: (() -> Unit)? = null,
 )
 
 /**
@@ -63,8 +69,13 @@ fun CollectUndoActions(
                 actionLabel = action.actionLabel ?: undoLabel,
                 duration = action.duration,
             )
+            // Exactly one branch runs per snackbar: the button tap routes to
+            // [UndoableAction.onUndo], every other exit (timeout, swipe) to the
+            // optional [UndoableAction.onDismiss] — the announce-once pairing.
             if (result == SnackbarResult.ActionPerformed) {
                 action.onUndo()
+            } else {
+                action.onDismiss?.invoke()
             }
         }
     }

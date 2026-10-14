@@ -511,6 +511,8 @@
     <string name="ss_auto_delete_after_watch_subtitle">看完后删除下载</string>
     <string name="ss_next_up_hidden_title">已从“接下来播放”中隐藏</string>
     <string name="ss_next_up_hidden_subtitle">查看并恢复从“接下来播放”栏移除的剧集</string>
+    <string name="ss_hidden_libraries_title">已隐藏的媒体库</string>
+    <string name="ss_hidden_libraries_subtitle">查看并恢复从“我的媒体”行中排除的媒体库</string>
     <string name="ss_prefer_logos_subtitle">服务器提供透明 Logo 时，将其用作详情页标题</string>
     <string name="ss_external_player_app_subtitle">选择由哪个外部播放器应用打开播放</string>
     <string name="ss_still_watching_mode_subtitle">连续多集或数小时后，继续前先确认</string>

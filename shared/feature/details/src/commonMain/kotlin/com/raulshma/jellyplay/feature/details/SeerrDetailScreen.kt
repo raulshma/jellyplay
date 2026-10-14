@@ -73,6 +73,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.backgroundBrush
 import com.raulshma.jellyplay.core.designsystem.theme.detailCardBorder
 import com.raulshma.jellyplay.core.designsystem.theme.rememberIsLightTheme
 import com.raulshma.jellyplay.core.designsystem.theme.LocalIsSoothingTheme
+import com.raulshma.jellyplay.core.model.ExternalUrl
 import com.raulshma.jellyplay.core.model.SeerrDetailPreferences
 import com.raulshma.jellyplay.core.model.seerr.SeerrEpisode
 import com.raulshma.jellyplay.core.model.seerr.SeerrMovieDetails
@@ -94,7 +95,6 @@ import com.raulshma.jellyplay.core.ui.components.seerr.SeerrRequestDialog
 import com.raulshma.jellyplay.core.ui.components.rememberVideoClickHandler
 import com.raulshma.jellyplay.core.ui.components.seerr.seerrCardClickHandler
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
-import com.raulshma.jellyplay.core.designsystem.theme.BrandColors
 import com.raulshma.jellyplay.core.designsystem.theme.StatusColors
 import com.raulshma.jellyplay.core.ui.image.MediaImage
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
@@ -570,11 +570,22 @@ private fun SeerrDetailContent(
 
                                 Spacer(Modifier.height(24.dp))
 
-                                ExternalLinksRow(
-                                    tmdbId = movieDetail?.id ?: tvDetail?.id ?: 0,
-                                    imdbId = movieDetail?.imdbId ?: tvDetail?.externalIds?.imdbId,
-                                    tvdbId = tvDetail?.externalIds?.tvdbId,
-                                    mediaType = if (movieDetail != null) "movie" else "tv"
+                                // The former private ExternalLinksRow, generalized into the
+                                // shared DetailExternalLinksRow (D1) — same three brand chips,
+                                // same id sources and url construction, plain links now.
+                                val seerrMediaType = if (movieDetail != null) "movie" else "tv"
+                                val seerrTmdbId = movieDetail?.id ?: tvDetail?.id ?: 0
+                                val seerrImdbId = movieDetail?.imdbId ?: tvDetail?.externalIds?.imdbId
+                                val seerrTvdbId = tvDetail?.externalIds?.tvdbId
+                                val tmdbLabel = stringResource(Res.string.detail_link_tmdb)
+                                val imdbLabel = stringResource(Res.string.detail_link_imdb)
+                                val tvdbLabel = stringResource(Res.string.detail_link_tvdb)
+                                DetailExternalLinksRow(
+                                    links = buildList {
+                                        add(ExternalUrl(name = tmdbLabel, url = "https://www.themoviedb.org/$seerrMediaType/$seerrTmdbId"))
+                                        seerrImdbId?.let { add(ExternalUrl(name = imdbLabel, url = "https://www.imdb.com/title/$it")) }
+                                        seerrTvdbId?.let { add(ExternalUrl(name = tvdbLabel, url = "https://thetvdb.com/dereferrer/series/$seerrTvdbId")) }
+                                    }
                                 )
                             }
 
@@ -1049,60 +1060,6 @@ private fun SeerrHorizontalSection(
                 modifier = Modifier.width(
                     LocalAdaptiveInfo.current.rowCardWidth(LocalTvMode.current)
                 )
-            )
-        }
-    }
-}
-
-@Composable
-private fun ExternalLinksRow(
-    tmdbId: Int,
-    imdbId: String?,
-    tvdbId: Int?,
-    mediaType: String,
-) {
-    val uriHandler = LocalUriHandler.current
-
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        // TMDB
-        SuggestionChip(
-            onClick = { uriHandler.openUri("https://www.themoviedb.org/$mediaType/$tmdbId") },
-            label = { Text(stringResource(Res.string.detail_link_tmdb), fontWeight = FontWeight.Bold) },
-            modifier = Modifier.focusIndicator(ShapeCache.smoothPill),
-            colors = SuggestionChipDefaults.suggestionChipColors(
-                containerColor = BrandColors.tmdb.copy(alpha = 0.2f),
-                labelColor = BrandColors.tmdb
-            ),
-            border = null
-        )
-
-        if (imdbId != null) {
-            SuggestionChip(
-                onClick = { uriHandler.openUri("https://www.imdb.com/title/$imdbId") },
-                label = { Text(stringResource(Res.string.detail_link_imdb), fontWeight = FontWeight.Bold) },
-                modifier = Modifier.focusIndicator(ShapeCache.smoothPill),
-                colors = SuggestionChipDefaults.suggestionChipColors(
-                containerColor = BrandColors.imdb.copy(alpha = 0.2f),
-                labelColor = BrandColors.imdb
-                ),
-                border = null
-            )
-        }
-
-        if (tvdbId != null) {
-            SuggestionChip(
-                onClick = { uriHandler.openUri("https://thetvdb.com/dereferrer/series/$tvdbId") },
-                label = { Text(stringResource(Res.string.detail_link_tvdb), fontWeight = FontWeight.Bold) },
-                modifier = Modifier.focusIndicator(ShapeCache.smoothPill),
-                colors = SuggestionChipDefaults.suggestionChipColors(
-                containerColor = BrandColors.tvdb.copy(alpha = 0.2f),
-                labelColor = BrandColors.tvdb
-                ),
-                border = null
             )
         }
     }

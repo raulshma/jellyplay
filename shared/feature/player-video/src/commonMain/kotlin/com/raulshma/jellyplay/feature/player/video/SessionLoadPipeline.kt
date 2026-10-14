@@ -32,6 +32,14 @@ data class LoadRequest(
     val allowCinemaMode: Boolean,
     val subtitleStreamIndex: Int?,
     val audioStreamIndex: Int?,
+    /**
+     * D14 "Play (with pre-rolls)": forces the cinema gate past the global
+     * `cinemaModeEnabled` pref for THIS load (the per-invocation override the
+     * detail screen's ⋮ action arms through [CinemaModeOverride]). Every
+     * other veto of [shouldAttemptCinemaMode] still applies — fresh start,
+     * external player, SyncPlay, item type. Default false = today's behavior.
+     */
+    val forceCinemaMode: Boolean = false,
 )
 
 /** Terminal state of one session load. */
@@ -242,6 +250,9 @@ internal class SessionLoadPipeline(
         restoreRememberedMuted(agg)
 
         if (request.allowCinemaMode &&
+            // D14: the per-invocation override ORs past the global pref — the
+            // session-level gate and the remaining vetoes below still apply.
+            (agg.videoPlayer.cinemaModeEnabled || request.forceCinemaMode) &&
             shouldAttemptCinemaMode(agg, request.itemId, request.startPositionTicks)
         ) {
             val intros = libraryApiClient.getIntros(request.itemId).getOrDefault(emptyList())
@@ -352,15 +363,16 @@ internal class SessionLoadPipeline(
     /**
      * Cinema Mode is only attempted on fresh starts (never on resume /
      * next-episode auto-advance / SyncPlay / external player / mini-mode
-     * reclaim). Server-side intros are best-effort: any failure returns an
-     * empty list and falls back to normal playback.
+     * reclaim). The global pref / D14 force-flag admission is decided by the
+     * single caller (the `cinemaModeEnabled || forceCinemaMode` OR) — not
+     * re-checked here. Server-side intros are best-effort: any failure
+     * returns an empty list and falls back to normal playback.
      */
     private fun shouldAttemptCinemaMode(
         agg: VideoPlayerAggregate,
         itemId: String,
         startPositionTicks: Long,
     ): Boolean {
-        if (!agg.videoPlayer.cinemaModeEnabled) return false
         if (startPositionTicks != 0L) return false
         if (agg.playback.preferredPlayer == PlayerType.EXTERNAL) return false
         if (syncPlayManager.isInSyncPlaySession) return false

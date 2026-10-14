@@ -133,6 +133,76 @@ class HomeHeroControllerTest {
         assertEquals(listOf("m1"), candidates.map { it.id })
     }
 
+    // --- H9 plugin-curated hero (merge + offline exclusion) ---
+
+    @Test
+    fun mergeCuratedHeroCandidates_emptyCurated_keepsLocalUnchanged() {
+        val local = listOf(item("m1", MediaType.MOVIE), item("m2", MediaType.MOVIE))
+
+        assertEquals(local, mergeCuratedHeroCandidates(emptyList(), local))
+    }
+
+    @Test
+    fun mergeCuratedHeroCandidates_curatedAhead_serverOrderPreserved_localDupesDropped() {
+        val merged = mergeCuratedHeroCandidates(
+            curated = listOf(
+                curated("c2"),
+                curated("c1"),
+            ),
+            local = listOf(
+                item("m1", MediaType.MOVIE),
+                item("c2", MediaType.MOVIE), // curated wins — no second rotation slot
+                item("m2", MediaType.MOVIE),
+            ),
+        )
+
+        assertEquals(listOf("c2", "c1", "m1", "m2"), merged.map { it.id })
+    }
+
+    @Test
+    fun mergeCuratedHeroCandidates_duplicateCuratedIds_keepTheirFirstSlot() {
+        val merged = mergeCuratedHeroCandidates(
+            curated = listOf(curated("c1"), curated("c1")),
+            local = emptyList(),
+        )
+
+        assertEquals(listOf("c1"), merged.map { it.id })
+    }
+
+    @Test
+    fun selectHomeHeroCandidates_online_mergesCuratedAheadOfLocalLatest() {
+        val candidates = selectHomeHeroCandidates(
+            renderingOffline = false,
+            homeMode = HomeMode.VIDEO,
+            onlineSections = listOf(section("latest", item("m1", MediaType.MOVIE), item("m2", MediaType.MOVIE))),
+            offlineSections = emptyList(),
+            curatedHero = listOf(curated("c1", headline = "Billboard", subhead = "Staff pick")),
+        )
+
+        assertEquals(listOf("c1", "m1", "m2"), candidates.map { it.id })
+    }
+
+    @Test
+    fun selectHomeHeroCandidates_offline_ignoresCuratedBillboards() {
+        val candidates = selectHomeHeroCandidates(
+            renderingOffline = true,
+            homeMode = HomeMode.VIDEO,
+            onlineSections = listOf(section("latest", item("m1", MediaType.MOVIE))),
+            offlineSections = listOf(
+                HomeSection(
+                    id = "offline_movies",
+                    title = "Movies",
+                    type = HomeSectionType.DOWNLOADED,
+                    items = listOf(item("d-m1", MediaType.MOVIE)),
+                ),
+            ),
+            curatedHero = listOf(curated("c1")),
+        )
+
+        // Curated is server data; the offline hero features downloads only.
+        assertEquals(listOf("d-m1"), candidates.map { it.id })
+    }
+
     @Test
     fun heroController_toggleSurprise_onPicksNewCandidateAndPausesAutoRotate() {
         val controller = HeroController(getBackdropUrl = { "url/$it" }, initialAutoRotateEnabled = false)
@@ -416,10 +486,109 @@ class HomeHeroControllerTest {
         assertEquals("url/m2", controller.backdropUrl)
     }
 
+    // --- H7 hero-video gating (heroVideoShouldPlay, pure) ---
+    //
+    // Every leg of the start gate flips the whole decision — the clip's
+    // absence must be reachable from each gate alone (the plan's controller
+    // gating matrix: visibility/lifecycle/perf + pref, motion, focus,
+    // scroll-defer, platform).
+
+    @Test
+    fun heroVideoShouldPlay_allGatesHolding_plays() {
+        assertTrue(holding())
+    }
+
+    @Test
+    fun heroVideoShouldPlay_prefOff_neverPlays() {
+        // The feature master gate: both form-factor prefs default false.
+        assertFalse(holding(prefEnabled = false))
+    }
+
+    @Test
+    fun heroVideoShouldPlay_sessionPaused_neverPlays() {
+        // The pause-video chip's session latch — an explicit user pause only.
+        assertFalse(holding(sessionPaused = true))
+    }
+
+    @Test
+    fun heroVideoShouldPlay_reducedMotion_neverPlays() {
+        assertFalse(holding(reducedMotion = true))
+    }
+
+    @Test
+    fun heroVideoShouldPlay_performanceMode_neverPlays() {
+        assertFalse(holding(performanceMode = true))
+    }
+
+    @Test
+    fun heroVideoShouldPlay_scrolledAway_neverPlays() {
+        assertFalse(holding(isVisible = false))
+        assertFalse(holding(isProminent = false))
+    }
+
+    @Test
+    fun heroVideoShouldPlay_focusLostOnTv_neverPlays() {
+        // Touch has no focus traversal — the leg always holds there.
+        assertTrue(holding(heroFocusHeld = true))
+        assertFalse(holding(heroFocusHeld = false))
+    }
+
+    @Test
+    fun heroVideoShouldPlay_lifecycleBelowResumed_neverPlays() {
+        assertFalse(holding(lifecycleResumed = false))
+    }
+
+    @Test
+    fun heroVideoShouldPlay_scrolling_neverPlays() {
+        // The scroll-defer leg, rotation-cadence posture.
+        assertFalse(holding(isScrolling = true))
+    }
+
+    @Test
+    fun heroVideoShouldPlay_desktopPlatform_neverPlays() {
+        // Desktop v1: the platform seam reports incapable → static hero, and
+        // nothing downstream (the loader effect also gates on this leg).
+        assertFalse(holding(platformCapable = false))
+    }
+
+    private fun holding(
+        prefEnabled: Boolean = true,
+        sessionPaused: Boolean = false,
+        reducedMotion: Boolean = false,
+        performanceMode: Boolean = false,
+        isVisible: Boolean = true,
+        isProminent: Boolean = true,
+        heroFocusHeld: Boolean = true,
+        lifecycleResumed: Boolean = true,
+        isScrolling: Boolean = false,
+        platformCapable: Boolean = true,
+    ): Boolean = heroVideoShouldPlay(
+        prefEnabled = prefEnabled,
+        sessionPaused = sessionPaused,
+        reducedMotion = reducedMotion,
+        performanceMode = performanceMode,
+        isVisible = isVisible,
+        isProminent = isProminent,
+        heroFocusHeld = heroFocusHeld,
+        lifecycleResumed = lifecycleResumed,
+        isScrolling = isScrolling,
+        platformCapable = platformCapable,
+    )
+
     private fun item(id: String, type: MediaType) = MediaItem(
         id = id,
         name = id,
         mediaType = type,
+    )
+
+    private fun curated(
+        id: String,
+        headline: String? = null,
+        subhead: String? = null,
+    ) = com.raulshma.jellyplay.core.model.CuratedHeroEntry(
+        item = item(id, MediaType.MOVIE),
+        headline = headline,
+        subhead = subhead,
     )
 
     private fun section(id: String, vararg items: MediaItem) = HomeSection(

@@ -52,6 +52,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import org.koin.core.module.Module
@@ -322,6 +323,8 @@ private class AppDetailThemeMusic(
 ) : DetailThemeMusic {
     override fun playThemeFor(itemId: String) = player.playThemeFor(itemId)
     override fun stop() = player.stop()
+    override fun setMuted(muted: Boolean) = player.setMuted(muted)
+    override val isPlaying: StateFlow<Boolean> get() = player.isPlaying
 }
 
 /**

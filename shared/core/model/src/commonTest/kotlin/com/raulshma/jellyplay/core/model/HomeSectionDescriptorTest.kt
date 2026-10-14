@@ -107,6 +107,9 @@ descriptor.idFor("COLLECTION_7"),
                 HomeSectionType.CONTINUE_WATCHING,
                 HomeSectionType.CONTINUE_READING,
                 HomeSectionType.NEXT_UP,
+                // The v3 pair: Upcoming directly after Next Up, My Media after it.
+                HomeSectionType.UPCOMING,
+                HomeSectionType.MY_MEDIA,
                 HomeSectionType.LATEST_MEDIA,
                 HomeSectionType.RECENTLY_ADDED,
                 HomeSectionType.RECOMMENDATIONS,
@@ -114,6 +117,12 @@ descriptor.idFor("COLLECTION_7"),
             ),
             HomeSectionType.CONFIGURABLE,
         )
+    }
+
+    @Test
+    fun v3Types_carryNetworkRowIdentity() {
+        assertEquals("upcoming" to "Upcoming", staticIdentity(HomeSectionType.UPCOMING))
+        assertEquals("my_media" to "My Media", staticIdentity(HomeSectionType.MY_MEDIA))
     }
 
     private fun staticIdentity(type: HomeSectionType): Pair<String, String> {

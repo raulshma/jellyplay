@@ -64,8 +64,17 @@ class SettingsSearchCatalogTest {
         // there and again through the sync-screen consolidation (zero net);
         // +1 for the push wave's 13th per-feature switch row; +1 for the
         // analytics wave's 14th per-feature switch row; +1 for the Wave-3
-        // "Export with Secrets" backup row.
-        assertEquals(331, items.size)
+        // "Export with Secrets" backup row; +14 for the detail-preference
+        // wave (13 Library & Cards detail-display rows + the
+        // play-trailer-before-movie playback row); +13 for the home-preference
+        // wave (the H6/H7/H10/H13/H15/H17/H18/H19/H20/H21 home rows + the
+        // H11/H12 card-badge rows); +2 for the H11/H12 card-badge rows'
+        // second faces in Appearance → Library & Cards (namespaced residual
+        // ids over the same home-store prefs); +1 for the D12 wave's
+        // per-series notification row (the "Series notifications" fused row
+        // beside the per-library list); +1 for the H5 hidden-libraries
+        // restore row (the My Media hidden-libraries drill-in).
+        assertEquals(362, items.size)
         // Curated flat order starts with the account/session pair that used to
         // open the old registry, and the aggregation is a pure concatenation
         // of the decorated per-screen groups (no dedup, no reordering).

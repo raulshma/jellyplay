@@ -77,10 +77,15 @@ class DetailSectionAdmissionTest {
         hasSeerrSimilar: Boolean = true,
         hasSpecialFeatures: Boolean = true,
         hasTmdbReviews: Boolean = true,
+        showReviews: Boolean = true,
         hasAttachedDownload: Boolean = false,
         hasPluginRatings: Boolean = false,
         hasPluginSimilar: Boolean = false,
         suppressStockSimilar: Boolean = false,
+        hasFranchiseCollections: Boolean = false,
+        showMoreInCollection: Boolean = true,
+        hasUpcomingEpisodes: Boolean = false,
+        showUpcomingStrip: Boolean = true,
     ): List<DetailSectionKind> = DetailSectionAdmission(
         mediaType = mediaType,
         isLocalOrigin = isLocalOrigin,
@@ -98,10 +103,15 @@ class DetailSectionAdmissionTest {
         hasSeerrSimilar = hasSeerrSimilar,
         hasSpecialFeatures = hasSpecialFeatures,
         hasTmdbReviews = hasTmdbReviews,
+        showReviews = showReviews,
         hasAttachedDownload = hasAttachedDownload,
         hasPluginRatings = hasPluginRatings,
         hasPluginSimilar = hasPluginSimilar,
         suppressStockSimilar = suppressStockSimilar,
+        hasFranchiseCollections = hasFranchiseCollections,
+        showMoreInCollection = showMoreInCollection,
+        hasUpcomingEpisodes = hasUpcomingEpisodes,
+        showUpcomingStrip = showUpcomingStrip,
     ).admit()
 
     private fun List<DetailSectionKind>.indices(): List<Int> = map { it.delayIndex }
@@ -474,6 +484,13 @@ class DetailSectionAdmissionTest {
         assertEquals(14, admission(MediaType.MOVIE).first { it == DetailSectionKind.TMDB_REVIEWS }.delayIndex)
     }
 
+    @Test
+    fun reviews_showReviewsPreferenceGatesTheWholeSlot() {
+        // D9: show_reviews off hides the section even with reviews fetched.
+        assertFalse(admission(MediaType.MOVIE, showReviews = false).contains(DetailSectionKind.TMDB_REVIEWS))
+        assertTrue(admission(MediaType.MOVIE, showReviews = true).contains(DetailSectionKind.TMDB_REVIEWS))
+    }
+
     // ── delayIndex ratchet ────────────────────────────────────────────────
 
     @Test
@@ -488,10 +505,12 @@ class DetailSectionAdmissionTest {
             DetailSectionKind.CHAPTERS_OR_TOC to 4,
             DetailSectionKind.ALBUM_TRACKS to 5,
             DetailSectionKind.UP_NEXT to 6,
+            DetailSectionKind.UPCOMING_EPISODES to 6,
             DetailSectionKind.SEASONS to 6,
             DetailSectionKind.COLLECTION_ITEMS to 7,
             DetailSectionKind.CAST to 8,
             DetailSectionKind.RELATED_VIDEOS to 9,
+            DetailSectionKind.MORE_IN_COLLECTION to 10,
             DetailSectionKind.MORE_LIKE_THIS to 10,
             DetailSectionKind.JELLYPLAY_SIMILAR to 10,
             DetailSectionKind.SEERR_RECOMMENDATIONS to 11,
@@ -508,6 +527,121 @@ class DetailSectionAdmissionTest {
         // The entrance driver animates to 1f + MAX * STEP so the highest slot
         // still settles at full alpha — the footer must never exceed it.
         assertEquals(15, DETAIL_MAX_STAGGER_INDEX)
+    }
+
+    // ── D7: the UPCOMING_EPISODES strip ───────────────────────────────────
+
+    @Test
+    fun upcomingStrip_admitsInTheSeriesTrio_sharedSlot6() {
+        val sections = admission(MediaType.SERIES, hasUpcomingEpisodes = true)
+        val upNext = sections.indexOf(DetailSectionKind.UP_NEXT)
+        val upcoming = sections.indexOf(DetailSectionKind.UPCOMING_EPISODES)
+        val seasons = sections.indexOf(DetailSectionKind.SEASONS)
+        // Emission order: the unaired strip sits between the smart-play card
+        // and the season tree; all three share the stagger band 6.
+        assertTrue(upNext in 0 until upcoming, "UP_NEXT must be emitted before UPCOMING_EPISODES")
+        assertTrue(upcoming in 0 until seasons, "UPCOMING_EPISODES must be emitted before SEASONS")
+        assertEquals(6, sections[upcoming].delayIndex)
+        assertEquals(6, sections[upNext].delayIndex)
+        assertEquals(6, sections[seasons].delayIndex)
+    }
+
+    @Test
+    fun upcomingStrip_emptyOrPreferenceOff_dropsOnlyUpcoming() {
+        // No strip content (the enrichment's silent absence) → no slot.
+        assertFalse(admission(MediaType.SERIES, hasUpcomingEpisodes = false).contains(DetailSectionKind.UPCOMING_EPISODES))
+        // Preference off → no slot even with content; UP_NEXT/SEASONS stand.
+        val off = admission(MediaType.SERIES, hasUpcomingEpisodes = true, showUpcomingStrip = false)
+        assertFalse(off.contains(DetailSectionKind.UPCOMING_EPISODES))
+        assertTrue(off.contains(DetailSectionKind.UP_NEXT))
+        assertTrue(off.contains(DetailSectionKind.SEASONS))
+        // Admission is content-driven, NOT media-type-driven: a movie with
+        // (impossible-by-enrichment) content would admit — the fold stays a
+        // pure input table. The SERIES-only rule lives on the enrichment.
+        assertTrue(admission(MediaType.MOVIE, hasUpcomingEpisodes = true).contains(DetailSectionKind.UPCOMING_EPISODES))
+    }
+
+    // ── D6: the MORE_IN_COLLECTION franchise rows ─────────────────────────
+
+    @Test
+    fun franchiseRow_admittedJustBeforeTheSimilarRows_sharedSlot10() {
+        val sections = admission(MediaType.MOVIE, hasFranchiseCollections = true)
+        val franchise = sections.indexOf(DetailSectionKind.MORE_IN_COLLECTION)
+        val relatedVideos = sections.indexOf(DetailSectionKind.RELATED_VIDEOS)
+        val moreLikeThis = sections.indexOf(DetailSectionKind.MORE_LIKE_THIS)
+        assertTrue(relatedVideos in 0 until franchise, "RELATED_VIDEOS must precede the franchise rows")
+        assertTrue(franchise in 0 until moreLikeThis, "the franchise rows precede MORE_LIKE_THIS")
+        assertEquals(10, sections[franchise].delayIndex)
+        assertEquals(10, sections[moreLikeThis].delayIndex)
+    }
+
+    @Test
+    fun franchiseRow_emptyOrPreferenceOff_dropsOnlyFranchise() {
+        assertFalse(
+            admission(MediaType.MOVIE, hasFranchiseCollections = false).contains(DetailSectionKind.MORE_IN_COLLECTION),
+        )
+        val off = admission(MediaType.MOVIE, hasFranchiseCollections = true, showMoreInCollection = false)
+        assertFalse(off.contains(DetailSectionKind.MORE_IN_COLLECTION))
+        // The similar rows are untouched by the franchise preference.
+        assertTrue(off.contains(DetailSectionKind.MORE_LIKE_THIS))
+    }
+
+    @Test
+    fun franchiseRow_admittedForSeriesToo() {
+        // The D6 gate is MOVIE || SERIES (the enrichment's rule); the fold
+        // itself is content-driven for both.
+        assertTrue(admission(MediaType.SERIES, hasFranchiseCollections = true).contains(DetailSectionKind.MORE_IN_COLLECTION))
+    }
+
+    // ── the state mapper: hidden rows never admit ─────────────────────────
+
+    @Test
+    fun fromState_hiddenFranchiseRows_excludeFromAdmission() {
+        val item = MediaItem(id = "i3", name = "Movie", mediaType = MediaType.MOVIE)
+        val detail = MediaDetail(item = item)
+        fun stateWith(hidden: Map<String, Set<String>>) = DetailContentState(
+            itemId = "i3",
+            detail = detail,
+            seasons = emptyList(),
+            episodes = emptyMap(),
+            fetchedSeasonIds = emptySet(),
+            smartPlayTarget = null,
+            selectedSubtitleIndex = null,
+            selectedAudioIndex = null,
+            isDownloading = false,
+            isDownloadingSeries = false,
+            activeDownload = null,
+            loadState = DetailUiLoadState.Loaded,
+            albumTracks = emptyList(),
+            collectionItems = emptyList(),
+            relatedItems = emptyList(),
+            relatedVideos = emptyList(),
+            seerrRecommendations = emptyList(),
+            seerrSimilar = emptyList(),
+            isSeerrConnected = false,
+            isSeerrRecommendationsEnabled = false,
+            preferences = DetailPreferences(),
+            canManageSeries = false,
+            origin = DetailOrigin.REMOTE,
+            franchiseCollections = listOf(
+                DetailUiState.FranchiseCollection(id = "box1", name = "Franchise", members = listOf(item)),
+                DetailUiState.FranchiseCollection(id = "box2", name = "Shared universe", members = listOf(item)),
+            ),
+            hiddenFranchiseCollections = hidden,
+        )
+
+        // No hides → admitted.
+        assertTrue(DetailSectionAdmission.from(stateWith(emptyMap()), detail).hasFranchiseCollections)
+        // One row hidden → the other keeps the slot admitted.
+        val oneHidden = DetailSectionAdmission.from(stateWith(mapOf("i3" to setOf("box1"))), detail)
+        assertTrue(oneHidden.hasFranchiseCollections)
+        // Every row hidden → the slot drops (no empty gap in the body).
+        val allHidden = DetailSectionAdmission.from(stateWith(mapOf("i3" to setOf("box1", "box2"))), detail)
+        assertFalse(allHidden.hasFranchiseCollections)
+        assertFalse(allHidden.admit().contains(DetailSectionKind.MORE_IN_COLLECTION))
+        // Hides are keyed per item: another item's hides don't leak in.
+        val otherItemsHide = DetailSectionAdmission.from(stateWith(mapOf("other" to setOf("box1", "box2"))), detail)
+        assertTrue(otherItemsHide.hasFranchiseCollections)
     }
 
     // ── the state mapper ──────────────────────────────────────────────────

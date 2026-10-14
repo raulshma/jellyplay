@@ -30,6 +30,7 @@ object JellyPlayPluginFeatures {
     const val Ratings = "ratings"
     const val CustomRows = "custom-rows"
     const val SeasonalRows = "seasonal-rows"
+    const val Hero = "hero"
     const val AnimeMarkers = "anime-markers"
     const val Recommendations = "recommendations"
     const val UserRatings = "user-ratings"

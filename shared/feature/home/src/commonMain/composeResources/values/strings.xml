@@ -66,6 +66,8 @@
     <string name="home_resume">Resume</string>
     <string name="home_details">Details</string>
     <string name="home_play">Play</string>
+    <!-- H7 video hero: the pause-video chip shown while the ambient clip plays. -->
+    <string name="home_hero_pause_video">Pause video</string>
 
     <!-- Offline home states. -->
     <string name="home_no_downloads_yet">No downloads yet</string>
@@ -111,6 +113,41 @@
     <string name="next_up_hidden_restore_all_message">All %1$d hidden series will reappear in the Next Up row.</string>
     <string name="next_up_hidden_restore_cd">Restore %1$s to Next Up</string>
     <string name="next_up_hidden_unknown">Unknown series</string>
+    <string name="my_media_hidden_title">Hidden libraries</string>
+    <string name="my_media_hidden_empty">Nothing hidden</string>
+    <string name="my_media_hidden_empty_subtitle">Libraries you hide from the My Media row appear here to restore.</string>
+    <string name="my_media_hidden_restore_all">Restore All</string>
+    <string name="my_media_hidden_restore_all_cd">Restore every hidden library to My Media</string>
+    <string name="my_media_hidden_restore_all_title">Restore all libraries?</string>
+    <string name="my_media_hidden_restore_all_message">All %1$d hidden libraries will reappear in the My Media row.</string>
+    <string name="my_media_hidden_restore_cd">Restore %1$s to My Media</string>
+    <string name="my_media_hidden_unknown">Unknown library</string>
     <string name="a11y_mode_video">Video mode</string>
     <string name="a11y_mode_music">Music mode</string>
+
+    <!-- Home top-dock overflow menu (H15 inline anti-spoiler toggle). -->
+    <string name="home_more_options">More options</string>
+    <string name="home_anti_spoiler_mode">Anti-spoiler mode</string>
+
+    <!-- H17 personal stats card ("Your library week"). -->
+    <string name="home_stats_card_title">Your library week</string>
+    <string name="home_stats_card_counts">%1$d played · %2$d unplayed</string>
+    <string name="home_stats_card_watch_approx">~%1$s h watched</string>
+    <string name="home_stats_card_watch_exact">%1$s h watched</string>
+    <string name="home_stats_card_streak">%1$d-day streak</string>
+
+    <!-- H4 Upcoming row: the air-date chip on an unaired-episode card (the
+         details screen's "Airs <date>" vocabulary, home's own resource). -->
+    <string name="home_airs_date_format">Airs %1$s</string>
+
+    <!-- H19 watch-party presence chips ("Alex is watching Dune — join/open"). -->
+    <string name="home_presence_chip_label">%1$s is watching %2$s</string>
+    <string name="home_presence_join">Join</string>
+    <string name="home_presence_dismiss_cd">Hide this session</string>
+    <string name="home_watch_party_join_failed">Couldn't join the watch party</string>
+
+    <!-- H21 new-section announcement snackbar (the VM emits the structural
+         event; the screen resolves the text). -->
+    <string name="home_new_sections_announcement">New on Home: %1$s</string>
+    <string name="home_new_sections_customize">Customize</string>
 </resources>

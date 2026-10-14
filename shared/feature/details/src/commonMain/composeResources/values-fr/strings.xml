@@ -316,6 +316,15 @@
     <string name="detail_collection_empty_description">Les éléments ajoutés à cette collection apparaîtront ici.</string>
     <string name="detail_person_empty_title">Aucun titre trouvé</string>
     <string name="detail_person_empty_description">Cette personne n'a aucun titre correspondant au filtre actuel.</string>
+    <!-- D18: role-named, grouped filmography -->
+    <string name="detail_person_role_as">dans %1$s</string>
+    <string name="detail_person_role_all">Tout</string>
+    <string name="detail_person_role_acting">Jeu</string>
+    <string name="detail_person_role_directing">Réalisation</string>
+    <string name="detail_person_role_writing">Scénario</string>
+    <string name="detail_person_role_other">Autres</string>
+    <!-- D20: "frequently appears with" co-star row -->
+    <string name="detail_person_costars_title">Souvent à l'affiche avec</string>
     <string name="detail_season_empty_title">Aucun épisode disponible</string>
     <string name="detail_season_empty_description">Les épisodes apparaîtront ici une fois ajoutés.</string>
 
@@ -501,4 +510,6 @@
     <string name="jellyplay_det_filler_badge">Filler</string>
     <string name="jellyplay_det_mixed_badge">Mitigé</string>
     <string name="jellyplay_det_recap_badge">Récap</string>
+    <string name="detail_cd_theme_music_mute">Couper la musique de thème</string>
+    <string name="detail_cd_theme_music_unmute">Réactiver la musique de thème</string>
 </resources>

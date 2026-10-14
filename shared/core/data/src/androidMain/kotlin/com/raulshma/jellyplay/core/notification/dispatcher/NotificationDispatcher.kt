@@ -209,6 +209,66 @@ class NotificationDispatcher(
         notificationManager.notify(notificationId, notification)
     }
 
+    /**
+     * D12: one opted-in series' new-episode announcement — posted to the
+     * shared [NotificationChannelManager.CHANNEL_NEW_EPISODES] channel (the
+     * per-series path reuses that fixed channel so the channel count stays
+     * bounded), with the same series/season/episode framing the library
+     * path's episode-routed notifications use ([episodeFramingTitle]).
+     *
+     * Guards mirror [dispatch]: notifications must be enabled system-wide and
+     * the system DND respected. No mark-seen action — the seen-media store is
+     * library-keyed and the series path has no library context; the Open
+     * action + the deep-link content intent carry the episode id.
+     */
+    fun dispatchSeriesNewEpisode(
+        seriesId: String,
+        episode: MediaItem,
+        prefs: NotificationPreferences,
+    ) {
+        if (!notificationManager.areNotificationsEnabled()) return
+        if (prefs.respectSystemDnd && isSystemDndEnabled()) return
+        channelManager.ensureNewEpisodesChannel()
+
+        val notificationId = seriesEpisodeNotificationIdFor(seriesId, episode.id)
+        // Same explicit-intent convention as buildItemNotification (CodeQL):
+        // setters chained on the Intent expression itself.
+        val contentIntent = PendingIntent.getActivity(
+            context,
+            notificationId,
+            Intent(Intent.ACTION_VIEW, android.net.Uri.parse(DeepLinkGrammar.mediaLink(episode.id)))
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                .setPackage(context.packageName),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val openIntent = Intent()
+            .setClassName(context.packageName, NotificationActionReceiver::class.java.name)
+            .setAction(NotificationActionReceiver.ACTION_OPEN_DETAIL)
+            .putExtra(NotificationActionReceiver.EXTRA_ITEM_ID, episode.id)
+        val openPendingIntent = PendingIntent.getBroadcast(
+            context,
+            notificationId + OPEN_ACTION_REQUEST_CODE_OFFSET,
+            openIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+
+        val notification = NotificationCompat.Builder(context, NotificationChannelManager.CHANNEL_NEW_EPISODES)
+            .setSmallIcon(com.raulshma.jellyplay.shared.core.data.R.drawable.ic_notification_small)
+            .setContentTitle(episodeFramingTitle(episode))
+            .setContentText(episode.name)
+            .setContentIntent(contentIntent)
+            .addAction(
+                com.raulshma.jellyplay.shared.core.data.R.drawable.ic_notification_small,
+                context.getString(R.string.notification_action_open),
+                openPendingIntent,
+            )
+            .setAutoCancel(true)
+            .setOnlyAlertOnce(true)
+            .setDefaults(0)
+            .build()
+        notificationManager.notify(notificationId, notification)
+    }
+
     private fun isSystemDndEnabled(): Boolean {
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? android.app.NotificationManager
             ?: return false
@@ -559,6 +619,21 @@ class NotificationDispatcher(
         internal fun pluginPushMessageNotificationIdFor(title: String, body: String): Int =
             PLUGIN_PUSH_MESSAGE_ID_BASE +
                 (((31 * title.hashCode()) + body.hashCode()).toLong() and 0xFFFFFFFFL)
+                    .toInt() % PLUGIN_NOTIFICATION_ID_SLOTS
+
+        // D12's series-episode family sits one slot-family above the push
+        // message family so a hashed (series, episode) pair can never collide
+        // with a push text id.
+        private const val SERIES_EPISODE_NOTIFICATION_ID_BASE =
+            PLUGIN_PUSH_MESSAGE_ID_BASE + PLUGIN_NOTIFICATION_ID_SLOTS
+
+        /**
+         * Stable per-(series, episode) id for a D12 series notification —
+         * re-delivery of the same episode coalesces instead of stacking.
+         */
+        internal fun seriesEpisodeNotificationIdFor(seriesId: String, episodeId: String): Int =
+            SERIES_EPISODE_NOTIFICATION_ID_BASE +
+                (((31 * seriesId.hashCode()) + episodeId.hashCode()).toLong() and 0xFFFFFFFFL)
                     .toInt() % PLUGIN_NOTIFICATION_ID_SLOTS
     }
 }

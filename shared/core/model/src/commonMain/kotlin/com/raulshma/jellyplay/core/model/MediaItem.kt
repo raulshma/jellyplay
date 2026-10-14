@@ -113,6 +113,84 @@ data class MediaItem(
     val isVirtual: Boolean = false,
     /** Why the item is virtual; non-null exactly when [isVirtual] is true. */
     val missingReason: MissingEpisodeReason? = null,
+    /**
+     * Compact stream summary (D11) for the season-episode rows' subtitle /
+     * audio badges. Populated only where the fetch actually projected
+     * `MediaStreams` — the per-season [getEpisodes] call; the all-episodes
+     * path (and any listing that carries no sources) maps to null so the
+     * rows render nothing. Derived at map time in JellyfinDtoMappers.
+     */
+    val episodeStreamInfo: EpisodeStreamInfo? = null,
+    /**
+     * When the item entered the library (epoch millis; H12 NEW-badge input).
+     * Populated only where the fetch projected `DateCreated` (the
+     * HOME_ROW_PROJECTION_FIELDS rows — resume / next-up / latest); every
+     * other listing maps to null and the badge predicate treats it as
+     * "never new". Derived at map time in JellyfinDtoMappers.
+     */
+    val dateCreatedEpochMs: Long? = null,
+    /**
+     * Compact resolution/audio quality summary (H11) for the cards'
+     * [ItemQualityBadge] row, in render-priority order (resolution badge
+     * first, then format badges — see [toQualityBadges] / QualityBadgeRow).
+     * Populated only where the fetch projected `MediaStreams` (the home-row
+     * projections); null means "not fetched", so the cards render nothing —
+     * never a badge-less lie. The full MediaStreams never reach the UI: this
+     * tiny list is the only stream summary a home item carries.
+     */
+    val qualityBadges: List<ItemQualityBadge>? = null,
+    /**
+     * The item's credited People (D18) — the raw wire list retained so the
+     * person screen extracts the per-item role ("as {Role}") and role group
+     * from the entry matching the queried person. Populated only where the
+     * fetch projected the `People` field (the getItemsByPerson filmography
+     * rows, bounded at 50); every other listing maps to emptyList so
+     * role-bearing surfaces degrade to the role-less render.
+     */
+    val people: List<PersonInfo> = emptyList(),
+    /**
+     * Compact trickplay sprite-sheet summary (H13) — everything a preview
+     * overlay needs to request and crop the right tile: the tile-cell pixel
+     * size ([TrickplayInfo.width]/[TrickplayInfo.height]), the per-sheet grid
+     * shape ([TrickplayInfo.tileWidth]/[TrickplayInfo.tileHeight] — tiles per
+     * row/column), the total [TrickplayInfo.thumbnailCount] and the per-tile
+     * [TrickplayInfo.interval] in ms. Populated only where the fetch projected
+     * `Trickplay` (the HOME_ROW_PROJECTION_FIELDS resume/next-up rows); every
+     * other listing — and older servers that never generate the element — maps
+     * to null, so preview surfaces degrade to nothing rather than guess.
+     * Derived at map time in JellyfinDtoMappers.
+     */
+    val trickplayInfo: TrickplayInfo? = null,
+)
+
+/**
+ * The card-quality-badge vocabulary (H11). Derived client-side from the
+ * projected MediaStreams in JellyfinDtoMappers — one resolution tier
+ * ([FOUR_K] / [HD] / [SD]) plus independent format badges ([HDR] /
+ * [DOLBY_VISION] / [ATMOS]). Only the first four are badge-worthy on the
+ * cards ([QualityBadgeRow]'s render set); HD/SD exist so the derivation is
+ * total and callers can tell "just HD" from "nothing notable" without
+ * re-deriving from widths.
+ */
+@Immutable
+@Serializable
+enum class ItemQualityBadge { FOUR_K, HDR, DOLBY_VISION, ATMOS, HD, SD }
+
+/**
+ * The compact per-episode stream summary behind the season rows' stream
+ * badges (D11): whether any subtitle track exists ([hasSubtitles] → the CC
+ * chip), the best audio track's layout label ([audioLayout] — "Atmos" when
+ * the codec/profile advertises it, else "7.1"/"5.1" from the channel count,
+ * null for lesser layouts), and the count of distinct audio languages
+ * ([audioLanguageCount], rendered only when > 1). Null [MediaItem.episodeStreamInfo]
+ * means "unknown" — never rendered as an empty badge row.
+ */
+@Immutable
+@Serializable
+data class EpisodeStreamInfo(
+    val hasSubtitles: Boolean,
+    val audioLayout: String?,
+    val audioLanguageCount: Int,
 )
 
 /**
@@ -171,6 +249,21 @@ val MediaItem.seriesIdForDetail: String?
         MediaType.EPISODE, MediaType.SEASON -> seriesId
         else -> null
     }
+
+/**
+ * H12's NEW-badge predicate in its pure form: the item entered the library
+ * strictly after the user's last home visit. Both failure modes degrade to
+ * false — a null [dateCreatedEpochMs] (the fetch didn't project DateCreated)
+ * and a zero/never-stamped [lastVisitEpochMs] (first visit — everything in
+ * the library predates no stamp, and stamping happens ~10s into the visit,
+ * so the first session would otherwise badge the entire library).
+ */
+fun isNewForHome(dateCreatedEpochMs: Long?, lastVisitEpochMs: Long): Boolean =
+    dateCreatedEpochMs != null && lastVisitEpochMs > 0L && dateCreatedEpochMs > lastVisitEpochMs
+
+/** [isNewForHome] against the item's own [MediaItem.dateCreatedEpochMs]. */
+fun MediaItem.isNewForHome(lastVisitEpochMs: Long): Boolean =
+    isNewForHome(dateCreatedEpochMs = dateCreatedEpochMs, lastVisitEpochMs = lastVisitEpochMs)
 
 @Immutable
 @Serializable

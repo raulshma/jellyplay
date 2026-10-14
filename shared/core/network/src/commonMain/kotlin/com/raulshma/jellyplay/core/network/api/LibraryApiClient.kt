@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.network.api
 
+import com.raulshma.jellyplay.core.model.CollectionSummary
 import com.raulshma.jellyplay.core.model.DiscoverRowConfig
 import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.HomeSection
@@ -51,7 +52,34 @@ interface LibraryApiClient {
          */
         classicEpisodePool: Int? = null,
     ): Result<List<MediaItem>>
-    suspend fun getNextUp(limit: Int = 20, enableRewatching: Boolean = false, maxDays: Int = 0): Result<List<MediaItem>>
+    /**
+     * The server's Next Up (`GET /Shows/NextUp`). [seriesId] scopes it to one
+     * series and [enableResumable] overrides the server's resumable-episode
+     * inclusion (D12's per-series notification diff rides this with
+     * `enableResumable = false` — a half-watched episode is not "new");
+     * leave both null to keep the home row's user-scoped, server-default
+     * read.
+     */
+    suspend fun getNextUp(
+        limit: Int = 20,
+        enableRewatching: Boolean = false,
+        maxDays: Int = 0,
+        seriesId: String? = null,
+        enableResumable: Boolean? = null,
+    ): Result<List<MediaItem>>
+
+    /**
+     * Unaired episodes across the followed series (`GET /Shows/Upcoming`) —
+     * the watch-state-independent complement to [getNextUp] (H4 home row; D7
+     * re-scopes it with [parentId] = seriesId for the series "airing next"
+     * strip). Same [MediaItem] mapping and home-row projection as Next Up.
+     */
+    suspend fun getUpcoming(
+        userId: String? = null,
+        parentId: String? = null,
+        limit: Int = 20,
+    ): Result<List<MediaItem>>
+
     suspend fun getContinueWatching(
         limit: Int = 20,
         /**
@@ -61,6 +89,12 @@ interface LibraryApiClient {
          * reports (a no-op on ≤10.x servers, where no rollups arrive).
          */
         classicRows: Boolean = false,
+        /**
+         * H6: true adds the server-side `excludeActiveSessions` flag so an
+         * item currently playing on another device stops being offered for
+         * "continue". Default false — the pre-H6 wire (current behavior).
+         */
+        excludeActiveSessions: Boolean = false,
     ): Result<List<MediaItem>>
 
     /**
@@ -137,6 +171,15 @@ interface LibraryApiClient {
      */
     suspend fun getSpecialFeatures(itemId: String): Result<List<MediaItem>>
 
+    /**
+     * Server-hosted local trailers for the item (`/Items/{id}/LocalTrailers`)
+     * — the play-through-the-player half of the trailer sources (D3): unlike
+     * the remote YouTube embeds these ride the full playback session and work
+     * on desktop too. Empty when the item has no local trailers; parental
+     * rating filtered like every list read.
+     */
+    suspend fun getLocalTrailers(itemId: String): Result<List<MediaItem>>
+
     suspend fun getSearchHints(
         query: String,
         mediaTypes: List<MediaType>? = null,
@@ -184,11 +227,14 @@ interface LibraryApiClient {
      * Cast/crew person lookup for the discover-row editor's People picker —
      * the `/Persons` endpoint narrowed by an optional [searchTerm]. Returns
      * the id+name pair only: persons have no MediaItem surface (the item
-     * mappers drop them), and the picker needs nothing else.
+     * mappers drop them), and the picker needs nothing else. [appearsInItemId]
+     * (D20) narrows the result to the people credited on that item — the
+     * "frequently appears with" co-star row.
      */
     suspend fun getPeople(
         searchTerm: String? = null,
         limit: Int = 50,
+        appearsInItemId: String? = null,
     ): Result<List<PersonRef>>
 
     suspend fun getItemsByStudio(
@@ -203,7 +249,26 @@ interface LibraryApiClient {
     suspend fun getSimilarItems(itemId: String, limit: Int = 12): Result<List<MediaItem>>
     suspend fun getInstantMix(itemId: String, limit: Int = 100): Result<List<MediaItem>>
     suspend fun getItemsByPerson(personId: String, limit: Int = 50): Result<List<MediaItem>>
+
+    /**
+     * The BoxSets whose hierarchy contains the item (`GET /Items/{id}/Ancestors`,
+     * filtered to `BaseItemKind.BoxSet`) — the "More in this collection"
+     * franchise row's sources (D6). Summaries only (id + name + poster tag,
+     * the [CollectionSummary] vocabulary); the members resolve through the
+     * existing collection-members read, not duplicated here.
+     */
+    suspend fun getBoxSetsContaining(itemId: String): Result<List<CollectionSummary>>
+
     suspend fun getThemeSongs(itemId: String): Result<List<MediaItem>>
+
+    /**
+     * Server-hosted theme videos for the item (`/Items/{id}/ThemeVideos`) —
+     * the home hero's ambient-clip source (H7; detail hero shares the seam,
+     * D22). Same shape and filtering as [getThemeSongs]. [inheritFromParent]
+     * walks up to the series when the featured item itself carries no theme
+     * video (an episode/season card inherits the show's clip); default on.
+     */
+    suspend fun getThemeVideos(itemId: String, inheritFromParent: Boolean = true): Result<List<MediaItem>>
     suspend fun getSeasons(seriesId: String): Result<List<MediaItem>>
 
     /**
@@ -255,6 +320,24 @@ interface LibraryApiClient {
      * single member serves the flip and the replay funnels alike.
      */
     suspend fun writeUserData(write: UserDataWrite): Result<UserDataWriteOutcome>
+
+    /**
+     * Reads the server-persisted home-layout slice (H20) from Jellyfin's
+     * DisplayPreferences API — the stored JSON payload plus its schema
+     * version and write-time stamp (see [HomeLayoutServerState]). Never
+     * fails on "nothing stored": a fresh user decodes to all-null state.
+     */
+    suspend fun readHomeLayoutDisplayPreferences(userId: String): Result<HomeLayoutServerState>
+
+    /**
+     * Writes the home-layout slice (H20) into the server's DisplayPreferences
+     * store: the [json] payload under the `jellyplay.homeLayout` custom-pref
+     * key, plus the [schemaVersion] and a write-time stamp companion keys —
+     * the transport documented on the HomeLayoutSync constants. A manual
+     * "upload layout" action or the debounced autopush; no auto-pull exists
+     * (silent overwrites avoided by design).
+     */
+    suspend fun writeHomeLayoutDisplayPreferences(userId: String, json: String, schemaVersion: Int): Result<Unit>
 
     fun getImageUrl(
         itemId: String,

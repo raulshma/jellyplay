@@ -245,6 +245,10 @@ class LibraryApiHandMappersTest {
             fields.contains("Path", ignoreCase = true) && fields.contains("ProviderIds", ignoreCase = true),
             "detail projection lost its load-bearing fields (got $fields) — SDK or projection drift",
         )
+        assertTrue(
+            fields.contains("Taglines", ignoreCase = true),
+            "the D2 tagline field must ride the detail projection (got $fields)",
+        )
     }
 
     @Test

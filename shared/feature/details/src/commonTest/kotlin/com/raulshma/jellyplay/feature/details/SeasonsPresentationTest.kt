@@ -166,6 +166,23 @@ class SeasonsPresentationTest {
         assertEquals("/downloads/e1.jpg", presentation.episodeLocalImagePaths["e1"])
     }
 
+    @Test
+    fun `episode-row badge gates ride the display preferences`() {
+        // D11/D16: the stream-badge and download-progress gates are the
+        // preferences verbatim (both default on) — the fold only carries them.
+        val on = SeasonsPresentation.from(state(), series(), isLocalOrigin = false)
+        assertTrue(on.showStreamBadges)
+        assertTrue(on.showDownloadProgress)
+
+        val off = SeasonsPresentation.from(
+            state(preferences = DetailPreferences(showEpisodeStreamBadges = false, showDownloadProgress = false)),
+            series(),
+            isLocalOrigin = false,
+        )
+        assertFalse(off.showStreamBadges)
+        assertFalse(off.showDownloadProgress)
+    }
+
     // ── Fixtures (mirrors DetailSectionAdmissionTest's builder style) ──
 
     private fun series() = MediaItem(id = "sr1", name = "Series", mediaType = MediaType.SERIES)

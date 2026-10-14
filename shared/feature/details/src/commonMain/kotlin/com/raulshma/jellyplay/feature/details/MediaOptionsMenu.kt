@@ -6,12 +6,15 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.ArrowsJoin
 import com.composables.icons.tabler.outline.ArrowsSplit
+import com.composables.icons.tabler.outline.Bell
+import com.composables.icons.tabler.outline.BellOff
 import com.composables.icons.tabler.outline.Download
 import com.composables.icons.tabler.outline.Eye
 
 import com.composables.icons.tabler.outline.EyeOff
 import com.composables.icons.tabler.outline.InfoCircle
 import com.composables.icons.tabler.outline.ListDetails
+import com.composables.icons.tabler.outline.Movie
 import com.composables.icons.tabler.outline.Pencil
 import com.composables.icons.tabler.outline.Playlist
 import com.composables.icons.tabler.outline.PlayerTrackNext
@@ -47,6 +50,9 @@ import com.raulshma.jellyplay.feature.details.generated.resources.detail_option_
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_option_identify
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_option_play_last
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_option_play_next
+import com.raulshma.jellyplay.feature.details.generated.resources.detail_option_play_with_prerolls
+import com.raulshma.jellyplay.feature.details.generated.resources.detail_option_notify_new_episodes
+import com.raulshma.jellyplay.feature.details.generated.resources.detail_option_stop_notify_new_episodes
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_option_hide_from_continue_watching
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_option_hide_from_next_up
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_option_instant_mix
@@ -67,13 +73,85 @@ import org.jetbrains.compose.resources.stringResource
 /**
  * A single resolved options-menu entry, shared by the touch [DropdownMenu]
  * and the TV [TvSafeSheet] so the two menus can never drift apart.
+ *
+ * [id] is a stable snake_case action key ("download", "watch_party", …) the
+ * D23 promoted-rail filter keys on: the landscape rail lifts a fixed id set
+ * out of this list and the ⋮ menu suppresses exactly those ids while the rail
+ * shows them, so an id must identify the menu SLOT (never the label — the
+ * download slot's label legitimately varies download → downloading → delete
+ * by transfer state).
  */
 internal data class MediaOption(
+    val id: String,
     val label: String,
     val icon: ImageVector,
     val enabled: Boolean = true,
     val onClick: () -> Unit,
 )
+
+/**
+ * The fixed option-id set the landscape/TV detail rail promotes out of the ⋮
+ * menu (D23, v1 — per-item customization is explicitly out of scope). Ids the
+ * current menu does not carry are ignored: "mark_watched" and "trailer" act
+ * from the action row / videos row today, so the rail renders only the
+ * entries that actually resolve.
+ */
+internal val PromotedMediaOptionIds: List<String> = listOf(
+    "download",
+    "mark_watched",
+    "trailer",
+    "watch_party",
+)
+
+/**
+ * This list minus every option whose [MediaOption.id] is in [promotedIds] —
+ * the ⋮-menu half of the D23 no-dupes rule (applied only while the rail
+ * actually shows the promoted set; an empty [promotedIds] is a pass-through).
+ * Pure and order-preserving.
+ */
+internal fun List<MediaOption>.excludingIds(promotedIds: Set<String>): List<MediaOption> =
+    if (promotedIds.isEmpty()) {
+        this
+    } else {
+        filter { it.id !in promotedIds }
+    }
+
+/**
+ * This list's options whose [MediaOption.id] is in [promotedIds], resolved in
+ * the fixed [PromotedMediaOptionIds] order (the rail's row order is stable
+ * regardless of where each entry sits in the menu) and skipping ids the menu
+ * does not carry. Pure.
+ */
+internal fun List<MediaOption>.promotedOptions(
+    promotedIds: Collection<String> = PromotedMediaOptionIds,
+): List<MediaOption> = promotedIds.mapNotNull { id -> firstOrNull { it.id == id } }
+
+/**
+ * D14: the "Play (with pre-rolls)" entry's gate — server intros are
+ * meaningful only for MOVIE/EPISODE plays (a SERIES has nothing of its own
+ * to pre-roll; intros are episode-scoped), need the server (never offline),
+ * and the caller resolves the host-level SyncPlay veto into [canPlay].
+ * Pure — pinned by the menu tests.
+ */
+internal fun offersPlayWithPrerolls(
+    mediaType: MediaType?,
+    isOffline: Boolean,
+    canPlay: Boolean,
+): Boolean = canPlay && !isOffline &&
+    (mediaType == MediaType.MOVIE || mediaType == MediaType.EPISODE)
+
+/**
+ * D12: the "Notify me about new episodes" entry's gate — a per-SERIES opt-in
+ * (an episode's notifications key off its parent series; nothing else has a
+ * "new episode"), needs the server (the worker reads Jellyfin + optionally
+ * *arr), and only where a notification stack exists (desktop: none — the
+ * entry hides). Pure — pinned by the menu tests.
+ */
+internal fun offersSeriesNewEpisodeNotifications(
+    mediaType: MediaType?,
+    isOffline: Boolean,
+    platformSupported: Boolean,
+): Boolean = platformSupported && !isOffline && mediaType == MediaType.SERIES
 
 /**
  * Builds the single ordered list of options-menu entries for the media
@@ -141,6 +219,22 @@ internal fun rememberMediaOptions(
     /** Enqueues the item onto the player's manual up-next queue (head / tail). */
     onPlayNextInQueue: () -> Unit = {},
     onPlayLastInQueue: () -> Unit = {},
+    /**
+     * D14: the host-level half of the "Play (with pre-rolls)" gate (SyncPlay
+     * + remote-origin resolution; the media-type/offline terms live in
+     * [offersPlayWithPrerolls]).
+     */
+    canPlayWithPrerolls: Boolean = false,
+    /** Plays the current item with server intros forced for this single play. */
+    onPlayWithPrerolls: () -> Unit = {},
+    /**
+     * D12: the current series' new-episode notification opt-in (the menu
+     * entry's checkmark state) and the write. Only rendered where
+     * [platformSupportsNotifications] holds — desktop hides the entry.
+     */
+    seriesNotificationsEnabled: Boolean = false,
+    platformSupportsNotifications: Boolean = false,
+    onToggleSeriesNotifications: (enabled: Boolean) -> Unit = {},
 ): List<MediaOption> {
     // Download status / progress, resolved once for both the label and the
     // enabled flag so the two menus stay in lock-step.
@@ -187,6 +281,9 @@ internal fun rememberMediaOptions(
     val labelSplitVersions = stringResource(Res.string.detail_option_split_versions)
     val labelPlayNextInQueue = stringResource(Res.string.detail_option_play_next)
     val labelPlayLastInQueue = stringResource(Res.string.detail_option_play_last)
+    val labelPlayWithPrerolls = stringResource(Res.string.detail_option_play_with_prerolls)
+    val labelNotifyNewEpisodes = stringResource(Res.string.detail_option_notify_new_episodes)
+    val labelStopNotifyingNewEpisodes = stringResource(Res.string.detail_option_stop_notify_new_episodes)
 
     return remember(item, detail, itemId, isAudio, isSeries, seasons, preferences.showShareMediaOption,
         preferences.nextUpExcludedSeriesIds, preferences.hiddenCwItemIds, preferences.showDetailUpNext,
@@ -197,13 +294,15 @@ internal fun rememberMediaOptions(
         labelRefreshMetadata, labelIdentify, labelStartRadio, labelVersion, labelMergeVersions, labelSplitVersions,
         labelAddToPlaylist, labelDeleteDownloads, labelInstantMix, labelAddToCollection,
         labelHideDetailUpNext, labelShowDetailUpNext, labelWatchParty,
-        labelPlayNextInQueue, labelPlayLastInQueue) {
+        labelPlayNextInQueue, labelPlayLastInQueue, labelPlayWithPrerolls,
+        seriesNotificationsEnabled, platformSupportsNotifications,
+        labelNotifyNewEpisodes, labelStopNotifyingNewEpisodes) {
         buildList {
             // Metadata editor is a remote-only action (feature matrix: local = No);
             // gated on remoteDiscovery so a local origin never offers a server
             // edit it cannot fulfill.
             if (canEditMetadata) {
-                add(MediaOption(labelEdit, Tabler.Outline.Pencil) {
+                add(MediaOption("edit_metadata", labelEdit, Tabler.Outline.Pencil) {
                     onClose(); onEditClick()
                 })
             }
@@ -212,14 +311,14 @@ internal fun rememberMediaOptions(
             // same origin rule as the editor. Sits directly under Edit so the
             // two metadata-maintenance entries stay grouped.
             if (canRefreshMetadata) {
-                add(MediaOption(labelRefreshMetadata, Tabler.Outline.Refresh) {
+                add(MediaOption("refresh_metadata", labelRefreshMetadata, Tabler.Outline.Refresh) {
                     onClose(); onRefreshMetadata()
                 })
             }
             // Identify (jellyfin-web parity): search providers by name/year/id
             // and apply the real match. Same admin + remote gates as refresh.
             if (canIdentify) {
-                add(MediaOption(labelIdentify, Tabler.Outline.Search) {
+                add(MediaOption("identify", labelIdentify, Tabler.Outline.Search) {
                     onClose(); onIdentify()
                 })
             }
@@ -229,24 +328,24 @@ internal fun rememberMediaOptions(
             // identify entries use), remote-only. The pair stays grouped with
             // the other metadata-maintenance entries.
             if (canMergeVersions) {
-                add(MediaOption(labelMergeVersions, Tabler.Outline.ArrowsJoin) {
+                add(MediaOption("merge_versions", labelMergeVersions, Tabler.Outline.ArrowsJoin) {
                     onClose(); onMergeVersions()
                 })
             }
             if (canSplitVersions) {
-                add(MediaOption(labelSplitVersions, Tabler.Outline.ArrowsSplit) {
+                add(MediaOption("split_versions", labelSplitVersions, Tabler.Outline.ArrowsSplit) {
                     onClose(); onSplitVersions()
                 })
             }
             // Version picker: multi-version items only (the size gate lives
             // with the caller, which also knows the origin/capability mix).
             if (canPickVersion) {
-                add(MediaOption(labelVersion, Tabler.Outline.Stack2) {
+                add(MediaOption("version_picker", labelVersion, Tabler.Outline.Stack2) {
                     onClose(); onVersionPicker()
                 })
             }
             if (preferences.showShareMediaOption) {
-                add(MediaOption(labelShare, Tabler.Outline.Share) {
+                add(MediaOption("share", labelShare, Tabler.Outline.Share) {
                     onClose(); onShare()
                 })
             }
@@ -257,12 +356,13 @@ internal fun rememberMediaOptions(
                 // stays a read-only status row (cancel via the download manager).
                 when {
                     isDownloadCompleted -> add(
-                        MediaOption(labelDeleteDownload, Tabler.Outline.Trash) {
+                        MediaOption("delete_download", labelDeleteDownload, Tabler.Outline.Trash) {
                             onClose(); onDeleteDownload()
                         }
                     )
                     isDownloading || isDownloadActive -> add(
                         MediaOption(
+                            id = "download",
                             label = if (downloadProgress > 0f && downloadStatus == DownloadStatus.DOWNLOADING) {
                                 labelDownloadingPercent
                             } else {
@@ -273,7 +373,7 @@ internal fun rememberMediaOptions(
                         ) { onClose(); onDownload() }
                     )
                     else -> add(
-                        MediaOption(labelDownload, Tabler.Outline.Download) {
+                        MediaOption("download", labelDownload, Tabler.Outline.Download) {
                             onClose(); onDownload()
                         }
                     )
@@ -283,6 +383,7 @@ internal fun rememberMediaOptions(
             } else if (!isOffline && !isAudio && item != null && isSeries && seasons.isNotEmpty()) {
                 add(
                     MediaOption(
+                        id = "download_series",
                         label = if (isDownloadingSeries) labelDownloadingSeries else labelDownloadSeries,
                         icon = Tabler.Outline.Download,
                         enabled = !isDownloadingSeries,
@@ -295,7 +396,7 @@ internal fun rememberMediaOptions(
             // downloaded episodes. Opens the multi-select sheet that drives
             // DetailViewModel.deleteOfflineEpisodes / deleteOfflineSeries.
             if (canDeleteDownloadedSeries) {
-                add(MediaOption(labelDeleteDownloads, Tabler.Outline.Trash) {
+                add(MediaOption("delete_downloads", labelDeleteDownloads, Tabler.Outline.Trash) {
                     onClose(); onDeleteDownloadedSeries()
                 })
             }
@@ -305,7 +406,7 @@ internal fun rememberMediaOptions(
             // excluded here to avoid a duplicate entry path. Remote-only — a
             // local origin has no server playlist target.
             if (canAddToPlaylist && item != null && (item.mediaType.isVideoType || item.mediaType == MediaType.SERIES)) {
-                add(MediaOption(labelAddToPlaylist, Tabler.Outline.Playlist) {
+                add(MediaOption("add_to_playlist", labelAddToPlaylist, Tabler.Outline.Playlist) {
                     onClose(); onAddToPlaylist()
                 })
             }
@@ -315,7 +416,7 @@ internal fun rememberMediaOptions(
             // in the VM. Sits directly under Add to Playlist so the two
             // assemble-into actions stay grouped.
             if (canAddToCollection && item != null && (item.mediaType.isVideoType || item.mediaType == MediaType.SERIES)) {
-                add(MediaOption(labelAddToCollection, Tabler.Outline.Stack2) {
+                add(MediaOption("add_to_collection", labelAddToCollection, Tabler.Outline.Stack2) {
                     onClose(); onAddToCollection()
                 })
             }
@@ -324,11 +425,27 @@ internal fun rememberMediaOptions(
             // items only — a series has nothing playable of its own, audio has
             // the audio queue.
             if (item != null && item.mediaType.isVideoType) {
-                add(MediaOption(labelPlayNextInQueue, Tabler.Outline.PlayerTrackNext) {
+                add(MediaOption("play_next_in_queue", labelPlayNextInQueue, Tabler.Outline.PlayerTrackNext) {
                     onClose(); onPlayNextInQueue()
                 })
-                add(MediaOption(labelPlayLastInQueue, Tabler.Outline.PlayerTrackPrev) {
+                add(MediaOption("play_last_in_queue", labelPlayLastInQueue, Tabler.Outline.PlayerTrackPrev) {
                     onClose(); onPlayLastInQueue()
+                })
+            }
+            // Play (with pre-rolls) — D14: the item plays with server intros
+            // FORCED for this single play (bypasses the global cinema-mode
+            // pref; the pipeline's remaining vetoes still apply). Suppressed
+            // for SERIES (intros are episode-scoped), offline (intros are a
+            // server read) and during SyncPlay (the host-level half rides
+            // [canPlayWithPrerolls]).
+            if (offersPlayWithPrerolls(
+                    mediaType = item?.mediaType,
+                    isOffline = isOffline,
+                    canPlay = canPlayWithPrerolls,
+                )
+            ) {
+                add(MediaOption("play_with_prerolls", labelPlayWithPrerolls, Tabler.Outline.Movie) {
+                    onClose(); onPlayWithPrerolls()
                 })
             }
             // Instant Mix: audio-only. Builds a shuffled track queue seeded from
@@ -336,7 +453,7 @@ internal fun rememberMediaOptions(
             // (audio type + remoteDiscovery) is resolved in DetailContent so the
             // menu entry only renders for a remote audio item.
             if (canInstantMix) {
-                add(MediaOption(labelInstantMix, Tabler.Outline.WaveSine) {
+                add(MediaOption("instant_mix", labelInstantMix, Tabler.Outline.WaveSine) {
                     onClose(); onStartInstantMix()
                 })
             }
@@ -344,7 +461,7 @@ internal fun rememberMediaOptions(
             // seed that keeps refilling itself as the queue drains until the
             // user stops it from the player's queue sheet.
             if (canStartRadio) {
-                add(MediaOption(labelStartRadio, Tabler.Outline.Radio) {
+                add(MediaOption("start_radio", labelStartRadio, Tabler.Outline.Radio) {
                     onClose(); onStartRadio()
                 })
             }
@@ -354,7 +471,7 @@ internal fun rememberMediaOptions(
             // invite link / share / deep-link — the player auto-detects the
             // active session once the group is joined + the queue is seeded.
             if (canStartWatchParty) {
-                add(MediaOption(labelWatchParty, Tabler.Outline.Users) {
+                add(MediaOption("watch_party", labelWatchParty, Tabler.Outline.Users) {
                     onClose(); onStartWatchParty()
                 })
             }
@@ -366,6 +483,7 @@ internal fun rememberMediaOptions(
                     seriesId != null && seriesId in preferences.nextUpExcludedSeriesIds
                 add(
                     MediaOption(
+                        id = "next_up_visibility",
                         label = if (isHiddenFromNextUp) labelShowInNextUp else labelHideFromNextUp,
                         icon = if (isHiddenFromNextUp) Tabler.Outline.Eye else Tabler.Outline.EyeOff,
                     ) {
@@ -374,10 +492,37 @@ internal fun rememberMediaOptions(
                     }
                 )
             }
+            // D12: "Notify me about new episodes" — the checkmark mirrors the
+            // per-series opt-in (same label/icon state flip as the visibility
+            // entries above; the menu carries no checkbox renderer). The gate
+            // (SERIES-only, server-only, notification-stack platforms only)
+            // lives in offersSeriesNewEpisodeNotifications.
+            if (offersSeriesNewEpisodeNotifications(
+                    mediaType = item?.mediaType,
+                    isOffline = isOffline,
+                    platformSupported = platformSupportsNotifications,
+                )
+            ) {
+                add(
+                    MediaOption(
+                        id = "notify_new_episodes",
+                        label = if (seriesNotificationsEnabled) {
+                            labelStopNotifyingNewEpisodes
+                        } else {
+                            labelNotifyNewEpisodes
+                        },
+                        icon = if (seriesNotificationsEnabled) Tabler.Outline.BellOff else Tabler.Outline.Bell,
+                    ) {
+                        onClose()
+                        onToggleSeriesNotifications(!seriesNotificationsEnabled)
+                    }
+                )
+            }
             if (isSeries) {
                 val isDetailUpNextHidden = !preferences.showDetailUpNext
                 add(
                     MediaOption(
+                        id = "detail_up_next_visibility",
                         label = if (isDetailUpNextHidden) labelShowDetailUpNext else labelHideDetailUpNext,
                         icon = if (isDetailUpNextHidden) Tabler.Outline.Eye else Tabler.Outline.EyeOff,
                     ) {
@@ -389,6 +534,7 @@ internal fun rememberMediaOptions(
             val isHiddenFromCw = item?.id in preferences.hiddenCwItemIds
             add(
                 MediaOption(
+                    id = "continue_watching_visibility",
                     label = if (isHiddenFromCw) labelShowInContinueWatching else labelHideFromContinueWatching,
                     icon = if (isHiddenFromCw) Tabler.Outline.Eye else Tabler.Outline.EyeOff,
                 ) {
@@ -397,11 +543,11 @@ internal fun rememberMediaOptions(
                 }
             )
             if (canManageSeries) {
-                add(MediaOption(labelManageSeries, Tabler.Outline.ListDetails) {
+                add(MediaOption("manage_series", labelManageSeries, Tabler.Outline.ListDetails) {
                     onClose(); onManageSeries()
                 })
             }
-            add(MediaOption(labelTechnicalInfo, Tabler.Outline.InfoCircle) {
+            add(MediaOption("technical_info", labelTechnicalInfo, Tabler.Outline.InfoCircle) {
                 onClose(); onTechnicalInfo()
             })
         }

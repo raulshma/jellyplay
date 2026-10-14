@@ -176,6 +176,16 @@ class HomeViewModelEventsTest {
     }
 
     private val userFlow = MutableStateFlow<UserInfo?>(null)
+
+    /**
+     * H17/H18 loader doubles — see [HomeViewModelTest]'s harness note: relaxed
+     * mocks with defensive null/empty stubs; the default pref state never
+     * triggers them.
+     */
+    private val statsCardLoader: HomeStatsCardLoader = mockk(relaxed = true)
+    private val genreRailCache: HomeGenreRailCache = mockk(relaxed = true)
+    private val presenceChips: HomePresenceChipsController = mockk(relaxed = true)
+
     private val sessionFlow = MutableStateFlow<ActiveSession?>(null)
     private val sessionApiClient: AuthApiClient = mockk(relaxed = true)
     private val homeSession: HomeSession by lazy {
@@ -272,6 +282,9 @@ class HomeViewModelEventsTest {
         every { offlineRepository.getOfflineEpisodes() } returns flowOf(emptyList())
         coEvery { homeFeed.getOfflineHomeLayout() } returns null
         every { newsletterTriggerManager.shouldShowBanner() } returns flowOf(false)
+        coEvery { statsCardLoader.load(any(), any()) } returns null
+        coEvery { genreRailCache.genres(any(), any()) } returns emptyList()
+        coEvery { presenceChips.refresh(any()) } returns emptyList()
     }
 
     @AfterTest
@@ -291,6 +304,7 @@ class HomeViewModelEventsTest {
         offlineRepository = offlineRepository,
         offlineModeManager = offlineModeManager,
         newsletterTriggerManager = newsletterTriggerManager,
+        clock = fakeTimeSource,
         prefs = HomeStores(
             homeDiscovery = homeDiscoveryStore,
             appearance = appearanceStore,
@@ -331,6 +345,9 @@ class HomeViewModelEventsTest {
             userMessageBus = userMessageBus,
             offlineRepository = offlineRepository,
         ),
+        statsCardLoader = statsCardLoader,
+        genreRailCache = genreRailCache,
+        presenceChips = presenceChips,
     )
 
     private fun vmTest(block: suspend kotlinx.coroutines.test.TestScope.() -> Unit): Unit =

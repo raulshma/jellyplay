@@ -8,12 +8,14 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.statusBarsPadding
 import com.raulshma.jellyplay.core.ui.components.clearFloatingNav
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -21,6 +23,7 @@ import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.SnackbarDuration
 import com.raulshma.jellyplay.core.ui.components.PullToRefreshBox
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -57,11 +60,15 @@ import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.merge
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Download
 import com.raulshma.jellyplay.feature.home.generated.resources.home_error_load_content
 import com.raulshma.jellyplay.feature.home.generated.resources.home_go_online_action
 import com.raulshma.jellyplay.feature.home.generated.resources.home_implicit_offline_banner
+import com.raulshma.jellyplay.feature.home.generated.resources.home_new_sections_announcement
+import com.raulshma.jellyplay.feature.home.generated.resources.home_new_sections_customize
 import com.raulshma.jellyplay.feature.home.generated.resources.home_no_downloads_description
 import com.raulshma.jellyplay.feature.home.generated.resources.home_no_downloads_yet
 import com.raulshma.jellyplay.feature.home.generated.resources.Res
@@ -73,11 +80,13 @@ import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.MediaQuickActionScope
 import com.raulshma.jellyplay.core.model.SortOption
+import com.raulshma.jellyplay.core.model.descriptor
 import com.raulshma.jellyplay.core.model.hasPlaybackPosition
 import com.raulshma.jellyplay.core.model.quickActions
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.model.seerr.DiscoverSectionType
+import com.raulshma.jellyplay.core.ui.components.UndoableAction
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
@@ -102,6 +111,7 @@ import com.raulshma.jellyplay.core.ui.components.downloads.rememberRemoveDownloa
 import com.raulshma.jellyplay.core.ui.components.seerr.rememberSeerrCardLoadingState
 import com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus
 import com.raulshma.jellyplay.core.ui.components.HeaderStatus
+import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.navigation.withHighlightSettingId
 import com.raulshma.jellyplay.core.ui.settingssearch.ResolvedSettingsItem
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
@@ -144,11 +154,23 @@ data class HomeCallbacks(
      * overrides). Reached from the inline section-config sheet when a
      * per-library (LATEST_MEDIA) row is being configured. */
     val onConfigureLibraries: () -> Unit = {},
+    /** Open Home Settings from the H21 new-section announcement snackbar's
+     * Customize action (the config hub where the just-enabled sections are
+     * reordered/toggled). */
+    val onCustomizeHome: () -> Unit = {},
     /** Open the full library screen for a home-section "See All" action.
      * Carries the section [HomeSectionType], the optional per-library id (non-null
      * only for LATEST_MEDIA), the optional per-library [collectionType] (used to
      * reproduce the home row's leaf item type + sort), and the resolved title. */
     val onSeeAllClick: (sectionType: HomeSectionType, libraryId: String?, collectionType: String?, title: String) -> Unit = { _, _, _, _ -> },
+    /**
+     * Navigate to a caller-constructed route — H17/H18's in-feature routing:
+     * the stats card's admin user-statistics detail and the genre rail's
+     * filtered library section. Same Route-carrying shape as
+     * [onSettingsSearchItemClick]; default no-op keeps every existing
+     * constructor call site compiling.
+     */
+    val onOpenRoute: (com.raulshma.jellyplay.core.ui.navigation.Route) -> Unit = {},
 )
 
 /**
@@ -301,9 +323,15 @@ private fun MainHomeContent(
     } else null
 
     // Hero featured-candidate selection — single-pass (was up to 3x flatMap/filter).
-    val featuredCandidates = remember(renderingOffline, state.homeMode, state.sections, offlineSections) {
-        selectHomeHeroCandidates(renderingOffline, state.homeMode, state.sections, offlineSections)
+    // H9: the plugin-curated billboards merge ahead of the local pool (server
+    // order, dedupe by item id, curated wins); offline rendering ignores them.
+    val featuredCandidates = remember(renderingOffline, state.homeMode, state.sections, offlineSections, state.curatedHero) {
+        selectHomeHeroCandidates(renderingOffline, state.homeMode, state.sections, offlineSections, state.curatedHero)
     }
+    // The featured item's curated billboard copy, keyed by item id — the hero
+    // reads the headline/subhead overrides for whichever candidate is
+    // featured (curated or local; a miss renders the item's own metadata).
+    val curatedHeroOverlay = remember(state.curatedHero) { state.curatedHero.associateBy { it.item.id } }
     val heroFocusRequester = remember { FocusRequester() }
     val mediaImageUrlBuilder = remember(viewModel) { { item: com.raulshma.jellyplay.core.model.MediaItem -> viewModel.getImageUrl(item.id) } }
     val mediaBackdropUrlBuilder = remember(viewModel) { { item: com.raulshma.jellyplay.core.model.MediaItem -> viewModel.getBackdropUrl(item.id) } }
@@ -603,13 +631,59 @@ private fun MainHomeContent(
         ) {
             // Recovery path for search-history delete/clear. Home
             // previously had no SnackbarHost at all; this is the single host.
+            // H21: the new-section announcement rides the SAME host, mapped
+            // here from the VM's structural event to localized text (the VM
+            // has no resource access); its Customize action adds the
+            // navigation onto the VM's stamp closure (the VM cannot route),
+            // while the stamp itself stays on the action either way (button
+            // tap or dismissal).
+            val newOnHomeTemplate = stringResource(Res.string.home_new_sections_announcement)
+            val customizeLabel = stringResource(Res.string.home_new_sections_customize)
+            val snackbarActions = remember(viewModel, callbacks, newOnHomeTemplate, customizeLabel) {
+                merge(
+                    viewModel.undoActions,
+                    viewModel.sectionAnnouncements.map { announcement ->
+                        UndoableAction(
+                            message = newOnHomeTemplate.replace(
+                                "%1\$s",
+                                announcement.addedSections.joinToString(", ") { it.descriptor.displayName },
+                            ),
+                            onUndo = {
+                                announcement.stampAnnounced()
+                                callbacks.onCustomizeHome()
+                            },
+                            actionLabel = customizeLabel,
+                            duration = SnackbarDuration.Long,
+                            onDismiss = announcement.stampAnnounced,
+                        )
+                    },
+                )
+            }
             UndoSnackbarOverlay(
-                actions = viewModel.undoActions,
+                actions = snackbarActions,
                 modifier = Modifier.align(Alignment.BottomCenter),
             )
             // Ambient backdrop: the hero artwork's BlurHash, or a palette-derived
             // gradient when no hero/blurhash is available. Sits behind all content
             // and above the flat background fill. Suppressed in performance mode.
+            //
+            // H10: while a TV card holds focus (and `home_focus_backdrop` is on),
+            // the backdrop reads THE CARD's artwork instead — the in-memory
+            // BlurHash crossfades in at focus arrival, the backdrop URL (the
+            // ambient palette's source) only resolves after the settle window,
+            // and focus exit folds back to the hero-driven inputs here. Offline
+            // the URL half is skipped (a server URL is unreachable; blank folds
+            // to the arrival blurhash alone).
+            val focusBackdropUrlFor = if (renderingOffline) {
+                remember { { _: MediaItem -> "" } }
+            } else {
+                mediaBackdropUrlBuilder
+            }
+            val focusBackdrop = rememberFocusBackdropState(
+                focusedItem = { tvFocusedItem },
+                enabled = isTv && state.focusBackdropEnabled,
+                backdropUrlFor = focusBackdropUrlFor,
+            )
             HomeBackdrop(
                 state = HomeBackdropState(
                     enabled = state.homeBackdropEnabled,
@@ -619,9 +693,13 @@ private fun MainHomeContent(
                     blurHash = heroController.featuredItem?.blurHashes?.backdrop,
                     backdropUrl = heroController.backdropUrl,
                     backgroundColor = backgroundColor,
-                ),
+                ).withFocusBackdrop(focusBackdrop),
             )
-            CompositionLocalProvider(LocalMediaQuickActionController provides quickActionController) {
+            CompositionLocalProvider(
+                LocalMediaQuickActionController provides quickActionController,
+                // H13: the wide-card trickplay peek's pref gate.
+                LocalHomeTrickplayPreview provides state.trickplayPreviewEnabled,
+            ) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -660,6 +738,8 @@ private fun MainHomeContent(
                     onConfigureHomeLayout = onConfigureHomeLayout,
                     onConfigureLibraries = onConfigureLibraries,
                     onFocusedMediaItem = onFocusedMediaItem,
+                    clearFocusedMediaItem = remember { { tvFocusedItem = null } },
+                    curatedHeroOverlay = curatedHeroOverlay,
                     listState = listState,
                     density = density,
                 )
@@ -739,6 +819,13 @@ private fun HomeSurfaceContent(
     onConfigureHomeLayout: () -> Unit,
     onConfigureLibraries: () -> Unit,
     onFocusedMediaItem: (MediaItem) -> Unit,
+    /** H10's focus-exit half: drops the screen's tracked card when focus
+     * leaves the rows for the hero — the row reporting only ever names a card
+     * that GAINED focus, so without this the tracked item (and the focus
+     * backdrop) would go stale once the hero re-engages. */
+    clearFocusedMediaItem: () -> Unit,
+    /** H9's curated billboard copy, keyed by item id (null copy = item metadata). */
+    curatedHeroOverlay: Map<String, com.raulshma.jellyplay.core.model.CuratedHeroEntry>,
     listState: LazyListState,
     density: Density,
 ) {
@@ -773,6 +860,101 @@ private fun HomeSurfaceContent(
             musicContent()
         }
         is HomeSurface.Content -> {
+            // ── H17/H18 non-section home content ────────────────────────
+            // The newsletter banner is the precedent for non-section home
+            // content; that banner mounts as a gated LazyColumn item inside
+            // HomeContentList, which this agent does not own — so the stats
+            // card + genre rail mount here instead, directly above the
+            // content list (the closest HomeScreen-owned slot to the plan's
+            // "between hero and the first row"). Both are ONLINE-FEED-ONLY:
+            // `s.feed is HomeFeed.Online` is the same suppression posture the
+            // banner's `online?.newsletterBannerVisible` gate applies (that
+            // gate reads HomeContentState.online = feed as? HomeFeed.Online),
+            // so an offline render (explicit or implicit) shows neither.
+            val onlineFeed = s.feed is HomeFeed.Online
+            // Documented relative order: the stats card first, the genre
+            // rail directly above the first row (the chips read as the
+            // row-adjacent quick nav; the plan leaves the pair unordered).
+            val statsCardData = state.statsCard
+            val currentUser = state.currentUser
+            val statsCardClick: (() -> Unit)? = if (currentUser != null && currentUser.isAdmin) {
+                // Tap → the admin area's user-statistics detail for the
+                // signed-in user (the plan's "Route.AdminStatistics user
+                // detail" — the route that exists is UserStatisticsDetail);
+                // hidden for non-admins, per the admin gate.
+                remember(callbacks, currentUser.id) {
+                    { callbacks.onOpenRoute(Route.UserStatisticsDetail(currentUser.id)) }
+                }
+            } else {
+                null
+            }
+            Column(modifier = Modifier.fillMaxSize()) {
+                // ── H19 presence chips ───────────────────────────────────
+                // The first HomeScreen-owned slot of the content column —
+                // the closest mount to the plan's "under the top dock" (the
+                // dock itself is the overlay above this column). Online-feed
+                // only, same suppression posture as the two surfaces below;
+                // empty (pref off / offline / probe failure / nobody
+                // watching) renders nothing.
+                if (onlineFeed && state.presenceChips.isNotEmpty()) {
+                    HomePresenceChipRow(
+                        chips = state.presenceChips,
+                        onChipClick = remember(callbacks) {
+                            { chip: HomePresenceChip ->
+                                callbacks.onItemClick(chip.itemId, chip.mediaType, null, chip.itemName)
+                            }
+                        },
+                        // Join → the VM's SyncPlay seam, then the player (the
+                        // screen owns navigation; the bridge attaches to the
+                        // now-active watch party — the detail screen's
+                        // create→open-player shape).
+                        onJoinClick = remember(viewModel, callbacks) {
+                            { chip: HomePresenceChip ->
+                                viewModel.onEvent(
+                                    HomeUiEvent.JoinPresenceWatchParty(chip) { startPositionTicks ->
+                                        callbacks.onPlayClick(
+                                            chip.itemId,
+                                            null,
+                                            startPositionTicks,
+                                            chip.mediaType,
+                                            null,
+                                            chip.itemName,
+                                        )
+                                    },
+                                )
+                            }
+                        },
+                        onDismiss = remember(viewModel) {
+                            { chip: HomePresenceChip ->
+                                viewModel.onEvent(HomeUiEvent.DismissPresenceChip(chip.sessionId))
+                            }
+                        },
+                        contentPad = contentPad,
+                        // The content column sits under the status-bar touch
+                        // frame (only the dock overlay insets itself); without
+                        // this the chip's dismiss X lands in the inset and taps
+                        // never reach it. No-op on TV (zero status-bar inset).
+                        modifier = Modifier
+                            .statusBarsPadding()
+                            .padding(top = 4.dp, bottom = 4.dp),
+                    )
+                }
+                if (onlineFeed && state.statsCardEnabled && statsCardData != null) {
+                    HomeStatsCard(
+                        data = statsCardData,
+                        onClick = statsCardClick,
+                    )
+                }
+                if (onlineFeed && state.genreRailEnabled && state.genreChips.isNotEmpty()) {
+                    HomeGenreRail(
+                        genres = state.genreChips,
+                        onGenreClick = remember(callbacks) {
+                            { genre: String -> callbacks.onOpenRoute(homeGenreRoute(genre)) }
+                        },
+                        contentPad = contentPad,
+                        modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
+                    )
+                }
             HomeContentList(
                 state = HomeContentState(
                     // WHAT renders was decided by the fold — the
@@ -786,6 +968,7 @@ private fun HomeSurfaceContent(
                     discoverEnabled = state.discoverEnabled,
                     experimentalCardClippingEnabled = state.experimentalCardClippingEnabled,
                     featuredItem = heroController.featuredItem,
+                    curatedHeroOverlay = curatedHeroOverlay,
                     backgroundColor = backgroundColor,
                     contentPad = contentPad,
                     headerHeight = headerHeight,
@@ -811,6 +994,9 @@ private fun HomeSurfaceContent(
                     // row's edge chip while its single-row refetch runs.
                     refreshingSectionIds = state.refreshingSectionIds,
                     statusBanner = implicitOfflineBanner,
+                    // H12 visit memory (the sibling one-liner): the
+                    // NEW-badge predicate's previous-visit threshold.
+                    homeLastVisitEpochMs = state.homeLastVisitEpochMs,
                 ),
                 callbacks = HomeContentCallbacks(
                     onRetrySectionLoad = remember(viewModel) { { viewModel.onEvent(HomeUiEvent.Refresh) } },
@@ -818,7 +1004,15 @@ private fun HomeSurfaceContent(
                     onNewsletterClick = callbacks.onNewsletterClick,
                     onOfflineLibraryClick = callbacks.onOfflineLibraryClick,
                     onItemClick = remember(callbacks) { { id: String -> callbacks.onItemClick(id, MediaType.UNKNOWN, null, "") } },
-                    onFocusChange = remember { { focused: Boolean -> heroController.onFocusChange(focused) } },
+                    // H10: the hero re-engaging means no card holds focus —
+                    // drop the tracked card (the focus backdrop reverts; the
+                    // Menu key stops targeting a card the user left).
+                    onFocusChange = remember {
+                        { focused: Boolean ->
+                            if (focused) clearFocusedMediaItem()
+                            heroController.onFocusChange(focused)
+                        }
+                    },
                     getImageUrl = remember(viewModel) { { id: String -> viewModel.getImageUrl(id) } },
                     photoFolderChildUrlsFor = remember(viewModel) { { id: String -> viewModel.photoFolderChildUrlsFor(id) } },
                     onSeerrItemClick = callbacks.onSeerrItemClick,
@@ -835,6 +1029,7 @@ private fun HomeSurfaceContent(
                 listState = listState,
                 density = density,
             )
+            } // end Column(H17 stats card + H18 genre rail + content list)
         }
     }
 }
@@ -915,6 +1110,10 @@ private fun HomeDockArea(
     val dockOnShowSyncDetails = remember(viewModel) {
         { onShowSyncDetails() }
     }
+    // H15 inline toggle — the dock overflow's anti-spoiler checkmark.
+    val dockOnToggleAntiSpoiler = remember(viewModel) {
+        { enabled: Boolean -> viewModel.onEvent(HomeUiEvent.SetAntiSpoilerHome(enabled)) }
+    }
 
     HomeTopDockScrim(
         settingsSearch = viewModel::settingsSearchResults,
@@ -936,6 +1135,8 @@ private fun HomeDockArea(
             homeHeroEnabled = state.homeHeroEnabled,
             hasFeaturedItem = heroHasFeaturedItem,
             hideTopHeaderOnScroll = state.hideTopHeaderOnScroll,
+            // H15: the dock overflow's anti-spoiler checkmark state.
+            antiSpoilerHome = state.antiSpoilerHome,
         ),
         dockCallbacks = HomeDockCallbacks(
             onUserSwitch = onUserSwitch,
@@ -945,6 +1146,7 @@ private fun HomeDockArea(
             onClearSearch = dockOnClearSearch,
             onToggleOffline = dockOnToggleOffline,
             onShowSyncDetails = dockOnShowSyncDetails,
+            onToggleAntiSpoiler = dockOnToggleAntiSpoiler,
         ),
         onHeroFocusDown = remember(heroFocusRequester) {
             { heroFocusRequester.tryRequestFocus("top_dock_down_hero") }

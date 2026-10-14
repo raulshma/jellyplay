@@ -79,16 +79,26 @@ sealed interface MediaCardFooterMeta {
  * ([MediaItem.hasMeaningfulRuntime] + [MediaItem.hasWatchProgress] — the
  * former hand-rolled `hasValidDuration` / `playbackPositionTicks != null &&
  * > 0 && !isPlayed` copies). Null when the footer shows no meta.
+ *
+ * [showTimeLeft] is the H15 anti-spoiler leg ([spoilerSafeCardState]'s
+ * `showTimeLeft`): when false, the "Xm left" remaining-time segment drops —
+ * how much of a film is left is watch-state information — while the total
+ * runtime and the book percent stay (the documented precedence: the plan
+ * suppresses the time-left footer, not runtime meta).
  */
-fun mediaCardFooterMeta(item: MediaItem, bookFractionOverride: Float? = null): MediaCardFooterMeta? {
+fun mediaCardFooterMeta(
+    item: MediaItem,
+    bookFractionOverride: Float? = null,
+    showTimeLeft: Boolean = true,
+): MediaCardFooterMeta? {
     bookFooterPercent(item, bookFractionOverride)?.let { return MediaCardFooterMeta.BookProgress(it) }
     if (!item.hasMeaningfulRuntime) return null
-    return if (item.hasWatchProgress) {
-        formatRemainingTimeFromTicks(item.runTimeTicks!!, item.playbackPositionTicks!!)
+    if (item.hasWatchProgress) {
+        if (!showTimeLeft) return null
+        return formatRemainingTimeFromTicks(item.runTimeTicks!!, item.playbackPositionTicks!!)
             ?.let(MediaCardFooterMeta::TimeLeft)
-    } else {
-        formatRuntimeLabelFromTicks(item.runTimeTicks)?.let(MediaCardFooterMeta::Runtime)
     }
+    return formatRuntimeLabelFromTicks(item.runTimeTicks)?.let(MediaCardFooterMeta::Runtime)
 }
 
 /**

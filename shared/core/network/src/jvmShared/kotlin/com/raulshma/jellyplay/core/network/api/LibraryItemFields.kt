@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.network.api
 
+import com.raulshma.jellyplay.core.network.library.HOME_ROW_PROJECTION_FIELDS
 import com.raulshma.jellyplay.core.network.library.LIST_PROJECTION_FIELDS
 import org.jellyfin.sdk.model.api.ItemFields
 
@@ -20,3 +21,15 @@ internal val LIST_ITEM_FIELDS: List<ItemFields> = LIST_PROJECTION_FIELDS.map { n
 
 /** The genre-rendering composition (the library grid, the empty-library fallback's latest probe). */
 internal val LIST_ITEM_FIELDS_WITH_GENRES: List<ItemFields> = LIST_ITEM_FIELDS + ItemFields.GENRES
+
+/**
+ * The home-row composition (the resume / Next Up / Upcoming / latest rows),
+ * resolved from the shared commonMain [HOME_ROW_PROJECTION_FIELDS] — the
+ * card-overlay reads (quality badges, NEW dot, trickplay preview) ride the
+ * same list fetch. Fails fast on SDK drift like its sibling above.
+ */
+internal val HOME_ROW_ITEM_FIELDS: List<ItemFields> = HOME_ROW_PROJECTION_FIELDS.map { name ->
+    requireNotNull(ItemFields.entries.firstOrNull { it.serialName == name }) {
+        "ItemFields has no serial name '$name' — SDK drift vs the shared home-row projection"
+    }
+}

@@ -4,6 +4,7 @@ import com.raulshma.jellyplay.core.concurrency.mapConcurrent
 import com.raulshma.jellyplay.core.concurrency.mapConcurrentCatching
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.model.CacheIdentity
+import com.raulshma.jellyplay.core.model.CuratedHeroEntry
 import com.raulshma.jellyplay.core.model.DiscoverRowConfig
 import com.raulshma.jellyplay.core.model.DiscoverRowSource
 import com.raulshma.jellyplay.core.model.HomeFreshness
@@ -26,6 +27,8 @@ import com.raulshma.jellyplay.core.model.descriptor
 import com.raulshma.jellyplay.core.model.monotonicNowMillis
 import com.raulshma.jellyplay.core.model.seerr.SeerrDiscoverParams
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
+import com.raulshma.jellyplay.core.network.api.JellyPlayHeroCandidate
+import com.raulshma.jellyplay.core.network.api.JellyPlayHeroResult
 import com.raulshma.jellyplay.core.network.api.JellyPlayRowItem
 import com.raulshma.jellyplay.core.network.api.JellyPlayRowResult
 import kotlin.concurrent.Volatile
@@ -58,9 +61,18 @@ import kotlinx.coroutines.sync.Semaphore
  * exposes it; direct implementations elsewhere are not supported.
  */
 public interface HomeSectionSources {
-    suspend fun getContinueWatching(limit: Int, classicRows: Boolean): Result<List<MediaItem>>
+    suspend fun getContinueWatching(limit: Int, classicRows: Boolean, excludeActiveSessions: Boolean): Result<List<MediaItem>>
     suspend fun getContinueReading(limit: Int): Result<List<MediaItem>>
     suspend fun getNextUp(limit: Int, enableRewatching: Boolean, maxDays: Int): Result<List<MediaItem>>
+
+    /**
+     * H4: unaired episodes across the followed series (`GET /Shows/Upcoming`)
+     * — the batch sub-call behind the Upcoming row. Signature borrowed
+     * verbatim from [com.raulshma.jellyplay.core.network.api.LibraryApiClient]
+     * (defaults dropped, the port convention), so the production client
+     * satisfies it for free.
+     */
+    suspend fun getUpcoming(userId: String?, parentId: String?, limit: Int): Result<List<MediaItem>>
     suspend fun getLibraryFolders(): Result<List<LibraryFolder>>
     suspend fun getLatestMedia(parentId: String, limit: Int, classicEpisodePool: Int?): Result<List<MediaItem>>
     suspend fun getSimilarItems(itemId: String, limit: Int): Result<List<MediaItem>>
@@ -99,9 +111,9 @@ public interface SeerrHomeSectionSources {
 }
 
 /**
- * The plugin-side sibling of [SeerrHomeSectionSources]: the two jellyplay row
- * reads the PLUGIN_ROW home rows need (the transport twin of
- * `JellyPlayRowsRoutes.getSeasonalRow/getCustomRow`), the plugin's
+ * The plugin-side sibling of [SeerrHomeSectionSources]: the jellyplay row and
+ * curated-hero reads the PLUGIN_ROW home rows and the H9 hero need (the
+ * transport twin of `JellyPlayRowsRoutes`), the plugin's
  * local-library matches resolved to full [MediaItem]s, and the capability
  * gates. Signatures deliberately carry the raw wire payload — the port stays
  * a dumb transport; payload→[HomeSection] mapping, TTL memoisation and the
@@ -126,11 +138,14 @@ public interface JellyPlayHomeSectionSources {
     suspend fun seasonalRowsEnabled(): Boolean
 
     /**
-     * Capability gate for admin-defined custom rows (probe + `custom-rows`
+     * Capability gate for the admin-defined custom rows (probe + `custom-rows`
      * feature). Unused by the batch home path in v1 — see
      * [HomeSectionsFetcher.fetchPluginCustomRow] for the one blocker.
      */
     suspend fun customRowsEnabled(): Boolean
+
+    /** Capability gate for the plugin-curated hero (probe + `hero` feature). */
+    suspend fun curatedHeroEnabled(): Boolean
 
     /** The plugin's seasonal row; null = unconfigured this season (plugin 404). */
     suspend fun getSeasonalRow(keyword: String?): Result<JellyPlayRowResult?>
@@ -140,6 +155,13 @@ public interface JellyPlayHomeSectionSources {
 
     /** The admin-defined row catalog (the enumerate capability — titles in plugin config order); null = unavailable. */
     suspend fun getCustomRowCatalog(): Result<com.raulshma.jellyplay.core.network.api.JellyPlayRowCatalog?>
+
+    /**
+     * The plugin's curated hero billboards in the plugin's serve order (weight
+     * descending, config order breaking ties); null = unconfigured / the
+     * `hero` route predates the installed plugin wave (plugin 404).
+     */
+    suspend fun getCuratedHero(): Result<JellyPlayHeroResult?>
 
     /**
      * The batched library read resolving a row entry's `localItemId` to the
@@ -163,10 +185,12 @@ public interface JellyPlayHomeSectionSources {
  * recommendations chain.
  *
  * Schedule (verbatim from the JVM impl it replaces):
- *  - Continue Watching / Continue Reading / Next Up / folders / pinned launch
+ *  - Continue Watching / Continue Reading / Next Up / Upcoming (H4) /
+ *    folders / pinned launch
  *    concurrently; a disabled section makes ZERO port calls (resolved locally
  *    as `Result.success(emptyList())`); folders are gated on
- *    LATEST_MEDIA || RECENTLY_ADDED; pinned sections are fetched ALWAYS,
+ *    LATEST_MEDIA || RECENTLY_ADDED || MY_MEDIA (the H5 tiles assemble the
+ *    same folders read); pinned sections are fetched ALWAYS,
  *    regardless of [HomeSectionQuery.enabledSections].
  *  - The recommendations chain launches only AFTER Continue Watching and
  *    Next Up resolve (deliberate serialization, not an oversight — their
@@ -324,6 +348,15 @@ public class HomeSectionsFetcher(
     private val homePluginRowCache = TtlCache<PluginRowValue>(ttlMs = HomeFreshness.NETWORK_SUBCALL_TTL_MS)
 
     /**
+     * The plugin-curated hero (H9): identity-scoped like every entry with the
+     * sibling sub-call TTL — the cached VALUE is the resolved entry list (full
+     * MediaItems with per-item UserData), so a hit costs zero port calls and a
+     * watched/favorite write must not let the memo serve the pre-write hero
+     * (cleared in [invalidateCaches] with the plugin-row memo).
+     */
+    private val homeCuratedHeroCache = TtlCache<List<CuratedHeroEntry>>(ttlMs = HomeFreshness.NETWORK_SUBCALL_TTL_MS)
+
+    /**
      * Drops both sub-call caches so the next home fetch re-hits the server for the
      * latest/similar rows. The rows carry per-item UserData (played badge,
      * favorite heart, resume bar), so a watched/favorite/progress write must
@@ -338,6 +371,9 @@ public class HomeSectionsFetcher(
         // watched/favorite write must not let this memo serve the pre-write
         // row either.
         homePluginRowCache.clear()
+        // Same for the curated hero — its entries are full MediaItems the
+        // hero's Play/Resume affordance renders from.
+        homeCuratedHeroCache.clear()
     }
 
     /**
@@ -405,8 +441,20 @@ public class HomeSectionsFetcher(
         val nextUpDeferred = async {
             HomeRowBatchSubcalls.getValue(HomeSectionType.NEXT_UP)(sources, query)
         }
+        // H4: the Upcoming sub-call rides the same per-type registration the
+        // resume trio uses — the schedule stays here, the call shape lives in
+        // the row's own batch arm.
+        val upcomingDeferred = async {
+            HomeRowBatchSubcalls.getValue(HomeSectionType.UPCOMING)(sources, query)
+        }
         val foldersDeferred = async {
-            if (HomeSectionType.LATEST_MEDIA in enabledSections || HomeSectionType.RECENTLY_ADDED in enabledSections) {
+            // The shared folders fetch backs THREE rows now: the latest
+            // fan-out (LATEST_MEDIA + RECENTLY_ADDED) and the H5 My Media
+            // tiles (which assemble the folders directly, zero extra calls).
+            if (HomeSectionType.LATEST_MEDIA in enabledSections ||
+                HomeSectionType.RECENTLY_ADDED in enabledSections ||
+                HomeSectionType.MY_MEDIA in enabledSections
+            ) {
                 sources.getLibraryFolders()
             } else {
                 Result.success(emptyList())
@@ -439,9 +487,16 @@ public class HomeSectionsFetcher(
                 fetchTitledPluginRows(force = force, identity = identity)
         }
 
+        // H9 plugin-curated hero: fetched ALWAYS beside the plugin rows (the
+        // same capability-registry gate posture — not user layout config),
+        // concurrently with everything else. Empty = gated off / unconfigured
+        // / unresolvable — the hero silently falls back to its local pool.
+        val curatedHeroDeferred = async { fetchCuratedHero(force = force, identity = identity) }
+
         val continueWatchingResult = continueWatchingDeferred.await()
         val continueReadingResult = continueReadingDeferred.await()
         val nextUpResult = nextUpDeferred.await()
+        val upcomingResult = upcomingDeferred.await()
         val foldersResult = foldersDeferred.await()
 
         // Launch the recommendations chain now: it depends only on the
@@ -465,6 +520,7 @@ public class HomeSectionsFetcher(
                         force = force,
                         identity = identity,
                         classicRows = query.classicRows,
+                        excludeActiveSessions = query.excludeActiveSessions,
                     )
                 }
             } else null
@@ -507,6 +563,7 @@ public class HomeSectionsFetcher(
                 continueWatchingResult = continueWatchingResult,
                 continueReadingResult = continueReadingResult,
                 nextUpResult = nextUpResult,
+                upcomingResult = upcomingResult,
                 foldersResult = foldersResult,
                 latestPerFolder = latestPerFolder,
                 recommendationsResult = recommendationsResult,
@@ -514,6 +571,7 @@ public class HomeSectionsFetcher(
                 pinnedSections = pinnedDeferred.await(),
                 discoverSections = discoverDeferred.await(),
                 pluginRowSections = pluginRowsDeferred.await(),
+                curatedHero = curatedHeroDeferred.await(),
             ),
         )
         if (output.result.sections.isEmpty() && output.firstError != null) {
@@ -560,6 +618,8 @@ public class HomeSectionsFetcher(
      *    rebuilds that fold from BOTH fresh sources — a CW-only refetch would
      *    swap away the row's Next Up half (and the CW-empty + Next Up-present
      *    relabel arm would drop a non-empty row).
+     *  - UPCOMING (H4): the same direct port read, no eligibility filters
+     *    (watch-state-blind by definition).
      *  - LATEST_MEDIA: one `/Items/Latest` for the row's library (resolved
      *    from the `latest_<libraryId>` id), through the same TTL memo.
      *  - RECENTLY_ADDED: the whole latest fan-out (folders → per-library
@@ -628,8 +688,12 @@ public class HomeSectionsFetcher(
     private suspend fun continueWatchingIdsForFilters(query: HomeSectionQuery): Set<String> =
         if (HomeSectionType.CONTINUE_WATCHING in query.enabledSections) {
             continueWatchingFilterIds(
-                continueWatchingItems = sources.getContinueWatching(limit = 20, classicRows = query.classicRows)
-                    .getOrDefault(emptyList()),
+            continueWatchingItems = sources.getContinueWatching(
+                limit = 20,
+                classicRows = query.classicRows,
+                excludeActiveSessions = query.excludeActiveSessions,
+            )
+                .getOrDefault(emptyList()),
                 hiddenItemIds = query.hiddenCwItemIds,
             )
         } else {
@@ -936,6 +1000,68 @@ public class HomeSectionsFetcher(
         }
     }
 
+    // ── Plugin-curated hero (H9 — the `hero` feature, beside the rows) ────
+    //
+    // The same leaf shape as the rows: the capability registry is the WHAT
+    // gate, the TTL memo is [homeCuratedHeroCache], and every failure mode
+    // degrades to an empty list — a curated hero must never fail home, and
+    // the hero's fallback IS the local candidate pool (there are no fallback
+    // tiles to keep, unlike a row).
+
+    /**
+     * The plugin-curated hero for the batch home fetch: gate → TTL memo →
+     * resolve under the `jellyplay_hero` cache key. Empty list = gated off /
+     * unconfigured / failed / nothing resolvable — silently absent, never an
+     * error. Public for the leaf-test suite (the rows' convention).
+     */
+    public suspend fun fetchCuratedHero(
+        force: Boolean = false,
+        identity: CacheIdentity? = null,
+    ): List<CuratedHeroEntry> {
+        if (jellyPlaySources == null || !jellyPlaySources.curatedHeroEnabled()) return emptyList()
+        return homeCuratedHeroCache.cacheThrough(
+            identity ?: cacheIdentity() ?: CacheIdentity.UNKNOWN,
+            "jellyplay_hero",
+            force = force,
+        ) {
+            // A failed plugin read is an empty hero, not a fetch failure —
+            // normalize to an empty success (the plugin-row arm's policy).
+            runCatchingRethrowingCancellation {
+                jellyPlaySources.getCuratedHero().getOrNull()
+                    ?.let { payload -> resolveCuratedHeroEntries(payload.candidates) }
+                    .orEmpty()
+            }
+        }.getOrDefault(emptyList())
+    }
+
+    /**
+     * Maps the wire candidates to [CuratedHeroEntry]s in serve order: the ids
+     * resolve through ONE batched [JellyPlayHomeSectionSources.getItemsByIds]
+     * read (the plugin rows' resolution pattern), and an id the server no
+     * longer knows DROPS — a curated hero never renders a fallback tile. The
+     * serve order is authoritative end-to-end; a duplicated id keeps its
+     * FIRST slot (the earlier candidate wins) and resolves once.
+     */
+    private suspend fun resolveCuratedHeroEntries(candidates: List<JellyPlayHeroCandidate>): List<CuratedHeroEntry> {
+        val deduped = candidates
+            .filter { it.itemId.isNotBlank() }
+            .distinctBy { it.itemId }
+        if (deduped.isEmpty()) return emptyList()
+        val resolved = jellyPlaySources?.getItemsByIds(deduped.map { it.itemId })
+            ?.getOrDefault(emptyList())
+            .orEmpty()
+            .associateBy { it.id }
+        return deduped.mapNotNull { candidate ->
+            resolved[candidate.itemId]?.let { item ->
+                CuratedHeroEntry(
+                    item = item,
+                    headline = candidate.headline?.takeIf { it.isNotBlank() },
+                    subhead = candidate.subhead?.takeIf { it.isNotBlank() },
+                )
+            }
+        }
+    }
+
     /**
      * Home-path wrapper around [HomeSectionSources.getLatestMedia] that
      * consults [homeLatestMediaCache] first. Only the home path uses this —
@@ -1001,6 +1127,7 @@ public class HomeSectionsFetcher(
         force: Boolean,
         identity: CacheIdentity,
         classicRows: Boolean,
+        excludeActiveSessions: Boolean,
     ): Result<RecommendationResult> = runCatchingRethrowingCancellation {
         // Reuse caller-supplied seeds when available (e.g. the home screen has
         // already fetched Continue Watching + Next Up) to avoid duplicate
@@ -1008,7 +1135,11 @@ public class HomeSectionsFetcher(
         val seedItems = if (seeds.isNotEmpty()) {
             seeds.distinctBy { it.id }.take(5)
         } else {
-            val continueWatching = sources.getContinueWatching(limit = 5, classicRows = classicRows).getOrDefault(emptyList())
+            val continueWatching = sources.getContinueWatching(
+                limit = 5,
+                classicRows = classicRows,
+                excludeActiveSessions = excludeActiveSessions,
+            ).getOrDefault(emptyList())
             val nextUp = sources.getNextUp(limit = 5, enableRewatching = false, maxDays = 0).getOrDefault(emptyList())
             (continueWatching + nextUp).distinctBy { it.id }.take(5)
         }

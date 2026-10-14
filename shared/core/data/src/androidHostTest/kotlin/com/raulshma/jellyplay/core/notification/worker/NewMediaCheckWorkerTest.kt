@@ -8,25 +8,35 @@ import androidx.work.ListenableWorker
 import androidx.work.WorkerFactory
 import androidx.work.WorkerParameters
 import androidx.work.testing.TestListenableWorkerBuilder
+import com.raulshma.jellyplay.core.data.repository.ArrRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.SeenMediaRepository
+import com.raulshma.jellyplay.core.data.repository.SeriesNotificationReads
 import com.raulshma.jellyplay.core.datastore.notification.NotificationSlice
 import com.raulshma.jellyplay.core.datastore.notification.NotificationStore
+import com.raulshma.jellyplay.core.model.arr.ArrCalendarItem
+import com.raulshma.jellyplay.core.model.arr.ArrMediaType
 import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.LibraryNotificationConfig
+import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.NotificationPreferences
+import com.raulshma.jellyplay.core.model.SeriesNotificationConfig
 import com.raulshma.jellyplay.core.model.SystemTimeSource
+import com.raulshma.jellyplay.core.model.TimeSource
 import com.raulshma.jellyplay.core.notification.dispatcher.NotificationDispatcher
 import com.raulshma.jellyplay.core.notification.scheduler.NotificationScheduler
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.slot
 import io.mockk.verify
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -35,6 +45,10 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import java.io.IOException
+import java.time.Duration
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
 
 /**
  * Pins the main `doWork` flow of [NewMediaCheckWorker] (the quiet-hours table
@@ -56,26 +70,40 @@ import java.io.IOException
 class NewMediaCheckWorkerTest {
 
     private val mediaRepository: MediaRepository = mockk()
+    private val seriesNotificationReads: SeriesNotificationReads = mockk()
     private val seenMediaRepository: SeenMediaRepository = mockk(relaxed = true)
     private val notificationStore: NotificationStore = mockk()
     private val dispatcher: NotificationDispatcher = mockk(relaxed = true)
     private val scheduler: NotificationScheduler = mockk(relaxed = true)
+    private val arrRepository: ArrRepository = mockk(relaxed = true)
 
     private val context: Context = ApplicationProvider.getApplicationContext()
+
+    /** The fixed clock the accelerator tests pin the one-shot delay against. */
+    private val fixedNowEpochMs = 1_760_000_000_000L
 
     private fun enabledPrefs(
         maxPerCheck: Int = 10,
         libraryConfigs: Map<String, LibraryNotificationConfig> = emptyMap(),
+        newEpisodesEnabled: Boolean = false,
+        seriesConfigs: Map<String, SeriesNotificationConfig> = emptyMap(),
     ) = NotificationPreferences(
         enabled = true,
         maxPerCheck = maxPerCheck,
         libraryConfigs = libraryConfigs,
+        newEpisodesEnabled = newEpisodesEnabled,
+        seriesConfigs = seriesConfigs,
     )
 
     private fun stubPreferences(prefs: NotificationPreferences) {
         every { notificationStore.notification } returns MutableStateFlow(
             NotificationSlice(notificationPreferences = prefs),
         )
+        // The series pass writes back through the RMW command — stub it here
+        // so runs that never assert the write do not crash on the strict
+        // store mock; the diff tests re-stub with a capture slot afterwards
+        // (the later stub wins).
+        coEvery { notificationStore.updateSeriesNotificationConfigs(any()) } returns Unit
     }
 
     private fun grantPostNotifications(granted: Boolean) {
@@ -87,7 +115,7 @@ class NewMediaCheckWorkerTest {
         }
     }
 
-    private fun worker(): NewMediaCheckWorker =
+    private fun worker(timeSource: TimeSource = SystemTimeSource()): NewMediaCheckWorker =
         TestListenableWorkerBuilder<NewMediaCheckWorker>(context)
             .setWorkerFactory(
                 object : WorkerFactory() {
@@ -99,15 +127,24 @@ class NewMediaCheckWorkerTest {
                         appContext,
                         workerParameters,
                         mediaRepository = mediaRepository,
+                        seriesNotificationReads = seriesNotificationReads,
                         seenMediaRepository = seenMediaRepository,
                         notificationStore = notificationStore,
                         dispatcher = dispatcher,
                         scheduler = scheduler,
-                        timeSource = SystemTimeSource(),
+                        timeSource = timeSource,
+                        arrRepository = arrRepository,
                     )
                 },
             )
             .build()
+
+    /** The fake clock pinned to [fixedNowEpochMs], for the accelerator delay math. */
+    private fun fixedClock() = object : TimeSource {
+        override fun nowEpochMillis(): Long = fixedNowEpochMs
+        override fun today(zone: ZoneId): LocalDate = LocalDate.of(2026, 10, 12)
+        override fun nowElapsedRealtimeMillis(): Long = 0L
+    }
 
     private fun item(id: String, mediaType: MediaType = MediaType.MOVIE) = MediaItem(
         id = id,
@@ -321,5 +358,167 @@ class NewMediaCheckWorkerTest {
         val result = worker().doWork()
 
         assertTrue(result is ListenableWorker.Result.Failure)
+    }
+
+    // ── D12: the per-series second pass ─────────────────────────────────
+
+    private fun seriesPrefs(config: SeriesNotificationConfig) = enabledPrefs(
+        newEpisodesEnabled = true,
+        seriesConfigs = mapOf("s1" to config),
+    )
+
+    /**
+     * Stubs the per-series newest-episode read. Also stubs the tvdb lookup
+     * as failed so the accelerator (which every check re-schedules) degrades
+     * to a no-op unless the test re-stubs [MediaRepository.getMediaDetail]
+     * with a tvdb-carrying detail (the accelerator test does — the later
+     * stub wins).
+     */
+    private fun stubSeriesEpisode(id: String) {
+        coEvery {
+            seriesNotificationReads.getSeriesNextUpEpisode("s1")
+        } returns Result.success(item(id, MediaType.EPISODE))
+        coEvery { mediaRepository.getMediaDetail("s1") } returns Result.failure(IOException("no arr configured"))
+    }
+
+    /** Captures the store RMW transform so the test can apply it to the input map. */
+
+    @Test
+    fun `series pass skipped entirely when the new-episodes master switch is off`() = runTest {
+        stubPreferences(
+            NotificationPreferences(
+                enabled = true,
+                newEpisodesEnabled = false,
+                seriesConfigs = mapOf("s1" to SeriesNotificationConfig()),
+            ),
+        )
+        stubFolders()
+
+        val result = worker().doWork()
+
+        assertTrue(result is ListenableWorker.Result.Success)
+        coVerify(exactly = 0) { seriesNotificationReads.getSeriesNextUpEpisode(any()) }
+        coVerify(exactly = 0) { notificationStore.updateSeriesNotificationConfigs(any()) }
+        verify(exactly = 0) { dispatcher.dispatchSeriesNewEpisode(any(), any(), any()) }
+    }
+
+    @Test
+    fun `series disabled opt-in is skipped - enabled one checked`() = runTest {
+        stubPreferences(
+            enabledPrefs(
+                newEpisodesEnabled = true,
+                seriesConfigs = mapOf(
+                    "s-off" to SeriesNotificationConfig(enabled = false),
+                    "s1" to SeriesNotificationConfig(lastNotifiedEpisodeId = "ep1"),
+                ),
+            ),
+        )
+        stubFolders()
+        stubSeriesEpisode("ep1")
+
+        val result = worker(fixedClock()).doWork()
+
+        assertTrue(result is ListenableWorker.Result.Success)
+        coVerify(exactly = 0) { seriesNotificationReads.getSeriesNextUpEpisode("s-off") }
+        coVerify(exactly = 1) { seriesNotificationReads.getSeriesNextUpEpisode("s1") }
+    }
+
+    @Test
+    fun `first check after opt-in records the baseline without notifying`() = runTest {
+        stubPreferences(seriesPrefs(SeriesNotificationConfig()))
+        stubFolders()
+        stubSeriesEpisode("ep1")
+        val transform = slot<(Map<String, SeriesNotificationConfig>) -> Map<String, SeriesNotificationConfig>>()
+        coEvery { notificationStore.updateSeriesNotificationConfigs(capture(transform)) } returns Unit
+
+        val result = worker(fixedClock()).doWork()
+
+        assertTrue(result is ListenableWorker.Result.Success)
+        // The anti-spam baseline: newest id recorded, nothing dispatched.
+        val written = transform.captured(mapOf("s1" to SeriesNotificationConfig()))
+        assertEquals("ep1", written.getValue("s1").lastNotifiedEpisodeId)
+        verify(exactly = 0) { dispatcher.dispatchSeriesNewEpisode(any(), any(), any()) }
+    }
+
+    @Test
+    fun `newer episode than the baseline dispatches on the new-episodes channel and writes back`() = runTest {
+        stubPreferences(seriesPrefs(SeriesNotificationConfig(lastNotifiedEpisodeId = "ep1")))
+        stubFolders()
+        stubSeriesEpisode("ep2")
+        val transform = slot<(Map<String, SeriesNotificationConfig>) -> Map<String, SeriesNotificationConfig>>()
+        coEvery { notificationStore.updateSeriesNotificationConfigs(capture(transform)) } returns Unit
+
+        val result = worker(fixedClock()).doWork()
+
+        assertTrue(result is ListenableWorker.Result.Success)
+        verify(exactly = 1) {
+            dispatcher.dispatchSeriesNewEpisode(
+                seriesId = "s1",
+                episode = match { it.id == "ep2" },
+                prefs = any(),
+            )
+        }
+        val written = transform.captured(mapOf("s1" to SeriesNotificationConfig(lastNotifiedEpisodeId = "ep1")))
+        assertEquals("ep2", written.getValue("s1").lastNotifiedEpisodeId)
+    }
+
+    @Test
+    fun `same newest episode as the baseline neither dispatches nor rewrites the id`() = runTest {
+        stubPreferences(seriesPrefs(SeriesNotificationConfig(lastNotifiedEpisodeId = "ep1")))
+        stubFolders()
+        stubSeriesEpisode("ep1")
+        val transform = slot<(Map<String, SeriesNotificationConfig>) -> Map<String, SeriesNotificationConfig>>()
+        coEvery { notificationStore.updateSeriesNotificationConfigs(capture(transform)) } returns Unit
+
+        val result = worker(fixedClock()).doWork()
+
+        assertTrue(result is ListenableWorker.Result.Success)
+        verify(exactly = 0) { dispatcher.dispatchSeriesNewEpisode(any(), any(), any()) }
+        val written = transform.captured(mapOf("s1" to SeriesNotificationConfig(lastNotifiedEpisodeId = "ep1")))
+        assertEquals("ep1", written.getValue("s1").lastNotifiedEpisodeId)
+    }
+
+    @Test
+    fun `arr accelerator schedules one delayed one-shot per upcoming sonarr episode`() = runTest {
+        stubPreferences(seriesPrefs(SeriesNotificationConfig(lastNotifiedEpisodeId = "ep1")))
+        stubFolders()
+        stubSeriesEpisode("ep1")
+        val airStamp = "2026-10-15T20:00:00Z"
+        coEvery { mediaRepository.getMediaDetail("s1") } returns Result.success(
+            MediaDetail(item = item("s1", MediaType.SERIES), providerIds = mapOf("tvdb" to "42")),
+        )
+        coEvery { arrRepository.refreshCalendar(any(), any()) } returns Result.success(Unit)
+        coEvery { arrRepository.calendar(any(), any()) } returns flowOf(
+            listOf(
+                ArrCalendarItem(tvdbId = 42, mediaType = ArrMediaType.SERIES, title = "E5", airDateUtc = airStamp),
+                // A Radarr (movie) row and another series' row must not match.
+                ArrCalendarItem(tvdbId = 99, mediaType = ArrMediaType.SERIES, title = "Other", airDateUtc = airStamp),
+                ArrCalendarItem(tvdbId = 42, mediaType = ArrMediaType.MOVIE, title = "Film", airDateUtc = airStamp),
+            ),
+        )
+
+        val result = worker(fixedClock()).doWork()
+
+        assertTrue(result is ListenableWorker.Result.Success)
+        val expectedDelay = Duration.ofMillis(
+            Instant.parse(airStamp).toEpochMilli() + 30L * 60 * 1000 - fixedNowEpochMs,
+        )
+        verify(exactly = 1) {
+            scheduler.enqueueSeriesEpisodeCheck("s1", "42:$airStamp", expectedDelay)
+        }
+    }
+
+    @Test
+    fun `series fetch failure still succeeds - the accelerator is best-effort`() = runTest {
+        stubPreferences(seriesPrefs(SeriesNotificationConfig(lastNotifiedEpisodeId = "ep1")))
+        stubFolders()
+        coEvery { seriesNotificationReads.getSeriesNextUpEpisode("s1") } returns Result.failure(IOException())
+        coEvery { mediaRepository.getMediaDetail("s1") } returns Result.failure(IOException())
+
+        val result = worker().doWork()
+
+        assertTrue(result is ListenableWorker.Result.Success)
+        verify(exactly = 0) { dispatcher.dispatchSeriesNewEpisode(any(), any(), any()) }
+        verify(exactly = 0) { scheduler.enqueueSeriesEpisodeCheck(any(), any(), any()) }
     }
 }

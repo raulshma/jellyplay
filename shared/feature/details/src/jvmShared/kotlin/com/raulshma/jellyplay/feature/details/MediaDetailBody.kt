@@ -66,12 +66,10 @@ import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.formatBytes
-import com.raulshma.jellyplay.core.model.formatFixed
 import com.raulshma.jellyplay.core.model.isAudioType
 import com.raulshma.jellyplay.core.model.progressFraction
 import com.raulshma.jellyplay.core.model.seerr.SeerrRelatedVideo
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
-import com.raulshma.jellyplay.core.model.seerr.TmdbImageUrls
 import com.raulshma.jellyplay.core.model.seerr.TmdbReview
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
@@ -93,7 +91,7 @@ import com.raulshma.jellyplay.feature.details.generated.resources.Res
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_cd_episode_play
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_cd_hide_up_next
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_more_like_this_on_device
-import com.raulshma.jellyplay.feature.details.generated.resources.detail_review_rating
+import com.raulshma.jellyplay.feature.details.generated.resources.detail_reviews_all
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_section_cast_crew
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_section_chapters
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_section_items
@@ -109,6 +107,7 @@ import com.raulshma.jellyplay.feature.details.generated.resources.detail_book_fo
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_book_finished_badge
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_book_page_progress
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_book_percent_progress
+import com.raulshma.jellyplay.feature.details.generated.resources.detail_trailer_badge_local
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_time_left_format
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_up_next
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_watched_badge
@@ -360,6 +359,14 @@ internal fun DetailSectionRenderer(
                 bodyContentPad = bodyContentPad,
             )
 
+        DetailSectionKind.UPCOMING_EPISODES ->
+            DetailUpcomingEpisodesSection(
+                delayIndex = section.delayIndex,
+                state = state,
+                callbacks = callbacks,
+                bodyContentPad = bodyContentPad,
+            )
+
         DetailSectionKind.SEASONS ->
             DetailSeasonsSection(
                 delayIndex = section.delayIndex,
@@ -394,6 +401,14 @@ internal fun DetailSectionRenderer(
                 delayIndex = section.delayIndex,
                 state = state,
                 callbacks = callbacks,
+            )
+
+        DetailSectionKind.MORE_IN_COLLECTION ->
+            DetailMoreInCollectionSection(
+                delayIndex = section.delayIndex,
+                state = state,
+                callbacks = callbacks,
+                bodyContentPad = bodyContentPad,
             )
 
         DetailSectionKind.MORE_LIKE_THIS ->
@@ -445,6 +460,7 @@ internal fun DetailSectionRenderer(
             DetailReviewsSlotSection(
                 delayIndex = section.delayIndex,
                 state = state,
+                callbacks = callbacks,
             )
 
         DetailSectionKind.DOWNLOAD_FOOTER ->
@@ -467,8 +483,19 @@ private fun DetailRelatedVideosSection(
     callbacks: DetailContentCallbacks,
 ) {
     StaggeredDetailSection(visible = true, delayIndex = delayIndex) {
-        if (state.relatedVideos.isNotEmpty()) {
-            VideosSection(videos = state.relatedVideos, onVideoClick = callbacks.seerr.onVideoClick)
+        if (state.trailers.isNotEmpty()) {
+            VideosSection(
+                trailers = state.trailers,
+                getImageUrl = callbacks.artwork.getImageUrl,
+                onVideoClick = callbacks.seerr.onVideoClick,
+                onPlayLocal = { trailerId ->
+                    // D3: a local (server-hosted) trailer plays through the
+                    // full player session — the same route the Play button
+                    // takes (the libmpv engine on desktop), never the
+                    // WebView embed.
+                    callbacks.playback.onPlayClick(trailerId, null, 0L)
+                },
+            )
         }
     }
 }
@@ -479,17 +506,26 @@ private fun DetailRelatedVideosSection(
 private fun DetailReviewsSlotSection(
     delayIndex: Int,
     state: DetailContentState,
+    callbacks: DetailContentCallbacks,
 ) {
     // ── TMDB Reviews ──
     // Fetched straight from TMDB (see DetailViewModel.loadSeerrData), so the
-    // section renders regardless of Seerr connection state. Rendered as a
-    // vertical card list — review bodies are paragraphs, not glanceable tiles,
-    // so they join the screen scroll instead of a horizontal row.
+    // section renders regardless of Seerr connection state. D9 split: a
+    // preview of [REVIEWS_PREVIEW_COUNT] cards renders inline; the
+    // "All reviews (N)" button opens the full Route.Reviews screen. (The
+    // whole section's show_reviews admission lives in DetailSectionAdmission.)
     StaggeredDetailSection(
         visible = state.tmdbReviews.isNotEmpty(),
         delayIndex = delayIndex,
     ) {
-        ReviewsSection(reviews = state.tmdbReviews)
+        ReviewsSection(
+            reviews = state.tmdbReviews,
+            onAllReviews = {
+                callbacks.navigation.onNavigate(
+                    com.raulshma.jellyplay.core.ui.navigation.Route.Reviews(state.itemId),
+                )
+            },
+        )
     }
 }
 
@@ -548,8 +584,10 @@ internal fun SeerrItemsRow(
 
 @Composable
 private fun VideosSection(
-    videos: List<SeerrRelatedVideo>,
+    trailers: List<DetailUiState.TrailerEntry>,
+    getImageUrl: (String) -> String,
     onVideoClick: (SeerrRelatedVideo) -> Unit,
+    onPlayLocal: (String) -> Unit,
 ) {
     val bodyContentPad = LocalAdaptiveInfo.current.contentPadding(isTv = LocalTvMode.current)
     // The video card border depends only on the active theme, not on the per-video
@@ -564,6 +602,9 @@ private fun VideosSection(
     val videoCardBorder = remember(themeVariant, primaryColor, secondaryColor, outlineColor) {
         themeVariant.detailCardBorder(primaryColor, secondaryColor, outlineColor, includeAurora = false)
     }
+    // D3: the local-source badge resolved once (the merged row mixes the two
+    // card variants; the badge marks the server-hosted entries).
+    val localBadge = stringResource(Res.string.detail_trailer_badge_local)
     Column {
         FadingItem {
             Text(
@@ -577,47 +618,69 @@ private fun VideosSection(
         }
         Spacer(Modifier.height(16.dp))
         TvFocusableItemRow(
-            items = videos,
-            // Fall back to the video name when its key is null so two null-key
-            // videos don't collide and collapse their composition slots.
-            key = { video -> video.key ?: video.name ?: "video" },
-            contentType = { _, _ -> "video" },
+            items = trailers,
+            // Fall back to the video name/id when its key is null so two
+            // keyless entries don't collide and collapse their composition
+            // slots (the remote rule; locals key on the library item id).
+            key = { entry ->
+                when (entry) {
+                    is DetailUiState.TrailerEntry.Local -> "local_${entry.mediaItem.id}"
+                    is DetailUiState.TrailerEntry.Remote -> entry.video.key ?: entry.video.name ?: "video"
+                }
+            },
+            contentType = { _, entry ->
+                when (entry) {
+                    is DetailUiState.TrailerEntry.Local -> "local_video"
+                    is DetailUiState.TrailerEntry.Remote -> "video"
+                }
+            },
             contentPadding = PaddingValues(horizontal = bodyContentPad),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) { _, video, focusModifier ->
-            // The card body is the shared [YouTubeVideoCard] (commonMain
-            // DetailSectionVocabulary) — collapsed with the Seerr family's
-            // identical copy; only the row scaffolding + this border decision
-            // stay family-local.
-            YouTubeVideoCard(
-                video = video,
-                fallbackLabel = "Video",
-                onClick = { onVideoClick(video) },
-                modifier = focusModifier,
-                border = videoCardBorder,
-            )
+        ) { _, entry, focusModifier ->
+            // The card bodies are the shared [YouTubeVideoCard] /
+            // [LocalTrailerVideoCard] (commonMain DetailSectionVocabulary) —
+            // collapsed with the Seerr family's identical copy; only the row
+            // scaffolding + this border decision stay family-local. The
+            // dispatch is the [resolveTrailerEntryDispatch] policy: locals
+            // play in the full player session, remotes open the YouTube
+            // dialog (embed failure falling back to the external URL).
+            when (val dispatch = resolveTrailerEntryDispatch(entry)) {
+                is TrailerEntryDispatch.PlayerSession -> LocalTrailerVideoCard(
+                    mediaItem = dispatch.mediaItem,
+                    fallbackLabel = "Video",
+                    imageUrl = remember(dispatch.mediaItem.id) { getImageUrl(dispatch.mediaItem.id) },
+                    badgeLabel = localBadge,
+                    onClick = { onPlayLocal(dispatch.mediaItem.id) },
+                    modifier = focusModifier,
+                    border = videoCardBorder,
+                )
+                is TrailerEntryDispatch.YouTubeEmbed -> YouTubeVideoCard(
+                    video = dispatch.video,
+                    fallbackLabel = "Video",
+                    onClick = { onVideoClick(dispatch.video) },
+                    modifier = focusModifier,
+                    border = videoCardBorder,
+                )
+            }
         }
     }
 }
 
-/** TMDB avatar URL for the 40dp review circle (w90 covers it at 2x density). */
-private fun tmdbAvatarUrl(avatarPath: String?): String? =
-    avatarPath?.takeIf { it.isNotBlank() }?.let { path ->
-        // Gravatar-linked accounts ship "/https://…" — the path is already an
-        // absolute URL, so it must not get the image.tmdb.org prefix.
-        if (path.startsWith("/http")) path.drop(1) else "${TmdbImageUrls.BASE}/w90$path"
-    }
-
 /**
- * Vertical list of TMDB review cards. Part of the screen scroll (not a lazy
- * row) — the VM caps the list at 5 entries, and review bodies are paragraphs
- * that want the full content width. Cards are informational only: no click.
+ * The detail screen's TMDB reviews section (D9): the first
+ * [REVIEWS_PREVIEW_COUNT] cards render inline (bodies capped at the former
+ * 6-line preview), followed by the "All reviews (N)" button whenever the
+ * fetched list hides reviews behind the preview ([tmdbReviewsPreviewSplit]).
+ * The card vocabulary is the shared [TmdbReviewCard] — the same renderer the
+ * Route.Reviews screen shows uncapped.
  */
 @Composable
 private fun ReviewsSection(
     reviews: List<TmdbReview>,
+    onAllReviews: () -> Unit,
 ) {
     val bodyContentPad = LocalAdaptiveInfo.current.contentPadding(isTv = LocalTvMode.current)
+    val split = remember(reviews) { tmdbReviewsPreviewSplit(reviews) }
     Column(modifier = Modifier.padding(horizontal = bodyContentPad)) {
         FadingItem {
             Text(
@@ -629,73 +692,25 @@ private fun ReviewsSection(
         }
         Spacer(Modifier.height(16.dp))
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            reviews.forEach { review ->
+            split.preview.forEach { review ->
                 FadingItem {
-                    // Display name falls back username-first: TMDB often ships an
-                    // empty author_details.name for casual reviewers.
-                    val authorName = review.authorDetails.name.takeIf { it.isNotBlank() }
-                        ?: review.authorDetails.username.takeIf { it.isNotBlank() }
-                        ?: review.author
-                    val avatarUrl = remember(review.id) { tmdbAvatarUrl(review.authorDetails.avatarPath) }
-                    Column(
+                    TmdbReviewCard(review = review, contentMaxLines = 6)
+                }
+            }
+            split.allCount?.let { allCount ->
+                FadingItem {
+                    val allReviewsFocusState = rememberTvFocusState(focusedScale = 1.05f)
+                    Text(
+                        text = stringResource(Res.string.detail_reviews_all, allCount),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier
-                            .fillMaxWidth()
                             .clip(ShapeCache.smooth16)
-                            .background(MaterialTheme.colorScheme.surfaceContainer)
-                            .padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(40.dp)
-                                    .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.surfaceVariant),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                if (avatarUrl != null) {
-                                    MediaImage(
-                                        url = avatarUrl,
-                                        contentDescription = null,
-                                        modifier = Modifier.fillMaxSize(),
-                                        contentScale = ContentScale.Crop,
-                                    )
-                                } else {
-                                    Text(
-                                        text = authorName.take(1).uppercase().ifBlank { "?" },
-                                        style = MaterialTheme.typography.titleMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                }
-                            }
-                            Column {
-                                Text(
-                                    text = authorName,
-                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                                review.authorDetails.rating?.let { rating ->
-                                    Text(
-                                        text = stringResource(Res.string.detail_review_rating, formatFixed(rating, 1)),
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                }
-                            }
-                        }
-                        Text(
-                            text = review.content,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
-                            maxLines = 6,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
+                            .then(allReviewsFocusState.focusModifier)
+                            .then(Modifier.tvFocusIndicator(allReviewsFocusState, ShapeCache.smooth16))
+                            .clickable(onClick = onAllReviews)
+                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                    )
                 }
             }
         }

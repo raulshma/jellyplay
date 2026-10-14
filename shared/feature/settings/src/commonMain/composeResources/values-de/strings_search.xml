@@ -511,6 +511,8 @@
     <string name="ss_auto_delete_after_watch_subtitle">Downloads nach vollständiger Wiedergabe entfernen</string>
     <string name="ss_next_up_hidden_title">Aus „Als Nächstes“ ausgeblendet</string>
     <string name="ss_next_up_hidden_subtitle">Aus der „Als Nächstes“-Reihe entfernte Serien ansehen und wiederherstellen</string>
+    <string name="ss_hidden_libraries_title">Ausgeblendete Bibliotheken</string>
+    <string name="ss_hidden_libraries_subtitle">Aus der Mediathek-Reihe ausgeblendete Bibliotheken ansehen und wiederherstellen</string>
     <string name="ss_prefer_logos_subtitle">Das Clear-Logo als Titel der Detailseite verwenden, wenn der Server eines hat</string>
     <string name="ss_external_player_app_subtitle">Wählen, welche externe Player-App die Wiedergabe öffnet</string>
     <string name="ss_still_watching_mode_subtitle">Nach mehreren Episoden oder Stunden vor dem Fortfahren bestätigen</string>

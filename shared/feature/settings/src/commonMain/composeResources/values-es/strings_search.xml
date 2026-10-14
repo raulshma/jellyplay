@@ -511,6 +511,8 @@
     <string name="ss_auto_delete_after_watch_subtitle">Eliminar descargas al terminar de verlas</string>
     <string name="ss_next_up_hidden_title">Oculto de A continuación</string>
     <string name="ss_next_up_hidden_subtitle">Ver y restaurar series quitadas de la fila A continuación</string>
+    <string name="ss_hidden_libraries_title">Bibliotecas ocultas</string>
+    <string name="ss_hidden_libraries_subtitle">Ver y restaurar bibliotecas excluidas de la fila Mi contenido</string>
     <string name="ss_prefer_logos_subtitle">Usa el logotipo claro como título de la página de detalles cuando el servidor tiene uno</string>
     <string name="ss_external_player_app_subtitle">Elige qué app de reproductor externo abre la reproducción</string>
     <string name="ss_still_watching_mode_subtitle">Confirmar antes de continuar tras varios episodios u horas</string>

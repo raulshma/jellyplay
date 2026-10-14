@@ -120,6 +120,20 @@ private val homeSectionDescriptors: Map<HomeSectionType, HomeSectionDescriptor> 
                 description = "Next unwatched episodes of your shows",
                 isConfigurable = true,
             )
+            HomeSectionType.UPCOMING -> HomeSectionDescriptor(
+                type = type,
+                id = "upcoming",
+                displayName = "Upcoming",
+                description = "Unaired episodes of the series you follow",
+                isConfigurable = true,
+            )
+            HomeSectionType.MY_MEDIA -> HomeSectionDescriptor(
+                type = type,
+                id = "my_media",
+                displayName = "My Media",
+                description = "Tiles for each of your libraries",
+                isConfigurable = true,
+            )
             HomeSectionType.RECENTLY_ADDED -> HomeSectionDescriptor(
                 type = type,
                 id = "recently_added",

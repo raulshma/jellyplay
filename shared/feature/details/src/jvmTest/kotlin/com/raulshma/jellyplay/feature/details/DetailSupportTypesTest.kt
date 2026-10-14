@@ -8,6 +8,7 @@ import com.raulshma.jellyplay.core.datastore.engine.PlayerEngineStore
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalStore
 import com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore
 import com.raulshma.jellyplay.core.datastore.library.LibraryStore
+import com.raulshma.jellyplay.core.datastore.notification.NotificationStore
 import com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections
 import com.raulshma.jellyplay.core.model.PersonInfo
 import com.raulshma.jellyplay.core.model.ResyncResult
@@ -141,6 +142,7 @@ class DetailSupportTypesTest {
         val homeDiscoveryStore = mockk<HomeDiscoveryStore>(relaxed = true)
         val experimentalStore = mockk<ExperimentalStore>(relaxed = true)
         val engineStore = mockk<PlayerEngineStore>(relaxed = true)
+        val notificationStore = mockk<NotificationStore>(relaxed = true)
 
         val stores = DetailStores(
             projections = projections,
@@ -148,6 +150,7 @@ class DetailSupportTypesTest {
             homeDiscoveryStore = homeDiscoveryStore,
             experimentalStore = experimentalStore,
             engineStore = engineStore,
+            notificationStore = notificationStore,
         )
 
         assertSame(projections, stores.projections)
@@ -155,6 +158,7 @@ class DetailSupportTypesTest {
         assertSame(homeDiscoveryStore, stores.homeDiscoveryStore)
         assertSame(experimentalStore, stores.experimentalStore)
         assertSame(engineStore, stores.engineStore)
+        assertSame(notificationStore, stores.notificationStore)
     }
 
     @Test

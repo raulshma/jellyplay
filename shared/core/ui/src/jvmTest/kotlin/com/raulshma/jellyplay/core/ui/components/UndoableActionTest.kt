@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -26,6 +27,18 @@ class UndoableActionTest {
 
         assertEquals(null, action.actionLabel, "actionLabel defaults to null so the shared core_undo label applies")
         assertEquals(SnackbarDuration.Short, action.duration, "recoverable actions stay brief by default")
+    }
+
+    @Test
+    fun action_onDismiss_defaultsNull_andCarriesTheLambdaWhenGiven() {
+        assertNull(
+            UndoableAction(message = "m", onUndo = {}).onDismiss,
+            "plain undo snackbars keep their shape — no dismissal callback",
+        )
+        var dismissCount = 0
+        val action = UndoableAction(message = "m", onUndo = {}, onDismiss = { dismissCount++ })
+        action.onDismiss?.invoke()
+        assertEquals(1, dismissCount)
     }
 
     @Test

@@ -112,6 +112,7 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_paus
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_playback
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_playback_metadata
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_player_engine
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_play_trailer_before_movie
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_player_engine_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_preferred_codecs
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_preferred_renderer
@@ -277,6 +278,8 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_pause_on_f
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_pause_on_focus_loss_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_playback_metadata_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_playback_metadata_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_play_trailer_before_movie_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_play_trailer_before_movie_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_player_engine_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_player_engine_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_preferred_renderer_subtitle
@@ -573,6 +576,15 @@ internal object PlaybackRows {
         titleRes = Res.string.settings_cinema_mode,
         searchTitleRes = Res.string.ss_cinema_mode_title,
         searchSubtitleRes = Res.string.ss_cinema_mode_subtitle,
+    )
+
+    /** Trailer-then-feature — renders beside [CinemaMode], the other pre-roll knob. */
+    val PlayTrailerBeforeMovie = SettingsRow(
+        id = "play_trailer_before_movie",
+        icon = Tabler.Outline.Clipboard,
+        titleRes = Res.string.settings_play_trailer_before_movie,
+        searchTitleRes = Res.string.ss_play_trailer_before_movie_title,
+        searchSubtitleRes = Res.string.ss_play_trailer_before_movie_subtitle,
     )
 
     val EpisodeBrowser = SettingsRow(
@@ -1534,6 +1546,7 @@ internal val PlaybackPlayerRows: List<SettingsRow> = listOf(
     PlaybackRows.ResumeHeadsetPlug,
     PlaybackRows.AutoplayTrailers,
     PlaybackRows.CinemaMode,
+    PlaybackRows.PlayTrailerBeforeMovie,
     PlaybackRows.EpisodeBrowser,
     PlaybackRows.PlaybackMetadata,
     PlaybackRows.SwipeSeekRange,

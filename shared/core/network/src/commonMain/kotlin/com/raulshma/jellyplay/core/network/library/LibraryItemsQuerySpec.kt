@@ -86,6 +86,12 @@ internal data class LibraryItemsQuerySpec(
      */
     val minDateLastSavedMs: Long? = null,
     val minPremiereDateMs: Long? = null,
+    /**
+     * The `/Items/Resume`-only excludeActiveSessions flag (H6): true omits
+     * items currently playing in another session's playback from the resume
+     * row. Defaults false — the pre-H6 wire (the server's own default).
+     */
+    val excludeActiveSessions: Boolean = false,
 )
 
 /**
@@ -260,16 +266,25 @@ internal fun buildItemsByStudioQuerySpec(
  *
  * Deliberately NOT here: the `nextUpDateCutoff` CLOCK (`java.time`, JVM-side)
  * and the SDK's non-null enable* defaults
- * (enableTotalRecordCount / enableImages / excludeActiveSessions), which are
+ * (enableTotalRecordCount / enableImages), which are
  * transport-level — the JVM SDK sends them as non-null defaults.
+ *
+ * The rows project [HOME_ROW_PROJECTION_FIELDS] (not the two-field minimum):
+ * the resume / Next Up cards are exactly the surfaces the quality-badge,
+ * NEW-dot and trickplay-preview overlays read (H11/H12/H13), so the shared
+ * spec carries the home-row composition — batch and refresh arms agree by
+ * construction. [excludeActiveSessions] threads the H6 toggle so both arms
+ * send the same flag.
  */
 internal fun buildResumeQuerySpec(
     limit: Int,
     kinds: List<String>?,
+    excludeActiveSessions: Boolean = false,
 ): LibraryItemsQuerySpec = LibraryItemsQuerySpec(
     includeKinds = kinds,
     limit = limit,
-    fields = LIST_PROJECTION_FIELDS,
+    fields = HOME_ROW_PROJECTION_FIELDS,
+    excludeActiveSessions = excludeActiveSessions,
 )
 
 /**

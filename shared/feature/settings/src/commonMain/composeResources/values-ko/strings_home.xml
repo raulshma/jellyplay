@@ -166,4 +166,6 @@
     <string name="settings_hide_top_header_on_scroll_off">헤더 항상 표시</string>
     <string name="settings_next_up_hidden">"다음 시청"에서 숨김</string>
     <string name="settings_next_up_hidden_brief">"다음 시청" 행에서 제거한 시리즈를 보고 복원</string>
+    <string name="settings_hidden_libraries">숨긴 라이브러리</string>
+    <string name="settings_hidden_libraries_brief">내 미디어 행에서 숨긴 라이브러리를 보고 복원합니다</string>
 </resources>

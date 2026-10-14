@@ -58,22 +58,52 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_oled
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_oled_mode_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_performance_mode
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_performance_mode_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_play_theme_music
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_play_theme_music_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_prefer_local_trailers
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_prefer_local_trailers_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_prefer_logos
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_prefer_logos_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_reduce_motion
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_reduce_motion_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_screen_fit
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_screen_fit_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_download_progress
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_download_progress_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_episode_stream_badges
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_episode_stream_badges_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_external_links
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_external_links_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_filmography_roles
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_filmography_roles_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_frequent_costars
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_frequent_costars_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_missing_episodes
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_missing_episodes_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_more_in_collection
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_more_in_collection_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_nav_labels
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_new_badges
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_new_badges_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_promoted_actions_landscape
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_promoted_actions_landscape_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_quality_badges
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_quality_badges_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_reviews
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_reviews_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_share_media
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_share_media_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_tagline
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_tagline_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_upcoming_strip
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_show_upcoming_strip_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_skip_special_episodes
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_skip_special_episodes_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_theme_mode
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_theme_style
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_theme_style_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_trailer_preview_on_focus
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_trailer_preview_on_focus_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_blue_light_filter_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_blue_light_filter_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_blue_light_strength_subtitle
@@ -432,6 +462,40 @@ internal object AppearanceRows {
         gate = RowAdmission.Always,
     )
 
+    // ── RESIDUAL rows (HomeDiscoveryStore — the spec machinery lives in the
+    // home domain, and the catalog ids are unique): the H11/H12 card-badge
+    // toggles ALSO surfaced here per the plan's registry (§3 puts the rows in
+    // Appearance → Library & Cards; Home Settings' Cards group carries the
+    // same prefs — these write the SAME store commands, so the two faces can
+    // never disagree). The search hit restates the screen faces (the fold;
+    // the `settings_*` keys are the shared home-wave strings, not duplicated
+    // copy) and the ids are namespaced so the deep-link highlights THIS
+    // group's row, not the home hub's.
+
+    /** H11 quality badges (4K / HDR / DV / Atmos) on poster + wide cards. Default on. */
+    val QualityBadges = SettingsRow(
+        id = "appearance_quality_badges",
+        icon = Tabler.Outline.Badge4k,
+        titleRes = Res.string.settings_show_quality_badges,
+        subtitleRes = Res.string.settings_show_quality_badges_subtitle,
+        searchSubtitleRes = Res.string.settings_show_quality_badges_subtitle,
+        keywords = listOf("quality", "badges", "4k", "hdr", "dolby", "vision", "atmos", "card", "resolution"),
+        route = Route.AppearanceSettings(),
+        gate = RowAdmission.Always,
+    )
+
+    /** H12 "NEW" badges for items added since the last home visit. Default on. */
+    val NewBadges = SettingsRow(
+        id = "appearance_new_badges",
+        icon = Tabler.Outline.Sparkles,
+        titleRes = Res.string.settings_show_new_badges,
+        subtitleRes = Res.string.settings_show_new_badges_subtitle,
+        searchSubtitleRes = Res.string.settings_show_new_badges_subtitle,
+        keywords = listOf("new", "badge", "arrivals", "added", "visit", "card", "home"),
+        route = Route.AppearanceSettings(),
+        gate = RowAdmission.Always,
+    )
+
     // ── RESIDUAL row (LibraryStore — no spec machinery); the search hit restates the screen title (the fold). ──
 
     val CompactEpisodeList = SettingsRow(
@@ -441,6 +505,20 @@ internal object AppearanceRows {
         subtitleRes = Res.string.settings_compact_episode_list_subtitle,
         searchSubtitleRes = Res.string.settings_compact_episode_list_subtitle,
         keywords = listOf("episode", "list", "compact", "vertical", "layout", "rows", "dense"),
+        route = Route.AppearanceSettings(),
+        gate = RowAdmission.Always,
+    )
+
+    // ── RESIDUAL row (LibraryStore — no spec machinery); renders beside
+    // [CompactEpisodeList] — the other episode-row display toggle. ───────
+
+    val ShowEpisodeStreamBadges = SettingsRow(
+        id = "show_episode_stream_badges",
+        icon = Tabler.Outline.Subtitles,
+        titleRes = Res.string.settings_show_episode_stream_badges,
+        subtitleRes = Res.string.settings_show_episode_stream_badges_subtitle,
+        searchSubtitleRes = Res.string.settings_show_episode_stream_badges_subtitle,
+        keywords = listOf("episode", "stream", "badge", "subtitle", "audio", "channels", "language"),
         route = Route.AppearanceSettings(),
         gate = RowAdmission.Always,
     )
@@ -483,6 +561,142 @@ internal object AppearanceRows {
         subtitleRes = Res.string.settings_prefer_logos_subtitle,
         searchSubtitleRes = Res.string.ss_prefer_logos_subtitle,
         keywords = listOf("logo", "clear logo", "title", "artwork", "image", "banner", "details", "prefer"),
+        route = Route.AppearanceSettings(),
+        gate = RowAdmission.Always,
+    )
+
+    // ── RESIDUAL rows (LibraryStore — no spec machinery): the detail-screen
+    // display toggles (plan features D1–D23). The search hit restates each
+    // row's screen title/subtitle (the fold: no separate ss_* twins). ─────
+
+    val ShowTagline = SettingsRow(
+        id = "show_tagline",
+        icon = Tabler.Outline.Quote,
+        titleRes = Res.string.settings_show_tagline,
+        subtitleRes = Res.string.settings_show_tagline_subtitle,
+        searchSubtitleRes = Res.string.settings_show_tagline_subtitle,
+        keywords = listOf("tagline", "slogan", "title", "details", "subtitle line"),
+        route = Route.AppearanceSettings(),
+        gate = RowAdmission.Always,
+    )
+
+    val PlayThemeMusic = SettingsRow(
+        id = "play_theme_music",
+        icon = Tabler.Outline.Music,
+        titleRes = Res.string.settings_play_theme_music,
+        subtitleRes = Res.string.settings_play_theme_music_subtitle,
+        searchSubtitleRes = Res.string.settings_play_theme_music_subtitle,
+        keywords = listOf("theme", "music", "audio", "background", "series", "details", "play"),
+        route = Route.AppearanceSettings(),
+        gate = RowAdmission.Always,
+    )
+
+    val ShowExternalLinks = SettingsRow(
+        id = "show_external_links",
+        icon = Tabler.Outline.Link,
+        titleRes = Res.string.settings_show_external_links,
+        subtitleRes = Res.string.settings_show_external_links_subtitle,
+        searchSubtitleRes = Res.string.settings_show_external_links_subtitle,
+        keywords = listOf("external", "links", "imdb", "tmdb", "provider", "buttons", "details"),
+        route = Route.AppearanceSettings(),
+        gate = RowAdmission.Always,
+    )
+
+    val ShowReviews = SettingsRow(
+        id = "show_reviews",
+        icon = Tabler.Outline.Star,
+        titleRes = Res.string.settings_show_reviews,
+        subtitleRes = Res.string.settings_show_reviews_subtitle,
+        searchSubtitleRes = Res.string.settings_show_reviews_subtitle,
+        keywords = listOf("reviews", "ratings", "critic", "audience", "tmdb", "details"),
+        route = Route.AppearanceSettings(),
+        gate = RowAdmission.Always,
+    )
+
+    val PreferLocalTrailers = SettingsRow(
+        id = "prefer_local_trailers",
+        icon = Tabler.Outline.Movie,
+        titleRes = Res.string.settings_prefer_local_trailers,
+        subtitleRes = Res.string.settings_prefer_local_trailers_subtitle,
+        searchSubtitleRes = Res.string.settings_prefer_local_trailers_subtitle,
+        keywords = listOf("trailer", "local", "server", "youtube", "remote", "details", "play"),
+        route = Route.AppearanceSettings(),
+        gate = RowAdmission.Always,
+    )
+
+    val TrailerPreviewOnFocus = SettingsRow(
+        id = "trailer_preview_on_focus",
+        icon = Tabler.Outline.DeviceTv,
+        titleRes = Res.string.settings_trailer_preview_on_focus,
+        subtitleRes = Res.string.settings_trailer_preview_on_focus_subtitle,
+        searchSubtitleRes = Res.string.settings_trailer_preview_on_focus_subtitle,
+        keywords = listOf("trailer", "preview", "focus", "tv", "hero", "backdrop", "autoplay"),
+        route = Route.AppearanceSettings(),
+        gate = RowAdmission.Always,
+    )
+
+    val ShowPromotedActionsLandscape = SettingsRow(
+        id = "show_promoted_actions_landscape",
+        icon = Tabler.Outline.PlayerPlay,
+        titleRes = Res.string.settings_show_promoted_actions_landscape,
+        subtitleRes = Res.string.settings_show_promoted_actions_landscape_subtitle,
+        searchSubtitleRes = Res.string.settings_show_promoted_actions_landscape_subtitle,
+        keywords = listOf("promoted", "actions", "landscape", "tv", "rail", "menu", "details"),
+        route = Route.AppearanceSettings(),
+        gate = RowAdmission.Always,
+    )
+
+    val ShowDownloadProgress = SettingsRow(
+        id = "show_download_progress",
+        icon = Tabler.Outline.Download,
+        titleRes = Res.string.settings_show_download_progress,
+        subtitleRes = Res.string.settings_show_download_progress_subtitle,
+        searchSubtitleRes = Res.string.settings_show_download_progress_subtitle,
+        keywords = listOf("download", "progress", "episode", "bar", "percent", "offline"),
+        route = Route.AppearanceSettings(),
+        gate = RowAdmission.Always,
+    )
+
+    val ShowUpcomingStrip = SettingsRow(
+        id = "show_upcoming_strip",
+        icon = Tabler.Outline.CalendarEvent,
+        titleRes = Res.string.settings_show_upcoming_strip,
+        subtitleRes = Res.string.settings_show_upcoming_strip_subtitle,
+        searchSubtitleRes = Res.string.settings_show_upcoming_strip_subtitle,
+        keywords = listOf("upcoming", "airing", "next", "strip", "series", "air date", "details"),
+        route = Route.AppearanceSettings(),
+        gate = RowAdmission.Always,
+    )
+
+    val ShowMoreInCollection = SettingsRow(
+        id = "show_more_in_collection",
+        icon = Tabler.Outline.Stack2,
+        titleRes = Res.string.settings_show_more_in_collection,
+        subtitleRes = Res.string.settings_show_more_in_collection_subtitle,
+        searchSubtitleRes = Res.string.settings_show_more_in_collection_subtitle,
+        keywords = listOf("collection", "franchise", "boxset", "more", "movie", "series", "details"),
+        route = Route.AppearanceSettings(),
+        gate = RowAdmission.Always,
+    )
+
+    val ShowFilmographyRoles = SettingsRow(
+        id = "show_filmography_roles",
+        icon = Tabler.Outline.Users,
+        titleRes = Res.string.settings_show_filmography_roles,
+        subtitleRes = Res.string.settings_show_filmography_roles_subtitle,
+        searchSubtitleRes = Res.string.settings_show_filmography_roles_subtitle,
+        keywords = listOf("filmography", "role", "person", "actor", "cast", "grouping"),
+        route = Route.AppearanceSettings(),
+        gate = RowAdmission.Always,
+    )
+
+    val ShowFrequentCostars = SettingsRow(
+        id = "show_frequent_costars",
+        icon = Tabler.Outline.User,
+        titleRes = Res.string.settings_show_frequent_costars,
+        subtitleRes = Res.string.settings_show_frequent_costars_subtitle,
+        searchSubtitleRes = Res.string.settings_show_frequent_costars_subtitle,
+        keywords = listOf("costar", "co-star", "person", "actor", "appears with", "cast"),
         route = Route.AppearanceSettings(),
         gate = RowAdmission.Always,
     )
@@ -674,19 +888,35 @@ internal val AppearanceNavigationRows: List<SettingsRow> = listOf(
 )
 
 /**
- * The "Library & Cards" group's 8 rows: the five library-content residuals +
- * the appearance haptics toggle and the experimental share-media /
- * hide-search-history toggles (spec-backed). (The home-discovery watch-state
- * quartet moved to the home cards group — PS-4.)
+ * The "Library & Cards" group's rows: the library-content residuals (episode
+ * + detail-screen display toggles) + the appearance haptics toggle and the
+ * experimental share-media / hide-search-history toggles (spec-backed).
+ * (The home-discovery watch-state quartet moved to the home cards group —
+ * PS-4.)
  */
 internal val AppearanceLibraryRows: List<SettingsRow> = listOf(
     AppearanceRows.HideEpisodeThumbnails,
+    AppearanceRows.QualityBadges,
+    AppearanceRows.NewBadges,
     AppearanceRows.CompactEpisodeList,
+    AppearanceRows.ShowEpisodeStreamBadges,
     AppearanceRows.SkipSpecials,
     AppearanceRows.ShowMissingEpisodes,
     AppearanceRows.PreferLogos,
+    AppearanceRows.ShowTagline,
+    AppearanceRows.PlayThemeMusic,
     AppearanceRows.HapticsEnabled,
     AppearanceRows.ShowShareMedia,
+    AppearanceRows.ShowExternalLinks,
+    AppearanceRows.ShowReviews,
+    AppearanceRows.PreferLocalTrailers,
+    AppearanceRows.TrailerPreviewOnFocus,
+    AppearanceRows.ShowPromotedActionsLandscape,
+    AppearanceRows.ShowDownloadProgress,
+    AppearanceRows.ShowUpcomingStrip,
+    AppearanceRows.ShowMoreInCollection,
+    AppearanceRows.ShowFilmographyRoles,
+    AppearanceRows.ShowFrequentCostars,
     AppearanceRows.HideSearchHistory,
 )
 

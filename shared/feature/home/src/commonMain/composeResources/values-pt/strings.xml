@@ -109,6 +109,30 @@
     <string name="next_up_hidden_restore_all_message">Todas as %1$d séries ocultadas voltarão a aparecer na fila A seguir.</string>
     <string name="next_up_hidden_restore_cd">Restaurar %1$s em A seguir</string>
     <string name="next_up_hidden_unknown">Série desconhecida</string>
+    <string name="my_media_hidden_title">Bibliotecas ocultas</string>
+    <string name="my_media_hidden_empty">Nada oculto</string>
+    <string name="my_media_hidden_empty_subtitle">As bibliotecas ocultas da linha Meu conteúdo aparecem aqui para restauração.</string>
+    <string name="my_media_hidden_restore_all">Restaurar tudo</string>
+    <string name="my_media_hidden_restore_all_cd">Restaurar todas as bibliotecas ocultas para Meu conteúdo</string>
+    <string name="my_media_hidden_restore_all_title">Restaurar todas as bibliotecas?</string>
+    <string name="my_media_hidden_restore_all_message">Todas as %1$d bibliotecas ocultas voltarão a aparecer na linha Meu conteúdo.</string>
+    <string name="my_media_hidden_restore_cd">Restaurar %1$s para Meu conteúdo</string>
+    <string name="my_media_hidden_unknown">Biblioteca desconhecida</string>
     <string name="a11y_mode_video">Modo vídeo</string>
     <string name="a11y_mode_music">Modo música</string>
+    <!-- Home top-dock overflow menu (H15 inline anti-spoiler toggle). -->
+    <string name="home_more_options">Mais opções</string>
+    <string name="home_anti_spoiler_mode">Modo sem spoilers</string>
+
+    <!-- H17 personal stats card ("Your library week"). -->
+    <string name="home_stats_card_title">Sua semana na biblioteca</string>
+    <string name="home_stats_card_counts">%1$d assistidos · %2$d não assistidos</string>
+    <string name="home_stats_card_watch_approx">~%1$s h assistidos</string>
+    <string name="home_stats_card_watch_exact">%1$s h assistidos</string>
+    <string name="home_stats_card_streak">sequência de %1$d dias</string>
+
+    <!-- H21 new-section announcement snackbar (the VM emits the structural
+         event; the screen resolves the text). -->
+    <string name="home_new_sections_announcement">Novidades na Página inicial: %1$s</string>
+    <string name="home_new_sections_customize">Personalizar</string>
 </resources>

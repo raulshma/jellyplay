@@ -10,6 +10,7 @@ import com.raulshma.jellyplay.feature.details.ManageSeriesScreen
 import com.raulshma.jellyplay.feature.details.MediaDetailScreen
 import com.raulshma.jellyplay.feature.details.MediaInfoScreen
 import com.raulshma.jellyplay.feature.details.PersonDetailScreen
+import com.raulshma.jellyplay.feature.details.ReviewsScreen
 import com.raulshma.jellyplay.feature.details.SeerrDetailScreen
 
 fun EntryProviderScope<NavKey>.detailsSection(
@@ -73,6 +74,8 @@ fun EntryProviderScope<NavKey>.detailsSection(
         PersonDetailScreen(
             personId = key.personId,
             onItemClick = { itemId -> navigator.navigate(Route.MediaDetail(itemId)) },
+            // D20 co-star tap-through: same person jump the detail cast row takes.
+            onPersonClick = { personId -> navigator.navigate(Route.PersonDetail(personId)) },
             onBack = { navigator.goBack() },
         )
     }
@@ -81,6 +84,13 @@ fun EntryProviderScope<NavKey>.detailsSection(
         CastAndCrewScreen(
             itemId = key.itemId,
             onPersonClick = { personId -> navigator.navigate(Route.PersonDetail(personId)) },
+            onBack = { navigator.goBack() },
+        )
+    }
+
+    entry<Route.Reviews> { key ->
+        ReviewsScreen(
+            itemId = key.itemId,
             onBack = { navigator.goBack() },
         )
     }

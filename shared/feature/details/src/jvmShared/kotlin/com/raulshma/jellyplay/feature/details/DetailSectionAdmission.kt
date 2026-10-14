@@ -17,8 +17,10 @@ import com.raulshma.jellyplay.core.model.isAudioType
  *
  * The indices are deliberately NOT position-unique — BOOK_READING_CARD and
  * MEDIA_INFO share `2` (a book renders the reading card in the media-info
- * slot), and UP_NEXT and SEASONS share `6` — so the body's emission order is
- * this enum's declaration order, independent of the stagger index.
+ * slot), and UP_NEXT, UPCOMING_EPISODES and SEASONS share `6` (the series
+ * trio: smart-play card, unaired strip, season tree) — so the body's
+ * emission order is this enum's declaration order, independent of the
+ * stagger index.
  */
 internal enum class DetailSectionKind(val delayIndex: Int) {
 
@@ -51,8 +53,15 @@ internal enum class DetailSectionKind(val delayIndex: Int) {
     /** Album/audio track list. */
     ALBUM_TRACKS(5),
 
-    /** Series smart-play "Up Next" card, ahead of SEASONS in emission order (both delayIndex 6). */
+    /** Series smart-play "Up Next" card, ahead of the series trio's shared slot 6. */
     UP_NEXT(6),
+
+    /** D7: the series' "Airing next" strip (unaired episodes, `/Shows/Upcoming`
+     *  scoped to the series) — the middle member of the shared slot-6 band,
+     *  between the smart-play card and the season tree. Admitted only when
+     *  the strip actually has content (the enrichment's silent-absence
+     *  contract: no rows, no slot). */
+    UPCOMING_EPISODES(6),
 
     /** Season tabs + episode lists for SERIES/EPISODE/SEASON. Always admitted; empty gate is render-side. */
     SEASONS(6),
@@ -65,6 +74,13 @@ internal enum class DetailSectionKind(val delayIndex: Int) {
 
     /** Seerr "Videos" (trailers/extras mined from TMDB). */
     RELATED_VIDEOS(9),
+
+    /** D6: the "More in {collection}" franchise rows (BoxSet ancestors +
+     *  members), declared just before the similar rows and sharing their
+     *  slot-10 band. Admitted only when at least one row has content (the
+     *  enrichment's silent-absence contract) AND the preference is on —
+     *  a whole-ROW family, unlike the always-admitted single-slot sections. */
+    MORE_IN_COLLECTION(10),
 
     /** "More like this" — server relatedItems (remote) or localRelatedItems (local).
      *  Suppressed only on a Jellyfin 12+ pipeline host ([DetailSectionAdmission.suppressStockSimilar])
@@ -146,6 +162,9 @@ internal data class DetailSectionAdmission(
     val hasSpecialFeatures: Boolean,
     /** TMDB reviews fetched (state.tmdbReviews non-empty). */
     val hasTmdbReviews: Boolean,
+    /** User preference: the detail screen shows the reviews section at all
+     *  (D9's show_reviews — gates the whole TMDB_REVIEWS slot). */
+    val showReviews: Boolean = true,
     /** A download lifecycle is attached to the snapshot (state.detailContext?.download != null). */
     val hasAttachedDownload: Boolean,
     /** Plugin ratings chips fetched (state.pluginRatings non-empty — ADR 0010). */
@@ -160,12 +179,27 @@ internal data class DetailSectionAdmission(
      *  content, MORE_LIKE_THIS stands down. False on pre-12 hosts / older
      *  plugins — the lists differ, both rows render. */
     val suppressStockSimilar: Boolean = false,
+    /** D6 franchise rows hydrated with non-empty members
+     *  (state.franchiseCollections non-empty). Admits MORE_IN_COLLECTION
+     *  together with [showMoreInCollection]. */
+    val hasFranchiseCollections: Boolean = false,
+    /** User preference: the detail screen shows the "More in this collection"
+     *  franchise rows (D6's show_more_in_collection — gates the whole
+     *  MORE_IN_COLLECTION slot). */
+    val showMoreInCollection: Boolean = true,
+    /** D7 unaired-episode strip fetched with rows (state.upcomingEpisodes
+     *  non-empty). Admits UPCOMING_EPISODES together with [showUpcomingStrip]. */
+    val hasUpcomingEpisodes: Boolean = false,
+    /** User preference: the detail screen shows the "Airing next" strip
+     *  (D7's show_upcoming_strip — gates the whole UPCOMING_EPISODES slot). */
+    val showUpcomingStrip: Boolean = true,
 ) {
 
     /**
      * Folds the inputs into the ordered list of sections the body renders. The
-     * order is the former source emission order (UP_NEXT before SEASONS — both
-     * delayIndex 6), and each kind carries its own delayIndex.
+     * order is the former source emission order (the series trio UP_NEXT →
+     * UPCOMING_EPISODES → SEASONS — all delayIndex 6), and each kind carries
+     * its own delayIndex.
      */
     fun admit(): List<DetailSectionKind> = buildList {
         fun admit(kind: DetailSectionKind, admitted: Boolean) {
@@ -200,10 +234,18 @@ internal data class DetailSectionAdmission(
             DetailSectionKind.UP_NEXT,
             mediaType == MediaType.SERIES && hasSmartPlayTarget && showDetailUpNext,
         )
+        admit(
+            DetailSectionKind.UPCOMING_EPISODES,
+            showUpcomingStrip && hasUpcomingEpisodes,
+        )
         admit(DetailSectionKind.SEASONS, admitted = true)
         admit(DetailSectionKind.COLLECTION_ITEMS, admitted = true)
         admit(DetailSectionKind.CAST, mediaType != MediaType.BOOK)
         admit(DetailSectionKind.RELATED_VIDEOS, admitted = true)
+        admit(
+            DetailSectionKind.MORE_IN_COLLECTION,
+            showMoreInCollection && hasFranchiseCollections,
+        )
         admit(
             DetailSectionKind.MORE_LIKE_THIS,
             // Stand the stock row down only where it would duplicate the plugin
@@ -229,7 +271,10 @@ internal data class DetailSectionAdmission(
             DetailSectionKind.SPECIAL_FEATURES,
             capabilities.remoteDiscovery && hasSpecialFeatures,
         )
-        admit(DetailSectionKind.TMDB_REVIEWS, hasTmdbReviews)
+        admit(
+            DetailSectionKind.TMDB_REVIEWS,
+            showReviews && hasTmdbReviews,
+        )
         admit(
             DetailSectionKind.DOWNLOAD_FOOTER,
             hasAttachedDownload || isLocalOrigin,
@@ -265,10 +310,21 @@ internal data class DetailSectionAdmission(
             hasSeerrSimilar = state.seerrSimilar.isNotEmpty(),
             hasSpecialFeatures = state.specialFeatures.isNotEmpty(),
             hasTmdbReviews = state.tmdbReviews.isNotEmpty(),
+            showReviews = state.preferences.showReviews,
             hasAttachedDownload = state.detailContext?.download != null,
             hasPluginRatings = state.pluginRatings.isNotEmpty(),
             hasPluginSimilar = state.pluginSimilarItems.isNotEmpty(),
             suppressStockSimilar = state.pluginSimilarSuppressesStock,
+            // The D6 franchise admission counts only VISIBLE rows: a row the
+            // user eye-hid is excluded here (not just render-side) so a fully
+            // hidden row family doesn't leave an empty admitted slot's gap in
+            // the body column.
+            hasFranchiseCollections = state.franchiseCollections.any { collection ->
+                collection.id !in state.hiddenFranchiseCollections[state.itemId].orEmpty()
+            },
+            showMoreInCollection = state.preferences.showMoreInCollection,
+            hasUpcomingEpisodes = state.upcomingEpisodes.isNotEmpty(),
+            showUpcomingStrip = state.preferences.showUpcomingStrip,
         )
     }
 }

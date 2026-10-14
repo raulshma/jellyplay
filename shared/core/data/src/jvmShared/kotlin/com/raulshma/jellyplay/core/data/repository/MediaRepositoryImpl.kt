@@ -161,6 +161,7 @@ class MediaRepositoryImpl internal constructor(
     UserDataWriteOperations,
     HomeFeed,
     UserDataChanges,
+    SeriesNotificationReads,
     MediaRepositoryCacheInvalidation,
     MediaCacheInvalidator {
 
@@ -615,6 +616,13 @@ class MediaRepositoryImpl internal constructor(
         latestMediaSpec.cache.getOrFetch("latest_${parentId}_$limit") {
             libraryApiClient.getLatestMedia(parentId = parentId, limit = limit)
         }
+
+    override suspend fun getSeriesNextUpEpisode(seriesId: String): Result<MediaItem?> =
+        libraryApiClient.getNextUp(
+            limit = 1,
+            seriesId = seriesId,
+            enableResumable = false,
+        ).map { items -> items.firstOrNull { it.mediaType == MediaType.EPISODE } }
 
     override suspend fun getMediaDetail(itemId: String, force: Boolean): Result<MediaDetail> =
         // Single-flight dedup, the force freshness lever, the epoch guard and

@@ -105,6 +105,27 @@ data class JellyPlayRowResult(
     val items: List<JellyPlayRowItem> = emptyList(),
 )
 
+/**
+ * One admin-curated hero billboard candidate (the `hero` feature's wire item).
+ * Item id only — the client resolves it against its own library so art and
+ * metadata are always the local read; `headline`/`subhead` are optional
+ * overrides rendered over the item's own metadata when present. [weight] is
+ * already consumed server-side (serve order = weight descending, config order
+ * breaking ties) and rides the wire verbatim for observability.
+ */
+@Serializable
+data class JellyPlayHeroCandidate(
+    val itemId: String,
+    val headline: String? = null,
+    val subhead: String? = null,
+    val weight: Int = 0,
+)
+
+@Serializable
+data class JellyPlayHeroResult(
+    val candidates: List<JellyPlayHeroCandidate> = emptyList(),
+)
+
 @Serializable
 data class JellyPlayBookmark(
     val id: String,

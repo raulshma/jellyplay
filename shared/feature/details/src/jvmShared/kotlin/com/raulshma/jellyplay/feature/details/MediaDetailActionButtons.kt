@@ -28,6 +28,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -475,6 +477,19 @@ private fun PlayButton(
 ) {
     val isTv = LocalTvMode.current
     val playFocusState = rememberTvFocusState(focusedScale = 1.05f)
+    // D22: report the play target's focus into the trailer-preview port —
+    // on TV (with `trailer_preview_on_focus` on) the hero's muted preview
+    // mounts exactly while this button holds focus. The write is a no-op
+    // for non-gated consumers (non-TV ignores the flag in the mount
+    // machine); leaving composition drops it so a disposed button can never
+    // leave a stale "focused" behind.
+    val trailerFocusPort = LocalTrailerFocusPreview.current
+    LaunchedEffect(playFocusState.isFocused) {
+        trailerFocusPort.playTargetFocused = playFocusState.isFocused
+    }
+    DisposableEffect(Unit) {
+        onDispose { trailerFocusPort.playTargetFocused = false }
+    }
     val shape = if (style == PlayButtonStyle.Vertical) ShapeCache.smooth14 else ShapeCache.smooth16
     val iconSize = if (style == PlayButtonStyle.Vertical) 22.dp else 24.dp
     val spacerSize = if (style == PlayButtonStyle.Vertical) 6.dp else 8.dp

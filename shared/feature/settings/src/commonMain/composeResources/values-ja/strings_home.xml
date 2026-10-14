@@ -166,4 +166,6 @@
     <string name="settings_hide_top_header_on_scroll_off">ヘッダーは常に表示</string>
     <string name="settings_next_up_hidden">「次のエピソード」から非表示</string>
     <string name="settings_next_up_hidden_brief">「次のエピソード」行から削除したシリーズの表示と復元</string>
+    <string name="settings_hidden_libraries">非表示のライブラリ</string>
+    <string name="settings_hidden_libraries_brief">マイメディア行から隠したライブラリを表示して復元します</string>
 </resources>

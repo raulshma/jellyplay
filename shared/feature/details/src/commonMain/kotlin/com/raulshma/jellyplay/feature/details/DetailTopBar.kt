@@ -40,6 +40,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.DotsVertical
+import com.composables.icons.tabler.outline.Volume2
+import com.composables.icons.tabler.outline.VolumeOff
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.ui.components.CircleBgBackButton
 import com.raulshma.jellyplay.core.ui.components.TvSafeSheet
@@ -48,6 +50,8 @@ import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.verticalWrapAround
 import com.raulshma.jellyplay.feature.details.generated.resources.Res
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_cd_options
+import com.raulshma.jellyplay.feature.details.generated.resources.detail_cd_theme_music_mute
+import com.raulshma.jellyplay.feature.details.generated.resources.detail_cd_theme_music_unmute
 import org.jetbrains.compose.resources.stringResource
 
 /**
@@ -69,6 +73,11 @@ internal fun DetailTopBar(
     contentFocusRequester: FocusRequester,
     scrollBehavior: androidx.compose.material3.TopAppBarScrollBehavior,
     modifier: Modifier = Modifier,
+    /** D8: whether the mute chip renders at all — only while theme audio plays. */
+    themeMusicVisible: Boolean = false,
+    /** D8: the per-series memory the chip's icon reflects (muted → VolumeOff). */
+    themeMusicMuted: Boolean = false,
+    onToggleThemeMusicMuted: (Boolean) -> Unit = {},
 ) {
     val scrollCollapsed = scrollState.scrollCollapsed
     val animatedContainerColor = scrollState.animatedContainerColor
@@ -100,6 +109,34 @@ internal fun DetailTopBar(
             },
             actions = {
                 val editIconColor = if (scrollCollapsed < 0.5f) Color.White else MaterialTheme.colorScheme.onSurface
+                // D8: the ambient theme-music mute chip — visible only while a
+                // theme plays; tapping mutes immediately AND writes the
+                // per-series memory (the VM command does both).
+                if (themeMusicVisible) {
+                    IconButton(
+                        onClick = { onToggleThemeMusicMuted(!themeMusicMuted) },
+                        modifier = Modifier
+                            .focusIndicator(CircleShape)
+                            .focusProperties { down = contentFocusRequester }
+                            .padding(8.dp)
+                            .clip(CircleShape)
+                            .background(
+                                color = if (scrollCollapsed < 0.5f) MaterialTheme.colorScheme.surface.copy(alpha = 0.3f) else Color.Transparent,
+                            ),
+                    ) {
+                        Icon(
+                            if (themeMusicMuted) Tabler.Outline.VolumeOff else Tabler.Outline.Volume2,
+                            contentDescription = stringResource(
+                                if (themeMusicMuted) {
+                                    Res.string.detail_cd_theme_music_unmute
+                                } else {
+                                    Res.string.detail_cd_theme_music_mute
+                                },
+                            ),
+                            tint = editIconColor,
+                        )
+                    }
+                }
                 Box {
                     IconButton(
                         onClick = {

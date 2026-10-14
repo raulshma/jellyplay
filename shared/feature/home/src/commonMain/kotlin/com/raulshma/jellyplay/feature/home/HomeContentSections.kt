@@ -139,6 +139,12 @@ internal data class HomeContentState(
     val discoverEnabled: Boolean,
     val experimentalCardClippingEnabled: Boolean,
     val featuredItem: MediaItem?,
+    /**
+     * H9: the plugin-curated billboard copy keyed by item id — the hero looks
+     * its featured item up here; a hit's headline/subhead override the item's
+     * own title/kicker slots, a miss renders item metadata as today.
+     */
+    val curatedHeroOverlay: Map<String, com.raulshma.jellyplay.core.model.CuratedHeroEntry> = emptyMap(),
     val backgroundColor: Color,
     val contentPad: Dp,
     val headerHeight: Dp,
@@ -177,6 +183,15 @@ internal data class HomeContentState(
      * "couldn't reach the server — showing your downloads" notice). Null hides it.
      */
     val statusBanner: String? = null,
+    /**
+     * H12 visit memory: the PREVIOUS home visit's stamp (epoch ms; 0 =
+     * never). Read once per home session before the dwell timer stamps the
+     * new one, so this session's own stamp can never clear the badges it
+     * just showed. Feeds the arrival rows' NEW-badge predicate
+     * ([HomeMediaRow.showNewBadges]); 0 (the default, e.g. before the
+     * screen wires `uiState.homeLastVisitEpochMs` through) badges nothing.
+     */
+    val homeLastVisitEpochMs: Long = 0L,
 ) {
     /** The online feed, null while the offline branch renders. */
     val online: HomeFeed.Online? get() = feed as? HomeFeed.Online
@@ -393,11 +408,17 @@ internal fun HomeContentList(
             if (state.featuredItem != null && state.homeHeroEnabled) {
                 item(key = "hero") {
                     val featured = state.featuredItem
+                    // H9: the curated billboard copy for whichever candidate is
+                    // featured — absent/null fields render the item's own
+                    // metadata exactly as the local hero always has.
+                    val curated = state.curatedHeroOverlay[featured.id]
                     // Online and offline heroes alike open the unified detail
                     // tree — it renders remote and downloaded items alike, so
                     // the id is all the routing needs.
                     AnimatedHeroHeader(
                         featuredItem = featured,
+                        headline = curated?.headline,
+                        subhead = curated?.subhead,
                         getBackdropUrl = remember(renderInputs.heroBackdropUrlBuilder) {
                             { id: String -> renderInputs.heroBackdropUrlBuilder(id) }
                         },
@@ -575,6 +596,7 @@ internal fun HomeContentList(
                     is HomeRowChassis.OfflineWide -> HomeSectionOfflineWideRow(ctx = armContext, state = state, callbacks = callbacks, renderInputs = renderInputs)
                     is HomeRowChassis.OnlineWide -> HomeSectionOnlineWideRow(ctx = armContext, state = state, callbacks = callbacks, renderInputs = renderInputs)
                     is HomeRowChassis.OnlinePoster -> HomeSectionOnlinePosterRow(ctx = armContext, state = state, callbacks = callbacks, renderInputs = renderInputs)
+                    is HomeRowChassis.OnlineTiles -> HomeSectionOnlineTilesRow(ctx = armContext, state = state, callbacks = callbacks, renderInputs = renderInputs)
                 }
             }
 
@@ -763,6 +785,47 @@ private fun HomeSectionJellyPlayRow(
         onSectionLongClick = ctx.onSectionLongClick,
         onFocusedItemChange = callbacks.onFocusedMediaItem,
         edgeRefresh = ctx.edgeRefresh,
+    )
+}
+
+/**
+ * H5: the My Media tiles row over the server feed — the chassis's
+ * [HomeRowChassis.OnlineTiles] arm. The section's items are the assembler's
+ * FOLDER-typed library tiles; a tile tap routes into the library screen
+ * through the existing "See All" carrier ([HomeContentCallbacks.onSeeAllClick],
+ * the one wired `Route.LibrarySection` construction — id + name, the dock
+ * drawer's identity fields), and the tile long-press opens the inline
+ * section-config sheet scoped to that library ([onConfigureSection], the
+ * rows' existing long-press pattern — the same affordance the section title
+ * carries, per-library here). No offline arm: the offline mirror drops the
+ * row (library art is a server artifact).
+ */
+@Composable
+private fun HomeSectionOnlineTilesRow(
+    ctx: HomeRowArmContext,
+    state: HomeContentState,
+    callbacks: HomeContentCallbacks,
+    renderInputs: HomeRenderInputs,
+) {
+    val section = ctx.section
+    val tileClick: (MediaItem) -> Unit = remember(callbacks, section.type) {
+        { tile -> callbacks.onSeeAllClick(section.type, tile.id, null, tile.name) }
+    }
+    val tileLongClick: (MediaItem) -> Unit = remember(callbacks, section.type) {
+        { tile -> callbacks.onConfigureSection(section.type, tile.id) }
+    }
+    HomeLibraryTilesRow(
+        title = ctx.title,
+        items = section.items,
+        imageUrlFor = renderInputs.mediaImageUrlBuilder,
+        onTileClick = tileClick,
+        modifier = ctx.modifier,
+        focusRequester = ctx.focusRequester,
+        onRowFocused = ctx.onRowFocused,
+        clippingEnabled = state.experimentalCardClippingEnabled,
+        onTileLongClick = tileLongClick,
+        onSectionLongClick = ctx.onSectionLongClick,
+        onFocusedItemChange = callbacks.onFocusedMediaItem,
     )
 }
 
@@ -1005,6 +1068,15 @@ private fun HomeSectionOnlinePosterRow(
         onRowFocused = ctx.onRowFocused,
         clippingEnabled = state.experimentalCardClippingEnabled,
         showEpisodeSeriesBadge = section.type == HomeSectionType.LATEST_MEDIA,
+        // H12 NEW badges: the arrival rows only (the H4 Upcoming row's items
+        // are also library arrivals — episodes added for airing shows).
+        showNewBadges = section.type == HomeSectionType.LATEST_MEDIA ||
+            section.type == HomeSectionType.RECENTLY_ADDED ||
+            section.type == HomeSectionType.UPCOMING,
+        homeLastVisitEpochMs = state.homeLastVisitEpochMs,
+        // H4: the air-date chip rides the Upcoming row's cards — its items
+        // are unaired episodes, the premiere date being the point of the row.
+        showAirDateChips = section.type == HomeSectionType.UPCOMING,
         onSectionLongClick = sectionLongClick,
         onSeeAllClick = seeAllClick,
         onRollClick = if (diceRowId != null) {

@@ -511,6 +511,8 @@
     <string name="ss_auto_delete_after_watch_subtitle">Rimuovi gli scaricamenti dopo la visione completa</string>
     <string name="ss_next_up_hidden_title">Nascosto da Prossimi contenuti</string>
     <string name="ss_next_up_hidden_subtitle">Visualizza e ripristina le serie rimosse dalla riga Prossimi contenuti</string>
+    <string name="ss_hidden_libraries_title">Librerie nascoste</string>
+    <string name="ss_hidden_libraries_subtitle">Visualizza e ripristina le librerie escluse dalla riga Le mie librerie</string>
     <string name="ss_prefer_logos_subtitle">Usa il logo chiaro come titolo della pagina dei dettagli quando il server ne ha uno</string>
     <string name="ss_external_player_app_subtitle">Scegli quale app lettore esterno apre la riproduzione</string>
     <string name="ss_still_watching_mode_subtitle">Conferma prima di continuare dopo diversi episodi o ore</string>

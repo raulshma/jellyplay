@@ -44,7 +44,10 @@ internal object UniqueWorkSchedules {
      * The one-shot ladder: CONNECTED-constrained [W] tagged [tag], enqueued
      * under [uniqueName] with [existingPolicy] (KEEP unless a caller
      * deliberately passes otherwise). [batteryNotLow] defaults off — only the
-     * auto-download foreground trigger sets it today.
+     * auto-download foreground trigger sets it today. [initialDelay] (D12's
+     * *arr air-time accelerator is the first consumer) defers the run to
+     * [airTime + buffer]; null keeps the run-immediately-when-constraints-
+     * allow behavior every existing caller relies on.
      */
     inline fun <reified W : ListenableWorker> uniqueOnce(
         context: Context,
@@ -52,6 +55,7 @@ internal object UniqueWorkSchedules {
         tag: String,
         existingPolicy: ExistingWorkPolicy = ExistingWorkPolicy.KEEP,
         batteryNotLow: Boolean = false,
+        initialDelay: Duration? = null,
     ) {
         val constraints = Constraints.Builder()
             .setRequiredNetworkType(NetworkType.CONNECTED)
@@ -59,6 +63,7 @@ internal object UniqueWorkSchedules {
             .build()
         val request = OneTimeWorkRequestBuilder<W>()
             .setConstraints(constraints)
+            .apply { initialDelay?.let { setInitialDelay(it) } }
             .addTag(tag)
             .build()
         WorkManager.getInstance(context).enqueueUniqueWork(uniqueName, existingPolicy, request)

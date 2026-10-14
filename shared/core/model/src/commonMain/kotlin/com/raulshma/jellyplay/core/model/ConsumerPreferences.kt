@@ -84,7 +84,47 @@ data class DetailPreferences(
     val showMissingEpisodes: Boolean = false,
     /** Render the server clear-logo as the detail-screen title instead of text. */
     val preferLogos: Boolean = false,
-)
+    /** Show provider external-link buttons (TMDb / IMDb / server `externalUrls`) on the detail header. */
+    val showExternalLinks: Boolean = true,
+    /** Show the item's first tagline under the detail title. */
+    val showTagline: Boolean = true,
+    /** Prefer server-hosted local trailers over remote (YouTube) entries in the trailer list. */
+    val preferLocalTrailers: Boolean = false,
+    /** Show the "More in this collection" franchise row on movie/series detail. */
+    val showMoreInCollection: Boolean = true,
+    /** Show the "Airing next" strip on series detail. */
+    val showUpcomingStrip: Boolean = true,
+    /** Play a series' ambient theme music on detail open. */
+    val playThemeMusic: Boolean = true,
+    /**
+     * D8: per-series "never play theme music here" memory (the detail top
+     * bar's mute chip wrote it). Projected from
+     * `HomeDiscoveryStore.themeMusicMutedSeriesIds`; a muted series's theme
+     * enrichment doesn't start playback at all.
+     */
+    val themeMusicMutedSeriesIds: Set<String> = emptySet(),
+    /** Show the reviews preview + ratings block on the detail screen. */
+    val showReviews: Boolean = true,
+    /** Show subtitle / audio layout stream badges on season episode rows. */
+    val showEpisodeStreamBadges: Boolean = true,
+    /** Show role names + role grouping on the person screen's filmography. */
+    val showFilmographyRoles: Boolean = true,
+    /** Show the "frequently appears with" co-star row on the person screen. */
+    val showFrequentCostars: Boolean = true,
+    /**
+     * TV focus-gated trailer preview: mount the muted detail-hero embed only
+     * while a Play/Trailer action holds focus (TV-only semantics; requires
+     * [trailerAutoplay]).
+     */
+    val trailerPreviewOnFocus: Boolean = true,
+    /** Promote the ⋮ options' fixed promoted set into the landscape/TV detail rail. */
+    val showPromotedActionsLandscape: Boolean = true,
+    /** Show live download progress on season episode rows. */
+    val showDownloadProgress: Boolean = true,
+) {
+    /** D8: whether [seriesId]'s theme music is per-series muted. */
+    fun isThemeMusicMutedFor(seriesId: String): Boolean = seriesId in themeMusicMutedSeriesIds
+}
 
 /** Fields read by `OnboardingViewModel` across the multi-step onboarding flow. */
 @Immutable
@@ -198,6 +238,12 @@ data class MainPreferences(
     val showUnwatchedBadge: Boolean = true,
     val hideWatchedItems: Boolean = false,
     val showWatchedCheckmark: Boolean = true,
+    /** H11: quality badges (4K / HDR / DV / Atmos) on cards (home-discovery knob). */
+    val showQualityBadges: Boolean = true,
+    /** H12: "NEW" badges for items added since the last home visit (home-discovery knob). */
+    val showNewBadges: Boolean = true,
+    /** H15: anti-spoiler home master switch (home-discovery knob). */
+    val antiSpoilerHome: Boolean = false,
     val hiddenNavItems: Set<String> = emptySet(),
     val navItemOrder: List<String> = emptyList(),
     val hideBottomNavOnScroll: Boolean = true,

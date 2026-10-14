@@ -7,6 +7,7 @@ import com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections
 import com.raulshma.jellyplay.core.model.AudioPreferences
 import com.raulshma.jellyplay.core.model.AppearancePreferences
 import com.raulshma.jellyplay.core.model.AppearanceScreenPreferences
+import com.raulshma.jellyplay.core.model.DetailPreferences
 import com.raulshma.jellyplay.core.model.DownloadPreferences
 import com.raulshma.jellyplay.core.model.ExperimentalFeature
 import com.raulshma.jellyplay.core.model.ExperimentalPreferences
@@ -85,6 +86,7 @@ class PreferenceProjectionsTest {
         projections.experimentalPreferences.first()
         projections.appearanceScreenPreferences.first()
         projections.notificationPreferences.first()
+        projections.detailPreferences.first()
     }
 
     @Test
@@ -195,6 +197,39 @@ class PreferenceProjectionsTest {
         assertNotEquals(screenBefore, screenAfter)
         assertEquals(ThemeMode.DARK, screenAfter.themeMode)
         assertEquals(!screenBefore.homeHeroEnabled, screenAfter.homeHeroEnabled)
+    }
+
+    @Test
+    fun `a library write is reflected in the detail and appearance-screen projections`() = runTest {
+        val detailBefore = projections.detailPreferences.first()
+        val screenBefore = projections.appearanceScreenPreferences.first()
+        // skipSpecials defaults false — flip it and a detail-display toggle.
+        graph.libraryStore.setSkipSpecials(true)
+        graph.libraryStore.setShowTagline(false)
+
+        val detailAfter = projections.detailPreferences.first()
+        assertNotEquals(detailBefore, detailAfter)
+        assertTrue(detailAfter.skipSpecials)
+        assertFalse(detailAfter.showTagline)
+        // The detail-display fields surface on the appearance-settings screen
+        // through the same library slice.
+        val screenAfter = projections.appearanceScreenPreferences.first()
+        assertNotEquals(screenBefore, screenAfter)
+        assertFalse(screenAfter.showTagline)
+        assertTrue(screenAfter.skipSpecials)
+        // The rest of the detail projection keeps its defaults.
+        assertEquals(
+            DetailPreferences(skipSpecials = true, showTagline = false),
+            detailAfter,
+        )
+    }
+
+    @Test
+    fun `a video-player trailer-before-movie write reaches the playback projection`() = runTest {
+        val before = projections.playbackPreferences.first()
+        assertFalse(before.playTrailerBeforeMovie)
+        graph.videoPlayerStore.setPlayTrailerBeforeMovie(true)
+        assertTrue(projections.playbackPreferences.first().playTrailerBeforeMovie)
     }
 
     @Test

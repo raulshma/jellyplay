@@ -42,6 +42,7 @@ class HomeSectionsAssemblerTest {
                 continueWatchingResult = Result.success(listOf(item("cw1"), item("cw2"))),
                 continueReadingResult = Result.success(listOf(item("book1").copy(mediaType = MediaType.BOOK))),
                 nextUpResult = Result.success(listOf(item("nu1", seriesId = "s1"), item("cw1"))),
+                upcomingResult = Result.success(listOf(item("up1"))),
                 foldersResult = Result.success(listOf(folder("f1", "Movies"), folder("f2", "TV"))),
                 latestPerFolder = listOf(
                     folder("f1", "Movies") to Result.success(listOf(item("a"), item("cw1"))),
@@ -66,6 +67,8 @@ class HomeSectionsAssemblerTest {
                 HomeSectionType.CONTINUE_WATCHING,
                 HomeSectionType.CONTINUE_READING,
                 HomeSectionType.NEXT_UP,
+                HomeSectionType.UPCOMING,
+                HomeSectionType.MY_MEDIA,
                 HomeSectionType.LATEST_MEDIA,
                 HomeSectionType.LATEST_MEDIA,
                 HomeSectionType.RECENTLY_ADDED,
@@ -81,18 +84,110 @@ class HomeSectionsAssemblerTest {
         assertEquals(listOf("nu1"), sections[2].items.map { it.id })
         assertEquals(listOf("book1"), sections[1].items.map { it.id })
 
+        // Upcoming rides verbatim between Next Up and the latest fan-out; the
+        // My Media tiles assemble from the same folders read the fan-out uses.
+        assertEquals("upcoming", sections[3].id)
+        assertEquals("Upcoming", sections[3].title)
+        assertEquals(listOf("up1"), sections[3].items.map { it.id })
+        assertEquals("my_media", sections[4].id)
+        assertEquals(listOf("f1", "f2"), sections[4].items.map { it.id })
+        assertEquals(MediaType.FOLDER, sections[4].items[0].mediaType)
+
         // One Latest row per library, id/title from the descriptor templates.
-        assertEquals("latest_f1", sections[3].id)
-        assertEquals("Latest Movies", sections[3].title)
-        assertEquals("f1", sections[3].libraryId)
-        assertEquals("latest_f2", sections[4].id)
+        assertEquals("latest_f1", sections[5].id)
+        assertEquals("Latest Movies", sections[5].title)
+        assertEquals("f1", sections[5].libraryId)
+        assertEquals("latest_f2", sections[6].id)
 
         // Recently Added dedupes across folders and drops CW overlaps.
-        assertEquals(listOf("a", "b"), sections[5].items.map { it.id })
+        assertEquals(listOf("a", "b"), sections[7].items.map { it.id })
         assertEquals("continue_watching", sections[0].id)
-        assertEquals("r1", sections[6].items.single().id)
-        assertEquals("cw1", sections[6].seedItem?.id)
-        assertEquals("p1", sections[7].items.single().id)
+        assertEquals("r1", sections[8].items.single().id)
+        assertEquals("cw1", sections[8].seedItem?.id)
+        assertEquals("p1", sections[9].items.single().id)
+    }
+
+    @Test
+    fun `upcoming emits verbatim between next up and latest media`() {
+        val output = assembleHomeSections(
+            HomeSectionsAssemblyInputs(
+                query = HomeSectionQuery(enabledSections = setOf(HomeSectionType.NEXT_UP, HomeSectionType.UPCOMING)),
+                nextUpResult = Result.success(listOf(item("nu1", seriesId = "s1"))),
+                upcomingResult = Result.success(listOf(item("up1"), item("up2"))),
+            ),
+        )
+        val sections = output.result.sections
+        assertEquals(
+            listOf(HomeSectionType.NEXT_UP, HomeSectionType.UPCOMING),
+            sections.map { it.type },
+        )
+        assertEquals(listOf("up1", "up2"), sections[1].items.map { it.id }, "upcoming is watch-state-blind: no filters")
+        assertNull(output.firstError)
+        assertTrue(output.result.failedSectionTypes.isEmpty())
+    }
+
+    @Test
+    fun `my media assembles library tiles and drops hidden and overridden libraries`() {
+        val output = assembleHomeSections(
+            HomeSectionsAssemblyInputs(
+                query = HomeSectionQuery(
+                    enabledSections = setOf(HomeSectionType.MY_MEDIA),
+                    myMediaHiddenLibraryIds = setOf("f-hidden"),
+                    libraryHomeSectionOverrides = mapOf("f-overridden" to setOf(HomeSectionType.MY_MEDIA)),
+                ),
+                foldersResult = Result.success(
+                    listOf(
+                        folder("f1", "Movies", "movies"),
+                        folder("f-hidden", "Hidden", "tvshows"),
+                        folder("f-overridden", "Overridden", "music"),
+                        folder("f2", "Books", "books"),
+                    ),
+                ),
+            ),
+        )
+        val sections = output.result.sections
+        assertEquals(listOf(HomeSectionType.MY_MEDIA), sections.map { it.type })
+        val tiles = sections.single().items
+        // The hidden-set member AND the per-library override member drop; the
+        // survivors keep folder order as FOLDER-typed tiles keyed by library id.
+        assertEquals(listOf("f1", "f2"), tiles.map { it.id })
+        assertEquals(listOf("Movies", "Books"), tiles.map { it.name })
+        tiles.forEach { assertEquals(MediaType.FOLDER, it.mediaType) }
+    }
+
+    @Test
+    fun `my media drops the row when every library is hidden and surfaces a folders failure`() {
+        val allHidden = assembleHomeSections(
+            HomeSectionsAssemblyInputs(
+                query = HomeSectionQuery(
+                    enabledSections = setOf(HomeSectionType.MY_MEDIA),
+                    myMediaHiddenLibraryIds = setOf("f1"),
+                ),
+                foldersResult = Result.success(listOf(folder("f1", "A"))),
+            ),
+        )
+        assertTrue(allHidden.result.sections.isEmpty(), "all tiles hidden — the row drops")
+        assertTrue(allHidden.result.failedSectionTypes.isEmpty())
+
+        val ioError = RuntimeException("folders down")
+        val failed = assembleHomeSections(
+            HomeSectionsAssemblyInputs(
+                query = HomeSectionQuery(enabledSections = setOf(HomeSectionType.MY_MEDIA)),
+                foldersResult = Result.failure(ioError),
+            ),
+        )
+        assertEquals(setOf(HomeSectionType.MY_MEDIA), failed.result.failedSectionTypes)
+        assertEquals(ioError, failed.firstError)
+
+        // Disabled → no row, no failure, whatever the folders result.
+        val disabled = assembleHomeSections(
+            HomeSectionsAssemblyInputs(
+                query = HomeSectionQuery(enabledSections = emptySet()),
+                foldersResult = Result.failure(ioError),
+            ),
+        )
+        assertTrue(disabled.result.sections.isEmpty())
+        assertTrue(disabled.result.failedSectionTypes.isEmpty())
     }
 
     @Test
@@ -207,6 +302,7 @@ class HomeSectionsAssemblerTest {
         val output = assembleHomeSections(
             HomeSectionsAssemblyInputs(
                 query = HomeSectionQuery(
+                    enabledSections = setOf(HomeSectionType.LATEST_MEDIA, HomeSectionType.RECENTLY_ADDED),
                     libraryHomeSectionOverrides = mapOf(
                         "f1" to setOf(HomeSectionType.LATEST_MEDIA, HomeSectionType.RECENTLY_ADDED),
                         "f2" to setOf(HomeSectionType.LATEST_MEDIA),
@@ -258,6 +354,8 @@ class HomeSectionsAssemblerTest {
         assertEquals(
             setOf(
                 HomeSectionType.CONTINUE_WATCHING,
+                // MY_MEDIA shares the failed folders read, so it starves too.
+                HomeSectionType.MY_MEDIA,
                 HomeSectionType.LATEST_MEDIA,
                 HomeSectionType.RECENTLY_ADDED,
                 HomeSectionType.RECOMMENDATIONS,

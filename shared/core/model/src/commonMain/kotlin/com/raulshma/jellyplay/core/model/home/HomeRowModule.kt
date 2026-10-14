@@ -104,6 +104,8 @@ public object HomeRowModules {
         ContinueWatching,
         ContinueReading,
         NextUp,
+        Upcoming,
+        MyMedia,
         LatestMedia,
         RecentlyAdded,
         Recommendations,
@@ -133,7 +135,7 @@ public object HomeRowModules {
         registry.values.filter { it.descriptor.isConfigurable }.map { it.type }
 }
 
-// ── The 12 registrations ────────────────────────────────────────────────────
+// ── The 14 registrations ────────────────────────────────────────────────────
 // One object per row type; identity delegates to the descriptor, and each
 // registration overrides exactly the facts its row carries (everything else
 // keeps the interface's inert default).
@@ -165,6 +167,33 @@ public object NextUp : HomeRowModule {
     override val edgeRefreshable = true
     override val mergesIntoContinueWatching = true
     override val offline = NextUpOfflineProjection
+}
+
+/**
+ * Upcoming (H4) — unaired episodes across the followed series, Next Up's
+ * watch-state-independent complement. Poster chassis (not wide), See All (the
+ * full airing schedule lives behind a library browse) and edge refresh via the
+ * batch sub-call's single-row twin. Inert offline: unaired air-times are a
+ * live server fact.
+ */
+public object Upcoming : HomeRowModule {
+    override val type = HomeSectionType.UPCOMING
+    override val descriptor = type.descriptor
+    override val hasSeeAll = true
+    override val edgeRefreshable = true
+}
+
+/**
+ * My Media (H5) — the library-tiles row (jellyfin-web's SmallLibraryTiles);
+ * home's only non-poster shape (the chassis's OnlineTiles arm renders it).
+ * Assembles the library folders the batch already fetched for the Latest
+ * fan-out — no port call of its own — so edge refresh buys nothing (the row
+ * is exactly as fresh as the batch that fetched it). Inert offline: the
+ * offline mirror drops the tiles (library art is a server artifact).
+ */
+public object MyMedia : HomeRowModule {
+    override val type = HomeSectionType.MY_MEDIA
+    override val descriptor = type.descriptor
 }
 
 /** Latest Media — one row per library; per-library overrides gate it. */

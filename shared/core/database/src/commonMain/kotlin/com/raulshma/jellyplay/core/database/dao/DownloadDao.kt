@@ -180,11 +180,22 @@ interface DownloadDao {
      * invalidation is table-level, so every [updateProgressWithSpeed] tick
      * re-ran the downloads screen's full 23-column [getAllDownloads] window
      * and re-executed the whole screen per event; the screen now takes its
-     * moving bytes/speed from this 3-column projection keyed by id instead.
+     * moving bytes/speed from this narrow projection keyed by id instead.
      * Same narrow-projection rationale as [getRecoveryRows] / [getStatus].
      * Served by the `status` index.
+     *
+     * The projection also carries `mediaItemId` + `totalSizeBytes` (D16) so
+     * the detail screen can join the live progress onto its episode rows:
+     * the repository-boundary [DownloadProgress] re-keys by item and derives
+     * the 0..1 fraction from the same two columns the ⋮ menu's
+     * "Downloading N%" label divides.
      */
-    @Query("SELECT id, downloadedBytes, speedBytesPerSec FROM downloads WHERE status IN ('PENDING', 'QUEUED', 'DOWNLOADING')")
+    @Query(
+        """
+        SELECT id, mediaItemId, downloadedBytes, speedBytesPerSec, totalSizeBytes
+        FROM downloads WHERE status IN ('PENDING', 'QUEUED', 'DOWNLOADING')
+        """
+    )
     fun getActiveDownloadProgress(): Flow<List<DownloadProgressRow>>
 
     /**
@@ -464,10 +475,15 @@ data class SeriesSizeAggregate(
 /**
  * Narrow per-row live-progress projection for the downloads screen's hot
  * path — see [DownloadDao.getActiveDownloadProgress]. Carries only the
- * columns that move on a 2 s progress tick.
+ * columns that move on a 2 s progress tick, plus the item join pair
+ * (`mediaItemId` + the `totalSizeBytes` denominator) the detail screen's
+ * episode rows need to re-key the map by item and derive a 0..1 fraction
+ * (D16).
  */
 data class DownloadProgressRow(
     val id: String,
+    val mediaItemId: String? = null,
     val downloadedBytes: Long,
     val speedBytesPerSec: Long,
+    val totalSizeBytes: Long = 0,
 )

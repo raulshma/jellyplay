@@ -5,30 +5,43 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
+import com.raulshma.jellyplay.core.data.repository.HomeLayoutRestoreFetch
 import com.raulshma.jellyplay.core.model.ContinueWatchingClickBehavior
+import com.raulshma.jellyplay.core.model.DateFormatPreference
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
+import com.raulshma.jellyplay.core.ui.components.ConfirmDialog
+import com.raulshma.jellyplay.core.ui.components.ConfirmTone
 import com.raulshma.jellyplay.core.ui.components.SettingListItem
 import com.raulshma.jellyplay.core.ui.components.SettingToggleItem
 import com.raulshma.jellyplay.core.ui.components.SettingsItemList
+import com.raulshma.jellyplay.core.ui.components.formatDate
 import com.raulshma.jellyplay.core.ui.components.formatIntPattern
 import com.raulshma.jellyplay.core.ui.components.homeSectionIcon
+import com.raulshma.jellyplay.core.ui.message.LocalUserMessageBus
 import com.raulshma.jellyplay.core.ui.reorder.rememberReorderableOrderedList
 import com.raulshma.jellyplay.core.ui.navigation.Route
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
+import com.raulshma.jellyplay.core.ui.generated.resources.Res as CoreUiRes
+import com.raulshma.jellyplay.core.ui.generated.resources.core_cancel
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_configure_libraries
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_continue_next_up
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_discover_rows
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_exclude_active_sessions_off
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_exclude_active_sessions_on
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hide_top_header_on_scroll
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hide_top_header_on_scroll_off
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_hide_top_header_on_scroll_on
@@ -37,16 +50,45 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_backdrop_on
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_cards
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_display
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_focus_backdrop_off
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_focus_backdrop_on
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_genre_rail_off
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_genre_rail_on
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_hero_video_off
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_hero_video_on
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_hero_video_tv_off
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_hero_video_tv_on
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_layout_autopush_off
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_layout_autopush_on
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_layout_presets
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_layout_restore
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_layout_restore_message
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_layout_restore_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_layout_restore_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_layout_restored
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_layout_server_empty
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_layout_server_undecodable
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_layout_sync_failed
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_layout_upload
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_layout_upload_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_layout_uploaded
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_mode
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_mode_music
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_mode_video
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_presence_chips_off
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_presence_chips_on
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_screen_layout
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_sections_visible
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_stats_card_off
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_stats_card_on
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_title
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_trickplay_preview_off
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_home_trickplay_preview_on
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_merge_continue_next_up
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_merge_continue_next_up_off
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_merge_continue_next_up_on
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_new_section_announcements_off
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_new_section_announcements_on
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_next_up_time_window
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_off
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_pinned_home_sections
@@ -91,7 +133,7 @@ internal val homeScreenGroups: List<Set<String>> = listOf(
 /**
  * The display group's `SettingsItemList(total = …)` row count, derived by
  * [rowTotalFor] from the [SettingsScreenGroups.homeDisplay] declaration
- * (nine always-rendered config rows — the declared `unhide_cw` admission is
+ * (the always-rendered config rows — the declared `unhide_cw` admission is
  * deliberately absent, so the strict derivation excludes it) plus the
  * conditional unhide action row, which renders only while hidden
  * continue-watching items exist — a content-state condition with no
@@ -102,14 +144,36 @@ internal fun homeDisplayScreenRowTotal(hiddenCwItems: Int): Int =
     rowTotalFor(SettingsScreenGroups.homeDisplay, RowAdmissionFlags()) + if (hiddenCwItems > 0) 1 else 0
 
 /**
- * The cards group's `SettingsItemList(total = …)` row count: the four
- * card-display toggles moved off AppearanceSettingsScreen's "Library & Cards"
- * group, every one declared [RowAdmission.Always] (the shipped always-on
- * behavior — no advanced gate on this hub), so the strict derivation counts
- * them all under the no-flag input.
+ * The cards group's `SettingsItemList(total = …)` row count: the PS-4 moved
+ * card-display quartet plus the home-wave badge/spoiler/trickplay toggles.
+ * Every row is declared [RowAdmission.Always] except the TV-only trickplay
+ * row ([RowAdmission.Tv]), so the strict derivation counts all rows on TV and
+ * all but the trickplay row off it.
  */
-internal fun homeCardsScreenRowTotal(): Int =
-    rowTotalFor(SettingsScreenGroups.homeCards, RowAdmissionFlags())
+internal fun homeCardsScreenRowTotal(isTv: Boolean): Int =
+    rowTotalFor(SettingsScreenGroups.homeCards, RowAdmissionFlags(isTv = isTv))
+
+/**
+ * The H20 restore confirmation dialog's content, pure for tests: the
+ * timestamp-diff signal (the server write stamp) plus BOTH layouts'
+ * enabled-section counts, so the dialog can show "server copy saved <date> —
+ * N sections" against "this device — M sections" without any formatting
+ * logic of its own.
+ */
+internal data class HomeLayoutRestorePreview(
+    val serverSavedAtEpochMillis: Long?,
+    val serverSectionCount: Int,
+    val localSectionCount: Int,
+)
+
+internal fun homeLayoutRestorePreview(
+    offer: HomeLayoutRestoreFetch.Offer,
+    localEnabledSectionCount: Int,
+): HomeLayoutRestorePreview = HomeLayoutRestorePreview(
+    serverSavedAtEpochMillis = offer.savedAtEpochMillis,
+    serverSectionCount = offer.config.enabledHomeSectionTypes.size,
+    localSectionCount = localEnabledSectionCount,
+)
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class, ExperimentalFoundationApi::class)
 @Composable
@@ -120,6 +184,17 @@ fun HomeSettingsScreen(
     viewModel: HomeSettingsViewModel = koinViewModel(),
 ) {
     val preferences by viewModel.preferences.collectAsStateWithLifecycle()
+    val isTv = LocalTvMode.current
+    // H20 manual sync actions: one-shot toast texts pre-resolved at composable
+    // scope (the message bus takes plain Strings — the presets screen's
+    // convention) plus the restore-confirmation dialog flag.
+    val bus = LocalUserMessageBus.current
+    val uploadedText = stringResource(Res.string.settings_home_layout_uploaded)
+    val restoredText = stringResource(Res.string.settings_home_layout_restored)
+    val syncFailedText = stringResource(Res.string.settings_home_layout_sync_failed)
+    val serverEmptyText = stringResource(Res.string.settings_home_layout_server_empty)
+    val serverUndecodableText = stringResource(Res.string.settings_home_layout_server_undecodable)
+    var showRestoreConfirm by remember { mutableStateOf(false) }
 
     PreferenceScreenScaffold(
         title = stringResource(Res.string.settings_home_title),
@@ -158,8 +233,8 @@ fun HomeSettingsScreen(
                 ) {
                     // Derived from the declared display group (the derivation
                     // source the row total below reads — one declaration, no
-                    // parallel id list): the nine always-rendered config rows
-                    // in catalog order, plus the unhide row while hidden
+                    // parallel id list): the always-rendered config rows in
+                    // catalog order, plus the unhide row while hidden
                     // continue-watching items exist.
                     val displayItems = remember(preferences.hiddenCwItemIds) {
                         SettingsScreenGroups.homeDisplay.itemIds.filter { it != HomeRows.UnhideCw.id } +
@@ -199,6 +274,76 @@ fun HomeSettingsScreen(
                                     checked = preferences.homeBackdropEnabled,
                                     highlighted = highlightSettingId == HomeRows.HomeBackdrop.id,
                                     onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setHomeBackdropEnabled(it) } },
+                                )
+                            }
+                            HomeRows.HeroVideo.id -> {
+                                SettingToggleItem(
+                                    icon = Tabler.Outline.Video,
+                                    title = rowTitle(HomeRows.HeroVideo),
+                                    subtitle = if (preferences.homeHeroVideoEnabled) stringResource(Res.string.settings_home_hero_video_on) else stringResource(Res.string.settings_home_hero_video_off),
+                                    checked = preferences.homeHeroVideoEnabled,
+                                    highlighted = highlightSettingId == HomeRows.HeroVideo.id,
+                                    onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setHeroVideoEnabled(it) } },
+                                )
+                            }
+                            HomeRows.HeroVideoTv.id -> {
+                                SettingToggleItem(
+                                    icon = Tabler.Outline.DeviceTv,
+                                    title = rowTitle(HomeRows.HeroVideoTv),
+                                    subtitle = if (preferences.homeHeroVideoTvEnabled) stringResource(Res.string.settings_home_hero_video_tv_on) else stringResource(Res.string.settings_home_hero_video_tv_off),
+                                    checked = preferences.homeHeroVideoTvEnabled,
+                                    highlighted = highlightSettingId == HomeRows.HeroVideoTv.id,
+                                    onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setHeroVideoTvEnabled(it) } },
+                                )
+                            }
+                            HomeRows.FocusBackdrop.id -> {
+                                SettingToggleItem(
+                                    icon = Tabler.Outline.Focus,
+                                    title = rowTitle(HomeRows.FocusBackdrop),
+                                    subtitle = if (preferences.homeFocusBackdrop) stringResource(Res.string.settings_home_focus_backdrop_on) else stringResource(Res.string.settings_home_focus_backdrop_off),
+                                    checked = preferences.homeFocusBackdrop,
+                                    highlighted = highlightSettingId == HomeRows.FocusBackdrop.id,
+                                    onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setFocusBackdrop(it) } },
+                                )
+                            }
+                            HomeRows.StatsCard.id -> {
+                                SettingToggleItem(
+                                    icon = Tabler.Outline.ChartBar,
+                                    title = rowTitle(HomeRows.StatsCard),
+                                    subtitle = if (preferences.homeStatsCard) stringResource(Res.string.settings_home_stats_card_on) else stringResource(Res.string.settings_home_stats_card_off),
+                                    checked = preferences.homeStatsCard,
+                                    highlighted = highlightSettingId == HomeRows.StatsCard.id,
+                                    onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setStatsCard(it) } },
+                                )
+                            }
+                            HomeRows.GenreRail.id -> {
+                                SettingToggleItem(
+                                    icon = Tabler.Outline.Category,
+                                    title = rowTitle(HomeRows.GenreRail),
+                                    subtitle = if (preferences.homeGenreRail) stringResource(Res.string.settings_home_genre_rail_on) else stringResource(Res.string.settings_home_genre_rail_off),
+                                    checked = preferences.homeGenreRail,
+                                    highlighted = highlightSettingId == HomeRows.GenreRail.id,
+                                    onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setGenreRail(it) } },
+                                )
+                            }
+                            HomeRows.PresenceChips.id -> {
+                                SettingToggleItem(
+                                    icon = Tabler.Outline.Users,
+                                    title = rowTitle(HomeRows.PresenceChips),
+                                    subtitle = if (preferences.homePresenceChips) stringResource(Res.string.settings_home_presence_chips_on) else stringResource(Res.string.settings_home_presence_chips_off),
+                                    checked = preferences.homePresenceChips,
+                                    highlighted = highlightSettingId == HomeRows.PresenceChips.id,
+                                    onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setPresenceChips(it) } },
+                                )
+                            }
+                            HomeRows.NewSectionAnnouncements.id -> {
+                                SettingToggleItem(
+                                    icon = Tabler.Outline.Speakerphone,
+                                    title = rowTitle(HomeRows.NewSectionAnnouncements),
+                                    subtitle = if (preferences.homeNewSectionAnnouncements) stringResource(Res.string.settings_new_section_announcements_on) else stringResource(Res.string.settings_new_section_announcements_off),
+                                    checked = preferences.homeNewSectionAnnouncements,
+                                    highlighted = highlightSettingId == HomeRows.NewSectionAnnouncements.id,
+                                    onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setNewSectionAnnouncements(it) } },
                                 )
                             }
                             HomeRows.ClockHome.id -> {
@@ -268,6 +413,16 @@ fun HomeSettingsScreen(
                                     trailingText = if (preferences.nextUpExcludedSeriesIds.isEmpty()) "" else "${preferences.nextUpExcludedSeriesIds.size}",
                                     highlighted = highlightSettingId == HomeRows.NextUpHidden.id,
                                     onClick = { navActions.onNavigate(Route.NextUpExcluded) },
+                                )
+                            }
+                            HomeRows.HiddenLibraries.id -> {
+                                SettingListItem(
+                                    icon = Tabler.Outline.Folders,
+                                    title = rowTitle(HomeRows.HiddenLibraries),
+                                    subtitle = rowSubtitle(HomeRows.HiddenLibraries),
+                                    trailingText = if (preferences.myMediaHiddenLibraryIds.isEmpty()) "" else "${preferences.myMediaHiddenLibraryIds.size}",
+                                    highlighted = highlightSettingId == HomeRows.HiddenLibraries.id,
+                                    onClick = { navActions.onNavigate(Route.MyMediaHidden) },
                                 )
                             }
                             HomeRows.UnhideCw.id -> {
@@ -348,6 +503,16 @@ fun HomeSettingsScreen(
                         index = 2, count = nextUpTotal,
                         onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setNextUpRewatching(it) } },
                     )
+
+                    SettingToggleItem(
+                        icon = Tabler.Outline.Ban,
+                        title = rowTitle(HomeRows.ExcludeActiveSessions),
+                        subtitle = if (preferences.excludeActiveSessions) stringResource(Res.string.settings_exclude_active_sessions_on) else stringResource(Res.string.settings_exclude_active_sessions_off),
+                        checked = preferences.excludeActiveSessions,
+                        highlighted = highlightSettingId == HomeRows.ExcludeActiveSessions.id,
+                        index = 3, count = nextUpTotal,
+                        onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setExcludeActiveSessions(it) } },
+                    )
                 }
             }
 
@@ -402,6 +567,52 @@ fun HomeSettingsScreen(
                         onClick = { navActions.onNavigate(Route.DiscoverRows()) },
                     )
 
+                    SettingToggleItem(
+                        icon = Tabler.Outline.CloudUpload,
+                        title = rowTitle(HomeRows.LayoutAutopush),
+                        subtitle = if (preferences.homeLayoutAutopush) stringResource(Res.string.settings_home_layout_autopush_on) else stringResource(Res.string.settings_home_layout_autopush_off),
+                        checked = preferences.homeLayoutAutopush,
+                        highlighted = highlightSettingId == HomeRows.LayoutAutopush.id,
+                        index = 0, count = 1,
+                        onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setLayoutAutopush(it) } },
+                    )
+
+                    // H20 manual sync actions — work regardless of the
+                    // autopush pref (the manual and automatic pushes serialize
+                    // through the exact same codec inside the controller).
+                    SettingListItem(
+                        icon = Tabler.Outline.Upload,
+                        title = stringResource(Res.string.settings_home_layout_upload),
+                        subtitle = stringResource(Res.string.settings_home_layout_upload_subtitle),
+                        trailingText = "",
+                        highlighted = false,
+                        index = 0, count = 1,
+                        onClick = {
+                            viewModel.uploadLayoutToServer { result ->
+                                if (result.isSuccess) bus.info(uploadedText) else bus.info(syncFailedText)
+                            }
+                        },
+                    )
+
+                    SettingListItem(
+                        icon = Tabler.Outline.CloudDownload,
+                        title = stringResource(Res.string.settings_home_layout_restore),
+                        subtitle = stringResource(Res.string.settings_home_layout_restore_subtitle),
+                        trailingText = "",
+                        highlighted = false,
+                        index = 0, count = 1,
+                        onClick = {
+                            viewModel.fetchServerLayout { result ->
+                                when (result.getOrNull()) {
+                                    is HomeLayoutRestoreFetch.Offer -> showRestoreConfirm = true
+                                    HomeLayoutRestoreFetch.Empty -> bus.info(serverEmptyText)
+                                    HomeLayoutRestoreFetch.Undecodable -> bus.info(serverUndecodableText)
+                                    null -> bus.info(syncFailedText)
+                                }
+                            }
+                        },
+                    )
+
                     val homeSections = rememberReorderableOrderedList(
                         storedOrder = preferences.homeSectionOrder,
                         onPersist = { order -> viewModel.edit { it.homeDiscovery.setHomeSectionOrder(order) } },
@@ -431,7 +642,9 @@ fun HomeSettingsScreen(
             item {
                 // The card-display toggles moved off AppearanceSettingsScreen's
                 // "Library & Cards" group (PS-4): home-discovery knobs, now
-                // grouped beside the rest of the home hub.
+                // grouped beside the rest of the home hub — plus the home-wave
+                // badge/spoiler/trickplay toggles (the trickplay row is
+                // TV-only, gated by its declared RowAdmission.Tv).
                 SettingsGroup(
                     icon = Tabler.Outline.Photo,
                     title = stringResource(Res.string.settings_home_cards),
@@ -441,14 +654,18 @@ fun HomeSettingsScreen(
                         if (preferences.showWatchedCheckmark) parts.add(rowTitle(HomeRows.ShowWatchedCheckmark))
                         if (preferences.hideWatchedItems) parts.add(rowTitle(HomeRows.HideWatchedItems))
                         if (preferences.showExternalRatings) parts.add(rowTitle(HomeRows.ShowExternalRatings))
+                        if (preferences.showQualityBadges) parts.add(rowTitle(HomeRows.ShowQualityBadges))
+                        if (preferences.showNewBadges) parts.add(rowTitle(HomeRows.ShowNewBadges))
+                        if (isTv && preferences.homeTrickplayPreview) parts.add(rowTitle(HomeRows.TrickplayPreview))
+                        if (preferences.antiSpoilerHome) parts.add(rowTitle(HomeRows.AntiSpoilerHome))
                         parts.joinToString(", ").ifEmpty { stringResource(Res.string.settings_off) }
                     },
                     modifier = Modifier.padding(vertical = 8.dp),
                     initiallyExpanded = highlightSettingId in SettingsScreenGroups.homeCards.itemIdSet,
                 ) {
                     // Derived by rowTotalFor from the cards declaration (every
-                    // row always renders — no gate on this hub).
-                    SettingsItemList(total = homeCardsScreenRowTotal()) {
+                    // row always renders except the TV-gated trickplay row).
+                    SettingsItemList(total = homeCardsScreenRowTotal(isTv)) {
                         SettingToggleItem(
                             icon = rowIcon(HomeRows.ShowUnwatchedBadge),
                             title = rowTitle(HomeRows.ShowUnwatchedBadge),
@@ -484,8 +701,87 @@ fun HomeSettingsScreen(
                             highlighted = highlightSettingId == HomeRows.ShowExternalRatings.id,
                             onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setShowExternalRatings(it) } },
                         )
+
+                        SettingToggleItem(
+                            icon = rowIcon(HomeRows.ShowQualityBadges),
+                            title = rowTitle(HomeRows.ShowQualityBadges),
+                            subtitle = rowSubtitle(HomeRows.ShowQualityBadges),
+                            checked = preferences.showQualityBadges,
+                            highlighted = highlightSettingId == HomeRows.ShowQualityBadges.id,
+                            onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setShowQualityBadges(it) } },
+                        )
+
+                        SettingToggleItem(
+                            icon = rowIcon(HomeRows.ShowNewBadges),
+                            title = rowTitle(HomeRows.ShowNewBadges),
+                            subtitle = rowSubtitle(HomeRows.ShowNewBadges),
+                            checked = preferences.showNewBadges,
+                            highlighted = highlightSettingId == HomeRows.ShowNewBadges.id,
+                            onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setShowNewBadges(it) } },
+                        )
+
+                        if (SettingsScreenGroups.homeCards.rowAdmitted(HomeRows.TrickplayPreview.id, RowAdmissionFlags(isTv = isTv))) {
+                            SettingToggleItem(
+                                icon = rowIcon(HomeRows.TrickplayPreview),
+                                title = rowTitle(HomeRows.TrickplayPreview),
+                                subtitle = if (preferences.homeTrickplayPreview) stringResource(Res.string.settings_home_trickplay_preview_on) else stringResource(Res.string.settings_home_trickplay_preview_off),
+                                checked = preferences.homeTrickplayPreview,
+                                highlighted = highlightSettingId == HomeRows.TrickplayPreview.id,
+                                onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setTrickplayPreview(it) } },
+                            )
+                        }
+
+                        SettingToggleItem(
+                            icon = rowIcon(HomeRows.AntiSpoilerHome),
+                            title = rowTitle(HomeRows.AntiSpoilerHome),
+                            subtitle = rowSubtitle(HomeRows.AntiSpoilerHome),
+                            checked = preferences.antiSpoilerHome,
+                            highlighted = highlightSettingId == HomeRows.AntiSpoilerHome.id,
+                            onCheckedChange = { viewModel.edit { scope -> scope.homeDiscovery.setAntiSpoilerHome(it) } },
+                        )
                     }
                 }
             }
+    }
+
+    // H20 restore confirmation: the timestamp-diff dialog (server write stamp
+    // vs both layouts' enabled-section counts). Shown only while a decoded
+    // offer is pending — fetchServerLayout retained it on the VM. The apply
+    // routes through the store's applyLayout — the SAME command the local
+    // preset-restore path uses (no second write path).
+    val pendingOffer = viewModel.pendingRestoreOffer
+    if (showRestoreConfirm && pendingOffer != null) {
+        val restoreTitle = stringResource(Res.string.settings_home_layout_restore_title)
+        val restoreMessageTemplate = stringResource(Res.string.settings_home_layout_restore_message)
+        val cancelText = stringResource(CoreUiRes.string.core_cancel)
+        // Client-clock sourced stamp (the transport carries no server
+        // timestamp) — a "how old is the server copy" signal, not a guarantee.
+        val savedAtLabel = remember(pendingOffer.savedAtEpochMillis) {
+            pendingOffer.savedAtEpochMillis?.let { stamp ->
+                runCatching { formatDate(stamp, DateFormatPreference.LONG) }.getOrDefault("")
+            } ?: ""
+        }
+        val preview = homeLayoutRestorePreview(pendingOffer, preferences.enabledHomeSectionTypes.size)
+        val message = restoreMessageTemplate
+            .replace("%1\$s", savedAtLabel)
+            .replace("%2\$s", preview.serverSectionCount.toString())
+            .replace("%3\$s", preview.localSectionCount.toString())
+        ConfirmDialog(
+            title = restoreTitle,
+            message = message,
+            confirmText = stringResource(Res.string.settings_home_layout_restore),
+            dismissText = cancelText,
+            onConfirm = {
+                viewModel.edit { it.homeDiscovery.applyLayout(pendingOffer.config) }
+                viewModel.clearPendingRestoreOffer()
+                showRestoreConfirm = false
+                bus.info(restoredText)
+            },
+            onDismiss = {
+                viewModel.clearPendingRestoreOffer()
+                showRestoreConfirm = false
+            },
+            tone = ConfirmTone.NEUTRAL,
+        )
     }
 }

@@ -194,6 +194,23 @@ interface MusicCatalogue {
 }
 
 /**
+ * The D12 series-notification family seam of the media stack (the
+ * [MusicCatalogue] narrow-collaborator pattern): the per-series Next Up
+ * diff read the `NewMediaCheckWorker`'s second pass rides. Its clean sole
+ * consumer injects this seam instead of the union; the impl satisfies both
+ * declarations.
+ *
+ * The series-scoped Next Up row: `GET /Shows/NextUp` filtered to [seriesId]
+ * with resumable episodes excluded (a half-watched episode is not "new"),
+ * top row only — null when the series has no next-up episode. Uncached by
+ * contract: the notification diff wants the live answer, one call per
+ * opted-in series per check.
+ */
+interface SeriesNotificationReads {
+    suspend fun getSeriesNextUpEpisode(seriesId: String): Result<MediaItem?>
+}
+
+/**
  * The user-data WRITE family seam of [MediaRepository]: the five toggle/mark
  * endpoints every user-data mutation funnels through. Its clean sole
  * consumer is [UserDataMutatorImpl] — the protocol facade every feature

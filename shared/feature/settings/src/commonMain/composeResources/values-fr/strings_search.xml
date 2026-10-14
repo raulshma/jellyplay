@@ -511,6 +511,8 @@
     <string name="ss_auto_delete_after_watch_subtitle">Supprimer les téléchargements une fois entièrement regardés</string>
     <string name="ss_next_up_hidden_title">Masqué de À suivre</string>
     <string name="ss_next_up_hidden_subtitle">Voir et restaurer les séries retirées de la rangée À suivre</string>
+    <string name="ss_hidden_libraries_title">Bibliothèques masquées</string>
+    <string name="ss_hidden_libraries_subtitle">Afficher et restaurer les bibliothèques exclues de la ligne Mes médias</string>
     <string name="ss_prefer_logos_subtitle">Utilise le logo clair comme titre de la page de détails quand le serveur en propose un</string>
     <string name="ss_external_player_app_subtitle">Choisis quelle application de lecteur externe ouvre la lecture</string>
     <string name="ss_still_watching_mode_subtitle">Confirmer avant de continuer après plusieurs épisodes ou heures</string>

@@ -3,6 +3,9 @@ package com.raulshma.jellyplay.feature.details
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,15 +17,21 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredHeight
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.MediaItem
@@ -33,6 +42,8 @@ import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.LocalAnimatedVisibilityScope
 import com.raulshma.jellyplay.core.ui.components.LocalSharedTransitionScope
 import com.raulshma.jellyplay.core.ui.image.MediaImage
+import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
+import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import androidx.compose.ui.ExperimentalComposeUiApi
 
 /**
@@ -40,6 +51,11 @@ import androidx.compose.ui.ExperimentalComposeUiApi
  * in the right. Extracted verbatim from the former `DetailContent` branch;
  * behaviour is identical. [DetailContentBody] is invoked once with
  * `showActionButtons = false` because actions live in the left rail.
+ *
+ * [promotedActions] is the D23 rail slice of the ⋮ options list — the fixed
+ * promoted set resolved by the caller (which owns the display-preference gate
+ * and the matching ⋮-menu suppression); empty = nothing renders under the
+ * action buttons.
  */
 @Composable
 internal fun DetailBodyLandscape(
@@ -52,6 +68,7 @@ internal fun DetailBodyLandscape(
     isAlbum: Boolean,
     isExpanded: Boolean,
     item: MediaItem?,
+    promotedActions: List<MediaOption> = emptyList(),
 ) {
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = com.raulshma.jellyplay.core.ui.tv.LocalTvMode.current
@@ -100,6 +117,11 @@ internal fun DetailBodyLandscape(
                         vertical = true,
                         contentFocusRequester = contentFocusRequester,
                     )
+                    // D23 promoted rail: the fixed option subset lifted out of
+                    // the ⋮ menu (which suppresses exactly these while the rail
+                    // shows them). Sits under the action buttons so the TV
+                    // focus order reads poster → play → rail actions → body.
+                    DetailPromotedActions(options = promotedActions)
                 }
             }
         }
@@ -285,4 +307,68 @@ private fun DetailPoster(
             .then(sharedPosterModifier),
         contentScale = ContentScale.Crop,
     )
+}
+
+/**
+ * The landscape/TV detail rail's promoted actions (D23): the fixed subset of
+ * the ⋮ options list ([PromotedMediaOptionIds]) rendered as icon+label rows
+ * under [DetailActionButtons], so the top actions escape the overflow sheet
+ * where TV D-pad cost is highest. Availability logic is unchanged — an option
+ * the menu disabled (e.g. an in-flight download row) stays disabled here.
+ * Renders nothing when the caller resolved no promoted options (gate off /
+ * none available).
+ */
+@Composable
+internal fun DetailPromotedActions(
+    options: List<MediaOption>,
+    modifier: Modifier = Modifier,
+) {
+    if (options.isEmpty()) return
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        options.forEach { option -> DetailPromotedAction(option = option) }
+    }
+}
+
+/** One promoted rail row: the ⋮ entry's icon + label at the rail's button chrome. */
+@Composable
+private fun DetailPromotedAction(option: MediaOption) {
+    val focusState = rememberTvFocusState(focusedScale = 1.05f)
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(ShapeCache.smooth12)
+            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f))
+            // A disabled option stays visible-but-inert (the TV sheet's
+            // disabled-item treatment): no focus chrome, no click.
+            .then(if (option.enabled) focusState.focusModifier else Modifier)
+            .then(
+                if (option.enabled) Modifier.tvFocusIndicator(focusState, ShapeCache.smooth12)
+                else Modifier
+            )
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                enabled = option.enabled,
+                onClick = option.onClick,
+            )
+            .padding(horizontal = 12.dp, vertical = 10.dp)
+            .graphicsLayer { alpha = if (option.enabled) 1f else 0.38f },
+    ) {
+        Icon(
+            imageVector = option.icon,
+            contentDescription = null,
+            modifier = Modifier.size(20.dp),
+        )
+        Text(
+            text = option.label,
+            style = MaterialTheme.typography.bodyMedium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
 }

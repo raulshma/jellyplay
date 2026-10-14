@@ -312,6 +312,15 @@
     <string name="detail_collection_empty_description">이 컬렉션에 추가된 항목이 여기에 표시됩니다.</string>
     <string name="detail_person_empty_title">제목을 찾을 수 없습니다</string>
     <string name="detail_person_empty_description">이 인물에는 현재 필터와 일치하는 제목이 없습니다.</string>
+    <!-- D18: role-named, grouped filmography -->
+    <string name="detail_person_role_as">%1$s 역</string>
+    <string name="detail_person_role_all">전체</string>
+    <string name="detail_person_role_acting">출연</string>
+    <string name="detail_person_role_directing">감독</string>
+    <string name="detail_person_role_writing">각본</string>
+    <string name="detail_person_role_other">기타</string>
+    <!-- D20: "frequently appears with" co-star row -->
+    <string name="detail_person_costars_title">자주 함께 출연한 인물</string>
     <string name="detail_season_empty_title">사용 가능한 에피소드가 없습니다</string>
     <string name="detail_season_empty_description">에피소드가 추가되면 여기에 표시됩니다.</string>
 
@@ -489,4 +498,6 @@
     <string name="jellyplay_det_filler_badge">필러</string>
     <string name="jellyplay_det_mixed_badge">복합</string>
     <string name="jellyplay_det_recap_badge">리캡</string>
+    <string name="detail_cd_theme_music_mute">테마 음악 음소거</string>
+    <string name="detail_cd_theme_music_unmute">테마 음악 음소거 해제</string>
 </resources>

@@ -4,6 +4,7 @@ import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.data.download.DownloadIntake
 import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager
+import com.raulshma.jellyplay.core.data.repository.DownloadProgress
 import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaDetailProvider
 import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
@@ -53,6 +54,13 @@ internal data class DownloadLifecycleState(
     // is loaded; empty once loaded if no files resolved on disk.
     val downloadFileInventory: DownloadFileInventory? = null,
     val isLoadingDownloadFiles: Boolean = false,
+    // Live in-flight download fraction per EPISODE id (D16, 0..1) — the
+    // seasons section's per-row determinate bar + percent chip. Re-keyed from
+    // the repository's download-id-keyed [DownloadProgress] map via the
+    // mediaItemId join; rows drop out on their own when a download leaves the
+    // in-flight status window (completes/fails/cancelled), so the map is a
+    // live global projection that needs no per-navigation reset.
+    val episodeDownloadProgress: Map<String, Float> = emptyMap(),
 )
 
 /**
@@ -112,6 +120,23 @@ internal class DownloadLifecycleActions(
 
     private val _state = MutableStateFlow(DownloadLifecycleState())
     val state: StateFlow<DownloadLifecycleState> = _state.asStateFlow()
+
+    init {
+        // Live in-flight download progress (D16): one collector for the screen's
+        // lifetime, re-keying the repository's download-id-keyed projection onto
+        // episode ids so the seasons section renders bars without a per-row
+        // subscription. The upstream map is structurally deduped by the
+        // repository (Room re-emits per table write; equal maps collapse), and
+        // rows self-remove when their status leaves the in-flight window, so
+        // no navigation reset is needed below.
+        scope.launch {
+            downloadRepository.getActiveDownloadProgress().collect { progressById ->
+                _state.update {
+                    it.copy(episodeDownloadProgress = episodeDownloadProgress(progressById.values))
+                }
+            }
+        }
+    }
 
     /**
      * Opens the pre-download picker, seeding the pending quality from the user's
@@ -385,4 +410,23 @@ internal class DownloadLifecycleActions(
     }
 
     private fun qualityToMaxBitrate(quality: DownloadQuality): Int? = quality.maxBitrate
+}
+
+/**
+ * Re-keys the repository's download-id-keyed live [DownloadProgress] rows onto
+ * episode (item) ids as 0..1 fractions — the [DownloadLifecycleState.episodeDownloadProgress]
+ * shape the seasons section's rows render (D16). Rows without an item join or
+ * with an unknown total size (a PENDING row before its size probe — the same
+ * `totalSizeBytes > 0` guard the ⋮ menu's percent label applies) drop out;
+ * two in-flight rows for one item resolve to their latest fraction (last wins).
+ * Pure so the in-flight/absent/unknown-total merge has a direct test surface.
+ */
+internal fun episodeDownloadProgress(
+    progress: Collection<DownloadProgress>,
+): Map<String, Float> = buildMap {
+    for (row in progress) {
+        val itemId = row.mediaItemId?.takeIf(String::isNotEmpty) ?: continue
+        val fraction = row.progressFraction ?: continue
+        put(itemId, fraction)
+    }
 }

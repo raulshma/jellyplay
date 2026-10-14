@@ -25,7 +25,7 @@ package com.raulshma.jellyplay.core.network.library
 internal val DETAIL_PROJECTION_FIELDS: List<String> = listOf(
     "People", "Chapters", "MediaSources", "Trickplay", "ExternalUrls",
     "OriginalTitle", "ProductionLocations", "Studios", "Genres", "Overview",
-    "ProviderIds", "PrimaryImageAspectRatio", "Path",
+    "ProviderIds", "PrimaryImageAspectRatio", "Path", "Taglines",
 )
 
 /**
@@ -43,6 +43,22 @@ internal val DETAIL_PROJECTION_FIELDS: List<String> = listOf(
  */
 internal val LIST_PROJECTION_FIELDS: List<String> = listOf(
     "Overview", "PrimaryImageAspectRatio",
+)
+
+/**
+ * The home-row composition on top of the list minimum — the projection the
+ * home cards' fetches (the `/UserItems/Resume` rows, Next Up, Upcoming and
+ * the `/Items/Latest` rows) request so the card overlays can render from the
+ * same list read: "MediaStreams" feeds the quality badges (4K/HDR/DV/Atmos
+ * derived client-side), "DateCreated" the NEW-arrival dot, "Trickplay" the
+ * focus preview strip (a legal item field, same as on
+ * [DETAIL_PROJECTION_FIELDS]). Payload stays bounded by the rows' small
+ * limits (~20), which is why this extends only the home rows and not every
+ * [LIST_PROJECTION_FIELDS] consumer (search hints, collection/playlist
+ * listings, … keep the two-field minimum).
+ */
+internal val HOME_ROW_PROJECTION_FIELDS: List<String> = LIST_PROJECTION_FIELDS + listOf(
+    "MediaStreams", "DateCreated", "Trickplay",
 )
 
 /**

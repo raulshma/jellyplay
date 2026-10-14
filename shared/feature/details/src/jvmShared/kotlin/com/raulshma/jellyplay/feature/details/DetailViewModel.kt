@@ -88,6 +88,8 @@ import com.raulshma.jellyplay.feature.details.generated.resources.detail_msg_dow
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_msg_download_started
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_msg_hidden_from_continue_watching
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_msg_hidden_from_next_up
+import com.raulshma.jellyplay.feature.details.generated.resources.detail_msg_series_notifications_off
+import com.raulshma.jellyplay.feature.details.generated.resources.detail_msg_series_notifications_on
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_msg_shown_in_continue_watching
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_msg_shown_in_next_up
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_next_up_episode
@@ -202,6 +204,15 @@ class DetailViewModel internal constructor(
      * probe-only fallback keeps the pre-toggle behavior (tests).
      */
     private val jellyPlayFeatureGate: com.raulshma.jellyplay.core.data.session.JellyPlayFeatureGate? = null,
+    /**
+     * The D4 TMDB-fallback seam: the direct-TMDB details read behind the
+     * `externalRatings` enrichment when Seerr is disconnected (or its ratings
+     * fetch failed/returned nothing). Nullable-with-default like the plugin
+     * seams — the Koin defs pass the core:network single and the enrichment
+     * degrades to silent absence (TMDB-only source unavailable) when null,
+     * keeping the direct-construction test harnesses compiling.
+     */
+    private val tmdbApiClient: com.raulshma.jellyplay.core.network.api.TmdbApiClient? = null,
 ) : JellyPlayViewModel() {
 
     /** Media-detail preference fields, projected centrally off the store slices. */
@@ -314,12 +325,17 @@ class DetailViewModel internal constructor(
                 )
             }
             .stateIn(scope, SharingStarted.WhileSubscribed(5_000), SeerrConnectionFlags())
+        // Group 4 — D8: the theme-music seam's playing signal, folded so the
+        // top-bar mute chip exists only while audio is actually audible.
+        val themePlaying = themeMusicPlayer.isPlaying
+            .stateIn(scope, SharingStarted.WhileSubscribed(5_000), false)
 
-        combine(core, seerrRequest, seerrFlags) { primary, request, flags ->
+        combine(core, seerrRequest, seerrFlags, themePlaying) { primary, request, flags, playing ->
             primary.copy(
                 seerrRequest = request,
                 isSeerrConnected = flags.isConnected,
                 isSeerrRecommendationsEnabled = flags.isRecommendationsEnabled,
+                themeMusicPlaying = playing,
             )
         }.stateIn(scope, SharingStarted.WhileSubscribed(5_000), DetailUiState())
     }
@@ -329,6 +345,7 @@ class DetailViewModel internal constructor(
         when (event) {
             is DetailUiEvent.LoadItem -> loadItem(event.itemId)
             is DetailUiEvent.ForceRefresh -> forceRefresh()
+            is DetailUiEvent.SetThemeMusicMuted -> setThemeMusicMuted(event.muted)
             is DetailUiEvent.LoadEpisodesForSeason -> loadEpisodesForSeason(event.seriesId, event.seasonId)
             is DetailUiEvent.SelectSubtitle -> selectSubtitle(event.index)
             is DetailUiEvent.SelectAudio -> selectAudio(event.index)
@@ -352,6 +369,8 @@ class DetailViewModel internal constructor(
             is DetailUiEvent.ShowFromContinueWatching -> showFromContinueWatching()
             is DetailUiEvent.SetLastViewedSeason -> setLastViewedSeason(event.seriesId, event.seasonId)
             is DetailUiEvent.SetShowDetailUpNext -> setShowDetailUpNext(event.enabled)
+            is DetailUiEvent.HideFranchiseRow -> hideFranchiseRow(event.collectionId)
+            is DetailUiEvent.SetSeriesNotifications -> setSeriesNotifications(event.enabled)
         }
     }
 
@@ -428,6 +447,27 @@ class DetailViewModel internal constructor(
                 _uiState.update { it.copy(canManageMetadata = isAdmin) }
             }
         }
+        // D12: mirror the CURRENT series' new-episode notification opt-in
+        // into the content bag, so the ⋮ entry's checkmark and the D7 rows'
+        // bell stay true to the store even when the config changes out from
+        // under the screen (the notification settings' management sheet,
+        // another device). An episode resolves to its parent series, a
+        // series to itself — the same keying the ⋮ menu's next-up exclusion
+        // entry uses.
+        scope.launch {
+            stores.notificationStore.notification
+                .map { it.notificationPreferences.seriesConfigs }
+                .distinctUntilChanged()
+                .collect { configs ->
+                    val session = _session.value ?: return@collect
+                    val seriesId = session.detail?.item?.seriesId
+                        ?: session.detail?.item?.id
+                        ?: session.itemId
+                    _uiState.update {
+                        it.copy(seriesNotificationsEnabled = configs[seriesId]?.enabled == true)
+                    }
+                }
+        }
     }
 
     /** Download-lifecycle seam: single-item/series downloads, sheets, picker. */
@@ -480,6 +520,7 @@ class DetailViewModel internal constructor(
     // optimistic rewrite, so the VM keeps no local catalogue snapshot. The
     // download sheet's per-season cache moved into [downloadLifecycleActions].
     private var loadJob: Job? = null
+
     /** The BOOK item whose extras (TOC cache + marks counts) are being observed. */
     private var bookExtrasJob: Job? = null
     /**
@@ -790,6 +831,13 @@ class DetailViewModel internal constructor(
             sortedEpisodes = snapshot.sortedEpisodes,
         )
 
+        // Downloaded-episode ids load at SCREEN-OPEN (D16), not sheet-open:
+        // the seasons section's rows read the set for the delete affordance
+        // and the on-disk states, so in-flight + completed downloads must
+        // render without the user ever opening the download sheet. The
+        // sheet-open call stays as an idempotent freshness re-read.
+        downloadLifecycleActions.loadDownloadedEpisodeIds()
+
         // Stream selection: remote applies the persisted engine-store selection;
         // local clears it (local playback uses the separate local-subtitle index).
         val (subtitleIndex, audioIndex) = if (isRemote) {
@@ -856,9 +904,11 @@ class DetailViewModel internal constructor(
      *
      * Ordering note: the former sequence ran the collection-items launch
      * AFTER [loadBookExtras]; both are fire-and-forget, guard-checked
-     * coroutines, so the declaration list placing collectionItems last (and
-     * [loadBookExtras] after the evaluator) preserves the observable
-     * behavior.
+     * coroutines, so any declaration order that keeps the former remote
+     * block's relative sequence (and [loadBookExtras] after the evaluator)
+     * preserves the observable behavior. Later additions (the ADR 0010
+     * plugin family, D6 `franchise`, D7 `upcoming`) append after the
+     * original entries for the same reason.
      *
      * Still inline by design (see reduceLoaded): [loadBookExtras] (lifecycle
      * cancel for every media type) and [maybeComputeSmartPlayTarget] (core
@@ -867,7 +917,17 @@ class DetailViewModel internal constructor(
     private val enrichments: List<DetailEnrichment> = listOf(
         DetailEnrichment(
             name = "themeMusic",
-            gate = { it.remoteDiscoveryAllowed },
+            // D8 gate matrix: the global pref must be ON and the series not
+            // per-series muted (the mute chip's memory) on top of the shared
+            // remote gate — a muted series's enrichment doesn't start
+            // playback at all.
+            gate = {
+                it.remoteDiscoveryAllowed &&
+                    preferences.value.playThemeMusic &&
+                    !preferences.value.isThemeMusicMutedFor(
+                        it.detail.item.seriesId ?: it.itemId,
+                    )
+            },
         ) { inputs ->
             val themeSourceId = inputs.detail.item.seriesId ?: inputs.itemId
             themeMusicPlayer.playThemeFor(themeSourceId)
@@ -1006,6 +1066,73 @@ class DetailViewModel internal constructor(
             }
         },
         DetailEnrichment(
+            name = "externalRatings",
+            // D4: the no-plugin ratings strip (RT/IMDb/TMDB chips when the
+            // plugin is absent). Source order mirrors the D4 spec: Seerr's
+            // detail-by-provider-id ratings first (the loadSeerrData path —
+            // same repository, same tmdbId resolution), the direct-TMDB
+            // vote aggregate as the fallback when Seerr is disconnected or
+            // its ratings fetch failed/returned nothing. MOVIE/SERIES only:
+            // the provider-id sources and the ratings payload exist for
+            // nothing else.
+            gate = { it.remoteDiscoveryAllowed },
+        ) { inputs ->
+            // The user-pref half of the gate rides the body: the gate lambda
+            // stays a pure snapshot read (the DetailEnrichmentInputs
+            // contract), so `showExternalRatings` is checked here instead —
+            // a preference read, not snapshot state.
+            if (!preferences.value.showExternalRatings) return@DetailEnrichment
+            // The plugin dedupe probe, the pluginSimilarSuppressesStock
+            // mirror: one synchronous Ratings-feature read (the store refresh
+            // is latched — the pluginRatings enrichment above probed this
+            // item already), remembered on the state, and suppressing the D4
+            // chips at RENDER time only when the plugin row actually has
+            // content. `!hasPluginRatings` cannot gate the START — the plugin
+            // row's content lands asynchronously from the same fan-out.
+            val pluginRatingsLive = pluginFeature(JellyPlayPluginFeatures.Ratings, inputs.itemId)
+            val mediaType = inputs.mediaType
+            if (mediaType != MediaType.MOVIE && mediaType != MediaType.SERIES) return@DetailEnrichment
+            val tmdbId = resolveTmdbId(inputs.detail) ?: return@DetailEnrichment
+
+            // Seerr ratings first — the same connection-flag read
+            // loadSeerrData uses (the flags live only on the published
+            // aggregator, never on _uiState). The fetch is cache-backed
+            // (SeerrRepositoryImpl's detail cache), so a failed/empty Seerr
+            // payload costs one call before the TMDB fallback.
+            val seerrRatings = if (uiState.value.isSeerrConnected) {
+                remoteDiscovery.seerrRepository
+                    .getRatings(tmdbId, if (mediaType == MediaType.MOVIE) "movie" else "tv")
+                    .getOrNull()
+                    ?.takeUnless { seerr ->
+                        seerr.rt?.criticsScore == null && seerr.rt?.audienceScore == null &&
+                            seerr.imdb?.criticsScore == null && seerr.imdb?.rating == null &&
+                            seerr.tmdb?.rating == null
+                    }
+                    ?.let { DetailExternalRatings.fromSeerr(it) }
+            } else {
+                null
+            }
+            val resolved = seerrRatings
+                // TMDB-only fallback: the public vote aggregate + the
+                // constructed provider link. Null seam (unwired tests) or a
+                // failed fetch leave the strip empty — silent absence.
+                ?: tmdbApiClient?.getDetails(tmdbId, mediaType)?.getOrNull()?.let { details ->
+                    DetailExternalRatings.tmdbOnly(
+                        voteAverage = details.voteAverage?.toFloat(),
+                        tmdbPathSegment = if (mediaType == MediaType.MOVIE) "movie" else "tv",
+                        tmdbId = tmdbId,
+                    )
+                }
+            if (resolved == null || resolved.isEmpty) return@DetailEnrichment
+            if (!loadGuard.isCurrent(inputs.itemId)) return@DetailEnrichment
+            _uiState.update {
+                it.copy(
+                    externalRatings = resolved,
+                    externalRatingsSuppressedByPlugin = pluginRatingsLive,
+                )
+            }
+        },
+        DetailEnrichment(
             name = "pluginSimilarItems",
             // The server-scored "More like this" row, rendered BESIDE the stock
             // one. The stock row stands down only when the capabilities
@@ -1093,11 +1220,124 @@ class DetailViewModel internal constructor(
             if (!loadGuard.isCurrent(inputs.itemId)) return@DetailEnrichment
             _uiState.update { it.copy(seasonRatings = ratingsBySeasonId) }
         },
+        DetailEnrichment(
+            name = "franchise",
+            // D6: the "More in this collection" franchise rows. MOVIE/SERIES
+            // only — BoxSet ancestry is a film-franchise concept, and the
+            // members read is a per-collection page the other families have
+            // no use for. Ancestors → up to [FRANCHISE_MAX_COLLECTIONS]
+            // BoxSets → each hydrated with its members in the server's
+            // default order; rows with no (non-self) members drop out and a
+            // wholly empty fold leaves the field empty — silent absence.
+            gate = {
+                it.remoteDiscoveryAllowed &&
+                    (it.mediaType == MediaType.MOVIE || it.mediaType == MediaType.SERIES)
+            },
+        ) { inputs ->
+            // The user-pref half of the gate rides the body: the gate lambda
+            // stays a pure snapshot read (the DetailEnrichmentInputs
+            // contract), so `showMoreInCollection` is checked here instead —
+            // a preference read, not snapshot state (the externalRatings
+            // convention).
+            if (!preferences.value.showMoreInCollection) return@DetailEnrichment
+            val boxSets = libraryApiClient.getBoxSetsContaining(inputs.itemId)
+                .getOrNull()
+                ?.take(FRANCHISE_MAX_COLLECTIONS)
+                .orEmpty()
+            if (boxSets.isEmpty()) return@DetailEnrichment
+            val rows = boxSets.mapNotNull { boxSet ->
+                val members = mediaRepository
+                    .getCollectionItems(boxSet.id, limit = FRANCHISE_MEMBER_LIMIT)
+                    .getOrNull()
+                    ?.items
+                    // The loaded item never renders inside its own franchise
+                    // row (the similarItems enrichment's self-filter).
+                    ?.filter { it.id != inputs.itemId }
+                    .orEmpty()
+                if (members.isEmpty()) {
+                    null
+                } else {
+                    DetailUiState.FranchiseCollection(id = boxSet.id, name = boxSet.name, members = members)
+                }
+            }
+            if (rows.isEmpty()) return@DetailEnrichment
+            if (!loadGuard.isCurrent(inputs.itemId)) return@DetailEnrichment
+            _uiState.update { it.copy(franchiseCollections = rows) }
+        },
+        DetailEnrichment(
+            name = "upcoming",
+            // D7: the "Airing next" strip, SERIES detail only. The fetch keys
+            // on `parentId` = the loaded item id — which inside this
+            // SERIES-only gate IS the series id: the gate cannot start before
+            // a snapshot resolved (the enrichment fan-out runs off the
+            // resolution), so the item id can never be an unresolved
+            // stand-in. This is the MediaDetailScreen `seriesIdForSeasons`
+            // keying rule applied at the enrichment seam: for an
+            // EPISODE/SEASON detail the series id differs from the item id,
+            // and those types are excluded here rather than re-keyed.
+            gate = { it.remoteDiscoveryAllowed && it.mediaType == MediaType.SERIES },
+        ) { inputs ->
+            // The user-pref half of the gate rides the body (the franchise
+            // convention above).
+            if (!preferences.value.showUpcomingStrip) return@DetailEnrichment
+            libraryApiClient.getUpcoming(parentId = inputs.itemId, limit = UPCOMING_STRIP_LIMIT)
+                .onSuccess { upcoming ->
+                    if (!loadGuard.isCurrent(inputs.itemId)) return@onSuccess
+                    _uiState.update { it.copy(upcomingEpisodes = upcoming) }
+                }
+        },
+        DetailEnrichment(
+            name = "trailers",
+            // D3: the merged trailer list's local leg — the server-hosted
+            // trailers (the parental-filtered getLocalTrailers wrapper) merged
+            // with the TMDB/Seerr videos into `state.trailers`, ordered by the
+            // `preferLocalTrailers` pref. The remote leg re-merges on its own
+            // landing (foldCompanionLanding's Videos case — the seerrDiscovery
+            // enrichment fetches it independently and later), so whichever
+            // source resolves first already leaves a correct list. A failed
+            // local fetch degrades to the remote-only list (today's content);
+            // remote-only is exactly the pre-D3 shape.
+            gate = { it.remoteDiscoveryAllowed },
+        ) { inputs ->
+            val local = libraryApiClient.getLocalTrailers(inputs.itemId).getOrNull().orEmpty()
+            if (!loadGuard.isCurrent(inputs.itemId)) return@DetailEnrichment
+            _uiState.update {
+                it.copy(
+                    trailers = mergeTrailerEntries(
+                        localTrailers = local,
+                        remoteVideos = it.relatedVideos,
+                        preferLocalTrailers = preferences.value.preferLocalTrailers,
+                    ),
+                )
+            }
+        },
+        DetailEnrichment(
+            name = "themeVideo",
+            // D22: the server ThemeVideo clip behind the detail hero's ambient
+            // video (preferred over the YouTube embed when it resolves). Same
+            // remote gate as the trailers leg — the user-pref half
+            // (`trailerAutoplay`) rides the body: without the autoplay pref
+            // no mount ever reads the URL, so the fetch is skipped entirely.
+            // A failed/empty lookup degrades to the embed (today's content);
+            // the URL is shaped fresh against the active session.
+            gate = { it.remoteDiscoveryAllowed },
+        ) { inputs ->
+            if (!preferences.value.trailerAutoplay) return@DetailEnrichment
+            val clip = libraryApiClient.getThemeVideos(inputs.itemId).getOrNull()?.firstOrNull()
+            if (clip == null) return@DetailEnrichment
+            val streamUrl = playbackRepository.getStreamUrl(itemId = clip.id, mediaSourceId = clip.id)
+            if (streamUrl.isBlank()) return@DetailEnrichment
+            if (!loadGuard.isCurrent(inputs.itemId)) return@DetailEnrichment
+            _uiState.update { it.copy(themeVideoStreamUrl = streamUrl) }
+        },
     )
 
     /** The stock similar row's limit (the plugin row mirrors it). */
     private companion object {
         const val SIMILAR_ITEMS_LIMIT = 12
+
+        /** The D7 strip's row bound (an "airing next" rail; small by design). */
+        const val UPCOMING_STRIP_LIMIT = 12
     }
 
     /**
@@ -1609,6 +1849,76 @@ class DetailViewModel internal constructor(
         }
     }
 
+    /**
+     * D12: toggles the CURRENT series' new-episode notification opt-in (the
+     * ⋮ menu entry and the D7 rows' bell both land here). An episode resolves
+     * to its parent series, a series to itself — the hideFromNextUp keying.
+     * The POST_NOTIFICATIONS runtime prompt is the screen seam's job (it
+     * needs the activity), so only the store write + the snackbar happen
+     * here.
+     */
+    private fun setSeriesNotifications(enabled: Boolean) {
+        val item = _uiState.value.detail?.item ?: return
+        val seriesId = item.seriesId ?: item.id
+        launch {
+            stores.notificationStore.setSeriesNotificationEnabled(seriesId, enabled)
+            _messages.emit(
+                DetailMessage.Text(
+                    strings.get(
+                        if (enabled) {
+                            Res.string.detail_msg_series_notifications_on
+                        } else {
+                            Res.string.detail_msg_series_notifications_off
+                        },
+                    ),
+                ),
+            )
+        }
+    }
+
+    /**
+     * D8: the top-bar mute chip — flips the live theme audio immediately
+     * (the seam's volume half) and writes the per-series memory (the store
+     * half), so a muted series's theme enrichment never starts playback
+     * again. An episode resolves to its parent series, a series to itself —
+     * the hideFromNextUp/setSeriesNotifications keying.
+     */
+    private fun setThemeMusicMuted(muted: Boolean) {
+        themeMusicPlayer.setMuted(muted)
+        val item = _uiState.value.detail?.item ?: return
+        val seriesId = item.seriesId ?: item.id
+        launch {
+            if (muted) {
+                stores.homeDiscoveryStore.muteThemeMusicForSeries(seriesId)
+            } else {
+                stores.homeDiscoveryStore.unmuteThemeMusicForSeries(seriesId)
+            }
+        }
+    }
+
+    /**
+     * D6 inline eye-hide: records the collection id under the CURRENT item's
+     * key in [DetailUiState.hiddenFranchiseCollections] — the Up Next card
+     * hide's pattern, per row and per item instead of one global switch.
+     * Session memory by design (the map is a surviving leaf of
+     * [DetailUiState.clearedForReload], so it survives navigation and
+     * refresh but not a process restart; cross-launch persistence would
+     * need a store slice). Idempotent: a second hide of the same row is a
+     * no-op on the set.
+     */
+    private fun hideFranchiseRow(collectionId: String) {
+        val itemId = _session.value?.itemId ?: return
+        _uiState.update { state ->
+            state.copy(
+                hiddenFranchiseCollections = state.hiddenFranchiseCollections + (
+                    itemId to (
+                        state.hiddenFranchiseCollections[itemId].orEmpty() + collectionId
+                        )
+                    ),
+            )
+        }
+    }
+
     fun getImageUrl(itemId: String): String =
         imageUrlProvider.getImageUrl(itemId)
 
@@ -1657,6 +1967,15 @@ class DetailViewModel internal constructor(
                     seerrRecommendations = emptyList(),
                     seerrSimilar = emptyList(),
                     relatedVideos = emptyList(),
+                    // D3 parity: the merged trailer list drops its (now
+                    // stale) remote entries and keeps the local ones — the
+                    // videos leg re-merges on landing, exactly like the raw
+                    // relatedVideos reset below.
+                    trailers = mergeTrailerEntries(
+                        localTrailers = it.trailers.localTrailerItems(),
+                        remoteVideos = emptyList(),
+                        preferLocalTrailers = preferences.value.preferLocalTrailers,
+                    ),
                     tmdbReviews = emptyList(),
                 )
             }
@@ -1704,7 +2023,18 @@ class DetailViewModel internal constructor(
     private fun foldCompanionLanding(landing: TmdbCompanionLanding) {
         _uiState.update {
             when (landing) {
-                is TmdbCompanionLanding.Videos -> it.copy(relatedVideos = landing.videos)
+                is TmdbCompanionLanding.Videos ->
+                    it.copy(
+                        relatedVideos = landing.videos,
+                        // D3: the merged trailer list re-merges with the
+                        // fresh remote leg, keeping whichever local entries
+                        // the `trailers` enrichment already wrote.
+                        trailers = mergeTrailerEntries(
+                            localTrailers = it.trailers.localTrailerItems(),
+                            remoteVideos = landing.videos,
+                            preferLocalTrailers = preferences.value.preferLocalTrailers,
+                        ),
+                    )
                 is TmdbCompanionLanding.Reviews -> it.copy(tmdbReviews = landing.reviews)
                 is TmdbCompanionLanding.Recommendations -> it.copy(seerrRecommendations = landing.items)
                 is TmdbCompanionLanding.Similar -> it.copy(seerrSimilar = landing.items)

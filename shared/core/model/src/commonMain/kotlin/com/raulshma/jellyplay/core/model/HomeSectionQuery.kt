@@ -45,6 +45,20 @@ data class HomeSectionQuery(
      * behavior, unchanged. Rides [cacheKey] so a flip re-fetches.
      */
     val classicRows: Boolean = false,
+    /**
+     * H6: true adds the server-side `excludeActiveSessions` flag to the
+     * Continue Watching read, so an item currently playing on another device
+     * stops being offered for "continue". Default false — the pre-H6 wire.
+     * Rides [cacheKey] so a flip re-fetches.
+     */
+    val excludeActiveSessions: Boolean = false,
+    /**
+     * H5: libraries the user hid from the My Media tiles row (the tiles'
+     * inline long-press curation). The assembler drops the matching folders
+     * client-side — the hide is a layout fact, never a port call. Rides
+     * [cacheKey] so a flip re-fetches (the SWR snapshot re-assembles too).
+     */
+    val myMediaHiddenLibraryIds: Set<String> = emptySet(),
 ) {
     /**
      * Structural fingerprint of the query params, used as the `cacheKey` for both
@@ -58,6 +72,6 @@ data class HomeSectionQuery(
     fun cacheKey(): String = cachedKey
 
     private val cachedKey by lazy {
-        "${enabledSections.sortedBy { it.name }}|$libraryHomeSectionOverrides|$nextUpRewatching|$nextUpMaxDays|$nextUpExcludedSeriesIds|$hiddenCwItemIds|$pinnedSections|$discoverRows|$classicRows"
+        "${enabledSections.sortedBy { it.name }}|$libraryHomeSectionOverrides|$nextUpRewatching|$nextUpMaxDays|$nextUpExcludedSeriesIds|$hiddenCwItemIds|$pinnedSections|$discoverRows|$classicRows|$excludeActiveSessions|$myMediaHiddenLibraryIds"
     }
 }

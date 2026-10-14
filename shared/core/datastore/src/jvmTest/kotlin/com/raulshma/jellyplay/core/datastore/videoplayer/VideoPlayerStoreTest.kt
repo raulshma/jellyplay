@@ -311,6 +311,17 @@ class VideoPlayerStoreTest {
     }
 
     @Test
+    fun `play_trailer_before_movie defaults off and toggles`() = runTest {
+        // Opt-in by default (D14) — trailer-then-feature changes today's
+        // feature-first play behavior.
+        assertFalse(store.videoPlayer.first().playTrailerBeforeMovie)
+        store.setPlayTrailerBeforeMovie(true)
+        assertTrue(store.videoPlayer.first().playTrailerBeforeMovie)
+        store.setPlayTrailerBeforeMovie(false)
+        assertFalse(store.videoPlayer.first().playTrailerBeforeMovie)
+    }
+
+    @Test
     fun `still watching defaults off with zero threshold`() = runTest {
         val slice = store.videoPlayer.first()
         assertEquals(StillWatchingMode.OFF, slice.stillWatchingMode)

@@ -115,6 +115,9 @@
     <string name="settings_cinema_mode">Cinema Mode</string>
     <string name="settings_cinema_mode_on">Play intros/trailers before main feature</string>
     <string name="settings_cinema_mode_off">Skip pre-roll intros</string>
+    <string name="settings_play_trailer_before_movie">Play Trailer Before Movie</string>
+    <string name="settings_play_trailer_before_movie_on">Seeds the movie queue with a trailer</string>
+    <string name="settings_play_trailer_before_movie_off">Start the movie directly</string>
     <string name="settings_tv_zoom_mode">TV Zoom Mode</string>
     <string name="settings_tv_zoom_mode_subtitle">Crop/zoom video to fill screen (0% = off)</string>
     <string name="settings_tv_zoom_none">No zoom (original aspect ratio)</string>

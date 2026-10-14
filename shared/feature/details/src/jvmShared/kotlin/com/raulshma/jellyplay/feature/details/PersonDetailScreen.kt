@@ -46,6 +46,7 @@ import com.composables.icons.tabler.outline.MovieOff
 import com.raulshma.jellyplay.core.ui.components.rememberQuickActionIntake
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvFocusableGrid
+import com.raulshma.jellyplay.core.ui.tv.TvFocusableItemRow
 import com.raulshma.jellyplay.core.ui.tv.input.onDpadKey
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
@@ -58,9 +59,19 @@ import androidx.compose.ui.text.style.TextOverflow
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaQuickActionScope
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.PersonInfo
+import com.raulshma.jellyplay.core.model.PersonRef
 import com.raulshma.jellyplay.feature.details.generated.resources.Res
+import com.raulshma.jellyplay.feature.details.generated.resources.detail_person_costars_title
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_person_empty_description
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_person_empty_title
+import com.raulshma.jellyplay.feature.details.generated.resources.detail_person_role_acting
+import com.raulshma.jellyplay.feature.details.generated.resources.detail_person_role_all
+import com.raulshma.jellyplay.feature.details.generated.resources.detail_person_role_as
+import com.raulshma.jellyplay.feature.details.generated.resources.detail_person_role_directing
+import com.raulshma.jellyplay.feature.details.generated.resources.detail_person_role_other
+import com.raulshma.jellyplay.feature.details.generated.resources.detail_person_role_writing
+import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 import com.raulshma.jellyplay.core.ui.generated.resources.Res as CoreUiRes
@@ -72,13 +83,42 @@ private enum class PersonFilmographyFilter(val label: String, val match: (MediaI
     TV("TV", { it.mediaType == MediaType.SERIES }),
 }
 
+/**
+ * The D18 role-group dimension over the filmography — a second chip row that
+ * only renders when the fetch carried role data ([PersonDetailUiState.Success.filmographyCredits]
+ * non-empty under the showFilmographyRoles gate). [group] is null for the
+ * ALL entry, which matches every item including uncredited ones.
+ */
+private enum class PersonFilmographyRoleFilter(val group: FilmographyRoleGroup? = null) {
+    ALL,
+    ACTING(FilmographyRoleGroup.ACTING),
+    DIRECTING(FilmographyRoleGroup.DIRECTING),
+    WRITING(FilmographyRoleGroup.WRITING),
+    OTHER(FilmographyRoleGroup.OTHER),
+    ;
+
+    /** True when [itemGroup] belongs under this chip (ALL admits everything). */
+    fun matches(itemGroup: FilmographyRoleGroup?): Boolean = group == null || itemGroup == group
+}
+
+private fun PersonFilmographyRoleFilter.labelRes(): StringResource = when (this) {
+    PersonFilmographyRoleFilter.ALL -> Res.string.detail_person_role_all
+    PersonFilmographyRoleFilter.ACTING -> Res.string.detail_person_role_acting
+    PersonFilmographyRoleFilter.DIRECTING -> Res.string.detail_person_role_directing
+    PersonFilmographyRoleFilter.WRITING -> Res.string.detail_person_role_writing
+    PersonFilmographyRoleFilter.OTHER -> Res.string.detail_person_role_other
+}
+
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun PersonFilmography(
     filmography: List<MediaItem>,
     biography: String?,
+    credits: Map<String, PersonInfo>,
+    costars: List<PersonRef>,
     getImageUrl: (String) -> String,
     onItemClick: (String) -> Unit,
+    onPersonClick: (String) -> Unit,
     onFocusedMediaItem: (MediaItem?) -> Unit,
     contentPad: androidx.compose.ui.unit.Dp,
     gridMin: androidx.compose.ui.unit.Dp,
@@ -87,8 +127,20 @@ private fun PersonFilmography(
     bottomInset: androidx.compose.ui.unit.Dp,
 ) {
     var filter by remember { mutableStateOf(PersonFilmographyFilter.ALL) }
-    val visibleFilmography by remember(filmography, filter) {
-        derivedStateOf { filmography.filter(filter.match) }
+    var roleFilter by remember { mutableStateOf(PersonFilmographyRoleFilter.ALL) }
+    // The group chips exist only when the fetch carried role data (D18) — an
+    // empty credits map degrades the second dimension to a no-op ALL so a
+    // stale selection can never strand the grid on an invisible filter.
+    val showRoleGroups = credits.isNotEmpty()
+    val activeRoleFilter = if (showRoleGroups) roleFilter else PersonFilmographyRoleFilter.ALL
+    val visibleFilmography by remember(filmography, filter, activeRoleFilter, credits) {
+        derivedStateOf {
+            filmography
+                .filter(filter.match)
+                .filter { item ->
+                    activeRoleFilter.matches(credits[item.id]?.let { filmographyRoleGroup(it.type) })
+                }
+        }
     }
 
     TvFocusableGrid(
@@ -106,18 +158,24 @@ private fun PersonFilmography(
         verticalArrangement = Arrangement.spacedBy(spacing),
         contentType = { "mediaItem" },
         onFocusedIndexChange = { index -> onFocusedMediaItem(visibleFilmography.getOrNull(index)) },
-        // Full-span header (biography + movie/TV filter chips) stays in scroll
+        // Full-span header (biography + co-stars + filter chips) stays in scroll
         // flow above the poster grid. extraContent is emitted before the items.
         extraContent = {
             item(span = { GridItemSpan(maxLineSpan) }) {
                 PersonHeader(
                     biography = biography,
+                    costars = costars,
+                    getImageUrl = getImageUrl,
+                    onPersonClick = onPersonClick,
                     filter = filter,
                     onFilterChange = { filter = it },
+                    roleFilter = activeRoleFilter,
+                    onRoleFilterChange = { roleFilter = it },
+                    showRoleGroups = showRoleGroups,
                     contentPad = contentPad,
                 )
             }
-            // an empty filmography (no titles, or a Movies/TV
+            // an empty filmography (no titles, or a Movies/TV or role-group
             // filter that matches nothing) previously rendered just the header.
             // Surface an empty state with a one-tap "Clear filter" CTA so the
             // zero-result case is recoverable.
@@ -127,11 +185,18 @@ private fun PersonFilmography(
                         icon = Tabler.Outline.MovieOff,
                         title = stringResource(Res.string.detail_person_empty_title),
                         description = stringResource(Res.string.detail_person_empty_description),
-                        actionLabel = if (filter != PersonFilmographyFilter.ALL) {
+                        actionLabel = if (filter != PersonFilmographyFilter.ALL ||
+                            activeRoleFilter != PersonFilmographyRoleFilter.ALL
+                        ) {
                             stringResource(CoreUiRes.string.core_clear_filters)
                         } else null,
-                        onAction = if (filter != PersonFilmographyFilter.ALL) {
-                            { filter = PersonFilmographyFilter.ALL }
+                        onAction = if (filter != PersonFilmographyFilter.ALL ||
+                            activeRoleFilter != PersonFilmographyRoleFilter.ALL
+                        ) {
+                            {
+                                filter = PersonFilmographyFilter.ALL
+                                roleFilter = PersonFilmographyRoleFilter.ALL
+                            }
                         } else null,
                         modifier = Modifier
                             .fillMaxWidth()
@@ -154,12 +219,28 @@ private fun PersonFilmography(
                 animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
             ),
         ) {
-            PosterCard(
-                item = item,
-                imageUrl = getImageUrl(item.id),
-                onClick = clickHandler,
-                modifier = itemModifier,
-            )
+            // The "as {Role}" subtitle (D18) rides under the poster in a cell
+            // wrapper — PosterCard itself stays subtitle-free for every other
+            // surface. No credit → no text, the card renders unchanged.
+            androidx.compose.foundation.layout.Column(modifier = itemModifier) {
+                PosterCard(
+                    item = item,
+                    imageUrl = getImageUrl(item.id),
+                    onClick = clickHandler,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                val roleLabel = creditRoleLabel(credits[item.id])
+                if (roleLabel != null) {
+                    Text(
+                        text = stringResource(Res.string.detail_person_role_as, roleLabel),
+                        style = MaterialTheme.typography.labelSmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                }
+            }
         }
     }
 }
@@ -168,8 +249,14 @@ private fun PersonFilmography(
 @Composable
 private fun PersonHeader(
     biography: String?,
+    costars: List<PersonRef>,
+    getImageUrl: (String) -> String,
+    onPersonClick: (String) -> Unit,
     filter: PersonFilmographyFilter,
     onFilterChange: (PersonFilmographyFilter) -> Unit,
+    roleFilter: PersonFilmographyRoleFilter,
+    onRoleFilterChange: (PersonFilmographyRoleFilter) -> Unit,
+    showRoleGroups: Boolean,
     contentPad: androidx.compose.ui.unit.Dp,
 ) {
     androidx.compose.foundation.layout.Column(
@@ -187,6 +274,34 @@ private fun PersonHeader(
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = contentPad),
             )
         }
+        // D20 "frequently appears with" — avatars of the co-stars credited on
+        // the person's most-recent title, tap-through to that person's screen
+        // (the same Route.PersonDetail jump the detail cast row uses). Hidden
+        // entirely when the fetch produced none (pref off, empty, or failed).
+        if (costars.isNotEmpty()) {
+            Text(
+                text = stringResource(Res.string.detail_person_costars_title),
+                style = MaterialTheme.typography.titleSmall,
+                modifier = Modifier.padding(horizontal = contentPad),
+            )
+            TvFocusableItemRow(
+                items = costars,
+                key = { "person_costar_${it.id}" },
+                contentPadding = PaddingValues(horizontal = contentPad),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+            ) { _, costar, focusModifier ->
+                val costarClick = remember(costar.id) { { onPersonClick(costar.id) } }
+                val costarImageUrl = remember(costar.id) { getImageUrl(costar.id) }
+                // PersonRef carries no role — the shared avatar cell renders
+                // the name line only.
+                PersonItem(
+                    person = PersonInfo(id = costar.id, name = costar.name, type = "Actor"),
+                    imageUrl = costarImageUrl,
+                    onClick = costarClick,
+                    modifier = focusModifier,
+                )
+            }
+        }
         androidx.compose.foundation.layout.Row(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -203,12 +318,34 @@ private fun PersonHeader(
                 )
             }
         }
+        // D18 role-group dimension — a second chip row that only exists when
+        // the filmography carried role data; no data → exactly the single row
+        // above, as before.
+        if (showRoleGroups) {
+            androidx.compose.foundation.layout.Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = contentPad),
+            ) {
+                PersonFilmographyRoleFilter.entries.forEach { option ->
+                    FilterChip(
+                        selected = roleFilter == option,
+                        onClick = { onRoleFilterChange(option) },
+                        label = { Text(stringResource(option.labelRes())) },
+                        colors = FilterChipDefaults.filterChipColors(),
+                    )
+                }
+            }
+        }
     }
 }
 @Composable
 fun PersonDetailScreen(
     personId: String,
     onItemClick: (String) -> Unit,
+    onPersonClick: (String) -> Unit,
     onBack: () -> Unit,
     viewModel: PersonDetailViewModel = koinViewModel(),
 ) {
@@ -221,6 +358,10 @@ fun PersonDetailScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val title = (state as? PersonDetailUiState.Success)?.name ?: ""
     val isLoading = state is PersonDetailUiState.Loading
+    // The D18/D20 gates — read through the VM's eagerly-shared projection so
+    // toggling a setting hides/shows the role subtitles, group chips, and
+    // co-star row without waiting for a reload.
+    val preferences by viewModel.preferences.collectAsStateWithLifecycle()
 
     // Collected (not read as a .value snapshot inside the intake's
     // isDownloaded lambda) so the resolver is rebuilt when the downloaded set
@@ -306,12 +447,25 @@ fun PersonDetailScreen(
             val filmography = remember(success.filmography) {
                 success.filmography.sortedByDescending { it.year ?: 0 }
             }
+            // The D18/D20 surfaces gate on the preferences here so a toggle
+            // takes effect on the already-loaded screen (an off pref reads as
+            // absent data — the cards and header degrade to the role-less /
+            // co-star-less render).
+            val credits = if (preferences.showFilmographyRoles) {
+                success.filmographyCredits
+            } else {
+                emptyMap()
+            }
+            val costars = if (preferences.showFrequentCostars) success.costars else emptyList()
 
             PersonFilmography(
                 filmography = filmography,
                 biography = success.biography,
+                credits = credits,
+                costars = costars,
                 getImageUrl = viewModel::getImageUrl,
                 onItemClick = onItemClick,
+                onPersonClick = onPersonClick,
                 onFocusedMediaItem = { item -> quickActionIntake.tvFocusedItem = item },
                 contentPad = contentPad,
                 gridMin = gridMin,

@@ -18,6 +18,7 @@ import com.raulshma.jellyplay.core.model.LibraryNotificationConfig
 import com.raulshma.jellyplay.core.model.NewsletterSectionType
 import com.raulshma.jellyplay.core.model.NotificationPreferences
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
+import com.raulshma.jellyplay.core.model.SeriesNotificationConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.serialization.Serializable
@@ -80,6 +81,8 @@ class NotificationStore constructor(
         val NOTIFICATIONS_MAX_PER_CHECK = intPreferencesKey("notifications_max_per_check")
         val NOTIFICATIONS_LIBRARY_CONFIGS = stringPreferencesKey("notifications_library_configs")
         val NOTIFICATIONS_NEW_EPISODES_ENABLED = booleanPreferencesKey("notifications_new_episodes_enabled")
+        val NOTIFICATIONS_SERIES_CONFIGS = stringPreferencesKey("notifications_series_configs")
+
 
         val NEWSLETTER_ENABLED = booleanPreferencesKey("newsletter_enabled")
         val NEWSLETTER_DAY_OF_WEEK = intPreferencesKey("newsletter_day_of_week")
@@ -90,6 +93,8 @@ class NotificationStore constructor(
 
     // JSON memoisation — decode is skipped when the raw key is unchanged.
     private var cachedNotificationLibraryConfigs: ParsedCache<Map<String, LibraryNotificationConfig>> =
+        ParsedCache(null, emptyMap())
+    private var cachedNotificationSeriesConfigs: ParsedCache<Map<String, SeriesNotificationConfig>> =
         ParsedCache(null, emptyMap())
     private var cachedEnabledNewsletterSections: ParsedCache<Set<NewsletterSectionType>> =
         ParsedCache(null, NewsletterSectionType.entries.toSet())
@@ -112,6 +117,7 @@ class NotificationStore constructor(
             maxPerCheck = prefs[Keys.NOTIFICATIONS_MAX_PER_CHECK] ?: 10,
             libraryConfigs = readNotificationLibraryConfigs(prefs),
             newEpisodesEnabled = prefs[Keys.NOTIFICATIONS_NEW_EPISODES_ENABLED] ?: false,
+            seriesConfigs = readNotificationSeriesConfigs(prefs),
         ),
         newsletterEnabled = PreferenceCodec.readBool(prefs, Keys.NEWSLETTER_ENABLED, "newsletter_enabled", true),
         newsletterDayOfWeek = PreferenceCodec.readInt(prefs, Keys.NEWSLETTER_DAY_OF_WEEK, "newsletter_day_of_week", 7),
@@ -133,6 +139,16 @@ class NotificationStore constructor(
             default = emptyMap(),
             parse = { json.decodeFromString<Map<String, LibraryNotificationConfig>>(it) },
             cacheRef = { cachedNotificationLibraryConfigs = it },
+            nullPolicy = CachedJsonNullPolicy.MemoizeNull,
+        )
+
+    private fun readNotificationSeriesConfigs(prefs: Preferences): Map<String, SeriesNotificationConfig> =
+        PreferenceCodec.cachedJson(
+            raw = prefs[Keys.NOTIFICATIONS_SERIES_CONFIGS],
+            cache = cachedNotificationSeriesConfigs,
+            default = emptyMap(),
+            parse = { json.decodeFromString<Map<String, SeriesNotificationConfig>>(it) },
+            cacheRef = { cachedNotificationSeriesConfigs = it },
             nullPolicy = CachedJsonNullPolicy.MemoizeNull,
         )
 
@@ -184,6 +200,11 @@ class NotificationStore constructor(
                     } ?: emptyMap()
                 } catch (_: Exception) { emptyMap() },
                 newEpisodesEnabled = prefs[Keys.NOTIFICATIONS_NEW_EPISODES_ENABLED] ?: false,
+                seriesConfigs = try {
+                    prefs[Keys.NOTIFICATIONS_SERIES_CONFIGS]?.let {
+                        json.decodeFromString<Map<String, SeriesNotificationConfig>>(it)
+                    } ?: emptyMap()
+                } catch (_: Exception) { emptyMap() },
             )
             val updated = transform(current)
             prefs[Keys.NOTIFICATIONS_ENABLED] = updated.enabled
@@ -197,7 +218,56 @@ class NotificationStore constructor(
             prefs[Keys.NOTIFICATIONS_MAX_PER_CHECK] = updated.maxPerCheck
             prefs[Keys.NOTIFICATIONS_LIBRARY_CONFIGS] = json.encodeToString(updated.libraryConfigs)
             prefs[Keys.NOTIFICATIONS_NEW_EPISODES_ENABLED] = updated.newEpisodesEnabled
+            prefs[Keys.NOTIFICATIONS_SERIES_CONFIGS] = json.encodeToString(updated.seriesConfigs)
         }
+    }
+
+    /**
+     * Read-modify-write of the D12 per-series config map (the library-configs
+     * aggregate transform's series-granularity twin). The worker's per-series
+     * write-back (diff baseline + check stamp) and the opt-in/out UI commands
+     * both funnel through here, so concurrent writers cannot drop each other's
+     * entries.
+     */
+    suspend fun updateSeriesNotificationConfigs(
+        transform: (Map<String, SeriesNotificationConfig>) -> Map<String, SeriesNotificationConfig>,
+    ) {
+        dataStore.edit { prefs ->
+            val current = try {
+                prefs[Keys.NOTIFICATIONS_SERIES_CONFIGS]?.let {
+                    json.decodeFromString<Map<String, SeriesNotificationConfig>>(it)
+                } ?: emptyMap()
+            } catch (_: Exception) { emptyMap() }
+            prefs[Keys.NOTIFICATIONS_SERIES_CONFIGS] = json.encodeToString(transform(current))
+        }
+    }
+
+    /**
+     * Opt-in / opt-out command for one series (the ⋮ menu entry, the D7 bell
+     * and the management sheet all route here). Opt-out REMOVES the entry
+     * (the management list shows opted-in series only — a disabled husk
+     * would be dead weight), so a disable→re-enable pair starts with a fresh
+     * baseline and the worker's first-check anti-spam rule re-records it
+     * without notifying. Opt-in keeps a surviving entry's
+     * [SeriesNotificationConfig.lastNotifiedEpisodeId] baseline (an older
+     * config shape may have left one behind).
+     */
+    suspend fun setSeriesNotificationEnabled(seriesId: String, enabled: Boolean) {
+        updateSeriesNotificationConfigs { configs ->
+            if (enabled) {
+                configs + (
+                    seriesId to (configs[seriesId]?.copy(enabled = true)
+                        ?: SeriesNotificationConfig())
+                )
+            } else {
+                configs - seriesId
+            }
+        }
+    }
+
+    /** Removes every series opt-in (the management sheet's "Restore all"). */
+    suspend fun clearSeriesNotificationConfigs() {
+        updateSeriesNotificationConfigs { emptyMap() }
     }
 
     suspend fun setNewsletterEnabled(enabled: Boolean) {
@@ -254,6 +324,7 @@ class NotificationStore constructor(
             Keys.NOTIFICATIONS_MAX_PER_CHECK,
             Keys.NOTIFICATIONS_LIBRARY_CONFIGS,
             Keys.NOTIFICATIONS_NEW_EPISODES_ENABLED,
+            Keys.NOTIFICATIONS_SERIES_CONFIGS,
         )
         PreferenceResetCategory.NEWSLETTER -> listOf(
             Keys.NEWSLETTER_ENABLED,
@@ -284,6 +355,7 @@ class NotificationStore constructor(
             it[Keys.NOTIFICATIONS_MAX_PER_CHECK] = slice.notificationPreferences.maxPerCheck
             it[Keys.NOTIFICATIONS_LIBRARY_CONFIGS] = json.encodeToString(slice.notificationPreferences.libraryConfigs)
             it[Keys.NOTIFICATIONS_NEW_EPISODES_ENABLED] = slice.notificationPreferences.newEpisodesEnabled
+            it[Keys.NOTIFICATIONS_SERIES_CONFIGS] = json.encodeToString(slice.notificationPreferences.seriesConfigs)
             it[Keys.NEWSLETTER_ENABLED] = slice.newsletterEnabled
             it[Keys.NEWSLETTER_DAY_OF_WEEK] = slice.newsletterDayOfWeek
             it[Keys.NEWSLETTER_LAST_VIEWED_MS] = slice.newsletterLastViewedMs

@@ -3,9 +3,13 @@ package com.raulshma.jellyplay.feature.details
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
+import com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections
+import com.raulshma.jellyplay.core.model.DetailPreferences
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.PersonInfo
+import com.raulshma.jellyplay.core.model.PersonRef
 import com.raulshma.jellyplay.core.model.UserDataChange
 import com.raulshma.jellyplay.core.testfixtures.FakeUserDataMutator
 import io.mockk.coEvery
@@ -14,6 +18,7 @@ import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.Dispatchers
@@ -22,6 +27,7 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import org.junit.Assert.assertSame
 import kotlin.test.assertTrue
@@ -44,6 +50,22 @@ class PersonDetailViewModelTest {
     /** Driven by the deferred-refresh tests; collected by the VM for its lifetime. */
     private val userDataEvents = MutableSharedFlow<UserDataChange>(extraBufferCapacity = 16)
 
+    /** Builds a VM over fresh preference stubs — the D18/D20 gate seam. */
+    private fun buildViewModel(
+        detailPreferences: DetailPreferences = DetailPreferences(),
+    ): PersonDetailViewModel {
+        val projections = mockk<PreferenceProjections>(relaxed = true)
+        every { projections.detailPreferences } returns MutableStateFlow(detailPreferences)
+        return PersonDetailViewModel(
+            mediaRepository,
+            libraryApiClient,
+            userDataMutator,
+            imageUrlProvider,
+            mockk<com.raulshma.jellyplay.core.data.download.MediaDownloadActions>(relaxed = true),
+            projections,
+        )
+    }
+
     @BeforeTest
     fun setUp() {
         Dispatchers.setMain(mainDispatcher)
@@ -51,13 +73,10 @@ class PersonDetailViewModelTest {
         libraryApiClient = mockk(relaxed = true)
         userDataMutator = FakeUserDataMutator()
         imageUrlProvider = mockk(relaxed = true)
-        viewModel = PersonDetailViewModel(
-            mediaRepository,
-            libraryApiClient,
-            userDataMutator,
-            imageUrlProvider,
-            mockk<com.raulshma.jellyplay.core.data.download.MediaDownloadActions>(relaxed = true),
-        )
+        // The D20 leg runs behind a relaxed mock otherwise (mockk cannot shape
+        // a Result return) — every test here starts co-star-silent.
+        coEvery { libraryApiClient.getPeople(any(), any(), any()) } returns Result.success(emptyList())
+        viewModel = buildViewModel()
     }
 
     @AfterTest
@@ -137,6 +156,115 @@ class PersonDetailViewModelTest {
 
         val success = viewModel.uiState.value as PersonDetailUiState.Success
         assertNull(success.biography)
+    }
+
+    // ── D18: role credits off the filmography's projected People ────────────
+
+    @Test
+    fun `filmography People resolve the person's role credits into the state`() = runTest(mainDispatcher) {
+        backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+        val person = MediaItem(id = "p1", name = "Person One", mediaType = MediaType.UNKNOWN)
+        val acting = PersonInfo(id = "p1", name = "Person One", role = "John Smith", type = "Actor")
+        val credited = MediaItem(
+            id = "m1",
+            name = "Movie 1",
+            mediaType = MediaType.MOVIE,
+            people = listOf(PersonInfo(id = "someone-else", name = "Other", type = "Actor"), acting),
+        )
+        val uncredited = MediaItem(id = "m2", name = "Movie 2", mediaType = MediaType.MOVIE)
+        coEvery { mediaRepository.getMediaDetail("p1") } returns Result.success(MediaDetail(item = person))
+        coEvery { libraryApiClient.getItemsByPerson("p1") } returns Result.success(listOf(credited, uncredited))
+
+        viewModel.loadPerson("p1")
+        advanceUntilIdle()
+
+        val success = viewModel.uiState.value as PersonDetailUiState.Success
+        assertEquals(acting, success.filmographyCredits["m1"])
+        assertFalse(success.filmographyCredits.containsKey("m2"))
+    }
+
+    // ── D20: co-star enrichment leg ─────────────────────────────────────────
+
+    @Test
+    fun `co-stars anchor on the most-recent filmography entry and exclude the person`() = runTest(mainDispatcher) {
+        backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+        val person = MediaItem(id = "p1", name = "Person One", mediaType = MediaType.UNKNOWN)
+        val older = MediaItem(id = "m1", name = "Old Movie", mediaType = MediaType.MOVIE, year = 2000)
+        val newest = MediaItem(id = "m2", name = "New Movie", mediaType = MediaType.MOVIE, year = 2020)
+        coEvery { mediaRepository.getMediaDetail("p1") } returns Result.success(MediaDetail(item = person))
+        coEvery { libraryApiClient.getItemsByPerson("p1") } returns Result.success(listOf(older, newest))
+        coEvery { libraryApiClient.getPeople(any(), any(), any()) } returns Result.success(
+            listOf(
+                PersonRef(id = "p1", name = "Person One"),
+                PersonRef(id = "c1", name = "Co Star One"),
+                PersonRef(id = "c2", name = "Co Star Two"),
+            )
+        )
+
+        viewModel.loadPerson("p1")
+        advanceUntilIdle()
+
+        // The appearsIn query runs against the newest title, not the first listed.
+        coVerify(exactly = 1) { libraryApiClient.getPeople(null, any(), "m2") }
+        val success = viewModel.uiState.value as PersonDetailUiState.Success
+        assertEquals(
+            listOf(PersonRef(id = "c1", name = "Co Star One"), PersonRef(id = "c2", name = "Co Star Two")),
+            success.costars,
+        )
+    }
+
+    @Test
+    fun `showFrequentCostars off skips the co-star query`() = runTest(mainDispatcher) {
+        backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+        val person = MediaItem(id = "p1", name = "Person One", mediaType = MediaType.UNKNOWN)
+        coEvery { mediaRepository.getMediaDetail("p1") } returns Result.success(MediaDetail(item = person))
+        coEvery { libraryApiClient.getItemsByPerson("p1") } returns Result.success(
+            listOf(MediaItem(id = "m1", name = "Movie 1", mediaType = MediaType.MOVIE, year = 2020))
+        )
+        val viewModel = buildViewModel(detailPreferences = DetailPreferences(showFrequentCostars = false))
+
+        viewModel.loadPerson("p1")
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { libraryApiClient.getPeople(any(), any(), any()) }
+        assertTrue((viewModel.uiState.value as PersonDetailUiState.Success).costars.isEmpty())
+    }
+
+    @Test
+    fun `empty filmography skips the co-star query`() = runTest(mainDispatcher) {
+        backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+        val person = MediaItem(id = "p1", name = "Person One", mediaType = MediaType.UNKNOWN)
+        coEvery { mediaRepository.getMediaDetail("p1") } returns Result.success(MediaDetail(item = person))
+        coEvery { libraryApiClient.getItemsByPerson("p1") } returns Result.success(emptyList())
+
+        viewModel.loadPerson("p1")
+        advanceUntilIdle()
+
+        // No anchor entry exists, so the enrichment never runs — the gate the
+        // row-hidden contract needs.
+        coVerify(exactly = 0) { libraryApiClient.getPeople(any(), any(), any()) }
+        assertTrue((viewModel.uiState.value as PersonDetailUiState.Success).costars.isEmpty())
+    }
+
+    @Test
+    fun `a failed co-star query keeps the Success state with no costars`() = runTest(mainDispatcher) {
+        backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+        val person = MediaItem(id = "p1", name = "Person One", mediaType = MediaType.UNKNOWN)
+        coEvery { mediaRepository.getMediaDetail("p1") } returns Result.success(MediaDetail(item = person))
+        coEvery { libraryApiClient.getItemsByPerson("p1") } returns Result.success(
+            listOf(MediaItem(id = "m1", name = "Movie 1", mediaType = MediaType.MOVIE, year = 2020))
+        )
+        coEvery { libraryApiClient.getPeople(any(), any(), any()) } returns Result.failure(
+            RuntimeException("persons boom")
+        )
+
+        viewModel.loadPerson("p1")
+        advanceUntilIdle()
+
+        // Failure-tolerant enrichment: the loud content survives, the row hides.
+        val success = viewModel.uiState.value as PersonDetailUiState.Success
+        assertTrue(success.costars.isEmpty())
+        assertEquals("Person One", success.name)
     }
 
     @Test
@@ -255,13 +383,7 @@ class PersonDetailViewModelTest {
             MediaDetail(item = MediaItem(id = "p1", name = "Person One", mediaType = MediaType.UNKNOWN))
         )
         coEvery { libraryApiClient.getItemsByPerson("p1") } returns Result.success(emptyList())
-        val viewModel = PersonDetailViewModel(
-            mediaRepository,
-            libraryApiClient,
-            userDataMutator,
-            imageUrlProvider,
-            mockk<com.raulshma.jellyplay.core.data.download.MediaDownloadActions>(relaxed = true),
-        )
+        val viewModel = buildViewModel()
 
         viewModel.loadPerson("p1")
         advanceUntilIdle()
@@ -292,13 +414,7 @@ class PersonDetailViewModelTest {
         every { mediaRepository.userDataChanges } returns userDataEvents
         coEvery { mediaRepository.getMediaDetail("p1") } returns Result.failure(RuntimeException("offline"))
         coEvery { libraryApiClient.getItemsByPerson("p1") } returns Result.success(emptyList())
-        val viewModel = PersonDetailViewModel(
-            mediaRepository,
-            libraryApiClient,
-            userDataMutator,
-            imageUrlProvider,
-            mockk<com.raulshma.jellyplay.core.data.download.MediaDownloadActions>(relaxed = true),
-        )
+        val viewModel = buildViewModel()
 
         viewModel.loadPerson("p1")
         advanceUntilIdle()
@@ -323,13 +439,7 @@ class PersonDetailViewModelTest {
             MediaDetail(item = MediaItem(id = "p1", name = "Person One", mediaType = MediaType.UNKNOWN))
         ) andThen Result.failure(RuntimeException("offline blip"))
         coEvery { libraryApiClient.getItemsByPerson("p1") } returns Result.success(emptyList())
-        val viewModel = PersonDetailViewModel(
-            mediaRepository,
-            libraryApiClient,
-            userDataMutator,
-            imageUrlProvider,
-            mockk<com.raulshma.jellyplay.core.data.download.MediaDownloadActions>(relaxed = true),
-        )
+        val viewModel = buildViewModel()
 
         viewModel.loadPerson("p1")
         advanceUntilIdle()

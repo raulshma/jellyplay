@@ -13,6 +13,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import com.raulshma.jellyplay.core.ui.components.PullToRefreshBox
 import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.withFrameNanos
@@ -114,6 +115,12 @@ internal fun DetailContent(
         chooserTitle = stringResource(Res.string.detail_share_via),
     )
 
+    // D22: the TV focus-gated trailer preview's port — the single holder
+    // instance the Play button (deep in the body) writes and DetailBackdrop
+    // reads; provided below so the button's writes reach it on both the
+    // touch and TV branches.
+    val trailerFocusPreview = remember { TrailerFocusPreviewState() }
+
     // Manual up-next queue (the player drains it queue-first). The controller
     // is process-wide, so "play next" here feeds the player's queue sheet even
     // before the player opens. koinInject — the book feature's desktop-host
@@ -132,6 +139,13 @@ internal fun DetailContent(
         if (next) videoQueue.enqueueNext(queueItem) else videoQueue.enqueueLast(queueItem)
     }
 
+    // D14 "Play (with pre-rolls)": the SyncPlay veto is host-level (the
+    // process-wide SyncPlayManager, the videoQueue koinInject precedent) — a
+    // group session owns the playback order, so the per-invocation intro
+    // override is meaningless there. The media-type + offline gates live
+    // with the menu entry ([MediaOptionsMenu.offersPlayWithPrerolls]).
+    val syncPlayManager = org.koin.compose.koinInject<com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager>()
+
     val mediaOptions = rememberMediaOptions(
         onPlayNextInQueue = {
             enqueueInQueue(item, next = true)
@@ -139,6 +153,8 @@ internal fun DetailContent(
         onPlayLastInQueue = {
             enqueueInQueue(item, next = false)
         },
+        canPlayWithPrerolls = !isSeries && !syncPlayManager.isInSyncPlaySession,
+        onPlayWithPrerolls = callbacks.playback.onPlayWithPrerolls,
         item = item,
         detail = state.detail,
         itemId = state.itemId,
@@ -188,6 +204,11 @@ internal fun DetailContent(
         onShowFromContinueWatching = callbacks.userData.onShowFromContinueWatching,
         onHideDetailUpNext = callbacks.userData.onHideDetailUpNext,
         onShowDetailUpNext = callbacks.userData.onShowDetailUpNext,
+        // D12: the per-series notify entry rides the platform seam — desktop
+        // (no notification stack) never sees it.
+        seriesNotificationsEnabled = state.seriesNotificationsEnabled,
+        platformSupportsNotifications = platformHasNotificationStack,
+        onToggleSeriesNotifications = callbacks.userData.onToggleSeriesNotifications,
         onManageSeries = callbacks.navigation.onManageSeries,
         onRefreshMetadata = callbacks.metadata.onRefreshMetadata,
         onIdentify = callbacks.metadata.onIdentify,
@@ -198,6 +219,21 @@ internal fun DetailContent(
         onStartRadio = callbacks.playback.onStartRadio,
         onStartWatchParty = callbacks.playback.onStartWatchParty,
     )
+
+    // ── D23 promoted rail resolution ─────────────────────────────────────
+    // The fixed promoted subset of [mediaOptions] lifts into the landscape
+    // rail; the ⋮ menu suppresses exactly those ids while the rail shows them
+    // (no dupes). Effective only where the rail exists — the landscape body —
+    // and gated on the display preference; both off → the ⋮ list passes
+    // through unchanged.
+    val showsLandscapeRail = isExpanded && adaptiveInfo.isLandscape
+    val promotedOptionIds = if (showsLandscapeRail && state.preferences.showPromotedActionsLandscape) {
+        PromotedMediaOptionIds.toSet()
+    } else {
+        emptySet()
+    }
+    val overflowOptions = remember(mediaOptions, promotedOptionIds) { mediaOptions.excludingIds(promotedOptionIds) }
+    val promotedActions = remember(mediaOptions, promotedOptionIds) { mediaOptions.promotedOptions(promotedOptionIds) }
 
     val themeVariant = com.raulshma.jellyplay.core.designsystem.theme.LocalThemeVariant.current
     val backgroundColorState = scrollState.backgroundColorState
@@ -269,23 +305,46 @@ internal fun DetailContent(
             targetBackdropId = targetBackdropId,
             backdropBlurHash = if (isBook) item?.blurHashes?.primary else item?.blurHashes?.backdrop,
             getBackdropUrl = if (isBook) callbacks.artwork.getImageUrl else callbacks.artwork.getBackdropUrl,
-            relatedVideos = state.relatedVideos,
+            trailers = state.trailers,
             preferences = state.preferences,
             scrollState = scrollState,
             localBackdropPath = if (isBook) state.assets.posterPath else state.assets.backdropPath,
             coverHero = coverHero,
+            themeVideoStreamUrl = state.themeVideoStreamUrl,
+            trailerFocusPreview = trailerFocusPreview,
         )
 
-        // Pull-to-refresh lets the user force a fresh fetch (invalidating the
-        // in-memory caches) by pulling the content down. Disabled on TV — the
-        // D-pad has no drag gesture, and the LazyColumn's tvFocusRestorer stays
-        // the outermost modifier there.
-        if (!isTv) {
-            PullToRefreshBox(
-                isRefreshing = state.loadState is DetailUiLoadState.Refreshing,
-                onRefresh = callbacks.screen.onRefresh,
-                modifier = Modifier.fillMaxSize(),
-            ) {
+        // D22: the port reaches the Play button through the composition
+        // local (the holder itself travels to the backdrop as a parameter
+        // above) — the local scopes exactly the body subtrees that render
+        // the button.
+        CompositionLocalProvider(LocalTrailerFocusPreview provides trailerFocusPreview) {
+            // Pull-to-refresh lets the user force a fresh fetch (invalidating the
+            // in-memory caches) by pulling the content down. Disabled on TV — the
+            // D-pad has no drag gesture, and the LazyColumn's tvFocusRestorer stays
+            // the outermost modifier there.
+            if (!isTv) {
+                PullToRefreshBox(
+                    isRefreshing = state.loadState is DetailUiLoadState.Refreshing,
+                    onRefresh = callbacks.screen.onRefresh,
+                    modifier = Modifier.fillMaxSize(),
+                ) {
+                    DetailScrollContent(
+                        state = state,
+                        callbacks = callbacks,
+                        listState = listState,
+                        scrollState = scrollState,
+                        contentVisible = contentVisible,
+                        contentFocusRequester = contentFocusRequester,
+                        isExpanded = isExpanded,
+                        isTv = isTv,
+                        item = item,
+                        isAudio = isAudio,
+                        isAlbum = isAlbum,
+                        promotedActions = promotedActions,
+                    )
+                }
+            } else {
                 DetailScrollContent(
                     state = state,
                     callbacks = callbacks,
@@ -298,31 +357,26 @@ internal fun DetailContent(
                     item = item,
                     isAudio = isAudio,
                     isAlbum = isAlbum,
+                    promotedActions = promotedActions,
                 )
             }
-        } else {
-            DetailScrollContent(
-                state = state,
-                callbacks = callbacks,
-                listState = listState,
-                scrollState = scrollState,
-                contentVisible = contentVisible,
-                contentFocusRequester = contentFocusRequester,
-                isExpanded = isExpanded,
-                isTv = isTv,
-                item = item,
-                isAudio = isAudio,
-                isAlbum = isAlbum,
-            )
         }
 
         DetailTopBar(
             itemName = item?.name ?: "",
             scrollState = scrollState,
             onBack = callbacks.navigation.onBack,
-            mediaOptions = mediaOptions,
+            mediaOptions = overflowOptions,
             contentFocusRequester = contentFocusRequester,
             scrollBehavior = scrollBehavior,
+            // D8: the mute chip exists only while theme audio is actually
+            // audible; its icon reflects the per-series memory (the same
+            // theme-source keying the VM's enrichment gate uses).
+            themeMusicVisible = state.themeMusicPlaying,
+            themeMusicMuted = state.preferences.isThemeMusicMutedFor(
+                item?.seriesId ?: state.itemId,
+            ),
+            onToggleThemeMusicMuted = callbacks.screen.onToggleThemeMusicMuted,
         )
     }
 
@@ -369,6 +423,8 @@ private fun DetailScrollContent(
     item: com.raulshma.jellyplay.core.model.MediaItem?,
     isAudio: Boolean,
     isAlbum: Boolean,
+    /** D23: the ⋮ options' promoted subset for the landscape rail (empty = none). */
+    promotedActions: List<MediaOption>,
 ) {
     val adaptiveInfo = LocalAdaptiveInfo.current
 
@@ -409,6 +465,7 @@ private fun DetailScrollContent(
                         isAlbum = isAlbum,
                         isExpanded = isExpanded,
                         item = item,
+                        promotedActions = promotedActions,
                     )
                 } else {
                     DetailBodyPortrait(

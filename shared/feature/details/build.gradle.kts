@@ -19,6 +19,11 @@ kotlin {
             implementation(project(":shared:core:model"))
             implementation(project(":shared:core:designsystem"))
             implementation(project(":shared:core:data"))
+            // D14 "Play (with pre-rolls)": the one-shot CinemaModeOverride
+            // holder the ⋮ action arms and the player session consumes —
+            // the contract lives in core:player-contract (same core.data
+            // playback package, the PlayerLifecycleCallbacks precedent).
+            implementation(project(":shared:core:player-contract"))
             // runCatchingRethrowingCancellation in resolveTargetItemIds (the
             // sanctioned wrapper — a bare runCatching there masked cancellation
             // of the canonicalEpisodeIds fetch).

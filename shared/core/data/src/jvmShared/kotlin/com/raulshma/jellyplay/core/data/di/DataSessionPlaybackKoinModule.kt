@@ -16,6 +16,7 @@ import com.raulshma.jellyplay.core.data.repository.JellyPlayBookmarksSyncAdapter
 import com.raulshma.jellyplay.core.data.repository.JellyPlayCwSyncAdapter
 import com.raulshma.jellyplay.core.data.repository.JellyPlayEventsRepository
 import com.raulshma.jellyplay.core.data.repository.JellyPlayHomeLayoutSyncAdapter
+import com.raulshma.jellyplay.core.data.repository.HomeLayoutSyncController
 import com.raulshma.jellyplay.core.data.repository.JellyPlayIntegrationsSyncAdapter
 import com.raulshma.jellyplay.core.data.repository.JellyPlayItemPrefsSyncAdapter
 import com.raulshma.jellyplay.core.data.repository.JellyPlayPlaylistsSyncAdapter
@@ -322,6 +323,21 @@ internal val dataSessionPlaybackModule: Module = module {
         )
     }
 
+    // The H20 DisplayPreferences home-layout sync bridge: collects the home
+    // store's layoutRevision dirty signal (armed by the home_layout_autopush
+    // pref + sign-in state), debounces 2s, and pushes the current layout
+    // through the preset codec — plus the manual Upload/Restore actions'
+    // transport. Sits beside the adapter above because both are the
+    // home-layout-to-network bridge family; the store layer owns no client.
+    single {
+        HomeLayoutSyncController(
+            homeDiscoveryStore = get(),
+            identityStore = get<ServerIdentityStore>(),
+            apiClient = get(),
+            externalScope = get(com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers.applicationScope),
+        )
+    }
+
     // The NON-SECRET integration settings under the general sync protocol
     // (the settings-backup wave): the `integrations` namespace adapter over
     // the Seerr / *arr / subtitle-provider preference stores' sync-only
@@ -600,10 +616,11 @@ private fun appVersionString(): String =
 /**
  * The session-aware transport satisfying the home fetcher's
  * [com.raulshma.jellyplay.core.network.library.JellyPlayHomeSectionSources]
- * for the PLUGIN_ROW home rows: the row reads forward verbatim onto the
- * plugin api client (ADR 0010's one-family rule — every `jellyplay/` route
- * rides the `JellyPlayRowsRoutes` role of the one plugin client family), the item resolution forwards onto the
- * library client's batched ids read, and the two capability gates read ONLY
+ * for the PLUGIN_ROW home rows and the plugin-curated hero (H9): the reads
+ * forward verbatim onto the plugin api client (ADR 0010's one-family rule —
+ * every `jellyplay/` route rides the `JellyPlayRowsRoutes` role of the one
+ * plugin client family), the item resolution forwards onto the
+ * library client's batched ids read, and the capability gates read ONLY
  * the probe store's registry — the ONE gating mechanism (ADR 0010 §6).
  *
  * Gate semantics: a store still UNKNOWN (never probed this session) runs the
@@ -639,6 +656,9 @@ private class JellyPlayHomeSectionSourcesImpl(
     override suspend fun customRowsEnabled(): Boolean =
         rowsEnabled(com.raulshma.jellyplay.core.model.JellyPlayPluginFeatures.CustomRows)
 
+    override suspend fun curatedHeroEnabled(): Boolean =
+        rowsEnabled(com.raulshma.jellyplay.core.model.JellyPlayPluginFeatures.Hero)
+
     override suspend fun getSeasonalRow(keyword: String?): Result<com.raulshma.jellyplay.core.network.api.JellyPlayRowResult?> =
         apiClient.getSeasonalRow(keyword)
 
@@ -647,6 +667,9 @@ private class JellyPlayHomeSectionSourcesImpl(
 
     override suspend fun getCustomRow(title: String): Result<com.raulshma.jellyplay.core.network.api.JellyPlayRowResult?> =
         apiClient.getCustomRow(title)
+
+    override suspend fun getCuratedHero(): Result<com.raulshma.jellyplay.core.network.api.JellyPlayHeroResult?> =
+        apiClient.getCuratedHero()
 
     override suspend fun getItemsByIds(ids: List<String>): Result<List<com.raulshma.jellyplay.core.model.MediaItem>> =
         libraryClient().getItemsByIds(ids)

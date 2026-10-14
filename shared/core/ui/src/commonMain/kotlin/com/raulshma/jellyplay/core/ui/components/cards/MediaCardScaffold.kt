@@ -155,6 +155,14 @@ fun MediaCardScaffold(
     val themeVariant = LocalThemeVariant.current
     val cardShape = ShapeCache.smooth12
 
+    // H15 anti-spoiler: the scaffold owns the card's progress surfaces (the
+    // bottom bar AND the play ring's arc), so it owns the suppression gate —
+    // force-false when anti-spoiler home is on, regardless of the caller's
+    // showProgress. The composition-local read keeps every call site unchanged.
+    val cardPrefs = LocalCardDisplayPreferences.current
+    val spoilerSafe = remember(cardPrefs) { spoilerSafeCardState(cardPrefs) }
+    val effectiveShowProgress = showProgress && spoilerSafe.showProgress
+
     // Shared-element transition: wrap the image when a key and both scopes are
     // present. Only PosterCard participates today; Wide/Seerr gain it for free
     // when a caller passes a sharedElementKey.
@@ -241,7 +249,7 @@ fun MediaCardScaffold(
 
                 play?.let {
                     PlayButtonWithProgress(
-                        progressPercent = if (showProgress) progressFraction else 0f,
+                        progressPercent = if (effectiveShowProgress) progressFraction else 0f,
                         dominantColor = it.dominantColor ?: MaterialTheme.colorScheme.primary,
                         onClick = it.onClick,
                         icon = it.icon ?: Tabler.Outline.PlayerPlay,
@@ -254,7 +262,7 @@ fun MediaCardScaffold(
                     )
                 }
 
-                if (showProgress && progressFraction > 0f) {
+                if (effectiveShowProgress && progressFraction > 0f) {
                     MediaCardProgressOverlay(
                         progressFraction = progressFraction,
                         modifier = Modifier

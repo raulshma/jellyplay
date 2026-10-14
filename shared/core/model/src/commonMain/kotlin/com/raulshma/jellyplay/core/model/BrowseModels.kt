@@ -89,6 +89,31 @@ data class JellyPlayRowEntry(
 data class HomeSectionsResult(
     val sections: List<HomeSection>,
     val failedSectionTypes: Set<HomeSectionType> = emptySet(),
+    /**
+     * H9: the plugin-curated hero billboards (`jellyplay/hero`), already
+     * resolved to full [CuratedHeroEntry]s by the home fetcher (unresolved
+     * ids dropped) in the plugin's serve order. Rendered AHEAD of the local
+     * hero candidates; empty = gated off / unconfigured / unresolvable — the
+     * hero silently falls back to its local pool. Additive with a default, so
+     * persisted Room snapshots decode unchanged.
+     */
+    val curatedHero: List<CuratedHeroEntry> = emptyList(),
+)
+
+/**
+ * One plugin-curated hero billboard (H9 — the companion server plugin's
+ * `hero` feature): the curated item id resolved to the full library
+ * [MediaItem] (the same batched ids read the plugin rows resolve through, so
+ * the candidate carries local art and per-item UserData), plus the optional
+ * headline/subhead overrides. A null [headline]/[subhead] renders the item's
+ * own metadata exactly as the local hero does.
+ */
+@Immutable
+@Serializable
+data class CuratedHeroEntry(
+    val item: MediaItem,
+    val headline: String? = null,
+    val subhead: String? = null,
 )
 
 @Immutable
@@ -104,6 +129,20 @@ enum class HomeSectionType {
     CONTINUE_WATCHING,
     CONTINUE_READING,
     NEXT_UP,
+    /**
+     * H4: unaired episodes across the followed series (`GET /Shows/Upcoming`)
+     * — the watch-state-independent complement to Next Up. Renders through the
+     * standard poster chassis; cards carry an air-date chip.
+     */
+    UPCOMING,
+    /**
+     * H5: the My Media library-tiles row — one non-poster tile per Jellyfin
+     * library (jellyfin-web's SmallLibraryTiles). The only non-poster home
+     * shape: renders through the [com.raulshma.jellyplay.core.model.home]
+     * chassis's tiles arm, items being the libraries mapped to FOLDER-typed
+     * [MediaItem]s (id = library id, name = library name) by the assembler.
+     */
+    MY_MEDIA,
     RECENTLY_ADDED,
     LATEST_MEDIA,
     FAVORITES,
@@ -165,6 +204,12 @@ enum class HomeSectionType {
             CONTINUE_WATCHING,
             CONTINUE_READING,
             NEXT_UP,
+            // H4/H5 (v3): Upcoming rides beside Next Up (its watch-state
+            // complement); My Media follows it. Registry order = default
+            // layout order — a persisted order missing either re-inserts it
+            // at this default position (the order union).
+            UPCOMING,
+            MY_MEDIA,
             LATEST_MEDIA,
             RECENTLY_ADDED,
             RECOMMENDATIONS,

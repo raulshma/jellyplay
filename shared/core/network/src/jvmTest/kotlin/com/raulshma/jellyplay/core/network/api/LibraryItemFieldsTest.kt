@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.core.network.api
 
+import com.raulshma.jellyplay.core.network.library.HOME_ROW_PROJECTION_FIELDS
 import com.raulshma.jellyplay.core.network.library.LIST_PROJECTION_FIELDS
 import org.jellyfin.sdk.model.api.ItemFields
 import kotlin.test.Test
@@ -9,8 +10,9 @@ import kotlin.test.assertEquals
  * Pins the hoisted SDK resolution of the commonMain list projection
  * ([LIST_PROJECTION_FIELDS] stays the policy home): the resolved
  * [LIST_ITEM_FIELDS] must agree wire-name-for-wire-name with the policy (the
- * resolver itself fails fast on SDK enum drift), and the shared genre
- * composition must be exactly the projection plus Genres.
+ * resolver itself fails fast on SDK enum drift), the shared genre
+ * composition must be exactly the projection plus Genres, and the home-row
+ * composition must resolve the same way.
  */
 class LibraryItemFieldsTest {
 
@@ -22,5 +24,10 @@ class LibraryItemFieldsTest {
     @Test
     fun `the genre composition is the list projection plus Genres`() {
         assertEquals(LIST_ITEM_FIELDS + ItemFields.GENRES, LIST_ITEM_FIELDS_WITH_GENRES)
+    }
+
+    @Test
+    fun `HOME_ROW_ITEM_FIELDS resolves the home-row policy wire names against the SDK enum`() {
+        assertEquals(HOME_ROW_PROJECTION_FIELDS, HOME_ROW_ITEM_FIELDS.map { it.serialName })
     }
 }

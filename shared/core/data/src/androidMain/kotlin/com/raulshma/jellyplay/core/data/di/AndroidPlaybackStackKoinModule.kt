@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.core.data.di
 import android.content.Context
 import com.raulshma.jellyplay.core.data.cache.CacheManager
 import com.raulshma.jellyplay.core.data.playback.AndroidPipController
+import com.raulshma.jellyplay.core.data.playback.AmbientVideoPlayer
 import com.raulshma.jellyplay.core.data.playback.AudioEffectsManager
 import com.raulshma.jellyplay.core.data.playback.AudioEffectsProcessor
 import com.raulshma.jellyplay.core.data.playback.AudioLibraryBrowser
@@ -13,6 +14,7 @@ import com.raulshma.jellyplay.core.data.playback.AudioQueueManager
 import com.raulshma.jellyplay.core.data.playback.AudioPlayerEngine
 import com.raulshma.jellyplay.core.data.playback.AudioStreamCache
 import com.raulshma.jellyplay.core.data.playback.DefaultAudioQueueFacade
+import com.raulshma.jellyplay.core.data.playback.ExoAmbientVideoPlayer
 import com.raulshma.jellyplay.core.data.playback.PipController
 import com.raulshma.jellyplay.core.data.playback.PlaybackSessionManager
 import com.raulshma.jellyplay.core.data.playback.ThemeMusicPlayer
@@ -122,6 +124,10 @@ internal fun androidPlaybackStackModule(context: Context): Module = module {
             appearanceStore = get(),
         )
     }
+    // H7/D22: the ambient hero-clip transport (muted-by-contract, looping) —
+    // one process-wide single so the home hero and the detail hero can never
+    // both drive video (start implicitly stops the previous clip).
+    single<AmbientVideoPlayer> { ExoAmbientVideoPlayer(context = context) }
     // The PiP state owner: concrete single (PlayerActivity injects the class)
     // plus the commonMain PipController port bound to the SAME instance —
     // both players resolve the port key, the Activity the concrete one.

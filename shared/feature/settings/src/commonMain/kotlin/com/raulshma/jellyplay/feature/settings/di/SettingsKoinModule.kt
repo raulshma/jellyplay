@@ -185,6 +185,9 @@ val settingsModule: Module = module {
             projections = get(),
             advancedSettings = get(),
             editor = get(),
+            // The H20 home-layout DisplayPreferences bridge (core:data) —
+            // the manual Upload/Restore actions + the autopush engine.
+            homeLayoutSync = get(),
         )
     }
     viewModel {
@@ -388,6 +391,7 @@ val settingsModule: Module = module {
             editor = get(),
             mediaRepository = get(),
             notificationSync = get(),
+            imageUrlProvider = get(),
         )
     }
 }

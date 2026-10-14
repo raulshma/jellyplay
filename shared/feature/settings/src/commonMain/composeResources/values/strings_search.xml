@@ -74,6 +74,8 @@
     <string name="ss_unhide_cw_subtitle">Show all hidden items in the Continue Watching row</string>
     <string name="ss_next_up_hidden_title">Hidden from Next Up</string>
     <string name="ss_next_up_hidden_subtitle">View and restore series excluded from the Next Up row</string>
+    <string name="ss_hidden_libraries_title">Hidden libraries</string>
+    <string name="ss_hidden_libraries_subtitle">View and restore libraries excluded from the My Media row</string>
     <string name="ss_merge_continue_next_up_title">Merge Continue &amp; Next Up</string>
     <string name="ss_merge_continue_next_up_subtitle">Combine Next Up items into the Continue Watching row</string>
     <string name="ss_next_up_max_days_title">Next Up Time Window</string>
@@ -158,6 +160,8 @@
     <string name="ss_autoplay_trailers_subtitle">Automatically play media trailers on details pages</string>
     <string name="ss_cinema_mode_title">Cinema Mode</string>
     <string name="ss_cinema_mode_subtitle">Play pre-roll intros before the main feature</string>
+    <string name="ss_play_trailer_before_movie_title">Play Trailer Before Movie</string>
+    <string name="ss_play_trailer_before_movie_subtitle">Queue a trailer ahead of the feature when one is available</string>
     <string name="ss_episode_browser_title">In-Player Episode Browser</string>
     <string name="ss_episode_browser_subtitle">Show inline list of episodes during playback</string>
     <string name="ss_playback_metadata_title">Show Playback Metadata</string>
@@ -424,6 +428,10 @@
     <string name="ss_max_per_check_subtitle">Maximum items per notification batch</string>
     <string name="ss_notification_libraries_title">Notification Libraries</string>
     <string name="ss_notification_libraries_subtitle">Choose which libraries trigger notifications</string>
+    <!-- D12: the per-series new-episode notification management entry (fused
+         notification row + the sheet it opens). -->
+    <string name="ss_series_notifications_title">Series Notifications</string>
+    <string name="ss_series_notifications_subtitle">Manage the series you get new-episode alerts for</string>
     <string name="ss_clear_cache_title">Clear Cache</string>
     <string name="ss_clear_cache_subtitle">Delete temporary image and network buffers to free space</string>
     <string name="ss_clear_image_cache_title">Clear Image Cache</string>

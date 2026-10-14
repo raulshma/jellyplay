@@ -4,6 +4,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.raulshma.jellyplay.core.datastore.PreferenceCodec
 import com.raulshma.jellyplay.core.datastore.UserNamespacedKeys
+import com.raulshma.jellyplay.core.datastore.spec.PreferencePlatformRule
 import com.raulshma.jellyplay.core.datastore.spec.PreferenceSearchSpec
 import com.raulshma.jellyplay.core.datastore.spec.PreferenceSpec
 import com.raulshma.jellyplay.core.datastore.spec.PreferenceStorage
@@ -87,7 +88,7 @@ object HomeDiscoveryPreferenceSpecs {
      * whose set predates them, while a user who then disables the section
      * keeps that choice.
      */
-    const val HOME_ENABLED_SECTION_TYPES_CURRENT_VERSION = 2
+    const val HOME_ENABLED_SECTION_TYPES_CURRENT_VERSION = 3
 
     /**
      * The version at which [HomeSectionType.CONTINUE_READING] shipped —
@@ -107,6 +108,20 @@ object HomeDiscoveryPreferenceSpecs {
      */
     const val DISCOVER_SHIPPED_AT_VERSION = 2
 
+    /**
+     * The version at which [HomeSectionType.UPCOMING] (H4) shipped — same
+     * union-in mechanics as the shipped-at entries above. H4 and H5 land in
+     * ONE bump (both v3) so existing users get a single H21 announcement for
+     * the pair.
+     */
+    const val UPCOMING_SHIPPED_AT_VERSION = 3
+
+    /**
+     * The version at which [HomeSectionType.MY_MEDIA] (H5) shipped — same
+     * union-in mechanics as [UPCOMING_SHIPPED_AT_VERSION], same bump.
+     */
+    const val MY_MEDIA_SHIPPED_AT_VERSION = 3
+
     // ------------------------------------------------------------------
     // Settings-search route kinds (the plain ids the feature layer maps to
     // its Routes) + the standalone entries + searchEntries list live at the
@@ -117,7 +132,11 @@ object HomeDiscoveryPreferenceSpecs {
     const val ROUTE_HOME_SETTINGS = "home_settings"
 
     /** Route kind: the "Hidden from Next Up" management screen. */
+    /** Route kind: the Next Up hidden-series drill-in. */
     const val ROUTE_NEXT_UP_EXCLUDED = "next_up_excluded"
+
+    /** Route kind: the My Media hidden-libraries drill-in. */
+    const val ROUTE_MY_MEDIA_HIDDEN = "my_media_hidden"
 
     /** Route kind: the pinned home sections drill-in. */
     const val ROUTE_PINNED_HOME_SECTIONS = "pinned_home_sections"
@@ -173,6 +192,125 @@ object HomeDiscoveryPreferenceSpecs {
             subtitleKey = "ss_home_backdrop_subtitle",
             categoryKey = "ss_cat_home",
             keywords = listOf("home", "backdrop", "artwork", "background", "blur", "wallpaper"),
+            routeKind = ROUTE_HOME_SETTINGS,
+        ),
+    )
+
+    /**
+     * H7 video hero billboard (touch/default form factors): a muted looping
+     * clip (ThemeVideo → trailer-embed fallback) in the hero on dwell. Default
+     * off — the static artwork hero stays the shipped behavior. The TV form
+     * factor has its own switch ([HOME_HERO_VIDEO_TV_ENABLED]).
+     */
+    val HOME_HERO_VIDEO_ENABLED: PreferenceSpec<Boolean> = PreferenceSpec.plainBoolean(
+        keyName = "home_hero_video_enabled",
+        default = false,
+        resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
+        search = PreferenceSearchSpec(
+            id = "home_hero_video",
+            titleKey = "settings_home_hero_video",
+            subtitleKey = "settings_home_hero_video_subtitle",
+            categoryKey = "ss_cat_home",
+            keywords = listOf("hero", "video", "trailer", "theme", "ambient", "motion", "billboard", "clip"),
+            routeKind = ROUTE_HOME_SETTINGS,
+        ),
+    )
+
+    /** H7's TV form-factor twin — same clip pipeline, separate switch. */
+    val HOME_HERO_VIDEO_TV_ENABLED: PreferenceSpec<Boolean> = PreferenceSpec.plainBoolean(
+        keyName = "home_hero_video_tv_enabled",
+        default = false,
+        resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
+        search = PreferenceSearchSpec(
+            id = "home_hero_video_tv",
+            titleKey = "settings_home_hero_video_tv",
+            subtitleKey = "settings_home_hero_video_tv_subtitle",
+            categoryKey = "ss_cat_home",
+            keywords = listOf("hero", "video", "trailer", "tv", "android tv", "ambient", "motion", "billboard"),
+            routeKind = ROUTE_HOME_SETTINGS,
+        ),
+    )
+
+    /**
+     * H10 focus-driven ambient backdrop (Android TV): the focused card
+     * repaints the home ambient backdrop from its BlurHash/backdrop. Default
+     * off — the backdrop stays hero-driven.
+     */
+    val HOME_FOCUS_BACKDROP: PreferenceSpec<Boolean> = PreferenceSpec.plainBoolean(
+        keyName = "home_focus_backdrop",
+        default = false,
+        resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
+        search = PreferenceSearchSpec(
+            id = "home_focus_backdrop",
+            titleKey = "settings_home_focus_backdrop",
+            subtitleKey = "settings_home_focus_backdrop_subtitle",
+            categoryKey = "ss_cat_home",
+            keywords = listOf("focus", "backdrop", "ambient", "immersive", "tv", "android tv", "blur", "background"),
+            routeKind = ROUTE_HOME_SETTINGS,
+        ),
+    )
+
+    /** H17 personal stats card ("Your library week") between hero and the first row. */
+    val HOME_STATS_CARD: PreferenceSpec<Boolean> = PreferenceSpec.plainBoolean(
+        keyName = "home_stats_card",
+        default = false,
+        resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
+        search = PreferenceSearchSpec(
+            id = "home_stats_card",
+            titleKey = "settings_home_stats_card",
+            subtitleKey = "settings_home_stats_card_subtitle",
+            categoryKey = "ss_cat_home",
+            keywords = listOf("stats", "statistics", "week", "watch", "played", "library", "card"),
+            routeKind = ROUTE_HOME_SETTINGS,
+        ),
+    )
+
+    /** H18 genre quick-access rail (chips above the first row). */
+    val HOME_GENRE_RAIL: PreferenceSpec<Boolean> = PreferenceSpec.plainBoolean(
+        keyName = "home_genre_rail",
+        default = false,
+        resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
+        search = PreferenceSearchSpec(
+            id = "home_genre_rail",
+            titleKey = "settings_home_genre_rail",
+            subtitleKey = "settings_home_genre_rail_subtitle",
+            categoryKey = "ss_cat_home",
+            keywords = listOf("genre", "chips", "rail", "browse", "categories", "quick access"),
+            routeKind = ROUTE_HOME_SETTINGS,
+        ),
+    )
+
+    /** H19 watch-party / presence chips ("Alex is watching Dune — join"). Admin-gated surface. */
+    val HOME_PRESENCE_CHIPS: PreferenceSpec<Boolean> = PreferenceSpec.plainBoolean(
+        keyName = "home_presence_chips",
+        default = false,
+        resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
+        search = PreferenceSearchSpec(
+            id = "home_presence_chips",
+            titleKey = "settings_home_presence_chips",
+            subtitleKey = "settings_home_presence_chips_subtitle",
+            categoryKey = "ss_cat_home",
+            keywords = listOf("presence", "watch party", "friends", "sessions", "join", "watching", "now playing"),
+            routeKind = ROUTE_HOME_SETTINGS,
+        ),
+    )
+
+    /**
+     * H21 new-section announcement toast: when a version bump auto-enables a
+     * section, say so once instead of silently. Default on — the announcement
+     * IS the discoverability fix; the stamped
+     * [HOME_ANNOUNCED_VERSION] makes it once-per-section-wave.
+     */
+    val HOME_NEW_SECTION_ANNOUNCEMENTS: PreferenceSpec<Boolean> = PreferenceSpec.plainBoolean(
+        keyName = "home_new_section_announcements",
+        default = true,
+        resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
+        search = PreferenceSearchSpec(
+            id = "home_new_section_announcements",
+            titleKey = "settings_new_section_announcements",
+            subtitleKey = "settings_new_section_announcements_subtitle",
+            categoryKey = "ss_cat_home",
+            keywords = listOf("new", "section", "announcement", "toast", "update", "customize", "notification"),
             routeKind = ROUTE_HOME_SETTINGS,
         ),
     )
@@ -289,6 +427,26 @@ object HomeDiscoveryPreferenceSpecs {
         ),
     )
 
+    /**
+     * H20 server-persisted home layout: after any layout-writing command,
+     * push the layout to the server's DisplayPreferences (debounced). Default
+     * off — the MANUAL sync policy (explicit upload/restore actions) is the
+     * shipped behavior; no auto-pull exists either way.
+     */
+    val HOME_LAYOUT_AUTOPUSH: PreferenceSpec<Boolean> = PreferenceSpec.plainBoolean(
+        keyName = "home_layout_autopush",
+        default = false,
+        resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
+        search = PreferenceSearchSpec(
+            id = "home_layout_autopush",
+            titleKey = "settings_home_layout_autopush",
+            subtitleKey = "settings_home_layout_autopush_subtitle",
+            categoryKey = "ss_cat_home",
+            keywords = listOf("layout", "sync", "server", "display preferences", "upload", "push", "cross-device", "roam"),
+            routeKind = ROUTE_HOME_SETTINGS,
+        ),
+    )
+
     val CONTINUE_WATCHING_CLICK_BEHAVIOR: PreferenceSpec<ContinueWatchingClickBehavior> = PreferenceSpec.enumRow(
         keyName = "continue_watching_click_behavior",
         default = ContinueWatchingClickBehavior.DETAILS,
@@ -382,6 +540,88 @@ object HomeDiscoveryPreferenceSpecs {
     )
 
     // ------------------------------------------------------------------
+    // Card-display expansion (H11/H12/H13/H15): quality/new badges, TV
+    // trickplay preview and the anti-spoiler master switch. Consumed through
+    // the CardDisplayPreferences composition local (provisioned from the
+    // HomeDiscoverySlice beside the quartet above); their rows live in the
+    // home hub's Cards group.
+    // ------------------------------------------------------------------
+
+    /** H11 quality badges (4K / HDR / DV / Atmos) on poster + wide cards. */
+    val SHOW_QUALITY_BADGES: PreferenceSpec<Boolean> = PreferenceSpec.plainBoolean(
+        keyName = "show_quality_badges",
+        default = true,
+        resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
+        search = PreferenceSearchSpec(
+            id = "show_quality_badges",
+            titleKey = "settings_show_quality_badges",
+            subtitleKey = "settings_show_quality_badges_subtitle",
+            categoryKey = "ss_cat_home",
+            keywords = listOf("quality", "4k", "hdr", "dolby", "vision", "atmos", "badge", "resolution", "codec"),
+            routeKind = ROUTE_HOME_SETTINGS,
+        ),
+    )
+
+    /** H12 "NEW" badges for items added since the last home visit. */
+    val SHOW_NEW_BADGES: PreferenceSpec<Boolean> = PreferenceSpec.plainBoolean(
+        keyName = "show_new_badges",
+        default = true,
+        resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
+        search = PreferenceSearchSpec(
+            id = "show_new_badges",
+            titleKey = "settings_show_new_badges",
+            subtitleKey = "settings_show_new_badges_subtitle",
+            categoryKey = "ss_cat_home",
+            keywords = listOf("new", "badge", "dot", "recently", "added", "indicator", "marker"),
+            routeKind = ROUTE_HOME_SETTINGS,
+        ),
+    )
+
+    /**
+     * H13 trickplay preview on wide (resume/next-up) cards — TV-only v1: the
+     * focused card shows the trickplay tile at the resume position. Default
+     * on (a pure enhancement); the row is hidden on non-TV form factors (the
+     * [PreferencePlatformRule.ANDROID_ONLY] tag keeps the search hit off
+     * desktop, the row's TV gate hides it on touch) and the behavior hard-gates
+     * on performance mode.
+     */
+    val HOME_TRICKPLAY_PREVIEW: PreferenceSpec<Boolean> = PreferenceSpec.plainBoolean(
+        keyName = "home_trickplay_preview",
+        default = true,
+        resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
+        search = PreferenceSearchSpec(
+            id = "home_trickplay_preview",
+            titleKey = "settings_home_trickplay_preview",
+            subtitleKey = "settings_home_trickplay_preview_subtitle",
+            categoryKey = "ss_cat_home",
+            keywords = listOf("trickplay", "preview", "hover", "focus", "scrub", "thumbnails", "chapter"),
+            routeKind = ROUTE_HOME_SETTINGS,
+            platformRule = PreferencePlatformRule.ANDROID_ONLY,
+        ),
+    )
+
+    /**
+     * H15 anti-spoiler home mode — the one master switch that hides
+     * watch-state spoilers across home (progress bars, "Xm left", watched
+     * checkmarks/unwatched counts, episode titles on resume cards). Default
+     * off; when ON, the watched-checkmark/unwatched-badge knobs above are
+     * force-suppressed at the render sites regardless of their own settings.
+     */
+    val ANTI_SPOILER_HOME: PreferenceSpec<Boolean> = PreferenceSpec.plainBoolean(
+        keyName = "anti_spoiler_home",
+        default = false,
+        resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
+        search = PreferenceSearchSpec(
+            id = "anti_spoiler_home",
+            titleKey = "settings_anti_spoiler_home",
+            subtitleKey = "settings_anti_spoiler_home_subtitle",
+            categoryKey = "ss_cat_home",
+            keywords = listOf("spoiler", "progress", "watched"),
+            routeKind = ROUTE_HOME_SETTINGS,
+        ),
+    )
+
+    // ------------------------------------------------------------------
     // Next Up + Continue Watching curation
     // ------------------------------------------------------------------
 
@@ -433,6 +673,26 @@ object HomeDiscoveryPreferenceSpecs {
         ),
     )
 
+    /**
+     * H6 active-session-aware Continue Watching: don't offer "continue" for an
+     * item currently playing on another device (server
+     * `excludeActiveSessions` resume-query param). Default false — current
+     * behavior preserved.
+     */
+    val EXCLUDE_ACTIVE_SESSIONS: PreferenceSpec<Boolean> = PreferenceSpec.plainBoolean(
+        keyName = "home_cw_exclude_active_sessions",
+        default = false,
+        resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
+        search = PreferenceSearchSpec(
+            id = "home_cw_exclude_active_sessions",
+            titleKey = "settings_exclude_active_sessions",
+            subtitleKey = "settings_exclude_active_sessions_subtitle",
+            categoryKey = "ss_cat_home",
+            keywords = listOf("continue watching", "next up", "active", "session", "playing", "device", "resume", "currently"),
+            routeKind = ROUTE_HOME_SETTINGS,
+        ),
+    )
+
     val NEXT_UP_EXCLUDED_SERIES_IDS: PreferenceSpec<Set<String>> = PreferenceSpec.custom(
         keyName = "next_up_excluded_series_ids",
         default = emptySet(),
@@ -469,6 +729,68 @@ object HomeDiscoveryPreferenceSpecs {
     val LAST_VIEWED_SEASON_BY_SERIES: PreferenceSpec<Map<String, String>> = PreferenceSpec.custom(
         keyName = "last_viewed_season_by_series",
         default = emptyMap(),
+        resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
+    )
+
+    // ------------------------------------------------------------------
+    // Home-wave internals + inline-curation slices. The internal stamps are
+    // plain rows with no search entry (never surfaced); the two slices are
+    // JSON string sets with no settings row yet — their management UI ships
+    // with the features that consume them (H5's config sheet, D8's
+    // detail-screen mute chip), so the specs stay faceless.
+    // ------------------------------------------------------------------
+
+    /**
+     * H12 visit memory: when the user last saw home (epoch ms, stamped by the
+     * home screen's dwell timer). Items added after this render the NEW
+     * badge. Internal bookkeeping — no settings row.
+     */
+    val HOME_LAST_VISIT_EPOCH_MS: PreferenceSpec<Long> = PreferenceSpec.plainLong(
+        keyName = "home_last_visit_epoch_ms",
+        default = 0L,
+        resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
+    )
+
+    /**
+     * H21 announce-once stamp: the enabled-set schema version whose
+     * new-section announcement was last shown (or dismissed). Internal
+     * bookkeeping — no settings row.
+     */
+    val HOME_ANNOUNCED_VERSION: PreferenceSpec<Int> = PreferenceSpec.plainInt(
+        keyName = "home_announced_version",
+        default = 0,
+        resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
+    )
+
+    /**
+     * H5 "My Media" inline curation: libraries hidden from the My Media tiles
+     * row (long-press a tile → hide). Stored as a JSON string-id set; managed
+     * inline plus the section config sheet, and restored through the
+     * hidden-libraries drill-in (the settings-search surface GAP-1 added).
+     */
+    val MY_MEDIA_HIDDEN_LIBRARY_IDS: PreferenceSpec<Set<String>> = PreferenceSpec.custom(
+        keyName = "my_media_hidden_library_ids",
+        default = emptySet(),
+        resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
+        search = PreferenceSearchSpec(
+            id = "hidden_libraries",
+            titleKey = "ss_hidden_libraries_title",
+            subtitleKey = "ss_hidden_libraries_subtitle",
+            categoryKey = "ss_cat_home",
+            keywords = listOf("my media", "hidden", "library", "tiles", "restore", "show", "unhide"),
+            routeKind = ROUTE_MY_MEDIA_HIDDEN,
+        ),
+    )
+
+    /**
+     * D8 per-series theme-music memory: series whose ambient theme music the
+     * user muted on the detail screen ("never for this series"). Stored as a
+     * JSON string-id set; a later wave projects it into DetailPreferences and
+     * builds the mute chip — the store-side slice lands first.
+     */
+    val THEME_MUSIC_MUTED_SERIES_IDS: PreferenceSpec<Set<String>> = PreferenceSpec.custom(
+        keyName = "theme_music_muted_series_ids",
+        default = emptySet(),
         resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
     )
 
@@ -546,7 +868,14 @@ object HomeDiscoveryPreferenceSpecs {
     val all: List<PreferenceSpec<*>> = listOf(
         HOME_MODE,
         HOME_HERO_ENABLED,
+        HOME_HERO_VIDEO_ENABLED,
+        HOME_HERO_VIDEO_TV_ENABLED,
         HOME_BACKDROP_ENABLED,
+        HOME_FOCUS_BACKDROP,
+        HOME_STATS_CARD,
+        HOME_GENRE_RAIL,
+        HOME_PRESENCE_CHIPS,
+        HOME_NEW_SECTION_ANNOUNCEMENTS,
         HOME_ENABLED_SECTION_TYPES,
         HOME_ENABLED_SECTION_TYPES_VERSION,
         HOME_SECTION_ORDER,
@@ -555,18 +884,28 @@ object HomeDiscoveryPreferenceSpecs {
         PINNED_HOME_SECTIONS,
         HOME_DISCOVER_ROWS,
         HOME_LAYOUT_PRESETS,
+        HOME_LAYOUT_AUTOPUSH,
         CONTINUE_WATCHING_CLICK_BEHAVIOR,
         SHOW_UNWATCHED_BADGE,
         HIDE_WATCHED_ITEMS,
         SHOW_WATCHED_CHECKMARK,
         SHOW_EXTERNAL_RATINGS,
+        SHOW_QUALITY_BADGES,
+        SHOW_NEW_BADGES,
+        HOME_TRICKPLAY_PREVIEW,
+        ANTI_SPOILER_HOME,
         MERGE_CONTINUE_WATCHING_NEXT_UP,
         NEXT_UP_MAX_DAYS,
         NEXT_UP_REWATCHING,
         CLASSIC_ROWS,
+        EXCLUDE_ACTIVE_SESSIONS,
         NEXT_UP_EXCLUDED_SERIES_IDS,
         HIDDEN_CW_ITEM_IDS,
         LAST_VIEWED_SEASON_BY_SERIES,
+        MY_MEDIA_HIDDEN_LIBRARY_IDS,
+        THEME_MUSIC_MUTED_SERIES_IDS,
+        HOME_LAST_VISIT_EPOCH_MS,
+        HOME_ANNOUNCED_VERSION,
         SHOW_CLOCK_ON_HOME,
         SHOW_SETTINGS_IN_HOME_SEARCH,
         HIDE_TOP_HEADER_ON_SCROLL,
@@ -636,25 +975,39 @@ object HomeDiscoveryPreferenceSpecs {
     val searchEntries: List<PreferenceSearchSpec> = listOf(
         HOME_MODE.searchEntry(),
         HOME_HERO_ENABLED.searchEntry(),
+        HOME_HERO_VIDEO_ENABLED.searchEntry(),
+        HOME_HERO_VIDEO_TV_ENABLED.searchEntry(),
         HOME_BACKDROP_ENABLED.searchEntry(),
+        HOME_FOCUS_BACKDROP.searchEntry(),
         SHOW_CLOCK_ON_HOME.searchEntry(),
         HIDE_TOP_HEADER_ON_SCROLL.searchEntry(),
         SHOW_SETTINGS_IN_HOME_SEARCH.searchEntry(),
+        HOME_STATS_CARD.searchEntry(),
+        HOME_GENRE_RAIL.searchEntry(),
+        HOME_PRESENCE_CHIPS.searchEntry(),
+        HOME_NEW_SECTION_ANNOUNCEMENTS.searchEntry(),
         CONTINUE_WATCHING_CLICK_BEHAVIOR.searchEntry(),
         CLASSIC_ROWS.searchEntry(),
+        EXCLUDE_ACTIVE_SESSIONS.searchEntry(),
         NEXT_UP_EXCLUDED_SERIES_IDS.searchEntry(),
         HIDDEN_CW_ITEM_IDS.searchEntry(),
+        MY_MEDIA_HIDDEN_LIBRARY_IDS.searchEntry(),
         MERGE_CONTINUE_WATCHING_NEXT_UP.searchEntry(),
         NEXT_UP_MAX_DAYS.searchEntry(),
         NEXT_UP_REWATCHING.searchEntry(),
         PINNED_HOME_SECTIONS.searchEntry(),
         HOME_LAYOUT_PRESETS.searchEntry(),
+        HOME_LAYOUT_AUTOPUSH.searchEntry(),
         HOME_LIBRARY_SECTION_OVERRIDES.searchEntry(),
         HOME_DISCOVER_ROWS.searchEntry(),
         SHOW_UNWATCHED_BADGE.searchEntry(),
         SHOW_WATCHED_CHECKMARK.searchEntry(),
         HIDE_WATCHED_ITEMS.searchEntry(),
         SHOW_EXTERNAL_RATINGS.searchEntry(),
+        SHOW_QUALITY_BADGES.searchEntry(),
+        SHOW_NEW_BADGES.searchEntry(),
+        HOME_TRICKPLAY_PREVIEW.searchEntry(),
+        ANTI_SPOILER_HOME.searchEntry(),
     )
 
     /** The projection hook for [searchEntries]: a row's declared search entry. */

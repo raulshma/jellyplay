@@ -352,6 +352,11 @@ class JellyPlayPluginApiClientImpl(
         json.decodeFromString<JellyPlayRowResult>(text)
     }
 
+    override suspend fun getCuratedHero(): Result<JellyPlayHeroResult?> = runCatchingIO {
+        val text = requester.getBodyText("/jellyplay/hero") ?: return@runCatchingIO null
+        json.decodeFromString<JellyPlayHeroResult>(text)
+    }
+
     // ------------------------------------------------------------------
     // user data
     // ------------------------------------------------------------------

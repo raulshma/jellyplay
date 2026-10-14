@@ -107,6 +107,9 @@ class HomeSectionQueryTest {
             base.copy(nextUpExcludedSeriesIds = emptySet()),
             base.copy(hiddenCwItemIds = emptySet()),
             base.copy(pinnedSections = emptyList()),
+            base.copy(classicRows = true),
+            base.copy(excludeActiveSessions = true),
+            base.copy(myMediaHiddenLibraryIds = setOf("lib1")),
         )
 
         variants.forEach { variant ->

@@ -16,6 +16,7 @@ import com.raulshma.jellyplay.core.data.widget.LibrarySyncHook
 import com.raulshma.jellyplay.core.data.worker.TvWatchNextScheduler
 import com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore
 import com.raulshma.jellyplay.core.model.DiscoverRowConfig
+import com.raulshma.jellyplay.core.model.CuratedHeroEntry
 import com.raulshma.jellyplay.core.model.HomeFreshness
 import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionPrefs
@@ -421,7 +422,17 @@ internal class HomeRefresher(
                         // between this drain and the write below, by
                         // construction.
                         val rolledSections = discoverRows.drainRolls(finalSections)
-                        _state.update { it.copy(sections = rolledSections, bookProgressFractions = bookFractions) }
+                        _state.update {
+                            it.copy(
+                                sections = rolledSections,
+                                bookProgressFractions = bookFractions,
+                                // H9: the hero billboards ride the SAME
+                                // single-emission write as the sections they
+                                // rotate with — a partial paint (new rows,
+                                // stale hero) never lands.
+                                curatedHero = homeResult.curatedHero,
+                            )
+                        }
 
                         val continueWatching = rolledSections
                             .find { it.type == HomeSectionType.CONTINUE_WATCHING }
@@ -1327,6 +1338,15 @@ internal enum class RefreshTrigger {
 internal data class HomeRefreshState(
     val sections: List<HomeSection> = emptyList(),
     /**
+     * H9: the plugin-curated hero billboards, resolved by the fetcher and
+     * merged AHEAD of the local hero candidates at the screen (server order,
+     * dedup by item id, curated wins). Cleared wherever the sections clear —
+     * server-curated data must never outlive its fetch the way sections
+     * don't (the SWR repaint deliberately doesn't restore it; the hero falls
+     * back to its local pool until the revalidation lands).
+     */
+    val curatedHero: List<CuratedHeroEntry> = emptyList(),
+    /**
      * Continue Reading progress bars, keyed by item id — decoded from the
      * book ticks encodings (see [com.raulshma.jellyplay.core.model.bookProgressFraction])
      * with exact page fractions where the TOC cache knows the page count.
@@ -1397,6 +1417,8 @@ private fun HomeRefreshState.withContentDropped(
     sections = sections,
     discoverSections = emptyMap(),
     bookProgressFractions = bookProgressFractions,
+    // Server-curated hero billboards clear with the sections that carry them.
+    curatedHero = emptyList(),
     error = error,
     isLoading = isLoading,
     recentlyGrabbed = if (dropRecentlyGrabbed) emptyList() else this.recentlyGrabbed,

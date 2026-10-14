@@ -166,4 +166,6 @@
     <string name="settings_hide_top_header_on_scroll_off">El encabezado permanece visible</string>
     <string name="settings_next_up_hidden">Oculto de A continuación</string>
     <string name="settings_next_up_hidden_brief">Ver y restaurar series quitadas de la fila A continuación</string>
+    <string name="settings_hidden_libraries">Bibliotecas ocultas</string>
+    <string name="settings_hidden_libraries_brief">Ver y restaurar bibliotecas ocultas de la fila Mi contenido</string>
 </resources>

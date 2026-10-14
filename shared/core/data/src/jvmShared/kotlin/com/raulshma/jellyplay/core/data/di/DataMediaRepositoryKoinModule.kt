@@ -13,6 +13,7 @@ import com.raulshma.jellyplay.core.data.repository.MediaRepositoryCacheInvalidat
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryInternals
 import com.raulshma.jellyplay.core.data.repository.MusicCatalogue
+import com.raulshma.jellyplay.core.data.repository.SeriesNotificationReads
 import com.raulshma.jellyplay.core.data.repository.OfflineFirstItemResolver
 import com.raulshma.jellyplay.core.data.repository.OfflineFirstItemResolverImpl
 import com.raulshma.jellyplay.core.data.repository.OfflinePlaybackFacade
@@ -140,6 +141,8 @@ internal val dataMediaRepositoryModule: Module = module {
     // the user-data feed). getAlbumTracks is the one member still dual-declared:
     // the detail provider's session resolves detail + album tracks together.
     single<MusicCatalogue> { get<MediaRepositoryImpl>() }
+    // D12: the series-notification family (the per-series Next Up diff read).
+    single<SeriesNotificationReads> { get<MediaRepositoryImpl>() }
     single<UserDataWriteOperations> { get<MediaRepositoryImpl>() }
     // The home-feed family (the sections payload, the single-row edge-pull
     // refetch, the SWR snapshot reads, the discover-row verbs) and the

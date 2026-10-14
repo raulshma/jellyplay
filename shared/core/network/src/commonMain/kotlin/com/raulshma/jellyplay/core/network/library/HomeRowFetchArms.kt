@@ -21,7 +21,7 @@ import kotlinx.coroutines.sync.Semaphore
  *
  * Two tables, both keyed by [HomeSectionType]:
  *  - [HomeRowBatchSubcalls] — the batch fetch's per-type port call for the
- *    resume-row trio (the
+ *    resume trio plus the H4 Upcoming row (the
  *    enabled gate and the query-parameter wiring move here from the fetch
  *    schedule; the SCHEDULE itself — what runs concurrently, the shared
  *    folders fetch, the recommendations seed chain — stays in
@@ -37,7 +37,8 @@ import kotlinx.coroutines.sync.Semaphore
  */
 
 /**
- * The batch fetch's direct sub-call for the resume-row trio: the enabled
+ * The batch fetch's direct sub-call for the resume trio plus the H4 Upcoming
+ * row: the enabled
  * gate (a disabled section makes ZERO port calls — resolved locally as an
  * empty success) and the query-parameter wiring, in one registration per
  * type. Types without a direct sub-call (rows that emerge from a fan-out,
@@ -48,7 +49,11 @@ internal val HomeRowBatchSubcalls: Map<HomeSectionType, suspend (HomeSectionSour
     mapOf(
         HomeSectionType.CONTINUE_WATCHING to { sources, query ->
             if (HomeSectionType.CONTINUE_WATCHING in query.enabledSections) {
-                sources.getContinueWatching(limit = 20, classicRows = query.classicRows)
+                sources.getContinueWatching(
+                    limit = 20,
+                    classicRows = query.classicRows,
+                    excludeActiveSessions = query.excludeActiveSessions,
+                )
             } else {
                 Result.success(emptyList())
             }
@@ -67,6 +72,18 @@ internal val HomeRowBatchSubcalls: Map<HomeSectionType, suspend (HomeSectionSour
                     enableRewatching = query.nextUpRewatching,
                     maxDays = query.nextUpMaxDays,
                 )
+            } else {
+                Result.success(emptyList())
+            }
+        },
+        // H4: the Upcoming row's direct sub-call — the resume trio's shape
+        // (enabled gate + fixed row limit) with no per-user query parameters:
+        // the catalog-wide unaired list, uncached like its trio siblings (the
+        // sub-call TTL memos are the latest/similar rows' policy; watch-state
+        // rows stay live every refresh).
+        HomeSectionType.UPCOMING to { sources, query ->
+            if (HomeSectionType.UPCOMING in query.enabledSections) {
+                sources.getUpcoming(userId = null, parentId = null, limit = 20)
             } else {
                 Result.success(emptyList())
             }
@@ -114,7 +131,7 @@ internal fun interface HomeRowRefreshArm {
 }
 
 /**
- * The single-row refresh arms, complete over the enum. Eight rows carry a
+ * The single-row refresh arms, complete over the enum. Nine rows carry a
  * real arm; RECOMMENDATIONS, FAVORITES, LIVE_TV and DOWNLOADED share
  * [notRefreshable] (never constructed by the network, or — for
  * RECOMMENDATIONS — batch-shaped; the gesture is gated off them upstream and
@@ -135,7 +152,13 @@ internal object HomeRowRefreshArms {
     private val arms: Map<HomeSectionType, HomeRowRefreshArm> = mapOf(
 
         HomeSectionType.CONTINUE_WATCHING to HomeRowRefreshArm { ctx, _ ->
-            val cw = ctx.sources.getContinueWatching(limit = 20, classicRows = ctx.query.classicRows)
+            val cw = ctx.sources.getContinueWatching(
+                limit = 20,
+                classicRows = ctx.query.classicRows,
+                // Same param value the batch sub-call sends — the refresh arm
+                // must not disagree with the batch on the H6 wire flag.
+                excludeActiveSessions = ctx.query.excludeActiveSessions,
+            )
                 .getOrThrow()
                 .excludingHiddenItemIds(ctx.query.hiddenCwItemIds)
             if (!ctx.mergeNextUpIntoContinueWatching) {
@@ -186,6 +209,17 @@ internal object HomeRowRefreshArms {
                 .filterNextUpEligible(cwIds, ctx.query.nextUpExcludedSeriesIds)
                 .takeIf { it.isNotEmpty() }
                 ?.let { HomeSectionType.NEXT_UP.descriptor.section(it) }
+        },
+
+        // H4: the Upcoming row's single-row refetch — the batch sub-call's
+        // identical port read with no eligibility filters (upcoming is
+        // watch-state-blind by definition; there is nothing to re-filter
+        // against), rebuilt under the descriptor's static identity.
+        HomeSectionType.UPCOMING to HomeRowRefreshArm { ctx, _ ->
+            ctx.sources.getUpcoming(userId = null, parentId = null, limit = 20)
+                .getOrThrow()
+                .takeIf { it.isNotEmpty() }
+                ?.let { HomeSectionType.UPCOMING.descriptor.section(it) }
         },
 
         HomeSectionType.LATEST_MEDIA to HomeRowRefreshArm { ctx, section ->

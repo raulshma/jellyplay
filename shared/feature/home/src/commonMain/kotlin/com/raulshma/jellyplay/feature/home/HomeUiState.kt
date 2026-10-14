@@ -1,6 +1,8 @@
 package com.raulshma.jellyplay.feature.home
 
 import androidx.compose.runtime.Immutable
+import com.raulshma.jellyplay.core.model.CuratedHeroEntry
+import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionType
@@ -48,6 +50,13 @@ data class SectionConfigState(
 @Immutable
 data class HomeUiState(
     val sections: List<HomeSection> = emptyList(),
+    /**
+     * H9: the plugin-curated hero billboards (the refresher's resolved
+     * entries — see [HomeRefreshState.curatedHero]). The screen merges them
+     * ahead of the local hero candidates and reads the headline/subhead
+     * overrides for the featured item from here.
+     */
+    val curatedHero: List<CuratedHeroEntry> = emptyList(),
     /**
      * Continue Reading progress bars keyed by item id (the refresher's
      * book-fraction decodes — see [HomeRefreshState.bookProgressFractions]).
@@ -186,6 +195,58 @@ data class HomeUiState(
      * the same sheet the media-detail screen hosts.
      */
     val seriesDownload: HomeSeriesDownloadState? = null,
+    /**
+     * H12 visit memory: the PREVIOUS home visit's stamp (epoch ms; 0 =
+     * never stamped), read ONCE per home session — before this session's
+     * dwell timer writes its own stamp — so the NEW-badge predicate compares
+     * arrivals against the last visit, never against the in-progress one
+     * (a live flow would clear every badge ~10s after it appeared). Feeds
+     * the content list's arrival rows via [HomeContentState].
+     */
+    val homeLastVisitEpochMs: Long = 0L,
+    /**
+     * H17 personal stats card data — null hides the card. Loaded only while
+     * the `home_stats_card` pref is on and a user is signed in; a load
+     * failure resolves to null too (the card hides silently — no error
+     * surface for an opt-in decoration).
+     */
+    val statsCard: HomeStatsCardData? = null,
+    /** The `home_stats_card` pref mirror — the card's render gate. */
+    val statsCardEnabled: Boolean = false,
+    /**
+     * H18 genre quick-access rail chips (server-ordered, top ~24). Empty
+     * hides the rail: pref off, offline suppression, or a failed/empty
+     * fetch.
+     */
+    val genreChips: List<Genre> = emptyList(),
+    /** The `home_genre_rail` pref mirror — the rail's render gate. */
+    val genreRailEnabled: Boolean = false,
+    /**
+     * H15 anti-spoiler home master switch mirror — the home top-dock
+     * overflow's checkmark reads this; its toggle writes the same
+     * [com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore]
+     * command Settings' Home-Cards row does.
+     */
+    val antiSpoilerHome: Boolean = false,
+    /**
+     * The `home_focus_backdrop` pref mirror (H10) — the TV focus-driven
+     * ambient backdrop's render gate. Default off; the backdrop region gates
+     * the focus choreography on it (beside the existing backdrop gates).
+     */
+    val focusBackdropEnabled: Boolean = false,
+    /**
+     * The `home_trickplay_preview` pref mirror (H13) — the TV wide-card peek
+     * loader's gate. Default on; TV-only behavior (non-TV never provides the
+     * loader with a live gate).
+     */
+    val trickplayPreviewEnabled: Boolean = true,
+    /**
+     * H19 watch-party presence chips — OTHER users' now-playing sessions
+     * (capped at 3, per-chip dismissals already applied). Empty hides the
+     * row: pref off, offline, a failed capability probe (non-admin for the
+     * session — probe-once/hide-forever), or simply nobody watching.
+     */
+    val presenceChips: List<HomePresenceChip> = emptyList(),
 )
 
 /**

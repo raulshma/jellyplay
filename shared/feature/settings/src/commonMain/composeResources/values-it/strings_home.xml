@@ -166,4 +166,6 @@
     <string name="settings_hide_top_header_on_scroll_off">L'intestazione resta visibile</string>
     <string name="settings_next_up_hidden">Nascosto da Prossimi contenuti</string>
     <string name="settings_next_up_hidden_brief">Visualizza e ripristina le serie rimosse dalla riga Prossimi contenuti</string>
+    <string name="settings_hidden_libraries">Librerie nascoste</string>
+    <string name="settings_hidden_libraries_brief">Visualizza e ripristina le librerie nascoste dalla riga Le mie librerie</string>
 </resources>

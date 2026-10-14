@@ -143,6 +143,30 @@ class DetailPlayPoliciesTest {
         )
     }
 
+    @Test
+    fun dispatch_forceCinemaMode_recordsTheOverrideWithoutTouchingTheStreamTail() {
+        // D14 "Play (with pre-rolls)": the override record rides the dispatch
+        // and defaults false — every pre-D14 construction reads identical.
+        assertFalse(
+            DetailPlayPolicies.resolveDetailPlayDispatch(
+                origin = DetailOrigin.REMOTE,
+                localSubtitleIndex = null,
+                remoteSubtitleIndex = 7,
+                audioStreamIndex = 2,
+            ).forceCinemaMode,
+        )
+        assertEquals(
+            DetailPlayDispatch(subtitleStreamIndex = 7, audioStreamIndex = 2, forceCinemaMode = true),
+            DetailPlayPolicies.resolveDetailPlayDispatch(
+                origin = DetailOrigin.REMOTE,
+                localSubtitleIndex = null,
+                remoteSubtitleIndex = 7,
+                audioStreamIndex = 2,
+                forceCinemaMode = true,
+            ),
+        )
+    }
+
     // ── dispatchMarkPlayedAction table (mediaType × season action → confirm?) ──
 
     /** Runs the gate once and reports which branch fired. */

@@ -114,6 +114,12 @@ fun MediaDetailScreen(
     // can be merged into it (was previously a separate LaunchedEffect(itemId)).
     var activeTrailerKey by remember { mutableStateOf<String?>(null) }
 
+    // D12: the POST_NOTIFICATIONS runtime-flow seam (Android actual fires the
+    // Android 13+ system dialog when not granted; desktop is a no-op). The
+    // per-series notify toggle's first enable invokes it beside the config
+    // write — the MainActivity cold-start prompt pattern, mirrored.
+    val requestSeriesNotificationPermission = rememberSeriesNotificationPermissionRequest()
+
     LaunchedEffect(itemId) {
         viewModel.onEvent(DetailUiEvent.LoadItem(itemId))
         // Dismiss any open trailer dialog when navigating to a different item
@@ -487,6 +493,8 @@ fun MediaDetailScreen(
                     hasIntroSegment = uiState.hasIntroSegment,
                     hasCreditSegment = uiState.hasCreditSegment,
                     relatedVideos = uiState.relatedVideos,
+                    trailers = uiState.trailers,
+                    themeVideoStreamUrl = uiState.themeVideoStreamUrl,
                     tmdbReviews = uiState.tmdbReviews,
                     seerrRecommendations = uiState.seerrRecommendations,
                     seerrSimilar = uiState.seerrSimilar,
@@ -510,6 +518,13 @@ fun MediaDetailScreen(
                     pluginSimilarSuppressesStock = uiState.pluginSimilarSuppressesStock,
                     animeMarkers = uiState.animeMarkers,
                     seasonRatings = uiState.seasonRatings,
+                    externalRatings = uiState.externalRatings,
+                    externalRatingsSuppressedByPlugin = uiState.externalRatingsSuppressedByPlugin,
+                    franchiseCollections = uiState.franchiseCollections,
+                    upcomingEpisodes = uiState.upcomingEpisodes,
+                    seriesNotificationsEnabled = uiState.seriesNotificationsEnabled,
+                    themeMusicPlaying = uiState.themeMusicPlaying,
+                    hiddenFranchiseCollections = uiState.hiddenFranchiseCollections,
                 )
 
                 val onVideoClick = rememberVideoClickHandler(
@@ -541,6 +556,22 @@ fun MediaDetailScreen(
                     )
                 }
 
+                // D6: the process-wide manual up-next queue (DetailContent's
+                // koinInject precedent) — the franchise row's "play collection
+                // in order" action appends to it before the start dispatch.
+                val videoQueue = org.koin.compose.koinInject<com.raulshma.jellyplay.core.data.playback.VideoQueueController>()
+                // D14: the one-shot Cinema Mode override ("Play with
+                // pre-rolls" arms it), the SyncPlay flag the trailer
+                // pre-roll sequencing vetoes on, and the playback-prefs
+                // slice the trailer-then-feature toggle reads at dispatch
+                // time — all process-wide core:data/datastore/player-contract
+                // singles, same koinInject shape.
+                val cinemaModeOverride =
+                    org.koin.compose.koinInject<com.raulshma.jellyplay.core.data.playback.CinemaModeOverride>()
+                val syncPlayManager =
+                    org.koin.compose.koinInject<com.raulshma.jellyplay.core.data.syncplay.SyncPlayManager>()
+                val videoPlayerStore =
+                    org.koin.compose.koinInject<com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerStore>()
                 val playbackCallbacks = remember(viewModel, onPlayClick, onAudioClick, onReadClick, itemId) {
                     PlaybackCallbacks(
                         onPlayClick = { playItemId: String, sourceId: String?, start: Long ->
@@ -553,13 +584,48 @@ fun MediaDetailScreen(
                                 remoteSubtitleIndex = viewModel.selectedSubtitleIndex,
                                 audioStreamIndex = viewModel.selectedAudioIndex,
                             )
-                            onPlayClick(
-                                playItemId,
-                                sourceId,
-                                start,
-                                dispatch.subtitleStreamIndex,
-                                dispatch.audioStreamIndex,
+                            // D14 trailer-then-feature (opt-in
+                            // `playTrailerBeforeMovie`): sequence a LOCAL
+                            // trailer before the feature. The manual queue
+                            // drains AFTER the current item, so the plan's
+                            // seed-the-trailer-first shape would play it
+                            // after the movie — the documented two-session
+                            // fallback instead seeds the FEATURE at the
+                            // queue head and starts the session on the
+                            // trailer; the queue-first advance plays the
+                            // feature when the trailer ends. Remote
+                            // (YouTube) trailers cannot ride the player
+                            // session, so remote-only items keep the plain
+                            // start (resolveTrailerPreroll returns null).
+                            // SyncPlay-suppressed by the policy (the group
+                            // owns the order).
+                            val preroll = resolveTrailerPreroll(
+                                mediaType = uiState.detail?.item?.mediaType,
+                                trailers = uiState.trailers,
+                                playTrailerBeforeMovie = videoPlayerStore.videoPlayer.value.playTrailerBeforeMovie,
+                                startPositionTicks = start,
+                                isSyncPlayActive = syncPlayManager.isInSyncPlaySession,
                             )
+                            if (preroll != null && playItemId == itemId) {
+                                videoQueue.enqueueNext(
+                                    com.raulshma.jellyplay.core.data.playback.VideoQueueItem(
+                                        itemId = itemId,
+                                        title = uiState.detail?.item?.name ?: "",
+                                        subtitle = uiState.detail?.item?.year?.toString(),
+                                        imageUrl = viewModel.getImageUrl(itemId),
+                                        runTimeTicks = uiState.detail?.item?.runTimeTicks,
+                                    ),
+                                )
+                                onPlayClick(preroll.mediaItem.id, null, 0L, null, null)
+                            } else {
+                                onPlayClick(
+                                    playItemId,
+                                    sourceId,
+                                    start,
+                                    dispatch.subtitleStreamIndex,
+                                    dispatch.audioStreamIndex,
+                                )
+                            }
                         },
                         onPlayChapter = { start ->
                             // Resume the current item at a chapter position. Reuses the
@@ -598,7 +664,59 @@ fun MediaDetailScreen(
                         onStartInstantMix = { viewModel.onEvent(DetailUiEvent.StartInstantMix) },
                         onStartRadio = { viewModel.onEvent(DetailUiEvent.StartRadio) },
                         onStartWatchParty = { viewModel.watchParty.startScreenItem() },
+                        // D14 "Play (with pre-rolls)": arm the one-shot Cinema
+                        // Mode override, then dispatch the current item from
+                        // the start through the normal play path — the
+                        // session's user-open funnel consumes the override
+                        // into LoadRequest.forceCinemaMode and the pipeline's
+                        // cinema gate ORs it over the global pref (remaining
+                        // vetoes still apply). The stream selection is the
+                        // same policy fold, forced via the override record.
+                        onPlayWithPrerolls = {
+                            cinemaModeOverride.arm()
+                            val dispatch = DetailPlayPolicies.resolveDetailPlayDispatch(
+                                origin = uiState.origin,
+                                localSubtitleIndex = viewModel.selectedLocalSubtitleIndex,
+                                remoteSubtitleIndex = viewModel.selectedSubtitleIndex,
+                                audioStreamIndex = viewModel.selectedAudioIndex,
+                                forceCinemaMode = true,
+                            )
+                            onPlayClick(
+                                itemId,
+                                null,
+                                0L,
+                                dispatch.subtitleStreamIndex,
+                                dispatch.audioStreamIndex,
+                            )
+                        },
                         onOpenVersionPicker = { dialogSession.openVersionPicker() },
+                        // D6 "Play collection in order": start at the FIRST
+                        // UNWATCHED member (franchisePlayOrder — plain in-order
+                        // when every member is watched or user data is absent)
+                        // and append the members AFTER it to the manual queue
+                        // (VideoQueueController.enqueueLast, queue-first
+                        // semantics; suppressed under SyncPlay by the player's
+                        // advance routing — VideoQueueController's own contract).
+                        // The start rides the raw onPlayClick path (not the
+                        // detail-dispatch wrapper): the target is another item,
+                        // so the current item's stream selections must not
+                        // carry over (the onPlayExtra precedent).
+                        onPlayCollectionInOrder = { collection ->
+                            franchisePlayOrder(collection.members)?.let { order ->
+                                order.queuedTail.forEach { member ->
+                                    videoQueue.enqueueLast(
+                                        com.raulshma.jellyplay.core.data.playback.VideoQueueItem(
+                                            itemId = member.id,
+                                            title = member.name,
+                                            subtitle = member.seriesName ?: member.year?.toString(),
+                                            imageUrl = viewModel.getImageUrl(member.id),
+                                            runTimeTicks = member.runTimeTicks,
+                                        ),
+                                    )
+                                }
+                                onPlayClick(order.start.id, null, 0L, null, null)
+                            }
+                        },
                     )
                 }
 
@@ -676,6 +794,18 @@ fun MediaDetailScreen(
                         onShowFromContinueWatching = { viewModel.onEvent(DetailUiEvent.ShowFromContinueWatching) },
                         onShowDetailUpNext = { viewModel.onEvent(DetailUiEvent.SetShowDetailUpNext(enabled = true)) },
                         onHideDetailUpNext = { viewModel.onEvent(DetailUiEvent.SetShowDetailUpNext(enabled = false)) },
+                        onHideFranchiseRow = { collectionId ->
+                            viewModel.onEvent(DetailUiEvent.HideFranchiseRow(collectionId))
+                        },
+                        // D12: the config write routes through the VM; the
+                        // POST_NOTIFICATIONS runtime prompt (first enable on
+                        // Android 13+, the MainActivity cold-start pattern)
+                        // fires beside it via the platform seam. Desktop —
+                        // where the surfaces are hidden — never reaches this.
+                        onToggleSeriesNotifications = { enabled ->
+                            viewModel.onEvent(DetailUiEvent.SetSeriesNotifications(enabled))
+                            if (enabled) requestSeriesNotificationPermission()
+                        },
                     )
                 }
 
@@ -719,6 +849,9 @@ fun MediaDetailScreen(
                         onRefresh = { viewModel.onEvent(DetailUiEvent.ForceRefresh) },
                         onMediaQuickActions = { item -> quickActionIntake.controller.show(item) },
                         onFocusedMediaItem = { item -> quickActionIntake.tvFocusedItem = item },
+                        onToggleThemeMusicMuted = { muted ->
+                            viewModel.onEvent(DetailUiEvent.SetThemeMusicMuted(muted))
+                        },
                     )
                 }
 
@@ -764,6 +897,11 @@ fun MediaDetailScreen(
 
                 CompositionLocalProvider(
                     LocalMediaQuickActionController provides quickActionIntake.controller,
+                    // D16: live in-flight download fraction per episode id for
+                    // the seasons section's rows — read through the local (not
+                    // the state bag) so a ~2 s progress tick recomposes only
+                    // the downloading rows.
+                    LocalEpisodeDownloadProgress provides downloads.episodeDownloadProgress,
                 ) {
                     DetailContent(
                         state = state,

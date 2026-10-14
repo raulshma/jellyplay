@@ -37,4 +37,33 @@ class LibraryRequestPolicyTest {
             LIST_PROJECTION_FIELDS + listOf("CanDelete", "DateCreated"),
         )
     }
+
+    @Test
+    fun `detail projection ends with the tagline field (D2)`() {
+        // Element-for-element pin: Taglines rides last (D2 — the model and
+        // mapper already read it; this wire field is what was missing, so
+        // dropping it silently re-breaks remote taglines).
+        assertEquals(
+            listOf(
+                "People", "Chapters", "MediaSources", "Trickplay", "ExternalUrls",
+                "OriginalTitle", "ProductionLocations", "Studios", "Genres", "Overview",
+                "ProviderIds", "PrimaryImageAspectRatio", "Path", "Taglines",
+            ),
+            DETAIL_PROJECTION_FIELDS,
+        )
+    }
+
+    @Test
+    fun `home-row projection is the list minimum plus MediaStreams DateCreated and Trickplay`() {
+        // The home cards' fetches (resume / Next Up / Upcoming / latest) must
+        // carry exactly the card-overlay reads: MediaStreams for the quality
+        // badges (H11), DateCreated for the NEW dot (H12), Trickplay for the
+        // focus preview (H13) — appended after the two-field minimum, never
+        // folded into LIST_PROJECTION_FIELDS itself (search hints, collection
+        // and playlist listings keep the small payload).
+        assertEquals(
+            listOf("Overview", "PrimaryImageAspectRatio", "MediaStreams", "DateCreated", "Trickplay"),
+            HOME_ROW_PROJECTION_FIELDS,
+        )
+    }
 }

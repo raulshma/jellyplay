@@ -59,11 +59,22 @@ class I18nParityRatchetTest {
      * means 0 — no missing keys allowed.
      *
      * Zero-tolerance: the core/ui PreferenceEnumNames 15-key translation
-     * follow-up landed 2026-10-05, so every entry below reads 0 and the map
-     * is kept only as documentation of the accepted-gap mechanism. A new
+     * follow-up landed 2026-10-05, so the core/ui entries below read 0; the
+     * map is kept as documentation of the accepted-gap mechanism. A new
      * untranslated key must be translated (preferred) or added here as a
      * deliberate baseline entry — never raise an existing number, and keep
      * the entry's KDoc pointed at the tracking issue.
+     *
+     * Accepted gaps recorded 2026-10-12 (multi-feature branch landed feature
+     * strings ahead of their translation pass; the numbers must never rise):
+     *  - `shared/feature/details` 13 keys × 8 locales — home-detail plan
+     *    (docs/home-detail-implementation-plan.md) UI strings; translations
+     *    tracked as a details-module follow-up.
+     *  - `shared/feature/home` 6 keys × 8 locales — home section/hero strings
+     *    from the same branch; translations tracked as a home-module follow-up.
+     *  - `shared/feature/settings` 98 keys × 8 locales — large settings
+     *    surface landed untranslated; translations tracked as a
+     *    settings-module follow-up.
      */
     private val baselineMissingKeys: Map<String, Int> = mapOf(
         "shared/core/ui:de" to 0,
@@ -74,6 +85,30 @@ class I18nParityRatchetTest {
         "shared/core/ui:ko" to 0,
         "shared/core/ui:pt" to 0,
         "shared/core/ui:zh" to 0,
+        "shared/feature/details:de" to 13,
+        "shared/feature/details:es" to 13,
+        "shared/feature/details:fr" to 13,
+        "shared/feature/details:it" to 13,
+        "shared/feature/details:ja" to 13,
+        "shared/feature/details:ko" to 13,
+        "shared/feature/details:pt" to 13,
+        "shared/feature/details:zh" to 13,
+        "shared/feature/home:de" to 6,
+        "shared/feature/home:es" to 6,
+        "shared/feature/home:fr" to 6,
+        "shared/feature/home:it" to 6,
+        "shared/feature/home:ja" to 6,
+        "shared/feature/home:ko" to 6,
+        "shared/feature/home:pt" to 6,
+        "shared/feature/home:zh" to 6,
+        "shared/feature/settings:de" to 98,
+        "shared/feature/settings:es" to 98,
+        "shared/feature/settings:fr" to 98,
+        "shared/feature/settings:it" to 98,
+        "shared/feature/settings:ja" to 98,
+        "shared/feature/settings:ko" to 98,
+        "shared/feature/settings:pt" to 98,
+        "shared/feature/settings:zh" to 98,
     )
 
     /**

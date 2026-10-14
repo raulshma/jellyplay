@@ -4,10 +4,12 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -27,6 +29,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.RatingColors
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.StatusColors
 import com.raulshma.jellyplay.core.designsystem.theme.isLightColor
+import com.raulshma.jellyplay.core.model.ItemQualityBadge
 
 /**
  * A translucent "glass" overlay badge for poster/wide media cards.
@@ -226,6 +229,121 @@ fun EpisodeChip(
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onPrimary,
             fontWeight = FontWeight.SemiBold,
+        )
+    }
+}
+
+// ── Quality badges (H11) ─────────────────────────────────────────────────
+
+/**
+ * The badge-worthy quality marks in render-priority order — the resolution
+ * tier first, then the format badges ([ItemQualityBadge.HD] / [ItemQualityBadge.SD]
+ * are not badge-worthy: a plain "HD" chip is noise, and SD is never a
+ * selling point). [QualityBadgeRow] caps its render to [QUALITY_BADGE_CAP]
+ * marks from this ladder's head.
+ */
+private val qualityBadgeRenderOrder: List<ItemQualityBadge> = listOf(
+    ItemQualityBadge.FOUR_K,
+    ItemQualityBadge.DOLBY_VISION,
+    ItemQualityBadge.HDR,
+    ItemQualityBadge.ATMOS,
+)
+
+/** At most three chips fit a card's top-left stack legibly. */
+internal const val QUALITY_BADGE_CAP = 3
+
+/**
+ * [badges]' badge-worthy marks ([qualityBadgeRenderOrder] members, ladder
+ * order, capped at [QUALITY_BADGE_CAP]) — the pure admission/order/cap fold
+ * [QualityBadgeRow] renders, kept Compose-free so the policy is directly
+ * testable. Null or exhausted [badges] (the "streams not fetched" and
+ * HD/SD-only cases) yield an empty list — render nothing.
+ */
+internal fun qualityBadgesToRender(
+    badges: List<ItemQualityBadge>?,
+    cap: Int = QUALITY_BADGE_CAP,
+): List<ItemQualityBadge> =
+    if (badges.isNullOrEmpty()) {
+        emptyList()
+    } else {
+        qualityBadgeRenderOrder.filter { it in badges }.take(cap)
+    }
+
+/** The compact chip label per badge-worthy mark (format marks, not translatable copy). */
+private fun ItemQualityBadge.renderLabel(): String = when (this) {
+    ItemQualityBadge.FOUR_K -> "4K"
+    ItemQualityBadge.DOLBY_VISION -> "DV"
+    ItemQualityBadge.HDR -> "HDR"
+    ItemQualityBadge.ATMOS -> "Atmos"
+    // Never rendered (see [qualityBadgeRenderOrder]); the arm keeps the when exhaustive.
+    ItemQualityBadge.HD, ItemQualityBadge.SD -> ""
+}
+
+/**
+ * The cards' compact resolution/audio quality chips (H11): a trailing Row of
+ * glass badges — "4K" / "DV" / "HDR" / "Atmos" — ordered, capped
+ * ([QUALITY_BADGE_CAP]) and admitted by [qualityBadgesToRender]. Renders
+ * nothing for the "not fetched" null, the HD/SD-only sets, and callers that
+ * already suppressed the feature (the shells pass null then), so the
+ * overlay stack stays empty rather than reserving a gap.
+ */
+@Composable
+fun QualityBadgeRow(
+    badges: List<ItemQualityBadge>?,
+    modifier: Modifier = Modifier,
+) {
+    val renderBadges = remember(badges) { qualityBadgesToRender(badges) }
+    if (renderBadges.isEmpty()) return
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(3.dp),
+        modifier = modifier,
+    ) {
+        renderBadges.forEach { badge ->
+            GlassBadge {
+                Text(
+                    text = badge.renderLabel(),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
+        }
+    }
+}
+
+// ── NEW badge (H12) ──────────────────────────────────────────────────────
+
+/**
+ * The "NEW" arrival chip (H12): a primary-tinted glass pill with an accent
+ * dot — same accent treatment as [EpisodeChip], so the card family reads one
+ * design language. Rendered top-left on the cards that the row flagged as
+ * added since the user's last home visit; the visit-stamp predicate lives on
+ * the model ([com.raulshma.jellyplay.core.model.isNewForHome]) — this is a
+ * pure renderer.
+ */
+@Composable
+fun NewBadge(
+    modifier: Modifier = Modifier,
+) {
+    val primary = MaterialTheme.colorScheme.primary
+    GlassBadge(
+        modifier = modifier,
+        background = primary.copy(alpha = 0.85f),
+        borderColor = Color.White.copy(alpha = 0.2f),
+    ) {
+        // The accent dot — the plan's "NEW dot", kept as the chip's leading mark.
+        Box(
+            modifier = Modifier
+                .size(5.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.onPrimary),
+        )
+        Text(
+            text = "NEW",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onPrimary,
+            fontWeight = FontWeight.Bold,
         )
     }
 }

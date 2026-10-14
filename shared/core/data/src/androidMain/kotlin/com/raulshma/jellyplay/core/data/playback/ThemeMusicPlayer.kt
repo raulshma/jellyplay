@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem as ExoMediaItem
+import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import com.raulshma.jellyplay.core.data.repository.MusicCatalogue
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
@@ -16,6 +17,9 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 /**
  * Plays ambient theme music on media detail pages when the
@@ -44,6 +48,24 @@ class ThemeMusicPlayer(
     private var currentPlayerItemId: String? = null
 
     /**
+     * D8: the ambient mute level. Volume-only — playback keeps running while
+     * muted, so unmuting is instant and the fetch/prepare cycle is untouched.
+     */
+    @Volatile
+    private var muted = false
+
+    private val _isPlaying = MutableStateFlow(false)
+
+    /** D8: whether theme audio is currently playing (the mute chip's visibility gate). */
+    val isPlaying: StateFlow<Boolean> = _isPlaying.asStateFlow()
+
+    private val playingListener = object : Player.Listener {
+        override fun onIsPlayingChanged(isPlaying: Boolean) {
+            _isPlaying.value = isPlaying
+        }
+    }
+
+    /**
      * Fetches and plays the theme song for [itemId] when the
      * backdrop-theme-music preference is enabled. Calling this with the same
      * [itemId] as the currently-playing track is a no-op. Pass `null` (or a
@@ -65,12 +87,22 @@ class ThemeMusicPlayer(
             if (streamUrl.isBlank()) return@launch
             ensurePlayer().apply {
                 setMediaItem(ExoMediaItem.fromUri(streamUrl))
-                volume = AMBIENT_VOLUME
+                volume = if (muted) 0f else AMBIENT_VOLUME
                 repeatMode = ExoPlayer.REPEAT_MODE_ONE
                 prepare()
                 playWhenReady = true
             }
         }
+    }
+
+    /**
+     * D8: the mute chip's live-volume half. Instant — adjusts the playing
+     * player's volume and arms the level for the next [playThemeFor]; no
+     * stop/restart. The per-series memory write is the caller's job.
+     */
+    fun setMuted(muted: Boolean) {
+        this.muted = muted
+        player?.volume = if (muted) 0f else AMBIENT_VOLUME
     }
 
     /**
@@ -92,6 +124,7 @@ class ThemeMusicPlayer(
             it.release()
         }
         player = null
+        _isPlaying.value = false
     }
 
     private fun ensurePlayer(): ExoPlayer {
@@ -103,7 +136,10 @@ class ThemeMusicPlayer(
         return ExoPlayer.Builder(context)
             .setAudioAttributes(attributes, false)
             .build()
-            .also { player = it }
+            .also {
+                player = it
+                it.addListener(playingListener)
+            }
     }
 
     /**

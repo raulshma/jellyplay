@@ -334,6 +334,9 @@ internal fun MainContent(
             showUnwatchedBadge = preferences.showUnwatchedBadge,
             showWatchedCheckmark = preferences.showWatchedCheckmark,
             hideWatchedItems = preferences.hideWatchedItems,
+            showQualityBadges = preferences.showQualityBadges,
+            showNewBadges = preferences.showNewBadges,
+            antiSpoilerHome = preferences.antiSpoilerHome,
         ),
     ) {
         val isExpanded = adaptiveInfo.windowSizeClass != WindowSizeClass.Compact

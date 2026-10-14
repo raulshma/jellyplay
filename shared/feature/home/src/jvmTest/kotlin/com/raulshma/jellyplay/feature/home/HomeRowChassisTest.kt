@@ -18,11 +18,16 @@ import kotlin.test.fail
  */
 class HomeRowChassisTest {
 
-    /** Every section type the offline mirror claims when not wide. */
+    /**
+     * Every section type the offline mirror claims when not wide. MY_MEDIA is
+     * claimed offline too (it is non-wide), but online it has its own tiles
+     * arm — excluded here so the online-poster pin keeps its exact membership.
+     */
     private val posterTypes = HomeSectionType.entries.filter {
         it != HomeSectionType.CONTINUE_WATCHING &&
             it != HomeSectionType.NEXT_UP &&
-            it != HomeSectionType.DOWNLOADED
+            it != HomeSectionType.DOWNLOADED &&
+            it != HomeSectionType.MY_MEDIA
     }
 
     private fun section(type: HomeSectionType) =
@@ -104,6 +109,17 @@ class HomeRowChassisTest {
     }
 
     @Test
+    fun myMedia_dispatchesOnlineTilesOnline_andTheOfflineMirrorOffline() {
+        // H5: the row's own tiles arm online; while the offline feed renders,
+        // the non-wide mirror claim wins (and the mirrored row drops — no
+        // offline library exists for a server library id).
+        val online = section(HomeSectionType.MY_MEDIA)
+        assertEquals(HomeRowChassis.OnlineTiles(online), homeRowChassis(online, hasOfflineContent = false))
+        val offline = section(HomeSectionType.MY_MEDIA)
+        assertEquals(HomeRowChassis.OfflinePoster(offline), homeRowChassis(offline, hasOfflineContent = true))
+    }
+
+    @Test
     fun offlineContinueWatchingAndNextUp_renderOfflineWide() {
         for (type in listOf(HomeSectionType.CONTINUE_WATCHING, HomeSectionType.NEXT_UP)) {
             val section = section(type)
@@ -130,10 +146,12 @@ class HomeRowChassisTest {
     // ── sectionHasSeeAll ──
 
     @Test
-    fun sectionHasSeeAll_trueOnlyForRecentlyAddedAndLatestMedia() {
+    fun sectionHasSeeAll_trueOnlyForRecentlyAddedLatestMediaAndUpcoming() {
         for (type in HomeSectionType.entries) {
             assertEquals(
-                type == HomeSectionType.RECENTLY_ADDED || type == HomeSectionType.LATEST_MEDIA,
+                type == HomeSectionType.RECENTLY_ADDED ||
+                    type == HomeSectionType.LATEST_MEDIA ||
+                    type == HomeSectionType.UPCOMING,
                 sectionHasSeeAll(type),
                 "type=$type",
             )
@@ -287,6 +305,8 @@ class HomeRowChassisTest {
             HomeSectionType.CONTINUE_WATCHING,
             HomeSectionType.CONTINUE_READING,
             HomeSectionType.NEXT_UP,
+            // The H4 Upcoming row rides the batch sub-call's single-row twin.
+            HomeSectionType.UPCOMING,
             HomeSectionType.RECENTLY_ADDED,
             HomeSectionType.LATEST_MEDIA,
             HomeSectionType.PINNED,

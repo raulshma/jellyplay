@@ -7,7 +7,11 @@ import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.UserDataContainer
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
+import com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections
+import com.raulshma.jellyplay.core.model.DetailPreferences
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.PersonInfo
+import com.raulshma.jellyplay.core.model.PersonRef
 import com.raulshma.jellyplay.core.ui.viewmodel.DeferredFetchCoordinator
 import com.raulshma.jellyplay.core.ui.viewmodel.DeferredFetchState
 import com.raulshma.jellyplay.core.ui.viewmodel.DeferredUserDataRefresher
@@ -24,6 +28,8 @@ import kotlinx.coroutines.flow.stateIn
 private data class PersonDetailContent(
     val name: String,
     val filmography: List<MediaItem>,
+    val filmographyCredits: Map<String, PersonInfo> = emptyMap(),
+    val costars: List<PersonRef> = emptyList(),
     val biography: String? = null,
     val profileImageUrl: String? = null,
 )
@@ -35,7 +41,19 @@ class PersonDetailViewModel constructor(
     private val userDataMutator: UserDataMutator,
     private val imageUrlProvider: ImageUrlProvider,
     private val mediaDownloadActions: MediaDownloadActions,
+    /** Preference projections — the D18/D20 gates (SeerrDetailViewModel's smallest pattern). */
+    private val projections: PreferenceProjections,
 ) : JellyPlayViewModel() {
+
+    /**
+     * The D18/D20 gates ([DetailPreferences.showFilmographyRoles] /
+     * [DetailPreferences.showFrequentCostars]), re-shared eagerly so the
+     * fetch-time gate read below sees live values even while the screen is
+     * away (the projection's own sharing idles after 5s unsubscribed — an
+     * idle read would silently fall back to the default-all-on frame).
+     */
+    val preferences: StateFlow<DetailPreferences> =
+        projections.detailPreferences.stateIn(scope, SharingStarted.Eagerly, DetailPreferences())
 
     private val fetchCoordinator = DeferredFetchCoordinator<String, PersonDetailContent>(
         userDataChanges = mediaRepository.userDataChanges,
@@ -65,6 +83,8 @@ class PersonDetailViewModel constructor(
                 PersonDetailUiState.Success(
                     name = content.name,
                     filmography = content.filmography,
+                    filmographyCredits = content.filmographyCredits,
+                    costars = content.costars,
                     biography = content.biography,
                     profileImageUrl = content.profileImageUrl,
                 )
@@ -94,6 +114,11 @@ class PersonDetailViewModel constructor(
      * re-arm. [force] reaches the detail read as the repository
      * cache-bypass flag (the silent regeneration always runs forced —
      * getItemsByPerson is uncached, so force has no bearing on it).
+     *
+     * The D18 role credits ride the filmography response itself (its People
+     * field); the D20 co-star leg runs after the filmography lands (it is
+     * anchored on the most-recent entry) but is failure-tolerant — a miss
+     * hides the row silently instead of failing the all-or-nothing content.
      */
     private suspend fun fetchPerson(personId: String, force: Boolean): PersonDetailContent {
         return coroutineScope {
@@ -109,11 +134,31 @@ class PersonDetailViewModel constructor(
             // filmography error wins when both fail), keeping whatever is
             // on screen whole instead of mixing fresh and stale halves.
             (itemsResult.exceptionOrNull() ?: detailResult.exceptionOrNull())?.let { throw it }
-            val detail = detailResult.getOrThrow().item
+            val detail = detailResult.getOrThrow()
+            val items = itemsResult.getOrThrow()
+
+            // D20 "frequently appears with": anchored on the person's
+            // most-recent filmography entry (the same year-descending read
+            // the screen sorts by), gated on the preference, self-excluded
+            // and capped by [selectCostars]. Failure / empty → empty list,
+            // the row just doesn't render.
+            val costars = if (preferences.value.showFrequentCostars) {
+                items.maxByOrNull { it.year ?: 0 }?.let { anchor ->
+                    libraryApiClient
+                        .getPeople(appearsInItemId = anchor.id)
+                        .getOrElse { emptyList() }
+                        .let { selectCostars(it, personId) }
+                } ?: emptyList()
+            } else {
+                emptyList()
+            }
+
             PersonDetailContent(
-                name = detail.name,
-                filmography = itemsResult.getOrThrow(),
-                biography = detail.overview?.takeIf { it.isNotBlank() },
+                name = detail.item.name,
+                filmography = items,
+                filmographyCredits = filmographyCredits(items, personId),
+                costars = costars,
+                biography = detail.item.overview?.takeIf { it.isNotBlank() },
                 profileImageUrl = imageUrlProvider.getImageUrl(personId).takeIf { it.isNotBlank() },
             )
         }

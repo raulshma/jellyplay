@@ -37,7 +37,9 @@ data class AppearancePreferences(
  * newsletter, and accessibility settings together. Navigation-customization
  * fields are excluded — they live in [navigationCustomization]; the
  * home-discovery card-display quartet is excluded too — it moved (with its
- * rows) to `HomeScreenPreferences` (PS-4).
+ * rows) to `HomeScreenPreferences` (PS-4). The H11/H12 card-badge toggles
+ * read back here though: the plan also surfaces those two rows in
+ * Appearance → Library & Cards, writing the SAME home-store prefs.
  */
 @Immutable
 @Serializable
@@ -94,6 +96,32 @@ data class AppearanceScreenPreferences(
     val showMissingEpisodes: Boolean = false,
     /** Render the server clear-logo as the detail-screen title instead of text. */
     val preferLogos: Boolean = false,
+    /** Show provider external-link buttons on the detail header. */
+    val showExternalLinks: Boolean = true,
+    /** Show the item's first tagline under the detail title. */
+    val showTagline: Boolean = true,
+    /** Prefer server-hosted local trailers over remote (YouTube) entries. */
+    val preferLocalTrailers: Boolean = false,
+    /** Show the "More in this collection" franchise row on detail. */
+    val showMoreInCollection: Boolean = true,
+    /** Show the "Airing next" strip on series detail. */
+    val showUpcomingStrip: Boolean = true,
+    /** Play a series' ambient theme music on detail open. */
+    val playThemeMusic: Boolean = true,
+    /** Show the reviews preview + ratings block on the detail screen. */
+    val showReviews: Boolean = true,
+    /** Show subtitle / audio layout stream badges on season episode rows. */
+    val showEpisodeStreamBadges: Boolean = true,
+    /** Show role names + role grouping on the person screen's filmography. */
+    val showFilmographyRoles: Boolean = true,
+    /** Show the "frequently appears with" co-star row on the person screen. */
+    val showFrequentCostars: Boolean = true,
+    /** TV focus-gated trailer preview on the detail hero (TV-only semantics). */
+    val trailerPreviewOnFocus: Boolean = true,
+    /** Promote the ⋮ options' fixed promoted set into the landscape/TV detail rail. */
+    val showPromotedActionsLandscape: Boolean = true,
+    /** Show live download progress on season episode rows. */
+    val showDownloadProgress: Boolean = true,
     /** Whether the library "Reset" pill shows a confirmation dialog before clearing. */
     val confirmLibraryReset: Boolean = true,
     val showShareMediaOption: Boolean = true,
@@ -101,6 +129,10 @@ data class AppearanceScreenPreferences(
     val showClockOnHome: Boolean = false,
     /** Show settings search results alongside media in the home search bar. */
     val showSettingsInHomeSearch: Boolean = true,
+    /** H11 quality badges (4K / HDR / DV / Atmos) on cards — the home-store pref, also surfaced in Library & Cards. */
+    val showQualityBadges: Boolean = true,
+    /** H12 NEW badges for items added since the last home visit — the home-store pref, also surfaced in Library & Cards. */
+    val showNewBadges: Boolean = true,
     /**
      * Whether the home screen's top header dock auto-hides on scroll-down and
      * reappears on scroll-up. Default `false` — the dock stays pinned (current

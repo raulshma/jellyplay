@@ -1083,9 +1083,10 @@ class SettingsCatalogScreenContractTest {
     fun `notification row total tracks the declaration through every gate`() {
         // The naive derivation, over the same declarations the screen reads:
         // the master toggle always renders (its declared Always gate); the
-        // five toggle rows ride it; the four advanced rows
+        // five toggle rows ride it; the five advanced rows
         // (respect_system_dnd, quiet_hours, max_per_check,
-        // notification_libraries) additionally ride the advanced toggle; the
+        // notification_libraries, notification_series — the D12 per-series
+        // management entry) additionally ride the advanced toggle; the
         // quiet pair additionally rides the quiet-hours toggle; the
         // system-settings row additionally rides the platform-intent
         // capability.
@@ -1101,6 +1102,7 @@ class SettingsCatalogScreenContractTest {
             NotificationRows.QuietHours.id,
             NotificationRows.MaxPerCheck.id,
             NotificationRows.NotificationLibraries.id,
+            NotificationRows.NotificationSeries.id,
         )
         val quietPairRows = listOf(
             NotificationRows.QuietStart.id,
@@ -1159,7 +1161,7 @@ class SettingsCatalogScreenContractTest {
                     parentsOn = rowParentsOn(NotificationRows.NotificationsEnable.id to true),
                 ),
             ),
-        ) // + quiet hours/dnd/max-per-check/libraries
+        ) // + quiet hours/dnd/max-per-check/libraries/series
         assertEquals(
             naiveNotificationTotal(
                 showAdvanced = true,
@@ -1266,7 +1268,8 @@ class SettingsCatalogScreenContractTest {
             SettingsScreenGroups.appearanceLibrary.items.size + 1,
             appearanceLibraryScreenRowTotal(),
         )
-        // 8 declared rows (the shipped set minus the home-discovery
+        // Declared rows (the library-content + detail-display residuals and
+        // the spec-backed toggles — the shipped set minus the home-discovery
         // card-display quartet that moved to HomeSettingsScreen — PS-4) plus
         // the screen-local confirm-library-reset action row.
         assertEquals(
@@ -1276,16 +1279,32 @@ class SettingsCatalogScreenContractTest {
     }
 
     @Test
-    fun `home cards row total is the four moved card-display rows`() {
-        // The PS-4 moved quartet: every row renders unconditionally on the
-        // home hub (no advanced gate), so the strict derivation counts all
-        // four under the no-flag input.
-        assertEquals(4, SettingsScreenGroups.homeCards.items.size, "the cards declaration changed — update this pin")
+    fun `home cards row total is the card-display toggles with the TV-gated trickplay fork`() {
+        // The PS-4 moved quartet plus the home-wave badge/spoiler toggles:
+        // every row renders unconditionally on the home hub except the
+        // TV-only trickplay row (its declared RowAdmission.Tv), so the strict
+        // derivation counts all eight on TV and all but the trickplay row
+        // off it.
+        assertEquals(8, SettingsScreenGroups.homeCards.items.size, "the cards declaration changed — update this pin")
         assertEquals(
             SettingsScreenGroups.homeCards.items.size,
-            homeCardsScreenRowTotal(),
+            homeCardsScreenRowTotal(isTv = true),
         )
-        assertTrue(SettingsScreenGroups.homeCards.items.all { !it.isAdvanced }, "the cards rows must stay always-on")
+        assertEquals(
+            SettingsScreenGroups.homeCards.items.size - 1,
+            homeCardsScreenRowTotal(isTv = false),
+        )
+        assertTrue(
+            SettingsScreenGroups.homeCards.items.all { !it.isAdvanced },
+            "the cards rows must stay always-on",
+        )
+        // The trickplay row is the one TV fork.
+        assertEquals(
+            listOf(HomeRows.TrickplayPreview.id),
+            SettingsScreenGroups.homeCards.items
+                .filter { SettingsScreenGroups.homeCards.admissionOf(it.id) == RowAdmission.Tv }
+                .map { it.id },
+        )
     }
 
     @Test

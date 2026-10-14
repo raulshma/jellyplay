@@ -120,6 +120,9 @@ fun androidPlayerVideoModule(context: Context): Module = module {
     // core:data port, bound (to the AndroidPipController singleton the host
     // PlayerActivity also injects) in androidCoreDataModule.
     single<PlayerVideoMessageBus> { AndroidUserMessageBridge(get()) }
+    // D14 "Play (with pre-rolls)": the one-shot Cinema Mode override the
+    // detail screen arms before the play dispatch (core:player-contract).
+    single { com.raulshma.jellyplay.core.data.playback.CinemaModeOverride() }
     viewModel { params ->
         VideoPlayerViewModel(
             platform = get(),
@@ -130,6 +133,7 @@ fun androidPlayerVideoModule(context: Context): Module = module {
             playbackIdentity = get(),
             subtitleProviderRepository = get(),
             videoQueue = get(),
+            cinemaModeOverride = get(),
             streamingSubtitleStore = get(),
             imageUrlProvider = get(),
             downloadRepository = get(),

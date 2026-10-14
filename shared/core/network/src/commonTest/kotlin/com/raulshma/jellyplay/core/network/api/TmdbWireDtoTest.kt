@@ -72,4 +72,22 @@ class TmdbWireDtoTest {
         assertEquals(0, parseTmdbReviewsWire("""{"results":[]}""").size)
         assertEquals(0, json.decodeFromString<TmdbVideosResponseWire>("""{"results":[]}""").results.size)
     }
+
+    @Test
+    fun `details response decodes snake_case vote fields and tolerates a vote-less body (D4)`() {
+        val details = parseTmdbDetailsWire(
+            """
+            {"id":550,"overview":"A clockwork salesman.","vote_average":8.4,"vote_count":12345,
+             "runtime":139,"UnknownFutureField":true}
+            """.trimIndent(),
+        )
+        assertEquals(8.4, details.voteAverage)
+        assertEquals(12345, details.voteCount)
+        assertEquals("A clockwork salesman.", details.overview)
+
+        // Unvoted item: the fields fall back to null, like the JVM decode.
+        val unvoted = parseTmdbDetailsWire("""{"overview":"Series."}""")
+        assertNull(unvoted.voteAverage)
+        assertNull(unvoted.voteCount)
+    }
 }

@@ -19,10 +19,15 @@
     <string name="detail_see_all">See all</string>
     <string name="detail_more_like_this_on_device">On-device</string>
     <string name="detail_section_videos">Videos</string>
+    <!-- D3: badge on the videos row's server-hosted (local) trailer cards. -->
+    <string name="detail_trailer_badge_local">Local</string>
     <string name="detail_section_seasons">Seasons</string>
     <string name="detail_section_seerr_recommendations">Seerr Recommendations</string>
     <string name="detail_section_seerr_similar">Seerr Similar</string>
     <string name="detail_section_reviews">Reviews</string>
+    <!-- "All reviews" button on the detail screen's reviews preview (D9):
+         %1$d = total fetched review count. -->
+    <string name="detail_reviews_all">All reviews (%1$d)</string>
     <!-- Review author rating format: %1$s = 0-10 rating. Same in every locale. -->
     <string name="detail_review_rating" translatable="false">%1$s / 10</string>
 
@@ -49,6 +54,20 @@
 
     <!-- ── Up Next card label ───────────────────────────────────────────── -->
     <string name="detail_up_next">Up Next</string>
+
+    <!-- ── D6 "More in this collection" franchise rows ──────────────────── -->
+    <!-- Franchise row title: %1$s = the collection's name. -->
+    <string name="detail_section_more_in_collection_format">More in %1$s</string>
+    <!-- Header action on a franchise row: plays the collection in order
+         (starts at the first unwatched member, queues the rest). -->
+    <string name="detail_play_collection_in_order">Play collection in order</string>
+    <string name="detail_cd_hide_collection_row">Hide this collection row</string>
+
+    <!-- ── D7 "Airing next" strip (series detail) ───────────────────────── -->
+    <string name="detail_section_airing_next">Airing next</string>
+    <!-- Countdown subtitle on an unaired-episode card: %1$d = whole days until air. -->
+    <string name="detail_airs_countdown_format">in %1$dd</string>
+    <string name="detail_airs_countdown_today">Airs today</string>
 
     <!-- ── Smart-play templates (verb + S#:E#) ────────────────────────────
          Positional args: %1$d = season number, %2$d = episode number. -->
@@ -112,6 +131,13 @@
     <string name="detail_option_add_to_playlist">Add to Playlist</string>
     <string name="detail_option_play_next">Play next</string>
     <string name="detail_option_play_last">Play last</string>
+    <!-- D14: the ⋮ action that plays the item with server intros forced for this single play. -->
+    <string name="detail_option_play_with_prerolls">Play (with pre-rolls)</string>
+    <!-- D12: the per-series new-episode notification ⋮ entry (checkmark pair)
+         and the D7 upcoming rows' bell content descriptions (the labels
+         double as the bell's CD by state). -->
+    <string name="detail_option_notify_new_episodes">Notify me about new episodes</string>
+    <string name="detail_option_stop_notify_new_episodes">Stop notifying about new episodes</string>
     <string name="detail_playlist_picker_title">Add to Playlist</string>
     <string name="detail_playlist_watch_later">Watch Later</string>
     <string name="detail_playlist_create_new">Create new playlist</string>
@@ -225,6 +251,8 @@
     <string name="detail_msg_shown_in_next_up">Shown in Next Up</string>
     <string name="detail_msg_hidden_from_continue_watching">Hidden from Continue Watching</string>
     <string name="detail_msg_shown_in_continue_watching">Shown in Continue Watching</string>
+    <string name="detail_msg_series_notifications_on">New-episode notifications on</string>
+    <string name="detail_msg_series_notifications_off">New-episode notifications off</string>
 
     <!-- ── Snackbar: episodes queued (plurals) ──────────────────────────── -->
     <plurals name="detail_episodes_queued">
@@ -338,6 +366,15 @@
     <string name="detail_collection_empty_description">Items added to this collection will appear here.</string>
     <string name="detail_person_empty_title">No titles found</string>
     <string name="detail_person_empty_description">This person has no titles matching the current filter.</string>
+    <!-- D18: role-named, grouped filmography -->
+    <string name="detail_person_role_as">as %1$s</string>
+    <string name="detail_person_role_all">All</string>
+    <string name="detail_person_role_acting">Acting</string>
+    <string name="detail_person_role_directing">Directing</string>
+    <string name="detail_person_role_writing">Writing</string>
+    <string name="detail_person_role_other">Other</string>
+    <!-- D20: "frequently appears with" co-star row -->
+    <string name="detail_person_costars_title">Frequently appears with</string>
     <string name="detail_season_empty_title">No episodes available</string>
     <string name="detail_season_empty_description">Episodes will appear here once they're added.</string>
 
@@ -528,4 +565,6 @@
     <string name="jellyplay_det_filler_badge">Filler</string>
     <string name="jellyplay_det_mixed_badge">Mixed</string>
     <string name="jellyplay_det_recap_badge">Recap</string>
+    <string name="detail_cd_theme_music_mute">Mute theme music</string>
+    <string name="detail_cd_theme_music_unmute">Unmute theme music</string>
 </resources>
