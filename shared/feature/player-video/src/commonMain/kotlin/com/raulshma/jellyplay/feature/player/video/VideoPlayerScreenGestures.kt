@@ -49,8 +49,10 @@ import com.raulshma.jellyplay.core.model.SwipeSide
 import com.raulshma.jellyplay.core.model.TouchZone
 import com.raulshma.jellyplay.core.model.WheelAxis
 import com.raulshma.jellyplay.core.ui.tv.components.DpadSeekState
+import com.raulshma.jellyplay.core.ui.tv.input.DpadAction
 import com.raulshma.jellyplay.core.ui.tv.input.DpadKeyEvent
-import com.raulshma.jellyplay.core.ui.tv.input.onDpadKeyEvent
+import com.raulshma.jellyplay.core.ui.tv.input.DpadKeyHandlerScope
+import com.raulshma.jellyplay.core.ui.tv.input.dpadKeyHandler
 import com.raulshma.jellyplay.feature.player.video.chrome.shouldSummonControlsOnPause
 import com.raulshma.jellyplay.feature.player.video.components.GestureOverlay
 import com.raulshma.jellyplay.feature.player.video.components.GestureSwipeGates
@@ -115,6 +117,8 @@ internal fun playerBoxKeyInputModifier(
     keyboardFocusRequester: FocusRequester,
     onUserInteraction: () -> Unit,
     onKeyboardLayerFocusChange: (Boolean) -> Unit,
+    /** Live hasFocus of the TV layer subtree (buttons inside the controls included) — the TV grab seam's re-assert watch. */
+    onTvLayerFocusChange: (Boolean) -> Unit,
     seekState: DpadSeekState,
     doTogglePlayPause: () -> Unit,
     doSeekBack: () -> Unit,
@@ -127,35 +131,9 @@ internal fun playerBoxKeyInputModifier(
     executePlayerAction: (PlayerAction) -> Boolean,
 ): Modifier =
     if (isTv && !isSheetOpen) {
-        // Every D-pad arm resolves its control's binding first (hoisted once
-        // per arm): the default actions run the legacy arms verbatim; a
-        // rebound action routes to the shared executor; a disabled/unbound
-        // control returns false (the key falls through, exactly like an
-        // unmapped key).
-        fun actionOf(control: DpadControl): PlayerAction? =
-            resolveAction(InputPattern.DPad(control))
-
-        // One discrete D-pad arm — the shape every non-seek arm shares:
-        // KeyUp is always false (arms act on KeyDown only; the seek arms
-        // below own the accumulate-on-repeat / commit-on-KeyUp shape), the
-        // DEFAULT action runs the legacy arm verbatim, a rebound routes to
-        // the shared executor, unbound/disabled falls through.
-        fun discreteArm(
-            dpadKey: DpadKeyEvent,
-            control: DpadControl,
-            defaultAction: PlayerAction,
-            legacy: () -> Boolean,
-        ): Boolean {
-            if (!dpadKey.isKeyDown) return false
-            return when (val action = actionOf(control)) {
-                defaultAction -> legacy()
-                null -> false
-                else -> executePlayerAction(action)
-            }
-        }
-
         Modifier
             .focusRequester(tvPlayerFocusRequester)
+            .onFocusChanged { onTvLayerFocusChange(it.hasFocus) }
             .focusable()
             .onKeyEvent { keyEvent ->
                 onUserInteraction()
@@ -184,114 +162,21 @@ internal fun playerBoxKeyInputModifier(
                     false
                 }
             }
-            .onDpadKeyEvent(
-                // Every arm executes on KeyDown only (repeats included) — the
-                // handler is invoked for KeyUp too. The retired arms ran on
-                // BOTH edges (detailed handlers with no type guard): FF/RW
-                // seeked twice per press and play/pause toggled twice (a net
-                // no-op). Acting once per press is the deliberate divergence
-                // from that retired behavior — DECLARED, not verbatim parity;
-                // the mapping rows themselves stay verbatim. The seek arms
-                // are the exception shape: they accumulate on KeyDown repeats
-                // and commit on KeyUp.
-                onRight = { dpadKey ->
-                    when (val action = actionOf(DpadControl.RIGHT)) {
-                        PlayerAction.SEEK_FORWARD -> {
-                            if (!showControls) {
-                                if (dpadKey.isKeyDown) {
-                                    seekState.seekForward(dpadKey.repeatCount)
-                                } else if (dpadKey.isKeyUp) {
-                                    seekState.commitForward()
-                                    performConfirmHaptic()
-                                }
-                                true
-                            } else false
-                        }
-                        null -> false
-                        else -> if (dpadKey.isKeyDown) executePlayerAction(action) else false
-                    }
-                },
-                onLeft = { dpadKey ->
-                    when (val action = actionOf(DpadControl.LEFT)) {
-                        PlayerAction.SEEK_BACK -> {
-                            if (!showControls) {
-                                if (dpadKey.isKeyDown) {
-                                    seekState.seekBackward(dpadKey.repeatCount)
-                                } else if (dpadKey.isKeyUp) {
-                                    seekState.commitBackward()
-                                    performConfirmHaptic()
-                                }
-                                true
-                            } else false
-                        }
-                        null -> false
-                        else -> if (dpadKey.isKeyDown) executePlayerAction(action) else false
-                    }
-                },
-                onSelect = { dpadKey ->
-                    discreteArm(dpadKey, DpadControl.SELECT, PlayerAction.TOGGLE_CONTROLS) {
-                        if (!showControls) {
-                            onShowControlsChange(true)
-                            true
-                        } else false
-                    }
-                },
-                onUp = { dpadKey ->
-                    discreteArm(dpadKey, DpadControl.UP, PlayerAction.TOGGLE_CONTROLS) {
-                        if (!showControls) {
-                            onShowControlsChange(true)
-                            true
-                        } else false
-                    }
-                },
-                onDown = { dpadKey ->
-                    discreteArm(dpadKey, DpadControl.DOWN, PlayerAction.TOGGLE_CONTROLS) {
-                        if (!showControls) {
-                            onShowControlsChange(true)
-                            true
-                        } else false
-                    }
-                },
-                onBack = { dpadKey ->
-                    discreteArm(dpadKey, DpadControl.BACK, PlayerAction.BACK_OR_HIDE) {
-                        if (showControls) {
-                            onShowControlsChange(false)
-                            true
-                        } else false
-                    }
-                },
-                onPlayPause = { dpadKey ->
-                    discreteArm(dpadKey, DpadControl.PLAY_PAUSE, PlayerAction.TOGGLE_PLAY_PAUSE) {
-                        // TV remotes' media play/pause lands here — the
-                        // summon follows the toggle's direction exactly like
-                        // the SPACE arm above.
-                        togglePlayPauseWithSummon(
-                            isPlaying = isPlaying,
-                            hideOsdOnPause = hideOsdOnPause,
-                            doTogglePlayPause = doTogglePlayPause,
-                            performConfirmHaptic = performConfirmHaptic,
-                            summonControls = { onShowControlsChange(true) },
-                        )
-                        true
-                    }
-                },
-                onFastForward = { dpadKey ->
-                    discreteArm(dpadKey, DpadControl.FAST_FORWARD, PlayerAction.SEEK_FORWARD) {
-                        doSeekForward()
-                        onShowControlsChange(true)
-                        performConfirmHaptic()
-                        true
-                    }
-                },
-                onRewind = { dpadKey ->
-                    discreteArm(dpadKey, DpadControl.REWIND, PlayerAction.SEEK_BACK) {
-                        doSeekBack()
-                        onShowControlsChange(true)
-                        performConfirmHaptic()
-                        true
-                    }
-                },
-            )
+                .dpadKeyHandler(
+                    tvDpadKeyConfig(
+                        showControls = showControls,
+                        isPlaying = isPlaying,
+                        hideOsdOnPause = hideOsdOnPause,
+                        onShowControlsChange = onShowControlsChange,
+                        seekState = seekState,
+                        doTogglePlayPause = doTogglePlayPause,
+                        doSeekBack = doSeekBack,
+                        doSeekForward = doSeekForward,
+                        performConfirmHaptic = performConfirmHaptic,
+                        resolveAction = resolveAction,
+                        executePlayerAction = executePlayerAction,
+                    )
+                )
     } else if (!isTv && hasHardwareKeyboard && !isSheetOpen) {
         // Hardware-keyboard shortcuts for phones/tablets with a
         // keyboard (Chromebook, Bluetooth, Samsung DeX). TV keeps
@@ -353,6 +238,191 @@ internal fun playerBoxKeyInputModifier(
                 handleMediaKeyDown(keyEvent)
             }
     } else Modifier
+
+/**
+ * The TV D-pad arm set, shared verbatim by the two dispatch paths that must
+ * never diverge: the surface Box's focused-dispatch modifier
+ * ([playerBoxKeyInputModifier] via [dpadKeyHandler]) and the key-sink fallback
+ * ([PlayerTvKeySinkEffect]) the screen publishes for keys that reach nothing
+ * (issue #174's null-focus death — no Compose focus target left after the
+ * controls auto-hide, so the Activity-level bridge runs the same arms). Every
+ * arm is EXACTLY the inline body this file carried before the extraction.
+ *
+ * Every D-pad arm resolves its control's binding first (hoisted once
+ * per arm): the default actions run the legacy arms verbatim; a
+ * rebound action routes to the shared executor; a disabled/unbound
+ * control returns false (the key falls through, exactly like an
+ * unmapped key).
+ *
+ * Every arm executes on KeyDown only (repeats included) — the handler is
+ * invoked for KeyUp too. The retired arms ran on BOTH edges (detailed
+ * handlers with no type guard): FF/RW seeked twice per press and play/pause
+ * toggled twice (a net no-op). Acting once per press is the deliberate
+ * divergence from that retired behavior — DECLARED, not verbatim parity; the
+ * mapping rows themselves stay verbatim. The seek arms are the exception
+ * shape: they accumulate on KeyDown repeats and commit on KeyUp.
+ *
+ * BACK's default (BACK_OR_HIDE) is deliberately ABSENT from this set: the
+ * system back pipeline owns it — see the BACK arm below. MENU is the inverse:
+ * it has no bindable control (no DpadControl value), so its summon arm runs
+ * unconditionally (see the Menu arm above).
+ */
+internal fun tvDpadKeyConfig(
+    showControls: Boolean,
+    isPlaying: Boolean,
+    hideOsdOnPause: Boolean,
+    onShowControlsChange: (Boolean) -> Unit,
+    seekState: DpadSeekState,
+    doTogglePlayPause: () -> Unit,
+    doSeekBack: () -> Unit,
+    doSeekForward: () -> Unit,
+    performConfirmHaptic: () -> Unit,
+    resolveAction: (InputPattern) -> PlayerAction?,
+    executePlayerAction: (PlayerAction) -> Boolean,
+): DpadKeyHandlerScope.() -> Unit {
+    fun actionOf(control: DpadControl): PlayerAction? =
+        resolveAction(InputPattern.DPad(control))
+
+    // One discrete D-pad arm — the shape every non-seek arm shares:
+    // KeyUp is always false (arms act on KeyDown only; the seek arms
+    // below own the accumulate-on-repeat / commit-on-KeyUp shape), the
+    // DEFAULT action runs the legacy arm verbatim, a rebound routes to
+    // the shared executor, unbound/disabled falls through.
+    fun discreteArm(
+        dpadKey: DpadKeyEvent,
+        control: DpadControl,
+        defaultAction: PlayerAction,
+        legacy: () -> Boolean,
+    ): Boolean {
+        if (!dpadKey.isKeyDown) return false
+        return when (val action = actionOf(control)) {
+            defaultAction -> legacy()
+            null -> false
+            else -> executePlayerAction(action)
+        }
+    }
+
+    return {
+        onKeyEvent(DpadAction.Right) { dpadKey ->
+            when (val action = actionOf(DpadControl.RIGHT)) {
+                PlayerAction.SEEK_FORWARD -> {
+                    if (!showControls) {
+                        if (dpadKey.isKeyDown) {
+                            seekState.seekForward(dpadKey.repeatCount)
+                        } else if (dpadKey.isKeyUp) {
+                            seekState.commitForward()
+                            performConfirmHaptic()
+                        }
+                        true
+                    } else false
+                }
+                null -> false
+                else -> if (dpadKey.isKeyDown) executePlayerAction(action) else false
+            }
+        }
+        onKeyEvent(DpadAction.Left) { dpadKey ->
+            when (val action = actionOf(DpadControl.LEFT)) {
+                PlayerAction.SEEK_BACK -> {
+                    if (!showControls) {
+                        if (dpadKey.isKeyDown) {
+                            seekState.seekBackward(dpadKey.repeatCount)
+                        } else if (dpadKey.isKeyUp) {
+                            seekState.commitBackward()
+                            performConfirmHaptic()
+                        }
+                        true
+                    } else false
+                }
+                null -> false
+                else -> if (dpadKey.isKeyDown) executePlayerAction(action) else false
+            }
+        }
+        onKeyEvent(DpadAction.Select) { dpadKey ->
+            discreteArm(dpadKey, DpadControl.SELECT, PlayerAction.TOGGLE_CONTROLS) {
+                if (!showControls) {
+                    onShowControlsChange(true)
+                    true
+                } else false
+            }
+        }
+        onKeyEvent(DpadAction.Up) { dpadKey ->
+            discreteArm(dpadKey, DpadControl.UP, PlayerAction.TOGGLE_CONTROLS) {
+                if (!showControls) {
+                    onShowControlsChange(true)
+                    true
+                } else false
+            }
+        }
+        onKeyEvent(DpadAction.Down) { dpadKey ->
+            discreteArm(dpadKey, DpadControl.DOWN, PlayerAction.TOGGLE_CONTROLS) {
+                if (!showControls) {
+                    onShowControlsChange(true)
+                    true
+                } else false
+            }
+        }
+        onKeyEvent(DpadAction.Menu) { dpadKey ->
+            // MENU — the last key on issue #174's dead list ("none of Up,
+            // Down, Left, Right, OK or Menu brings them back"): the first
+            // press summons the controls. MENU has no row in the
+            // customizable D-pad catalog (no DpadControl value), so this arm
+            // carries no binding resolution and runs the legacy summon
+            // directly. Repeats and KeyUp stay unconsumed; with the controls
+            // already up MENU keeps its pre-fix inertness (unmapped key).
+            if (dpadKey.isKeyDown && dpadKey.repeatCount == 0 && !showControls) {
+                onShowControlsChange(true)
+                true
+            } else false
+        }
+        onKeyEvent(DpadAction.Back) { dpadKey ->
+            // BACK's default (BACK_OR_HIDE) is deliberately NOT handled here:
+            // the system back pipeline owns it — on API 33+ the predictive-back
+            // callback (which fires the JellyPlayBackHandler ladder on the
+            // KeyUp's Pre-IME stage, AFTER this key dispatch) is the single
+            // decision-maker. Consuming the KeyDown here too double-acted:
+            // the arm hid the controls, the replayed ladder call then read
+            // them as hidden and fell through to onBack() — one press hid
+            // AND exited the player. A REBOUND action still executes here
+            // (the system ladder cannot know the rebinding); the rebound is
+            // additive with the ladder's own default semantics.
+            when (val action = actionOf(DpadControl.BACK)) {
+                PlayerAction.BACK_OR_HIDE, null -> false
+                else -> if (dpadKey.isKeyDown) executePlayerAction(action) else false
+            }
+        }
+        onKeyEvent(DpadAction.PlayPause) { dpadKey ->
+            discreteArm(dpadKey, DpadControl.PLAY_PAUSE, PlayerAction.TOGGLE_PLAY_PAUSE) {
+                // TV remotes' media play/pause lands here — the
+                // summon follows the toggle's direction exactly like
+                // the SPACE arm above.
+                togglePlayPauseWithSummon(
+                    isPlaying = isPlaying,
+                    hideOsdOnPause = hideOsdOnPause,
+                    doTogglePlayPause = doTogglePlayPause,
+                    performConfirmHaptic = performConfirmHaptic,
+                    summonControls = { onShowControlsChange(true) },
+                )
+                true
+            }
+        }
+        onKeyEvent(DpadAction.FastForward) { dpadKey ->
+            discreteArm(dpadKey, DpadControl.FAST_FORWARD, PlayerAction.SEEK_FORWARD) {
+                doSeekForward()
+                onShowControlsChange(true)
+                performConfirmHaptic()
+                true
+            }
+        }
+        onKeyEvent(DpadAction.Rewind) { dpadKey ->
+            discreteArm(dpadKey, DpadControl.REWIND, PlayerAction.SEEK_BACK) {
+                doSeekBack()
+                onShowControlsChange(true)
+                performConfirmHaptic()
+                true
+            }
+        }
+    }
+}
 
 /** Outcome of one watched press: a completed tap, a long-press, or a moved/consumed stream that belongs to another gesture tier. */
 private enum class PressOutcome { Tapped, LongPressed, Moved }

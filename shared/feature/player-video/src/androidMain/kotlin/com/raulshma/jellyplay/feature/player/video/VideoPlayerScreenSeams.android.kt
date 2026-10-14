@@ -262,18 +262,33 @@ internal actual fun rememberHasHardwareKeyboard(): Boolean {
  */
 internal actual fun grabsKeyboardFocusWithControlsVisible(): Boolean = false
 
-/** Silent no-op — the focus diagnostic only ever speaks on a harness-armed desktop. */
-internal actual fun harnessFocusDiag(message: String) {}
+/**
+ * Focus diagnostic: logcat under `JellyPlayFocus` while the harness gate is
+ * armed (`jellyplay.harness.enabled=true` — the desktop actual's zero-cost
+ * gate, same property, so one flag speaks on both platforms), silent on every
+ * normal boot. Issue #174's reporter supplied clean logcat; these lines make
+ * the Compose-side focus story (grab attempts, layer focus transitions, sink
+ * installs) part of the next field report.
+ */
+internal actual fun harnessFocusDiag(message: String) {
+    if (System.getProperty("jellyplay.harness.enabled")?.equals("true", ignoreCase = true) == true) {
+        android.util.Log.d("JellyPlayFocus", message)
+    }
+}
 
 /**
- * Silent no-op — the deterministic desktop key bridge is desktop-only (the
- * install call site is behind [grabsKeyboardFocusWithControlsVisible], false
- * here), so Android never publishes a key sink and phone/TV behavior is
- * byte-identical to HEAD.
+ * Deterministic Android key delivery: delegate to [AndroidPlayerKeyBridge].
+ * PlayerActivity.dispatchKeyEvent offers every key the normal dispatch chain
+ * did not consume (the null-focus case) to the bridge — the Android half of
+ * the issue #174 fix.
  */
-internal actual fun installPlayerKeySink(sink: ((androidx.compose.ui.input.key.KeyEvent) -> Boolean)?) {}
+internal actual fun installPlayerKeySink(sink: ((androidx.compose.ui.input.key.KeyEvent) -> Boolean)?) {
+    AndroidPlayerKeyBridge.install(sink)
+}
 
-internal actual fun uninstallPlayerKeySink(expected: ((androidx.compose.ui.input.key.KeyEvent) -> Boolean)?) {}
+internal actual fun uninstallPlayerKeySink(expected: ((androidx.compose.ui.input.key.KeyEvent) -> Boolean)?) {
+    AndroidPlayerKeyBridge.uninstall(expected)
+}
 
 @Composable
 internal actual fun rememberIsPortraitOrientation(): Boolean =
@@ -369,6 +384,20 @@ internal actual fun EngineVideoSurface(
                     // Non-View-surface engine (desktop-style, impossible on Android
                     // today): empty surface, audio-only playback continues.
                     ?: android.view.View(ctx)
+                // Issue #174 hardening: the engine's View must never participate
+                // in focus. media3's PlayerView is focusable by default (its
+                // constructor calls setFocusable(true)) and a View-level focus
+                // owner outside Compose swallows every key before Compose's
+                // dispatch ever runs — the same all-keys-dead symptom as the
+                // null-focus case. isFocusable=false alone is the portable
+                // suppression: focus search skips non-focusable views, and the
+                // View#descendantFocusability API this used to also block is
+                // REMOVED from the API-37 android.jar (the player's engine
+                // children — AspectRatioFrameLayout/SubtitleView with
+                // useController=false — are non-focusable containers anyway).
+                // The surface takes no key or touch interaction, so free.
+                view.isFocusable = false
+                view.isFocusableInTouchMode = false
                 onSurfaceCreated(view)
                 view
             },

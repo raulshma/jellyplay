@@ -137,6 +137,16 @@ fun VideoPlayerScreen(
     onBack: () -> Unit,
     onEnterPip: () -> Unit = {},
     onOpenSubtitleTester: () -> Unit = {},
+    /**
+     * True while the host composes an overlay screen ABOVE this one
+     * (PlayerActivity's subtitle tester). The tester owns the window while
+     * up: without this gate the TV focus grab's re-assert would steal focus
+     * back from the tester's controls, and tester-declined keys would fall
+     * through to the TV key sink and act on the player hiding underneath.
+     * Default false — the tester is an Android-host-only overlay; the shell
+     * hosts have no equivalent.
+     */
+    isOverlayScreenActive: Boolean = false,
     viewModel: VideoPlayerViewModel = koinViewModel(),
 ) {
     // Host-window + input seams: the Activity/Context system-surface
@@ -246,6 +256,14 @@ fun VideoPlayerScreen(
     // ANYTHING under the keyboard layer holds focus; drives the grab seam's
     // re-assert-on-loss against the mpv surface-mount focus drop.
     var keyboardLayerHoldsFocus by remember { mutableStateOf(false) }
+    // TV twin (issue #174): whether ANYTHING under the surface Box holds
+    // focus — fed by the TV branch's onFocusChanged in
+    // [playerBoxKeyInputModifier], controls buttons included (hasFocus, not
+    // isFocused). Drives [PlayerTvFocusGrabEffect]'s re-assert-on-loss: the
+    // Box's D-pad handlers only run while the subtree holds focus, and a
+    // lost focus (hide-edge race, overlay unmount) otherwise silences every
+    // remote key.
+    var tvPlayerLayerHoldsFocus by remember { mutableStateOf(false) }
     var userInteractionCount by rememberSaveable { mutableIntStateOf(0) }
 
     LaunchedEffect(showControls) {
@@ -365,13 +383,20 @@ fun VideoPlayerScreen(
 
     // Always-on back interception (the seam's Android actual wires the system
     // back; the desktop actual is a no-op and Esc is the shell's concern).
+    // This ladder IS the single BACK decision-maker for the screen, and it
+    // runs exactly once per press on every pipeline pairing: the TV D-pad arm
+    // set deliberately carries no BACK_OR_HIDE arm (the arm acting on the
+    // KeyDown AND the predictive-back callback replaying the same press on
+    // the KeyUp's Pre-IME stage double-acted: one press hid the controls AND
+    // exited), and PlayerActivity.onBackPressed suppresses the legacy key
+    // path on API 33+ whenever a back callback IS registered — on API <33
+    // (and in any no-callback window) the legacy path is the ONLY dispatch,
+    // so there is nothing to suppress.
     JellyPlayBackHandler(enabled = true) {
-        if (currentSheet != PlayerSheet.None) {
-            currentSheet = PlayerSheet.None
-        } else if (isTv && showControls) {
-            showControls = false
-        } else {
-            onBack()
+        when {
+            currentSheet != PlayerSheet.None -> currentSheet = PlayerSheet.None
+            isTv && showControls -> showControls = false
+            else -> onBack()
         }
     }
 
@@ -488,11 +513,18 @@ fun VideoPlayerScreen(
 
     LaunchedEffect(showControls, isTv, isNextEpisodeVisible, isSkipSegmentVisible, isCinemaIntroVisible) {
         if (isTv && !showControls) {
+            // The overlay-priority handoff: overlays own focus while visible,
+            // the surface Box otherwise. [PlayerTvFocusGrabEffect] below owns
+            // the plain Box case with retry + re-assert (issue #174 — the
+            // single un-retried attempt here was the whole recovery path and
+            // it lost races); this effect stays the overlay-targeting arm.
             when {
                 isCinemaIntroVisible -> tvCinemaIntroFocusRequester.tryRequestFocus("tv_cinema_intro")
                 isNextEpisodeVisible -> tvNextEpisodeFocusRequester.tryRequestFocus("tv_next_episode")
                 isSkipSegmentVisible -> tvSkipSegmentFocusRequester.tryRequestFocus("tv_skip_segment")
-                else -> tvPlayerFocusRequester.tryRequestFocus("tv_player")
+                else -> harnessFocusDiag(
+                    "hide-edge handoff: box case deferred to the grab effect (showControls=false)",
+                )
             }
         } else if (!isTv && hasHardwareKeyboard && !showControls) {
             // Same call on every platform (Android behavior untouched); the
@@ -500,6 +532,30 @@ fun VideoPlayerScreen(
             val autoHideEdgeOk = keyboardFocusRequester.tryRequestFocus("keyboard_player")
             harnessFocusDiag("auto-hide edge regrab ok=$autoHideEdgeOk")
         }
+    }
+
+    // TV focus grab + re-assert (issue #174): the surface Box's D-pad tier
+    // receives keys only while its subtree holds focus. The grab runs whenever
+    // the layer SHOULD own focus — controls hidden, sheet closed, no overlay
+    // claiming focus — and the re-assert recovers any later loss (the
+    // AnimatedVisibility exits disposing the previously focused play button,
+    // an overlay unmount orphaning focus, an engine-surface focus shuffle).
+    // While the controls are visible this composes nothing: the play button's
+    // grab owns focus, exactly as before.
+    if (isTv) {
+        val overlayClaimsFocus = isCinemaIntroVisible || isNextEpisodeVisible || isSkipSegmentVisible
+        PlayerTvFocusGrabEffect(
+            focusRequester = tvPlayerFocusRequester,
+            // The cast branch composes the companion dashboard instead of the
+            // surface Box — the requester is unattached there, so the grab
+            // must stay disarmed (tryRequestFocus would just eat its retries).
+            // A host overlay above this screen (the subtitle tester) owns
+            // focus while up — the re-assert would steal it back from the
+            // tester's controls, so the grab disarms there too.
+            layerComposed = !showControls && currentSheet == PlayerSheet.None &&
+                !overlayClaimsFocus && !isCastConnected && !isOverlayScreenActive,
+            targetHoldsFocus = tvPlayerLayerHoldsFocus,
+        )
     }
 
     // Desktop: the hardware-keyboard layer must OWN focus whenever
@@ -823,6 +879,38 @@ fun VideoPlayerScreen(
         }
     }
 
+    // TV sink (issue #174): while the TV D-pad layer is up, publish its EXACT
+    // arm set ([tvDpadKeyConfig]) to the platform key bridge, so keys that
+    // reach nothing — Compose's null-focus fallback finding no focused node
+    // and, on Android, no topmost key-input node above the player — are still
+    // interpreted by the screen's own arms. PlayerActivity.dispatchKeyEvent
+    // forwards post-dispatch-unconsumed keys into the bridge, so a key the
+    // focused chain consumed never reaches the sink (no double handling);
+    // the effect's declines keep the desktop sink's single-interpretation
+    // guard for the fall-through cases (sheet open, layer holds focus, host
+    // overlay screen active).
+    if (isTv) {
+        PlayerTvKeySinkEffect(
+            isSheetOpen = currentSheet != PlayerSheet.None,
+            isOverlayScreenActive = isOverlayScreenActive,
+            layerHoldsFocus = tvPlayerLayerHoldsFocus,
+            onResetLayerFocus = { tvPlayerLayerHoldsFocus = false },
+            config = tvDpadKeyConfig(
+                showControls = showControls,
+                isPlaying = isPlaying,
+                hideOsdOnPause = uiState.uiPrefs.hideOsdOnPause,
+                onShowControlsChange = { showControls = it },
+                seekState = seekState,
+                doTogglePlayPause = currentDoTogglePlayPause,
+                doSeekBack = currentDoSeekBack,
+                doSeekForward = currentDoSeekForward,
+                performConfirmHaptic = performConfirmHaptic,
+                resolveAction = resolvePatternAction,
+                executePlayerAction = actionExecutor::executeAction,
+            ),
+        )
+    }
+
     // Cast-route teardown for the companion dashboard's disconnect action
     // (platform seam: Android also stops the legacy cast transport).
     val disconnectCast = rememberCastDisconnect(viewModel)
@@ -861,6 +949,7 @@ fun VideoPlayerScreen(
                         keyboardFocusRequester = keyboardFocusRequester,
                         onUserInteraction = onKeyUserInteraction,
                         onKeyboardLayerFocusChange = { keyboardLayerHoldsFocus = it },
+                        onTvLayerFocusChange = { tvPlayerLayerHoldsFocus = it },
                         seekState = seekState,
                         doTogglePlayPause = doTogglePlayPause,
                         doSeekBack = doSeekBack,

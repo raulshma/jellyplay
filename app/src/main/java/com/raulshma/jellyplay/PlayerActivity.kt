@@ -40,7 +40,10 @@ import com.raulshma.jellyplay.core.datastore.security.SecurityStore
 import com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections
 import com.raulshma.jellyplay.core.ui.components.JellyPlayPreferenceTheme
 import com.raulshma.jellyplay.core.ui.components.rememberPreferenceDarkTheme
+import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.isTv
 import com.raulshma.jellyplay.feature.player.live.LivePlayerScreen
+import com.raulshma.jellyplay.feature.player.video.AndroidPlayerKeyBridge
 import com.raulshma.jellyplay.feature.player.video.VideoPlayerScreen
 import com.raulshma.jellyplay.navigation.playbackhost.PlayerActivityArgs
 import com.raulshma.jellyplay.shell.AppLockRedirect
@@ -118,6 +121,62 @@ class PlayerActivity : FragmentActivity() {
      */
     private val launchArgs = mutableStateOf<PlayerActivityArgs?>(null)
 
+    /**
+     * Issue #174: the player's D-pad handlers are Compose focus-dependent
+     * (`.focusable()` + `onPreviewKeyEvent` on the surface Box), and when no
+     * Compose focus target exists — the controls auto-hid and the hide-edge
+     * focus handoff lost its race, an overlay unmount orphaned focus, or a
+     * View outside Compose took window focus — the default dispatch has no
+     * topmost key-input node above the player to fall back to, so every
+     * remote key died silently while Back survived (OnBackPressedDispatcher
+     * needs no focus). Offer every key the normal dispatch chain did NOT
+     * consume to the composing player screen's own handler
+     * ([AndroidPlayerKeyBridge]; the screens install their exact D-pad/keyboard
+     * arm sets while up). A consumed key never reaches here, so there is no
+     * double handling; a declined key keeps the system's default `false`
+     * behavior. Both hosts (VOD and live) are covered by this single seam.
+     */
+    override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
+        if (super.dispatchKeyEvent(event)) return true
+        return AndroidPlayerKeyBridge.deliver(
+            androidx.compose.ui.input.key.KeyEvent(event),
+        )
+    }
+
+    /**
+     * One physical BACK press, one back decision. On API 33+ (manifest
+     * `enableOnBackInvokedCallback="true"`) WITH a back callback actually
+     * registered (the composing player screen's JellyPlayBackHandler ladder)
+     * the framework already ran that ladder when this press's KEYUP crossed
+     * the Pre-IME stage ([android.view.ViewRootImpl] → OnBackInvokedInput →
+     * the ladder); this legacy key-path entry (`Activity.onKeyUp` BACK
+     * tracking → `onBackPressed`) would run the SAME ladder a second time on
+     * the identical press. The second run reads the first run's own effect as
+     * new state — controls it just hid, a sheet it just closed — and falls
+     * through to `onBack()`: one press hid the controls AND exited the player
+     * (the "BACK exits with controls visible" bug, reproduced on an API 36 TV
+     * image with the ladder stack trace).
+     *
+     * The registration test matters: when NO callback is registered — the
+     * live TV screen composes no JellyPlayBackHandler (its D-pad BACK arm IS
+     * the ladder), and it is also down in mid-swap/transient windows — the
+     * predictive pipeline ran nothing, and early-returning here used to kill
+     * BACK entirely in exactly those windows (the D-pad arm/sink had already
+     * declined). Falling through lets the dispatcher's no-callback fallback
+     * run: the activity finishes, the pre-fix exit behavior. Android <33 has
+     * no platform back callback at all: this legacy path IS the dispatch and
+     * must super through.
+     */
+    override fun onBackPressed() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            onBackPressedDispatcher.hasEnabledCallbacks()
+        ) {
+            return
+        }
+        @Suppress("DEPRECATION")
+        super.onBackPressed()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -146,53 +205,74 @@ class PlayerActivity : FragmentActivity() {
         }
 
         setContent {
-            // Theme the player with the same preference-driven stack as
-            // MainActivity (accent/OLED/contrast/performance-locals/hand-mode/
-            // blue-light/colorblind) via the shared wrapper. PreferenceProjections
-            // is the same @Singleton MainViewModel reads, so the player tracks the
-            // user's appearance settings identically.
-            val preferences by preferenceProjections.mainPreferences
-                .collectAsStateWithLifecycle()
-            val darkTheme = rememberPreferenceDarkTheme(preferences)
-            // Subtitle tester overlays the player (keeps the video engine alive
-            // underneath) rather than navigating away, mirroring the old nav-push
-            // behaviour. The tester builds its own preview engine, so it is
-            // self-contained. Video-only — live has no subtitle side-loading.
-            var showSubtitleTester by remember { mutableStateOf(false) }
-            // Hoisted launch args so onNewIntent (re-selection while this
-            // singleTask activity is alive, e.g. picking another item while in
-            // PiP) can swap the payload without recreating the Activity. The
-            // variant branch recomposes the matching screen with the new args.
-            val args = launchArgs.value ?: return@setContent
-            JellyPlayPreferenceTheme(
-                preferences = preferences,
-                darkTheme = darkTheme,
+            // The TV-mode composition local: MainActivity's shell provides it
+            // (MainContent), but this host composes the players DIRECTLY —
+            // without this provider LocalTvMode.current was false on every TV
+            // device here, so the players ran their PHONE branches: the TV
+            // D-pad arms, the TV focus grab/key sink (issue #174 machinery)
+            // and the back ladder's "TV: hide controls on back" step were all
+            // dead code, and BACK always exited (the "back exits with
+            // controls visible" bug) because `isTv && showControls` could
+            // never hold.
+            val isTvDevice = isTv()
+            androidx.compose.runtime.CompositionLocalProvider(
+                LocalTvMode provides isTvDevice,
             ) {
-                when (args) {
-                    is PlayerActivityArgs.Video -> Box(Modifier.fillMaxSize()) {
-                        VideoPlayerScreen(
-                            itemId = args.itemId,
-                            mediaSourceId = args.mediaSourceId,
-                            startPositionTicks = args.startPositionTicks,
-                            subtitleStreamIndex = args.subtitleStreamIndex,
-                            audioStreamIndex = args.audioStreamIndex,
-                            onBack = { finish() },
-                            onEnterPip = { enterPipMode() },
-                            onOpenSubtitleTester = { showSubtitleTester = true },
-                        )
-                        if (showSubtitleTester) {
-                            com.raulshma.jellyplay.feature.subtitle.tester.SubtitleTesterScreen(
-                                onBack = { showSubtitleTester = false },
+                // Theme the player with the same preference-driven stack as
+                // MainActivity (accent/OLED/contrast/performance-locals/hand-mode/
+                // blue-light/colorblind) via the shared wrapper. PreferenceProjections
+                // is the same @Singleton MainViewModel reads, so the player tracks the
+                // user's appearance settings identically.
+                val preferences by preferenceProjections.mainPreferences
+                    .collectAsStateWithLifecycle()
+                val darkTheme = rememberPreferenceDarkTheme(preferences)
+                // Subtitle tester overlays the player (keeps the video engine alive
+                // underneath) rather than navigating away, mirroring the old nav-push
+                // behaviour. The tester builds its own preview engine, so it is
+                // self-contained. Video-only — live has no subtitle side-loading.
+                var showSubtitleTester by remember { mutableStateOf(false) }
+                // Hoisted launch args so onNewIntent (re-selection while this
+                // singleTask activity is alive, e.g. picking another item while in
+                // PiP) can swap the payload without recreating the Activity. The
+                // variant branch recomposes the matching screen with the new args.
+                val args = launchArgs.value ?: return@CompositionLocalProvider
+                JellyPlayPreferenceTheme(
+                    preferences = preferences,
+                    darkTheme = darkTheme,
+                ) {
+                    when (args) {
+                        is PlayerActivityArgs.Video -> Box(Modifier.fillMaxSize()) {
+                            VideoPlayerScreen(
+                                itemId = args.itemId,
+                                mediaSourceId = args.mediaSourceId,
+                                startPositionTicks = args.startPositionTicks,
+                                subtitleStreamIndex = args.subtitleStreamIndex,
+                                audioStreamIndex = args.audioStreamIndex,
+                                onBack = { finish() },
+                                onEnterPip = { enterPipMode() },
+                                onOpenSubtitleTester = { showSubtitleTester = true },
+                                // The tester composes ABOVE the player and owns
+                                // the window while up: gates the player's TV
+                                // focus-grab re-assert (would steal focus from
+                                // the tester's controls) and its key sink
+                                // (tester-declined keys would act on the
+                                // player underneath).
+                                isOverlayScreenActive = showSubtitleTester,
                             )
+                            if (showSubtitleTester) {
+                                com.raulshma.jellyplay.feature.subtitle.tester.SubtitleTesterScreen(
+                                    onBack = { showSubtitleTester = false },
+                                )
+                            }
                         }
+                        is PlayerActivityArgs.Live -> LivePlayerScreen(
+                            channelId = args.channelId,
+                            channelName = args.channelName,
+                            audioStreamIndex = args.audioStreamIndex,
+                            subtitleStreamIndex = args.subtitleStreamIndex,
+                            onBack = { finish() },
+                        )
                     }
-                    is PlayerActivityArgs.Live -> LivePlayerScreen(
-                        channelId = args.channelId,
-                        channelName = args.channelName,
-                        audioStreamIndex = args.audioStreamIndex,
-                        subtitleStreamIndex = args.subtitleStreamIndex,
-                        onBack = { finish() },
-                    )
                 }
             }
         }

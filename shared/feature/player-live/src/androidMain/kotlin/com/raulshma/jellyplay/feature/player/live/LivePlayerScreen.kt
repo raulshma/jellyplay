@@ -20,6 +20,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.input.pointer.pointerInput
@@ -38,7 +39,9 @@ import com.raulshma.jellyplay.core.ui.player.playerBottomControlsExit
 import com.raulshma.jellyplay.core.ui.player.playerTopControlsEnter
 import com.raulshma.jellyplay.core.ui.player.playerTopControlsExit
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
-import com.raulshma.jellyplay.core.ui.tv.input.onDpadKeyEvent
+import com.raulshma.jellyplay.core.ui.tv.input.DpadAction
+import com.raulshma.jellyplay.core.ui.tv.input.DpadKeyHandlerScope
+import com.raulshma.jellyplay.core.ui.tv.input.dpadKeyHandler
 import com.raulshma.jellyplay.core.ui.message.LocalUserMessageBus
 import com.raulshma.jellyplay.core.ui.tv.tryRequestFocus
 import com.raulshma.jellyplay.feature.player.live.components.ChannelZapToast
@@ -50,6 +53,8 @@ import com.raulshma.jellyplay.feature.player.live.components.LiveRecordSheet
 import com.raulshma.jellyplay.feature.player.live.components.LiveStreamOptionSheet
 import com.raulshma.jellyplay.feature.player.live.engine.Media3LivePlayerEngine
 import com.raulshma.jellyplay.feature.player.video.PlayerOrientationLock
+import com.raulshma.jellyplay.feature.player.video.PlayerTvFocusGrabEffect
+import com.raulshma.jellyplay.feature.player.video.PlayerTvKeySinkEffect
 import com.raulshma.jellyplay.feature.player.video.chrome.controlsAutoHideTimeoutMs
 import com.raulshma.jellyplay.feature.player.video.chrome.LIVE_SEEK_STEP_MS
 import com.raulshma.jellyplay.feature.player.video.chrome.liveWindowRefreshLoop
@@ -252,6 +257,10 @@ fun LivePlayerScreen(
     // (mirrors the VOD player's overlay-priority focus chain).
     val playerFocusRequester = remember { FocusRequester() }
     val errorRetryFocusRequester = remember { FocusRequester() }
+    // Whether ANYTHING under the player Box holds focus (banner retry button
+    // included) — the grab seam's re-assert watch, fed by the Box's
+    // onFocusChanged below.
+    var liveLayerHoldsFocus by remember { mutableStateOf(false) }
     LaunchedEffect(isTv, state.errorMessage) {
         if (isTv) {
             if (state.errorMessage != null) {
@@ -261,6 +270,73 @@ fun LivePlayerScreen(
             }
         }
     }
+    // The TV D-pad arm set, built once per recomposition and shared by the two
+    // dispatch paths that must never diverge: the Box's focused-dispatch
+    // handler (dpadKeyHandler below) and the key-sink fallback. Arms are the
+    // inline bodies this screen carried before the extraction, verbatim.
+    val liveDpadConfig = liveDpadKeyConfig(
+        isSheetOpen = activeSheet != null,
+        onChannelUp = {
+            viewModel.onEvent(LiveTvPlayerUiEvent.ChannelUp(audioStreamIndex, subtitleStreamIndex))
+            overlayVisible = false
+        },
+        onChannelDown = {
+            viewModel.onEvent(LiveTvPlayerUiEvent.ChannelDown(audioStreamIndex, subtitleStreamIndex))
+            overlayVisible = false
+        },
+        onSelect = {
+            if (activeSheet != null) {
+                activeSheet = null
+            } else {
+                overlayVisible = !overlayVisible
+            }
+            true
+        },
+        onBack = {
+            when {
+                activeSheet != null -> activeSheet = null
+                overlayVisible -> overlayVisible = false
+                else -> onBack()
+            }
+            true
+        },
+        onMenu = {
+            // MENU — issue #174's last dead key: first press summons the
+            // overlay. Already-up stays unconsumed (unmapped key, pre-fix
+            // inertness).
+            if (!overlayVisible) {
+                overlayVisible = true
+                true
+            } else false
+        },
+    )
+    // TV focus grab + re-assert (issue #174 parity with the VOD screen): this
+    // screen had NO hide-edge re-grab at all — when the overlay auto-hid (or a
+    // sheet closed, or the error banner unmounted), nothing re-grabbed the root
+    // Box and every D-pad key died until something else happened to take
+    // focus. The grab runs whenever the layer SHOULD own focus — overlay
+    // hidden, sheet closed, no error banner claiming focus — and the
+    // re-assert recovers any later loss, both with the 3-frame retry.
+    if (isTv) {
+        PlayerTvFocusGrabEffect(
+            focusRequester = playerFocusRequester,
+            layerComposed = !overlayVisible && activeSheet == null && state.errorMessage == null,
+            targetHoldsFocus = liveLayerHoldsFocus,
+        )
+    }
+    // TV key-sink fallback (issue #174 parity with the VOD screen): publish
+    // the EXACT arm set the Box's D-pad handler runs to the platform bridge,
+    // so keys that reach nothing — no Compose focus target left, PlayerActivity's
+    // dispatchKeyEvent finding nothing consumed — still zap/toggle/hide.
+    if (isTv) {
+        PlayerTvKeySinkEffect(
+            isSheetOpen = activeSheet != null,
+            isOverlayScreenActive = false,
+            layerHoldsFocus = liveLayerHoldsFocus,
+            onResetLayerFocus = { liveLayerHoldsFocus = false },
+            config = liveDpadConfig,
+        )
+    }
 
     PlayerDarkTheme {
         Box(
@@ -268,6 +344,10 @@ fun LivePlayerScreen(
                 .fillMaxSize()
                 .background(Color.Black)
                 .focusRequester(playerFocusRequester)
+                // BEFORE the focus target it observes (the grab seam's
+                // ordering contract): feeds [liveLayerHoldsFocus] with the
+                // subtree's hasFocus — banner retry button included.
+                .onFocusChanged { if (isTv) liveLayerHoldsFocus = it.hasFocus }
                 .focusable(true)
                 .then(
                     if (!isTv) Modifier.pointerInput(Unit) {
@@ -278,40 +358,9 @@ fun LivePlayerScreen(
                         }
                     } else Modifier,
                 )
-                .onDpadKeyEvent(
-                    onUp = { key ->
-                        if (activeSheet != null) return@onDpadKeyEvent false
-                        if (key.isKeyUp) {
-                            viewModel.onEvent(LiveTvPlayerUiEvent.ChannelUp(audioStreamIndex, subtitleStreamIndex))
-                            overlayVisible = false
-                            true
-                        } else false
-                    },
-                    onDown = { key ->
-                        if (activeSheet != null) return@onDpadKeyEvent false
-                        if (key.isKeyUp) {
-                            viewModel.onEvent(LiveTvPlayerUiEvent.ChannelDown(audioStreamIndex, subtitleStreamIndex))
-                            overlayVisible = false
-                            true
-                        } else false
-                    },
-                    onSelect = {
-                        if (activeSheet != null) {
-                            activeSheet = null
-                        } else {
-                            overlayVisible = !overlayVisible
-                        }
-                        true
-                    },
-                    onBack = {
-                        when {
-                            activeSheet != null -> activeSheet = null
-                            overlayVisible -> overlayVisible = false
-                            else -> onBack()
-                        }
-                        true
-                    },
-                ),
+                // Same [liveDpadConfig] the key-sink fallback interprets —
+                // one arm set, two dispatch paths.
+                .dpadKeyHandler(liveDpadConfig),
         ) {
             // Surface layer
             val media3Player = remember(state.engineState) {
@@ -324,6 +373,16 @@ fun LivePlayerScreen(
                         PlayerView(ctx).apply {
                             player = media3Player
                             useController = false
+                            // Issue #174 hardening (the VOD EngineVideoSurface's
+                            // focus twin): media3's PlayerView is focusable by
+                            // default and a View-level focus owner outside Compose
+                            // swallows every D-pad key before Compose's dispatch
+                            // runs. isFocusable=false is the portable suppression
+                            // (the View#descendantFocusability API is removed from
+                            // the API-37 android.jar); the surface takes no key or
+                            // touch interaction, so free.
+                            isFocusable = false
+                            isFocusableInTouchMode = false
                             // Buffering is rendered by our own full-screen
                             // LiveErrorBanner (M3 Expressive LoadingIndicator);
                             // disable Media3's native spinner to avoid doubles.
@@ -494,4 +553,58 @@ fun LivePlayerScreen(
             }
         }
     }
+}
+
+/**
+ * The live TV D-pad arm set — the inline arms the Box's [dpadKeyHandler] ran
+ * before the extraction (channel zap acts on KeyUp), shared with the
+ * key-sink fallback via [PlayerTvKeySinkEffect] so the two dispatch paths
+ * can never diverge.
+ *
+ * The edge guards are DECLARED, not "verbatim as at HEAD": at HEAD the arms
+ * never ran on TV at all ([dpadKeyHandler] is a no-op without a
+ * [LocalTvMode] provider, which PlayerActivity only started supplying with
+ * this fix — the no-guard shape was unobservable). With the arms live, the
+ * pre-extraction shape is a bug: SELECT toggling on BOTH edges of one press
+ * is a net no-op (the KeyDown summons the overlay, the KeyUp 32 ms later
+ * hides it again), so SELECT/BACK act on the first KeyDown only and ignore
+ * KeyRepeat (a held key must not re-toggle or walk the back ladder).
+ */
+internal fun liveDpadKeyConfig(
+    isSheetOpen: Boolean,
+    onChannelUp: () -> Unit,
+    onChannelDown: () -> Unit,
+    onSelect: () -> Boolean,
+    onBack: () -> Boolean,
+    onMenu: () -> Boolean,
+): DpadKeyHandlerScope.() -> Unit = {
+    onKeyEvent(DpadAction.Up) { key ->
+        if (isSheetOpen) {
+            false
+        } else if (key.isKeyUp) {
+            onChannelUp()
+            true
+        } else {
+            false
+        }
+    }
+    onKeyEvent(DpadAction.Down) { key ->
+        if (isSheetOpen) {
+            false
+        } else if (key.isKeyUp) {
+            onChannelDown()
+            true
+        } else {
+            false
+        }
+    }
+    // BACK acts on the first KeyDown only (no KeyUp re-fire, no KeyRepeat):
+    // this arm IS the TV back ladder (the screen composes no
+    // JellyPlayBackHandler on TV), and an unguarded arm fired on BOTH edges
+    // of one press — KeyDown hid the overlay, the KeyUp 32 ms later read it
+    // hidden and fell to onBack(): one BACK press hid the chrome AND exited
+    // the player.
+    onKeyEvent(DpadAction.Select) { key -> if (key.isKeyDown && key.repeatCount == 0) onSelect() else false }
+    onKeyEvent(DpadAction.Back) { key -> if (key.isKeyDown && key.repeatCount == 0) onBack() else false }
+    onKeyEvent(DpadAction.Menu) { key -> if (key.isKeyDown && key.repeatCount == 0) onMenu() else false }
 }
