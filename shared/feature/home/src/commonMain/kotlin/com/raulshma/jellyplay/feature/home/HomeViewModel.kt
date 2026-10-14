@@ -834,6 +834,7 @@ internal class HomeViewModel(
                         rollingDiscoverRowIds = refresh.rollingDiscoverRowIds,
                         refreshingSectionIds = refresh.refreshingSectionIds,
                         offlineMode = refresh.offlineMode,
+                        imageReloadEpoch = refresh.imageReloadEpoch,
                     )
                 }
             }

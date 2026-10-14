@@ -105,7 +105,11 @@ fun MediaImage(
         // The fallback chain lives in a dedicated child composable so a state
         // change (advance to the next URL after an Error) only recomposes this
         // subtree instead of the whole Box (including the BlurHash layer). The
-        // parent [MediaImage] is now stateless wrt the fallback index.
+        // parent [MediaImage] is now stateless wrt the fallback index. The
+        // chain also resets (and re-issues the request) when the host screen
+        // bumps [LocalImageReloadEpoch] — a retried load is the only escape
+        // from a chain that exhausted on a transient failure, since the URL
+        // itself never changes.
         FallbackAsyncImage(
             primaryRequest = imageRequest,
             fallbackUrls = fallbackUrls,
@@ -135,14 +139,21 @@ private fun FallbackAsyncImage(
     val context = LocalPlatformContext.current
     val fallbackKey = remember(fallbackUrls) { fallbackUrls.joinToString("|") }
     val allUrls = remember(primaryRequest.data, fallbackKey) { listOf(primaryRequest.data.toString()) + fallbackUrls }
-    var currentIndex by remember(primaryRequest.data, fallbackKey) { mutableIntStateOf(0) }
-    var isError by remember(primaryRequest.data, fallbackKey) { mutableStateOf(false) }
+    // The reload epoch participates in every state key below: bumping it
+    // recreates the chain state (error flag cleared, index back to the
+    // primary URL), which re-enters AsyncImage and issues a fresh request.
+    // A succeeded image keeps the same Coil model, so it is unaffected.
+    val reloadEpoch = LocalImageReloadEpoch.current
+    var currentIndex by remember(primaryRequest.data, fallbackKey, reloadEpoch) { mutableIntStateOf(0) }
+    var isError by remember(primaryRequest.data, fallbackKey, reloadEpoch) { mutableStateOf(false) }
 
     // Hoist the onState lambda out of the AsyncImage call so a fresh closure
     // isn't allocated on every recomposition of this (very common) subtree.
     // currentIndex/isError are MutableState delegates, so reading them inside a
-    // stable lambda still observes changes correctly.
-    val onState = remember(allUrls.size) { { state: AsyncImagePainter.State ->
+    // stable lambda still observes changes correctly — which is why the key set
+    // here must match the states': a lambda remembered past a state reset would
+    // write to the discarded delegates and the chain would never advance.
+    val onState = remember(allUrls.size, primaryRequest.data, fallbackKey, reloadEpoch) { { state: AsyncImagePainter.State ->
         if (state is AsyncImagePainter.State.Error) {
             if (currentIndex < allUrls.size - 1) {
                 currentIndex++

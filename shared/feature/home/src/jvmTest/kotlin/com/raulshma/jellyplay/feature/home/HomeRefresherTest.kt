@@ -1196,6 +1196,94 @@ class HomeRefresherTest {
         assertTrue(r.state.value.refreshingSectionIds.isEmpty())
     }
 
+    // ── forced-refresh image-reload epoch ───────────────────────────────────
+
+    @Test
+    fun forcedRefresh_bumpsImageReloadEpoch_evenWhenFetchFails() = runTest {
+        coEvery { homeFeed.getHomeSections(any(), any()) } returns
+            Result.success(
+                HomeSectionsResult(
+                    sections = listOf(section(HomeSectionType.CONTINUE_WATCHING, listOf(item("cw1")))),
+                ),
+            )
+        val refresher = buildRefresher()
+        assertEquals(0L, refresher.state.value.imageReloadEpoch, "no forced refresh yet — epoch untouched")
+
+        refresher.fetchOnce()
+        runCurrent()
+        assertEquals(0L, refresher.state.value.imageReloadEpoch, "a plain (non-forced) fetch does not bump the epoch")
+
+        refresher.request(RefreshTrigger.PullToRefresh)
+        runCurrent()
+        assertEquals(1L, refresher.state.value.imageReloadEpoch, "pull-to-refresh bumps the epoch")
+
+        refresher.request(RefreshTrigger.PullToRefresh)
+        runCurrent()
+        assertEquals(2L, refresher.state.value.imageReloadEpoch, "every forced refresh bumps again")
+
+        // The bump precedes the fetch on purpose: a failed fetch must still
+        // leave the epoch advanced, since image recovery must not depend on
+        // the fetch succeeding.
+        coEvery { homeFeed.getHomeSections(any(), any()) } returns
+            Result.failure(RuntimeException("server restarting"))
+        refresher.request(RefreshTrigger.PullToRefresh)
+        runCurrent()
+        assertEquals(3L, refresher.state.value.imageReloadEpoch, "the failed fetch's epoch bump survives")
+
+        refresher.stop()
+    }
+
+    @Test
+    fun userDataChange_forcedRefresh_bumpsImageReloadEpoch() = runTest {
+        coEvery { homeFeed.getHomeSections(any(), any()) } returns
+            Result.success(HomeSectionsResult(sections = emptyList()))
+        val refresher = buildRefresher()
+        runCurrent()
+        // Prime the refresh clock the way a sign-in fetch would (the fake's
+        // 1_000 becomes lastRefreshTime); a plain fetch leaves the epoch at 0.
+        refresher.fetchOnce()
+        runCurrent()
+        assertEquals(0L, refresher.state.value.imageReloadEpoch)
+
+        // Past the 60s user-data throttle window, so the change refresh runs
+        // flushPendingUserDataChange's forced fetch — the "silent user-data
+        // refresh" of the epoch contract (returning from the player).
+        fakeTimeSource.nowMs = 61_000L
+        userDataEvents.tryEmit(UserDataChange(userId = "u1", itemIds = listOf("i1")))
+        advanceTimeBy(1_000)
+        runCurrent()
+
+        coVerify(exactly = 1) { homeFeed.getHomeSections(any(), force = true) }
+        assertEquals(1L, refresher.state.value.imageReloadEpoch, "the silent user-data forced fetch bumps the epoch")
+        refresher.stop()
+    }
+
+    @Test
+    fun goingOnline_handshake_bumpsImageReloadEpoch() = runTest {
+        // The going-online reconnect is exactly the "network blip" recovery
+        // the epoch exists for: images that failed while offline re-arm when
+        // the handshake's capped forced fetch fires.
+        coEvery { homeFeed.getHomeSections(any(), any()) } returns Result.success(
+            HomeSectionsResult(
+                sections = listOf(section(HomeSectionType.CONTINUE_WATCHING, items = listOf(item("cw1")))),
+            ),
+        )
+        val refresher = buildRefresher()
+        runCurrent() // offline-mode observer subscribes; initial ONLINE emission mirrors only
+
+        offlineModeFlow.value = OfflineMode.OFFLINE_MANUAL
+        runCurrent() // ONLINE→offline: content dropped, epoch untouched
+        assertEquals(0L, refresher.state.value.imageReloadEpoch, "going offline must not bump the epoch")
+
+        every { offlineModeManager.toggleManualOffline() } answers { offlineModeFlow.value = OfflineMode.ONLINE }
+        refresher.request(RefreshTrigger.GoingOnline)
+        runCurrent() // manager toggled → ONLINE emission runs the handshake (drain + capped fetch)
+
+        coVerify(exactly = 1) { homeFeed.getHomeSections(any(), force = true) }
+        assertEquals(1L, refresher.state.value.imageReloadEpoch, "the going-online forced fetch bumps the epoch")
+        refresher.stop()
+    }
+
     private fun section(
         type: HomeSectionType,
         items: List<MediaItem> = emptyList(),

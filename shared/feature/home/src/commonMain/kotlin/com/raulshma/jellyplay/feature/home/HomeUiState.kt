@@ -240,6 +240,15 @@ data class HomeUiState(
      * session — probe-once/hide-forever), or simply nobody watching.
      */
     val presenceChips: List<HomePresenceChip> = emptyList(),
+    /**
+     * Monotonic counter bumped once per forced refresh — mirrored from
+     * [HomeRefreshState.imageReloadEpoch] (the refresher is its sole writer,
+     * like [sections]). Provided to the content subtree as
+     * [com.raulshma.jellyplay.core.ui.image.LocalImageReloadEpoch] so
+     * [com.raulshma.jellyplay.core.ui.image.MediaImage] re-issues the failed
+     * loads (cards stuck on their blurHash) on every forced refresh.
+     */
+    val imageReloadEpoch: Long = 0L,
 )
 
 /**

@@ -723,8 +723,10 @@ internal class HomeRefresher(
      * normal refresh / pull-to-refresh can still repopulate sections once
      * the network recovers.
      */
-    private suspend fun cappedForcedFetch(): Boolean =
-        withDeadlineMs(GOING_ONLINE_TIMEOUT_MS) { fetchOnce(force = true) } != null
+    private suspend fun cappedForcedFetch(): Boolean {
+        bumpImageReloadEpoch()
+        return withDeadlineMs(GOING_ONLINE_TIMEOUT_MS) { fetchOnce(force = true) } != null
+    }
 
     /**
      * onStart: network re-check, stale fetch, periodic-loop start, then the
@@ -1187,6 +1189,7 @@ internal class HomeRefresher(
         userDataRefreshJob?.cancel()
         userDataRefreshJob = null
         replaceRefreshJob {
+            bumpImageReloadEpoch()
             fetchOnce(force = true)
             lastFetchRacedPendingSync = false
             pendingUserDataRefresh = false
@@ -1201,8 +1204,20 @@ internal class HomeRefresher(
      * (spinner/clear state, discover-cache invalidation); fetch and loop
      * stay in ONE job so [stop] cancels them together.
      */
+    /**
+     * Advances [HomeRefreshState.imageReloadEpoch] — the one re-trigger for
+     * visible images whose load failed earlier (MediaImage's reload-epoch
+     * contract). Called at every forced-fetch entry point BEFORE the fetch so
+     * the recovery never depends on the fetch succeeding; see the state
+     * field's KDoc for the entry-point enumeration.
+     */
+    private fun bumpImageReloadEpoch() {
+        _state.update { it.copy(imageReloadEpoch = it.imageReloadEpoch + 1) }
+    }
+
     private fun startForcedRefresh(preamble: suspend () -> Unit = {}) {
         replaceRefreshJob {
+            bumpImageReloadEpoch()
             preamble()
             fetchOnce(force = true)
             periodicRefreshLoop()
@@ -1378,6 +1393,22 @@ internal data class HomeRefreshState(
     val refreshingSectionIds: Set<String> = emptySet(),
     /** Mirror of [OfflineModeManager.offlineMode]; transitions drive the policy in [HomeRefresher.observeOfflineMode]. */
     val offlineMode: OfflineMode = OfflineMode.ONLINE,
+    /**
+     * Monotonic counter bumped once per forced fetch, BEFORE the fetch runs
+     * ([bumpImageReloadEpoch]) — entry points: [startForcedRefresh] (Manual,
+     * PullToRefresh), [flushPendingUserDataChange] (the silent user-data
+     * refresh, including the onStart deferred flush) and [cappedForcedFetch]
+     * (the going-online handshake). Not the per-row edge pulls, the periodic
+     * loop, or the stale checks. The screen mirrors it into
+     * [HomeUiState.imageReloadEpoch] and provides it as the core-ui
+     * [com.raulshma.jellyplay.core.ui.image.LocalImageReloadEpoch], so image
+     * composables whose loads failed earlier re-issue their requests on every
+     * forced fetch. Refresh alone doesn't achieve that: a forced fetch of
+     * unchanged data re-emits structurally-equal sections that conflate in
+     * the state flow, and the image URL (a pure function of item id + width)
+     * never changes, so without this counter a failed load has no retrigger.
+     */
+    val imageReloadEpoch: Long = 0L,
 ) {
     /**
      * The server fetch failed — the precondition for the implicit-offline

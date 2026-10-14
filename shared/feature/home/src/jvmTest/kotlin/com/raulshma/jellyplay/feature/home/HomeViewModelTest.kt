@@ -921,6 +921,9 @@ class HomeViewModelTest {
         assertFalse(viewModel.uiState.value.isRefreshing)
         // Pull-to-refresh bypasses the home-sections cache (force read).
         coVerify { homeFeed.getHomeSections(any(), force = true) }
+        // The forced refresh advanced the image-reload epoch so cards whose
+        // loads failed earlier re-issue their requests (the blurHash-stuck fix).
+        assertEquals(1L, viewModel.uiState.value.imageReloadEpoch)
     }
 
     @Test

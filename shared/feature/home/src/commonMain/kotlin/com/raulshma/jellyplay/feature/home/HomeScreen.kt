@@ -111,6 +111,7 @@ import com.raulshma.jellyplay.core.ui.components.downloads.rememberRemoveDownloa
 import com.raulshma.jellyplay.core.ui.components.seerr.rememberSeerrCardLoadingState
 import com.raulshma.jellyplay.core.ui.components.resolveHeaderStatus
 import com.raulshma.jellyplay.core.ui.components.HeaderStatus
+import com.raulshma.jellyplay.core.ui.image.LocalImageReloadEpoch
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.navigation.withHighlightSettingId
 import com.raulshma.jellyplay.core.ui.settingssearch.ResolvedSettingsItem
@@ -596,6 +597,11 @@ private fun MainHomeContent(
         closeSearch()
     }
 
+    // The image-reload epoch scopes MediaImage's retry contract to the home
+    // content subtree: every forced refresh bumps the counter (HomeRefresher),
+    // resetting image chains that failed on a transient error so the next
+    // pull-to-refresh actually recovers cards stuck on their blurHash.
+    CompositionLocalProvider(LocalImageReloadEpoch provides state.imageReloadEpoch) {
     ArtworkThemeWrapper(
         imageUrl = heroController.backdropUrl,
         dynamicTheming = state.appearance.dynamicTheming,
@@ -769,6 +775,7 @@ private fun MainHomeContent(
         }
     }
     }
+    } // end CompositionLocalProvider(LocalImageReloadEpoch)
 
     // Long-press / TV-Menu quick actions for home cards.
     MediaQuickActionHost(quickActionController)
