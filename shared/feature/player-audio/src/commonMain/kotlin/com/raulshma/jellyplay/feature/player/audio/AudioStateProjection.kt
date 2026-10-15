@@ -26,7 +26,11 @@ import kotlinx.coroutines.flow.stateIn
  * `isFavorite` (the favorite fetch on the VM), `albumArtBlurHash` (the
  * blur-hash cache), `lyrics.searchResults`/`isSearching` (the search
  * callbacks), `lyrics.karaokeMode` (the UI toggle), and the sleep timer's
- * controller-driven writes. The [AudioProjectionState.appliedTo] fold touches
+ * controller-driven writes. `lyrics.currentLyricIndex` is likewise kept out —
+ * it is position-derived (every lyric-line flip would re-run this whole tree
+ * and re-copy the state), so it rides the VM's dedicated
+ * [AudioPlayerViewModel.currentLyricIndex] flow into the artwork leaf. The
+ * [AudioProjectionState.appliedTo] fold touches
  * only the fields below, so those writers can never be clobbered.
  *
  * Pure-ish: the flows come in through the constructor and the field mapping
@@ -72,12 +76,11 @@ internal class AudioStateProjection(
         ) { meta, track, transport, queue -> CoreSlices(meta, track, transport, queue) },
         combine(
             engine.lyrics,
-            engine.currentLyricIndex,
             engine.lyricsSource,
             engine.isFetchingLyrics,
             engine.lyricsOffsetMs,
-        ) { lyrics, index, source, fetching, offset ->
-            ProjectionLyrics(lyrics, index, source, fetching, offset)
+        ) { lyrics, source, fetching, offset ->
+            ProjectionLyrics(lyrics, source, fetching, offset)
         },
         engine.crossfadeDurationMs,
         combine(
@@ -159,7 +162,6 @@ data class AudioProjectionState(
 @Immutable
 data class ProjectionLyrics(
     val lyrics: List<com.raulshma.jellyplay.core.model.LyricsLine> = emptyList(),
-    val currentLyricIndex: Int = -1,
     val lyricsSource: com.raulshma.jellyplay.core.model.LyricsSource =
         com.raulshma.jellyplay.core.model.LyricsSource.UNKNOWN,
     val isFetchingLyrics: Boolean = false,
@@ -189,7 +191,6 @@ fun AudioProjectionState.appliedTo(state: AudioPlayerUiState): AudioPlayerUiStat
     queue = queue,
     lyrics = state.lyrics.copy(
         lyrics = lyrics.lyrics,
-        currentLyricIndex = lyrics.currentLyricIndex,
         lyricsSource = lyrics.lyricsSource,
         isFetchingLyrics = lyrics.isFetchingLyrics,
         lyricsOffsetMs = lyrics.lyricsOffsetMs,

@@ -347,7 +347,7 @@ class HomeViewModelEventsTest {
         ),
         statsCardLoader = statsCardLoader,
         genreRailCache = genreRailCache,
-        presenceChips = presenceChips,
+        presenceChipsController = presenceChips,
     )
 
     private fun vmTest(block: suspend kotlinx.coroutines.test.TestScope.() -> Unit): Unit =
@@ -407,7 +407,9 @@ class HomeViewModelEventsTest {
         )
         advanceTimeBy(701)
         runCurrent()
-        assertTrue(viewModel.uiState.value.rollingDiscoverRowIds.isEmpty(), "the rolling flag settles")
+        // The rolling mirror leaf-collects off the VM's spinner flow now —
+        // no longer a HomeUiState field.
+        assertTrue(viewModel.refreshSpinners.value.rollingDiscoverRowIds.isEmpty(), "the rolling flag settles")
         // The cache choreography is the repository's now (rerollDiscoverRow
         // owns invalidate → fetch → seed); the end-to-end pin here is that the
         // roll reached it exactly once.
@@ -448,7 +450,7 @@ class HomeViewModelEventsTest {
         verify(exactly = 1) { userMessageBus.error(any<UiText>()) }
         advanceTimeBy(701)
         runCurrent()
-        assertTrue(viewModel.uiState.value.rollingDiscoverRowIds.isEmpty())
+        assertTrue(viewModel.refreshSpinners.value.rollingDiscoverRowIds.isEmpty())
     }
 
     // ── MarkItemUnplayed ─────────────────────────────────────────────────────

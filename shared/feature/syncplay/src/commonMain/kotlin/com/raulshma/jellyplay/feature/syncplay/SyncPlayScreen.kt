@@ -65,6 +65,7 @@ import org.jetbrains.compose.resources.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import org.koin.compose.viewmodel.koinViewModel
+import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.raulshma.jellyplay.core.model.SyncPlayGroup
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
@@ -88,7 +89,6 @@ import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
-import kotlinx.coroutines.delay
 import com.raulshma.jellyplay.core.model.SyncPlayRepeatMode
 import com.raulshma.jellyplay.core.model.SyncPlayShuffleMode
 import com.composables.icons.tabler.Tabler
@@ -166,15 +166,15 @@ fun SyncPlayScreen(
         viewModel.loadGroups()
     }
 
-    LaunchedEffect(isInGroup) {
+    // The group-list backoff poll lives in the ViewModel (the refresh cycle
+    // module); the screen only binds it to visibility. Keyed on membership so
+    // the binding restarts on a join/leave exactly like the composable loop
+    // it replaced did: polling runs only while NOT in a group.
+    LifecycleStartEffect(isInGroup) {
         if (!isInGroup) {
-            var pollInterval = 5000L
-            while (true) {
-                delay(pollInterval)
-                viewModel.refreshGroups()
-                pollInterval = (pollInterval * 1.5).toLong().coerceAtMost(30_000L)
-            }
+            viewModel.startGroupAutoRefresh()
         }
+        onStopOrDispose { viewModel.stopGroupAutoRefresh() }
     }
 
     LaunchedEffect(Unit) {

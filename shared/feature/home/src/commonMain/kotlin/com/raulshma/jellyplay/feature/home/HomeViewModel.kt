@@ -62,8 +62,10 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.Flow
+import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.map
@@ -159,11 +161,27 @@ internal class HomeViewModel(
      * filter and the per-chip dismiss memory. VM-scoped like
      * [genreRailCache] so the memory dies with the home session.
      */
-    private val presenceChips: HomePresenceChipsController,
+    private val presenceChipsController: HomePresenceChipsController,
 ) : JellyPlayViewModel() {
 
     private val _uiState = stateFlow(HomeUiState())
     val uiState: StateFlow<HomeUiState> = _uiState.flow
+
+    /**
+     * H19 watch-party presence chips — deliberately OUT of [HomeUiState], the
+     * search-query precedent (see [searchQuery]): the poll loop below writes
+     * this flow on the home refresh cadence, and a whole-state write per tick
+     * would copy the ~45-field [HomeUiState] — interleaving with the
+     * refresher's emissions on the same StateFlow — for a value one row
+     * reads. The chip row collects this flow at its own scope, so a tick that
+     * changes nothing (the common case: [MutableStateFlow] dedupes on
+     * equality) recomposes nothing and [HomeUiState] emits for real changes
+     * only.
+     */
+    private val _presenceChips = stateFlow<List<HomePresenceChip>>(emptyList())
+
+    /** The presence chips' source of truth — collected at the chip row (see the KDoc for why this is not [HomeUiState]). */
+    val presenceChips: StateFlow<List<HomePresenceChip>> get() = _presenceChips.flow
 
     /**
      * Ids whose quick actions must flip to "Remove download" — completed
@@ -257,6 +275,32 @@ internal class HomeViewModel(
             directArrEnabled = { directArrEnabled },
             androidTvWatchNextEnabled = { androidTvWatchNextEnabled },
         ),
+    )
+
+    /**
+     * The refresher's per-row spinner mirrors — the edge-pull
+     * ([HomeRefreshState.refreshingSectionIds]) and dice-roll
+     * ([HomeRefreshState.rollingDiscoverRowIds]) in-flight sets — narrowed
+     * to one small value ([HomeRefreshSpinnerState]) for ROW-SCOPE leaf
+     * collection (the `pendingSyncEntries` pattern): the read sites live in
+     * the content rows, not the orchestrator, so a single-row refresh's
+     * spin-up/data/spin-down emissions recompose only the matching row
+     * instead of re-executing the ~510-line MainHomeContent body three
+     * times. These two mirrors deliberately no longer ride the
+     * [HomeUiState] fold — its whole-object copy made every spinner flip an
+     * orchestrator-wide invalidation. Eagerly (not the base class'
+     * WhileSubscribed default) so the mirror is always live for a `.value`
+     * read and a flip during a brief unsubscribe can't be missed.
+     */
+    val refreshSpinners: StateFlow<HomeRefreshSpinnerState> = stateIn(
+        initial = HomeRefreshSpinnerState(),
+        started = SharingStarted.Eagerly,
+        flow = refresher.state.map {
+            HomeRefreshSpinnerState(
+                refreshingSectionIds = it.refreshingSectionIds,
+                rollingDiscoverRowIds = it.rollingDiscoverRowIds,
+            )
+        },
     )
 
     /**
@@ -370,8 +414,11 @@ internal class HomeViewModel(
      * pipeline with the injected [SettingsSearchProvider] (the feature/settings
      * catalog). Kept as a VM-exposed function — not a direct call from the
      * screen — so the provider seam is injected in exactly one place and JVM
-     * tests can swap in a fake catalog. The Appearance-level "settings in home
-     * search" gate stays with the caller: it simply doesn't collect when off.
+     * tests can swap in a fake catalog. The pipeline resolves the catalog once
+     * per collected subscription (the screen must not re-key its collector on
+     * the query) and the internal debounce owns the cadence. The
+     * Appearance-level "settings in home search" gate stays with the caller:
+     * it simply doesn't collect when off.
      */
     fun settingsSearchResults(
         queries: Flow<String>,
@@ -754,11 +801,13 @@ internal class HomeViewModel(
                 .collectLatest { gate ->
                     while (true) {
                         val chips = if (gate.enabled && gate.online && gate.userId != null) {
-                            presenceChips.refresh(gate.userId)
+                            presenceChipsController.refresh(gate.userId)
                         } else {
                             emptyList()
                         }
-                        _uiState.update { it.copy(presenceChips = chips) }
+                        // The chips' own flow (see [presenceChips]) — never a
+                        // whole-[HomeUiState] write per cadence tick.
+                        _presenceChips.set(chips)
                         if (!(gate.enabled && gate.online && gate.userId != null)) break
                         delay(HomeFreshness.REFRESH_INTERVAL_FOREGROUND_MS)
                     }
@@ -814,15 +863,21 @@ internal class HomeViewModel(
         // Fold the refresher's state slice into HomeUiState (same fold
         // pattern as the SeerrRequestStateHolder collector above) so the UI
         // observes a single state object. The refresher is the SOLE writer of
-        // these eight fields — including `sections` (in-place item patches go
+        // these fields — including `sections` (in-place item patches go
         // through HomeRefresher.patchItems, never a direct _uiState write),
         // the full-screen loader, and the offline-mode mirror with its
-        // transition policy. The VM only folds emissions.
+        // transition policy. The VM only folds emissions; the per-row
+        // spinner mirrors are NOT among them — they leaf-collect off
+        // [refreshSpinners] at row scope (a single-row refresh's
+        // spin-up/data/spin-down emissions must not re-execute this fold,
+        // and with it the ~510-line MainHomeContent body, three times).
         launch {
             refresher.state.collect { refresh ->
                 _uiState.update {
                     it.copy(
-                        sections = refresh.sections,
+                        // Persistent list — see [HomeUiState.sections]; the
+                        // conversion is a no-op wrap once already immutable.
+                        sections = refresh.sections.toImmutableList(),
                         curatedHero = refresh.curatedHero,
                         bookProgressFractions = refresh.bookProgressFractions,
                         isLoading = refresh.isLoading,
@@ -831,8 +886,6 @@ internal class HomeViewModel(
                         partialLoadError = refresh.partialLoadError,
                         discoverSections = refresh.discoverSections,
                         recentlyGrabbed = refresh.recentlyGrabbed,
-                        rollingDiscoverRowIds = refresh.rollingDiscoverRowIds,
-                        refreshingSectionIds = refresh.refreshingSectionIds,
                         offlineMode = refresh.offlineMode,
                         imageReloadEpoch = refresh.imageReloadEpoch,
                     )
@@ -1224,9 +1277,11 @@ internal class HomeViewModel(
      * to confirm what the tap already decided.
      */
     private fun dismissPresenceChip(event: HomeUiEvent.DismissPresenceChip) {
-        presenceChips.dismiss(event.sessionId)
-        _uiState.update {
-            it.copy(presenceChips = it.presenceChips.filterNot { chip -> chip.sessionId == event.sessionId })
+        presenceChipsController.dismiss(event.sessionId)
+        // The immediate fold-out rides the chips' own flow (see
+        // [presenceChips]) — no whole-state write for one row's contents.
+        _presenceChips.update { chips ->
+            chips.filterNot { chip -> chip.sessionId == event.sessionId }
         }
     }
 
@@ -1241,7 +1296,7 @@ internal class HomeViewModel(
      */
     private fun joinPresenceWatchParty(event: HomeUiEvent.JoinPresenceWatchParty) {
         launch {
-            presenceChips.join(event.chip.itemId)
+            presenceChipsController.join(event.chip.itemId)
                 .onSuccess { group -> event.onJoined(group.positionTicks ?: 0L) }
                 .onFailure {
                     userMessageBus.error(UiText.Resource(Res.string.home_watch_party_join_failed))

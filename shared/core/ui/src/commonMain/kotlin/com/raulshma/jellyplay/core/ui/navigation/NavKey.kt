@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.core.ui.navigation
 
 import androidx.compose.runtime.Immutable
 import androidx.navigation3.runtime.NavKey
+import com.raulshma.jellyplay.core.model.deeplink.DeepLinkTarget
 import kotlinx.serialization.Serializable
 
 /**
@@ -691,3 +692,34 @@ interface HighlightableRoute {
  */
 fun Route.withHighlightSettingId(id: String): Route =
     (this as? HighlightableRoute)?.withHighlightSettingId(id) ?: this
+
+/**
+ * The parsed deep-link target → [Route] fold — the ONE target→destination
+ * table every platform shell consumes. [DeepLinkTarget] lives in core:model
+ * (it must stay UI-free for the link grammar), [Route] here; this extension
+ * sits beside [Route] so the Android shell's DeepLinkHandler and the desktop
+ * shell's DesktopLinkOpenPolicy consume the same rows instead of two
+ * hand-mirrored when-expressions kept in agreement by "same rows, same nulls"
+ * KDoc. The shells keep only their Uri→target parsing glue.
+ *
+ * Rows (pinned by DeepLinkTargetRouteTest):
+ *  - MediaDetail / NewsletterSection / SeerrDetail → their detail routes;
+ *  - Search / Settings / Downloads / Library → their top-level routes;
+ *  - SyncPlayJoin → `null` on EVERY shell: it is the Discord Rich Presence
+ *    Join button's payload, consumed by the desktop's
+ *    DiscordPresenceService.handleJoinSecret — Android has no join-by-link
+ *    surface either (SyncPlay groups are joined through the group browser),
+ *    so the link parses but routes nowhere;
+ *  - `null` (a grammar parse miss) → `null`.
+ */
+fun DeepLinkTarget?.toRoute(): Route? = when (this) {
+    is DeepLinkTarget.MediaDetail -> Route.MediaDetail(itemId)
+    is DeepLinkTarget.NewsletterSection -> Route.NewsletterSectionList(section)
+    is DeepLinkTarget.SeerrDetail -> Route.SeerrDetail(tmdbId = tmdbId, mediaType = mediaType)
+    DeepLinkTarget.Search -> Route.Search
+    DeepLinkTarget.Settings -> Route.Settings
+    DeepLinkTarget.Downloads -> Route.Downloads
+    DeepLinkTarget.Library -> Route.Library
+    is DeepLinkTarget.SyncPlayJoin -> null
+    null -> null
+}

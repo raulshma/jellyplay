@@ -58,6 +58,7 @@ import com.raulshma.jellyplay.core.ui.components.focusIndicator
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.SessionInfo
+import com.raulshma.jellyplay.core.model.buildItemFillImageUrl
 import com.raulshma.jellyplay.core.model.progressFraction
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_active_devices
@@ -164,7 +165,17 @@ private fun ActiveDeviceCard(
         val tag = nowPlayingItem.backdropImageTag ?: nowPlayingItem.primaryImageTag
         if (!tag.isNullOrBlank()) {
             val type = if (nowPlayingItem.backdropImageTag != null) "Backdrop" else "Primary"
-            "$serverAddress/Items/${nowPlayingItem.id}/Images/$type?tag=$tag&fillWidth=400&fillHeight=300&quality=90"
+            // Owned image-URL grammar (core:model); byte-identical to the
+            // string this used to hand-roll, so Coil cache keys survive.
+            buildItemFillImageUrl(
+                baseUrl = serverAddress,
+                itemId = nowPlayingItem.id,
+                imageType = type,
+                tag = tag,
+                fillWidth = 400,
+                fillHeight = 300,
+                quality = 90,
+            ).ifEmpty { null }
         } else null
     } else null
 

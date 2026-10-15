@@ -114,11 +114,13 @@ dependencies {
     // wall clocks — mpv runs its own threads — but no polling races there.
     testImplementation(libs.coroutines.test)
     testImplementation(kotlin("test"))
-    // The shared MediaEngine double + pollUntil (the fake-twin merge): the
-    // desktop's app-side FakeMediaEngine copy was deleted; its suites now
-    // construct the fixtures class with LoadBehavior.AUTO_PLAY — the same
-    // personality the deleted twin hardcoded. Test-scoped edge per the
-    // test-fixtures house rules.
+    // The shared MediaEngine double (the fake-twin merge): the desktop's
+    // app-side FakeMediaEngine copy was deleted; its suites now construct the
+    // fixtures class with LoadBehavior.AUTO_PLAY — the same personality the
+    // deleted twin hardcoded. The fake-twin merge's wall-clock pollUntil
+    // helper has since moved back into THIS module's test sources
+    // (ADR-0006 rule 4: the desktop suites were its only consumers).
+    // Test-scoped edge per the test-fixtures house rules.
     testImplementation(project(":shared:core:test-fixtures"))
     // Real org.json for the WebSocketEvent fixtures (DesktopIdleAmbientControllerTest):
     // WebSocketEvent.data is a non-null org.json.JSONObject — the same

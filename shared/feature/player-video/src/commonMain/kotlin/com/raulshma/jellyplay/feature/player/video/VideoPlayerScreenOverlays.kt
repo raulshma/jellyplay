@@ -18,6 +18,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -25,8 +26,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.distinctUntilChanged
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.jetbrains.compose.resources.stringResource
 import com.raulshma.jellyplay.core.designsystem.theme.AlphaEasing
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
@@ -64,7 +67,7 @@ private const val TRICKPLAY_THUMB_BOTTOM_CLEARANCE_DP = 120
 
 /**
  * Input bundle for [PlayerCenterOverlayTier] (the [com.raulshma.jellyplay.feature.player.video.components.PlayerEffectsControls]
- * idiom): the 22 values the center overlays read — the gesture-trickplay and
+ * idiom): what the center overlays read — the gesture-trickplay and
  * seek feeds, the intro/segment-skip/up-next family with their TV focus
  * anchors, and the playback-context flags — riding one `@Immutable` carrier.
  * The call wall remembers it on exactly these fields, so the bundle instance
@@ -76,8 +79,14 @@ internal data class CenterOverlayInputs(
     val trickplayOnSeekGesture: Boolean,
     val gestureTrickplayVisible: Boolean,
     val gestureTrickplayBitmap: PlatformBitmap?,
-    val gestureSeekPositionMs: Long,
-    val gestureDeltaMs: Long,
+    /**
+     * The gesture-seek drag feeds — FLOWS, not values: they emit per pointer
+     * frame, so the call wall's remember must not key on them, and only the
+     * trickplay leaf below collects them (the ANR class PlayerControls'
+     * placement comment warns about).
+     */
+    val gestureSeekPositionMs: StateFlow<Long>,
+    val gestureDeltaMs: StateFlow<Long>,
     val durationMs: Long,
     val isCinemaIntroVisible: Boolean,
     val tvCinemaIntroFocusRequester: FocusRequester,
@@ -119,10 +128,15 @@ internal fun BoxScope.PlayerCenterOverlayTier(
         exit = fadeOut(tween(200, easing = AlphaEasing)),
         modifier = Modifier.align(Alignment.Center),
     ) {
+        // Collected HERE — inside the visible overlay's own recompose scope,
+        // not the tier's: the feeds emit per drag frame, and only the
+        // trickplay surface renders them.
+        val gestureSeekPositionMs by inputs.gestureSeekPositionMs.collectAsStateWithLifecycle()
+        val gestureDeltaMs by inputs.gestureDeltaMs.collectAsStateWithLifecycle()
         TrickplayOverlay(
             bitmap = inputs.gestureTrickplayBitmap,
-            positionMs = inputs.gestureSeekPositionMs,
-            deltaMs = inputs.gestureDeltaMs,
+            positionMs = gestureSeekPositionMs,
+            deltaMs = gestureDeltaMs,
             durationMs = inputs.durationMs,
         )
     }

@@ -1,6 +1,10 @@
 package com.raulshma.jellyplay.core.data.download
 
+import com.raulshma.jellyplay.core.data.repository.MediaRepository
+import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.UserDataChange
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 
 /**
@@ -70,3 +74,64 @@ interface QuickDownloadActions {
     /** Remove [item]'s local download (artifacts + offline rows). Fire-and-forget. */
     fun removeDownload(item: MediaItem)
 }
+
+/**
+ * The quick-action half of the `PagedMediaGridHost` constructor, wired once:
+ * the six seams (`userDataChanges` / `downloadedIds` / `downloadSupported` /
+ * `setPlayedSilently` / `requestDownload` / `removeDownloadItem`) that four
+ * grid view models (library, favorites, studio detail, search) each hand-typed
+ * identically from the same three collaborators — the repository's change
+ * feed, the mutator's silent default, and the shared [QuickDownloadActions]
+ * with the host's [DownloadOutcomeMessenger] pre-bound. Build with
+ * [pagedGridQuickActions]; the caller spreads the members into the host
+ * verbatim and keeps only its own paged source (and the genuinely per-screen
+ * deltas: the library's sink and its `seriesOpensSheet = true` routing).
+ *
+ * Lives in core:data because the wiring is entirely core:data vocabulary; the
+ * host itself cannot absorb it (core/ui owns no core:data types), so the
+ * bundle crosses as plain flows and lambdas — the host's parameter surface
+ * is unchanged.
+ */
+class PagedGridQuickActions(
+    /** The user-data change feed driving the host's deferred refresher. */
+    val userDataChanges: Flow<UserDataChange>,
+    /** The shared quick-action id set — see [QuickDownloadActions.downloadedIds]. */
+    val downloadedIds: StateFlow<Set<String>>,
+    /** Whether this platform has a download pipeline — see [QuickDownloadActions.isSupported]. */
+    val downloadSupported: Boolean,
+    /** The silent mark-played fold — the mutator's [UserDataMutator.setPlayed] silent default. */
+    val setPlayedSilently: suspend (itemId: String, played: Boolean) -> Unit,
+    /**
+     * The [QuickDownloadActions.downloadAndReport] fold with the factory's
+     * [messenger][DownloadOutcomeMessenger] pre-bound.
+     */
+    val requestDownload: suspend (
+        item: MediaItem,
+        onOpenDetail: (itemId: String, prePresentDownloadSheet: Boolean) -> Unit,
+        seriesOpensSheet: Boolean,
+    ) -> Unit,
+    /** The remove-download routing — see [QuickDownloadActions.removeDownload]. */
+    val removeDownloadItem: (item: MediaItem) -> Unit,
+)
+
+/**
+ * Wires [PagedGridQuickActions] from the collaborators every paged-grid host
+ * shares. [messenger] is the host's download-outcome sink (null ⇒ the
+ * [QuickDownloadActions] platform default, the shape of the hosts whose
+ * strings live nowhere — favorites, studio, search).
+ */
+fun pagedGridQuickActions(
+    mediaRepository: MediaRepository,
+    userDataMutator: UserDataMutator,
+    quickDownloadActions: QuickDownloadActions,
+    messenger: DownloadOutcomeMessenger? = null,
+): PagedGridQuickActions = PagedGridQuickActions(
+    userDataChanges = mediaRepository.userDataChanges,
+    downloadedIds = quickDownloadActions.downloadedIds,
+    downloadSupported = quickDownloadActions.isSupported,
+    setPlayedSilently = { itemId, played -> userDataMutator.setPlayed(itemId, played) },
+    requestDownload = { item, onOpenDetail, seriesOpensSheet ->
+        quickDownloadActions.downloadAndReport(item, onOpenDetail, seriesOpensSheet, messenger)
+    },
+    removeDownloadItem = quickDownloadActions::removeDownload,
+)

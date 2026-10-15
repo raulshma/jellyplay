@@ -59,9 +59,6 @@ class DownloadRepositoryImplResumeTest {
     // The resume path never loads series episodes; a relaxed mock satisfies the
     // catalogue constructor param added alongside the seasons/episodes migration.
     private val episodeCatalogue: com.raulshma.jellyplay.core.data.catalogue.EpisodeCatalogue = mockk(relaxed = true)
-    // Notification summary seam: relaxed mock — the resume path refreshes the
-    // summary but never renders notifications here.
-    private val progressNotifier: DownloadProgressNotifier = mockk(relaxed = true)
     // D6: the artifact-write cluster (start/metadata seeding/sidecars) lives in
     // the writer core; the resume path touches only DAO reads + batch updates,
     // so a relaxed mock suffices.
@@ -79,7 +76,6 @@ class DownloadRepositoryImplResumeTest {
         downloadsStore = preferencesStore,
         storagePolicy = storagePolicy,
         downloadEnqueuer = downloadEnqueuer,
-        progressNotifier = progressNotifier,
         timeSource = com.raulshma.jellyplay.core.model.SystemTimeSource(),
         writer = writer,
         downloadDelegate = downloadDelegate,

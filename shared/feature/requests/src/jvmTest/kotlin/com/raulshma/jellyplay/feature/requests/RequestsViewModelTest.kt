@@ -55,7 +55,8 @@ import kotlin.test.assertTrue
  * filter fallback, filter/sort/pagination state transitions, the 400 ms
  * debounced search (incl. the init echo of the empty query), bulk-selection
  * fan-out, the DIRECT_ARR_INTEGRATION gate over the *arr enrichment, queue
- * removal, and polling stop on clear.
+ * removal, and the visibility-bound polling pair (start/stop; the repository
+ * is NOT touched by VM construction or clear).
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class RequestsViewModelTest {
@@ -148,16 +149,18 @@ class RequestsViewModelTest {
             media = SeerrRequestMedia(id = id, tmdbId = tmdbId),
         )
 
-    // ── init: polling + first load ────────────────────────────────────────
+    // ── init: first load (polling is now the screen binding's job) ────────
 
     @Test
-    fun init_starts_polling_and_loads_first_page() = runTest(mainDispatcher) {
+    fun init_does_not_start_polling_but_loads_first_page() = runTest(mainDispatcher) {
         stubRequests { Result.success(page(listOf(item(1)))) }
 
         val viewModel = newViewModel()
         advanceUntilIdle()
 
-        verify(exactly = 1) { seerrRepository.startPolling() }
+        // The VM-lifetime pair (init start / onCleared stop) retired: the
+        // requests screen binds the repository's refcounted poll to visibility.
+        verify(exactly = 0) { seerrRepository.startPolling() }
         verify(exactly = 0) { seerrRepository.stopPolling() }
         val state = viewModel.state.value
         assertEquals(listOf(1), state.requests.map { it.id })
@@ -637,7 +640,24 @@ class RequestsViewModelTest {
     // ── polling lifecycle ─────────────────────────────────────────────────
 
     @Test
-    fun clearing_the_viewmodel_stops_polling() = runTest(mainDispatcher) {
+    fun the_visibility_binding_pairs_start_and_stop() = runTest(mainDispatcher) {
+        stubRequests { Result.success(page(listOf(item(1)))) }
+        val viewModel = newViewModel()
+        advanceUntilIdle()
+        verify(exactly = 0) { seerrRepository.startPolling() }
+
+        // The screen's LifecycleStartEffect binding: START starts the
+        // repository's refcounted poll, STOP stops it.
+        viewModel.startBackgroundPolling()
+        verify(exactly = 1) { seerrRepository.startPolling() }
+        verify(exactly = 0) { seerrRepository.stopPolling() }
+
+        viewModel.stopBackgroundPolling()
+        verify(exactly = 1) { seerrRepository.stopPolling() }
+    }
+
+    @Test
+    fun clearing_the_viewmodel_does_not_touch_the_refcounted_poll() = runTest(mainDispatcher) {
         stubRequests { Result.success(page(listOf(item(1)))) }
         val store = ViewModelStore()
         val factory = object : ViewModelProvider.Factory {
@@ -647,11 +667,11 @@ class RequestsViewModelTest {
         }
         val viewModel = ViewModelProvider.create(store, factory).get(RequestsViewModel::class)
         advanceUntilIdle()
-        verify(exactly = 0) { seerrRepository.stopPolling() }
 
+        // The poll is visibility-bound now — clearing the back-stacked VM is
+        // NOT a stop (the onCleared half of the old VM-lifetime pair is gone).
         store.clear()
-
-        verify(exactly = 1) { seerrRepository.stopPolling() }
+        verify(exactly = 0) { seerrRepository.stopPolling() }
         assertNotNull(viewModel)
     }
 

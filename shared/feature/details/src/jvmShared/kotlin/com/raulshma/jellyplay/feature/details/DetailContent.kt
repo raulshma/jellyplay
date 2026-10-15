@@ -162,7 +162,6 @@ internal fun DetailContent(
         isSeries = isSeries,
         seasons = state.seasons,
         preferences = state.preferences,
-        activeDownload = state.activeDownload,
         isDownloading = state.isDownloading,
         isDownloadingSeries = state.isDownloadingSeries,
         canManageSeries = state.canManageSeries,

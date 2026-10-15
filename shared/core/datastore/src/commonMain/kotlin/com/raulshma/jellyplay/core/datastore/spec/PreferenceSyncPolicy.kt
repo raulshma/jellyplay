@@ -1,13 +1,19 @@
 package com.raulshma.jellyplay.core.datastore.spec
 
+import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
+import com.raulshma.jellyplay.core.datastore.security.PinRateLimiter
+import com.raulshma.jellyplay.core.datastore.security.SecurityStore
+import com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore
+
 /**
  * The user_prefs namespace's sync-exclusion policy, in one home so its two
  * consumers cannot drift (docs/jellyplay-plugin.md's "never synced" list):
  * the sync adapter's registration (core/data DI) passes
- * [EXCLUDED_PREFIXES] as its `excludedPrefixes`, and the settings-catalog
- * generator skips the same prefixes so the catalog describes exactly what
- * syncs. Key-level exclusions (secrets, identity) are not duplicated here —
- * the owning stores export those as `SyncExcludedKeys` sets.
+ * [EXCLUDED_PREFIXES] as its `excludedPrefixes` and [EXCLUDED_KEYS] as its
+ * `excludedKeys`, and the settings-catalog generator skips the same prefixes
+ * and denylists the same keys so the catalog describes exactly what syncs.
+ * The owning stores keep exporting their own [SecurityStore.SyncExcludedKeys]-
+ * style sets — this object only assembles them.
  */
 object PreferenceSyncPolicy {
 
@@ -26,4 +32,16 @@ object PreferenceSyncPolicy {
 
     /** Per-device namespaces that never sync, by key prefix. */
     val EXCLUDED_PREFIXES: List<String> = listOf(PER_USER_NAMESPACED_PREFIX, "dream", "screensaver")
+
+    /**
+     * The assembled key-level exclusion set — the four owning stores'
+     * `SyncExcludedKeys` exports summed (secrets, per-device lock state,
+     * device/session identity, the widget payload cache). The ONE set both
+     * the sync adapter's registration and the catalog denylist consume.
+     */
+    val EXCLUDED_KEYS: Set<String> =
+        SecurityStore.SyncExcludedKeys +
+            PinRateLimiter.SyncExcludedKeys +
+            ServerIdentityStore.SyncExcludedKeys +
+            WidgetDataStore.SyncExcludedKeys
 }

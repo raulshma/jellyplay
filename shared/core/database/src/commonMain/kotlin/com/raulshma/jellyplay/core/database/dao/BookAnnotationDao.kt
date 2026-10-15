@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.core.database.dao
 
 import androidx.room3.Dao
 import androidx.room3.Query
+import androidx.room3.Transaction
 import androidx.room3.Update
 import androidx.room3.Upsert
 import com.raulshma.jellyplay.core.database.entity.BookAnnotationEntity
@@ -19,6 +20,9 @@ interface BookAnnotationDao {
 
     @Upsert
     suspend fun upsert(annotation: BookAnnotationEntity)
+
+    @Upsert
+    suspend fun upsertAll(annotations: List<BookAnnotationEntity>)
 
     @Update
     suspend fun update(annotation: BookAnnotationEntity)
@@ -44,6 +48,24 @@ interface BookAnnotationDao {
     @Query("DELETE FROM book_annotations WHERE itemId = :itemId")
     suspend fun deleteByItemId(itemId: String)
 
+    @Query("DELETE FROM book_annotations WHERE itemId IN (:itemIds)")
+    suspend fun deleteByItemIds(itemIds: Collection<String>)
+
     @Query("SELECT COUNT(*) FROM book_annotations WHERE itemId = :itemId")
     suspend fun countByItemId(itemId: String): Int
+
+    /**
+     * The sync adopt batch (JellyPlayReaderSyncAdapter.applyRemote): the
+     * whole pulled batch in ONE transaction — every touched book's rows go,
+     * then the pulled lists land. Keys are one per book, so the batch
+     * end-state is exactly the per-key delete/upsert pairs'.
+     */
+    @Transaction
+    suspend fun adoptAnnotations(
+        deletedItemIds: Collection<String>,
+        upserts: List<BookAnnotationEntity>,
+    ) {
+        if (deletedItemIds.isNotEmpty()) deleteByItemIds(deletedItemIds)
+        if (upserts.isNotEmpty()) upsertAll(upserts)
+    }
 }

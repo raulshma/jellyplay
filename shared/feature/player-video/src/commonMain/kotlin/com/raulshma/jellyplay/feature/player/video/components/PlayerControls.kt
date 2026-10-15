@@ -54,6 +54,7 @@ import com.raulshma.jellyplay.core.model.MediaSegment
 import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.model.PlaybackMode
 import com.raulshma.jellyplay.feature.player.video.PlatformCastButton
+import com.raulshma.jellyplay.feature.player.video.session.CastRouteButton
 import com.raulshma.jellyplay.feature.player.video.rememberIsPortraitOrientation
 import com.raulshma.jellyplay.core.ui.animation.horizontalFadingEdges
 import com.raulshma.jellyplay.core.ui.player.PlayerIconButton
@@ -344,10 +345,11 @@ internal fun PlayerControls(
     syncPlay: SyncPlayIndicator = SyncPlayIndicator(),
     sleepTimer: SleepTimerControls = SleepTimerControls(),
     abRepeat: AbRepeatState = AbRepeatState(),
-    // Opaque cast-manager handle (seam): the Android host passes the
-    // legacy discovery/connect CastManager; desktop passes null and the cast
-    // button hides. See VideoPlayerViewModel.platformCastManager.
-    castManager: Any? = null,
+    // The cast slice's route-button projection (availability + click): null
+    // on a platform with no cast stack (desktop) and the cast button hides.
+    // The former opaque platform handle (Any?) is retired — the chrome
+    // programs against the session-slice projection.
+    castRouteButton: CastRouteButton? = null,
     showClock: Boolean = false,
     showTimeRemaining: Boolean = false,
     tvSkipSegmentFocusRequester: FocusRequester? = null,
@@ -536,9 +538,9 @@ internal fun PlayerControls(
                             onClick = { sheets.openSheet(PlayerSheet.SyncPlay) },
                         )
                     }
-                    if (castManager != null) {
+                    if (castRouteButton != null) {
                         Spacer(Modifier.width(8.dp))
-                        PlatformCastButton(castManager = castManager)
+                        PlatformCastButton(routeButton = castRouteButton)
                     }
                 }
             }

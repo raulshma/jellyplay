@@ -58,7 +58,7 @@ internal sealed interface HomeSurface {
      * its feed is offline), so no render site re-derives the pick.
      */
     data class Content(
-        val feed: HomeFeed,
+        val feed: HomeRenderFeed,
         val renderSource: HomeRenderSource,
         val bookProgressFractions: Map<String, Float>,
     ) : HomeSurface
@@ -85,14 +85,14 @@ internal fun homeSurface(
 
     else -> {
         val feed = when (state.renderSource) {
-            HomeRenderSource.Online -> HomeFeed.Online(
+            HomeRenderSource.Online -> HomeRenderFeed.Online(
                 sections = state.sections,
                 isLoading = state.isLoading,
                 partialLoadError = state.partialLoadError,
                 newsletterBannerVisible = state.newsletterBannerVisible,
             )
-            HomeRenderSource.FallbackPending -> HomeFeed.Offline(offlineContent, isLoading = true)
-            is HomeRenderSource.Offline -> HomeFeed.Offline(offlineContent)
+            HomeRenderSource.FallbackPending -> HomeRenderFeed.Offline(offlineContent, isLoading = true)
+            is HomeRenderSource.Offline -> HomeRenderFeed.Offline(offlineContent)
         }
         HomeSurface.Content(
             feed = feed,
@@ -101,7 +101,7 @@ internal fun homeSurface(
             // FallbackPending window renders the offline feed, so it reads
             // the gate's decodes even while the offline-mode mirror still
             // says ONLINE.
-            bookProgressFractions = if (feed is HomeFeed.Offline) {
+            bookProgressFractions = if (feed is HomeRenderFeed.Offline) {
                 state.offlineBookProgressFractions
             } else {
                 state.bookProgressFractions

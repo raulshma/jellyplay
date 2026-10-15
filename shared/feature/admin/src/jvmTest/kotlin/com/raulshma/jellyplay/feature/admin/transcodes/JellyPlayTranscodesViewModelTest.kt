@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.admin.transcodes
 
+import com.raulshma.jellyplay.core.data.session.JellyPlayCapabilityState
 import com.raulshma.jellyplay.core.data.session.JellyPlayPluginStatusStore
 import com.raulshma.jellyplay.core.data.session.SessionCacheRegistry
 import com.raulshma.jellyplay.core.model.JellyPlayPluginFeatures
@@ -131,7 +132,7 @@ class JellyPlayTranscodesViewModelTest {
         val viewModel = JellyPlayTranscodesViewModel(pluginApi, statusStore)
         advanceUntilIdle()
 
-        assertEquals(TranscodesGate.Unavailable, viewModel.uiState.value.gate)
+        assertEquals(JellyPlayCapabilityState.Unavailable, viewModel.uiState.value.gate)
         assertFalse(viewModel.uiState.value.isLoading)
         coVerify(exactly = 0) { pluginApi.getActiveTranscodes() }
     }
@@ -143,7 +144,7 @@ class JellyPlayTranscodesViewModelTest {
         val viewModel = JellyPlayTranscodesViewModel(pluginApi, statusStore)
         advanceUntilIdle()
 
-        assertEquals(TranscodesGate.Unavailable, viewModel.uiState.value.gate)
+        assertEquals(JellyPlayCapabilityState.Unavailable, viewModel.uiState.value.gate)
         coVerify(exactly = 0) { pluginApi.getActiveTranscodes() }
     }
 
@@ -152,7 +153,7 @@ class JellyPlayTranscodesViewModelTest {
         val viewModel = JellyPlayTranscodesViewModel(pluginApi, statusStore = null)
         advanceUntilIdle()
 
-        assertEquals(TranscodesGate.Unavailable, viewModel.uiState.value.gate)
+        assertEquals(JellyPlayCapabilityState.Unavailable, viewModel.uiState.value.gate)
         assertFalse(viewModel.uiState.value.isLoading)
         coVerify(exactly = 0) { capabilitiesApi.getCapabilities() }
         coVerify(exactly = 0) { pluginApi.getActiveTranscodes() }
@@ -166,7 +167,7 @@ class JellyPlayTranscodesViewModelTest {
         val viewModel = loadedViewModel()
 
         val state = viewModel.uiState.value
-        assertEquals(TranscodesGate.Available, state.gate)
+        assertEquals(JellyPlayCapabilityState.Available, state.gate)
         assertFalse(state.isLoading)
         assertNull(state.error)
         assertEquals(2, state.rows.size)

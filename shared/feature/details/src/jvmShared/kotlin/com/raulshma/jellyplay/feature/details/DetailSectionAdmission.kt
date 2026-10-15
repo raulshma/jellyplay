@@ -165,15 +165,8 @@ internal data class DetailSectionAdmission(
     val hasSeerrSimilar: Boolean,
     /** Special features fetched (state.specialFeatures non-empty). */
     val hasSpecialFeatures: Boolean,
-    /** TMDB reviews fetched (state.tmdbReviews non-empty). */
-    val hasTmdbReviews: Boolean,
-    /** User preference: the detail screen shows the reviews section at all
-     *  (D9's show_reviews — gates the whole TMDB_REVIEWS slot). */
-    val showReviews: Boolean = true,
     /** A download lifecycle is attached to the snapshot (state.detailContext?.download != null). */
     val hasAttachedDownload: Boolean,
-    /** Plugin ratings chips fetched (state.pluginRatings non-empty — ADR 0010). */
-    val hasPluginRatings: Boolean = false,
     /** Plugin scored-similar items hydrated (state.pluginSimilarItems non-empty — ADR 0010).
      *  Admits JELLYPLAY_SIMILAR; with [suppressStockSimilar] it also stands the
      *  stock row down. */
@@ -205,6 +198,12 @@ internal data class DetailSectionAdmission(
      * order is the former source emission order (the series trio UP_NEXT →
      * UPCOMING_EPISODES → SEASONS — all delayIndex 6), and each kind carries
      * its own delayIndex.
+     *
+     * Two sections left the fold in the section-module wave-1 pilot —
+     * PLUGIN_RATINGS and TMDB_REVIEWS are admitted by their
+     * [DetailSectionModule]s instead ([DetailSectionRegistry.admittedSections]
+     * merges the two halves in this enum's declaration order, so the body's
+     * emission is unchanged).
      */
     fun admit(): List<DetailSectionKind> = buildList {
         fun admit(kind: DetailSectionKind, admitted: Boolean) {
@@ -222,10 +221,6 @@ internal data class DetailSectionAdmission(
             showMediaInfo && !mediaType.isAudioType,
         )
         admit(DetailSectionKind.OVERVIEW, admitted = true)
-        admit(
-            DetailSectionKind.PLUGIN_RATINGS,
-            hasPluginRatings,
-        )
         admit(
             DetailSectionKind.CHAPTERS_OR_TOC,
             (mediaType == MediaType.BOOK && hasBookToc) ||
@@ -277,10 +272,6 @@ internal data class DetailSectionAdmission(
             capabilities.remoteDiscovery && hasSpecialFeatures,
         )
         admit(
-            DetailSectionKind.TMDB_REVIEWS,
-            showReviews && hasTmdbReviews,
-        )
-        admit(
             DetailSectionKind.DOWNLOAD_FOOTER,
             hasAttachedDownload || isLocalOrigin,
         )
@@ -314,10 +305,7 @@ internal data class DetailSectionAdmission(
             hasSeerrRecommendations = state.seerrRecommendations.isNotEmpty(),
             hasSeerrSimilar = state.seerrSimilar.isNotEmpty(),
             hasSpecialFeatures = state.specialFeatures.isNotEmpty(),
-            hasTmdbReviews = state.tmdbReviews.isNotEmpty(),
-            showReviews = state.preferences.showReviews,
             hasAttachedDownload = state.detailContext?.download != null,
-            hasPluginRatings = state.pluginRatings.isNotEmpty(),
             hasPluginSimilar = state.pluginSimilarItems.isNotEmpty(),
             suppressStockSimilar = state.pluginSimilarSuppressesStock,
             // The D6 franchise admission counts only VISIBLE rows: a row the

@@ -90,7 +90,7 @@ internal fun sectionHasSeeAll(sectionType: HomeSectionType): Boolean =
  * refetch re-runs the fan-out), the Jellyfin discover rows, the pinned rows
  * and the plugin rows (PLUGIN_ROW — the fetcher's single-row plugin arm)
  * all map to a single-row fetch (see `HomeSectionsFetcher.refreshSection`,
- * the HomeRowRefreshArms registry). Seerr-sourced discover rows ride the
+ * the transport registration's refresh arms). Seerr-sourced discover rows ride the
  * group gate/last-known-good batch path and are excluded (the `seerrItems`
  * guard below — the per-INSTANCE half of the gate; the type half is the
  * registry's [HomeRowModules]/edgeRefreshable fact). RECOMMENDATIONS' seed

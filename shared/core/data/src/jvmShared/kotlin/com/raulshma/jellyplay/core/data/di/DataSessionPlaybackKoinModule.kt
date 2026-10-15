@@ -45,8 +45,6 @@ import com.raulshma.jellyplay.core.model.deviceModelName
 import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.datastore.library.LibraryStore
-import com.raulshma.jellyplay.core.datastore.security.PinRateLimiter
-import com.raulshma.jellyplay.core.datastore.security.SecurityStore
 import com.raulshma.jellyplay.core.datastore.spec.PreferenceSyncPolicy
 import kotlinx.coroutines.flow.first
 import org.koin.core.module.Module
@@ -243,13 +241,15 @@ internal val dataSessionPlaybackModule: Module = module {
             // shared with the settings-catalog generator so the catalog keeps
             // describing exactly what syncs.
             excludedPrefixes = PreferenceSyncPolicy.EXCLUDED_PREFIXES,
-            // Secrets and device/session identity never sync either — the
-            // owning stores export their key-name sets so renames stay in
-            // lockstep (same "never synced" list as docs/jellyplay-plugin.md;
-            // pin_hash leaving the device was a real leak this closes).
-            excludedKeys = SecurityStore.SyncExcludedKeys +
-                PinRateLimiter.SyncExcludedKeys +
-                ServerIdentityStore.SyncExcludedKeys,
+            // Secrets, device/session identity, and the widget payload cache
+            // never sync either — the ONE assembled exclusion set
+            // (PreferenceSyncPolicy) the catalog's denylist consumes too, so
+            // the two faces cannot drift (same "never synced" list as
+            // docs/jellyplay-plugin.md; pin_hash leaving the device was a
+            // real leak this closes). Mirror entries stranded by a
+            // retroactive exclusion (the widget payload keys synced before
+            // theirs landed) are swept by the adapter's one-time prune.
+            excludedKeys = PreferenceSyncPolicy.EXCLUDED_KEYS,
         )
     }
 

@@ -63,7 +63,12 @@ interface DownloadTransferNotifications {
     /** Dismisses the per-transfer progress surface. Best-effort. */
     fun dismissNotification(notificationId: Int)
 
-    /** Refreshes the collapsed summary surface with [inFlightCount] active rows. */
+    /**
+     * Refreshes the collapsed summary surface with [inFlightCount] active rows.
+     * No transfer path calls this anymore — the [DownloadSummarySurface] single
+     * observes the in-flight count flow and posts on transitions; the member
+     * stays so the port shape (and the desktop no-op actual) is unchanged.
+     */
     fun refreshSummary(inFlightCount: Int)
 }
 
@@ -125,7 +130,6 @@ object MultiConnectionDownloadStrategy {
             notifications.showForeground(
                 downloadId, notificationId, entity.name, 0, 0L, totalSize, 0L,
             )
-            notifications.refreshSummary(dao.getInFlightDownloadCount())
         } catch (_: Exception) {
         }
 
@@ -166,11 +170,13 @@ object MultiConnectionDownloadStrategy {
                             currentDownloaded, totalSize, speedBytesPerSec,
                         )
                         // Per-download notification only from this worker; the
-                        // shared summary is refreshed on lifecycle transitions
-                        // (start/complete) by DownloadWorker — with N concurrent
-                        // workers each re-posting the identical summary on its
-                        // own tick, this was N redundant notify() + count
-                        // queries per 2 s window.
+                        // shared summary is owned by DownloadSummarySurface,
+                        // which observes the in-flight count and posts on
+                        // lifecycle transitions — with N concurrent workers
+                        // each re-posting the identical summary on its own
+                        // tick, this was N redundant notify() + count queries
+                        // per 2 s window. This per-tick skip is the invariant:
+                        // no refreshSummary from any transfer path.
 
                         delay(PROGRESS_UPDATE_INTERVAL_MS)
                     }
@@ -226,7 +232,8 @@ object MultiConnectionDownloadStrategy {
             // A successful download clears the auto-retry budget.
             dao.resetRetryCount(downloadId)
             notifications.dismissNotification(notificationId)
-            notifications.refreshSummary(dao.getInFlightDownloadCount())
+            // No summary refresh: the COMPLETED write above is what the
+            // summary surface's count flow observes.
             TransferOutcome.Success
         } catch (e: CancellationException) {
             throw e

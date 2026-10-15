@@ -1,9 +1,12 @@
 package com.raulshma.jellyplay.feature.player.live
 
 import androidx.compose.ui.input.key.KeyEventType
+import com.raulshma.jellyplay.core.model.PlayerInputDefaults
 import com.raulshma.jellyplay.core.ui.tv.input.DpadAction
 import com.raulshma.jellyplay.core.ui.tv.input.DpadKeyEvent
 import com.raulshma.jellyplay.core.ui.tv.input.dpadKeyHandlerHandle
+import com.raulshma.jellyplay.feature.player.video.chrome.PlayerChromeController
+import com.raulshma.jellyplay.feature.player.video.state.PlayerInputDispatcher
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -11,7 +14,7 @@ import kotlin.test.assertTrue
 
 /**
  * The live TV arm set's edge guards ([liveDpadKeyConfig]). The arms at HEAD
- * were unobservable (the handler no-oped without a [com.raulshma.jellyplay.core.ui.tv.LocalTvMode]
+ * were unobservable (the handler no-oped without a [com.raulshma.jellyplay.core.ui.LocalTvMode]
  * provider), so the no-guard shape was never a working baseline — with the
  * arms live it is a bug: SELECT toggling on BOTH edges of one press is a net
  * no-op (KeyDown summons the overlay, KeyUp hides it again), and a held key
@@ -28,9 +31,22 @@ class LiveDpadKeyConfigTest {
 
     private fun fixture(isSheetOpen: Boolean = false, overlayVisible: Boolean = false): Pair<(DpadKeyEvent) -> Boolean, Probe> {
         val probe = Probe()
+        val chrome = PlayerChromeController(
+            scope = kotlinx.coroutines.CoroutineScope(kotlin.coroutines.EmptyCoroutineContext),
+            isVisibleNow = { overlayVisible },
+            applyVisible = {},
+            isTv = { true },
+            controlsTimeoutMs = { 5_000L },
+            isSheetOpen = { isSheetOpen },
+        )
+        val dispatcher = PlayerInputDispatcher(
+            getMap = { PlayerInputDefaults.defaultMap() },
+            executeAction = { true },
+        )
         val handler = dpadKeyHandlerHandle(
             liveDpadKeyConfig(
-                isSheetOpen = isSheetOpen,
+                isSheetOpen = { isSheetOpen },
+                dispatcher = dispatcher,
                 onChannelUp = { probe.channelUps++ },
                 onChannelDown = {},
                 onSelect = {

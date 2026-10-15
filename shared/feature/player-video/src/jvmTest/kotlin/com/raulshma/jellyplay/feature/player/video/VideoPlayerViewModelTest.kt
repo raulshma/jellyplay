@@ -265,7 +265,7 @@ class VideoPlayerViewModelTest : VideoPlayerViewModelHarness() {
         assertEquals(1, resolutionCalls)
         // …nor reach mark-played / initialize behind them.
         coVerify(exactly = 0) { userDataMutator.setPlayed(any(), any()) }
-        assertTrue(viewModel.isNextEpisodeLoading.value)
+        assertTrue(viewModel.sessionSlices.overlay.isNextEpisodeLoading.value)
     }
 
     @Test
@@ -276,7 +276,7 @@ class VideoPlayerViewModelTest : VideoPlayerViewModelHarness() {
 
         viewModel.onEvent(VideoPlayerUiEvent.PlayNextEpisode)
 
-        assertFalse(viewModel.isNextEpisodeLoading.value)
+        assertFalse(viewModel.sessionSlices.overlay.isNextEpisodeLoading.value)
     }
 
     @Test
@@ -304,7 +304,7 @@ class VideoPlayerViewModelTest : VideoPlayerViewModelHarness() {
 
         // Held while the next load is still unsettled — not released merely
         // because resolution + initialize returned.
-        assertTrue(viewModel.isNextEpisodeLoading.value)
+        assertTrue(viewModel.sessionSlices.overlay.isNextEpisodeLoading.value)
 
         // Settle the session onto item-2 (loadMedia flips currentItemId)…
         seedGate.complete(0L)
@@ -312,7 +312,7 @@ class VideoPlayerViewModelTest : VideoPlayerViewModelHarness() {
 
         // …and only then does the latch release. The current item was also
         // marked played on the way, exactly once.
-        assertFalse(viewModel.isNextEpisodeLoading.value)
+        assertFalse(viewModel.sessionSlices.overlay.isNextEpisodeLoading.value)
         coVerify(exactly = 1) {
             userDataMutator.setPlayed("item-1", played = true)
         }

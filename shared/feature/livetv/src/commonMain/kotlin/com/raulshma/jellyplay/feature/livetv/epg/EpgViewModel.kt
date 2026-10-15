@@ -1,5 +1,7 @@
 package com.raulshma.jellyplay.feature.livetv.epg
 
+import com.raulshma.jellyplay.core.concurrency.PollSpec
+import com.raulshma.jellyplay.core.concurrency.RefreshCycle
 import com.raulshma.jellyplay.core.concurrency.SingleFlight
 import com.raulshma.jellyplay.core.network.api.LiveTvApiClient
 import com.raulshma.jellyplay.core.model.EpochMillisSource
@@ -20,7 +22,6 @@ import kotlin.time.Duration.Companion.hours
 import kotlin.time.Instant
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -120,7 +121,19 @@ class EpgViewModel(
     )
     val gridData: EpgGridData get() = _gridData.value
 
-    private var autoRefreshJob: Job? = null
+    /**
+     * The 5-minute guide auto-refresh loop ([LIVE_TV_STALENESS_INTERVAL_MS]),
+     * registered once — the hand-rolled cancel-delay-fetch + stop pair this
+     * field used to be. The EPG screen binds it to visibility (STARTED) via
+     * [startAutoRefresh]/[stopAutoRefresh] so refreshes do not run while the
+     * screen sits in the back stack; repeated starts replace the loop
+     * ([RefreshCycle]'s rule) instead of stacking another one.
+     */
+    private val autoRefreshCycle = RefreshCycle(
+        scope = scope,
+        poll = PollSpec(intervalMs = LIVE_TV_STALENESS_INTERVAL_MS),
+        fetch = { fetchGuideIntoState() },
+    )
 
     /**
      * Serializes [rebuildGrid] passes. The grid computation runs on the
@@ -226,26 +239,17 @@ class EpgViewModel(
     fun dismissRecordDialog() { _recordDialog.value = null }
 
     /**
-     * Starts the 5-minute guide auto-refresh loop
-     * ([LIVE_TV_STALENESS_INTERVAL_MS]). Tied to screen visibility (STARTED)
-     * by the EPG screen via [stopAutoRefresh] on exit so refreshes do not run
-     * while the screen sits in the back stack. Repeated calls replace the
-     * previous loop instead of stacking another one.
+     * Starts the guide auto-refresh cycle — the screen's LifecycleStartEffect
+     * binding calls this on STARTED; repeated calls replace the previous loop
+     * ([RefreshCycle.start]) instead of stacking another one.
      */
     fun startAutoRefresh() {
-        autoRefreshJob?.cancel()
-        autoRefreshJob = launch {
-            while (true) {
-                delay(LIVE_TV_STALENESS_INTERVAL_MS)
-                fetchGuideIntoState()
-            }
-        }
+        autoRefreshCycle.start()
     }
 
-    /** Stops the guide auto-refresh loop started by [startAutoRefresh]. */
+    /** Stops the guide auto-refresh cycle started by [startAutoRefresh]. */
     fun stopAutoRefresh() {
-        autoRefreshJob?.cancel()
-        autoRefreshJob = null
+        autoRefreshCycle.stop()
     }
 
 }

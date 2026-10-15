@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import com.raulshma.jellyplay.core.datastore.widget.WidgetDataStore
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -193,7 +194,60 @@ class JellyPlayPreferencesSyncAdapterTest {
         assertEquals("42", prefs[stringPreferencesKey(JpsyncReservation.cursorKey("delta", "user-1"))])
         // Nothing re-reads as deleted or dirty afterwards.
         assertTrue(adapter.dirtyValues(adapter.snapshot()).isEmpty())
-        assertTrue(adapter.deletedKeys().isEmpty())
+        assertTrue(adapter.deletedKeys(adapter.snapshot()).isEmpty())
+    }
+
+    @Test
+    fun widgetPayloadKeys_neverEnterTheSyncedSet() = runTest {
+        // The widget payload is derived, per-device I/O rewritten on every
+        // home refresh — a synced-set leak would push the whole buffer each
+        // cycle (HomeRefresher.setContinueWatching runs per refresh).
+        val store = newDataStore("widget-payload-${System.nanoTime()}").apply { reset() }
+        val adapter = JellyPlayPreferencesSyncAdapter(store, excludedKeys = WidgetDataStore.SyncExcludedKeys)
+        store.edit { it[stringPreferencesKey("continue_watching")] = "[{\"id\":\"item-1\"}]" }
+
+        val snapshot = adapter.snapshot()
+
+        // Excluded at the seam: the key never rides a snapshot, so it can
+        // never read dirty and never reach the wire.
+        assertNull(snapshot["continue_watching"])
+        assertTrue(adapter.dirtyValues(adapter.snapshot()).isEmpty())
+    }
+
+    @Test
+    fun staleWidgetMirrorEntries_prunedOnFirstSnapshot() = runTest {
+        // A device that synced BEFORE the exclusion landed holds dead
+        // `jpsync.mirror.<widgetKey>` entries — swept once per process at the
+        // first snapshot, whatever the current store content.
+        val store = newDataStore("widget-prune-${System.nanoTime()}").apply { reset() }
+        val adapter = JellyPlayPreferencesSyncAdapter(store, excludedKeys = WidgetDataStore.SyncExcludedKeys)
+        store.edit {
+            it[stringPreferencesKey(JpsyncReservation.MIRROR_ROOT + "continue_watching")] = "\"[{\\\"id\\\":\\\"item-1\\\"}]\""
+            it[stringPreferencesKey(JpsyncReservation.MIRROR_ROOT + "theme")] = "\"dark\""
+        }
+
+        adapter.snapshot()
+
+        assertNull(store.data.first()[stringPreferencesKey(JpsyncReservation.MIRROR_ROOT + "continue_watching")])
+        // A live synced key's mirror entry is untouched by the sweep.
+        assertEquals("\"dark\"", store.data.first()[stringPreferencesKey(JpsyncReservation.MIRROR_ROOT + "theme")])
+    }
+
+    @Test
+    fun widgetSyncExcludedKeys_coversEveryWidgetKey() {
+        // The ratchet: a key rename in WidgetDataStore.Keys would silently
+        // re-enter the synced set (or strand its stale mirror entry) — the
+        // exported set must carry all five raw names.
+        assertEquals(
+            setOf(
+                "continue_watching",
+                "widget_config",
+                "widget_configs",
+                "library_widget_items",
+                "seerr_widget_items",
+            ),
+            WidgetDataStore.SyncExcludedKeys,
+        )
     }
 
 }

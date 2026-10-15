@@ -1,7 +1,6 @@
 package com.raulshma.jellyplay.desktop.player
 
 import com.raulshma.jellyplay.core.testfixtures.FakeMediaEngine
-import com.raulshma.jellyplay.core.testfixtures.pollUntil
 import com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState
 import com.raulshma.jellyplay.feature.player.video.engine.PlaybackRequest
 import kotlinx.coroutines.runBlocking

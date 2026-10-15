@@ -20,10 +20,12 @@ import com.raulshma.jellyplay.core.model.descriptor
  *    the offline projection (see [HomeRowOfflineProjection]).
  *  - The transport arms (which port call produces the row, how a single row
  *    refetches) reference network types (`HomeSectionSources`, the fetcher's
- *    TTL caches) and therefore live in a sibling arm registry keyed by the
- *    same enum — core/network's `HomeRowFetchArms`/`HomeRowRefreshArms`.
- *    The model layer must not know the transport, so the module cannot hold
- *    those members; the split is deliberate, not a missing merge.
+ *    TTL caches) and therefore live in a sibling transport registration keyed
+ *    by the same enum — core/network's `HomeRowFetchArms.kt`
+ *    (`HomeRowTransports`, one registration per type carrying both the batch
+ *    sub-call and the refresh arm). The model layer must not know the
+ *    transport, so the module cannot hold those members; the split is
+ *    deliberate, not a missing merge.
  *
  * NOT covered, on purpose (ADR-0009 protects hand-written emission): the
  * Compose rendering bodies, the localized row titles, the section
@@ -66,9 +68,10 @@ public interface HomeRowModule {
     /**
      * The row can be refetched on its own (the home screen's edge-pull
      * refresh): the type half of the gesture gate — a registered single-row
-     * fetch arm exists for it in core/network's `HomeRowRefreshArms`. The
-     * per-INSTANCE half (Seerr-sourced discover rows ride the batch group
-     * gate) stays with the section at the call site.
+     * refresh arm exists for it in core/network's transport registration
+     * (`HomeRowTransports`). The per-INSTANCE half (Seerr-sourced discover
+     * rows ride the batch group gate) stays with the section at the call
+     * site.
      */
     public val edgeRefreshable: Boolean get() = false
 

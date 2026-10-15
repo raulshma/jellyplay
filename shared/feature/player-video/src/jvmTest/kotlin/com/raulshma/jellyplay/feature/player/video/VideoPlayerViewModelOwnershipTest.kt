@@ -15,11 +15,13 @@ import kotlin.test.assertTrue
  * are private handlers, and the only public members beyond the funnel are
  * the state flows/getters, the result-returning queries
  * (`getImageUrl` / `loadTrickplayThumbnail` / `verifyPlayerLockPin` /
- * `useDownloadedSubtitle`), the `release` dispose hook, and the internal
- * controller slices the screen drives directly
- * (cast/syncPlay/subtitles/sleepTimer/abRepeat/effects/render/sessionRender/
- * globalMpvConfig — the session's `resolveOfflineResumeTicks` hook lives on
- * SessionLoadPipeline since the VideoSessionHost deletion). The whole
+ * `useDownloadedSubtitle`), the `release` dispose hook, and the ONE
+ * session-slice seam member (`sessionSlices` — the GLOSSARY "Session slice":
+ * per-region projections (cast/overlay/status/controls/sheets) whose
+ * interfaces the screens program against; a screen reading a session
+ * controller directly, or this VM re-exposing one as a pass-through, is a
+ * defect). The session's `resolveOfflineResumeTicks` hook lives on
+ * SessionLoadPipeline since the VideoSessionHost deletion. The whole
  * collaborator graph is built by the PlaybackSession composition root (the
  * former PlayerWiring builder's construction that broke the six
  * mutual-recursion cycles, since absorbed into single-phase ownership); the
@@ -47,14 +49,18 @@ import kotlin.test.assertTrue
  * `toggleEqualizer` / `setEqualizerSettings` / `setFrameRateMatching` /
  * `setRefreshRateMode` (the settings screens own those preference stores
  * directly) and `setInterpolationTscale` / `setCustomShaderFiles` (the
- * Rendering sheet only exposes the pickers with callers)). Lower the ceiling
- * when a slice moves out and deletes members; never raise it to admit new
- * ones.
+ * Rendering sheet only exposes the pickers with callers)). 30 before the
+ * 2026-10-14 session-slice migration: the eight controller pass-throughs
+ * (`stillWatchingPrompt` / `isNextEpisodeLoading` / `trackState` /
+ * `playerEngineRef` / `playerEngineFlow` / `videoQueueItems` / `upNextCard` /
+ * `globalMpvConfig`) were deleted in favor of the one `sessionSlices` member.
+ * Lower the ceiling when a slice moves out and deletes members; never raise
+ * it to admit new ones.
  */
 class VideoPlayerViewModelOwnershipTest {
 
     /** The maximum allowed public + internal members (see class KDoc). */
-    private val maxPublicInternalMembers = 35
+    private val maxPublicInternalMembers = 23
 
     /**
      * A class-body declaration line at the ViewModel's single level of

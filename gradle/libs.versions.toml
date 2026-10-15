@@ -61,6 +61,11 @@ pagingCompose = "3.5.0"
 workManager = "2.11.2"
 kotlinxSerialization = "1.11.0"
 kotlinxCoroutines = "1.11.0"
+# kotlinx.collections.immutable — the persistent collections behind the
+# @Immutable state bags' list fields (skippability without unstable List
+# params). 0.4.0 is the line the Compose runtime already resolves into the
+# graph transitively, so no new artifact family enters.
+kotlinxCollectionsImmutable = "0.4.0"
 # kotlinx-datetime 0.8.0 is the newest release line and is ABI-safe for this
 # repo's Kotlin 2.3.21 pin: its Gradle module metadata, fetched 2026-08-27,
 # declares kotlin-stdlib 2.1.20 on the metadataApiElements variant —
@@ -254,6 +259,7 @@ palette-ktx = { group = "androidx.palette", name = "palette-ktx", version.ref = 
 
 # Kotlinx Serialization
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinxSerialization" }
+kotlinx-collections-immutable = { group = "org.jetbrains.kotlinx", name = "kotlinx-collections-immutable", version.ref = "kotlinxCollectionsImmutable" }
 kotlinx-coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version.ref = "kotlinxCoroutines" }
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "kotlinxCoroutines" }
 kotlinx-coroutines-swing = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-swing", version.ref = "kotlinxCoroutines" }

@@ -181,7 +181,6 @@ class DetailUiStateTest {
             selectedAudioIndex = null,
             isDownloading = false,
             isDownloadingSeries = false,
-            activeDownload = null,
             loadState = DetailUiLoadState.Loaded,
             albumTracks = emptyList(),
             collectionItems = emptyList(),

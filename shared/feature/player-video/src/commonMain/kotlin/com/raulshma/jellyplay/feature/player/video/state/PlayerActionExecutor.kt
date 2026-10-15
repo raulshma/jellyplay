@@ -16,6 +16,8 @@ import com.raulshma.jellyplay.core.ui.tv.input.DpadSeekAcceleration
 import com.raulshma.jellyplay.feature.player.video.KEY_AUDIO_DELAY_STEP_MS
 import com.raulshma.jellyplay.feature.player.video.KEY_SUBTITLE_DELAY_STEP_MS
 import com.raulshma.jellyplay.feature.player.video.VideoPlayerUiEvent
+import com.raulshma.jellyplay.feature.player.video.chrome.PlayerChromeBackVerdict
+import com.raulshma.jellyplay.feature.player.video.chrome.PlayerChromeController
 import com.raulshma.jellyplay.feature.player.video.chrome.keyboardSeekStepMs
 import com.raulshma.jellyplay.feature.player.video.components.A11Y_STEP_DELTA
 import com.raulshma.jellyplay.feature.player.video.components.SPEED_OPTIONS
@@ -23,7 +25,6 @@ import com.raulshma.jellyplay.feature.player.video.delayAdjustMs
 import com.raulshma.jellyplay.feature.player.video.mediaKeySeek
 import com.raulshma.jellyplay.feature.player.video.playerKeyCode
 import com.raulshma.jellyplay.feature.player.video.playerKeyCodeOf
-import com.raulshma.jellyplay.feature.player.video.togglePlayPauseWithSummon
 
 /**
  * Owns the player's discrete-input EFFECT layer — the shared action executor
@@ -41,6 +42,12 @@ import com.raulshma.jellyplay.feature.player.video.togglePlayPauseWithSummon
  * play/pause delegates, the window seams), and the screen keeps the lambdas
  * that touch screen-local state (`playbackIntended`, snackbar capture)
  * outside — the executor must not import composition-local state.
+ *
+ * The chrome surface (visibility writes, the summon policy, the BACK
+ * hide-or-exit ladder) is the chrome module's ([PlayerChromeController],
+ * injected like any port) — every `show controls` arm here used to inline
+ * its own visibility write and each carried the summon/ladder policy by
+ * hand.
  *
  * The screen's `rememberDpadSeekState` moved into the construction with the
  * keyboard seek path that shares its chip: [seekState] is the ONE D-pad seek
@@ -64,9 +71,8 @@ import com.raulshma.jellyplay.feature.player.video.togglePlayPauseWithSummon
 internal class PlayerActionExecutor(
     // ── Live reads (invoked at execution time — the reader-lambda rule) ──
     private val getInputMap: () -> PlayerInputMap,
-    private val getShowControls: () -> Boolean,
+    private val chrome: PlayerChromeController,
     private val getIsPlaying: () -> Boolean,
-    private val getHideOsdOnPause: () -> Boolean,
     private val getPlaybackSpeed: () -> Float,
     private val getSubtitleOffsetMs: () -> Long,
     private val getSupportsAudioDelay: () -> Boolean,
@@ -86,7 +92,6 @@ internal class PlayerActionExecutor(
     private val onUiEvent: (VideoPlayerUiEvent) -> Unit,
     private val doSeekForward: () -> Unit,
     private val doSeekBack: () -> Unit,
-    private val setShowControls: (Boolean) -> Unit,
     private val setShowDelayOverlay: (Boolean) -> Unit,
     private val onBack: () -> Unit,
     private val onScreenshotClick: () -> Unit,
@@ -137,13 +142,13 @@ internal class PlayerActionExecutor(
     fun executeAction(action: PlayerAction): Boolean =
         when (action) {
             PlayerAction.TOGGLE_PLAY_PAUSE -> {
-                togglePlayPauseWithSummon(
-                    isPlaying = getIsPlaying(),
-                    hideOsdOnPause = getHideOsdOnPause(),
-                    doTogglePlayPause = doTogglePlayPause,
-                    performConfirmHaptic = performConfirmHaptic,
-                    summonControls = { setShowControls(true) },
-                )
+                // The summon wants the toggle's DIRECTION — read playing
+                // BEFORE the flip, not a post-call snapshot that only works
+                // while it lags the state change.
+                val pauseDirection = getIsPlaying()
+                doTogglePlayPause()
+                performConfirmHaptic()
+                chrome.summonForPlayPause(isPauseDirection = pauseDirection)
                 true
             }
             PlayerAction.PLAY -> {
@@ -156,22 +161,22 @@ internal class PlayerActionExecutor(
             }
             PlayerAction.VOLUME_UP -> {
                 streamVolumeAdjuster(true)
-                setShowControls(true)
+                chrome.show()
                 true
             }
             PlayerAction.VOLUME_DOWN -> {
                 streamVolumeAdjuster(false)
-                setShowControls(true)
+                chrome.show()
                 true
             }
             PlayerAction.TOGGLE_MUTE -> {
                 onUiEvent(VideoPlayerUiEvent.ToggleMute)
-                setShowControls(true)
+                chrome.show()
                 true
             }
             PlayerAction.TOGGLE_ORIENTATION -> {
                 toggleOrientation()
-                setShowControls(true)
+                chrome.show()
                 true
             }
             PlayerAction.TOGGLE_SUBTITLES -> {
@@ -254,18 +259,27 @@ internal class PlayerActionExecutor(
                 } else {
                     doSeekBack()
                 }
-                setShowControls(true)
+                chrome.show()
                 performConfirmHaptic()
                 true
             }
             PlayerAction.TOGGLE_CONTROLS -> {
-                setShowControls(!getShowControls())
+                chrome.toggle()
                 true
             }
             PlayerAction.BACK_OR_HIDE -> {
                 // The ESC/BACK split the retired PlayerKeyAction carried,
-                // resolved at execution time by the controls visibility.
-                if (getShowControls()) setShowControls(false) else onBack()
+                // resolved by the chrome module's ONE ladder policy. The
+                // keyboard paths decline while a sheet is open (the modifier
+                // branch disarms and the sink declines), so the sheet arm is
+                // unreachable here.
+                when (chrome.backVerdict(sheetArm = false)) {
+                    PlayerChromeBackVerdict.HideControls -> chrome.hide()
+                    PlayerChromeBackVerdict.Exit -> onBack()
+                    PlayerChromeBackVerdict.CloseSheet,
+                    PlayerChromeBackVerdict.SummonControls,
+                    -> {}
+                }
                 true
             }
             PlayerAction.EXIT_PLAYER -> {
@@ -292,14 +306,14 @@ internal class PlayerActionExecutor(
                 val current = getPlaybackSpeed()
                 val next = SPEED_OPTIONS.firstOrNull { it > current + 0.01f } ?: 1.0f
                 onUiEvent(VideoPlayerUiEvent.SetPlaybackSpeed(next))
-                setShowControls(true)
+                chrome.show()
                 true
             }
             PlayerAction.LOCK_CONTROLS -> {
                 // Same funnel the controls' lock button drives; the input
                 // surface dies with the lock, so this is lock-only.
                 onUiEvent(VideoPlayerUiEvent.SetScreenLocked(true))
-                setShowControls(false)
+                chrome.hide()
                 true
             }
             PlayerAction.SCREENSHOT -> {
@@ -379,7 +393,7 @@ internal class PlayerActionExecutor(
                 )
                 lastKeyboardSeekChipTimestamp = seekState.timestamp
                 keyboardSeekStamp++
-                setShowControls(true)
+                chrome.show()
                 true
             }
             else -> executeAction(binding.action)

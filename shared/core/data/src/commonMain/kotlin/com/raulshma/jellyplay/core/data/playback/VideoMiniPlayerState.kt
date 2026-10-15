@@ -1,11 +1,11 @@
 package com.raulshma.jellyplay.core.data.playback
 
 import androidx.compose.runtime.Stable
+import com.raulshma.jellyplay.core.concurrency.TaskBundle
 import com.raulshma.jellyplay.core.data.remote.RemotePlayableEngine
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
@@ -48,6 +48,11 @@ class VideoMiniPlayerState {
         // return to the same item. Kept short to avoid holding native
         // resources for half an hour; reclaim still works within the window.
         private const val AUTO_RELEASE_TIMEOUT_MS = 5 * 60 * 1000L
+
+        // The TaskBundle keys for the two cancel-and-replace slots: the
+        // isPlaying collector and the auto-release timeout.
+        private const val COLLECTOR = "VideoMiniPlayerState.collector"
+        private const val TIMEOUT = "VideoMiniPlayerState.timeout"
     }
 
     private val _isMiniMode = MutableStateFlow(false)
@@ -73,9 +78,15 @@ class VideoMiniPlayerState {
      */
     private var reclaimAsMediaEngine: ((broad: RemotePlayableEngine) -> MediaEngine?)? = null
 
-    private var job: Job? = null
-    private var timeoutJob: Job? = null
     private val miniScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+
+    /**
+     * The two cancel-and-replace slots — the isPlaying collector and the
+     * auto-release timeout — as one [TaskBundle] over [miniScope] (the
+     * plain-var `Job?` pair this replaced). Access is confined to Main, the
+     * same contract the plain vars ran under.
+     */
+    private val tasks = TaskBundle(miniScope)
 
     private val _itemId = MutableStateFlow<String?>(null)
     val itemId: StateFlow<String?> = _itemId.asStateFlow()
@@ -107,14 +118,16 @@ class VideoMiniPlayerState {
         _subtitle.value = subtitle
         _isPlaying.value = engine.isPlaying.value
 
-        job?.cancel()
-        timeoutJob?.cancel()
-        job = miniScope.launch {
-            engine.isPlaying.collect { _isPlaying.value = it }
+        tasks.replace(COLLECTOR) {
+            miniScope.launch {
+                engine.isPlaying.collect { _isPlaying.value = it }
+            }
         }
-        timeoutJob = miniScope.launch {
-            delay(AUTO_RELEASE_TIMEOUT_MS)
-            release()
+        tasks.replace(TIMEOUT) {
+            miniScope.launch {
+                delay(AUTO_RELEASE_TIMEOUT_MS)
+                release()
+            }
         }
         _isMiniMode.value = true
     }
@@ -123,10 +136,8 @@ class VideoMiniPlayerState {
         if (!_isMiniMode.value) return null
         if (_itemId.value != itemId) return null
         val engine = _engine
-        job?.cancel()
-        timeoutJob?.cancel()
-        job = null
-        timeoutJob = null
+        tasks.cancel(COLLECTOR)
+        tasks.cancel(TIMEOUT)
         _isMiniMode.value = false
         _engine = null
         reclaimAsMediaEngine = null
@@ -160,10 +171,8 @@ class VideoMiniPlayerState {
 
     fun release() {
         val engine = _engine
-        job?.cancel()
-        timeoutJob?.cancel()
-        job = null
-        timeoutJob = null
+        tasks.cancel(COLLECTOR)
+        tasks.cancel(TIMEOUT)
         engine?.release()
         _engine = null
         reclaimAsMediaEngine = null

@@ -2,6 +2,8 @@ package com.raulshma.jellyplay.feature.settings
 
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
+import com.raulshma.jellyplay.core.concurrency.PollSpec
+import com.raulshma.jellyplay.core.concurrency.RefreshCycle
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.session.JellyPlayFeatureGate
@@ -14,7 +16,6 @@ import com.raulshma.jellyplay.core.datastore.settings.PreferenceProjections
 import com.raulshma.jellyplay.core.model.HomeScreenPreferences
 import com.raulshma.jellyplay.core.model.SettingsScreenPreferences
 import com.raulshma.jellyplay.core.model.UserInfo
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
@@ -147,6 +148,16 @@ class SettingsViewModel(
         jellyPlayStatusStore?.status
             ?: kotlinx.coroutines.flow.MutableStateFlow(com.raulshma.jellyplay.core.model.JellyPlayPluginStatus.UNAVAILABLE)
 
+    /**
+     * The shared capability gate (the plugin capability gate module) — the
+     * probe-once-while-UNKNOWN / re-arm-on-identity-reset discipline behind
+     * [refreshJellyPlayPluginStatus]. Null with the store: direct-construction
+     * harnesses without the plugin seam simply never probe.
+     */
+    private val jellyPlayCapabilityGate = jellyPlayStatusStore?.let {
+        com.raulshma.jellyplay.core.data.session.JellyPlayCapabilityGate(it, scope)
+    }
+
     /** The sync engine's outcome (opt-in toggle, last sync, errors). */
     val jellyPlaySyncState: kotlinx.coroutines.flow.StateFlow<com.raulshma.jellyplay.core.data.repository.ProfileSyncRepository.SyncState> =
         jellyPlaySyncRepository?.state
@@ -226,10 +237,9 @@ class SettingsViewModel(
         scope.launch { repo.refreshInbox() }
     }
 
-    /** One capabilities probe; called when the sync section becomes visible. */
+    /** One capabilities probe while the store is still UNKNOWN — the shared capability gate's arm; called when the sync section becomes visible. */
     fun refreshJellyPlayPluginStatus() {
-        val store = jellyPlayStatusStore ?: return
-        scope.launch { store.refresh() }
+        jellyPlayCapabilityGate?.arm()
     }
 
     /**
@@ -264,7 +274,19 @@ class SettingsViewModel(
     var messageSentEvent by composeState<String?>(null)
         private set
 
-    private var sessionRefreshJob: Job? = null
+    /**
+     * The 30s `/Sessions` poll cycle, registered once — the hand-rolled
+     * cancel-delay-fetch + stop pair this field used to be (the refresh cycle
+     * module). The settings root screen binds it to visibility (STARTED,
+     * admin-keyed) via [startSessionAutoRefresh]/[stopSessionAutoRefresh] so
+     * polling does not run while settings sits in the back stack; the
+     * non-admin branch of the user collector stops it reactively.
+     */
+    private val sessionRefreshCycle = RefreshCycle(
+        scope = scope,
+        poll = PollSpec(intervalMs = SESSIONS_POLL_INTERVAL_MS),
+        fetch = { pollSessions() },
+    )
 
     init {
         launch {
@@ -319,25 +341,26 @@ class SettingsViewModel(
     }
 
     /**
-     * Starts polling `/Sessions` every 30s for admin users. Should be tied to
-     * screen visibility (STARTED) by the caller via [stopSessionAutoRefresh] on
-     * exit so polling does not run while settings is in the back stack.
+     * The poll arm's silent fetch — a failed poll keeps the previous list and
+     * never raises the loading flag (unlike the user-triggered [loadSessions]).
      */
-    fun startSessionAutoRefresh() {
-        sessionRefreshJob?.cancel()
-        sessionRefreshJob = launch {
-            while (true) {
-                kotlinx.coroutines.delay(30_000)
-                serverAdminActions.getSessions()
-                    .onSuccess { sessions -> activeSessions = sessions.filterActiveSessions() }
-            }
-        }
+    private suspend fun pollSessions() {
+        serverAdminActions.getSessions()
+            .onSuccess { sessions -> activeSessions = sessions.filterActiveSessions() }
     }
 
-    /** Stops the session auto-refresh loop started by [startSessionAutoRefresh]. */
+    /**
+     * Starts the session auto-refresh cycle — the settings root screen's
+     * LifecycleStartEffect binding calls this on STARTED (only for admins);
+     * repeated calls replace the previous loop ([RefreshCycle.start]).
+     */
+    fun startSessionAutoRefresh() {
+        sessionRefreshCycle.start()
+    }
+
+    /** Stops the session auto-refresh cycle started by [startSessionAutoRefresh]. */
     fun stopSessionAutoRefresh() {
-        sessionRefreshJob?.cancel()
-        sessionRefreshJob = null
+        sessionRefreshCycle.stop()
     }
 
     /**
@@ -374,11 +397,6 @@ class SettingsViewModel(
 
     fun clearMessageEvent() {
         messageSentEvent = null
-    }
-
-    override fun onCleared() {
-        super.onCleared()
-        sessionRefreshJob?.cancel()
     }
 
     /**
@@ -476,5 +494,10 @@ class SettingsViewModel(
 
     fun clearBackupRestoreStatus() {
         backupRestoreStatus = null
+    }
+
+    /** The session poll's cadence. */
+    private companion object {
+        const val SESSIONS_POLL_INTERVAL_MS = 30_000L
     }
 }

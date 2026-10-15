@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.details
 
 import com.raulshma.jellyplay.core.model.MediaItem
+import com.raulshma.jellyplay.core.model.hasWatchProgress
 
 /**
  * Pure resolver for the season tab a series detail screen should land on.
@@ -28,7 +29,10 @@ internal object SeasonStartResolver {
         if (seasons.isEmpty()) return 0
 
         val smartTargetIndex = findSeasonIndex(seasons, smartTargetEpisode)
-        val hasResume = smartTargetEpisode?.hasResumeProgress() == true
+        // The model-layer mid-playback predicate (formerly a local twin,
+        // hasResumeProgress) — the smart-play and season-tab decisions read
+        // the same definition of "counts as a resume".
+        val hasResume = smartTargetEpisode?.hasWatchProgress == true
         val shouldPrioritizeSmartTarget = isNextUpOrResume || hasResume
 
         return when {

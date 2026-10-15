@@ -168,4 +168,28 @@ object ContinueWatchingRowRule {
     /** [MediaItem] convenience overload — the merge's online callers' shape. */
     fun mergeCwNextUp(cw: List<MediaItem>, nextUp: List<MediaItem>): List<MediaItem> =
         mergeCwNextUp(cw, nextUp, id = { it.id })
+
+    /**
+     * The single-row refresh's rebuild of the batch merge fold — the
+     * item-list projection of OrderHomeSectionsUseCase's section fold (THE
+     * canonical owner of the anchor/donor/relabel policy; this member and the
+     * offline mirror run its mechanics through [mergeCwNextUp] instead of
+     * re-deriving the fold). The [cw] list passes through verbatim; the
+     * [nextUp] list folds through [nextUpEligible] first (the CW-overlap set
+     * keyed on the fresh cw list itself — the same filters the NEXT_UP arm
+     * applies) and the survivors join through [mergeCwNextUp]. An empty
+     * result means BOTH halves came back empty — the row drops.
+     */
+    fun mergedContinueWatchingRow(
+        cw: List<MediaItem>,
+        nextUp: List<MediaItem>,
+        excludedSeriesIds: Set<String>,
+    ): List<MediaItem> = mergeCwNextUp(
+        cw,
+        nextUpEligible(
+            nextUp,
+            continueWatchingIds = cw.mapTo(mutableSetOf()) { it.id },
+            excludedSeriesIds = excludedSeriesIds,
+        ),
+    )
 }

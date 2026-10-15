@@ -19,16 +19,16 @@ import kotlin.test.assertTrue
 /**
  * Invariants pinned for the home content list's render-model bundle (the
  * values [HomeSurfaceTest] constructs implicitly, asserted directly here):
- *  - [HomeFeed.Offline] derives `sections` from its [OfflineHomeContent] — the
+ *  - [HomeRenderFeed.Offline] derives `sections` from its [OfflineHomeContent] — the
  *    offline branch's constructor IS the mask; there is no second section list
  *    to drift out of sync.
  *  - [HomeContentState.online] / [HomeContentState.offlineContent] are exact
  *    cross-casts: exactly one is non-null per feed, so the "render one branch"
  *    invariant holds at the read sites too.
- *  - [HomeFeed.Online] carries the online-only surfaces (partialLoadError,
+ *  - [HomeRenderFeed.Online] carries the online-only surfaces (partialLoadError,
  *    newsletterBannerVisible) that the offline feed cannot express.
  */
-class HomeFeedContractTest {
+class HomeRenderFeedContractTest {
 
     private fun section(type: HomeSectionType) = HomeSection(
         id = type.name,
@@ -43,14 +43,14 @@ class HomeFeedContractTest {
         mediaType = MediaType.MOVIE,
     )
 
-    private fun onlineFeed() = HomeFeed.Online(
+    private fun onlineFeed() = HomeRenderFeed.Online(
         sections = listOf(section(HomeSectionType.CONTINUE_WATCHING)),
         isLoading = false,
         partialLoadError = true,
         newsletterBannerVisible = true,
     )
 
-    private fun offlineFeed(): HomeFeed.Offline {
+    private fun offlineFeed(): HomeRenderFeed.Offline {
         val content = buildOfflineHomeContent(
             library = listOf(offlineItem("d1")),
             episodes = emptyList(),
@@ -66,10 +66,10 @@ class HomeFeedContractTest {
             ),
             prefs = OfflineHomeSectionPrefs(),
         )
-        return HomeFeed.Offline(content = content)
+        return HomeRenderFeed.Offline(content = content)
     }
 
-    private fun state(feed: HomeFeed) = HomeContentState(
+    private fun state(feed: HomeRenderFeed) = HomeContentState(
         feed = feed,
         homeHeroEnabled = true,
         homeBackdropEnabled = true,

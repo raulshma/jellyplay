@@ -50,16 +50,18 @@ import com.raulshma.jellyplay.core.model.TouchZone
 import com.raulshma.jellyplay.core.model.WheelAxis
 import com.raulshma.jellyplay.core.ui.tv.components.DpadSeekState
 import com.raulshma.jellyplay.core.ui.tv.input.DpadAction
-import com.raulshma.jellyplay.core.ui.tv.input.DpadKeyEvent
 import com.raulshma.jellyplay.core.ui.tv.input.DpadKeyHandlerScope
 import com.raulshma.jellyplay.core.ui.tv.input.dpadKeyHandler
-import com.raulshma.jellyplay.feature.player.video.chrome.shouldSummonControlsOnPause
+import com.raulshma.jellyplay.feature.player.video.chrome.PlayerChromeBackVerdict
+import com.raulshma.jellyplay.feature.player.video.chrome.PlayerChromeController
 import com.raulshma.jellyplay.feature.player.video.components.GestureOverlay
 import com.raulshma.jellyplay.feature.player.video.components.GestureSwipeGates
 import com.raulshma.jellyplay.feature.player.video.state.DoubleTapHoldSeekPolicy
 import com.raulshma.jellyplay.feature.player.video.state.GestureSeekController
+import com.raulshma.jellyplay.feature.player.video.state.PlayerInputDispatcher
 import com.raulshma.jellyplay.feature.player.video.state.PlayerInputGates
 import com.raulshma.jellyplay.feature.player.video.state.PlayerWheelPolicy
+import com.raulshma.jellyplay.feature.player.video.state.WheelRowDisposition
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -80,55 +82,30 @@ import kotlin.math.abs
 private const val HOLD_SPEED_PILL_BOTTOM_CLEARANCE_DP = 180
 
 /**
- * TOGGLE_PLAY_PAUSE's shared effect — toggle, confirm haptic, then the
- * directional summon: pausing with the hide-OSD pref on leaves the overlay
- * hidden (playing keeps today's summon; an already-visible overlay is never
- * force-hidden, the auto-hide owns it). Shared by the keyboard executor's
- * TOGGLE_PLAY_PAUSE arm and the TV handler's SPACE and media play/pause arms.
+ * The surface Box's TV D-pad / hardware-key focus + input tier (the inline if/else modifier chain verbatim).
+ * The chrome surface (visibility reads/writes, the summon policy) is the chrome
+ * module's; the D-pad arm set arrives PREBUILT ([tvDpadConfig] — the ONE instance
+ * the focused-dispatch handler and the key-sink fallback share, so the two
+ * dispatch paths can never diverge) and the SPACE arm resolves through the
+ * input dispatcher like every rebound tier.
  */
-internal fun togglePlayPauseWithSummon(
-    isPlaying: Boolean,
-    hideOsdOnPause: Boolean,
-    doTogglePlayPause: () -> Unit,
-    performConfirmHaptic: () -> Unit,
-    summonControls: () -> Unit,
-) {
-    doTogglePlayPause()
-    performConfirmHaptic()
-    if (shouldSummonControlsOnPause(
-            isPause = isPlaying,
-            hideOsdOnPause = hideOsdOnPause,
-        )
-    ) {
-        summonControls()
-    }
-}
-
-/** The surface Box's TV D-pad / hardware-key focus + input tier (the inline if/else modifier chain verbatim). */
 internal fun playerBoxKeyInputModifier(
     isTv: Boolean,
     hasHardwareKeyboard: Boolean,
     isSheetOpen: Boolean,
-    showControls: Boolean,
+    chrome: PlayerChromeController,
     isPlaying: Boolean,
-    hideOsdOnPause: Boolean,
-    onShowControlsChange: (Boolean) -> Unit,
     tvPlayerFocusRequester: FocusRequester,
     keyboardFocusRequester: FocusRequester,
     onUserInteraction: () -> Unit,
     onKeyboardLayerFocusChange: (Boolean) -> Unit,
     /** Live hasFocus of the TV layer subtree (buttons inside the controls included) — the TV grab seam's re-assert watch. */
     onTvLayerFocusChange: (Boolean) -> Unit,
-    seekState: DpadSeekState,
+    tvDpadConfig: DpadKeyHandlerScope.() -> Unit,
+    dispatcher: PlayerInputDispatcher,
     doTogglePlayPause: () -> Unit,
-    doSeekBack: () -> Unit,
-    doSeekForward: () -> Unit,
     performConfirmHaptic: () -> Unit,
     handleMediaKeyDown: (KeyEvent) -> Boolean,
-    /** Input-mapping resolution: pattern → bound action, null = disabled/unbound/NONE. */
-    resolveAction: (InputPattern) -> PlayerAction?,
-    /** Shared discrete-action executor (the keyboard shell's when-block). */
-    executePlayerAction: (PlayerAction) -> Boolean,
 ): Modifier =
     if (isTv && !isSheetOpen) {
         Modifier
@@ -144,39 +121,21 @@ internal fun playerBoxKeyInputModifier(
                     // binds TOGGLE_PLAY_PAUSE there; the D-pad SELECT row owns
                     // the select key, not this one). Unbound SPACE falls
                     // through like any unmapped key.
-                    when (val space = resolveAction(InputPattern.Key(PlayerInputKey.SPACE))) {
+                    when (val space = dispatcher.resolveAction(InputPattern.Key(PlayerInputKey.SPACE))) {
                         PlayerAction.TOGGLE_PLAY_PAUSE -> {
-                            togglePlayPauseWithSummon(
-                                isPlaying = isPlaying,
-                                hideOsdOnPause = hideOsdOnPause,
-                                doTogglePlayPause = doTogglePlayPause,
-                                performConfirmHaptic = performConfirmHaptic,
-                                summonControls = { onShowControlsChange(true) },
-                            )
+                            doTogglePlayPause()
+                            performConfirmHaptic()
+                            chrome.summonForPlayPause(isPauseDirection = isPlaying)
                             true
                         }
                         null -> false
-                        else -> executePlayerAction(space)
+                        else -> dispatcher.execute(space)
                     }
                 } else {
                     false
                 }
             }
-                .dpadKeyHandler(
-                    tvDpadKeyConfig(
-                        showControls = showControls,
-                        isPlaying = isPlaying,
-                        hideOsdOnPause = hideOsdOnPause,
-                        onShowControlsChange = onShowControlsChange,
-                        seekState = seekState,
-                        doTogglePlayPause = doTogglePlayPause,
-                        doSeekBack = doSeekBack,
-                        doSeekForward = doSeekForward,
-                        performConfirmHaptic = performConfirmHaptic,
-                        resolveAction = resolveAction,
-                        executePlayerAction = executePlayerAction,
-                    )
-                )
+                .dpadKeyHandler(tvDpadConfig)
     } else if (!isTv && hasHardwareKeyboard && !isSheetOpen) {
         // Hardware-keyboard shortcuts for phones/tablets with a
         // keyboard (Chromebook, Bluetooth, Samsung DeX). TV keeps
@@ -248,11 +207,16 @@ internal fun playerBoxKeyInputModifier(
  * controls auto-hide, so the Activity-level bridge runs the same arms). Every
  * arm is EXACTLY the inline body this file carried before the extraction.
  *
- * Every D-pad arm resolves its control's binding first (hoisted once
- * per arm): the default actions run the legacy arms verbatim; a
- * rebound action routes to the shared executor; a disabled/unbound
- * control returns false (the key falls through, exactly like an
- * unmapped key).
+ * The config is built from the input-dispatch module's ONE dispatcher
+ * (resolution + the resolve-then-execute ladder) and the chrome module's
+ * controller, so the screen remembers the built instance and hands the SAME
+ * one to both dispatch paths — the former per-recomposition double build
+ * (modifier + sink) with its drift-prone argument pair is gone.
+ *
+ * Every D-pad arm resolves its control's binding first: the default actions
+ * run the legacy arms verbatim; a rebound action routes to the shared
+ * executor; a disabled/unbound control returns false (the key falls
+ * through, exactly like an unmapped key).
  *
  * Every arm executes on KeyDown only (repeats included) — the handler is
  * invoked for KeyUp too. The retired arms ran on BOTH edges (detailed
@@ -268,45 +232,20 @@ internal fun playerBoxKeyInputModifier(
  * unconditionally (see the Menu arm above).
  */
 internal fun tvDpadKeyConfig(
-    showControls: Boolean,
-    isPlaying: Boolean,
-    hideOsdOnPause: Boolean,
-    onShowControlsChange: (Boolean) -> Unit,
+    dispatcher: PlayerInputDispatcher,
+    chrome: PlayerChromeController,
     seekState: DpadSeekState,
+    isPlaying: () -> Boolean,
     doTogglePlayPause: () -> Unit,
     doSeekBack: () -> Unit,
     doSeekForward: () -> Unit,
     performConfirmHaptic: () -> Unit,
-    resolveAction: (InputPattern) -> PlayerAction?,
-    executePlayerAction: (PlayerAction) -> Boolean,
 ): DpadKeyHandlerScope.() -> Unit {
-    fun actionOf(control: DpadControl): PlayerAction? =
-        resolveAction(InputPattern.DPad(control))
-
-    // One discrete D-pad arm — the shape every non-seek arm shares:
-    // KeyUp is always false (arms act on KeyDown only; the seek arms
-    // below own the accumulate-on-repeat / commit-on-KeyUp shape), the
-    // DEFAULT action runs the legacy arm verbatim, a rebound routes to
-    // the shared executor, unbound/disabled falls through.
-    fun discreteArm(
-        dpadKey: DpadKeyEvent,
-        control: DpadControl,
-        defaultAction: PlayerAction,
-        legacy: () -> Boolean,
-    ): Boolean {
-        if (!dpadKey.isKeyDown) return false
-        return when (val action = actionOf(control)) {
-            defaultAction -> legacy()
-            null -> false
-            else -> executePlayerAction(action)
-        }
-    }
-
     return {
         onKeyEvent(DpadAction.Right) { dpadKey ->
-            when (val action = actionOf(DpadControl.RIGHT)) {
+            when (val action = dispatcher.resolveAction(InputPattern.DPad(DpadControl.RIGHT))) {
                 PlayerAction.SEEK_FORWARD -> {
-                    if (!showControls) {
+                    if (!chrome.visible) {
                         if (dpadKey.isKeyDown) {
                             seekState.seekForward(dpadKey.repeatCount)
                         } else if (dpadKey.isKeyUp) {
@@ -317,13 +256,13 @@ internal fun tvDpadKeyConfig(
                     } else false
                 }
                 null -> false
-                else -> if (dpadKey.isKeyDown) executePlayerAction(action) else false
+                else -> if (dpadKey.isKeyDown) dispatcher.execute(action) else false
             }
         }
         onKeyEvent(DpadAction.Left) { dpadKey ->
-            when (val action = actionOf(DpadControl.LEFT)) {
+            when (val action = dispatcher.resolveAction(InputPattern.DPad(DpadControl.LEFT))) {
                 PlayerAction.SEEK_BACK -> {
-                    if (!showControls) {
+                    if (!chrome.visible) {
                         if (dpadKey.isKeyDown) {
                             seekState.seekBackward(dpadKey.repeatCount)
                         } else if (dpadKey.isKeyUp) {
@@ -334,29 +273,29 @@ internal fun tvDpadKeyConfig(
                     } else false
                 }
                 null -> false
-                else -> if (dpadKey.isKeyDown) executePlayerAction(action) else false
+                else -> if (dpadKey.isKeyDown) dispatcher.execute(action) else false
             }
         }
         onKeyEvent(DpadAction.Select) { dpadKey ->
-            discreteArm(dpadKey, DpadControl.SELECT, PlayerAction.TOGGLE_CONTROLS) {
-                if (!showControls) {
-                    onShowControlsChange(true)
+            dispatcher.discreteArm(dpadKey, DpadControl.SELECT, PlayerAction.TOGGLE_CONTROLS) {
+                if (!chrome.visible) {
+                    chrome.show()
                     true
                 } else false
             }
         }
         onKeyEvent(DpadAction.Up) { dpadKey ->
-            discreteArm(dpadKey, DpadControl.UP, PlayerAction.TOGGLE_CONTROLS) {
-                if (!showControls) {
-                    onShowControlsChange(true)
+            dispatcher.discreteArm(dpadKey, DpadControl.UP, PlayerAction.TOGGLE_CONTROLS) {
+                if (!chrome.visible) {
+                    chrome.show()
                     true
                 } else false
             }
         }
         onKeyEvent(DpadAction.Down) { dpadKey ->
-            discreteArm(dpadKey, DpadControl.DOWN, PlayerAction.TOGGLE_CONTROLS) {
-                if (!showControls) {
-                    onShowControlsChange(true)
+            dispatcher.discreteArm(dpadKey, DpadControl.DOWN, PlayerAction.TOGGLE_CONTROLS) {
+                if (!chrome.visible) {
+                    chrome.show()
                     true
                 } else false
             }
@@ -369,8 +308,8 @@ internal fun tvDpadKeyConfig(
             // carries no binding resolution and runs the legacy summon
             // directly. Repeats and KeyUp stay unconsumed; with the controls
             // already up MENU keeps its pre-fix inertness (unmapped key).
-            if (dpadKey.isKeyDown && dpadKey.repeatCount == 0 && !showControls) {
-                onShowControlsChange(true)
+            if (dpadKey.isKeyDown && dpadKey.repeatCount == 0 && !chrome.visible) {
+                chrome.show()
                 true
             } else false
         }
@@ -385,38 +324,34 @@ internal fun tvDpadKeyConfig(
             // AND exited the player. A REBOUND action still executes here
             // (the system ladder cannot know the rebinding); the rebound is
             // additive with the ladder's own default semantics.
-            when (val action = actionOf(DpadControl.BACK)) {
+            when (val action = dispatcher.resolveAction(InputPattern.DPad(DpadControl.BACK))) {
                 PlayerAction.BACK_OR_HIDE, null -> false
-                else -> if (dpadKey.isKeyDown) executePlayerAction(action) else false
+                else -> if (dpadKey.isKeyDown) dispatcher.execute(action) else false
             }
         }
         onKeyEvent(DpadAction.PlayPause) { dpadKey ->
-            discreteArm(dpadKey, DpadControl.PLAY_PAUSE, PlayerAction.TOGGLE_PLAY_PAUSE) {
+            dispatcher.discreteArm(dpadKey, DpadControl.PLAY_PAUSE, PlayerAction.TOGGLE_PLAY_PAUSE) {
                 // TV remotes' media play/pause lands here — the
                 // summon follows the toggle's direction exactly like
                 // the SPACE arm above.
-                togglePlayPauseWithSummon(
-                    isPlaying = isPlaying,
-                    hideOsdOnPause = hideOsdOnPause,
-                    doTogglePlayPause = doTogglePlayPause,
-                    performConfirmHaptic = performConfirmHaptic,
-                    summonControls = { onShowControlsChange(true) },
-                )
+                doTogglePlayPause()
+                performConfirmHaptic()
+                chrome.summonForPlayPause(isPauseDirection = isPlaying())
                 true
             }
         }
         onKeyEvent(DpadAction.FastForward) { dpadKey ->
-            discreteArm(dpadKey, DpadControl.FAST_FORWARD, PlayerAction.SEEK_FORWARD) {
+            dispatcher.discreteArm(dpadKey, DpadControl.FAST_FORWARD, PlayerAction.SEEK_FORWARD) {
                 doSeekForward()
-                onShowControlsChange(true)
+                chrome.show()
                 performConfirmHaptic()
                 true
             }
         }
         onKeyEvent(DpadAction.Rewind) { dpadKey ->
-            discreteArm(dpadKey, DpadControl.REWIND, PlayerAction.SEEK_BACK) {
+            dispatcher.discreteArm(dpadKey, DpadControl.REWIND, PlayerAction.SEEK_BACK) {
                 doSeekBack()
-                onShowControlsChange(true)
+                chrome.show()
                 performConfirmHaptic()
                 true
             }
@@ -504,10 +439,8 @@ internal fun Modifier.playerTapAndZoomGestures(
     gates: PlayerInputGates,
     isScreenLocked: Boolean,
     doubleTapHoldSeekEnabled: Boolean,
-    /** Input-mapping resolution: pattern → bound action, null = disabled/unbound/NONE. */
-    resolveAction: (InputPattern) -> PlayerAction?,
-    /** Shared discrete-action executor (the keyboard shell's when-block). */
-    executePlayerAction: (PlayerAction) -> Boolean,
+    /** The input-dispatch module: resolution + the resolve-then-execute touch ladder, read live at event time. */
+    dispatcher: () -> PlayerInputDispatcher,
     holdRepeatScope: CoroutineScope,
     onUserInteraction: () -> Unit,
     isHoldSpeedActive: () -> Boolean,
@@ -523,17 +456,6 @@ internal fun Modifier.playerTapAndZoomGestures(
     onScrubbingStarted: () -> Unit = {},
     onScrubbingEnded: () -> Unit = {},
 ): Modifier {
-    // One tap-class arm — the D-pad helper's discreteArm shape with
-    // "unbound/disabled does nothing" instead of fall-through: the DEFAULT
-    // action runs the legacy arm, a rebound routes to the shared executor,
-    // null (unbound/disabled) and explicit NONE both no-op.
-    fun touchArm(pattern: InputPattern, defaultAction: PlayerAction, legacy: () -> Unit) {
-        when (val action = resolveAction(pattern)) {
-            defaultAction -> legacy()
-            null -> {}
-            else -> executePlayerAction(action)
-        }
-    }
     // pointerInput only re-launches its block when a KEY changes, so every
     // callback reading live screen state (hold-speed flags, the zoom value,
     // the rememberUpdatedState seek delegates) must arrive as a
@@ -560,7 +482,7 @@ internal fun Modifier.playerTapAndZoomGestures(
                         // press time; the default HOLD_SPEED keeps its
                         // press-and-release semantics.
                         onUserInteraction()
-                        touchArm(InputPattern.LongPress, PlayerAction.HOLD_SPEED) {
+                        dispatcher().touchArm(InputPattern.LongPress, PlayerAction.HOLD_SPEED) {
                             if (holdSpeedEnabled()) startHoldSpeed()
                         }
                         return@awaitEachGesture
@@ -593,7 +515,7 @@ internal fun Modifier.playerTapAndZoomGestures(
                     if (isHoldSpeedActive()) {
                         stopHoldSpeed()
                     } else {
-                        touchArm(InputPattern.Tap, PlayerAction.TOGGLE_CONTROLS) { toggleControls() }
+                        dispatcher().touchArm(InputPattern.Tap, PlayerAction.TOGGLE_CONTROLS) { toggleControls() }
                     }
                     return@awaitEachGesture
                 }
@@ -618,9 +540,9 @@ internal fun Modifier.playerTapAndZoomGestures(
                         onUserInteraction()
                         val zoneAction = when {
                             doubleTapHoldSeekEnabled && zone < 0 ->
-                                resolveAction(InputPattern.DoubleTapHold(TouchZone.LEFT))
+                                dispatcher().resolveAction(InputPattern.DoubleTapHold(TouchZone.LEFT))
                             doubleTapHoldSeekEnabled && zone > 0 ->
-                                resolveAction(InputPattern.DoubleTapHold(TouchZone.RIGHT))
+                                dispatcher().resolveAction(InputPattern.DoubleTapHold(TouchZone.RIGHT))
                             else -> null
                         }
                         when {
@@ -655,8 +577,8 @@ internal fun Modifier.playerTapAndZoomGestures(
                                     onScrubbingEnded()
                                 }
                             }
-                            zoneAction != null -> executePlayerAction(zoneAction)
-                            else -> touchArm(InputPattern.LongPress, PlayerAction.HOLD_SPEED) {
+                            zoneAction != null -> dispatcher().execute(zoneAction)
+                            else -> dispatcher().touchArm(InputPattern.LongPress, PlayerAction.HOLD_SPEED) {
                                 if (holdSpeedEnabled()) startHoldSpeed()
                             }
                         }
@@ -669,13 +591,13 @@ internal fun Modifier.playerTapAndZoomGestures(
                         // rebound action hits the shared executor, an unbound
                         // zone does nothing.
                         when (zone) {
-                            -1 -> touchArm(InputPattern.DoubleTap(TouchZone.LEFT), PlayerAction.SEEK_BACK) {
+                            -1 -> dispatcher().touchArm(InputPattern.DoubleTap(TouchZone.LEFT), PlayerAction.SEEK_BACK) {
                                 onDoubleTapSeekBack()
                             }
-                            1 -> touchArm(InputPattern.DoubleTap(TouchZone.RIGHT), PlayerAction.SEEK_FORWARD) {
+                            1 -> dispatcher().touchArm(InputPattern.DoubleTap(TouchZone.RIGHT), PlayerAction.SEEK_FORWARD) {
                                 onDoubleTapSeekForward()
                             }
-                            else -> touchArm(InputPattern.DoubleTap(TouchZone.CENTER), PlayerAction.TOGGLE_PLAY_PAUSE) {
+                            else -> dispatcher().touchArm(InputPattern.DoubleTap(TouchZone.CENTER), PlayerAction.TOGGLE_PLAY_PAUSE) {
                                 onDoubleTapCenter()
                             }
                         }
@@ -732,7 +654,7 @@ internal fun Modifier.playerTapAndZoomGestures(
  */
 internal fun Modifier.playerWheelGestures(
     isWheelEnabled: () -> Boolean,
-    resolveWheelAction: (axis: WheelAxis, isShiftPressed: Boolean) -> PlayerAction?,
+    dispatcher: () -> PlayerInputDispatcher,
     onVolumeNotch: (Int) -> Unit,
     onSeekNotch: (Int) -> Unit,
 ): Modifier =
@@ -762,18 +684,12 @@ internal fun Modifier.playerWheelGestures(
                 } else {
                     WheelAxis.VERTICAL
                 }
-                when (resolveWheelAction(axis, event.keyboardModifiers.isShiftPressed)) {
-                    PlayerAction.SWIPE_VOLUME,
-                    PlayerAction.VOLUME_UP,
-                    PlayerAction.VOLUME_DOWN,
-                    -> {
+                when (dispatcher().wheelDisposition(axis, event.keyboardModifiers.isShiftPressed)) {
+                    WheelRowDisposition.Volume -> {
                         onVolumeNotch(PlayerWheelPolicy.volumeDirection(scroll.y))
                         event.changes.forEach { it.consume() }
                     }
-                    PlayerAction.SWIPE_SEEK,
-                    PlayerAction.SEEK_FORWARD,
-                    PlayerAction.SEEK_BACK,
-                    -> {
+                    WheelRowDisposition.Seek -> {
                         val axisDelta = PlayerWheelPolicy.seekAxisDelta(scroll.x, scroll.y)
                         val (notches, remainder) = PlayerWheelPolicy.accumulateSeekNotches(
                             previousAccumulator = seekAccumulator,
@@ -786,7 +702,7 @@ internal fun Modifier.playerWheelGestures(
                         }
                         event.changes.forEach { it.consume() }
                     }
-                    else -> {
+                    WheelRowDisposition.Inert -> {
                         // Unbound / disabled / rebound elsewhere: leave the
                         // scroll unconsumed (it does nothing on the video
                         // surface, but the mapping must not swallow it).
@@ -806,21 +722,18 @@ internal fun PlayerGestureOverlayTier(
     gates: PlayerInputGates,
     isScreenLocked: Boolean,
     swipeSeekMaxMs: Long,
-    showControls: Boolean,
-    onShowControlsChange: (Boolean) -> Unit,
+    chrome: PlayerChromeController,
     viewModel: VideoPlayerViewModel,
     windowOps: PlayerWindowOps,
     onBack: () -> Unit,
     isHoldSpeedActive: Boolean,
     playbackSpeed: Float,
-    /** Input-mapping resolution: pattern → bound action, null = disabled/unbound/NONE. */
-    resolveAction: (InputPattern) -> PlayerAction?,
-    /** Shared discrete-action executor (the keyboard shell's when-block). */
-    executePlayerAction: (PlayerAction) -> Boolean,
+    /** The input-dispatch module, read live at event time. */
+    dispatcher: () -> PlayerInputDispatcher,
 ) {
     // Live reads for the event-time edge-swipe callback — a captured value
     // would freeze until this composable recomposes with a new lambda.
-    val currentShowControls by androidx.compose.runtime.rememberUpdatedState(showControls)
+    val currentDispatcher by androidx.compose.runtime.rememberUpdatedState(dispatcher)
     val currentOnBack by androidx.compose.runtime.rememberUpdatedState(onBack)
     // Horizontal-swipe seek is a scrub session like the seek-bar drag: the
     // first seek move opens it, the commit/cancel closes it. The flag lives
@@ -861,32 +774,31 @@ internal fun PlayerGestureOverlayTier(
                 seekState.reset()
             }
         },
-        showControls = showControls,
-        onEdgeSwipe = remember(resolveAction, executePlayerAction) {
+        showControls = chrome.visible,
+        onEdgeSwipe = remember(currentDispatcher, currentOnBack, chrome) {
             { edge ->
                 // The edge row resolves like every other arm: the default
-                // BACK_OR_HIDE keeps the summon-then-exit ladder; a rebound
-                // action hits the shared executor.
-                when (val action = resolveAction(InputPattern.EdgeSwipe(edge))) {
-                    PlayerAction.BACK_OR_HIDE -> {
-                        if (!currentShowControls) {
-                            onShowControlsChange(true)
-                        } else {
-                            currentOnBack()
-                        }
+                // BACK_OR_HIDE keeps the summon-then-exit ladder (the chrome
+                // module's verdict); a rebound action hits the shared
+                // executor.
+                when (val action = currentDispatcher().resolveAction(InputPattern.EdgeSwipe(edge))) {
+                    PlayerAction.BACK_OR_HIDE -> when (chrome.backVerdict(hideArm = false, summonArm = true, sheetArm = false)) {
+                        PlayerChromeBackVerdict.SummonControls -> chrome.show()
+                        PlayerChromeBackVerdict.Exit -> currentOnBack()
+                        else -> {}
                     }
                     null -> {}
-                    else -> executePlayerAction(action)
+                    else -> currentDispatcher().execute(action)
                 }
             }
         },
-        resolveVerticalAction = remember(resolveAction) {
+        resolveVerticalAction = remember(currentDispatcher) {
             { side ->
                 // The half resolves like every other arm: only the continuous
                 // drag actions own a swipe arm here (a discrete rebind falls
                 // to the executor's unmatched arm — the picker blocks it);
                 // null = unbound/disabled/NONE, the half stays inert.
-                when (val action = resolveAction(InputPattern.VerticalSwipe(side))) {
+                when (val action = currentDispatcher().resolveAction(InputPattern.VerticalSwipe(side))) {
                     PlayerAction.SWIPE_BRIGHTNESS, PlayerAction.SWIPE_VOLUME -> action
                     else -> null
                 }

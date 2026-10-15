@@ -73,9 +73,10 @@ class DownloadWorker(
      * multi-connection path: maps the strategy's notification calls onto
      * [DownloadNotificationHelper] + this worker's foreground surface. The
      * runner path's per-tick promotion keeps its own lambda at the runTransfer
-     * call site; the start-of-transfer summary refresh BOTH paths now share
-     * lives in [DownloadTransferGate.execute] (the declared heal of the former
-     * runner-refreshes-multi-does-not divergence).
+     * call site; the group summary is NOT part of either path's job anymore —
+     * the [DownloadSummarySurface] single observes the in-flight count and
+     * posts on transitions, so the per-tick refreshSummary (a COUNT query +
+     * re-post per 2 s tick per transfer) is gone from every transfer path.
      */
     private inner class WorkerTransferNotifications : DownloadTransferNotifications {
         override suspend fun showForeground(
@@ -144,9 +145,8 @@ class DownloadWorker(
                 )
             )
             DownloadNotificationHelper.dismissPausedNotification(applicationContext, downloadId)
-            DownloadNotificationHelper.refreshSummary(
-                applicationContext, dao.getInFlightDownloadCount(),
-            )
+            // No summary refresh here: the QUEUED write above is what the
+            // summary surface's count flow observes.
         } catch (e: Exception) {
             // On Android 12+ a background-launched worker cannot promote itself
             // to a foreground service. Continuing would let the OS kill the
@@ -173,15 +173,13 @@ class DownloadWorker(
                         applicationContext, downloadId, notifId, name, progress, downloaded, total, speed,
                     )
                 )
-                DownloadNotificationHelper.refreshSummary(
-                    applicationContext, dao.getInFlightDownloadCount(),
-                )
+                // The summary does NOT ride the progress ticks: the DOWNLOADING
+                // writes below are what the summary surface's count flow
+                // observes (the former per-tick COUNT query + memo-skipped
+                // re-post is gone).
             },
             dismissForeground = { notifId ->
                 DownloadNotificationHelper.dismissNotification(applicationContext, notifId)
-                DownloadNotificationHelper.refreshSummary(
-                    applicationContext, dao.getInFlightDownloadCount(),
-                )
             },
             onInactive = { TransferOutcome.Success },
         ) { preparation ->

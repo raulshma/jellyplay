@@ -422,43 +422,24 @@ internal class HomeRefresher(
                         // between this drain and the write below, by
                         // construction.
                         val rolledSections = discoverRows.drainRolls(finalSections)
-                        _state.update {
-                            it.copy(
-                                sections = rolledSections,
-                                bookProgressFractions = bookFractions,
-                                // H9: the hero billboards ride the SAME
-                                // single-emission write as the sections they
-                                // rotate with — a partial paint (new rows,
-                                // stale hero) never lands.
-                                curatedHero = homeResult.curatedHero,
-                            )
-                        }
-
-                        val continueWatching = rolledSections
-                            .find { it.type == HomeSectionType.CONTINUE_WATCHING }
-                            ?.items ?: emptyList()
-                        val currentIds = continueWatching.map { it.id }.toSet()
-                        if (currentIds != lastContinueWatchingIds) {
-                            lastContinueWatchingIds = currentIds
-                            widgetDataStore.setContinueWatching(continueWatching)
-                            // Defer the widget broadcast + TV Watch Next
-                            // refresh until after the mutex is released (see
-                            // pendingCwSideEffect above).
-                            pendingCwSideEffect = {
-                                // Push the CW change to the home-screen
-                                // widget. The broadcaster owns the
-                                // explicit-component broadcast so no Android
-                                // Context is needed here.
-                                continueWatchingBroadcaster.refreshContinueWatching()
-                                // Refresh the Android TV "Watch Next" OS row
-                                // so the system home stays in sync with the
-                                // user's progress. Worker is a no-op on
-                                // phones and respects its preference.
-                                if (fetchInputs.androidTvWatchNextEnabled()) {
-                                    tvWatchNextScheduler.scheduleRefresh()
-                                }
-                            }
-                        }
+                        // The batch arm of [applySectionOutcome] — the shared
+                        // post-fetch choreography (single-emission write; CW
+                        // widget store under the mutex with the broadcast /
+                        // Watch-Next side effect captured past it). The
+                        // fractions were decoded BEFORE the drain above, per
+                        // the helper's pairing contract.
+                        pendingCwSideEffect = applySectionOutcome(
+                            sections = rolledSections,
+                            bookProgressFractions = bookFractions,
+                            // H9: the hero billboards ride the SAME
+                            // single-emission write as the sections they
+                            // rotate with — a partial paint (new rows,
+                            // stale hero) never lands.
+                            curatedHero = homeResult.curatedHero,
+                            continueWatching = rolledSections
+                                .find { it.type == HomeSectionType.CONTINUE_WATCHING }
+                                ?.items ?: emptyList(),
+                        )
 
                         _state.update { it.copy(error = null) }
 
@@ -845,9 +826,10 @@ internal class HomeRefresher(
      * row's refetch rebuilds the CW + Next Up fold, so a pull cannot swap
      * away — or drop — the row's Next Up half. A Continue Watching swap
      * updates the widget store under the mutex and defers the
-     * broadcast/Watch-Next side effect past it (exactly [fetchOnce]'s shape);
-     * a Continue Reading swap or drop decodes its fractions for the same
-     * single emission as the batch's.
+     * broadcast/Watch-Next side effect past it, and a Continue Reading swap
+     * or drop decodes its fractions for the same single emission as the
+     * batch's — the shared [applySectionOutcome] choreography, the same
+     * three rules [fetchOnce]'s write arm applies.
      *
      * Known (accepted) corner: a concurrent [patchItems] landing between this
      * refresh's sections read and write could be reverted by the write —
@@ -899,50 +881,50 @@ internal class HomeRefresher(
                                     val patched = _state.value.sections.map {
                                         if (it.id == sectionId) fresh else it
                                     }
-                                    // Same single-emission pairing as the batch
-                                    // fetch's CR write: sections and their
-                                    // fractions land together.
-                                    if (section.type == HomeSectionType.CONTINUE_READING) {
-                                        val fractions = decodeBookProgressFractionsFor(patched)
-                                        _state.update { s ->
-                                            s.copy(sections = patched, bookProgressFractions = fractions)
-                                        }
-                                    } else {
-                                        _state.update { s -> s.copy(sections = patched) }
-                                    }
-                                    if (section.type == HomeSectionType.CONTINUE_WATCHING) {
-                                        val currentIds = fresh.items.map { it.id }.toSet()
-                                        if (currentIds != lastContinueWatchingIds) {
-                                            lastContinueWatchingIds = currentIds
-                                            widgetDataStore.setContinueWatching(fresh.items)
-                                            pendingCwSideEffect = {
-                                                continueWatchingBroadcaster.refreshContinueWatching()
-                                                if (fetchInputs.androidTvWatchNextEnabled()) {
-                                                    tvWatchNextScheduler.scheduleRefresh()
-                                                }
-                                            }
-                                        }
-                                    }
+                                    // Swap arm of [applySectionOutcome] — the
+                                    // batch fetch's single-emission CR pairing
+                                    // and CW widget choreography, scoped to
+                                    // THIS row: the fractions decode rides only
+                                    // a CONTINUE_READING swap, and only a
+                                    // swapped CONTINUE_WATCHING row can change
+                                    // the widget's item set (a sibling swap
+                                    // must not re-read the TOC cache or touch
+                                    // the widget store).
+                                    pendingCwSideEffect = applySectionOutcome(
+                                        sections = patched,
+                                        bookProgressFractions =
+                                            if (section.type == HomeSectionType.CONTINUE_READING) {
+                                                decodeBookProgressFractionsFor(patched)
+                                            } else {
+                                                null
+                                            },
+                                        continueWatching =
+                                            if (section.type == HomeSectionType.CONTINUE_WATCHING) fresh.items else null,
+                                    )
                                 } else {
-                                    // The row legitimately emptied (e.g. the
-                                    // user finished everything in it) — drop it,
-                                    // the batch assembler renders nothing for an
+                                    // Drop arm of [applySectionOutcome] — the
+                                    // row legitimately emptied (e.g. the
+                                    // user finished everything in it), the
+                                    // batch assembler renders nothing for an
                                     // empty source either. A CONTINUE_READING
                                     // drop pairs the fractions write with it
                                     // (same single-emission rule as the swap
                                     // above — the dropped books' stale fractions
-                                    // must not outlive the row).
+                                    // must not outlive the row); a dropped
+                                    // CONTINUE_WATCHING row deliberately passes
+                                    // no items — the batch arm's empty-list
+                                    // comparison (widget clear on a vanished
+                                    // row) stays batch-only.
                                     val remaining = _state.value.sections.filterNot { it.id == sectionId }
-                                    if (section.type == HomeSectionType.CONTINUE_READING) {
-                                        val fractions = decodeBookProgressFractionsFor(remaining)
-                                        _state.update { s ->
-                                            s.copy(sections = remaining, bookProgressFractions = fractions)
-                                        }
-                                    } else {
-                                        _state.update { s ->
-                                            s.copy(sections = s.sections.filterNot { it.id == sectionId })
-                                        }
-                                    }
+                                    applySectionOutcome(
+                                        sections = remaining,
+                                        bookProgressFractions =
+                                            if (section.type == HomeSectionType.CONTINUE_READING) {
+                                                decodeBookProgressFractionsFor(remaining)
+                                            } else {
+                                                null
+                                            },
+                                    )
                                 }
                             }
                             .onFailure { e ->
@@ -1311,6 +1293,67 @@ internal class HomeRefresher(
             ?: return emptyMap()
         return bookTocCacheRepository.decodeBookProgressFractions(continueReading.items)
     }
+
+    /**
+     * The post-fetch choreography [fetchOnce]'s batch arm and
+     * [refreshSectionRow]'s single-row arm used to hand-roll separately —
+     * one write, three shared rules:
+     *  * (a) Continue Watching: a changed item set writes the widget store
+     *    UNDER [refreshMutex], with the broadcast / TV Watch-Next refresh
+     *    captured into the returned runner for the caller to fire after the
+     *    mutex releases (a slow broadcast IPC or WorkManager enqueue must
+     *    not hold the refresh lock — both callers' `pendingCwSideEffect`).
+     *    The comparison input is the caller's: the batch arm always passes
+     *    the row's current items (so a vanished row clears the widget), a
+     *    single-row swap only a swapped Continue Watching row's, and a drop
+     *    passes `null` — it deliberately leaves the widget store alone.
+     *  * (b) Continue Reading: [sections] and their progress fractions land
+     *    as ONE emission — never a two-step paint that flashes the percent
+     *    fallback. The decode happens at the caller (the batch arm must
+     *    decode BEFORE its roll-registry drain — the generation invariant;
+     *    the single-row arm only for a CONTINUE_READING swap or drop), so
+     *    `null` here leaves the current map untouched: a sibling-row write
+     *    doesn't re-pair fractions that didn't change.
+     *  * (c) drop-on-empty has no branch here — the batch assembler applies
+     *    its zero-items rule upstream — but the single-row drop routes its
+     *    write through this helper too, so rule (b) covers it identically.
+     *
+     * Must run under [refreshMutex] (both call sites hold it). The only
+     * suspension point is the widget-store write itself — nothing may
+     * separate the paired write from the side-effect capture. Returns the
+     * deferred CW side effect, or null when the write has none.
+     */
+    private suspend fun applySectionOutcome(
+        sections: List<HomeSection>,
+        bookProgressFractions: Map<String, Float>? = null,
+        curatedHero: List<CuratedHeroEntry>? = null,
+        continueWatching: List<MediaItem>? = null,
+    ): (() -> Unit)? {
+        _state.update {
+            it.copy(
+                sections = sections,
+                bookProgressFractions = bookProgressFractions ?: it.bookProgressFractions,
+                curatedHero = curatedHero ?: it.curatedHero,
+            )
+        }
+        if (continueWatching == null) return null
+        val currentIds = continueWatching.map { it.id }.toSet()
+        if (currentIds == lastContinueWatchingIds) return null
+        lastContinueWatchingIds = currentIds
+        widgetDataStore.setContinueWatching(continueWatching)
+        return {
+            // Push the CW change to the home-screen widget. The broadcaster
+            // owns the explicit-component broadcast so no Android Context is
+            // needed here.
+            continueWatchingBroadcaster.refreshContinueWatching()
+            // Refresh the Android TV "Watch Next" OS row so the system home
+            // stays in sync with the user's progress. Worker is a no-op on
+            // phones and respects its preference.
+            if (fetchInputs.androidTvWatchNextEnabled()) {
+                tvWatchNextScheduler.scheduleRefresh()
+            }
+        }
+    }
 }
 
 /** What caused a refresh — decides the job-replacement policy in [HomeRefresher.request]. */
@@ -1427,6 +1470,32 @@ internal data class HomeRefreshState(
     val fetchFailed: Boolean
         get() = error != null
 }
+
+/**
+ * The narrow, UI-facing projection of [HomeRefreshState]: just the per-row
+ * spinner mirrors — the edge-pull in-flight section ids and the dice-roll
+ * in-flight row ids. Exposed by [HomeViewModel.refreshSpinners] so the
+ * content rows can leaf-collect the two sets WITHOUT the rest of
+ * [HomeRefreshState]: collecting the full state would re-invalidate every
+ * row on every `sections` emission (in-place item patches included) — the
+ * exact churn the leaf-collection split exists to remove. Derivation at the
+ * row is set membership on these small sets.
+ */
+@Immutable
+internal data class HomeRefreshSpinnerState(
+    /**
+     * Section ids with an edge-pull refresh in flight (see
+     * [HomeRefresher.refreshSectionRow]) — the matching online row's edge
+     * spinner. Mirrors [HomeRefreshState.refreshingSectionIds].
+     */
+    val refreshingSectionIds: Set<String> = emptySet(),
+    /**
+     * Custom discover rows with a dice roll in flight — the matching row's
+     * dice icon tumbles while the re-fetch runs. Mirrors
+     * [HomeRefreshState.rollingDiscoverRowIds].
+     */
+    val rollingDiscoverRowIds: Set<String> = emptySet(),
+)
 
 /**
  * The shared content-drop fold: the sections, the discover rows, and the

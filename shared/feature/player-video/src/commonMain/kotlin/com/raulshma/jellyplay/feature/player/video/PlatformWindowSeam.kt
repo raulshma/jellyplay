@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.player.video
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.focus.FocusRequester
 import com.raulshma.jellyplay.core.model.RefreshRateMode
@@ -293,9 +294,11 @@ public fun PlayerTvFocusGrabEffect(
  *  - [layerHoldsFocus] — the focused dispatch chain owns the key (an arm
  *    declined it there); re-running it here would double-handle.
  *
- * The [config] block is re-resolved every recomposition and compiled into a
- * [dpadKeyHandlerHandle] alongside it, so a delivered key never pays the
- * scope construction. Composes nothing off-TV ([LocalTvMode]).
+ * The [config] block is compiled into a [dpadKeyHandlerHandle] ONCE per
+ * config instance ([remember] keyed on it — the screens hand in the same
+ * remembered instance the focused-dispatch modifier runs, so a root
+ * recomposition no longer pays the scope construction), and delivered
+ * through a live-read delegate. Composes nothing off-TV ([LocalTvMode]).
  *
  * Public because the LIVE player's screen composes it too (same D-pad shape;
  * it previously installed its arm set on the bridge directly, which is why
@@ -312,7 +315,8 @@ public fun PlayerTvKeySinkEffect(
 ) {
     val isTv = LocalTvMode.current
     if (!isTv) return
-    val latestHandle = rememberUpdatedState(dpadKeyHandlerHandle(config))
+    val handle = remember(config) { dpadKeyHandlerHandle(config) }
+    val latestHandle = rememberUpdatedState(handle)
     val latestSheetOpen = rememberUpdatedState(isSheetOpen)
     val latestOverlayActive = rememberUpdatedState(isOverlayScreenActive)
     val latestLayerHoldsFocus = rememberUpdatedState(layerHoldsFocus)

@@ -10,8 +10,8 @@ import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.model.PlayerInputDefaults
 import com.raulshma.jellyplay.core.model.PlayerInputMap
+import com.raulshma.jellyplay.feature.player.video.state.PlayerInputDispatcher
 import com.raulshma.jellyplay.feature.player.video.state.PlayerInputGates
-import com.raulshma.jellyplay.feature.player.video.state.PlayerInputPolicy
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -50,6 +50,9 @@ class PlayerTapDoubleTapDetectorTest {
         composeTestRule.setContent {
             val scope = rememberCoroutineScope()
             val isHoldSpeedActive = remember { mutableStateOf(false) }
+            val dispatcher = remember(map) {
+                PlayerInputDispatcher(getMap = { map }, executeAction = { true })
+            }
             Box(
                 modifier = Modifier
                     .size(400.dp)
@@ -57,8 +60,7 @@ class PlayerTapDoubleTapDetectorTest {
                         gates = PlayerInputGates.of(map),
                         isScreenLocked = false,
                         doubleTapHoldSeekEnabled = true,
-                        resolveAction = { PlayerInputPolicy.resolveAction(map, it) },
-                        executePlayerAction = { true },
+                        dispatcher = { dispatcher },
                         holdRepeatScope = scope,
                         onUserInteraction = {},
                         isHoldSpeedActive = { isHoldSpeedActive.value },

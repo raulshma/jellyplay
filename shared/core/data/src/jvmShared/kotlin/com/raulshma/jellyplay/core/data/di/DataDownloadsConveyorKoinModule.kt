@@ -15,7 +15,9 @@ import com.raulshma.jellyplay.core.data.repository.OfflineDownloadWriter
 import com.raulshma.jellyplay.core.data.repository.OfflineDownloadWriterCore
 import com.raulshma.jellyplay.core.data.repository.OfflineImagePreloader
 import com.raulshma.jellyplay.core.data.util.DownloadDelegate
+import com.raulshma.jellyplay.core.data.worker.DownloadSummarySurface
 import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
+import com.raulshma.jellyplay.core.database.dao.DownloadDao
 import org.koin.core.module.Module
 import org.koin.dsl.module
 
@@ -101,13 +103,26 @@ internal val dataDownloadsConveyorModule: Module = module {
             downloadsStore = get(),
             storagePolicy = get(),
             downloadEnqueuer = get<DownloadEnqueueCoordinator>(),
-            progressNotifier = get<DownloadProgressNotifier>(),
             timeSource = get(),
             writer = get(),
             downloadDelegate = get(),
         )
     }
     single<DownloadRepository> { get<DownloadRepositoryImpl>() }
+
+    // The download summary surface (glossary: Download summary surface) — ONE
+    // collector over the in-flight count flow, posting through the
+    // DownloadProgressNotifier port on transitions only. createdAtStart: the
+    // summary tracks the pipeline whether or not anything resolves the surface
+    // (download lifecycles span screens and workers); the application scope is
+    // the MediaDownloadActions precedent for a process-lifetime coroutine home.
+    single(createdAtStart = true) {
+        DownloadSummarySurface(
+            inFlightCount = get<DownloadDao>().getInFlightDownloadCountFlow(),
+            notifier = get<DownloadProgressNotifier>(),
+            scope = get(DatastoreQualifiers.applicationScope),
+        )
+    }
 
     // The unified quick-action download/remove delegate every host surface
     // shares (library, favorites, search, detail rows). Koin-owned

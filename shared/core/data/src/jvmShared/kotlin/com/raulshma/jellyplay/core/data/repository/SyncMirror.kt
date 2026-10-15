@@ -55,14 +55,20 @@ class SyncMirror(
     /**
      * The keys [current] no longer holds but the mirror still does — the
      * [ProfileSyncAdapter.deletedKeys] body (mirror held them, the store
-     * removed them: the outbound tombstone set).
+     * removed them: the outbound tombstone set). [current] is the same
+     * cycle-start snapshot the engine handed [dirtyValues] — the deletion
+     * check diffs against it instead of re-reading the store. Keys failing
+     * [shouldMirror] never read as tombstones: the exclusion rule rides this
+     * face too, so a key excluded after it synced cannot push a spurious
+     * remote delete from its stranded entry (the entry itself is the
+     * once-per-process [prune]'s business).
      */
     suspend fun deletedKeys(current: Map<String, JsonElement>): Set<String> {
         val prefs = mirrorStore.data.first()
         return prefs.asMap().keys
             .filter { it.name.startsWith(prefix) }
             .map { it.name.removePrefix(prefix) }
-            .filter { it !in current }
+            .filter { shouldMirror(it) && it !in current }
             .toSet()
     }
 
@@ -94,6 +100,21 @@ class SyncMirror(
         if (keys.isEmpty()) return
         mirrorStore.edit { prefs ->
             keys.forEach { if (shouldMirror(it)) prefs.remove(mirrorKeyOf(it)) }
+        }
+    }
+
+    /**
+     * One-time stale-entry sweep: removes the mirror entries for [keys]
+     * REGARDLESS of [shouldMirror] — the migration face for a key that leaves
+     * the synced set after having synced. Every predicate-guarded face above
+     * now skips the key, so its stranded entry would sit in the store
+     * forever; the owning adapter calls this once per process for its whole
+     * exclusion set (a no-op for keys that never synced). Idempotent.
+     */
+    suspend fun prune(keys: Set<String>) {
+        if (keys.isEmpty()) return
+        mirrorStore.edit { prefs ->
+            keys.forEach { prefs.remove(mirrorKeyOf(it)) }
         }
     }
 }

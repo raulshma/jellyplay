@@ -58,13 +58,11 @@ import kotlinx.serialization.json.decodeFromJsonElement
 class JellyPlayHomeLayoutSyncAdapter(
     private val homeDiscoveryStore: HomeDiscoveryStore,
     /** The mirror's persistence home — the SAME user-prefs store the other adapters mirror, under a reserved prefix. */
-    private val mirrorStore: DataStore<Preferences>,
-    override val namespace: String = NAMESPACE,
-) : ProfileSyncAdapter {
+    mirrorStore: DataStore<Preferences>,
+    namespace: String = NAMESPACE,
+) : MirrorProfileSyncAdapter(namespace, mirrorStore) {
 
     private val json = Json { ignoreUnknownKeys = true }
-
-    private val mirror = SyncMirror(mirrorStore, JpsyncReservation.mirrorPrefix(NAMESPACE))
 
     /** One layout domain: the canonical key, its slice reader, and its store-setter adoption. */
     private abstract class Domain<T>(
@@ -173,9 +171,6 @@ class JellyPlayHomeLayoutSyncAdapter(
     override suspend fun snapshot(): Map<String, JsonElement> =
         domains.associate { domain -> domain.key to domain.encodeCurrent(slice) }
 
-    override suspend fun dirtyValues(current: Map<String, JsonElement>): Map<String, JsonElement> =
-        mirror.dirtyValues(current)
-
     override suspend fun applyRemote(entries: Map<String, JsonElement>) {
         for ((key, value) in entries) {
             val domain = domainsByKey[key] ?: continue // an unknown key never touches the store
@@ -186,7 +181,14 @@ class JellyPlayHomeLayoutSyncAdapter(
         }
     }
 
-    override suspend fun markSynced(values: Map<String, JsonElement>) = mirror.markSynced(values)
+    /**
+     * Overrides [deleteRemote] as the pure SPI default — an inbound tombstone
+     * does NOTHING here (no local work, no mirror clear): the layout domains
+     * reset through their VALUES (the store setters above), never a removal,
+     * so clearing mirror entries would turn still-standing rows into
+     * perpetual re-pushes. [deletedKeys] stays the SPI default with it.
+     */
+    override suspend fun deleteRemote(keys: Set<String>) {}
 
     // ------------------------------------------------------------------
     // Encoding helpers: the wire value is the same structured JSON the

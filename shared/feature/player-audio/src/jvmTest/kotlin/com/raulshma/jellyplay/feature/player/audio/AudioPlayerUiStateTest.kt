@@ -92,7 +92,6 @@ class AudioPlayerUiStateTest {
     fun `lyrics defaults are no lyrics not fetching unknown source`() {
         val lyrics = LyricsState()
         assertTrue(lyrics.lyrics.isEmpty())
-        assertEquals(-1, lyrics.currentLyricIndex)
         assertEquals(LyricsSource.UNKNOWN, lyrics.lyricsSource)
         assertFalse(lyrics.isFetchingLyrics)
         assertEquals(

@@ -330,8 +330,29 @@ actual fun PlatformBitmap.asPlatformImageBitmap(): ImageBitmap = asImageBitmap()
 
 // ── Cast chrome ────────────────────────────────────────────────────────────
 
-internal actual val VideoPlayerViewModel.platformCastManager: Any?
-    get() = androidCastManager
+/**
+ * The Android route-button projection over the legacy discovery/connect
+ * manager (the seam adapter's delegate): the click arm requests the route
+ * picker and the [PlatformCastButton] actual renders it from the request.
+ * The legacy surface stays behind this class — the chrome consumes only the
+ * commonMain CastRouteButton members.
+ */
+internal class AndroidCastRouteButton(
+    val legacy: com.raulshma.jellyplay.core.data.cast.CastManager,
+) : com.raulshma.jellyplay.feature.player.video.session.CastRouteButton {
+    override val isAvailable: Boolean get() = true
+
+    /** The picker request the button composable observes (the click arm's arm). */
+    val pickerRequested = kotlinx.coroutines.flow.MutableStateFlow(false)
+
+    override val onClick: () -> Unit = { pickerRequested.value = true }
+}
+
+internal actual fun VideoPlayerViewModel.platformCastRouteButton(): com.raulshma.jellyplay.feature.player.video.session.CastRouteButton? =
+    // The legacy surface through the SESSION's seam adapter (the VM's ctor
+    // param is private since the cast-chrome ownership closure — the session
+    // is the in-module holder).
+    (playbackSession.castManager as? AndroidCastManager)?.delegate?.let(::AndroidCastRouteButton)
 
 @Composable
 internal actual fun rememberCastDisconnect(viewModel: VideoPlayerViewModel): () -> Unit {
@@ -344,18 +365,20 @@ internal actual fun rememberCastDisconnect(viewModel: VideoPlayerViewModel): () 
 internal actual fun CoroutineScope.launchPlatformCastSessionEvents(viewModel: VideoPlayerViewModel) {
     launch {
         viewModel.androidCast.castSessionEvents.collect { event ->
+            // The transport commands live on the common PlayerCastController
+            // surface the androidCast seam narrows to — no session reach here.
             when (event) {
-                is CastSessionEvent.Connected -> viewModel.playbackSession.cast.castToDevice()
-                is CastSessionEvent.Disconnected -> viewModel.playbackSession.cast.onCastDisconnected()
+                is CastSessionEvent.Connected -> viewModel.androidCast.castToDevice()
+                is CastSessionEvent.Disconnected -> viewModel.androidCast.onCastDisconnected()
             }
         }
     }
 }
 
 @Composable
-internal actual fun PlatformCastButton(castManager: Any?) {
-    if (castManager is com.raulshma.jellyplay.core.data.cast.CastManager) {
-        CastButton(castManager = castManager)
+internal actual fun PlatformCastButton(routeButton: com.raulshma.jellyplay.feature.player.video.session.CastRouteButton) {
+    if (routeButton is AndroidCastRouteButton) {
+        CastButton(routeButton = routeButton)
     }
 }
 

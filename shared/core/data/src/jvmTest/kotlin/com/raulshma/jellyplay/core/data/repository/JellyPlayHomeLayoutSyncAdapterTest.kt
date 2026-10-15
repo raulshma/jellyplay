@@ -204,7 +204,7 @@ class JellyPlayHomeLayoutSyncAdapterTest {
         settle { it.enabledHomeSectionTypes.isEmpty() }
 
         assertTrue(adapter.snapshot().isNotEmpty()) // domains always carry a value
-        assertTrue(adapter.deletedKeys().isEmpty())
+        assertTrue(adapter.deletedKeys(adapter.snapshot()).isEmpty())
     }
 
     private companion object {

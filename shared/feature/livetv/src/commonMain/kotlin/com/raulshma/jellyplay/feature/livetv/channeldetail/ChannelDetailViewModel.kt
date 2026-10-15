@@ -22,6 +22,7 @@ import kotlin.time.Instant
 import org.jetbrains.compose.resources.StringResource
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.datetime.DateTimeUnit
@@ -38,6 +39,18 @@ class ChannelDetailViewModel(
 
     private val _uiState = stateFlow(ChannelDetailUiState())
     val uiState: StateFlow<ChannelDetailUiState> = _uiState.flow
+
+    /**
+     * The injected-clock instant the current content snapshot was fetched
+     * against — [nowInstant]'s seam (LiveTvTimeFormat: never a direct clock
+     * read in a ViewModel or its composition). Re-published on every
+     * [refreshPrograms] pass — the SAME single read that drives the request
+     * window and the ended/airing verdicts — and deliberately NO tick: the
+     * refresh-on-open/refresh-on-action design stands, the screen just reads
+     * this snapshot instead of a per-composition `Clock.System.now()`.
+     */
+    private val _now = MutableStateFlow(timeSource.nowInstant())
+    val now: StateFlow<Instant> = _now
 
     /**
      * One-shot record/cancel feedback, screen-forward seam replacing the legacy
@@ -99,9 +112,11 @@ class ChannelDetailViewModel(
     private suspend fun refreshPrograms(channelId: String, isInitialLoad: Boolean = false) {
         // One injected-clock read drives both the request window and the
         // ended/airing verdicts below, so the list can never disagree with
-        // the window it was fetched for.
+        // the window it was fetched for — and is published as the content's
+        // `now` snapshot, so the UI's progress math rides the same instant.
         val zone = TimeZone.currentSystemDefault()
         val now = timeSource.nowInstant()
+        _now.value = now
         val endOfDay = now.toLocalDateTime(zone).date.plus(1, DateTimeUnit.DAY).atStartOfDayIn(zone)
         // Both bounds travel as ISO-8601 UTC instants (the former
         // ISO_OFFSET_DATE_TIME formatting carried the system offset — the

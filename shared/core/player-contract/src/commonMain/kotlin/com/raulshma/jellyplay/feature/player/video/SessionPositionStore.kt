@@ -13,10 +13,12 @@ package com.raulshma.jellyplay.feature.player.video
  *
  * Home: moved here verbatim from player-video's PlaybackSession.kt (SAME
  * package, zero consumer import churn — the PlayerLifecycleCallbacks
- * precedent) so :shared:core:test-fixtures' FakePositionStore can implement
- * it through that module's existing player-contract edge; a test-fixtures →
- * player-video edge would be both a first core→feature dependency and a
- * project cycle with player-video's jvmTest → test-fixtures edge.
+ * precedent) when :shared:core:test-fixtures' FakePositionStore implemented
+ * it — a test-fixtures → player-video edge would have been both a first
+ * core→feature dependency and a project cycle with player-video's
+ * jvmTest → test-fixtures edge. The double has since moved to player-video's
+ * jvmTest itself (ADR-0006 rule 4: its only consumers were that module's
+ * suites); this interface stays put — same package, its single consumer.
  */
 interface SessionPositionStore {
     fun persist(itemId: String, positionMs: Long, playSessionId: String, nowMs: Long)

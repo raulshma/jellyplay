@@ -48,11 +48,9 @@ class JellyPlayIntegrationsSyncAdapter(
     private val arrPreferencesStore: ArrPreferencesStore,
     private val subtitleProviderPreferencesStore: SubtitleProviderPreferencesStore,
     /** The mirror's persistence home — the SAME user-prefs store the other adapters mirror, under a reserved prefix. */
-    private val mirrorStore: DataStore<Preferences>,
-    override val namespace: String = NAMESPACE,
-) : ProfileSyncAdapter {
-
-    private val mirror = SyncMirror(mirrorStore, JpsyncReservation.mirrorPrefix(NAMESPACE))
+    mirrorStore: DataStore<Preferences>,
+    namespace: String = NAMESPACE,
+) : MirrorProfileSyncAdapter(namespace, mirrorStore) {
 
     /** The three stores' shared snapshot/apply fan-out (the backup slice source rides the same one). */
     private val fan = IntegrationsStoreFan(
@@ -62,9 +60,6 @@ class JellyPlayIntegrationsSyncAdapter(
     )
 
     override suspend fun snapshot(): Map<String, JsonElement> = fan.snapshot()
-
-    override suspend fun dirtyValues(current: Map<String, JsonElement>): Map<String, JsonElement> =
-        mirror.dirtyValues(current)
 
     override suspend fun applyRemote(entries: Map<String, JsonElement>) {
         for ((key, value) in entries) {
@@ -83,22 +78,18 @@ class JellyPlayIntegrationsSyncAdapter(
     }
 
     /**
-     * Applies remote tombstones as resets: the local entries AND their mirror
-     * entries go, so an adopted namespace reset neither resurrects a value
-     * nor re-reads as a local edit. The per-store allowlist ignores any key
-     * that is not one of theirs.
+     * The local half of an adopted tombstone — the key RESETS in its owning
+     * store (the same value-only semantics a remote JsonNull carries in
+     * [applyRemote]: a written default roams back, an absent key could not);
+     * each store's allowlist ignores any key that is not one of theirs. The
+     * base's clear-tail drops the mirror entries after this, so the adopted
+     * namespace reset neither resurrects a value nor re-reads as a local edit.
      */
-    override suspend fun deleteRemote(keys: Set<String>) {
-        if (keys.isEmpty()) return
+    override suspend fun deleteLocally(keys: Set<String>) {
         for (key in keys) {
             fan.apply(key, null)
         }
-        // The mirror entries go REGARDLESS of key shape: an unknown key must
-        // not wedge in the mirror forever re-reading as deleted.
-        mirror.clear(keys)
     }
-
-    override suspend fun markSynced(values: Map<String, JsonElement>) = mirror.markSynced(values)
 
     private companion object {
         const val NAMESPACE = "integrations"

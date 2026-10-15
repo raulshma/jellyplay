@@ -70,6 +70,17 @@ interface DownloadDao {
     @Query("SELECT COUNT(*) FROM downloads WHERE status IN ('PENDING', 'QUEUED', 'DOWNLOADING')")
     suspend fun getInFlightDownloadCount(): Int
 
+    /**
+     * Reactive [getInFlightDownloadCount] — the same status set as a Flow. The
+     * one observation seam of the download summary surface
+     * ([com.raulshma.jellyplay.core.data.worker.DownloadSummarySurface]): Room
+     * invalidation is table-level, so every progress write re-runs the COUNT and
+     * the surface's `distinctUntilChanged` collapses same-count re-emissions —
+     * callers must not re-issue [getInFlightDownloadCount] per tick.
+     */
+    @Query("SELECT COUNT(*) FROM downloads WHERE status IN ('PENDING', 'QUEUED', 'DOWNLOADING')")
+    fun getInFlightDownloadCountFlow(): Flow<Int>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertDownload(download: DownloadEntity)
 

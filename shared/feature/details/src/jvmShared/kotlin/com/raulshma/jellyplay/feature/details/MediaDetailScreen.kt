@@ -426,9 +426,6 @@ fun MediaDetailScreen(
             colorStyle = preferences.theme.colorStyle,
             accentColorSwatch = preferences.theme.accentColorSwatch,
         ) {
-            val downloadFlow = remember(itemId) { viewModel.downloads.downloadFlow(itemId) }
-            val activeDownload by downloadFlow.collectAsStateWithLifecycle(initialValue = null)
-
             // Seerr integration state (the data holder's single snapshot,
             // folded into uiState as-is) plus the dialog holder's frozen-at-open
             // item — the render gate for the request dialog below.
@@ -483,7 +480,6 @@ fun MediaDetailScreen(
                     selectedVersionId = selectedVersionId,
                     isDownloading = downloads.isDownloading,
                     isDownloadingSeries = downloads.isDownloadingSeries,
-                    activeDownload = activeDownload,
                     loadState = uiState.loadState,
                     albumTracks = uiState.albumTracks,
                     collectionItems = uiState.collectionItems,
@@ -902,6 +898,14 @@ fun MediaDetailScreen(
                     // the state bag) so a ~2 s progress tick recomposes only
                     // the downloading rows.
                     LocalEpisodeDownloadProgress provides downloads.episodeDownloadProgress,
+                    // The current item's live download row rides the flow
+                    // local (not DetailContentState — see the local's KDoc):
+                    // providing the flow object is stable, and only the leaf
+                    // that reads the value (the ⋮ options-menu builder)
+                    // collects it, so a ~2 s transfer tick never re-executes
+                    // the DetailContentState construction above.
+                    LocalActiveDownloadFlow provides
+                        remember(itemId) { viewModel.downloads.downloadFlow(itemId) },
                 ) {
                     DetailContent(
                         state = state,

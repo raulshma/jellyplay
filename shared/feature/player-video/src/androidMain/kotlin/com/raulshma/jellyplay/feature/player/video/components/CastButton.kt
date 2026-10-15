@@ -8,15 +8,11 @@ import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.raulshma.jellyplay.core.data.cast.CastManager
 import com.raulshma.jellyplay.core.designsystem.theme.CastColors
 import com.raulshma.jellyplay.core.designsystem.theme.playerOnScrim
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
@@ -24,14 +20,23 @@ import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 
+/**
+ * The cast route button over the session slice's projection (the
+ * [com.raulshma.jellyplay.feature.player.video.session.CastRouteButton]
+ * Android implementation): the legacy discovery/connect manager stays behind
+ * the projection — the chrome's click arm is `routeButton.onClick` (a picker
+ * request), the picker flow renders from the request, and the connected arm
+ * (a tap while a receiver is attached) stays the disconnect.
+ */
 @Composable
 internal fun CastButton(
-    castManager: CastManager,
+    routeButton: com.raulshma.jellyplay.feature.player.video.AndroidCastRouteButton,
 ) {
+    val castManager = routeButton.legacy
     val context = LocalContext.current
     val isConnected by castManager.isConnectedFlow.collectAsStateWithLifecycle(initialValue = false)
     val discoveredDevices by castManager.discoveredDevices.collectAsStateWithLifecycle(initialValue = emptyList())
-    var showDialog by remember { mutableStateOf(false) }
+    val pickerRequested by routeButton.pickerRequested.collectAsStateWithLifecycle(initialValue = false)
     val castFocusState = rememberTvFocusState(focusedScale = 1.1f)
 
     DisposableEffect(Unit) {
@@ -41,14 +46,14 @@ internal fun CastButton(
         }
     }
 
-    if (showDialog) {
+    if (pickerRequested) {
         CastDeviceDialog(
             devices = discoveredDevices,
             onSelect = { device ->
                 castManager.connect(context, device)
-                showDialog = false
+                routeButton.pickerRequested.value = false
             },
-            onDismiss = { showDialog = false },
+            onDismiss = { routeButton.pickerRequested.value = false },
         )
     }
 
@@ -57,7 +62,8 @@ internal fun CastButton(
             if (isConnected) {
                 castManager.disconnect(context)
             } else {
-                showDialog = true
+                // The projection's click arm: request the route picker.
+                routeButton.onClick()
             }
         },
         modifier = Modifier
@@ -98,6 +104,8 @@ private fun CastDeviceDialog(
                     dialog.dismiss()
                 }
                 .setNegativeButton("Cancel") { dialog, _ -> dialog.dismiss(); onDismiss() }
+                // A back/outside dismissal must clear the picker request too,
+                // or the next devices emission re-shows the closed dialog.
                 .setOnDismissListener { onDismiss() }
                 .create()
         }

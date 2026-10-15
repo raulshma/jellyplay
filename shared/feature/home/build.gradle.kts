@@ -18,6 +18,10 @@ kotlin {
             implementation(project(":shared:core:model"))
             implementation(project(":shared:core:designsystem"))
             implementation(project(":shared:core:data"))
+            // HomeUiState.sections is a persistent ImmutableList — the
+            // @Immutable bag's list field stays Compose-stable (skippable)
+            // without boxing every row list into an unstable List param.
+            implementation(libs.kotlinx.collections.immutable)
             // Cancellation-safe suspend wrapper for the offline gate's
             // cached-layout read.
             implementation(project(":shared:core:concurrency"))

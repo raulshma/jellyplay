@@ -48,10 +48,14 @@ import java.io.File
 // method bodies are byte-identical except where a seam call replaces a direct
 // platform call (documented inline):
 //  - `@ApplicationContext context` dropped; its three uses became constructor
-//    seams — WorkManager enqueue/cancel → [DownloadEnqueueCoordinator], the
-//    notification group summary → [DownloadProgressNotifier], Coil preloading
-//    → [OfflineImagePreloader] (the preloader rode with the offline-metadata
-//    cluster to [OfflineDownloadWriterCore] at the D6 extraction).
+//    seams — WorkManager enqueue/cancel → [DownloadEnqueueCoordinator] and Coil
+//    preloading → [OfflineImagePreloader] (the preloader rode with the
+//    offline-metadata cluster to [OfflineDownloadWriterCore] at the D6
+//    extraction). The third — the notification group summary →
+//    [DownloadProgressNotifier] — has since left entirely: the summary surface
+//    (DownloadSummarySurface) observes the in-flight count flow and posts on
+//    transitions, so this repository's state changes reach the shade through
+//    its own DAO writes and the seam dep is gone.
 //  - concrete `DownloadStorageLayout` → the [DownloadStorageLayoutContract]
 //    interface (Android impl keeps its Context/StatFs logic verbatim) — the
 //    contract is now a dependency of the writer core only.
@@ -91,7 +95,6 @@ class DownloadRepositoryImpl(
     private val downloadsStore: DownloadsStore,
     private val storagePolicy: StoragePolicy,
     private val downloadEnqueuer: DownloadEnqueueCoordinator,
-    private val progressNotifier: DownloadProgressNotifier,
     /**
      * The one injected clock (the sibling repositories' seam): the retention
      * sweep computes its keep-days cutoff from it instead of reading the
@@ -225,7 +228,6 @@ class DownloadRepositoryImpl(
         // the row is gone.
         downloadEnqueuer.cancelWork(id)
         cleanupDownloadFiles(entity)
-        refreshDownloadSummary()
     }
 
     override suspend fun pauseDownload(id: String): Result<Unit> = runCatchingRethrowingCancellation {
@@ -242,7 +244,6 @@ class DownloadRepositoryImpl(
                 id, entity.downloadedBytes, DownloadStatus.PAUSED.name, DownloadPauseReason.USER.persistedValue,
             )
         }
-        refreshDownloadSummary()
     }
 
     override suspend fun resumeDownload(id: String): Result<Unit> = runCatchingRethrowingCancellation {
@@ -252,34 +253,22 @@ class DownloadRepositoryImpl(
             // auto-retry budget — the user has taken ownership of this row.
             downloadDao.markPendingForManualResume(id, entity.downloadedBytes)
         }
-        refreshDownloadSummary()
     }
 
     override suspend fun deleteDownload(id: String): Result<Unit> = runCatchingRethrowingCancellation {
         val entity = downloadDao.getDownloadById(id) ?: return@runCatchingRethrowingCancellation
         downloadEnqueuer.cancelWork(id)
         cleanupDownloadFiles(entity)
-        refreshDownloadSummary()
     }
 
-    /**
-     * Keeps the download summary surface in sync when this repository changes a
-     * row's state (pause/cancel/resume/retry/delete) — e.g. in-app controls
-     * that never cross a notification action receiver. Best-effort: a Room/
-     * notification hiccup must not fail the state change. The platform surface
-     * itself lives behind the [DownloadProgressNotifier] seam.
-     */
-    private suspend fun refreshDownloadSummary() {
-        runCatchingRethrowingCancellation {
-            progressNotifier.refreshSummary(downloadDao.getInFlightDownloadCount())
-        }
-    }
+    // The mutation sites never re-issue a COUNT query: the summary surface
+    // observes the in-flight count as a flow, so the DAO writes above ARE
+    // the summary trigger.
 
     override suspend fun retryDownload(id: String): Result<Unit> = runCatchingRethrowingCancellation {
         // A manual retry starts fresh — reset the bytes, clear the auto-retry
         // budget and reason, all in one UPDATE.
         downloadDao.markPendingForManualResume(id, 0L)
-        refreshDownloadSummary()
     }
 
     override suspend fun resumeInterruptedDownloads() {
@@ -346,7 +335,6 @@ class DownloadRepositoryImpl(
                 Log.w(TAG, "Failed to resume interrupted download $id", e)
             }
         }
-        refreshDownloadSummary()
     }
 
     override suspend fun getTotalDownloadedBytes(): Long =

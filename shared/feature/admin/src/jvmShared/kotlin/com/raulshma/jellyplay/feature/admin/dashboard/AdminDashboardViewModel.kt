@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.admin.dashboard
 import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import com.raulshma.jellyplay.core.data.repository.AdminRepository
+import com.raulshma.jellyplay.core.data.session.JellyPlayCapabilityState
 import com.raulshma.jellyplay.core.model.ItemCounts
 import com.raulshma.jellyplay.core.model.PendingConfirmation
 import com.raulshma.jellyplay.core.model.ScheduledTaskInfo
@@ -13,7 +14,11 @@ import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.ui.viewmodel.loadInto
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 
 @Immutable
 data class AdminDashboardState(
@@ -50,7 +55,7 @@ class AdminDashboardViewModel(
     private val jellyPlayStatusStore: com.raulshma.jellyplay.core.data.session.JellyPlayPluginStatusStore? = null,
     /**
      * The per-feature gate seam (probe AND the user's toggle) over the store
-     * above. Nullable-with-default; without it the probe-only combine below
+     * above. Nullable-with-default; without it the gate's probe-only fallback
      * keeps the pre-toggle behavior.
      */
     private val jellyPlayFeatureGate: com.raulshma.jellyplay.core.data.session.JellyPlayFeatureGate? = null,
@@ -67,26 +72,31 @@ class AdminDashboardViewModel(
     val uiState: StateFlow<AdminDashboardState> = _uiState.flow
 
     /**
-     * The nullable-seam gate every plugin tile rides (the transcodes monitor's
-     * exact shape): the ONE gate seam when wired, else the probe-only combine
-     * over the status store, else constant false — a tile whose seams are
-     * unwired (direct construction, tests) simply never renders.
+     * The shared capability gate (the plugin capability gate module) — the
+     * probe-once-while-UNKNOWN / re-arm-on-identity-reset / gate-reads-the-
+     * store discipline the tiles' gates used to re-wire per flow. Null with
+     * the store: tiles whose seams are unwired (direct construction, tests)
+     * simply never render.
      */
-    private fun pluginFeatureEnabled(featureKey: String): StateFlow<Boolean> =
-        when {
-            jellyPlayFeatureGate != null -> jellyPlayFeatureGate.isAvailable(featureKey)
-            jellyPlayStatusStore != null -> {
-                val store = jellyPlayStatusStore
-                stateIn(
-                    initial = false,
-                    flow = kotlinx.coroutines.flow.combine(store.status, store.features) { status, features ->
-                        status == com.raulshma.jellyplay.core.model.JellyPlayPluginStatus.AVAILABLE &&
-                            features.contains(featureKey)
-                    },
-                )
-            }
-            else -> kotlinx.coroutines.flow.MutableStateFlow(false)
-        }
+    private val capabilityGate = jellyPlayStatusStore?.let {
+        com.raulshma.jellyplay.core.data.session.JellyPlayCapabilityGate(it, scope)
+    }
+
+    /**
+     * The nullable-seam gate every plugin tile rides (the shared capability
+     * gate's tri-state mapped onto the tile's Boolean): the gate's verdict —
+     * the ONE gate seam when wired, its probe-only fallback when the toggle
+     * seam is absent, else constant false.
+     */
+    private fun pluginFeatureEnabled(featureKey: String): StateFlow<Boolean> {
+        val gate = capabilityGate
+            ?: return MutableStateFlow(false)
+        // Eagerly: the sendBroadcast backstop reads `.value` without holding a
+        // collector — the pre-gate-module flow was eagerly shared too.
+        return gate.state(featureKey, jellyPlayFeatureGate)
+            .map { it == JellyPlayCapabilityState.Available }
+            .stateIn(scope, SharingStarted.Eagerly, false)
+    }
 
     /**
      * Whether the dashboard may offer the companion-plugin transcodes monitor:
@@ -145,17 +155,12 @@ class AdminDashboardViewModel(
 
     /**
      * One capabilities probe; called when the dashboard becomes visible so the
-     * Transcodes tile's gate resolves without a settings detour. The store
-     * itself only acts while UNKNOWN (same discipline as the settings screen's
-     * sync section) — a stock server eats exactly one probe per visit.
+     * plugin tiles' gates resolve without a settings detour. The shared
+     * capability gate's arm — the store itself only acts while UNKNOWN — a
+     * stock server eats exactly one probe per visit.
      */
     fun refreshJellyPlayPluginStatus() {
-        val store = jellyPlayStatusStore ?: return
-        launch {
-            if (store.status.value == com.raulshma.jellyplay.core.model.JellyPlayPluginStatus.UNKNOWN) {
-                store.refresh()
-            }
-        }
+        capabilityGate?.arm()
     }
 
     /**

@@ -97,7 +97,6 @@ import com.raulshma.jellyplay.feature.details.generated.resources.detail_see_all
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_time_left_format
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_up_next
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_watched_badge
-import com.raulshma.jellyplay.feature.details.generated.resources.jellyplay_det_ratings_title
 import com.raulshma.jellyplay.feature.details.generated.resources.jellyplay_det_similar_badge
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.pluralStringResource
@@ -522,7 +521,7 @@ internal fun DetailHeaderSection(
                     // fallback), rendered after the critic chip. Standalone
                     // placement only — when the plugin ratings row is present
                     // the chips merge into THAT row's FlowRow instead
-                    // (DetailPluginRatingsSection, D9), so the strip never
+                    // (PluginRatingsSectionModule, D9), so the strip never
                     // renders twice. Chips deep-link to the provider when
                     // their source carries a url (the shared RatingsRow).
                     if (
@@ -1506,82 +1505,8 @@ internal fun DetailMoreLikeThisSection(
 
 // ── JellyPlay plugin sections (ADR 0010): ratings chips + scored similar ──
 
-/**
- * The companion plugin's aggregated external-ratings row (mdblist): one
- * non-clickable chip per source the server sent, rendered verbatim
- * ("Source Score"). Silent absence is the plugin contract — the admission
- * gate (state.pluginRatings non-empty) means a failed/null probe simply
- * never admits this slot; there is no error or loading state by design.
- *
- * D9 consolidation: this row is the detail screen's single RATINGS block.
- * The D4 no-plugin strip (state.externalRatings) merges into this same
- * FlowRow when it resolved chips — plugin sources first, then TMDB/IMDb —
- * standing down only while the enrichment's Ratings-feature probe says the
- * plugin owns ratings (the [DetailUiState.pluginSimilarSuppressesStock]
- * mirror: probe live AND this row actually rendering). When this row is
- * absent the D4 strip stands alone in the header metadata row instead —
- * [externalRatingsStandaloneInHeader] keeps the two placements exclusive.
- */
-@Composable
-internal fun DetailPluginRatingsSection(
-    delayIndex: Int,
-    state: DetailContentState,
-    bodyContentPad: Dp,
-) {
-    val ratings = state.pluginRatings
-    StaggeredDetailSection(visible = ratings.isNotEmpty(), delayIndex = delayIndex) {
-        Column(modifier = Modifier.padding(horizontal = bodyContentPad)) {
-            FadingItem {
-                Text(
-                    text = stringResource(Res.string.jellyplay_det_ratings_title),
-                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-                    modifier = Modifier.semantics { heading() },
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-            }
-            Spacer(Modifier.height(10.dp))
-            FadingItem {
-                // Chips wrap (the header metadata row's FlowRow shape) — the
-                // source set is small (≤6) and reads as one line on every
-                // width that matters.
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    ratings.forEach { entry ->
-                        val score = entry.score ?: return@forEach
-                        TagChip(
-                            label = "${entry.source} ${formatPluginScore(score)}",
-                            containerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f),
-                            contentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.95f),
-                            enabled = false,
-                        )
-                    }
-                    // The D4 chips, after the plugin sources (the D9 merge
-                    // order). Suppressed while the probe says the plugin owns
-                    // ratings AND this row is rendering — never duplicated.
-                    if (
-                        externalRatingsMergedIntoPluginRow(
-                            hasPluginRatings = ratings.isNotEmpty(),
-                            external = state.externalRatings,
-                            externalSuppressedByPlugin = state.externalRatingsSuppressedByPlugin,
-                        )
-                    ) {
-                        RatingsRow(
-                            critics = state.externalRatings.critics,
-                            audience = state.externalRatings.audience,
-                            imdb = state.externalRatings.imdb,
-                            tmdb = state.externalRatings.tmdb,
-                            rtUrl = state.externalRatings.rtUrl,
-                            imdbUrl = state.externalRatings.imdbUrl,
-                            tmdbUrl = state.externalRatings.tmdbUrl,
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
+// (The PLUGIN_RATINGS row renders through PluginRatingsSectionModule — the
+// detail section registry's wave-1 pilot; its renderer moved there verbatim.)
 
 /**
  * Score rendering for a plugin rating chip: whole scores stay integers

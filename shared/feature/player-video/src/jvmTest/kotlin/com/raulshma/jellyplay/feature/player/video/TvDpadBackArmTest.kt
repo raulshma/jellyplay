@@ -1,14 +1,16 @@
 package com.raulshma.jellyplay.feature.player.video
 
 import androidx.compose.ui.input.key.KeyEventType
-import com.raulshma.jellyplay.core.model.DpadControl
-import com.raulshma.jellyplay.core.model.InputPattern
 import com.raulshma.jellyplay.core.model.PlayerAction
+import com.raulshma.jellyplay.core.model.PlayerInputDefaults
+import com.raulshma.jellyplay.core.model.PlayerInputMap
 import com.raulshma.jellyplay.core.ui.tv.input.DpadAction
 import com.raulshma.jellyplay.core.ui.tv.input.DpadKeyEvent
 import com.raulshma.jellyplay.core.ui.tv.input.DpadSeekAcceleration
 import com.raulshma.jellyplay.core.ui.tv.components.DpadSeekState
 import com.raulshma.jellyplay.core.ui.tv.input.dpadKeyHandlerHandle
+import com.raulshma.jellyplay.feature.player.video.chrome.PlayerChromeController
+import com.raulshma.jellyplay.feature.player.video.state.PlayerInputDispatcher
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -43,28 +45,55 @@ class TvDpadBackArmTest {
         var executed: PlayerAction? = null
     }
 
+    /** Recording chrome + dispatcher over [backBinding]'s map row. */
+    private fun fixtures(
+        probe: Probe,
+        map: PlayerInputMap,
+    ): Pair<PlayerInputDispatcher, PlayerChromeController> {
+        val inputs = object {
+            var visible = true
+        }
+        val chrome = PlayerChromeController(
+            scope = kotlinx.coroutines.CoroutineScope(kotlin.coroutines.EmptyCoroutineContext),
+            isVisibleNow = { inputs.visible },
+            applyVisible = { inputs.visible = it; if (!it) probe.hiddenByArm = true },
+            isTv = { true },
+            controlsTimeoutMs = { 5_000L },
+            isSheetOpen = { false },
+        )
+        val dispatcher = PlayerInputDispatcher(
+            getMap = { map },
+            executeAction = { action ->
+                probe.executed = action
+                true
+            },
+        )
+        return dispatcher to chrome
+    }
+
     private fun fixture(
         backBinding: PlayerAction?,
     ): Pair<(DpadKeyEvent) -> Boolean, Probe> {
         val probe = Probe()
+        val map = if (backBinding == null) {
+            // Unbound BACK control: a disabled row reads as OFF.
+            PlayerInputDefaults.defaultMap()
+                .withBindingEnabled(PlayerInputDefaults.ID_DPAD_BACK, enabled = false)
+        } else {
+            PlayerInputDefaults.defaultMap()
+                .withBindingAction(PlayerInputDefaults.ID_DPAD_BACK, backBinding)
+        }
+        val (dispatcher, chrome) = fixtures(probe, map)
         val handler = dpadKeyHandlerHandle(
             tvDpadKeyConfig(
-                showControls = true,
-                isPlaying = true,
-                hideOsdOnPause = false,
-                onShowControlsChange = { hidden -> probe.hiddenByArm = !hidden },
+                dispatcher = dispatcher,
+                chrome = chrome,
                 seekState = seekState,
+                isPlaying = { true },
                 doTogglePlayPause = {},
                 doSeekBack = {},
                 doSeekForward = {},
                 performConfirmHaptic = {},
-                resolveAction = { pattern ->
-                    if (pattern == InputPattern.DPad(DpadControl.BACK)) backBinding else null
-                },
-                executePlayerAction = { action ->
-                    probe.executed = action
-                    true
-                },
             ),
         )
         return handler to probe
@@ -99,28 +128,19 @@ class TvDpadBackArmTest {
     fun `a rebound BACK control still routes to the executor`() {
         var hideCalls = 0
         val probe = Probe()
+        val map = PlayerInputDefaults.defaultMap()
+            .withBindingAction(PlayerInputDefaults.ID_DPAD_BACK, PlayerAction.TOGGLE_PLAY_PAUSE)
+        val (dispatcher, chrome) = fixtures(probe, map)
         val handler = dpadKeyHandlerHandle(
             tvDpadKeyConfig(
-                showControls = true,
-                isPlaying = true,
-                hideOsdOnPause = false,
-                onShowControlsChange = { hidden -> if (!hidden) hideCalls++ },
+                dispatcher = dispatcher,
+                chrome = chrome,
                 seekState = seekState,
+                isPlaying = { true },
                 doTogglePlayPause = {},
                 doSeekBack = {},
                 doSeekForward = {},
                 performConfirmHaptic = {},
-                resolveAction = { pattern ->
-                    if (pattern == InputPattern.DPad(DpadControl.BACK)) {
-                        PlayerAction.TOGGLE_PLAY_PAUSE
-                    } else {
-                        null
-                    }
-                },
-                executePlayerAction = { action ->
-                    probe.executed = action
-                    true
-                },
             ),
         )
 

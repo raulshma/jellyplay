@@ -74,10 +74,7 @@ class DetailSectionAdmissionTest {
         hasSeerrRecommendations: Boolean = true,
         hasSeerrSimilar: Boolean = true,
         hasSpecialFeatures: Boolean = true,
-        hasTmdbReviews: Boolean = true,
-        showReviews: Boolean = true,
         hasAttachedDownload: Boolean = false,
-        hasPluginRatings: Boolean = false,
         hasPluginSimilar: Boolean = false,
         suppressStockSimilar: Boolean = false,
         hasFranchiseCollections: Boolean = false,
@@ -100,10 +97,7 @@ class DetailSectionAdmissionTest {
         hasSeerrRecommendations = hasSeerrRecommendations,
         hasSeerrSimilar = hasSeerrSimilar,
         hasSpecialFeatures = hasSpecialFeatures,
-        hasTmdbReviews = hasTmdbReviews,
-        showReviews = showReviews,
         hasAttachedDownload = hasAttachedDownload,
-        hasPluginRatings = hasPluginRatings,
         hasPluginSimilar = hasPluginSimilar,
         suppressStockSimilar = suppressStockSimilar,
         hasFranchiseCollections = hasFranchiseCollections,
@@ -118,6 +112,10 @@ class DetailSectionAdmissionTest {
 
     @Test
     fun remoteMovie_fullAdmission_matchesInlineEmission() {
+        // PLUGIN_RATINGS and TMDB_REVIEWS left the fold in the wave-1 section
+        // module pilot (their modules own those rows now) — this pin covers the
+        // hand-written sections only; the merged emission is pinned by
+        // DetailSectionRegistryTest.
         assertEquals(
             listOf(
                 DetailSectionKind.HEADER,
@@ -131,12 +129,11 @@ class DetailSectionAdmissionTest {
                 DetailSectionKind.SEERR_RECOMMENDATIONS,
                 DetailSectionKind.SEERR_SIMILAR,
                 DetailSectionKind.SPECIAL_FEATURES,
-                DetailSectionKind.TMDB_REVIEWS,
             ),
             admission(MediaType.MOVIE, hasAttachedDownload = false),
         )
         assertEquals(
-            listOf(0, 1, 2, 3, 4, 8, 9, 10, 11, 12, 13, 14),
+            listOf(0, 1, 2, 3, 4, 8, 9, 10, 11, 12, 13),
             admission(MediaType.MOVIE).indices(),
         )
     }
@@ -178,7 +175,6 @@ class DetailSectionAdmissionTest {
                 hasSeerrRecommendations = false,
                 hasSeerrSimilar = false,
                 hasSpecialFeatures = false,
-                hasTmdbReviews = false,
             ),
         )
     }
@@ -194,8 +190,10 @@ class DetailSectionAdmissionTest {
         val sections = admission(MediaType.MOVIE, showActionButtons = false)
         assertFalse(sections.contains(DetailSectionKind.ACTION_ROW))
         assertEquals(0, sections.first().delayIndex)
-        // Everything else keeps its exact slot.
-        assertEquals(listOf(0, 2, 3, 4, 8, 9, 10, 11, 12, 13, 14), sections.indices())
+        // Everything else keeps its exact slot. Slot 14 (TMDB_REVIEWS) is
+        // registry-owned since the section-module wave — pinned by
+        // DetailSectionRegistryTest's merged-emission test, not by the fold.
+        assertEquals(listOf(0, 2, 3, 4, 8, 9, 10, 11, 12, 13), sections.indices())
     }
 
     @Test
@@ -236,8 +234,10 @@ class DetailSectionAdmissionTest {
         assertFalse(sections.contains(DetailSectionKind.COLLECTION_ITEMS))
         assertFalse(sections.contains(DetailSectionKind.UP_NEXT))
         assertFalse(sections.contains(DetailSectionKind.BOOK_READING_CARD))
+        // Slot 14 (TMDB_REVIEWS) is registry-owned since the section-module
+        // wave — pinned by DetailSectionRegistryTest's merged-emission test.
         assertEquals(
-            listOf(0, 1, 2, 3, 4, 6, 8, 9, 10, 11, 12, 13, 14),
+            listOf(0, 1, 2, 3, 4, 6, 8, 9, 10, 11, 12, 13),
             sections.indices(),
         )
     }
@@ -255,7 +255,6 @@ class DetailSectionAdmissionTest {
             hasSeerrRecommendations = false,
             hasSeerrSimilar = false,
             hasSpecialFeatures = false,
-            hasTmdbReviews = false,
         )
         assertEquals(DetailSectionKind.DOWNLOAD_FOOTER, sections.last())
         assertEquals(15, sections.last().delayIndex)
@@ -313,7 +312,6 @@ class DetailSectionAdmissionTest {
             hasSeerrRecommendations = false,
             hasSeerrSimilar = false,
             hasSpecialFeatures = false,
-            hasTmdbReviews = false,
         )
         assertEquals(
             listOf(
@@ -399,7 +397,6 @@ class DetailSectionAdmissionTest {
                 DetailSectionKind.SEERR_RECOMMENDATIONS,
                 DetailSectionKind.SEERR_SIMILAR,
                 DetailSectionKind.SPECIAL_FEATURES,
-                DetailSectionKind.TMDB_REVIEWS,
             ),
             sections,
         )
@@ -428,7 +425,7 @@ class DetailSectionAdmissionTest {
         // media type, never the collection members.
     }
 
-    // ── Seerr / special-features / reviews gates ──────────────────────────
+    // ── Seerr / special-features gates ────────────────────────────────────
 
     @Test
     fun seerrSections_requireConnectionAndRecommendationEnabled() {
@@ -472,18 +469,8 @@ class DetailSectionAdmissionTest {
         )
     }
 
-    @Test
-    fun reviews_admitOnlyWithContent() {
-        assertFalse(admission(MediaType.MOVIE, hasTmdbReviews = false).contains(DetailSectionKind.TMDB_REVIEWS))
-        assertEquals(14, admission(MediaType.MOVIE).first { it == DetailSectionKind.TMDB_REVIEWS }.delayIndex)
-    }
-
-    @Test
-    fun reviews_showReviewsPreferenceGatesTheWholeSlot() {
-        // D9: show_reviews off hides the section even with reviews fetched.
-        assertFalse(admission(MediaType.MOVIE, showReviews = false).contains(DetailSectionKind.TMDB_REVIEWS))
-        assertTrue(admission(MediaType.MOVIE, showReviews = true).contains(DetailSectionKind.TMDB_REVIEWS))
-    }
+    // (The PLUGIN_RATINGS / TMDB_REVIEWS admission pins moved to
+    // DetailSectionRegistryTest — the wave-1 section modules own those rows.)
 
     // ── delayIndex ratchet ────────────────────────────────────────────────
 
@@ -604,7 +591,6 @@ class DetailSectionAdmissionTest {
             selectedAudioIndex = null,
             isDownloading = false,
             isDownloadingSeries = false,
-            activeDownload = null,
             loadState = DetailUiLoadState.Loaded,
             albumTracks = emptyList(),
             collectionItems = emptyList(),
@@ -655,7 +641,6 @@ class DetailSectionAdmissionTest {
             selectedAudioIndex = null,
             isDownloading = false,
             isDownloadingSeries = false,
-            activeDownload = null,
             loadState = DetailUiLoadState.Loaded,
             albumTracks = listOf(item),
             collectionItems = emptyList(),
@@ -704,7 +689,6 @@ class DetailSectionAdmissionTest {
                 selectedAudioIndex = null,
                 isDownloading = false,
                 isDownloadingSeries = false,
-                activeDownload = null,
                 loadState = DetailUiLoadState.Loaded,
                 albumTracks = emptyList(),
                 collectionItems = emptyList(),
@@ -729,19 +713,12 @@ class DetailSectionAdmissionTest {
     // ── JellyPlay plugin sections (ADR 0010) ────────────────────────────
 
     @Test
-    fun pluginSections_admitOnlyWhenTheirContentArrived() {
-        // Silent absence: no plugin data → neither section in the body at all.
+    fun pluginSimilar_admitsOnlyWhenItsContentArrived() {
+        // Silent absence: no plugin data → the plugin row not in the fold at
+        // all (the PLUGIN_RATINGS row's pins moved to DetailSectionRegistryTest
+        // with its module).
         val bare = admission(MediaType.MOVIE)
-        assertFalse(bare.contains(DetailSectionKind.PLUGIN_RATINGS))
         assertFalse(bare.contains(DetailSectionKind.JELLYPLAY_SIMILAR))
-
-        // Ratings present → admitted right after OVERVIEW (same slot 3).
-        val withRatings = admission(MediaType.MOVIE, hasPluginRatings = true)
-        assertTrue(withRatings.contains(DetailSectionKind.PLUGIN_RATINGS))
-        val ratingsIdx = withRatings.indexOf(DetailSectionKind.PLUGIN_RATINGS)
-        val overviewIdx = withRatings.indexOf(DetailSectionKind.OVERVIEW)
-        assertEquals(overviewIdx + 1, ratingsIdx, "ratings row follows the overview")
-        assertEquals(3, DetailSectionKind.PLUGIN_RATINGS.delayIndex)
 
         // Scored similar present → the plugin row admits (same slot 10 as the
         // stock row), but suppression is NOT tied to its presence: on hosts
@@ -768,10 +745,6 @@ class DetailSectionAdmissionTest {
         // already contains MORE_LIKE_THIS — re-asserted here against the
         // plugin row's absence).
         assertTrue(bare.contains(DetailSectionKind.MORE_LIKE_THIS))
-
-        // The two are independent.
-        assertFalse(withRatings.contains(DetailSectionKind.JELLYPLAY_SIMILAR))
-        assertFalse(withSimilar.contains(DetailSectionKind.PLUGIN_RATINGS))
     }
 }
 

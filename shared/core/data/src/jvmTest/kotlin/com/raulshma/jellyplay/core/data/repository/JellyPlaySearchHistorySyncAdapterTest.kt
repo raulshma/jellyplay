@@ -142,12 +142,12 @@ class JellyPlaySearchHistorySyncAdapterTest {
         // pending outbound tombstone the engine pushes.
         database.searchHistoryDao().deleteById(rows().single().id)
 
-        assertEquals(setOf(key), adapter.deletedKeys())
+        assertEquals(setOf(key), adapter.deletedKeys(adapter.snapshot()))
 
         // The engine's confirmation (or an inbound tombstone): the mirror
         // entry goes, the key reads neither dirty nor deleted.
         adapter.deleteRemote(setOf(key))
-        assertTrue(adapter.deletedKeys().isEmpty())
+        assertTrue(adapter.deletedKeys(adapter.snapshot()).isEmpty())
         assertTrue(rows().isEmpty())
         assertNullMirror(key)
     }
@@ -162,7 +162,7 @@ class JellyPlaySearchHistorySyncAdapterTest {
         adapter.deleteRemote(setOf(alphaKey))
 
         assertEquals(listOf("beta"), rows().map { it.query })
-        assertTrue(adapter.deletedKeys().isEmpty())
+        assertTrue(adapter.deletedKeys(adapter.snapshot()).isEmpty())
         assertTrue(adapter.dirtyValues(adapter.snapshot()).isEmpty())
     }
 
@@ -175,7 +175,7 @@ class JellyPlaySearchHistorySyncAdapterTest {
         database.searchHistoryDao().clearAll(USER)
 
         assertTrue(adapter.snapshot().isEmpty())
-        assertEquals(2, adapter.deletedKeys().size)
+        assertEquals(2, adapter.deletedKeys(adapter.snapshot()).size)
     }
 
     @Test

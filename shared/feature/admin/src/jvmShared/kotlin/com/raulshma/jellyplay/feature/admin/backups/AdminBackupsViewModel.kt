@@ -1,6 +1,8 @@
 package com.raulshma.jellyplay.feature.admin.backups
 
 import androidx.compose.runtime.Immutable
+import com.raulshma.jellyplay.core.concurrency.PollSpec
+import com.raulshma.jellyplay.core.concurrency.boundedPoll
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import com.raulshma.jellyplay.core.data.repository.AdminBackupRepository
@@ -9,7 +11,6 @@ import com.raulshma.jellyplay.core.model.BackupComponentOptions
 import com.raulshma.jellyplay.core.model.ServerBackup
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.core.ui.viewmodel.loadInto
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.StateFlow
 
@@ -171,15 +172,22 @@ class AdminBackupsViewModel(
      * Polls the health probe until the restarting server answers again. The
      * probe is the address-failover machinery's reachability check
      * (`GET /System/Info/Public` against the exact address — never rerouted
-     * to an alternate while the server is down).
+     * to an alternate while the server is down). The hand-rolled
+     * repeat-delay-probe loop this used to be is one [boundedPoll]
+     * registration now: [PollSpec.initialDelayMs] keeps the downtime gap
+     * BEFORE the first probe (the server needs its 3s to restart — probing
+     * straight after the 204 is known-useless), the round cap is the
+     * downtime budget.
      */
     private suspend fun awaitServerRestart(): Boolean {
         val address = authRepository.currentServer.first()?.address ?: return false
-        repeat(RESTORE_POLL_ATTEMPTS) {
-            delay(RESTORE_POLL_INTERVAL_MS)
-            if (authRepository.probeServer(address).isSuccess) return true
-        }
-        return false
+        return boundedPoll(
+            PollSpec(
+                intervalMs = RESTORE_POLL_INTERVAL_MS,
+                maxAttempts = RESTORE_POLL_ATTEMPTS,
+                initialDelayMs = RESTORE_POLL_INTERVAL_MS,
+            ),
+        ) { if (authRepository.probeServer(address).isSuccess) true else null } == true
     }
 
     private companion object {

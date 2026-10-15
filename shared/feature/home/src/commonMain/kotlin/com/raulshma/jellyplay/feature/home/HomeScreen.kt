@@ -211,6 +211,14 @@ internal data class HomeRenderInputs(
     val seerrCardLoadingState: SeerrCardLoadingState,
     /** Focus requester attached to the hero row (D-pad enter routing). */
     val heroFocusRequester: FocusRequester,
+    /**
+     * The refresher's per-row spinner mirrors (edge-pull + dice-roll
+     * in-flight sets — see [HomeRefreshSpinnerState]). The content rows
+     * leaf-collect this at ROW scope (the `pendingSyncEntries` pattern), so
+     * a single-row refresh's spin-up/data/spin-down emissions recompose only
+     * the matching row — never the MainHomeContent orchestrator.
+     */
+    val refreshSpinners: StateFlow<HomeRefreshSpinnerState>,
 )
 
 @Composable
@@ -541,6 +549,7 @@ private fun MainHomeContent(
         seerrPrefetch,
         seerrCardLoadingState,
         heroFocusRequester,
+        viewModel.refreshSpinners,
     ) {
         HomeRenderInputs(
             mediaOnItemClick = mediaOnItemClick,
@@ -553,6 +562,7 @@ private fun MainHomeContent(
             seerrPrefetch = seerrPrefetch,
             seerrCardLoadingState = seerrCardLoadingState,
             heroFocusRequester = heroFocusRequester,
+            refreshSpinners = viewModel.refreshSpinners,
         )
     }
 
@@ -874,11 +884,11 @@ private fun HomeSurfaceContent(
             // card + genre rail mount here instead, directly above the
             // content list (the closest HomeScreen-owned slot to the plan's
             // "between hero and the first row"). Both are ONLINE-FEED-ONLY:
-            // `s.feed is HomeFeed.Online` is the same suppression posture the
+            // `s.feed is HomeRenderFeed.Online` is the same suppression posture the
             // banner's `online?.newsletterBannerVisible` gate applies (that
-            // gate reads HomeContentState.online = feed as? HomeFeed.Online),
+            // gate reads HomeContentState.online = feed as? HomeRenderFeed.Online),
             // so an offline render (explicit or implicit) shows neither.
-            val onlineFeed = s.feed is HomeFeed.Online
+            val onlineFeed = s.feed is HomeRenderFeed.Online
             // Documented relative order: the stats card first, the genre
             // rail directly above the first row (the chips read as the
             // row-adjacent quick nav; the plan leaves the pair unordered).
@@ -927,17 +937,10 @@ private fun HomeSurfaceContent(
                             .filter { it.enabled && it.source == DiscoverRowSource.JELLYFIN && it.filters.sortBy == SortOption.RANDOM }
                             .mapTo(mutableSetOf()) { it.id }
                     },
-                    // The dice-roll in-flight mirror: tumbles the
-                    // matching row's dice icon while the re-fetch runs.
-                    rollingDiscoverRowIds = state.rollingDiscoverRowIds,
-                    // The edge-pull in-flight mirror: spins the matching
-                    // row's edge chip while its single-row refetch runs.
-                    refreshingSectionIds = state.refreshingSectionIds,
                     statusBanner = implicitOfflineBanner,
                     // H12 visit memory (the sibling one-liner): the
                     // NEW-badge predicate's previous-visit threshold.
                     homeLastVisitEpochMs = state.homeLastVisitEpochMs,
-                    presenceChips = state.presenceChips,
                     statsCard = statsCardData,
                     statsCardEnabled = state.statsCardEnabled,
                     genreChips = state.genreChips,
@@ -1003,6 +1006,10 @@ private fun HomeSurfaceContent(
                 renderInputs = renderInputs,
                 listState = listState,
                 density = density,
+                // H19: the chips' own flow (see HomeViewModel.presenceChips) —
+                // collected at the chip row inside the content list, never
+                // mirrored through the whole uiState.
+                presenceChips = viewModel.presenceChips,
             )
         }
     }

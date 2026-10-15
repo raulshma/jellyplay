@@ -5,12 +5,15 @@ import com.raulshma.jellyplay.core.network.api.JellyPlaySettingWrite
 import com.raulshma.jellyplay.core.network.api.JellyPlaySettingsBatchResult
 import com.raulshma.jellyplay.core.network.api.JellyPlaySettingsEntry
 import com.raulshma.jellyplay.core.network.api.JellyPlaySettingsSnapshot
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 
@@ -49,14 +52,19 @@ interface ProfileSyncAdapter {
     /**
      * The keys deleted locally since the last [markSynced]/[deleteRemote] —
      * the adapter's outbound tombstones (mirror holds them, [snapshot] no
-     * longer does). The engine pushes each as a null-value write and confirms
-     * the applied ones with [deleteRemote]; a rejected delete keeps its mirror
-     * entry and retries next cycle. Default: none — value-only namespaces
+     * longer does). [current] is the same cycle-start snapshot the engine
+     * handed [dirtyValues] — deletions diff against it, never against a
+     * second store read (the same convention [dirtyValues] established; a
+     * re-read here would cost every mirror-backed adapter its whole store
+     * once per cycle). The engine pushes each as a null-value write and
+     * confirms the applied ones with [deleteRemote]; a rejected delete keeps
+     * its mirror entry and retries next cycle. Default: none — value-only
+     * namespaces
      * (e.g. prefs, where a removed key means "reset to default", never
      * "deleted everywhere") keep the empty set rather than turning every
      * local key removal into a cross-device delete.
      */
-    suspend fun deletedKeys(): Set<String> = emptySet()
+    suspend fun deletedKeys(current: Map<String, JsonElement>): Set<String> = emptySet()
 
     /** Applies remote values locally (the engine passes only clean keys this device lost). */
     suspend fun applyRemote(entries: Map<String, JsonElement>)
@@ -145,6 +153,15 @@ class ProfileSyncRepository(
      */
     private val loadNamespaceEnabled: (suspend (String) -> Boolean)? = null,
     private val saveNamespaceEnabled: (suspend (String, Boolean) -> Unit)? = null,
+    /**
+     * The dispatcher one cycle's work runs on (the resolved pull, the
+     * per-adapter store reads, the delta sweep): a `requestSync` fired from
+     * Main must not drag the whole cycle through it. Default
+     * [Dispatchers.Default]; runTest-based suites inject their test
+     * dispatcher — a hardcoded Default would strand the cycle off the
+     * virtual-time scheduler.
+     */
+    private val syncDispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) {
 
     /** The latest cycle's sync outcome for the settings screen. */
@@ -169,6 +186,12 @@ class ProfileSyncRepository(
          * namespace after the LAST cycle — the sync screen's "pending" face,
          * per namespace row and in total. Disabled (selectively-synced-off)
          * namespaces never contribute: they are opted out, not pending.
+         * Measured arithmetically against the cycle-start snapshot: pending
+         * is what that basis held (dirty ∪ unconfirmed tombstones) minus the
+         * keys the cycle confirmed resolved (adopts, applied pushes, applied
+         * tombstones, dirty keys the server already agreed with) — a local
+         * write landing mid-cycle counts on the NEXT cycle's basis, never a
+         * re-read.
          * Empty before the first cycle.
          */
         val pendingByNamespace: Map<String, Int> = emptyMap(),
@@ -199,6 +222,18 @@ class ProfileSyncRepository(
         val ours: JsonElement?,
         val theirs: JsonElement?,
         val theirsUpdatedAt: Long = 0,
+    )
+
+    /**
+     * One adapter's cycle-start view — the snapshot the whole cycle runs on
+     * plus its dirty/tombstone diffs. The pending face computes arithmetically
+     * over this (the mirror-cycle-read rule): no face of the cycle re-reads
+     * the adapter's mirror after this one read.
+     */
+    private data class CycleNamespaceState(
+        val local: Map<String, JsonElement>,
+        val dirty: Map<String, JsonElement>,
+        val deletes: Set<String>,
     )
 
     private val _state = MutableStateFlow(SyncState())
@@ -331,7 +366,7 @@ class ProfileSyncRepository(
         mutex.withLock { runCycle(forceRemoteWins = true) }
     }
 
-    private suspend fun runCycle(forceRemoteWins: Boolean = false) {
+    private suspend fun runCycle(forceRemoteWins: Boolean = false) = withContext(syncDispatcher) {
         // The gate is the probe ladder AND the registry's `settings-sync` key —
         // the ONE gating mechanism (ADR 0010 §1/§6): a server whose handshake
         // omits the key (admin-disabled, or the plugin predates the sync wave)
@@ -343,7 +378,7 @@ class ProfileSyncRepository(
             // nothing synced, nothing claimed, lastSyncAt keeps its
             // previous value.
             _state.value = _state.value.copy(inFlight = false)
-            return
+            return@withContext
         }
 
         _state.value = _state.value.copy(inFlight = true)
@@ -380,19 +415,37 @@ class ProfileSyncRepository(
             val cycleState = cycleAdapters.associate { adapter ->
                 val local = adapter.snapshot()
                 val dirty = adapter.dirtyValues(local)
-                adapter.namespace to (local to dirty)
+                // The tombstone diff rides the same face: the pending face
+                // below computes arithmetically over (dirty, deletes) — it
+                // never re-reads the mirror (the mirror-cycle-read rule,
+                // GLOSSARY.md).
+                val deletes = adapter.deletedKeys(local)
+                adapter.namespace to CycleNamespaceState(local, dirty, deletes)
             }
             var adopted = 0
             var pushed = 0
             val fatalRejects = mutableMapOf<String, String>()
             val conflicts = mutableListOf<SyncConflict>()
+            /**
+             * Per namespace, the cycle-start keys this cycle CONFIRMED
+             * resolved — adopted keys, pushed-and-applied keys, dirty keys
+             * the server already agreed with, applied tombstones (push and
+             * delta faces). The pending face subtracts these from the
+             * cycle-start basis instead of re-diffing.
+             */
+            val resolvedKeys = mutableMapOf<String, MutableSet<String>>()
 
             for (adapter in cycleAdapters) {
-                val (local, dirty) = cycleState.getValue(adapter.namespace)
+                val state = cycleState.getValue(adapter.namespace)
+                val local = state.local
+                val dirty = state.dirty
+                val resolvedThisCycle = resolvedKeys.getOrPut(adapter.namespace) { mutableSetOf() }
                 // The locally-deleted keys this cycle should push as
-                // tombstones. The recovery path pushes nothing — local deletes
-                // included (they are abandoned; the server's view wins).
-                val deletes = if (forceRemoteWins) emptySet() else adapter.deletedKeys()
+                // tombstones — diffed on the cycle-start face above, so the
+                // tombstone check re-reads nothing. The recovery path pushes
+                // nothing — local deletes included (they are abandoned; the
+                // server's view wins).
+                val deletes = if (forceRemoteWins) emptySet() else state.deletes
                 val remote = resolved.settings
                     .filter { it.ns == adapter.namespace }
                     .associateBy { it.key }
@@ -413,14 +466,35 @@ class ProfileSyncRepository(
                     adapter.applyRemote(adopt.mapValues { it.value.value })
                     adapter.markSynced(adopt.mapValues { it.value.value })
                     adopted += adopt.size
+                    resolvedThisCycle += adopt.keys
+                }
+
+                if (forceRemoteWins) {
+                    // The recovery path pushes nothing, and its adopt filter
+                    // only takes DIFFERING keys — a dirty key the server
+                    // already agrees with skipped it. Confirmed equal here, or
+                    // the key would re-read dirty (and pending) forever.
+                    val confirmedEqual = dirty.filter { (key, value) -> remote[key]?.value == value }
+                    if (confirmedEqual.isNotEmpty()) {
+                        adapter.markSynced(confirmedEqual)
+                        resolvedThisCycle += confirmedEqual.keys
+                    }
+                    continue
                 }
 
                 // PUSH: local changes the server hasn't seen yet — value edits
                 // plus [deletes] as null-value writes (the wire's delete op).
-                // The recovery path pushes nothing — it exists to take the
-                // server's view.
-                if (forceRemoteWins) continue
                 val toPush = dirty.filter { (key, value) -> remote[key]?.value != value }
+                // The rest of the dirty set: keys whose remote row already
+                // equals the local value. No write to send, but the mirror
+                // must record the agreement — unconfirmed, the key would
+                // re-read dirty (and pending) on every cycle while both sides
+                // hold the same value.
+                val confirmedEqual = dirty.filter { (key, value) -> remote[key]?.value == value }
+                if (confirmedEqual.isNotEmpty()) {
+                    adapter.markSynced(confirmedEqual)
+                    resolvedThisCycle += confirmedEqual.keys
+                }
                 if (toPush.isEmpty() && deletes.isEmpty()) continue
 
                 val writes = toPush.map { (key, value) ->
@@ -447,13 +521,16 @@ class ProfileSyncRepository(
                 // Only applied writes are marked synced: a `stale-write` reject
                 // keeps its key dirty so the next cycle retries and then adopts
                 // the winner through the ADOPT phase.
-                adapter.markSynced(toPush.filterKeys { key -> key in appliedKeys })
+                val appliedPushes = toPush.filterKeys { key -> key in appliedKeys }
+                adapter.markSynced(appliedPushes)
+                resolvedThisCycle += appliedPushes.keys
                 // Applied tombstones confirm through the same SPI the inbound
                 // deletes use — clearing the mirror entries so the delete stops
                 // reading as pending; a rejected delete keeps its entry and
                 // retries next cycle, exactly like a stale-write value.
                 val appliedDeletes = deletes.filter { it in appliedKeys }.toSet()
                 if (appliedDeletes.isNotEmpty()) adapter.deleteRemote(appliedDeletes)
+                resolvedThisCycle += appliedDeletes
                 collectFatalRejects(adapter.namespace, result, fatalRejects)
                 collectConflicts(adapter.namespace, result, remote, toPush, deletes, conflicts)
             }
@@ -463,12 +540,22 @@ class ProfileSyncRepository(
             // since this device's cursor, paged through to the end. Advances
             // the cursor only on a fully drained sweep; a failed page leaves
             // the cursor (and the state's error face) to the catch below.
-            adopted += pullDelta(resolved, forceRemoteWins, enabledNamespaces, cycleState)
+            adopted += pullDelta(resolved, forceRemoteWins, enabledNamespaces, cycleState, resolvedKeys)
 
-            // The pending face, measured AFTER the cycle: what each synced
-            // namespace still holds un-pushed (dirty or deleted-but-unconfirmed).
+            // The pending face, computed ARITHMETICALLY against the SAME
+            // cycle-start basis the whole cycle ran on (the mirror-cycle-read
+            // rule — no adapter re-read here): what the basis held pending
+            // (dirty ∪ outbound tombstones) minus the keys this cycle
+            // confirmed resolved (adopts, applied pushes, applied tombstones,
+            // server-agreed dirty keys — all folded into [resolvedKeys]).
+            // Conservative by construction: a local write landing mid-cycle
+            // is invisible to the basis and counts next cycle, never this
+            // one; a re-snapshot here would pay one more full-store read per
+            // adapter and could count a write that landed mid-cycle.
             val pendingByNamespace = cycleAdapters.associate { adapter ->
-                val pending = adapter.dirtyValues(adapter.snapshot()).size + adapter.deletedKeys().size
+                val state = cycleState.getValue(adapter.namespace)
+                val pendingKeys = state.dirty.keys + state.deletes
+                val pending = pendingKeys.size - resolvedKeys[adapter.namespace].orEmpty().intersect(pendingKeys).size
                 adapter.namespace to pending
             }.filterValues { it > 0 }
 
@@ -504,8 +591,10 @@ class ProfileSyncRepository(
      * gates the sweep per adapter (selective sync: a disabled namespace's
      * pending pages still advance the cursor — the rows are skipped, not
      * replayed forever). [cycleState] is the cycle-start per-adapter
-     * (snapshot, dirty) pair the push face already read — reused here so the
-     * sweep never re-reads a store per page.
+     * view the push face already read — reused here so the sweep never
+     * re-reads a store per page. [resolvedKeys] collects the keys the
+     * sweep's adopts and tombstones settle, for the pending face's
+     * arithmetic.
      *
      * Returns the number of adopted keys. On success the cursor advances to
      * the last page's `head` (persisted through the seam when wired);
@@ -516,7 +605,8 @@ class ProfileSyncRepository(
         resolved: JellyPlaySettingsSnapshot,
         forceRemoteWins: Boolean,
         enabledNamespaces: Set<String>,
-        cycleState: Map<String, Pair<Map<String, JsonElement>, Map<String, JsonElement>>>,
+        cycleState: Map<String, CycleNamespaceState>,
+        resolvedKeys: MutableMap<String, MutableSet<String>>,
     ): Int {
         // The keys the resolved pull already arbitrated, grouped per namespace
         // once per sweep — the adopt filter below consults these sets instead
@@ -537,7 +627,9 @@ class ProfileSyncRepository(
             ).getOrThrow()
             for (adapter in adapters) {
                 if (adapter.namespace !in enabledNamespaces) continue
-                val (local, dirty) = cycleState.getValue(adapter.namespace)
+                val state = cycleState.getValue(adapter.namespace)
+                val local = state.local
+                val dirty = state.dirty
                 val arbitrated = arbitratedKeys[adapter.namespace] ?: emptySet()
 
                 // Changed keys: the resolved view this cycle pulled already
@@ -545,12 +637,17 @@ class ProfileSyncRepository(
                 // value for one of them would fight the profile merge, so only
                 // keys the resolved payload did NOT arbitrate adopt here (the
                 // freshness tail: writes that landed between the two reads ride
-                // the next cycle's resolved pull).
+                // the next cycle's resolved pull). Pending local deletes are
+                // excluded on the same grounds as the resolved adopt face: a
+                // value row under a still-standing tombstone race would
+                // resurrect what the user just removed — the tombstone push
+                // has to land first.
                 val adopt = page.settings
                     .filter { it.ns == adapter.namespace }
                     .associate { it.key to it.value }
                     .filter { (key, value) ->
                         key !in dirty &&
+                            key !in state.deletes &&
                             local[key] != value &&
                             (forceRemoteWins || key !in arbitrated)
                     }
@@ -558,17 +655,24 @@ class ProfileSyncRepository(
                     adapter.applyRemote(adopt)
                     adapter.markSynced(adopt)
                     adopted += adopt.size
+                    resolvedKeys.getOrPut(adapter.namespace) { mutableSetOf() } += adopt.keys
                 }
 
                 // Deleted keys: the server tombstoned them — the delete wins
                 // over a local un-pushed edit (roaming deletes must not
                 // resurrect), and over a clean synced value (the delete IS the
-                // news).
+                // news). The tombstone settles the cycle-start basis too: the
+                // local value AND its mirror entry are gone, so the key —
+                // pending dirty, pending delete, or synced — can no longer
+                // read as pending.
                 val deletes = page.deleted
                     .filter { it.ns == adapter.namespace }
                     .map { it.key }
                     .toSet()
-                if (deletes.isNotEmpty()) adapter.deleteRemote(deletes)
+                if (deletes.isNotEmpty()) {
+                    adapter.deleteRemote(deletes)
+                    resolvedKeys.getOrPut(adapter.namespace) { mutableSetOf() } += deletes
+                }
             }
             cursor = page.nextCursor
             if (page.head > head) head = page.head

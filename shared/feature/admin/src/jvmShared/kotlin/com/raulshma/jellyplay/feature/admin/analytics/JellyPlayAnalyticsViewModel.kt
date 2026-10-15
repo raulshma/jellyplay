@@ -2,11 +2,11 @@ package com.raulshma.jellyplay.feature.admin.analytics
 
 import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.data.log.Log
+import com.raulshma.jellyplay.core.data.session.JellyPlayCapabilityGate
+import com.raulshma.jellyplay.core.data.session.JellyPlayCapabilityState
 import com.raulshma.jellyplay.core.data.session.JellyPlayFeatureGate
 import com.raulshma.jellyplay.core.data.session.JellyPlayPluginStatusStore
-import com.raulshma.jellyplay.core.data.session.isAvailableOrProbe
 import com.raulshma.jellyplay.core.model.JellyPlayPluginFeatures
-import com.raulshma.jellyplay.core.model.JellyPlayPluginStatus
 import com.raulshma.jellyplay.core.model.PlaybackActivityPoint
 import com.raulshma.jellyplay.core.network.api.JellyPlayAnalyticsOverview
 import com.raulshma.jellyplay.core.network.api.JellyPlayAnalyticsSession
@@ -19,19 +19,19 @@ import com.raulshma.jellyplay.feature.admin.transcodes.TranscodePlayMethod
 import com.raulshma.jellyplay.feature.admin.transcodes.formatBitrate
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
 /**
  * The admin analytics dashboard's gate — plugin AVAILABLE **and** the
  * `analytics` feature key present **and** the user's per-feature toggle on
- * (the transcodes monitor's gate shape; ADR 0010: the capability registry is
- * the ONLY gating mechanism, the toggle rides [JellyPlayFeatureGate], the ONE
- * per-feature seam). Admin-ness is enforced upstream by the admin area's
- * AdminRouteContainer — the existing admin gate, deliberately not re-built
- * here.
+ * (the shared [JellyPlayCapabilityGate] verdict — the transcodes monitor's
+ * gate shape, one home since the plugin capability gate module; ADR 0010: the
+ * capability registry is the ONLY gating mechanism, the toggle rides
+ * [JellyPlayFeatureGate], the ONE per-feature seam). Admin-ness is enforced
+ * upstream by the admin area's AdminRouteContainer — the existing admin gate,
+ * deliberately not re-built here. (The local `AnalyticsGate` enum this VM
+ * used to declare is the shared [JellyPlayCapabilityState] now.)
  */
-enum class AnalyticsGate { Unknown, Available, Unavailable }
 
 /** The window roll-up the totals row renders (durations pre-humanized). */
 @Immutable
@@ -105,7 +105,7 @@ data class AnalyticsState(
     val isLoading: Boolean = true,
     val isRefreshing: Boolean = false,
     val error: String? = null,
-    val gate: AnalyticsGate = AnalyticsGate.Unknown,
+    val gate: JellyPlayCapabilityState = JellyPlayCapabilityState.Unknown,
     /** The selected window (the 7/30/90 chips; the overview fetch's `days`). */
     val days: Int = 30,
     /** null = no overview loaded yet; the screen shows its quiet degraded state. */
@@ -133,12 +133,12 @@ data class AnalyticsState(
  *
  * Gating — admin && plugin AVAILABLE && `analytics` feature, the transcodes
  * monitor's exact seam: the admin half is the admin area's existing
- * AdminRouteContainer gate; the plugin half flows from
- * [JellyPlayPluginStatusStore] per ADR 0010 — no analytics fetch is ever
- * issued while the gate is off, so a stock server's plugin-route 404 is never
- * observed here. The nullable-with-default ctor deps mirror the settings
- * screen's plugin-seam pattern: direct construction (tests) may omit them —
- * a null store is simply gated off.
+ * AdminRouteContainer gate; the plugin half is the shared
+ * [JellyPlayCapabilityGate] reading the store per ADR 0010 — no analytics
+ * fetch is ever issued while the gate is off, so a stock server's plugin-route
+ * 404 is never observed here. The nullable-with-default ctor deps mirror the
+ * settings screen's plugin-seam pattern: direct construction (tests) may omit
+ * them — a null store is simply gated off.
  *
  * Loading — unlike the transcodes monitor there is NO auto-refresh loop (the
  * aggregates move on day boundaries, not seconds); [start] re-arms the probe
@@ -163,6 +163,15 @@ class JellyPlayAnalyticsViewModel(
     private val _uiState = stateFlow(AnalyticsState())
     val uiState: StateFlow<AnalyticsState> = _uiState.flow
 
+    /**
+     * The shared capability gate (the plugin capability gate module) — the
+     * probe-once-while-UNKNOWN / re-arm-on-identity-reset / gate-reads-the-
+     * store discipline this VM used to re-wire inline, the transcodes
+     * monitor's exact seam. Null with the store: direct construction (tests)
+     * without the plugin seam is gated off, final.
+     */
+    private val capabilityGate = statusStore?.let { JellyPlayCapabilityGate(it, scope) }
+
     /** Whether the initial gated load has been kicked off (exactly once per gate-on). */
     private var initialLoadStarted = false
 
@@ -175,11 +184,11 @@ class JellyPlayAnalyticsViewModel(
 
     /**
      * Screen-visibility hook (the transcodes screen's LifecycleStartEffect
-     * shape): one capabilities probe while the store is still UNKNOWN. No poll
-     * loop — see the class KDoc.
+     * shape): the gate's arm — one capabilities probe while the store is
+     * still UNKNOWN. No poll loop — see the class KDoc.
      */
     fun start() {
-        refreshPluginStatus()
+        capabilityGate?.arm()
     }
 
     /** Symmetry half of [start]: cancels the in-flight sessions load (no loop — analytics is not live). */
@@ -190,8 +199,8 @@ class JellyPlayAnalyticsViewModel(
 
     /** Manual refresh (scaffold action): silent on failure — the stale data stays; success clears a shown error. */
     fun refresh() {
-        refreshPluginStatus()
-        if (_uiState.value.gate != AnalyticsGate.Available) return
+        capabilityGate?.arm()
+        if (_uiState.value.gate != JellyPlayCapabilityState.Available) return
         launch {
             _uiState.update { it.copy(isRefreshing = true) }
             fetchOverview()
@@ -201,50 +210,27 @@ class JellyPlayAnalyticsViewModel(
     }
 
     /**
-     * One capabilities probe — the store never re-probes on its own
-     * (UNKNOWN → one refresh; AVAILABLE/UNAVAILABLE stay), the identity reset
-     * in the store re-arms the next visit. Same discipline as the transcodes
-     * monitor.
-     */
-    private fun refreshPluginStatus() {
-        val store = statusStore ?: return
-        launch {
-            if (store.status.value == JellyPlayPluginStatus.UNKNOWN) {
-                store.refresh()
-            }
-        }
-    }
-
-    /**
-     * The gate collector — the transcodes monitor's exact shape. The first
-     * load rides the Available transition (never before — a gated-off screen
-     * must not touch the plugin routes), so the screen opens on data rather
-     * than on a wasted 404.
+     * The gate collector — the shared capability gate's verdict (the
+     * transcodes monitor's exact shape). The first load rides the Available
+     * transition (never before — a gated-off screen must not touch the plugin
+     * routes), so the screen opens on data rather than on a wasted 404.
      */
     private fun observeGate() {
-        val store = statusStore
-        if (store == null) {
+        val gateFlow = capabilityGate?.state(JellyPlayPluginFeatures.Analytics, featureGate)
+        if (gateFlow == null) {
             // Direct-construction without the plugin seam: gated off, final.
-            _uiState.update { it.copy(gate = AnalyticsGate.Unavailable, isLoading = false) }
+            _uiState.update { it.copy(gate = JellyPlayCapabilityState.Unavailable, isLoading = false) }
             return
         }
-        val available: kotlinx.coroutines.flow.Flow<Boolean> =
-            featureGate.isAvailableOrProbe(store, JellyPlayPluginFeatures.Analytics)
         launch {
-            combine(store.status, available) { status, gateOpen ->
-                when {
-                    gateOpen -> AnalyticsGate.Available
-                    status == JellyPlayPluginStatus.UNKNOWN -> AnalyticsGate.Unknown
-                    else -> AnalyticsGate.Unavailable
-                }
-            }.collect { gate ->
+            gateFlow.collect { gate ->
                 _uiState.update {
                     it.copy(
                         gate = gate,
-                        isLoading = if (gate == AnalyticsGate.Unknown) it.isLoading else false,
+                        isLoading = if (gate == JellyPlayCapabilityState.Unknown) it.isLoading else false,
                     )
                 }
-                if (gate == AnalyticsGate.Available && !initialLoadStarted) {
+                if (gate == JellyPlayCapabilityState.Available && !initialLoadStarted) {
                     initialLoadStarted = true
                     loadAll()
                 }

@@ -16,6 +16,7 @@ import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.PersonRef
 import com.raulshma.jellyplay.core.model.lruMapOf
 import com.raulshma.jellyplay.core.model.isAudioType
+import com.raulshma.jellyplay.core.model.buildItemImageUrl
 import com.raulshma.jellyplay.core.model.Playlist
 import com.raulshma.jellyplay.core.model.PlaylistItem
 import com.raulshma.jellyplay.core.model.SearchResult
@@ -1321,15 +1322,25 @@ class LibraryApiClientImpl(
      */
     private val favoriteFlags = FavoriteFlagCache { currentHomeCacheIdentity() }
 
+    /**
+     * Delegates to core:model's [buildItemImageUrl] — the single owner of the
+     * item-image URL math (a byte-parity port of the SDK `imageApi` builder,
+     * pinned by ImageUrlBuilderTest); the SDK transport stays for the actual
+     * requests. One deliberate divergence from the former direct SDK call:
+     * the builder's [normalizeItemIdGuid] accepts the compact 32-hex item ids
+     * Jellyfin 10.11 emits (the `toUUID()` parse refused them), normalizing
+     * to the dashed form the server serves either way.
+     */
     override fun getImageUrl(itemId: String, imageType: String, maxWidth: Int?, imageIndex: Int?, tag: String?): String {
         val api = engine.api ?: return ""
         val imageTypeEnum = IMAGE_TYPES_BY_SERIAL_NAME[imageType.lowercase()]
             ?: return ""
-        return api.imageApi.getItemImageUrl(
-            itemId = runCatching { itemId.toUUID() }.getOrNull() ?: return "",
-            imageType = imageTypeEnum,
-            tag = tag,
+        return buildItemImageUrl(
+            baseUrl = api.baseUrl,
+            itemId = itemId,
+            imageType = imageTypeEnum.serialName,
             maxWidth = maxWidth,
+            tag = tag,
             imageIndex = imageIndex,
         )
     }

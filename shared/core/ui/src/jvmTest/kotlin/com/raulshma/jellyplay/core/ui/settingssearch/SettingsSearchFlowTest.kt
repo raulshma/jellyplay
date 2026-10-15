@@ -26,13 +26,18 @@ import kotlin.test.assertTrue
  * instrumented — `resolve()` over a NON-empty catalog would call `getString`,
  * which these tests never trigger):
  *
- *  - a BLANK query emits an empty list WITHOUT touching the provider's
- *    catalog (the catalog getter throws if touched — the short-circuit is the
- *    contract, not an implementation detail);
+ *  - a BLANK query emits an empty list WITHOUT touching the catalog (the
+ *    catalog getter AND `resolved()` throw if touched — the short-circuit is
+ *    the contract, not an implementation detail);
+ *  - the catalog resolves ONCE PER SUBSCRIPTION ([SettingsSearchProvider.resolved]
+ *    counted): every later query re-runs only the matcher against the prepared
+ *    candidates — the resolve-once contract, which is also why a desktop
+ *    in-app locale switch cannot refresh the snapshot mid-subscription (the
+ *    documented limitation in [settingsSearchResults]'s KDoc);
  *  - rapid keystrokes are debounced: only the FINAL query of a burst reaches
- *    the catalog (observed via a read-counting provider);
- *  - identical consecutive queries resolve exactly once (distinctUntilChanged
- *    sits before the resolve step);
+ *    the catalog;
+ *  - identical consecutive queries match only once (distinctUntilChanged sits
+ *    before the matcher);
  *  - the empty catalog yields empty results for any query.
  *
  * Note on timing: the pipeline runs on Dispatchers.Default (flowOn), so the
@@ -41,10 +46,13 @@ import kotlin.test.assertTrue
  */
 class SettingsSearchFlowTest {
 
-    /** Provider whose catalog getter throws — proves blank queries never touch it. */
+    /** Provider whose catalog getter AND resolved funnel throw — proves blank queries never touch either. */
     private class ExplodingProvider : SettingsSearchProvider {
         override val items: List<SettingsSearchItem>
             get() = throw IllegalStateException("blank query must not resolve the catalog")
+
+        override suspend fun resolved(): List<ResolvedSettingsItem> =
+            throw IllegalStateException("blank query must not call resolved()")
     }
 
     /** Provider that counts catalog reads and serves an empty catalog. */
@@ -61,14 +69,18 @@ class SettingsSearchFlowTest {
     /**
      * Provider whose items getter always throws — non-blank queries must match
      * against the [SettingsSearchProvider.resolved] funnel (platform-filtered),
-     * never against raw [SettingsSearchProvider.items].
+     * never against raw [SettingsSearchProvider.items] — and whose
+     * `resolved()` COUNTS its calls (the resolve-once-per-subscription pin).
      */
     private class FunnelOnlyProvider : SettingsSearchProvider {
+        var resolves = 0
+            private set
         override val items: List<SettingsSearchItem>
             get() = throw IllegalStateException("search must consume resolved(), not items")
 
-        override suspend fun resolved(): List<ResolvedSettingsItem> =
-            listOf(
+        override suspend fun resolved(): List<ResolvedSettingsItem> {
+            resolves++
+            return listOf(
                 ResolvedSettingsItem(
                     item = SettingsSearchItem(
                         id = "player_engine",
@@ -84,6 +96,7 @@ class SettingsSearchFlowTest {
                     category = "Playback",
                 ),
             )
+        }
 
         private val testIcon get() = androidx.compose.ui.graphics.vector.ImageVector.Builder(
             name = "test",
@@ -123,48 +136,62 @@ class SettingsSearchFlowTest {
 
     @Test
     fun rapidBurst_debouncesToTheFinalQueryOnly() = realTimeTest {
-        val provider = CountingProvider()
+        val provider = FunnelOnlyProvider()
         // All three keystrokes land well inside the 120 ms debounce window.
         val burst = flow {
             emit("")
             emit("the")
             emit("them")
-            emit("themes")
+            emit("engine")
         }
 
         val results = settingsSearchResults(burst, provider).first()
 
-        // Only the final query was resolved; the blank query and intermediate
-        // keystrokes were dropped by the debounce.
-        assertEquals(emptyList(), results)
-        assertEquals(1, provider.reads, "burst must resolve only the final query")
+        // Only the final query was matched; the blank query and intermediate
+        // keystrokes were dropped by the debounce — and the funnel ran once.
+        assertEquals(listOf("player_engine"), results.map { it.id })
+        assertEquals(1, provider.resolves, "burst must resolve only the final query")
     }
 
     @Test
-    fun identicalConsecutiveQueries_resolveOnlyOnce() = realTimeTest {
-        val provider = CountingProvider()
+    fun identicalConsecutiveQueries_matchOnlyOnce() = realTimeTest {
+        val provider = FunnelOnlyProvider()
         val queries = flow {
             emit("theme")
-            emit("theme") // duplicate — must be dropped before the resolve step
+            emit("theme") // duplicate — must be dropped before the matcher step
             emit("themes")
         }
 
         settingsSearchResults(queries, provider).first()
 
-        assertEquals(1, provider.reads, "duplicate consecutive queries must not re-resolve")
+        assertEquals(1, provider.resolves, "duplicate consecutive queries must not re-run the pipeline")
     }
 
     @Test
-    fun distinctQueries_afterTheDebounceWindow_resolveAgain() = realTimeTest {
-        val provider = CountingProvider()
-        val queries = MutableStateFlow("theme")
+    fun resolvedCatalog_isPreparedOncePerSubscription_acrossDistinctQueries() = realTimeTest {
+        val provider = FunnelOnlyProvider()
+        val queries = MutableStateFlow("engine")
 
         val job = launch { settingsSearchResults(queries, provider).take(2).collect { } }
-        delay(400) // "theme" settles (debounce 120 ms) and resolves once
-        queries.value = "appearance" // distinct query after the window
+        delay(400) // "engine" settles (debounce 120 ms) and resolves once
+        queries.value = "player" // distinct query after the window
         delay(600)
         job.join()
 
-        assertEquals(2, provider.reads, "a new query after the window must resolve again")
+        // The new query re-RAN the matcher (its results are still live) but
+        // must NOT re-resolve the catalog — that is the resolve-once contract,
+        // and its documented corollary: an in-app locale switch inside one
+        // subscription keeps the snapshot's locale (pinned limitation).
+        assertEquals(1, provider.resolves, "distinct queries must not re-resolve within one subscription")
+    }
+
+    @Test
+    fun aSecondSubscription_resolvesItsOwnCatalog() = realTimeTest {
+        val provider = FunnelOnlyProvider()
+
+        settingsSearchResults(flowOf("engine"), provider).first()
+        settingsSearchResults(flowOf("player"), provider).first()
+
+        assertEquals(2, provider.resolves, "each subscription owns one resolve")
     }
 }

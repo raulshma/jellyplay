@@ -11,6 +11,7 @@ import androidx.media3.common.util.UnstableApi
 import com.google.android.gms.cast.framework.CastContext
 import com.google.android.gms.cast.framework.CastSession
 import com.google.android.gms.cast.framework.SessionManagerListener
+import com.raulshma.jellyplay.core.concurrency.TaskBundle
 import com.raulshma.jellyplay.core.data.cast.dlna.DlnaCastStrategy
 import com.raulshma.jellyplay.core.data.cast.remote.JellyfinRemotePlayCastStrategy
 import com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastStore
@@ -26,7 +27,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
@@ -55,6 +55,12 @@ class CastManager(
         const val STRATEGY_GOOGLE = CastStrategyNames.GOOGLE
         const val STRATEGY_DLNA = CastStrategyNames.DLNA
         const val STRATEGY_JELLYFIN = CastStrategyNames.JELLYFIN
+
+        // The TaskBundle keys for the manager's four cancel-and-replace job slots.
+        private const val TICKER = "CastManager.ticker"
+        private const val STRATEGY_OBSERVER = "CastManager.strategyObserver"
+        private const val DEVICE_MERGE = "CastManager.deviceMerge"
+        private const val PREFERRED_RENDERER = "CastManager.preferredRenderer"
     }
 
     private val strategies = mutableMapOf<String, CastStrategy>()
@@ -67,13 +73,17 @@ class CastManager(
     private var externalListener: Player.Listener? = null
 
     private val coroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
-    private var tickerJob: Job? = null
+
+    /**
+     * The manager's four cancel-and-replace job slots — the shared ticker,
+     * the strategy-session observer, the device merge and the
+     * preferred-renderer watcher — as one [TaskBundle] over [coroutineScope].
+     * Access is confined to Main.
+     */
+    private val tasks = TaskBundle(coroutineScope)
 
     /** Per-strategy poll cadence, re-read by the shared ticker each tick. */
     private val castPollingIntervalMs = MutableStateFlow(1000L)
-    private var strategyObserverJob: Job? = null
-    private var deviceMergeJob: Job? = null
-    private var preferredRendererJob: Job? = null
 
     private val _sessionEvents = MutableSharedFlow<CastSessionEvent>(extraBufferCapacity = 1)
     val sessionEvents: SharedFlow<CastSessionEvent> = _sessionEvents.asSharedFlow()
@@ -275,7 +285,7 @@ class CastManager(
     }
 
     private fun toggleTicker() {
-        tickerJob?.cancel()
+        tasks.cancel(TICKER)
         val isDlna = activeStrategyName == STRATEGY_DLNA
         val isJellyfin = activeStrategyName == STRATEGY_JELLYFIN
         val shouldTick = when {
@@ -286,18 +296,18 @@ class CastManager(
         if (shouldTick) {
             // The shared polling loop (player-contract): bounded reactive
             // paused-wait, interval re-read per tick, and the post-timeout
-            // `continue` that keeps a paused session off the network. The
-            // hand-rolled copy this replaced had drifted out of the module —
-            // it still paid the interval delay after a timed-out paused wait,
-            // polling the remote renderer while nothing was playing.
+            // `continue` that keeps a paused session off the network — a
+            // timed-out paused wait must not keep polling the remote renderer.
             castPollingIntervalMs.value = if (isDlna || isJellyfin) 1000L else 500L
-            tickerJob = EnginePositionTicker(
-                scopeProvider = { coroutineScope },
-                pollingIntervalMs = castPollingIntervalMs,
-                isPlayingFlow = _castIsPlaying,
-                isCurrentlyPlaying = { _castIsPlaying.value },
-                onActive = ::updateCastState,
-            ).launch()
+            tasks.replace(TICKER) {
+                EnginePositionTicker(
+                    scopeProvider = { coroutineScope },
+                    pollingIntervalMs = castPollingIntervalMs,
+                    isPlayingFlow = _castIsPlaying,
+                    isCurrentlyPlaying = { _castIsPlaying.value },
+                    onActive = ::updateCastState,
+                ).launch()
+            }
         }
     }
 
@@ -357,17 +367,18 @@ class CastManager(
      * selected without manual intervention.
      */
     private fun startPreferredRendererWatcher() {
-        preferredRendererJob?.cancel()
-        preferredRendererJob = coroutineScope.launch {
-            _allDiscoveredDevices.combine(syncPlayCastStore.syncPlayCast) { devices, prefs ->
-                devices to prefs.preferredRenderer
-            }
-                .distinctUntilChanged()
-                .collect { (devices, preferredName) ->
-                    if (preferredName.isNullOrBlank() || isConnected) return@collect
-                    val match = devices.firstOrNull { it.name == preferredName }
-                    if (match != null) connect(context, match)
+        tasks.replace(PREFERRED_RENDERER) {
+            coroutineScope.launch {
+                _allDiscoveredDevices.combine(syncPlayCastStore.syncPlayCast) { devices, prefs ->
+                    devices to prefs.preferredRenderer
                 }
+                    .distinctUntilChanged()
+                    .collect { (devices, preferredName) ->
+                        if (preferredName.isNullOrBlank() || isConnected) return@collect
+                        val match = devices.firstOrNull { it.name == preferredName }
+                        if (match != null) connect(context, match)
+                    }
+            }
         }
     }
 
@@ -393,20 +404,21 @@ class CastManager(
     }
 
     private fun observeStrategySession() {
-        strategyObserverJob?.cancel()
-        strategyObserverJob = null
+        tasks.cancel(STRATEGY_OBSERVER)
         val strategy = strategies[activeStrategyName]
         if (strategy != null && strategy !== googleCastStrategy) {
             var wasConnected = strategy.isConnected.value
-            strategyObserverJob = coroutineScope.launch {
-                strategy.isConnected.collect { connected ->
-                    if (connected && !wasConnected) {
-                        _sessionEvents.tryEmit(CastSessionEvent.Connected)
-                    } else if (!connected && wasConnected) {
-                        resetCastState()
-                        _sessionEvents.tryEmit(CastSessionEvent.Disconnected)
+            tasks.replace(STRATEGY_OBSERVER) {
+                coroutineScope.launch {
+                    strategy.isConnected.collect { connected ->
+                        if (connected && !wasConnected) {
+                            _sessionEvents.tryEmit(CastSessionEvent.Connected)
+                        } else if (!connected && wasConnected) {
+                            resetCastState()
+                            _sessionEvents.tryEmit(CastSessionEvent.Disconnected)
+                        }
+                        wasConnected = connected
                     }
-                    wasConnected = connected
                 }
             }
         }
@@ -416,15 +428,16 @@ class CastManager(
         get() = strategies[activeStrategyName]
 
     private fun startDeviceMerge() {
-        deviceMergeJob?.cancel()
-        deviceMergeJob = coroutineScope.launch {
-            val flows = strategies.entries.map { (name, strategy) ->
-                strategy.discoveredDevices
+        tasks.replace(DEVICE_MERGE) {
+            coroutineScope.launch {
+                val flows = strategies.entries.map { (name, strategy) ->
+                    strategy.discoveredDevices
+                }
+                if (flows.isEmpty()) return@launch
+                combine(flows) { deviceLists ->
+                    deviceLists.flatMap { it }
+                }.collect { _allDiscoveredDevices.value = it }
             }
-            if (flows.isEmpty()) return@launch
-            combine(flows) { deviceLists ->
-                deviceLists.flatMap { it }
-            }.collect { _allDiscoveredDevices.value = it }
         }
     }
 
@@ -569,21 +582,14 @@ class CastManager(
     }
 
     /**
-     * Cancels the manager-owned background jobs (ticker, strategy observer,
-     * device merge, preferred-renderer watcher). Shared by the full teardown
-     * ([teardownSharedState]) and [softRelease]. [resetCastState] deliberately
-     * cancels only the ticker: it runs on session edges where discovery and
-     * the observers must keep running.
+     * Cancels every manager-owned background job (ticker, strategy observer,
+     * device merge, preferred-renderer watcher) via the [TaskBundle].
+     * Shared by the full teardown ([teardownSharedState]) and [softRelease].
+     * [resetCastState] deliberately cancels only the ticker: it runs on
+     * session edges where discovery and the observers must keep running.
      */
     private fun cancelJobs() {
-        tickerJob?.cancel()
-        tickerJob = null
-        strategyObserverJob?.cancel()
-        strategyObserverJob = null
-        deviceMergeJob?.cancel()
-        deviceMergeJob = null
-        preferredRendererJob?.cancel()
-        preferredRendererJob = null
+        tasks.cancelAll()
     }
 
     private fun teardownSharedState() {
@@ -627,8 +633,7 @@ class CastManager(
     }
 
     private fun resetCastState() {
-        tickerJob?.cancel()
-        tickerJob = null
+        tasks.cancel(TICKER)
         _castPositionMs.value = 0L
         _castDurationMs.value = 0L
         _castIsPlaying.value = false

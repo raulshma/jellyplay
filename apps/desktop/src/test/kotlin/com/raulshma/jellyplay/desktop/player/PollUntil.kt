@@ -1,4 +1,4 @@
-package com.raulshma.jellyplay.core.testfixtures
+package com.raulshma.jellyplay.desktop.player
 
 /**
  * Polls [condition] every 50 ms until true or [timeoutMs] elapses — the

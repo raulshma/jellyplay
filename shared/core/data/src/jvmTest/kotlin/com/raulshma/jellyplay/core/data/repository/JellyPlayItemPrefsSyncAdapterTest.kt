@@ -175,18 +175,18 @@ class JellyPlayItemPrefsSyncAdapterTest {
             seed(key = "item-$i", updatedAt = i.toLong())
         }
         adapter.markSynced(adapter.snapshot())
-        assertTrue(adapter.deletedKeys().isEmpty())
+        assertTrue(adapter.deletedKeys(adapter.snapshot()).isEmpty())
 
         // One newer write pushes the oldest row (updatedAt = 1) out of the
         // window: it reads as a local delete and roams a tombstone.
         seed(key = "item-new", updatedAt = 10_000L)
 
-        assertEquals(setOf("ITEM/item-1"), adapter.deletedKeys())
+        assertEquals(setOf("ITEM/item-1"), adapter.deletedKeys(adapter.snapshot()))
 
         // The engine's confirmation clears the mirror: nothing re-reads
         // dirty or deleted afterwards.
         adapter.deleteRemote(setOf("ITEM/item-1"))
-        assertTrue(adapter.deletedKeys().isEmpty())
+        assertTrue(adapter.deletedKeys(adapter.snapshot()).isEmpty())
         assertNull(
             mirrorStore.data.first()[stringPreferencesKey(JpsyncReservation.mirrorKey(NAMESPACE, "ITEM/item-1"))],
         )
@@ -226,10 +226,10 @@ class JellyPlayItemPrefsSyncAdapterTest {
 
         database.itemPlaybackPreferenceDao().deleteByKey("ITEM", "item-1")
 
-        assertEquals(setOf("ITEM/item-1"), adapter.deletedKeys())
+        assertEquals(setOf("ITEM/item-1"), adapter.deletedKeys(adapter.snapshot()))
 
         adapter.deleteRemote(setOf("ITEM/item-1"))
-        assertTrue(adapter.deletedKeys().isEmpty())
+        assertTrue(adapter.deletedKeys(adapter.snapshot()).isEmpty())
         assertTrue(adapter.dirtyValues(adapter.snapshot()).isEmpty())
         assertNull(rows("ITEM", "item-1"))
         assertNull(
@@ -247,7 +247,7 @@ class JellyPlayItemPrefsSyncAdapterTest {
 
         assertNull(rows("ITEM", "item-1"))
         assertEquals("deu", rows("ITEM", "item-2")?.audioLanguage)
-        assertTrue(adapter.deletedKeys().isEmpty())
+        assertTrue(adapter.deletedKeys(adapter.snapshot()).isEmpty())
     }
 
     @Test

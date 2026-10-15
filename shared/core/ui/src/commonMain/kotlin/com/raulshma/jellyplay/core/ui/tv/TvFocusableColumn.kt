@@ -9,19 +9,11 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.layout.LazyLayoutCacheWindow
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.IntState
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.FocusState
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.ui.animation.lazyItemPlacementSpec
 
@@ -128,45 +120,19 @@ fun TvFocusablePagingColumn(
     itemContent: @Composable (index: Int, itemModifier: Modifier) -> Unit,
 ) {
     val isTv = LocalTvMode.current
-    val fallbackFocusRequester = remember { FocusRequester() }
     val currentOnFocusedIndexChange by rememberUpdatedState(onFocusedIndexChange)
-    val focusedIndexState = rememberInt(initialIndex)
-    var focusedIndex by focusedIndexState
-    var initialFocusRequested by remember { mutableStateOf(false) }
-
-    LaunchedEffect(itemCount) {
-        if (itemCount > 0) {
-            focusedIndex = focusedIndex.coerceIn(0, itemCount - 1)
-        }
-    }
-
-    // focusRestorer(fallback) and focusProperties { onEnter } only react to focus *entering* the
-    // group from outside; neither proactively grabs focus. So when a column's data arrives after
-    // first composition, grab focus on the focused row once. The scroll-to-item before the grab
-    // ensures the saved row is composed before requesting focus (returning from a full-screen
-    // route can otherwise leave the saved index off-screen and the grab silently no-ops).
-    LaunchedEffect(itemCount > 0) {
-        if (isTv && requestInitialFocus && itemCount > 0 && !initialFocusRequested) {
-            initialFocusRequested = true
-            state.scrollToItem(focusedIndex.coerceIn(0, itemCount - 1))
-            fallbackFocusRequester.tryRequestFocus("tv_column_init")
-        }
-    }
-
-    // A completed refresh (filter/folder change) replaces the data under the old cursor: the caller
-    // scrolls to 0, so the saved index no longer matches what's composed. Reset the cursor and
-    // re-grab — without this, focus falls out of the column during the reload and the drawer rail
-    // captures it. Mirrors the same handling in [TvFocusableGrid].
-    LaunchedEffect(refreshGeneration) {
-        if (isTv && refreshGeneration > 0 && itemCount > 0) {
-            focusedIndex = 0
-            state.scrollToItem(0)
-            for (attempt in 1..3) {
-                withFrameNanos { }
-                if (fallbackFocusRequester.tryRequestFocus("tv_column_refresh")) break
-            }
-        }
-    }
+    // The shared focus cursor (fallback leaf + clamp/initial-grab/refresh-regrab
+    // ladder + tags) — TvFocusCursor.kt owns the whole contract.
+    val cursor = rememberTvFocusCursor(
+        layout = TvFocusLayout.Column,
+        initialIndex = initialIndex,
+        isTv = isTv,
+        requestInitialFocus = requestInitialFocus,
+        itemCount = itemCount,
+        refreshGeneration = refreshGeneration,
+        scrollToItem = { state.scrollToItem(it) },
+    )
+    val fallbackFocusRequester = cursor.fallback
 
     LazyColumn(
         state = state,
@@ -198,12 +164,11 @@ fun TvFocusablePagingColumn(
             val placementSpec = lazyItemPlacementSpec()
             if (isTv) {
                 TvItemFocusFallback(
-                    focusedIndexState = focusedIndexState,
+                    cursor = cursor,
                     itemCount = itemCount,
                     index = index,
-                    fallbackFocusRequester = fallbackFocusRequester,
                     onFocused = {
-                        focusedIndex = index
+                        cursor.focusedIndex = index
                         currentOnFocusedIndexChange(index)
                     },
                     animatedModifier = Modifier.animateItem(placementSpec = placementSpec),
@@ -216,34 +181,4 @@ fun TvFocusablePagingColumn(
         }
         extraContent()
     }
-}
-
-/**
- * Renders [content] with [fallbackFocusRequester] attached to the item at [index] only while the
- * tracked focus cursor points at [index]. The [focusedIndexState] read must stay inside this leaf —
- * reading it in the container body recomposes every composed item on each focus move.
- */
-@Composable
-private fun TvItemFocusFallback(
-    focusedIndexState: IntState,
-    itemCount: Int,
-    index: Int,
-    fallbackFocusRequester: FocusRequester,
-    onFocused: () -> Unit,
-    animatedModifier: Modifier,
-    content: @Composable (Modifier) -> Unit,
-) {
-    val currentFocusedIndex = focusedIndexState.intValue.coerceIn(0, itemCount - 1)
-    val itemModifier = (if (currentFocusedIndex == index) {
-        Modifier.focusRequester(fallbackFocusRequester)
-    } else {
-        Modifier
-    })
-        .onFocusChanged {
-            if (it.isFocused || it.hasFocus) {
-                onFocused()
-            }
-        }
-        .then(animatedModifier)
-    content(itemModifier)
 }

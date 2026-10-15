@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.platform.LocalDensity
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.jetbrains.compose.resources.stringResource
 import com.raulshma.jellyplay.feature.home.generated.resources.Res
 import com.raulshma.jellyplay.feature.home.generated.resources.home_because_you_watched
@@ -82,6 +83,7 @@ import com.raulshma.jellyplay.core.ui.components.mouseScroll
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.rememberInt
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.StateFlow
 
 /**
  * WHAT the content list renders, decided once at the construction site from
@@ -92,7 +94,7 @@ import kotlinx.coroutines.flow.Flow
  * disagree (silently empty rows); here each branch's constructor IS the mask,
  * and the banner fields simply do not exist on the offline feed.
  */
-internal sealed interface HomeFeed {
+internal sealed interface HomeRenderFeed {
 
     /** The rendered section list — server sections online, derived offline. */
     val sections: List<HomeSection>
@@ -110,7 +112,7 @@ internal sealed interface HomeFeed {
         override val isLoading: Boolean,
         val partialLoadError: Boolean,
         val newsletterBannerVisible: Boolean,
-    ) : HomeFeed
+    ) : HomeRenderFeed
 
     /**
      * The offline feed: the whole [OfflineHomeContent] render model.
@@ -120,7 +122,7 @@ internal sealed interface HomeFeed {
     data class Offline(
         val content: OfflineHomeContent,
         override val isLoading: Boolean = false,
-    ) : HomeFeed {
+    ) : HomeRenderFeed {
         override val sections: List<HomeSection> get() = content.sections
     }
 }
@@ -134,7 +136,7 @@ internal sealed interface HomeFeed {
  */
 @Immutable
 internal data class HomeContentState(
-    val feed: HomeFeed,
+    val feed: HomeRenderFeed,
     val homeHeroEnabled: Boolean,
     val homeBackdropEnabled: Boolean,
     val discoverEnabled: Boolean,
@@ -168,18 +170,6 @@ internal data class HomeContentState(
      */
     val randomDiscoverRowIds: Set<String> = emptySet(),
     /**
-     * Row ids with a dice roll in flight — the matching dice icon tumbles
-     * while the re-fetch runs (the refresher's rolling mirror, see
-     * [HomeRefreshState.rollingDiscoverRowIds]).
-     */
-    val rollingDiscoverRowIds: Set<String> = emptySet(),
-    /**
-     * Section ids with an edge-pull refresh in flight — the matching online
-     * row's edge spinner spins while its single-row refetch runs (the
-     * refresher's mirror, see [HomeRefreshState.refreshingSectionIds]).
-     */
-    val refreshingSectionIds: Set<String> = emptySet(),
-    /**
      * Non-blocking informational banner (e.g. the implicit-offline
      * "couldn't reach the server — showing your downloads" notice). Null hides it.
      */
@@ -193,17 +183,16 @@ internal data class HomeContentState(
      * screen wires `uiState.homeLastVisitEpochMs` through) badges nothing.
      */
     val homeLastVisitEpochMs: Long = 0L,
-    val presenceChips: List<HomePresenceChip> = emptyList(),
     val statsCard: HomeStatsCardData? = null,
     val statsCardEnabled: Boolean = false,
     val genreChips: List<Genre> = emptyList(),
     val genreRailEnabled: Boolean = false,
 ) {
     /** The online feed, null while the offline branch renders. */
-    val online: HomeFeed.Online? get() = feed as? HomeFeed.Online
+    val online: HomeRenderFeed.Online? get() = feed as? HomeRenderFeed.Online
 
     /** The offline render model, null while the online branch renders. */
-    val offlineContent: OfflineHomeContent? get() = (feed as? HomeFeed.Offline)?.content
+    val offlineContent: OfflineHomeContent? get() = (feed as? HomeRenderFeed.Offline)?.content
 }
 
 /**
@@ -281,10 +270,19 @@ internal fun HomeContentList(
     renderInputs: HomeRenderInputs,
     listState: LazyListState,
     density: Density,
+    /**
+     * H19 watch-party presence chips — the VM's dedicated flow (NOT a
+     * [HomeContentState] field, the search-query precedent): the poll loop
+     * writes it on the home refresh cadence, so collecting it HERE (the row
+     * is this composable's only reader) keeps the per-tick write off the
+     * whole-[HomeUiState] object.
+     */
+    presenceChips: StateFlow<List<HomePresenceChip>>,
 ) {
     val isTv = LocalTvMode.current
     val adaptiveInfo = LocalAdaptiveInfo.current
     val sections = state.feed.sections
+    val presenceChipList by presenceChips.collectAsStateWithLifecycle()
 
     // Discover-row dimensions computed once at the composable scope (not inside
     // the LazyColumn's LazyListScope, where the window-info read isn't typed).
@@ -450,11 +448,11 @@ internal fun HomeContentList(
             }
 
             // ── H19 presence chips ("Alex is watching Dune — join") ──────
-            val showPresenceChips = state.online != null && state.presenceChips.isNotEmpty()
+            val showPresenceChips = state.online != null && presenceChipList.isNotEmpty()
             if (showPresenceChips) {
                 item(key = "presence_chips") {
                     HomePresenceChipRow(
-                        chips = state.presenceChips,
+                        chips = presenceChipList,
                         onChipClick = callbacks.onPresenceChipClick,
                         onJoinClick = callbacks.onPresenceJoinClick,
                         onDismiss = callbacks.onPresenceDismiss,
@@ -597,6 +595,14 @@ internal fun HomeContentList(
                     } else null
                 }
 
+                // The per-row spinner mirrors, leaf-collected at row scope
+                // (the `pendingSyncEntries` pattern): a single-row refresh's
+                // spin-up/data/spin-down emissions invalidate only THIS
+                // item's recompose scope, never the orchestrator above.
+                // Derivation is set membership on the small mirror sets
+                // (see [HomeRefreshSpinnerState]).
+                val spinners by renderInputs.refreshSpinners.collectAsStateWithLifecycle()
+
                 // Edge-pull refresh wiring: online rows of the refreshable
                 // types only ([isEdgeRefreshableSection] — the same gate the
                 // refresher re-checks, so the gesture and the fetch cannot
@@ -605,7 +611,7 @@ internal fun HomeContentList(
                 val edgeRefreshCtx = if (offlineContent == null && isEdgeRefreshableSection(section)) {
                     EdgeRefreshContext(
                         sectionId = section.id,
-                        inProgress = section.id in state.refreshingSectionIds,
+                        inProgress = section.id in spinners.refreshingSectionIds,
                         onRefresh = { callbacks.onRefreshSection(section.id) },
                     )
                 } else {
@@ -1091,6 +1097,11 @@ private fun HomeSectionOnlinePosterRow(
             onPlainClick = renderInputs.mediaOnItemClick,
         )
     }
+    // The dice-roll in-flight mirror, leaf-collected at row scope (the
+    // `pendingSyncEntries` pattern — see the content list's edge-pull
+    // note): only the rolling row's arm recomposes when a roll spins up
+    // or down, never the content list above it.
+    val spinners by renderInputs.refreshSpinners.collectAsStateWithLifecycle()
     // Dice affordance: RANDOM-sorted custom discover rows only
     // (the descriptor resolves the row id back out of the
     // `discover_<rowId>` section id). Resolved once here so
@@ -1132,7 +1143,7 @@ private fun HomeSectionOnlinePosterRow(
         onRollClick = if (diceRowId != null) {
             { rollDiscoverRow(diceRowId) }
         } else null,
-        rollInProgress = diceRowId != null && diceRowId in state.rollingDiscoverRowIds,
+        rollInProgress = diceRowId != null && diceRowId in spinners.rollingDiscoverRowIds,
         rollAccessibilityLabel = diceRowAccessibilityLabel,
         onFocusedItemChange = callbacks.onFocusedMediaItem,
         // Book progress bars: exact page fractions from the

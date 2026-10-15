@@ -3,11 +3,8 @@ package com.raulshma.jellyplay.core.datastore.tools
 import com.raulshma.jellyplay.core.datastore.appearance.AppearancePreferenceSpecs
 import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalPreferenceSpecs
 import com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryPreferenceSpecs
-import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackPreferenceSpecs
 import com.raulshma.jellyplay.core.datastore.screensaver.ScreensaverPreferenceSpecs
-import com.raulshma.jellyplay.core.datastore.security.PinRateLimiter
-import com.raulshma.jellyplay.core.datastore.security.SecurityStore
 import com.raulshma.jellyplay.core.datastore.spec.PreferenceSpec
 import com.raulshma.jellyplay.core.datastore.spec.PreferenceStorage
 import com.raulshma.jellyplay.core.datastore.spec.PreferenceSyncPolicy
@@ -67,14 +64,13 @@ object SettingsCatalogGenerator {
 
     /**
      * Keys that must never be offered as admin defaults, even if their stores
-     * migrate to specs later: derived from the same `SyncExcludedKeys` sets
-     * the adapter registration excludes (secrets, device/session identity,
-     * per-device lock state), so the denylist cannot drift from what sync
-     * actually excludes.
+     * migrate to specs later: the ONE assembled key-level exclusion set
+     * ([PreferenceSyncPolicy.EXCLUDED_KEYS] — secrets, device/session
+     * identity, per-device lock state, the widget payload cache) the sync
+     * adapter's registration excludes too, so the denylist cannot drift from
+     * what sync actually excludes.
      */
-    val DENYLIST: Set<String> = SecurityStore.SyncExcludedKeys +
-        PinRateLimiter.SyncExcludedKeys +
-        ServerIdentityStore.SyncExcludedKeys
+    val DENYLIST: Set<String> = PreferenceSyncPolicy.EXCLUDED_KEYS
 
     /** One catalog entry as plain data, before JSON rendering. */
     data class Entry(

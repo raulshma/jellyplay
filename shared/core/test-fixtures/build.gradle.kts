@@ -15,8 +15,12 @@ kotlin {
         // FakeUserDataMutator (details + home) and FakeMediaEngine (the one
         // MediaEngine double for the session + audio-queue jvmTest suites;
         // apps/desktop's app-side copy was adopted in the fake-twin merge —
-        // its suites construct AUTO_PLAY instances of this class, and its
-        // wall-clock pollUntil helper lives beside it in PollUntil.kt).
+        // its suites construct AUTO_PLAY instances of this class. The fake's
+        // wall-clock pollUntil helper (and FakePositionStore, the session
+        // recording double) have since moved back OUT — ADR-0006 rule 4:
+        // each's only consumers were a single module's test lane, so each
+        // lives in that module's test sources again (apps/desktop tests and
+        // player-video jvmTest, respectively).
         // AGP 9 has no KMP testFixtures support, so this is a
         // plain library module declared inside consumers' test source-set
         // blocks ONLY.

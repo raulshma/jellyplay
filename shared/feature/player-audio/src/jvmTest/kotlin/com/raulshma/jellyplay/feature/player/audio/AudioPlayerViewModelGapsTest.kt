@@ -45,6 +45,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 /**
@@ -53,7 +54,8 @@ import kotlin.test.assertTrue
  *
  *  1. the lyrics-search choreography (isSearching flag, success/failure
  *     results, apply + offset passthrough) and the lyrics-flow mirror into
- *     [AudioPlayerUiState.lyrics] incl. the karaoke derived flag;
+ *     [AudioPlayerUiState.lyrics] incl. the karaoke derived flag — plus the
+ *     position-derived index's dedicated flow (a flip must not copy uiState);
  *  2. the cast happy path (fling the current track at the live position,
  *     pause the local engine);
  *  3. the add-to-playlist picker lifecycle (editable filter, failure, the
@@ -307,12 +309,24 @@ class AudioPlayerViewModelGapsTest {
 
         with(viewModel.uiState.value.lyrics) {
             assertEquals(worded, lyrics)
-            assertEquals(0, currentLyricIndex)
             assertEquals(LyricsSource.LRCLIB, lyricsSource)
             assertTrue(isFetchingLyrics)
             assertEquals(120L, lyricsOffsetMs)
             assertTrue(hasKaraokeLyrics, "a word-timed line enables the karaoke view")
         }
+        // The index no longer rides uiState (a lyric-line flip must not copy
+        // the whole state); it mirrors on the dedicated flow.
+        assertEquals(0, viewModel.currentLyricIndex.value)
+    }
+
+    @Test
+    fun currentLyricIndex_flipsMirrorOnTheDedicatedFlow_withoutUiStateCopy() {
+        val before = viewModel.uiState.value
+
+        currentLyricIndex.value = 7
+
+        assertEquals(7, viewModel.currentLyricIndex.value)
+        assertSame(before, viewModel.uiState.value, "a lyric-line flip must not re-copy AudioPlayerUiState")
     }
 
     @Test

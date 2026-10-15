@@ -187,11 +187,13 @@ class ControllerOwnershipTest {
         // VideoPlayerViewModelOwnershipTest: the VM shrinks only by moving
         // clusters into extracted modules (constructor-lambda controllers),
         // so its TOTAL line count is a one-way ratchet too. Baseline: 1_752
-        // — the current 1_751 lines by this suite's lineSequence count plus
-        // one line of slack, pinned EXACTLY like every other ratchet in
-        // this suite. Lower the ceiling when a slice moves out; never raise
-        // it to admit growth.
-        val maxVideoPlayerViewModelLines = 1_752
+        // — the then-current 1_751 lines plus one line of slack, pinned
+        // EXACTLY like every other ratchet in this suite. Lowered to 1_637
+        // when the 2026-10-14 session-slice migration deleted the eight
+        // controller pass-throughs (their reads moved to the
+        // session/SessionSlices.kt projections). Lower the ceiling when a
+        // slice moves out; never raise it to admit growth.
+        val maxVideoPlayerViewModelLines = 1_637
         val vm = mainSources().first { it.name == "VideoPlayerViewModel.kt" }
         val lines = vm.sourceText().lineSequence().count()
         assertTrue(

@@ -16,11 +16,12 @@ import com.raulshma.jellyplay.feature.player.video.subtitle.AndroidFontProvider
 
 /**
  * The legacy cast surface (discovery/connect, Context-bound transport) the
- * screen's chrome needs; the commonMain VM property is the narrow seam
- * interface. Same singleton the adapter wraps.
+ * screen's chrome needs; the VM's cast seam is private since the
+ * cast-chrome ownership closure, so this resolves through the SESSION's
+ * seam adapter (the same singleton wrapped there).
  */
 val VideoPlayerViewModel.androidCastManager: com.raulshma.jellyplay.core.data.cast.CastManager
-    get() = (castManager as AndroidCastManager).delegate
+    get() = (playbackSession.castManager as AndroidCastManager).delegate
 
 /** The Android-only font surface (Typeface cache, libass dir) for the overlay. */
 val VideoPlayerViewModel.androidFontProvider: AndroidFontProvider

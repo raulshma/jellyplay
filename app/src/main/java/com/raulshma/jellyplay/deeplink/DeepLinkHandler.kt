@@ -5,6 +5,7 @@ import android.net.Uri
 import com.raulshma.jellyplay.core.model.deeplink.DeepLinkGrammar
 import com.raulshma.jellyplay.core.model.deeplink.DeepLinkTarget
 import com.raulshma.jellyplay.core.ui.navigation.Route
+import com.raulshma.jellyplay.core.ui.navigation.toRoute
 
 /**
  * Android Intent/Uri glue over the pure [DeepLinkGrammar]. Every link shape
@@ -12,7 +13,9 @@ import com.raulshma.jellyplay.core.ui.navigation.Route
  * single emission surface (widgets/notifications/shortcuts call it directly),
  * so :app and the modules that cannot depend on it (core:data,
  * core:notification, shared:feature:details) emit and read exactly the same
- * URLs. This class only routes parsed [DeepLinkTarget]s to [Route]s.
+ * URLs. Routing rides the shared [DeepLinkTarget.toRoute] fold beside
+ * [Route] in core:ui (the one target→destination table the desktop shell
+ * consumes too) — this class owns only the Uri→target parsing glue.
  */
 class DeepLinkHandler {
 
@@ -37,30 +40,11 @@ class DeepLinkHandler {
                 uri.getQueryParameter(name)?.let { put(name, it) }
             }
         }
-        return targetToRoute(DeepLinkGrammar.parseCustom(host, uri.pathSegments, queryParameters))
+        return DeepLinkGrammar.parseCustom(host, uri.pathSegments, queryParameters).toRoute()
     }
 
     private fun parseHttpsScheme(uri: Uri): Route? {
         if (uri.host != DeepLinkGrammar.HOST_WEB) return null
-        return targetToRoute(DeepLinkGrammar.parseWeb(uri.pathSegments))
-    }
-
-    private fun targetToRoute(target: DeepLinkTarget?): Route? {
-        return when (target) {
-            is DeepLinkTarget.MediaDetail -> Route.MediaDetail(target.itemId)
-            is DeepLinkTarget.NewsletterSection -> Route.NewsletterSectionList(target.section)
-            is DeepLinkTarget.SeerrDetail -> Route.SeerrDetail(tmdbId = target.tmdbId, mediaType = target.mediaType)
-            DeepLinkTarget.Search -> Route.Search
-            DeepLinkTarget.Settings -> Route.Settings
-            DeepLinkTarget.Downloads -> Route.Downloads
-            DeepLinkTarget.Library -> Route.Library
-            // The SyncPlay join payload (feature 4.2) exists for the desktop
-            // Discord Rich Presence Join button — the desktop shell's IPC
-            // join handler consumes it. Android has no join-by-link surface
-            // (SyncPlay groups are joined through the group browser), so the
-            // link parses but routes nowhere here.
-            is DeepLinkTarget.SyncPlayJoin -> null
-            null -> null
-        }
+        return DeepLinkGrammar.parseWeb(uri.pathSegments).toRoute()
     }
 }

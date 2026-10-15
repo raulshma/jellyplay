@@ -114,7 +114,6 @@ class DownloadRepositoryImplSubtitlesTest {
         downloadsStore = preferencesStore,
         storagePolicy = mockk(relaxed = true),
         downloadEnqueuer = mockk(relaxed = true),
-        progressNotifier = mockk(relaxed = true),
         timeSource = com.raulshma.jellyplay.core.model.SystemTimeSource(),
         writer = writerCore(testClient),
         downloadDelegate = downloadDelegate,

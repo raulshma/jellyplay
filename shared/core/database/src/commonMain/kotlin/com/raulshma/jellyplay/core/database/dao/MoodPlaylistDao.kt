@@ -29,6 +29,10 @@ interface MoodPlaylistDao {
     @Query("DELETE FROM mood_playlists WHERE id = :id")
     suspend fun deleteById(id: String)
 
+    /** The sync tombstone's batch form of [deleteById] — one statement for the whole adopted delete. */
+    @Query("DELETE FROM mood_playlists WHERE id IN (:ids)")
+    suspend fun deleteByIds(ids: List<String>)
+
     @Query("DELETE FROM mood_playlists")
     suspend fun deleteAll()
 
@@ -47,4 +51,8 @@ interface MoodPlaylistDao {
     /** Removes one playlist's preference row — the sync adapter's adopted-tombstone face. */
     @Query("DELETE FROM mood_playlist_preferences WHERE playlistId = :playlistId")
     suspend fun deletePreferenceById(playlistId: String)
+
+    /** The sync tombstone's batch form of [deletePreferenceById]. */
+    @Query("DELETE FROM mood_playlist_preferences WHERE playlistId IN (:playlistIds)")
+    suspend fun deletePreferenceByIds(playlistIds: List<String>)
 }

@@ -5,6 +5,7 @@ import androidx.paging.LoadStates
 import androidx.paging.PagingData
 import com.raulshma.jellyplay.core.data.download.DownloadOutcomeMessenger
 import com.raulshma.jellyplay.core.data.download.QuickDownloadActions
+import com.raulshma.jellyplay.core.data.download.pagedGridQuickActions
 import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
@@ -255,6 +256,21 @@ internal class LibraryViewModel(
     }
 
     /**
+     * The six quick-action seams, wired once by the shared core:data factory
+     * ([pagedGridQuickActions]) — the repository's change feed, the silent
+     * mutator, and the shared quick actions with this host's message sink
+     * pre-bound. Spread into the [pagedGrid] host verbatim; this VM keeps
+     * only its paged source and its per-screen deltas (`seriesOpensSheet`
+     * routing, the sink).
+     */
+    private val quickActions = pagedGridQuickActions(
+        mediaRepository = mediaRepository,
+        userDataMutator = userDataMutator,
+        quickDownloadActions = quickDownloadActions,
+        messenger = downloadOutcomeSink,
+    )
+
+    /**
      * The item grid, wired through the shared [PagedMediaGridHost]: the host
      * owns the deferred-refresh generation counter + refresher pairing, the
      * cachedIn sharing and the quick-action forwarding; this source splices
@@ -265,14 +281,12 @@ internal class LibraryViewModel(
     @OptIn(ExperimentalCoroutinesApi::class)
     private val pagedGrid = PagedMediaGridHost(
         scope = scope,
-        userDataChanges = mediaRepository.userDataChanges,
-        downloadedIds = quickDownloadActions.downloadedIds,
-        downloadSupported = quickDownloadActions.isSupported,
-        setPlayedSilently = { itemId, played -> userDataMutator.setPlayed(itemId, played) },
-        requestDownload = { item, onOpenDetail, seriesOpensSheet ->
-            quickDownloadActions.downloadAndReport(item, onOpenDetail, seriesOpensSheet, downloadOutcomeSink)
-        },
-        removeDownloadItem = quickDownloadActions::removeDownload,
+        userDataChanges = quickActions.userDataChanges,
+        downloadedIds = quickActions.downloadedIds,
+        downloadSupported = quickActions.downloadSupported,
+        setPlayedSilently = quickActions.setPlayedSilently,
+        requestDownload = quickActions.requestDownload,
+        removeDownloadItem = quickActions.removeDownloadItem,
         source = { trigger ->
             combine(
                 _browserState.flow,

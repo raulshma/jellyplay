@@ -48,6 +48,7 @@ import com.composables.icons.tabler.outline.Graph
 import com.composables.icons.tabler.outline.Refresh
 import com.composables.icons.tabler.outline.Users
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
+import com.raulshma.jellyplay.core.data.session.JellyPlayCapabilityState
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.bottomPadding
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
@@ -144,7 +145,7 @@ fun JellyPlayAnalyticsScreen(
             state.isLoading -> {
                 ScreenLoadingState(modifier = Modifier.fillMaxSize())
             }
-            state.gate == AnalyticsGate.Unavailable -> {
+            state.gate == JellyPlayCapabilityState.Unavailable -> {
                 GatedOffState(modifier = Modifier.fillMaxSize())
             }
             state.error != null -> {

@@ -7,7 +7,6 @@ import com.raulshma.jellyplay.core.data.playback.PlayerLifecycleManager
 import com.raulshma.jellyplay.core.data.playback.SleepCountdown
 import com.raulshma.jellyplay.core.data.playback.VideoMiniPlayerState
 import com.raulshma.jellyplay.core.data.playback.VideoQueueController
-import com.raulshma.jellyplay.core.data.playback.VideoQueueItem
 import com.raulshma.jellyplay.core.data.network.NetworkMonitor
 import com.raulshma.jellyplay.core.data.playback.AdaptiveBitrateManager
 import com.raulshma.jellyplay.core.data.playback.NowPlayingReporter
@@ -41,6 +40,8 @@ import com.raulshma.jellyplay.core.model.TrackType
 import com.raulshma.jellyplay.core.model.mediaRuleContentType
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.feature.player.video.generated.resources.Res
+import com.raulshma.jellyplay.feature.player.video.session.createSessionSlices
+import com.raulshma.jellyplay.feature.player.video.session.PlayerSessionSlices
 import org.jetbrains.compose.resources.getString
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_direct_play_fallback
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_error_next_episode_load
@@ -180,11 +181,8 @@ class VideoPlayerViewModel(
      * androidMain factory alongside the Context the controller needs.
      */
     private val mediaSessionFactory: VideoMediaSessionFactory,
-    // Public: the screen's cast UI (route button, disconnect handler) needs the
-    // manager directly; every playback-side use stays private above.:
-    // typed as the commonMain seam interface — the androidMain screen reaches
-    // the full legacy surface through the `androidCastManager` extension.
-    val castManager: CastManager,
+    // Bare ctor parameter (DI passes it by name) — the public castManager val is retired.
+    castManager: CastManager,
     private val jellyfinRemotePlayCastStrategy: JellyfinRemotePlayCastStrategy,
     private val syncPlayManager: SyncPlayManager,
     private val adaptiveBitrateManager: AdaptiveBitrateManager,
@@ -213,6 +211,8 @@ class VideoPlayerViewModel(
      */
     private val nowPlayingReporter: NowPlayingReporter,
 ) : JellyPlayViewModel() {
+
+    private val castManager: CastManager = castManager
 
     private val _uiState = stateFlow(VideoPlayerUiState())
     val uiState: StateFlow<VideoPlayerUiState> = _uiState.flow
@@ -278,14 +278,7 @@ class VideoPlayerViewModel(
             durationMs,
             uiState.map(::SegmentProjection).distinctUntilChanged(),
         ) { dur, proj ->
-            proj.toSegmentInput(dur).also {
-                Log.d(
-                    UP_NEXT_LOG_TAG,
-                    "segInput rebuilt: queued=${proj.hasQueuedNext} hasNextEpisode=${it.hasNextEpisode} " +
-                        "durationMs=$dur cancelled=${it.autoplayCancelled} " +
-                        "syncPlay=${it.isInSyncPlaySession}",
-                )
-            }
+            proj.toSegmentInput(dur)
         },
     ) { pos, input ->
         computeOverlay(pos, input)
@@ -353,8 +346,8 @@ class VideoPlayerViewModel(
     // engine-event mirrors, the session-event forwarder, the aggregate-prefs
     // fan-out, the engine-attach choreography). This VM keeps only the state
     // holders, the [onEvent] funnel + its transport/policy handlers, and the
-    // expose-only flows; the screen drives the controller slices directly
-    // through [playbackSession].
+    // expose-only flows; the screen drives the controller slices only through
+    // the session-slice seam ([sessionSlices] below).
 
     private val _passOutEvents = Channel<String>(Channel.BUFFERED)
     val passOutEvents: kotlinx.coroutines.flow.Flow<String> = _passOutEvents.receiveAsFlow()
@@ -370,9 +363,10 @@ class VideoPlayerViewModel(
      * sequence, the engine-swap choreography, the reporting + release surface
      * and the session-event forwarder; this VM keeps the constructor
      * dependencies, the state holders, the [onEvent] funnel + its handlers
-     * and the expose-only flows. The screen drives the controller slices
-     * directly through this handle (the former per-slice VM pass-throughs are
-     * gone — read `playbackSession.subtitles`, `.effects`, `.render`, …).
+     * and the expose-only flows. The screens never read this handle — they
+     * program against the per-region session slices ([sessionSlices], the
+     * GLOSSARY "Session slice" seam); this property stays the VM-internal
+     * composition-root alias the slices and the funnel handlers project.
      *
      * [SessionHostLambdas] is the funnel's mirror — the VM-owned behaviors
      * the session calls back into: the transport funnels
@@ -446,6 +440,17 @@ class VideoPlayerViewModel(
     )
 
     /**
+     * The per-region session slices (the GLOSSARY "Session slice" seam): the
+     * ONE read surface the player screens program against — hot flows are
+     * collected in the leaf that reads them, and the session controllers sit
+     * behind the slices, so no screen reaches [playbackSession] (or a
+     * re-exposed controller pass-through) directly. Built in one place by
+     * [createSessionSlices] so construction has locality.
+     */
+    // The route-button projection rides the platform cast-chrome seam.
+    internal val sessionSlices: PlayerSessionSlices = playbackSession.createSessionSlices(routeButton = platformCastRouteButton())
+
+    /**
      * Runs the session's arm phase: registers every collector the former
      * inline init block launched (the engine-event mirrors FIRST, the
      * session-event forwarder, the PiP transport registration + dismissal
@@ -505,13 +510,6 @@ class VideoPlayerViewModel(
     }
 
     /**
-     * The overlay's state surface; `null` = hidden. The screen collects this
-     * at the overlay tier (thin alias over the session's controller).
-     */
-    val stillWatchingPrompt: StateFlow<StillWatchingPromptState?>
-        get() = playbackSession.stillWatching.prompt
-
-    /**
      * The single command funnel (the AudioPlayerUiEvent / AudioPlayerViewModel
      * `.onEvent` precedent): every user intent the screen expresses arrives as
      * a [VideoPlayerUiEvent] and routes once here to a private handler — the
@@ -519,9 +517,8 @@ class VideoPlayerViewModel(
      * the state flows, the sync getters, the result-returning queries
      * ([getImageUrl], [loadTrickplayThumbnail], [verifyPlayerLockPin],
      * [useDownloadedSubtitle]), [release] (the screen's dispose hook) and the
-     * internal controller slices the screen drives directly
-     * (cast/syncPlay/subtitles/sleepTimer/abRepeat/effects/render) — pinned by
-     * VideoPlayerViewModelOwnershipTest.
+     * per-region session slices ([sessionSlices]) the screen drives directly —
+     * pinned by VideoPlayerViewModelOwnershipTest.
      */
     fun onEvent(event: VideoPlayerUiEvent) {
         when (event) {
@@ -874,10 +871,9 @@ class VideoPlayerViewModel(
         )
     }
 
-    // The SyncPlay slice the screen drives directly lives on
-    // [playbackSession] (built by the session; the screen reads
-    // `playbackSession.syncPlay` — the former per-slice VM pass-throughs are
-    // gone with the wiring builder).
+    // The SyncPlay slice the screen drives lives on the session's slices
+    // ([sessionSlices].controls / .sheets — built by the session; the former
+    // per-slice VM pass-throughs are gone with the wiring builder).
 
     // ── Session load pipeline ────────────────────────────────────────────────
     // The pipeline owns the ORDER of the load stages; the outputs and hook
@@ -888,9 +884,6 @@ class VideoPlayerViewModel(
     // and the server start report in PlaybackSession (beside its stop-report
     // twin).
 
-    /** True while a next-episode advance is in flight and unsettled (#146). */
-    val isNextEpisodeLoading: StateFlow<Boolean> get() = playbackSession.upNext.isNextEpisodeLoading
-
     val hapticsEnabled: Boolean get() = stores.appearance.appearance.value.hapticsEnabled
 
     /**
@@ -900,17 +893,15 @@ class VideoPlayerViewModel(
      */
     val incognitoModeEnabled: Boolean get() = playbackSession.cachedAggregate.videoPlayer.incognitoModeEnabled
 
-    // ── Controller slice handles ────────────────────────────────────────────
-    // Each migrated controller owns its slice as a MutableStateFlow and is
-    // exposed directly; the screen collects `handle.state` (and any
-    // per-slice streams) at the leaf composables that render it, and calls
-    // commands on the handle directly. The residual [uiState] keeps only
-    // session + prefs-mirror state. The ViewModel does NOT relay slice
-    // commands: it keeps only real orchestration (load/session/lifecycle and
-    // cross-controller flows like background-cast detach).
-
-    val trackState: StateFlow<com.raulshma.jellyplay.feature.player.video.state.TrackState>
-        get() = playbackSession.trackSelectionHelper.state
+    // ── Session slices ──────────────────────────────────────────────────────
+    // Each migrated controller owns its slice as a MutableStateFlow; the
+    // screens collect `slice.state` (and any per-slice streams) at the leaf
+    // composables that render it and call the slice's command funs — through
+    // the per-region projections of [sessionSlices], never through a
+    // controller handle or a re-exposed pass-through. The residual [uiState]
+    // keeps only session + prefs-mirror state. The ViewModel does NOT relay
+    // slice commands: it keeps only real orchestration (load/session/lifecycle
+    // and cross-controller flows like background-cast detach).
 
     // The engine-event MIRROR collectors (play/buffering uiState writes, the
     // still-watching interaction feed) are registered once from
@@ -950,21 +941,11 @@ class VideoPlayerViewModel(
         }
     }
 
-    val playerEngineRef: com.raulshma.jellyplay.feature.player.video.engine.MediaEngine?
-        get() = playbackSession.playerSessionManager.engine
-
-    /**
-     * Reactive engine handle for composition. The screen previously read
-     * [playerEngineRef] as a plain property; Compose had no subscription, so a
-     * engine swap only re-created the surface `AndroidView` if some unrelated
-     * state happened to recompose. Exposing the session manager's StateFlow
-     * and collecting it with `collectAsStateWithLifecycle` makes engine swaps
-     * deterministic: `key(engine)` now always re-keys on a real swap.
-     * [playerEngineRef] is retained for the one-shot lambda reads that want
-     * the current value without subscribing.
-     */
-    val playerEngineFlow: StateFlow<com.raulshma.jellyplay.feature.player.video.engine.MediaEngine?>
-        get() = playbackSession.playerSessionManager.engineFlow
+    // The engine handle the screen composes with (reactive flow + one-shot
+    // reads) lives on the controls session slice
+    // ([com.raulshma.jellyplay.feature.player.video.session.ControlsSessionSlice.engineFlow]
+    // / `.engine`) — the former playerEngineRef / playerEngineFlow
+    // pass-throughs are gone with the slice seam.
 
     // The load funnel lives on [playbackSession] (`initialize(itemId, …)` —
     // the PiP event-flag clear + the process-death tick resolution are
@@ -1143,18 +1124,9 @@ class VideoPlayerViewModel(
     // "Play now" on a queue row routes to the Up Next controller's
     // settle-then-consume protocol (playQueueItem) — the old
     // consume-then-play body here silently deleted the row on a failed load.
-
-    /** The queue rows for the queue sheet (the controller is the single truth). */
-    val videoQueueItems: StateFlow<List<VideoQueueItem>>
-        get() = playbackSession.videoQueue.queue
-
-    /**
-     * The Up Next card (queue head beats the episode sibling, null under
-     * SyncPlay) — the screen-facing alias of the controller's projection,
-     * alongside [videoQueueItems]; the screen renders the overlay from this.
-     */
-    val upNextCard: StateFlow<com.raulshma.jellyplay.feature.player.video.UpNextCard?>
-        get() = playbackSession.upNext.upNextCard
+    // The queue rows and the Up Next card are read through the session's
+    // slices ([sessionSlices].sheets.queueItems / .overlay.upNextCard) — the
+    // former VM pass-throughs are gone with the slice seam.
     // -----------------------------------------------------------------------
 
     private fun setAspectRatio(ratio: AspectRatio) {
@@ -1355,10 +1327,8 @@ class VideoPlayerViewModel(
     // The write choreography lives in [render] (RenderControls); the funs
     // below are the screen-facing funnels — one-line delegates that preserve
     // the public names/signatures (the sheet router + gear menu call them).
-
-    /** Effective global mpv slice for the sheet's pickers (before the session lens). */
-    internal val globalMpvConfig: com.raulshma.jellyplay.core.model.MpvEngineConfig
-        get() = playbackSession.render.globalMpvConfig
+    // The sheet's READS (the global slice + the session lens) go through the
+    // sheets session slice (`sessionSlices.sheets.globalMpvConfig` / `.render`).
 
     /**
      * The "Rendering" sheet's shader-pack pick. Applies to the session

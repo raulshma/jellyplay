@@ -124,8 +124,16 @@ class AudioPlayerViewModel(
      */
     val currentPositionState: LongState get() = currentPositionHolder.asState()
 
-    val hasKaraokeLyrics: Boolean
-        get() = _uiState.value.lyrics.hasKaraokeLyrics
+    /**
+     * Position-derived active lyric line, sourced directly from the engine.
+     * Kept OUT of [uiState] (mirroring [sleepTimerRemainingMs]) so a
+     * lyric-line flip does not copy the whole [AudioPlayerUiState] and
+     * re-invalidate the screen root. Collected only by the artwork leaf that
+     * renders the active line (KaraokeLyricsView / LyricsOverlay). Trades
+     * against the deleted dead `hasKaraokeLyrics` re-exposure — the screen
+     * reads [LyricsState.hasKaraokeLyrics] off the collected state.
+     */
+    val currentLyricIndex: StateFlow<Int> get() = engine.currentLyricIndex
 
     var nightModeVolume by composeFloatState(0.4f)
         private set

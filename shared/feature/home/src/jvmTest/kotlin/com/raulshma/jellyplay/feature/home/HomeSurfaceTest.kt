@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.home
 
 import com.raulshma.jellyplay.core.model.HomeMode
+import kotlinx.collections.immutable.toImmutableList
 import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.MediaType
@@ -46,7 +47,7 @@ class HomeSurfaceTest {
     ) = HomeUiState(
         renderSource = renderSource,
         error = error,
-        sections = sections,
+        sections = sections.toImmutableList(),
         homeMode = homeMode,
         isGoingOnline = isGoingOnline,
         bookProgressFractions = bookProgressFractions,
@@ -84,8 +85,8 @@ class HomeSurfaceTest {
             emptyOffline,
         )
         val content = surface as HomeSurface.Content
-        assertTrue(content.feed is HomeFeed.Offline)
-        assertTrue((content.feed as HomeFeed.Offline).isLoading)
+        assertTrue(content.feed is HomeRenderFeed.Offline)
+        assertTrue((content.feed as HomeRenderFeed.Offline).isLoading)
         assertEquals(HomeRenderSource.FallbackPending, content.renderSource)
     }
 
@@ -159,7 +160,7 @@ class HomeSurfaceTest {
             populatedOffline,
         )
         val content = surface as HomeSurface.Content
-        assertTrue(content.feed is HomeFeed.Offline)
+        assertTrue(content.feed is HomeRenderFeed.Offline)
         assertEquals(HomeRenderSource.Offline.Explicit, content.renderSource)
     }
 
@@ -170,7 +171,7 @@ class HomeSurfaceTest {
         val sections = listOf(HomeSection(id = "movies", title = "Movies", type = HomeSectionType.LATEST_MEDIA, items = emptyList()))
         val surface = homeSurface(state(sections = sections), emptyOffline)
         val content = surface as HomeSurface.Content
-        val feed = content.feed as HomeFeed.Online
+        val feed = content.feed as HomeRenderFeed.Online
         assertEquals(sections, feed.sections)
         assertFalse(feed.partialLoadError)
         assertEquals(HomeRenderSource.Online, content.renderSource)
@@ -184,7 +185,7 @@ class HomeSurfaceTest {
         )
         val content = surface as HomeSurface.Content
         assertEquals(HomeRenderSource.Offline.Explicit, content.renderSource)
-        assertFalse((content.feed as HomeFeed.Offline).isLoading)
+        assertFalse((content.feed as HomeRenderFeed.Offline).isLoading)
     }
 
     @Test

@@ -70,7 +70,6 @@ import com.raulshma.jellyplay.core.model.isAudioType
 import com.raulshma.jellyplay.core.model.progressFraction
 import com.raulshma.jellyplay.core.model.seerr.SeerrRelatedVideo
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
-import com.raulshma.jellyplay.core.model.seerr.TmdbReview
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
@@ -91,12 +90,10 @@ import com.raulshma.jellyplay.feature.details.generated.resources.Res
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_cd_episode_play
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_cd_hide_up_next
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_more_like_this_on_device
-import com.raulshma.jellyplay.feature.details.generated.resources.detail_reviews_all
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_section_cast_crew
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_section_chapters
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_section_items
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_section_more_like_this
-import com.raulshma.jellyplay.feature.details.generated.resources.detail_section_reviews
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_section_seerr_recommendations
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_section_seerr_similar
 import com.raulshma.jellyplay.feature.details.generated.resources.detail_section_special_features
@@ -227,9 +224,17 @@ internal fun DetailContentBody(
     // in the body — replaces ~33 per-element LaunchedEffect + animateFloatAsState pairs.
     val entranceProgress = rememberDetailEntranceProgress()
 
-    val admittedSections = DetailSectionAdmission
-        .from(state, detail, showActionButtons, showMediaInfo)
-        .admit()
+    // The body's admission is two disjoint halves merged in [DetailSectionKind]
+    // declaration order (= the emission order): the hand-written fold for the
+    // unmigrated sections, the detail section registry's modules for the
+    // migrated ones (wave 1: PLUGIN_RATINGS, TMDB_REVIEWS).
+    val admittedSections = DetailSectionRegistry.admittedSections(
+        handFold = DetailSectionAdmission
+            .from(state, detail, showActionButtons, showMediaInfo)
+            .admit(),
+        state = state,
+        detail = detail,
+    )
 
     CompositionLocalProvider(LocalDetailEntrance provides entranceProgress) {
         Box(
@@ -267,7 +272,9 @@ internal fun DetailContentBody(
 /**
  * Dispatches one admitted section to its family renderer. Pure wiring — the
  * `when` is exhaustive over [DetailSectionKind] so a new admission row cannot
- * silently render nothing.
+ * silently render nothing. The registry's migrated sections (wave 1:
+ * PLUGIN_RATINGS, TMDB_REVIEWS) route through their module's [DetailSectionModule.Content]
+ * slot; the hand-written families keep their per-kind composables.
  */
 @Composable
 internal fun DetailSectionRenderer(
@@ -280,6 +287,16 @@ internal fun DetailSectionRenderer(
     bodyContentPad: Dp,
     contentFocusRequester: FocusRequester?,
 ) {
+    // The module slot's region params — only the two migrated branches read it.
+    val moduleScope = DetailSectionRenderScope(
+        state = state,
+        callbacks = callbacks,
+        detail = detail,
+        item = item,
+        isLocalOrigin = isLocalOrigin,
+        bodyContentPad = bodyContentPad,
+        contentFocusRequester = contentFocusRequester,
+    )
     when (section) {
         DetailSectionKind.HEADER ->
             DetailHeaderSection(
@@ -327,11 +344,7 @@ internal fun DetailSectionRenderer(
             )
 
         DetailSectionKind.PLUGIN_RATINGS ->
-            DetailPluginRatingsSection(
-                delayIndex = section.delayIndex,
-                state = state,
-                bodyContentPad = bodyContentPad,
-            )
+            PluginRatingsSectionModule.Content(moduleScope)
 
         DetailSectionKind.CHAPTERS_OR_TOC ->
             DetailChaptersSection(
@@ -457,11 +470,7 @@ internal fun DetailSectionRenderer(
             )
 
         DetailSectionKind.TMDB_REVIEWS ->
-            DetailReviewsSlotSection(
-                delayIndex = section.delayIndex,
-                state = state,
-                callbacks = callbacks,
-            )
+            TmdbReviewsSectionModule.Content(moduleScope)
 
         DetailSectionKind.DOWNLOAD_FOOTER ->
             DetailDownloadFooterSection(
@@ -494,35 +503,6 @@ private fun DetailRelatedVideosSection(
                 // takes (the libmpv engine on desktop), never the
                 // WebView embed.
                 callbacks.playback.onPlayClick(trailerId, null, 0L)
-            },
-        )
-    }
-}
-
-// ── TMDB reviews (delayIndex 14) ──────────────────────────────────────────
-
-@Composable
-private fun DetailReviewsSlotSection(
-    delayIndex: Int,
-    state: DetailContentState,
-    callbacks: DetailContentCallbacks,
-) {
-    // ── TMDB Reviews ──
-    // Fetched straight from TMDB (see DetailViewModel.loadSeerrData), so the
-    // section renders regardless of Seerr connection state. D9 split: a
-    // preview of [REVIEWS_PREVIEW_COUNT] cards renders inline; the
-    // "All reviews (N)" button opens the full Route.Reviews screen. (The
-    // whole section's show_reviews admission lives in DetailSectionAdmission.)
-    StaggeredDetailSection(
-        visible = state.tmdbReviews.isNotEmpty(),
-        delayIndex = delayIndex,
-    ) {
-        ReviewsSection(
-            reviews = state.tmdbReviews,
-            onAllReviews = {
-                callbacks.navigation.onNavigate(
-                    com.raulshma.jellyplay.core.ui.navigation.Route.Reviews(state.itemId),
-                )
             },
         )
     }
@@ -660,57 +640,6 @@ private fun VideosSection(
                     modifier = focusModifier,
                     border = videoCardBorder,
                 )
-            }
-        }
-    }
-}
-
-/**
- * The detail screen's TMDB reviews section (D9): the first
- * [REVIEWS_PREVIEW_COUNT] cards render inline (bodies capped at the former
- * 6-line preview), followed by the "All reviews (N)" button whenever the
- * fetched list hides reviews behind the preview ([tmdbReviewsPreviewSplit]).
- * The card vocabulary is the shared [TmdbReviewCard] — the same renderer the
- * Route.Reviews screen shows uncapped.
- */
-@Composable
-private fun ReviewsSection(
-    reviews: List<TmdbReview>,
-    onAllReviews: () -> Unit,
-) {
-    val bodyContentPad = LocalAdaptiveInfo.current.contentPadding(isTv = LocalTvMode.current)
-    val split = remember(reviews) { tmdbReviewsPreviewSplit(reviews) }
-    Column(modifier = Modifier.padding(horizontal = bodyContentPad)) {
-        FadingItem {
-            Text(
-                text = stringResource(Res.string.detail_section_reviews),
-                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-                modifier = Modifier.semantics { heading() },
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-        }
-        Spacer(Modifier.height(16.dp))
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            split.preview.forEach { review ->
-                FadingItem {
-                    TmdbReviewCard(review = review, contentMaxLines = 6)
-                }
-            }
-            split.allCount?.let { allCount ->
-                FadingItem {
-                    val allReviewsFocusState = rememberTvFocusState(focusedScale = 1.05f)
-                    Text(
-                        text = stringResource(Res.string.detail_reviews_all, allCount),
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier
-                            .clip(ShapeCache.smooth16)
-                            .then(allReviewsFocusState.focusModifier)
-                            .then(Modifier.tvFocusIndicator(allReviewsFocusState, ShapeCache.smooth16))
-                            .clickable(onClick = onAllReviews)
-                            .padding(horizontal = 8.dp, vertical = 4.dp),
-                    )
-                }
             }
         }
     }

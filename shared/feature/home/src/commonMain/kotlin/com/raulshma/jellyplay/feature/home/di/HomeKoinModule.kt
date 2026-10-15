@@ -146,7 +146,7 @@ val homeModule: Module = module {
             homeSheetsFactory = get(),
             statsCardLoader = get(),
             genreRailCache = get(),
-            presenceChips = get(),
+            presenceChipsController = get(),
         )
     }
     viewModel {

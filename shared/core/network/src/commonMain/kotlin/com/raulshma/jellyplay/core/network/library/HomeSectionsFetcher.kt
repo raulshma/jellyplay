@@ -431,21 +431,21 @@ public class HomeSectionsFetcher(
 
         val continueWatchingDeferred = async {
             // The resume-row trio's per-type sub-call (enabled gate + query
-            // parameter wiring) lives in HomeRowBatchSubcalls — the row's own
-            // registration; the schedule (what launches when) stays here.
-            HomeRowBatchSubcalls.getValue(HomeSectionType.CONTINUE_WATCHING)(sources, query)
+            // parameter wiring) lives in the row's transport registration —
+            // the schedule (what launches when) stays here.
+            homeRowBatchSubcall(HomeSectionType.CONTINUE_WATCHING)(sources, query)
         }
         val continueReadingDeferred = async {
-            HomeRowBatchSubcalls.getValue(HomeSectionType.CONTINUE_READING)(sources, query)
+            homeRowBatchSubcall(HomeSectionType.CONTINUE_READING)(sources, query)
         }
         val nextUpDeferred = async {
-            HomeRowBatchSubcalls.getValue(HomeSectionType.NEXT_UP)(sources, query)
+            homeRowBatchSubcall(HomeSectionType.NEXT_UP)(sources, query)
         }
         // H4: the Upcoming sub-call rides the same per-type registration the
         // resume trio uses — the schedule stays here, the call shape lives in
         // the row's own batch arm.
         val upcomingDeferred = async {
-            HomeRowBatchSubcalls.getValue(HomeSectionType.UPCOMING)(sources, query)
+            homeRowBatchSubcall(HomeSectionType.UPCOMING)(sources, query)
         }
         val foldersDeferred = async {
             // The shared folders fetch backs THREE rows now: the latest
@@ -526,23 +526,14 @@ public class HomeSectionsFetcher(
             } else null
 
         // Latest-media fan-out: one /Items/Latest per non-music folder,
-        // semaphore-bounded at 4, collected in folder order for the
-        // assembler — the fetch half stays here, the section-building
+        // semaphore-bounded at 4, collected in folder order for the assembler
+        // (the shared [latestFoldersFanOut] shape the RECENTLY_ADDED refresh
+        // arm re-runs) — the fetch half stays here, the section-building
         // and ordering policy lives in the shared pure assembler.
         var latestPerFolder: List<Pair<LibraryFolder, Result<List<MediaItem>>>> = emptyList()
         if (HomeSectionType.LATEST_MEDIA in enabledSections || HomeSectionType.RECENTLY_ADDED in enabledSections) {
             foldersResult.onSuccess { folders ->
-                val filteredFolders = folders
-                    .filter { it.collectionType != "music" }
-                latestPerFolder = Semaphore(4).mapConcurrent(filteredFolders) { folder ->
-                    folder to latestForLibrary(
-                        libraryId = folder.id,
-                        collectionType = folder.collectionType,
-                        classicRows = query.classicRows,
-                        force = force,
-                        identity = identity,
-                    )
-                }
+                latestPerFolder = latestFoldersFanOut(folders, query.classicRows, force, identity)
             }
         }
 
@@ -605,40 +596,15 @@ public class HomeSectionsFetcher(
      * persist — those live a layer up (MediaRepository), keyed by the whole
      * query, and a single-row result must never masquerade as one.
      *
-     * The per-type arms themselves live in [HomeRowRefreshArms] (the
-     * transport half of the home row registry — one arm per row type); this
-     * method owns the outcome contract and the context wiring. Mapping:
-     *  - CONTINUE_WATCHING / CONTINUE_READING / NEXT_UP: the direct port call
-     *    with the [query]'s parameters, then the assembler's filters verbatim
-     *    (hidden-CW set; Next Up's CW-overlap + excluded-series drops — the
-     *    CW ids come from one extra Continue Watching read, mirroring the
-     *    assembler's seed reuse). CONTINUE_WATCHING additionally honours
-     *    [mergeNextUpIntoContinueWatching]: when the user's layout folds Next
-     *    Up into this row (OrderHomeSectionsUseCase, batch time), the refetch
-     *    rebuilds that fold from BOTH fresh sources — a CW-only refetch would
-     *    swap away the row's Next Up half (and the CW-empty + Next Up-present
-     *    relabel arm would drop a non-empty row).
-     *  - UPCOMING (H4): the same direct port read, no eligibility filters
-     *    (watch-state-blind by definition).
-     *  - LATEST_MEDIA: one `/Items/Latest` for the row's library (resolved
-     *    from the `latest_<libraryId>` id), through the same TTL memo.
-     *  - RECENTLY_ADDED: the whole latest fan-out (folders → per-library
-     *    latest, music filtered, semaphore-bounded) re-aggregated with the
-     *    assembler's per-folder override + CW-overlap filters — the row is an
-     *    aggregate, so its refetch costs the aggregate.
-     *  - DISCOVER (JELLYFIN rows only): the row's memoised query, behind the
-     *    same dice-roll generation guard ([observedGeneration]).
-     *  - PINNED: the pin's item resolution, same routing table as the batch.
-     *  - PLUGIN_ROW: the same plugin leaf read the batch runs (seasonal under
-     *    the `seasonal` instance id, a titled row under `custom_<title>`),
-     *    rebuilt through the shared section builder so only the payload
-     *    moves.
-     *
-     * RECOMMENDATIONS and Seerr-sourced DISCOVER rows are deliberately NOT
-     * refreshable here (the recommendations seed chain and the Seerr group
-     * gate/last-known-good policy are batch-shaped); the feature layer keeps
-     * the edge-pull gesture off those rows, and an unguarded call fails with
-     * [IllegalStateException] rather than guessing.
+     * This method owns the OUTCOME CONTRACT and the context wiring only: the
+     * per-type mapping lives on the row's transport registration
+     * ([HomeRowTransports] — the row's read, wire parameters and refresh arm
+     * in one place; see its file KDoc). RECOMMENDATIONS and Seerr-sourced
+     * DISCOVER rows are deliberately NOT refreshable here (the recommendations
+     * seed chain and the Seerr group gate/last-known-good policy are
+     * batch-shaped); the feature layer keeps the edge-pull gesture off those
+     * rows, and an unguarded call fails with [IllegalStateException] rather
+     * than guessing.
      */
     suspend fun refreshSection(
         section: HomeSection,
@@ -647,11 +613,7 @@ public class HomeSectionsFetcher(
         force: Boolean = true,
     ): Result<HomeSection?> = runCatchingRethrowingCancellation {
         val identity = cacheIdentity() ?: CacheIdentity.UNKNOWN
-        // The per-type arms live in HomeRowRefreshArms (the transport half of
-        // the home row registry — see its KDoc); this method owns the
-        // outcome contract only. Non-refreshable types fail with the same
-        // caller-bug error the former `else` arm threw.
-        HomeRowRefreshArms.forType(section.type).refresh(
+        homeRowRefreshArm(section.type).refresh(
             ctx = HomeRowRefreshContext(
                 sources = sources,
                 query = query,
@@ -665,6 +627,9 @@ public class HomeSectionsFetcher(
                         force = force,
                         identity = identity,
                     )
+                },
+                latestFanOut = { folders ->
+                    latestFoldersFanOut(folders, query.classicRows, force, identity)
                 },
                 continueWatchingFilterIds = { continueWatchingIdsForFilters(query) },
                 discoverRowItems = { row, rowForce -> discoverRowItemsCached(row, rowForce, identity) },
@@ -703,8 +668,8 @@ public class HomeSectionsFetcher(
     /**
      * The dice-roll generation-guarded discover-row memo read — the ONE
      * cache-through shape both readers share: the batch fan-out
-     * ([fetchJellyfinDiscoverRows]) and the DISCOVER refresh arm
-     * (HomeRowRefreshArms, through the refresh context).
+     * ([fetchJellyfinDiscoverRows]) and the DISCOVER refresh arm (through the
+     * refresh context).
      */
     private suspend fun discoverRowItemsCached(
         row: DiscoverRowConfig,
@@ -1103,6 +1068,32 @@ public class HomeSectionsFetcher(
         force = force,
         identity = identity,
     )
+
+    /**
+     * The latest fan-out's ONE shape — the batch schedule ([fetch]) and the
+     * RECENTLY_ADDED refresh arm (through the refresh context) both run it:
+     * the music filter, then one TTL-memoised per-library latest read per
+     * folder, semaphore-bounded at 4 and collected in folder order.
+     * [includeFolder] lets the aggregate refresh skip a disabled library
+     * BEFORE any port call (the batch applies the same per-library overrides
+     * at assembly, after the fetch — one fact, two stages).
+     */
+    private suspend fun latestFoldersFanOut(
+        folders: List<LibraryFolder>,
+        classicRows: Boolean,
+        force: Boolean,
+        identity: CacheIdentity,
+        includeFolder: (LibraryFolder) -> Boolean = { true },
+    ): List<Pair<LibraryFolder, Result<List<MediaItem>>>> =
+        Semaphore(4).mapConcurrent(folders.filter { it.collectionType != "music" && includeFolder(it) }) { folder ->
+            folder to latestForLibrary(
+                libraryId = folder.id,
+                collectionType = folder.collectionType,
+                classicRows = classicRows,
+                force = force,
+                identity = identity,
+            )
+        }
 
     /**
      * Home-path wrapper around [HomeSectionSources.getSimilarItems] that

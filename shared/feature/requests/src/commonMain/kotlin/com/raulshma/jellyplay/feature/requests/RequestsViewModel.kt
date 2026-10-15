@@ -168,11 +168,13 @@ class RequestsViewModel(
         .stateIn(scope, SharingStarted.WhileSubscribed(5_000), 0)
 
     init {
-        // Start Seerr background polling while the Requests UI is active so
-        // the pending-count badge and current user stay fresh. Polling is
-        // stopped in onCleared() to avoid battery drain when the user leaves.
-        // The repository is a Singleton, so this is safe across recompositions.
-        seerrRepository.startPolling()
+        // The repository's background poll is NOT started here anymore: the
+        // requests screen binds it to visibility via
+        // [startBackgroundPolling]/[stopBackgroundPolling] (the refresh cycle
+        // module's binding discipline), so a back-stacked Requests screen no
+        // longer keeps the shared loop alive — the VM-lifetime pair this init
+        // used to run (start here, stop in onCleared) retained the poll
+        // across the whole back-stack stay.
         launch {
             seerrRepository.getRequestCount().onSuccess { count ->
                 if (count.pending == 0 && _state.value.filter == SeerrRequestFilter.PENDING) {
@@ -193,8 +195,20 @@ class RequestsViewModel(
         }
     }
 
-    override fun onCleared() {
-        super.onCleared()
+    /**
+     * Starts the repository's shared background poll (the pending-count badge
+     * and current-user freshness loop) — the requests screen's
+     * LifecycleStartEffect calls this on STARTED. The loop's cadence and its
+     * own gates (fast/slow collector cadence, offline skip) live in
+     * [SeerrRepository.startPolling]; the repository refcounts starters, so
+     * this pairing is per binding.
+     */
+    fun startBackgroundPolling() {
+        seerrRepository.startPolling()
+    }
+
+    /** The binding's stop half — see [startBackgroundPolling]. */
+    fun stopBackgroundPolling() {
         seerrRepository.stopPolling()
     }
 

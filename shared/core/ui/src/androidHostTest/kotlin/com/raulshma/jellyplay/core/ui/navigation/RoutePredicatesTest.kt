@@ -82,6 +82,7 @@ class RoutePredicatesTest {
         Route.PinnedHomeSections(),
         Route.HomeLayoutPresets(),
         Route.LibraryHomeSections(),
+        Route.MyMediaHidden,
         Route.DiscoverRows(),
         Route.DiscoverRowEditor(),
         Route.PlaybackSettings(),
@@ -228,6 +229,7 @@ class RoutePredicatesTest {
                 // settings sub-screens without modal classification
                 "ServerManagement", "UserManagement", "AppearanceSettings", "HomeSettings",
                 "PinnedHomeSections", "HomeLayoutPresets", "LibraryHomeSections",
+                "MyMediaHidden",
                 "DiscoverRows", "DiscoverRowEditor",
                 "PlaybackSettings", "InputBindings", "AudioSettings", "LanguageSettings",
                 "NotificationSettings", "StorageSettings", "SecuritySettings",

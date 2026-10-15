@@ -1,25 +1,28 @@
 package com.raulshma.jellyplay.feature.player.video
 
 import androidx.compose.runtime.Composable
+import com.raulshma.jellyplay.feature.player.video.session.CastRouteButton
 import kotlinx.coroutines.CoroutineScope
 
 /**
- * Cast-chrome seam for the commonMain [VideoPlayerScreen]: the
- * screen's cast UI reaches the legacy Android cast stack (discovery/connect
- * `CastManager`, the Context-bound disconnect, the `CastSessionEvent` flow)
- * through these members instead of androidMain ViewModel extensions. The
- * jvmMain actuals are inert — [platformCastManager] is null (the cast button
- * hides), disconnect and the session-event collector do nothing — matching
- * the desktop `NoOpCastManager`/`NoOpPlayerCastController` seams, so the
- * cast-connected branch of the screen is unreachable on desktop.
+ * Cast-chrome seam for the commonMain [VideoPlayerScreen]: the screen's cast
+ * UI reaches the legacy Android cast stack (discovery/connect `CastManager`,
+ * the Context-bound disconnect, the `CastSessionEvent` flow) through these
+ * members instead of androidMain ViewModel extensions. The jvmMain actuals
+ * are inert — [platformCastRouteButton] is null (the cast button hides),
+ * disconnect and the session-event collector do nothing — matching the
+ * desktop `NoOpCastManager`/`NoOpPlayerCastController` seams, so the
+ * cast-connected branch of the screen is unreachable on desktop. The route
+ * button reaches the chrome as the cast slice's typed [CastRouteButton]
+ * projection (availability + click); the legacy manager never crosses.
  */
 
 /**
- * The cast discovery/connect surface for the controls' cast button, opaque so
- * the legacy Android type does not leak into common code. Android: the
- * Hilt-owned legacy `core:data` CastManager. Desktop: `null`.
+ * The cast route button's projection for the controls' cast entry, built
+ * over this VM's cast seam. Android: the projection over the legacy
+ * discovery/connect manager. Desktop: `null` (the button hides).
  */
-internal expect val VideoPlayerViewModel.platformCastManager: Any?
+internal expect fun VideoPlayerViewModel.platformCastRouteButton(): CastRouteButton?
 
 /**
  * Tear down the cast route from the companion dashboard's disconnect action.
@@ -39,8 +42,9 @@ internal expect fun CoroutineScope.launchPlatformCastSessionEvents(viewModel: Vi
 
 /**
  * The cast button in the controls' action row. Android renders the real
- * [com.raulshma.jellyplay.feature.player.video.components.CastButton];
- * desktop renders nothing (never called — [platformCastManager] is null).
+ * [com.raulshma.jellyplay.feature.player.video.components.CastButton] over
+ * the projection's platform implementation; desktop renders nothing (never
+ * composed — [platformCastRouteButton] is null).
  */
 @Composable
-internal expect fun PlatformCastButton(castManager: Any?)
+internal expect fun PlatformCastButton(routeButton: CastRouteButton)

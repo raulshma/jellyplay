@@ -33,10 +33,11 @@ import kotlinx.serialization.json.longOrNull
  *
  * Excluded from sync by design — in BOTH directions: `ByteArray` values
  * (opaque binaries never sync), anything matching [excludedPrefixes]
- * (per-device namespaces), and anything in [excludedKeys] (secrets and
- * device/session identity — see docs/jellyplay-plugin.md's "never synced"
- * list; the exclusion sets are exported by the owning stores so the key
- * names cannot drift). Outbound ([snapshot]) they never leave the device;
+ * (per-device namespaces), and anything in [excludedKeys] (secrets,
+ * device/session identity, and the widget payload cache — see
+ * docs/jellyplay-plugin.md's "never synced" list; the exclusion sets are
+ * exported by the owning stores so the key names cannot drift). Outbound
+ * ([snapshot]) they never leave the device;
  * inbound ([applyRemote]/[markSynced]) they are dropped even if a server
  * still holds pre-exclusion leaked rows or is hostile — the whole reserved
  * `jpsync.*` space (mirrors, device identity, sync cursors) is likewise
@@ -49,38 +50,59 @@ import kotlinx.serialization.json.longOrNull
  */
 class JellyPlayPreferencesSyncAdapter(
     private val dataStore: DataStore<Preferences>,
-    override val namespace: String = "prefs",
+    namespace: String = "prefs",
     private val excludedPrefixes: List<String> = emptyList(),
     private val excludedKeys: Set<String> = emptySet(),
-) : ProfileSyncAdapter {
-
+) : MirrorProfileSyncAdapter(
+    namespace = namespace,
+    mirrorStore = dataStore,
     // The mirror rides the SAME store as the synced set, under the reserved
-    // root prefix (`jpsync.mirror.<key>` — that stored shape predates
-    // per-namespace mirroring and is frozen), with the adapter's exclusion
-    // rule handed to SyncMirror so the dirty/mark/clear comparison keeps
-    // exactly one implementation.
-    private val mirror = SyncMirror(
-        mirrorStore = dataStore,
-        prefix = JpsyncReservation.MIRROR_ROOT,
-        shouldMirror = { name -> !JpsyncReservation.isReserved(name) && !isExcluded(name) },
-    )
+    // ROOT prefix (`jpsync.mirror.<key>` — that stored shape predates
+    // per-namespace mirroring and is frozen, so this adapter departs from
+    // the base's per-namespace default), with the adapter's exclusion rule
+    // handed to SyncMirror so the dirty/mark/clear comparison keeps exactly
+    // one implementation.
+    mirrorPrefix = JpsyncReservation.MIRROR_ROOT,
+    shouldMirror = { name ->
+        !JpsyncReservation.isReserved(name) &&
+            !(name in excludedKeys || excludedPrefixes.any { name.startsWith(it) })
+    },
+) {
+
+    // One-time stale-mirror prune: a key-level exclusion that landed after a
+    // key had synced strands its mirror entry (`jpsync.mirror.<key>` — every
+    // mirror face skips excluded keys now, so nothing would ever clear it).
+    // The whole excluded set is swept once per process at the first snapshot
+    // (each cycle's first adapter read): one DataStore edit, a no-op for
+    // keys that never synced, idempotent after.
+    private var staleMirrorPruned = false
 
     private fun isExcluded(name: String) =
         name in excludedKeys || excludedPrefixes.any { name.startsWith(it) }
 
     override suspend fun snapshot(): Map<String, JsonElement> {
+        pruneStaleMirrorOnce()
         val prefs = dataStore.data.first()
         return prefs.asMap().keys
             .filter { key -> !JpsyncReservation.isReserved(key.name) && !isExcluded(key.name) && prefs[key] !is ByteArray }
             .associate { key -> key.name to toJson(prefs[key]) }
     }
 
-    override suspend fun dirtyValues(current: Map<String, JsonElement>): Map<String, JsonElement> =
-        mirror.dirtyValues(current)
+    private suspend fun pruneStaleMirrorOnce() {
+        if (staleMirrorPruned) return
+        mirror.prune(excludedKeys)
+        // Only after the sweep succeeded: a failed prune must retry on the
+        // next cycle, not be abandoned for the process.
+        staleMirrorPruned = true
+    }
 
     override suspend fun applyRemote(entries: Map<String, JsonElement>) {
         if (entries.isEmpty()) return
         val current = dataStore.data.first()
+        // Name-keyed once for the whole batch: a fresh-device restore can
+        // pull hundreds of rows, and the per-row `firstOrNull` scan made the
+        // kind lookup O(entries × store).
+        val currentByName = current.asMap().mapKeys { it.key.name }
         dataStore.edit { prefs ->
             entries.forEach { (name, value) ->
                 // Never-synced and reserved names are dropped inbound too: a
@@ -95,7 +117,7 @@ class JellyPlayPreferencesSyncAdapter(
 
                 // Name-based lookup: Preferences.get(key) casts by key type and would
                 // throw reading e.g. an Int value under a String key.
-                val existing = current.asMap().entries.firstOrNull { it.key.name == name }?.value
+                val existing = currentByName[name]
                 // Coerce FIRST, write after: an uncoercible remote value skips the
                 // key entirely — the local value and its kind survive a garbage or
                 // hostile row (removing first would have wiped the setting, and
@@ -140,17 +162,16 @@ class JellyPlayPreferencesSyncAdapter(
         }
     }
 
-    override suspend fun markSynced(values: Map<String, JsonElement>) = mirror.markSynced(values)
-
     /**
-     * Applies remote tombstones: the server deleted these keys (a namespace
-     * reset's tombstone batch, or another device's roaming delete) — the local
-     * values AND their mirror entries go, so the adopted delete neither
-     * resurrects the setting nor re-reads as a local edit. Reserved/excluded
-     * names are dropped inbound like everywhere else (a hostile or stale row
-     * cannot touch secrets, identity, or mirror state). [deletedKeys] stays
-     * the SPI default: a removed pref means "reset to default", never
-     * "deleted everywhere", so prefs never push tombstones.
+     * Overrides [deleteRemote] WHOLE (ADR 0011 §2): an inbound prefs tombstone
+     * (a namespace reset's batch, or another device's roaming delete) adopts
+     * as "reset to default here" — the local value AND its mirror entry go,
+     * so the adopted delete neither resurrects the setting nor re-reads as a
+     * local edit. Reserved/excluded names are dropped inbound like everywhere
+     * else (a hostile or stale row cannot touch secrets, identity, or mirror
+     * state). [deletedKeys] stays the SPI default: a removed pref means
+     * "reset to default", never "deleted everywhere", so prefs never pushes
+     * tombstones.
      */
     override suspend fun deleteRemote(keys: Set<String>) {
         if (keys.isEmpty()) return

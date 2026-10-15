@@ -258,8 +258,10 @@ internal fun buildOfflineHomeSections(
     }
 
     // Merge mode folds Next Up into the Continue Watching row (deduped) and
-    // drops the separate row — the offline mirror of the online merge pref,
-    // through the same fold owner as the online paths
+    // drops the separate row — the offline mirror of the online merge pref.
+    // The fold's canonical owner is OrderHomeSectionsUseCase (the batch-time
+    // section fold); this offline projection and the single-row refresh's
+    // rebuild run its item-list projection through the shared mechanics
     // (ContinueWatchingRowRule.mergeCwNextUp; the offline item type maps in
     // through the id accessor).
     val mergedContinueWatching = if (prefs.mergeCwAndNextUp && nextUp.isNotEmpty()) {

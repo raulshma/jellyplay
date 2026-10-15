@@ -1,6 +1,5 @@
 package com.raulshma.jellyplay.feature.player.video
 
-import com.raulshma.jellyplay.core.testfixtures.FakePositionStore
 import com.raulshma.jellyplay.core.data.repository.OfflinePlaybackFacade
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.model.MediaDetail
@@ -533,8 +532,8 @@ class PlaybackSessionReportingTest {
         override fun wasInSyncPlay(): Boolean = false
     }
 
-    // [FakePositionStore] is the shared recording double
-    // (com.raulshma.jellyplay.core.testfixtures.FakePositionStore) since the
-    // fixtures hoist — this file's former private variant (records persists,
-    // serves nulls) is its DEFAULT shape (the saved*Value fields stay null).
+    // [FakePositionStore] is the recording double (player-video jvmTest, the
+    // ADR-0006 rule-4 move out of test-fixtures) — this file's former
+    // private variant (records persists, serves nulls) is its DEFAULT shape
+    // (the saved*Value fields stay null).
 }

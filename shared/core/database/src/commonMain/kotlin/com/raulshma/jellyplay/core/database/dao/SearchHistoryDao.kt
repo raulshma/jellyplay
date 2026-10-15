@@ -20,6 +20,10 @@ interface SearchHistoryDao {
     @Query("DELETE FROM search_history WHERE id = :id")
     suspend fun deleteById(id: Long)
 
+    /** The sync tombstone's batch form of [deleteById] — one statement for the whole adopted delete. */
+    @Query("DELETE FROM search_history WHERE id IN (:ids)")
+    suspend fun deleteByIds(ids: List<Long>)
+
     @Query("DELETE FROM search_history WHERE userId = :userId")
     suspend fun clearAll(userId: String)
 

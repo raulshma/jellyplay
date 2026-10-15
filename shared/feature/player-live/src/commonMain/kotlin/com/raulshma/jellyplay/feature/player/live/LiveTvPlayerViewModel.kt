@@ -242,6 +242,16 @@ class LiveTvPlayerViewModel(
             .onEach { ms -> _state.value = _state.value.copy(controlsTimeoutMs = ms) }
             .launchIn(viewModelScope)
 
+        // The persisted input mapping rides the same aggregate store (the
+        // GLOSSARY "Input dispatch module"): the live D-pad surface resolves
+        // its arm gates through it, so a disabled/rebound row applies to live
+        // exactly as it does to the VOD player.
+        aggregateStore.aggregate
+            .map { it.videoPlayer.videoInputBindings }
+            .distinctUntilChanged()
+            .onEach { map -> _state.value = _state.value.copy(inputMap = map) }
+            .launchIn(viewModelScope)
+
         // PiP auto-exit discharge (the VOD VM's pipDismissed collector): the
         // host Activity's autoExitPip collector translates requestAutoExitPip
         // (fired by the EngineStateChanged fold on engine END/ERROR in PiP)

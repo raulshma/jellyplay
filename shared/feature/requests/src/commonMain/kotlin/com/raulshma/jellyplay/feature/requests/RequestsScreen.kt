@@ -36,6 +36,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.ArrowLeft
@@ -90,6 +91,16 @@ fun RequestsScreen(
         itemCount = if (state.isLoading && state.requests.isEmpty()) 0 else state.requests.size,
         tag = "requests_init",
     )
+
+    // The repository's shared background poll (badge + current user) is bound
+    // to screen visibility: it runs only while Requests is foregrounded, not
+    // for the VM's whole lifetime in the back stack (the refresh cycle
+    // module's binding discipline; the loop itself lives behind the
+    // repository's refcounted start/stop).
+    LifecycleStartEffect(Unit) {
+        viewModel.startBackgroundPolling()
+        onStopOrDispose { viewModel.stopBackgroundPolling() }
+    }
 
     JellyPlayScreenScaffold(
         title = stringResource(Res.string.requests_title),

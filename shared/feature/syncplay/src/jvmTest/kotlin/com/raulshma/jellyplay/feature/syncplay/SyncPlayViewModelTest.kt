@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
@@ -633,6 +634,46 @@ class SyncPlayViewModelTest {
         // fold); the stale list is kept.
         assertEquals(listOf("g1"), viewModel.uiState.value.groups.map { it.groupId })
         assertEquals("offline", (viewModel.uiState.value.error as UiMessage.Raw).text)
+    }
+
+    // ── group-list backoff poll (the refresh cycle module) ────────────────
+
+    @Test
+    fun groupAutoRefresh_polls_on_the_5s_to_30s_backoff_and_stops() = runTest(mainDispatcher) {
+        val viewModel = newViewModel()
+        advanceUntilIdle()
+        coVerify(exactly = 1) { mediaRepository.getSyncPlayGroups() } // the init load
+
+        // NOTE: no advanceUntilIdle until the stop — the cycle is a
+        // self-rescheduling loop, which would spin the idle-advance forever.
+        viewModel.startGroupAutoRefresh()
+        mainDispatcher.scheduler.advanceTimeBy(5_000)
+        mainDispatcher.scheduler.runCurrent() // poll 1 — the base gap
+        mainDispatcher.scheduler.advanceTimeBy(7_500) // 5s * 1.5
+        mainDispatcher.scheduler.runCurrent() // poll 2
+        mainDispatcher.scheduler.advanceTimeBy(11_250) // 7.5s * 1.5
+        mainDispatcher.scheduler.runCurrent() // poll 3
+        coVerify(exactly = 4) { mediaRepository.getSyncPlayGroups() }
+
+        viewModel.stopGroupAutoRefresh()
+        mainDispatcher.scheduler.advanceTimeBy(60_000)
+        mainDispatcher.scheduler.advanceUntilIdle()
+        coVerify(exactly = 4) { mediaRepository.getSyncPlayGroups() } // nothing further
+    }
+
+    @Test
+    fun a_repeated_startGroupAutoRefresh_does_not_stack_a_second_loop() = runTest(mainDispatcher) {
+        val viewModel = newViewModel()
+        advanceUntilIdle()
+
+        viewModel.startGroupAutoRefresh()
+        viewModel.startGroupAutoRefresh() // replaces, never stacks
+        mainDispatcher.scheduler.advanceTimeBy(5_000)
+        mainDispatcher.scheduler.runCurrent()
+        viewModel.stopGroupAutoRefresh()
+        mainDispatcher.scheduler.advanceUntilIdle()
+
+        coVerify(exactly = 2) { mediaRepository.getSyncPlayGroups() } // init load + exactly one poll tick
     }
 
     @Test

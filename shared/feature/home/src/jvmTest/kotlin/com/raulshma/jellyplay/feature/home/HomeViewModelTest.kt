@@ -373,7 +373,7 @@ class HomeViewModelTest {
         ),
         statsCardLoader = statsCardLoader,
         genreRailCache = genreRailCache,
-        presenceChips = presenceChips,
+        presenceChipsController = presenceChips,
     )
 
     /**

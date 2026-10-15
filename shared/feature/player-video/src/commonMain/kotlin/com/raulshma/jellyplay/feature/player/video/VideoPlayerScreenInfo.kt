@@ -144,7 +144,10 @@ internal fun BoxScope.PlayerStatusOverlayTier(
         detectedAspectRatio = inputs.detectedAspectRatio,
         aspectRatio = inputs.aspectRatio,
     )
-    AbRepeatBadge(events = viewModel.playbackSession.abRepeat.events)
+    // The A/B repeat badge's one-shot event feed rides the status session
+    // slice (the GLOSSARY "Session slice" seam — the badge leaf is its only
+    // consumer in this tier).
+    AbRepeatBadge(events = viewModel.sessionSlices.status.abRepeatEvents)
 
     ZoomBadge(videoZoom = inputs.videoZoom)
 

@@ -14,7 +14,6 @@ import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.ResolvedPlayback
 import com.raulshma.jellyplay.core.model.StreamingQuality
 import com.raulshma.jellyplay.core.testfixtures.FakeMediaEngine
-import com.raulshma.jellyplay.core.testfixtures.FakePositionStore
 import com.raulshma.jellyplay.feature.player.video.engine.EngineError
 import com.raulshma.jellyplay.feature.player.video.engine.EnginePlaybackState
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
@@ -830,9 +829,9 @@ class PlaybackSessionLifecycleTest {
         }
     }
 
-    // [FakePositionStore] is the shared recording double
-    // (com.raulshma.jellyplay.core.testfixtures.FakePositionStore) since the
-    // fixtures hoist — this file's former private variant (records persists,
-    // serves settable saved values) IS its behavior; the tests below set only
-    // the saved*Value fields the resume path reads.
+    // [FakePositionStore] is the recording double (player-video jvmTest, the
+    // ADR-0006 rule-4 move out of test-fixtures — its only consumers were
+    // this module's suites) — this file's former private variant (records
+    // persists, serves settable saved values) IS its behavior; the tests
+    // below set only the saved*Value fields the resume path reads.
 }

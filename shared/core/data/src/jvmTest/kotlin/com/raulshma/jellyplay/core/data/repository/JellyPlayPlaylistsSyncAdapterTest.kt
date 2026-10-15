@@ -328,10 +328,10 @@ class JellyPlayPlaylistsSyncAdapterTest {
         database.smartPlaylistDao().deleteById("smart-1")
         database.moodPlaylistDao().deletePreferenceById("mood-1")
 
-        assertEquals(setOf("smart/smart-1", "moodpref/mood-1"), adapter.deletedKeys())
+        assertEquals(setOf("smart/smart-1", "moodpref/mood-1"), adapter.deletedKeys(adapter.snapshot()))
 
         adapter.deleteRemote(setOf("smart/smart-1", "moodpref/mood-1"))
-        assertTrue(adapter.deletedKeys().isEmpty())
+        assertTrue(adapter.deletedKeys(adapter.snapshot()).isEmpty())
         assertTrue(adapter.dirtyValues(adapter.snapshot()).isEmpty())
         assertNull(database.smartPlaylistDao().getById("smart-1"))
         assertNull(database.moodPlaylistDao().getPreference("mood-1"))

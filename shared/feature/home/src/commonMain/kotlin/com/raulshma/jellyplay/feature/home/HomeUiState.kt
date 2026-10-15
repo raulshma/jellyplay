@@ -1,6 +1,8 @@
 package com.raulshma.jellyplay.feature.home
 
 import androidx.compose.runtime.Immutable
+import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.persistentListOf
 import com.raulshma.jellyplay.core.model.CuratedHeroEntry
 import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.HomeMode
@@ -49,7 +51,14 @@ data class SectionConfigState(
 
 @Immutable
 data class HomeUiState(
-    val sections: List<HomeSection> = emptyList(),
+    /**
+     * The rendered rows — a persistent list so the @Immutable bag's largest
+     * field stays Compose-stable (a plain List parameter is unstable and
+     * would un-skip every consumer). The refresher fold (the sole writer)
+     * converts with `toImmutableList()` — a no-op wrap once the value is
+     * already immutable.
+     */
+    val sections: ImmutableList<HomeSection> = persistentListOf(),
     /**
      * H9: the plugin-curated hero billboards (the refresher's resolved
      * entries — see [HomeRefreshState.curatedHero]). The screen merges them
@@ -84,20 +93,6 @@ data class HomeUiState(
     val error: String? = null,
     /** Non-blocking notice shown when some (not all) home sections failed to load. */
     val partialLoadError: Boolean = false,
-    /**
-     * Custom discover rows with a dice roll in flight (row ids) — drives the
-     * dice icon's tumbling animation on the matching row header. Mirrored
-     * from [HomeRefreshState.rollingDiscoverRowIds] (the refresher's roll
-     * choreography owns it).
-     */
-    val rollingDiscoverRowIds: Set<String> = emptySet(),
-    /**
-     * Section ids with an edge-pull refresh in flight — drives the matching
-     * row's edge spinner and arms the one-refresh-per-row pull guard.
-     * Mirrored from [HomeRefreshState.refreshingSectionIds] (the refresher's
-     * single-row refresh choreography owns it).
-     */
-    val refreshingSectionIds: Set<String> = emptySet(),
     val homeMode: HomeMode = HomeMode.VIDEO,
     /** The appearance/theme quintet — see [AppearanceUiState]. */
     val appearance: AppearanceUiState = AppearanceUiState(),
@@ -234,13 +229,14 @@ data class HomeUiState(
      */
     val trickplayPreviewEnabled: Boolean = true,
     /**
-     * H19 watch-party presence chips — OTHER users' now-playing sessions
-     * (capped at 3, per-chip dismissals already applied). Empty hides the
-     * row: pref off, offline, a failed capability probe (non-admin for the
-     * session — probe-once/hide-forever), or simply nobody watching.
-     */
-    val presenceChips: List<HomePresenceChip> = emptyList(),
-    /**
+     * H19 watch-party presence chips no longer live here — see the NOTE on
+     * [HomeSearchState] for the pattern: the poll loop writes the whole
+     * state on the home refresh cadence, so a per-tick field meant copying
+     * the ~45-field object (and racing the refresher's emissions on the same
+     * StateFlow) for a value one row reads. The source of truth is now the
+     * VM's `presenceChips` StateFlow, collected at the chip row
+     * ([HomeContentList]).
+     *
      * Monotonic counter bumped once per forced refresh — mirrored from
      * [HomeRefreshState.imageReloadEpoch] (the refresher is its sole writer,
      * like [sections]). Provided to the content subtree as

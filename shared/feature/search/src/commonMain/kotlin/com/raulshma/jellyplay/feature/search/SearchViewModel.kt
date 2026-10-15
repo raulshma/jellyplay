@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.search
 import androidx.paging.PagingData
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.download.QuickDownloadActions
+import com.raulshma.jellyplay.core.data.download.pagedGridQuickActions
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.SearchHistoryItem
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
@@ -127,6 +128,18 @@ internal class SearchViewModel(
     val offlineResults: StateFlow<List<OfflineMediaItem>> = _offlineResults.flow
 
     /**
+     * The six quick-action seams, wired once by the shared core:data factory
+     * ([pagedGridQuickActions]) — no messenger here: failures toast the
+     * platform-default strings. Spread into the [pagedGrid] host verbatim;
+     * this VM keeps only its (debounced query, filters) paged source.
+     */
+    private val quickActions = pagedGridQuickActions(
+        mediaRepository = mediaRepository,
+        userDataMutator = userDataMutator,
+        quickDownloadActions = quickDownloadActions,
+    )
+
+    /**
      * The paged results grid, wired through the shared [PagedMediaGridHost]:
      * the host owns the deferred-refresh generation counter, the refresher
      * pairing and the cachedIn sharing; this source splices the generation
@@ -135,14 +148,12 @@ internal class SearchViewModel(
      */
     private val pagedGrid = PagedMediaGridHost(
         scope = scope,
-        userDataChanges = mediaRepository.userDataChanges,
-        downloadedIds = quickDownloadActions.downloadedIds,
-        downloadSupported = quickDownloadActions.isSupported,
-        setPlayedSilently = { itemId, played -> userDataMutator.setPlayed(itemId, played) },
-        requestDownload = { item, onOpenDetail, seriesOpensSheet ->
-            quickDownloadActions.downloadAndReport(item, onOpenDetail, seriesOpensSheet)
-        },
-        removeDownloadItem = quickDownloadActions::removeDownload,
+        userDataChanges = quickActions.userDataChanges,
+        downloadedIds = quickActions.downloadedIds,
+        downloadSupported = quickActions.downloadSupported,
+        setPlayedSilently = quickActions.setPlayedSilently,
+        requestDownload = quickActions.requestDownload,
+        removeDownloadItem = quickActions.removeDownloadItem,
         source = { trigger ->
             combine(debouncedQuery, _filters.flow, trigger) { currentQuery, filters, _ ->
                 currentQuery to filters

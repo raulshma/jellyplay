@@ -1,8 +1,10 @@
 package com.raulshma.jellyplay.feature.details
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.ArrowsJoin
 import com.composables.icons.tabler.outline.ArrowsSplit
@@ -171,7 +173,6 @@ internal fun rememberMediaOptions(
     isSeries: Boolean,
     seasons: List<MediaItem>,
     preferences: DetailPreferences,
-    activeDownload: DownloadItem?,
     isDownloading: Boolean,
     isDownloadingSeries: Boolean,
     canManageSeries: Boolean,
@@ -236,15 +237,26 @@ internal fun rememberMediaOptions(
     platformSupportsNotifications: Boolean = false,
     onToggleSeriesNotifications: (enabled: Boolean) -> Unit = {},
 ): List<MediaOption> {
+    // The current item's live download row — the flow arrives through
+    // [LocalActiveDownloadFlow] and is collected HERE (this builder is the
+    // value's only reader), so a ~2 s transfer tick recomposes this scope
+    // (rebuilding the option list with the fresh percent) and nothing above
+    // it — never the DetailContentState construction or the content tree.
+    val activeDownloadFlow = LocalActiveDownloadFlow.current
+    val activeDownload by remember(activeDownloadFlow) {
+        activeDownloadFlow ?: kotlinx.coroutines.flow.emptyFlow<DownloadItem?>()
+    }.collectAsStateWithLifecycle(initialValue = null)
+
     // Download status / progress, resolved once for both the label and the
     // enabled flag so the two menus stay in lock-step.
-    val downloadStatus = activeDownload?.status
+    val activeDownloadRow = activeDownload
+    val downloadStatus = activeDownloadRow?.status
     val isDownloadActive = downloadStatus == DownloadStatus.PENDING ||
         downloadStatus == DownloadStatus.DOWNLOADING ||
         downloadStatus == DownloadStatus.PAUSED
     val isDownloadCompleted = downloadStatus == DownloadStatus.COMPLETED
-    val downloadProgress = if (activeDownload != null && activeDownload.totalSizeBytes > 0) {
-        activeDownload.downloadedBytes.toFloat() / activeDownload.totalSizeBytes
+    val downloadProgress = if (activeDownloadRow != null && activeDownloadRow.totalSizeBytes > 0) {
+        activeDownloadRow.downloadedBytes.toFloat() / activeDownloadRow.totalSizeBytes
     } else 0f
 
     val canDownload = item != null && detail != null && detail.mediaSources.isNotEmpty() &&

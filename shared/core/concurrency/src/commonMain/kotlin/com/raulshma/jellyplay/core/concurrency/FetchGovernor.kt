@@ -3,7 +3,10 @@ package com.raulshma.jellyplay.core.concurrency
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.pow
 import kotlin.random.Random
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
@@ -22,6 +25,9 @@ import kotlinx.coroutines.withTimeoutOrNull
  *    triggers of the same fetch serialize instead of duplicating.
  *  - **Cadence — how often** ([boundedPoll]): rounds separated by real gaps,
  *    so a busy server is waited out, not hammered gap-free.
+ *  - **Loop — whether at all** ([RefreshCycle]): the visibility-bound
+ *    start/stop refresh loop, so a back-stacked screen cannot poll by
+ *    construction.
  *
  * Per-attempt RETRY — which failures to re-attempt and how many times — stays
  * in core:network's `RetryPolicy`, where it already lives. The two are
@@ -119,6 +125,14 @@ class SingleFlight {
  */
 data class PollSpec(
     /**
+     * The wait BEFORE the first attempt (default 0) — for polls where
+     * probing immediately is known-useless (a server that just answered a
+     * restart command needs its downtime before the first health probe).
+     * Sits inside [envelopeMs]: the envelope caps the whole wait including
+     * this one.
+     */
+    val initialDelayMs: Long = 0,
+    /**
      * The gap between rounds, honored AFTER each null attempt: attempt N+1
      * never fires before [intervalMs] after attempt N.
      */
@@ -168,6 +182,8 @@ data class PollSpec(
  *
  * Declared policies:
  *
+ *  - **[PollSpec.initialDelayMs] runs before the first attempt** (default 0),
+ *    inside the envelope.
  *  - **A null attempt consumes the round** (the busy-server rule): the
  *    [PollSpec.intervalMs] gap is honored after it, grown per
  *    [PollSpec.backoffFactor] and capped at [PollSpec.maxIntervalMs], widened
@@ -200,6 +216,7 @@ private suspend fun <T> pollRounds(
     poll: PollSpec,
     attempt: suspend (round: Int) -> T?,
 ): T? {
+    if (poll.initialDelayMs > 0) delay(poll.initialDelayMs)
     var round = 1
     while (true) {
         val answer = attempt(round)
@@ -208,12 +225,96 @@ private suspend fun <T> pollRounds(
         // attempt gets no trailing delay, every other one is followed by the
         // grown-capped-jittered gap.
         if (round >= poll.maxAttempts) return null
-        val grown = (poll.intervalMs * poll.backoffFactor.pow(round - 1)).toLong()
-        val gapMs = grown.coerceAtMost(poll.maxIntervalMs)
-        delay(gapMs + poll.nextJitterMs())
+        delay(poll.gapMs(round) + poll.nextJitterMs())
         round++
     }
 }
 
+/** The grown-capped gap for 1-based [round], before jitter — shared with [RefreshCycle]. */
+private fun PollSpec.gapMs(round: Int): Long =
+    (intervalMs * backoffFactor.pow(round - 1)).toLong().coerceAtMost(maxIntervalMs)
+
 private fun PollSpec.nextJitterMs(): Long =
     if (jitterMs > 0) random.nextLong(jitterMs) else 0L
+
+/**
+ * One visibility-bound refresh loop — the FetchGovernor's fourth question,
+ * **whether at all**. The `job?.cancel(); job = launch { while (true) {
+ * delay(X); fetch() } }` + stop + screen-side visibility gate trio was
+ * hand-rolled per screen (EpgViewModel's 5-minute guide loop,
+ * SettingsViewModel's 30-second sessions poll, the transcodes monitor's
+ * gate-predicated 5s loop, SyncPlay's 5s→30s backoff — which lived IN the
+ * screen composable), each with its own flavor of the same four parts.
+ * A back-stacked screen cannot poll by construction here: polling runs
+ * only between [start] and [stop], and the screen owns that pair.
+ *
+ * Contract, declared:
+ *
+ *  - **start/stop is the whole interface.** [start] cancels any previous
+ *    loop before launching — the [RestartableJob] rule: repeated starts
+ *    replace, never stack, and re-entry re-arms from the first gap. [stop]
+ *    cancels and clears; a stopped cycle schedules nothing further.
+ *  - **Cadence is [PollSpec]** — the same interval/backoff/jitter vocabulary
+ *    as [boundedPoll]: round 1 fetches after one gap, round N after the
+ *    grown-capped-jittered gap. [PollSpec.maxAttempts] and
+ *    [PollSpec.envelopeMs] stay boundedPoll's dimensions — a refresh loop is
+ *    unbounded by definition; a bounded one IS a [boundedPoll].
+ *  - **A [gate]-closed round fetches nothing and does not advance the
+ *    backoff.** The growth measures fetches, not wall time, so a screen
+ *    un-gated after a long closed stretch polls at the cadence it left at,
+ *    not a stale grown one.
+ *  - **The fetch arm owns its outcomes.** Arms return `Result` and swallow
+ *    failures (the refresh-failure idiom — a failed poll keeps the stale
+ *    state); an arm that THROWS kills the loop, exactly like the hand-rolled
+ *    `while (true)` loops this replaces.
+ *
+ * Visibility binding stays screen-side on purpose — the screen calls the
+ * VM's start/stop from its `LifecycleStartEffect` (keying the effect on the
+ * gate input when the loop should re-arm on a gate flip, e.g. membership),
+ * so the VM owns the loop, the screen owns the lifecycle, and neither grows
+ * a lifecycle dependency. Not every poll is a [RefreshCycle]: a bounded
+ * wait-for-one-answer loop is a [boundedPoll], and a loop whose cadence
+ * already lives behind a repository start/stop pair keeps that pair and
+ * gains only the visibility binding.
+ */
+class RefreshCycle(
+    private val scope: CoroutineScope,
+    private val poll: PollSpec,
+    /** Per-round gate: false skips the fetch for that round (and its backoff step). */
+    private val gate: (suspend () -> Boolean)? = null,
+    private val fetch: suspend () -> Unit,
+) {
+
+    private var job: Job? = null
+
+    /** True while a started loop is alive — a stopped or never-started cycle is false. */
+    val isActive: Boolean
+        get() = job?.isActive == true
+
+    /**
+     * Cancels any previous loop, then starts a fresh one on [scope].
+     * `@Synchronized` keeps the cancel-then-replace slot safe under
+     * concurrent callers ([RestartableJob]'s discipline).
+     */
+    @Synchronized
+    fun start() {
+        job?.cancel()
+        job = scope.launch {
+            var round = 1
+            while (true) {
+                delay(poll.gapMs(round) + poll.nextJitterMs())
+                if (gate == null || gate()) {
+                    fetch()
+                    round++
+                }
+            }
+        }
+    }
+
+    /** Cancels the loop started by [start]; scheduling nothing further. */
+    @Synchronized
+    fun stop() {
+        job?.cancel()
+        job = null
+    }
+}

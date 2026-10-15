@@ -1,11 +1,14 @@
 package com.raulshma.jellyplay.feature.player.video
 
 import androidx.compose.ui.input.key.KeyEventType
+import com.raulshma.jellyplay.core.model.PlayerInputDefaults
 import com.raulshma.jellyplay.core.ui.tv.input.DpadAction
 import com.raulshma.jellyplay.core.ui.tv.input.DpadKeyEvent
 import com.raulshma.jellyplay.core.ui.tv.input.DpadSeekAcceleration
 import com.raulshma.jellyplay.core.ui.tv.components.DpadSeekState
 import com.raulshma.jellyplay.core.ui.tv.input.dpadKeyHandlerHandle
+import com.raulshma.jellyplay.feature.player.video.chrome.PlayerChromeController
+import com.raulshma.jellyplay.feature.player.video.state.PlayerInputDispatcher
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -26,12 +29,25 @@ class TvDpadMenuArmTest {
 
     private fun fixture(showControls: Boolean): Pair<(DpadKeyEvent) -> Boolean, Probe> {
         val probe = Probe()
+        val visibleState = object {
+            var visible = showControls
+        }
+        val chrome = PlayerChromeController(
+            scope = kotlinx.coroutines.CoroutineScope(kotlin.coroutines.EmptyCoroutineContext),
+            isVisibleNow = { visibleState.visible },
+            applyVisible = { visibleState.visible = it; if (it) probe.showCalls++ },
+            isTv = { true },
+            controlsTimeoutMs = { 5_000L },
+            isSheetOpen = { false },
+        )
+        val dispatcher = PlayerInputDispatcher(
+            getMap = { PlayerInputDefaults.defaultMap() },
+            executeAction = { true },
+        )
         val handler = dpadKeyHandlerHandle(
             tvDpadKeyConfig(
-                showControls = showControls,
-                isPlaying = true,
-                hideOsdOnPause = false,
-                onShowControlsChange = { show -> if (show) probe.showCalls++ },
+                dispatcher = dispatcher,
+                chrome = chrome,
                 seekState = DpadSeekState(
                     acceleration = DpadSeekAcceleration.Default,
                     getBaseStepMs = { 10_000L },
@@ -39,12 +55,11 @@ class TvDpadMenuArmTest {
                     getDurationMs = { 100_000L },
                     onCommit = {},
                 ),
+                isPlaying = { true },
                 doTogglePlayPause = {},
                 doSeekBack = {},
                 doSeekForward = {},
                 performConfirmHaptic = {},
-                resolveAction = { null },
-                executePlayerAction = { true },
             ),
         )
         return handler to probe

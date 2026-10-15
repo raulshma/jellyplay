@@ -5,7 +5,10 @@ package com.raulshma.jellyplay.core.model
  * of the Jellyfin SDK 1.8.12 `ImageApi.getItemImageUrl` +
  * `UrlBuilder.buildUrl` behavior for exactly the parameters the app uses
  * (`maxWidth` / `tag` / `imageIndex`; the other query keys keep their SDK
- * order so adding one later is a one-line change).
+ * order so adding one later is a one-line change). The `fillWidth` /
+ * `fillHeight` / `quality` thumbnail trio lives in [buildItemFillImageUrl],
+ * which deliberately emits the legacy settings-row key order instead (see
+ * its KDoc).
  *
  * Byte-parity notes (verified against the SDK sources):
  *  - Path is `/Items/{itemId}/Images/{imageType}`; path segments are
@@ -145,5 +148,51 @@ fun buildItemImageUrl(
         // format/percentPlayed/unplayedCount/blur/backgroundColor/
         // foregroundLayer also null for every current call site.
         imageIndex?.let { param("imageIndex", it) }
+    }
+}
+
+/**
+ * Builds the fixed-box `/Items/{itemId}/Images/{imageType}` variant — the
+ * `fillWidth` / `fillHeight` / `quality` parameter set the SDK exposes
+ * alongside `maxWidth`/`maxHeight`, for cover-fit boxes (the settings
+ * screen's now-playing device card) rather than max-bound scales. Same
+ * refusal contract as [buildItemImageUrl]: "" for no base URL, unknown
+ * image type, or an item id that is a GUID in neither serialization
+ * (compact ids normalize to dashed, values append unencoded — valid tags
+ * are hex, so the no-op is exact).
+ *
+ * One deliberate delta from the SDK: the query keys are emitted in the
+ * legacy settings-row order (`tag` first, then the fill dims, then
+ * `quality`), NOT the SDK buildMap order. This function absorbed
+ * ActiveDevicesRow's hand-rolled string verbatim, and Coil's memory/disk
+ * caches key on the URL string — reordering would silently evict every
+ * now-playing card image on first rebuild (the server itself parses query
+ * keys order-agnostically, so nothing else depends on the order).
+ */
+fun buildItemFillImageUrl(
+    baseUrl: String?,
+    itemId: String,
+    imageType: String,
+    tag: String? = null,
+    fillWidth: Int? = null,
+    fillHeight: Int? = null,
+    quality: Int? = null,
+): String {
+    if (baseUrl.isNullOrBlank()) return ""
+    if (imageType !in KNOWN_IMAGE_TYPES) return ""
+    val normalizedItemId = normalizeItemIdGuid(itemId) ?: return ""
+    return buildString {
+        append(baseUrl.trimEnd('/'))
+        append("/Items/").append(normalizedItemId).append("/Images/").append(imageType)
+        var separator = '?'
+        fun param(key: String, value: Any?) {
+            append(separator).append(key).append('=').append(value.toString())
+            separator = '&'
+        }
+        // Legacy settings-row order, NOT the SDK buildMap order (see KDoc).
+        tag?.let { param("tag", it) }
+        fillWidth?.let { param("fillWidth", it) }
+        fillHeight?.let { param("fillHeight", it) }
+        quality?.let { param("quality", it) }
     }
 }

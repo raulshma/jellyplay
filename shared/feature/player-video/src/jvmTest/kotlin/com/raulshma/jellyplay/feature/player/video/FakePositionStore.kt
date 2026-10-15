@@ -1,4 +1,4 @@
-package com.raulshma.jellyplay.core.testfixtures
+package com.raulshma.jellyplay.feature.player.video
 
 import com.raulshma.jellyplay.feature.player.video.SessionPositionStore
 

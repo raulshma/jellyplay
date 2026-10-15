@@ -913,8 +913,40 @@ class DetailViewModel internal constructor(
      * Still inline by design (see reduceLoaded): [loadBookExtras] (lifecycle
      * cancel for every media type) and [maybeComputeSmartPlayTarget] (core
      * resolution, not a side effect).
+     *
+     * The detail section modules' enrichment arms
+     * ([DetailSectionRegistry.enrichments]) are spliced in at the exact
+     * position their migrated hand-written entries occupied (wave 1: the
+     * pluginRatings fetch, now PluginRatingsSectionModule's arm) — the
+     * externalRatings entry below reads the feature probe that arm latches,
+     * so the splice point is load-bearing.
      */
-    private val enrichments: List<DetailEnrichment> = listOf(
+    // ── The section modules' enrichment-host seam ([DetailSectionEnrichmentHost]):
+    //    a private adapter over the members the former hand-written enrichment
+    //    bodies read directly — the guard, the state-write funnel, the plugin
+    //    roles. Kept off the ViewModel's member surface: implementing the host
+    //    on the class itself would widen the ownership ratchet's counted
+    //    interface for what is wiring, not new VM behavior. Declared ahead of
+    //    [enrichments], whose initializer splices it in. ──
+
+    private val sectionEnrichmentHost = object : DetailSectionEnrichmentHost {
+        override suspend fun pluginFeature(feature: String, itemId: String): Boolean =
+            this@DetailViewModel.pluginFeature(feature, itemId)
+
+        override fun isCurrent(itemId: String): Boolean = loadGuard.isCurrent(itemId)
+
+        override fun updateState(reduce: (DetailUiState) -> DetailUiState) {
+            _uiState.update(reduce)
+        }
+
+        override suspend fun mdbListRatings(
+            imdbId: String,
+        ): Result<com.raulshma.jellyplay.core.network.api.JellyPlayRatingsResult?>? =
+            pluginRatingsApi?.getMdbListRatings(imdbId)
+    }
+
+    private val enrichments: List<DetailEnrichment> =
+        listOf(
         DetailEnrichment(
             name = "themeMusic",
             // D8 gate matrix: the global pref must be ON and the series not
@@ -1043,28 +1075,13 @@ class DetailViewModel internal constructor(
                     _uiState.update { it.copy(collectionItems = result.items) }
                 }
         },
-        DetailEnrichment(
-            name = "pluginRatings",
-            // ADR 0010: the mdblist ratings chips row. The feature-key gate is
-            // a suspend probe, so it lives in the BODY (the gate stays a pure
-            // snapshot read); failure/null → the field stays empty → the
-            // section is silently absent.
-            gate = { it.remoteDiscoveryAllowed },
-        ) { inputs ->
-            if (!pluginFeature(JellyPlayPluginFeatures.Ratings, inputs.itemId)) return@DetailEnrichment
-            val imdbId = resolveImdbId(inputs.detail) ?: return@DetailEnrichment
-            val result = pluginRatingsApi?.getMdbListRatings(imdbId)?.getOrNull() ?: return@DetailEnrichment
-            if (!loadGuard.isCurrent(inputs.itemId)) return@DetailEnrichment
-            _uiState.update {
-                // Scoreless entries would render an empty chip — dropped here so
-                // the section's emptiness check matches what it can render.
-                it.copy(
-                    pluginRatings = result.ratings
-                        .filter { r -> r.score != null }
-                        .map { it.toModel() },
-                )
-            }
-        },
+    ) +
+        // The section modules' enrichment arms (the detail section registry):
+        // today the pluginRatings fetch, verbatim from its former hand-written
+        // entry — spliced exactly where that entry sat, so the fan-out order
+        // (and externalRatings' read of the latched probe below) is unchanged.
+        DetailSectionRegistry.enrichments(host = sectionEnrichmentHost) +
+        listOf(
         DetailEnrichment(
             name = "externalRatings",
             // D4: the no-plugin ratings strip (RT/IMDb/TMDB chips when the
@@ -1330,7 +1347,7 @@ class DetailViewModel internal constructor(
             if (!loadGuard.isCurrent(inputs.itemId)) return@DetailEnrichment
             _uiState.update { it.copy(themeVideoStreamUrl = streamUrl) }
         },
-    )
+        )
 
     /** The stock similar row's limit (the plugin row mirrors it). */
     private companion object {

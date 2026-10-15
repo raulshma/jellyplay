@@ -30,6 +30,18 @@ import com.raulshma.jellyplay.core.ui.navigation.Route
 internal val LocalEpisodeDownloadProgress = staticCompositionLocalOf<Map<String, Float>> { emptyMap() }
 
 /**
+ * The current item's live download row (`DownloadLifecycleActions.downloadFlow`),
+ * provided by [MediaDetailScreen] as the FLOW — not the value — so the ~2 s
+ * transfer tick invalidates only the leaf that collects it (the ⋮ options-menu
+ * builder, the value's one reader) instead of re-executing the ~60-field
+ * [DetailContentState] construction and recomposing the content tree per
+ * tick. Companion of [LocalEpisodeDownloadProgress], which is the same
+ * placement rule for the per-episode progress map. Null (the default) when no
+ * provider is wired — reads as "no active download".
+ */
+internal val LocalActiveDownloadFlow = staticCompositionLocalOf<kotlinx.coroutines.flow.Flow<DownloadItem?>?> { null }
+
+/**
  * Pure-data bundle for the media-detail content tree.
  *
  * Groups every value the `DetailContent` → `DetailContentBody` → section
@@ -67,7 +79,6 @@ internal data class DetailContentState(
     val selectedVersionId: String? = null,
     val isDownloading: Boolean,
     val isDownloadingSeries: Boolean,
-    val activeDownload: DownloadItem?,
     val loadState: DetailUiLoadState,
     val albumTracks: List<MediaItem>,
     val collectionItems: List<MediaItem>,

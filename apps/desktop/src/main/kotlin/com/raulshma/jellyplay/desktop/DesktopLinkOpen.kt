@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.desktop
 import com.raulshma.jellyplay.core.model.deeplink.DeepLinkGrammar
 import com.raulshma.jellyplay.core.model.deeplink.DeepLinkTarget
 import com.raulshma.jellyplay.core.ui.navigation.Route
+import com.raulshma.jellyplay.core.ui.navigation.toRoute
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.receiveAsFlow
@@ -108,28 +109,16 @@ object DesktopLinkOpenPolicy {
         args.filter { parse(it) != null }
 
     /**
-     * The parsed-target → route fold — the desktop twin of the Android
-     * shell's DeepLinkHandler.targetToRoute (same rows, same nulls):
-     * [DeepLinkTarget.SyncPlayJoin] routes NOWHERE on both shells — it is
-     * the Discord Rich Presence Join button's payload, consumed here by
+     * The parsed-target → route fold — the desktop shell's thin pass over the
+     * shared [DeepLinkTarget.toRoute] beside [Route] in core:ui (the ONE
+     * target→destination table; the Android DeepLinkHandler consumes the same
+     * fold): [DeepLinkTarget.SyncPlayJoin] routes NOWHERE on every shell — it
+     * is the Discord Rich Presence Join button's payload, consumed here by
      * DiscordPresenceService.handleJoinSecret, not a navigation destination.
      * `null` (with the grammar's own parse misses folded in) is the
      * scaffold's cue for the no-desktop-route snackbar.
      */
-    fun targetRoute(target: DeepLinkTarget?): Route? = when (target) {
-        is DeepLinkTarget.MediaDetail -> Route.MediaDetail(target.itemId)
-        is DeepLinkTarget.NewsletterSection -> Route.NewsletterSectionList(target.section)
-        is DeepLinkTarget.SeerrDetail -> Route.SeerrDetail(
-            tmdbId = target.tmdbId,
-            mediaType = target.mediaType,
-        )
-        DeepLinkTarget.Search -> Route.Search
-        DeepLinkTarget.Settings -> Route.Settings
-        DeepLinkTarget.Downloads -> Route.Downloads
-        DeepLinkTarget.Library -> Route.Library
-        is DeepLinkTarget.SyncPlayJoin -> null
-        null -> null
-    }
+    fun targetRoute(target: DeepLinkTarget?): Route? = target.toRoute()
 
     /** android.net.Uri.getPathSegments over java.net.URI's path (decoded, like Android's). */
     private fun java.net.URI.pathSegments(): List<String> =
