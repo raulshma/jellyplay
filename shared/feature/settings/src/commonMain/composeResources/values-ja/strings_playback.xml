@@ -268,6 +268,12 @@
     <string name="settings_passthrough_codec_off">ソフトウェアデコード</string>
     <string name="settings_max_audio_channels">最大オーディオチャンネル数</string>
     <string name="settings_downmix_boost">ステレオダウンミックスブースト</string>
+    <string name="settings_spatial_audio">スペーシャルオーディオ</string>
+    <string name="settings_spatial_audio_on">有効なとき、システムのスパイシャライザーがマルチチャンネル音声を立体再生します</string>
+    <string name="settings_spatial_audio_off">通常の音声処理</string>
+    <string name="settings_spatial_audio_only_headphones">ヘッドホンのみ</string>
+    <string name="settings_spatial_audio_only_headphones_on">ヘッドホン出力でのみダウンミックスを退けます</string>
+    <string name="settings_spatial_audio_only_headphones_off">すべての出力に適用</string>
     <string name="settings_offline_playback">オフライン再生</string>
     <string name="settings_offline_playback_prefer_downloaded">ダウンロードを優先</string>
     <string name="settings_offline_playback_prefer_streaming">ストリーミングを優先</string>

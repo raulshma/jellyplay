@@ -233,6 +233,9 @@ internal class ControlsSessionSlice(
 
     fun setAudioPassthrough(enabled: Boolean) = effects.setAudioPassthrough(enabled)
 
+    /** The ADVISORY spatial-audio toggle (Android/ExoPlayer only). */
+    fun setSpatialAudioEnabled(enabled: Boolean) = effects.setSpatialAudioEnabled(enabled)
+
     fun toggleAudioNormalization() = effects.toggleAudioNormalization()
 
     fun setAudioNormalizationMode(mode: AudioNormalizationMode) = effects.setAudioNormalizationMode(mode)

@@ -268,6 +268,12 @@
     <string name="settings_passthrough_codec_off">소프트웨어 디코딩</string>
     <string name="settings_max_audio_channels">최대 오디오 채널</string>
     <string name="settings_downmix_boost">스테레오 다운믹스 부스트</string>
+    <string name="settings_spatial_audio">스페이셜 오디오</string>
+    <string name="settings_spatial_audio_on">활성화되면 시스템 스페이셜라이저가 멀티채널 오디오를 입체적으로 재생합니다</string>
+    <string name="settings_spatial_audio_off">기본 오디오 처리</string>
+    <string name="settings_spatial_audio_only_headphones">헤드폰 전용</string>
+    <string name="settings_spatial_audio_only_headphones_on">헤드폰 출력에서만 다운믹스를 배제합니다</string>
+    <string name="settings_spatial_audio_only_headphones_off">모든 출력에 적용</string>
     <string name="settings_offline_playback">오프라인 재생</string>
     <string name="settings_offline_playback_prefer_downloaded">다운로드 선호</string>
     <string name="settings_offline_playback_prefer_streaming">스트리밍 선호</string>

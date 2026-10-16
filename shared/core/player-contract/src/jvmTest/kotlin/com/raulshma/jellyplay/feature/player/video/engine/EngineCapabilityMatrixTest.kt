@@ -52,6 +52,7 @@ class EngineCapabilityMatrixTest {
             caps.supportsSecondarySubtitles, caps.supportsScreenshot,
             caps.supportsImageSubtitles,
             caps.supportsDeinterlace,
+            caps.supportsSpatialAudio,
         ).forEach { assertFalse(it, "EXTERNAL must advertise no capabilities") }
     }
 
@@ -78,6 +79,7 @@ class EngineCapabilityMatrixTest {
         assertTrue(c.supportsLiveQualitySwitch)
         assertTrue(c.supportsBandwidthEstimate)
         assertTrue(c.supportsScreenshot)
+        assertTrue(c.supportsSpatialAudio)
     }
 
     @Test
@@ -139,8 +141,9 @@ class EngineCapabilityMatrixTest {
     fun exoPlayer_assCapabilities() {
         val c = EngineCapabilityMatrix.EXO_PLAYER
         assertTrue(c.supportsAssOverride)
-        // ExoPlayer renders ASS but cannot apply user style overrides to it.
-        assertFalse(c.supportsAssStyleOverride)
+        // FORCE override rides the ASS header rewrite at track parse time
+        // (AssStyleOverrideParserFactory) — apply-at-load, not live like mpv.
+        assertTrue(c.supportsAssStyleOverride)
         assertTrue(c.supportsFontFamily)
         assertTrue(c.supportsFreeFormColors)
         assertTrue(c.supportsBorderStyles)
@@ -150,7 +153,7 @@ class EngineCapabilityMatrixTest {
     fun mpv_assCapabilities() {
         val c = EngineCapabilityMatrix.MPV
         assertTrue(c.supportsAssOverride)
-        // mpv alone applies user style overrides (colors/edges/Force) to ASS.
+        // mpv applies user style overrides (colors/edges/Force) to ASS live.
         assertTrue(c.supportsAssStyleOverride)
         assertTrue(c.supportsFontFamily)
         assertTrue(c.supportsFreeFormColors)
@@ -182,6 +185,22 @@ class EngineCapabilityMatrixTest {
         assertFalse(EngineCapabilityMatrix.EXTERNAL.supportsDeinterlace)
     }
 
+    // ── Spatial audio capability flag ──
+
+    @Test
+    fun spatialAudio_exoPlayerOnly() {
+        // Only ExoPlayer's sink hands the platform spatializer (API 32+) an
+        // AudioTrack-qualifying multichannel stream without defeating it.
+        // Runtime-gated (device support / system setting / route) — this
+        // matrix flag is the declared admission, per
+        // EngineCapabilities.supportsSpatialAudio's KDoc. Gates the in-player
+        // spatial quick toggle.
+        assertTrue(EngineCapabilityMatrix.EXO_PLAYER.supportsSpatialAudio)
+        assertFalse(EngineCapabilityMatrix.MPV.supportsSpatialAudio)
+        assertFalse(EngineCapabilityMatrix.LIBVLC.supportsSpatialAudio)
+        assertFalse(EngineCapabilityMatrix.EXTERNAL.supportsSpatialAudio)
+    }
+
     @Test
     fun libvlc_noAssCapabilities() {
         val c = EngineCapabilityMatrix.LIBVLC
@@ -199,14 +218,14 @@ class EngineCapabilityMatrixTest {
     // ── Custom subtitle color picker gate ──
 
     @Test
-    fun customSubtitleColors_mpvOnly() {
+    fun customSubtitleColors_exoAndMpv() {
         // The free-form picker gates on supportsCustomSubtitleColors =
-        // supportsFreeFormColors && supportsAssStyleOverride: ExoPlayer can
-        // take hex colors but cannot hold them on ASS tracks (no style
-        // override), so the picker is offered on mpv only — see the
+        // supportsFreeFormColors && supportsAssStyleOverride: both ExoPlayer
+        // (ASS header rewrite, apply-at-load) and mpv (live) can hold hex
+        // colors on ASS tracks now; LibVLC renders ASS as-authored — see the
         // "Subtitle nuance" paragraph in docs/player-engines.md.
         assertTrue(EngineCapabilityMatrix.MPV.supportsCustomSubtitleColors)
-        assertFalse(EngineCapabilityMatrix.EXO_PLAYER.supportsCustomSubtitleColors)
+        assertTrue(EngineCapabilityMatrix.EXO_PLAYER.supportsCustomSubtitleColors)
         assertFalse(EngineCapabilityMatrix.LIBVLC.supportsCustomSubtitleColors)
         assertFalse(EngineCapabilityMatrix.EXTERNAL.supportsCustomSubtitleColors)
     }

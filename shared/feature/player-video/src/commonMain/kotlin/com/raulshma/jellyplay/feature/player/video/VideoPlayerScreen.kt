@@ -30,8 +30,6 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
-import kotlinx.coroutines.flow.filter
-import kotlinx.coroutines.flow.collectLatest
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -39,6 +37,10 @@ import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.type
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.map
 import org.jetbrains.compose.resources.stringResource
 
 import com.raulshma.jellyplay.core.ui.components.JellyPlayBackHandler
@@ -1332,6 +1334,15 @@ fun VideoPlayerScreen(
             val sleepTimer by controls.sleepTimerState.collectAsStateWithLifecycle()
             val abRepeat by controls.abRepeatState.collectAsStateWithLifecycle()
             val syncPlay by controls.syncPlayState.collectAsStateWithLifecycle()
+            // The engine's live spatial-audio state, read from the stats
+            // flow's typed field (null = no report). Mapped + distinct so the
+            // stats flow's up-to-4 Hz cadence while stats-for-nerds is open
+            // recomposes this scope only on an actual state flip.
+            val spatialAudioState by remember(viewModel.videoStats) {
+                viewModel.videoStats
+                    .map { it.audioSpatialState }
+                    .distinctUntilChanged()
+            }.collectAsStateWithLifecycle(null)
 
             val statusOverlayInputs = remember(
                 duration,
@@ -1467,6 +1478,8 @@ fun VideoPlayerScreen(
                 effectsState.audioNormalizationEnabled,
                 effectsState.channelMixMode,
                 effectsState.channelMixEnabled,
+                effectsState.spatialAudioEnabled,
+                spatialAudioState,
             ) {
                 PlayerEffectsControls(
                     dialogueBoostEnabled = uiState.dialogueBoostEnabled,
@@ -1478,6 +1491,8 @@ fun VideoPlayerScreen(
                     audioNormalizationEnabled = effectsState.audioNormalizationEnabled,
                     channelMixMode = effectsState.channelMixMode,
                     channelMixEnabled = effectsState.channelMixEnabled,
+                    spatialAudioEnabled = effectsState.spatialAudioEnabled,
+                    spatialAudioState = spatialAudioState,
                     onDialogueBoostClick = { viewModel.onEvent(VideoPlayerUiEvent.ToggleDialogueBoost) },
                     onDialogueBoostStrengthChange = { strength -> viewModel.onEvent(VideoPlayerUiEvent.SetDialogueBoostStrength(strength)) },
                     onNightModeClick = { controls.toggleNightMode() },
@@ -1487,6 +1502,7 @@ fun VideoPlayerScreen(
                     onAudioNormalizationModeChange = { mode -> controls.setAudioNormalizationMode(mode) },
                     onChannelMixClick = { controls.toggleChannelMix() },
                     onChannelMixModeChange = { mode -> controls.setChannelMixMode(mode) },
+                    onSpatialAudioClick = { controls.setSpatialAudioEnabled(!effectsState.spatialAudioEnabled) },
                 )
             }
             val onPipClick by remember(onEnterPip) { mutableStateOf({ onEnterPip() }) }

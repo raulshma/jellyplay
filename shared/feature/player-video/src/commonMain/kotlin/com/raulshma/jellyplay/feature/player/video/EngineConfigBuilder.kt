@@ -114,6 +114,8 @@ internal object EngineConfigBuilder {
             virtualizerEnabled = effects.virtualizerEnabled,
             virtualizerStrength = effects.virtualizerStrength,
             reverbPreset = effects.reverbPreset,
+            spatialAudioEnabled = effects.spatialAudioEnabled,
+            spatialAudioOnlyHeadphones = effects.spatialAudioOnlyHeadphones,
             audioSlice = agg.audio,
             audioEffectsSlice = agg.audioEffects,
         ),
@@ -170,6 +172,10 @@ internal object EngineConfigBuilder {
                 virtualizerEnabled = agg.audioEffects.virtualizerEnabled,
                 virtualizerStrength = agg.audioEffects.virtualizerStrength,
                 reverbPreset = agg.audioEffects.reverbPreset,
+                // The spatial prefs live on the playback slice (the settings
+                // screen's home); the engine boots with the persisted values.
+                spatialAudioEnabled = agg.playback.spatialAudioEnabled,
+                spatialAudioOnlyHeadphones = agg.playback.spatialAudioOnlyHeadphones,
                 audioSlice = agg.audio,
                 audioEffectsSlice = agg.audioEffects,
             ),
@@ -201,6 +207,8 @@ internal object EngineConfigBuilder {
         virtualizerEnabled: Boolean,
         virtualizerStrength: Int,
         reverbPreset: ReverbPreset,
+        spatialAudioEnabled: Boolean,
+        spatialAudioOnlyHeadphones: Boolean,
         audioSlice: com.raulshma.jellyplay.core.datastore.audio.AudioSlice,
         audioEffectsSlice: com.raulshma.jellyplay.core.datastore.audioeffects.AudioEffectsSlice,
     ): AudioEffectsConfig = AudioEffectsConfig(
@@ -224,5 +232,7 @@ internal object EngineConfigBuilder {
         reverbPreset = reverbPreset,
         volumeBoostEnabled = audioEffectsSlice.volumeBoostEnabled,
         volumeBoostGain = audioEffectsSlice.volumeBoostGain,
+        spatialAudioEnabled = spatialAudioEnabled,
+        spatialAudioOnlyHeadphones = spatialAudioOnlyHeadphones,
     )
 }

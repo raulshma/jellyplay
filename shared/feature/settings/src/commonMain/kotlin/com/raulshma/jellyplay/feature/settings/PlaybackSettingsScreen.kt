@@ -72,6 +72,7 @@ internal fun playbackRowAdmissionFlags(
         PlaybackRows.DialogueBoost.id to preferences.dialogueBoostEnabled,
         PlaybackRows.VideoAutoplayNext.id to preferences.videoAutoplayNext,
         PlaybackRows.AudioPassthrough.id to preferences.audioPassthrough,
+        PlaybackRows.SpatialAudio.id to preferences.spatialAudioEnabled,
     ),
 )
 

@@ -349,6 +349,8 @@ class VideoEffectsControllerTest {
             audioNormalizationEnabled = true,
             channelMixMode = ChannelMixMode.SURROUND_UPMIX,
             channelMixEnabled = true,
+            spatialAudioEnabled = true,
+            spatialAudioOnlyHeadphones = false,
         )
 
         val s = it.state.value
@@ -361,8 +363,24 @@ class VideoEffectsControllerTest {
         assertTrue(s.audioNormalizationEnabled)
         assertEquals(ChannelMixMode.SURROUND_UPMIX, s.channelMixMode)
         assertTrue(s.channelMixEnabled)
+        assertTrue(s.spatialAudioEnabled)
+        assertFalse(s.spatialAudioOnlyHeadphones)
         // Never seeded by the engine collector — live values survive.
         assertTrue(s.bassBoostEnabled)
         assertEquals(ReverbPreset.LARGE_HALL, s.reverbPreset)
+    }
+
+    /** The ADVISORY spatial toggle: state flip + playback-store persistence. */
+    @Test
+    fun setSpatialAudioEnabled_persistsThroughPlaybackStore() = withController {
+        it.setSpatialAudioEnabled(true)
+
+        assertTrue(it.state.value.spatialAudioEnabled)
+        coVerify { playbackStore.setSpatialAudioEnabled(true) }
+
+        it.setSpatialAudioOnlyHeadphones(false)
+
+        assertFalse(it.state.value.spatialAudioOnlyHeadphones)
+        coVerify { playbackStore.setSpatialAudioOnlyHeadphones(false) }
     }
 }

@@ -73,8 +73,10 @@ class SettingsSearchCatalogTest {
         // ids over the same home-store prefs); +1 for the D12 wave's
         // per-series notification row (the "Series notifications" fused row
         // beside the per-library list); +1 for the H5 hidden-libraries
-        // restore row (the My Media hidden-libraries drill-in).
-        assertEquals(362, items.size)
+        // restore row (the My Media hidden-libraries drill-in); +2 for the
+        // spatial-audio pair (the ADVISORY master toggle + its headphones
+        // sub-knob on the playback slice).
+        assertEquals(364, items.size)
         // Curated flat order starts with the account/session pair that used to
         // open the old registry, and the aggregation is a pure concatenation
         // of the decorated per-screen groups (no dedup, no reordering).

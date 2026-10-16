@@ -36,6 +36,10 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_refr
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_refresh_rate_desc_off
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_refresh_rate_desc_rate
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_refresh_rate_desc_res
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_spatial_audio_off
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_spatial_audio_on
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_spatial_audio_only_headphones_off
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_spatial_audio_only_headphones_on
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_refresh_rate_matching
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_offline_playback_prefer_downloaded
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_offline_playback_prefer_streaming
@@ -189,6 +193,28 @@ internal fun PlaybackAdvancedVideoGroup(
                             )
                         },
                     )
+                    val spatialAudioOnSubtitle = stringResource(Res.string.settings_spatial_audio_on)
+                    val spatialAudioOffSubtitle = stringResource(Res.string.settings_spatial_audio_off)
+                    SettingToggleItem(
+                        icon = rowIcon(PlaybackRows.SpatialAudio),
+                        title = rowTitle(PlaybackRows.SpatialAudio),
+                        subtitle = if (preferences.spatialAudioEnabled) spatialAudioOnSubtitle else spatialAudioOffSubtitle,
+                        checked = preferences.spatialAudioEnabled,
+                        highlighted = highlightSettingId == PlaybackRows.SpatialAudio.id,
+                        onCheckedChange = { viewModel.edit { scope -> scope.playback.setSpatialAudioEnabled(it) } },
+                    )
+                    if (SettingsScreenGroups.playbackAdvancedVideo.rowAdmitted(PlaybackRows.SpatialAudioOnlyHeadphones.id, rowFlags)) {
+                        val headphonesOnlyOn = stringResource(Res.string.settings_spatial_audio_only_headphones_on)
+                        val headphonesOnlyOff = stringResource(Res.string.settings_spatial_audio_only_headphones_off)
+                        SettingToggleItem(
+                            icon = rowIcon(PlaybackRows.SpatialAudioOnlyHeadphones),
+                            title = rowTitle(PlaybackRows.SpatialAudioOnlyHeadphones),
+                            subtitle = if (preferences.spatialAudioOnlyHeadphones) headphonesOnlyOn else headphonesOnlyOff,
+                            checked = preferences.spatialAudioOnlyHeadphones,
+                            highlighted = highlightSettingId == PlaybackRows.SpatialAudioOnlyHeadphones.id,
+                            onCheckedChange = { viewModel.edit { scope -> scope.playback.setSpatialAudioOnlyHeadphones(it) } },
+                        )
+                    }
                     val refreshRateSubtitles = com.raulshma.jellyplay.core.model.RefreshRateMode.entries.associateWith {
                         when (it) {
                             com.raulshma.jellyplay.core.model.RefreshRateMode.OFF -> stringResource(Res.string.settings_refresh_rate_off)

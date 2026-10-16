@@ -191,6 +191,11 @@
     <string name="player_video_dialogue_boost">Dialogue Boost</string>
     <string name="player_video_dialogue_boost_on">Dialogue Boost \u00B7 %1$s</string>
     <string name="player_video_night_mode">Night Mode</string>
+    <string name="player_video_spatial_audio">Spatial Audio</string>
+    <string name="player_video_spatial_audio_on">Spatial audio on — platform spatializer engaged</string>
+    <string name="player_video_spatial_audio_unavailable">Not spatializable on this output</string>
+    <string name="player_video_stats_spatial">Spatial state</string>
+    <string name="player_video_stats_spatial_superseded">(virtualizer superseded)</string>
     <string name="player_video_night_mode_on">Night Mode \u00B7 %1$s</string>
     <string name="player_video_audio_normalization">Audio Normalization</string>
     <string name="player_video_normalization_on">Normalization \u00B7 %1$s</string>

@@ -97,6 +97,8 @@ class PlaybackStore constructor(
         val AUDIO_PASSTHROUGH_CODECS = stringPreferencesKey(PlaybackPreferenceSpecs.AUDIO_PASSTHROUGH_CODECS.keyName)
         val MAX_AUDIO_CHANNELS = stringPreferencesKey(PlaybackPreferenceSpecs.MAX_AUDIO_CHANNELS.keyName)
         val DOWNMIX_BOOST_DB = floatPreferencesKey(PlaybackPreferenceSpecs.DOWNMIX_BOOST_DB.keyName)
+        val SPATIAL_AUDIO_ENABLED = booleanPreferencesKey(PlaybackPreferenceSpecs.SPATIAL_AUDIO_ENABLED.keyName)
+        val SPATIAL_AUDIO_ONLY_HEADPHONES = booleanPreferencesKey(PlaybackPreferenceSpecs.SPATIAL_AUDIO_ONLY_HEADPHONES.keyName)
         val FRAME_RATE_MATCHING = booleanPreferencesKey(PlaybackPreferenceSpecs.FRAME_RATE_MATCHING.keyName)
         val REFRESH_RATE_MODE = stringPreferencesKey(PlaybackPreferenceSpecs.REFRESH_RATE_MODE.keyName)
         val LIVE_STREAM_OPTION = stringPreferencesKey(PlaybackPreferenceSpecs.LIVE_STREAM_OPTION.keyName)
@@ -139,6 +141,8 @@ class PlaybackStore constructor(
         audioPassthroughCodecs = PlaybackPreferenceSpecs.AUDIO_PASSTHROUGH_CODECS.readFrom(prefs),
         maxAudioChannels = PlaybackPreferenceSpecs.MAX_AUDIO_CHANNELS.readFrom(prefs),
         downmixBoostDb = PlaybackPreferenceSpecs.DOWNMIX_BOOST_DB.readFrom(prefs),
+        spatialAudioEnabled = PlaybackPreferenceSpecs.SPATIAL_AUDIO_ENABLED.readFrom(prefs),
+        spatialAudioOnlyHeadphones = PlaybackPreferenceSpecs.SPATIAL_AUDIO_ONLY_HEADPHONES.readFrom(prefs),
         frameRateMatching = PlaybackPreferenceSpecs.FRAME_RATE_MATCHING.readFrom(prefs),
         refreshRateMode = PlaybackPreferenceSpecs.REFRESH_RATE_MODE.readFrom(prefs),
         keepScreenOnDuringVideo = PlaybackPreferenceSpecs.KEEP_SCREEN_ON_DURING_VIDEO.readFrom(prefs),
@@ -213,6 +217,20 @@ class PlaybackStore constructor(
         dataStore.edit {
             PlaybackPreferenceSpecs.DOWNMIX_BOOST_DB.writeTo(it, db.coerceIn(MIN_DOWNMIX_BOOST_DB, MAX_DOWNMIX_BOOST_DB))
         }
+    }
+
+    /**
+     * The ADVISORY "allow spatial audio" toggle (Android-only) — see
+     * AudioEffectsConfig.spatialAudioEnabled (MediaEngine.kt) for the full
+     * rationale.
+     */
+    suspend fun setSpatialAudioEnabled(enabled: Boolean) {
+        dataStore.edit { PlaybackPreferenceSpecs.SPATIAL_AUDIO_ENABLED.writeTo(it, enabled) }
+    }
+
+    /** Qualifies the spatial toggle to headphone-class outputs only. */
+    suspend fun setSpatialAudioOnlyHeadphones(enabled: Boolean) {
+        dataStore.edit { PlaybackPreferenceSpecs.SPATIAL_AUDIO_ONLY_HEADPHONES.writeTo(it, enabled) }
     }
 
     /**
@@ -323,6 +341,8 @@ class PlaybackStore constructor(
             PlaybackPreferenceSpecs.AUDIO_PASSTHROUGH_CODECS.writeTo(prefs, slice.audioPassthroughCodecs)
             PlaybackPreferenceSpecs.MAX_AUDIO_CHANNELS.writeTo(prefs, slice.maxAudioChannels)
             PlaybackPreferenceSpecs.DOWNMIX_BOOST_DB.writeTo(prefs, slice.downmixBoostDb)
+            PlaybackPreferenceSpecs.SPATIAL_AUDIO_ENABLED.writeTo(prefs, slice.spatialAudioEnabled)
+            PlaybackPreferenceSpecs.SPATIAL_AUDIO_ONLY_HEADPHONES.writeTo(prefs, slice.spatialAudioOnlyHeadphones)
             PlaybackPreferenceSpecs.FRAME_RATE_MATCHING.writeTo(prefs, slice.frameRateMatching)
             PlaybackPreferenceSpecs.REFRESH_RATE_MODE.writeTo(prefs, slice.refreshRateMode)
             PlaybackPreferenceSpecs.KEEP_SCREEN_ON_DURING_VIDEO.writeTo(prefs, slice.keepScreenOnDuringVideo)
@@ -368,6 +388,8 @@ data class PlaybackSlice(
     val audioPassthroughCodecs: Set<AudioPassthroughCodec> = PlaybackPreferenceSpecs.AUDIO_PASSTHROUGH_CODECS.default,
     val maxAudioChannels: MaxAudioChannelsEnum = PlaybackPreferenceSpecs.MAX_AUDIO_CHANNELS.default,
     val downmixBoostDb: Float = PlaybackPreferenceSpecs.DOWNMIX_BOOST_DB.default,
+    val spatialAudioEnabled: Boolean = PlaybackPreferenceSpecs.SPATIAL_AUDIO_ENABLED.default,
+    val spatialAudioOnlyHeadphones: Boolean = PlaybackPreferenceSpecs.SPATIAL_AUDIO_ONLY_HEADPHONES.default,
     val frameRateMatching: Boolean = PlaybackPreferenceSpecs.FRAME_RATE_MATCHING.default,
     val refreshRateMode: RefreshRateMode = PlaybackPreferenceSpecs.REFRESH_RATE_MODE.default,
     val keepScreenOnDuringVideo: Boolean = PlaybackPreferenceSpecs.KEEP_SCREEN_ON_DURING_VIDEO.default,

@@ -520,6 +520,8 @@
     <string name="ss_passthrough_codec_subtitle">选择哪些音频编解码器可以原始比特流输出至功放（随总开关联动）</string>
     <string name="ss_max_audio_channels_subtitle">限制输出声道布局——更宽的源会被下混或转码</string>
     <string name="ss_downmix_boost_subtitle">环绕声下混为立体声时的响度补偿（0–12 dB）</string>
+    <string name="ss_spatial_audio_subtitle">提示：让引擎避开下混和声道上限，以便 Android 空间音频生效（ExoPlayer，Android 12L+）</string>
+    <string name="ss_spatial_audio_only_headphones_subtitle">将空间音频行为限制为耳机类输出</string>
     <string name="ss_offline_playback_subtitle">两者都可用时，选择已下载副本还是服务器串流</string>
     <string name="ss_auto_download_lookahead_subtitle">在最新已看或已下载集数之前保留多少未看剧集</string>
     <string name="ss_auto_download_max_per_pass_subtitle">每轮检查新下载的上限；0 表示不限</string>

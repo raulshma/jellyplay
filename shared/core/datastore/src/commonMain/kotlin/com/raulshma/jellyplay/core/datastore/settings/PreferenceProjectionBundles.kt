@@ -50,6 +50,8 @@ internal data class PlaybackCoreBundle(
         audioPassthroughCodecs = playback.audioPassthroughCodecs,
         maxAudioChannels = playback.maxAudioChannels,
         downmixBoostDb = playback.downmixBoostDb,
+        spatialAudioEnabled = playback.spatialAudioEnabled,
+        spatialAudioOnlyHeadphones = playback.spatialAudioOnlyHeadphones,
         frameRateMatching = playback.frameRateMatching,
         refreshRateMode = playback.refreshRateMode,
         videoSeekDurationMs = video.videoSeekDurationMs,

@@ -192,6 +192,8 @@
     <string name="ss_passthrough_codec_subtitle">Choose which audio codecs may be bitstreamed raw to the receiver (rides the master toggle)</string>
     <string name="ss_max_audio_channels_subtitle">Cap the output speaker layout — wider sources are downmixed or transcoded</string>
     <string name="ss_downmix_boost_subtitle">Loudness compensation applied when surround audio is downmixed to stereo (0–12 dB)</string>
+    <string name="ss_spatial_audio_subtitle">Advisory: keeps the engine's downmix and speaker cap out of the way so Android's spatial audio can engage (ExoPlayer, Android 12L+)</string>
+    <string name="ss_spatial_audio_only_headphones_subtitle">Restrict the spatial-audio behavior to headphone-class outputs</string>
     <string name="ss_frame_rate_matching_title">Frame Rate Match</string>
     <string name="ss_frame_rate_matching_subtitle">Synchronize display refresh rate to video frames (TV/HDMI)</string>
     <string name="ss_streaming_quality_title">Streaming Quality</string>

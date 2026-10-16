@@ -174,6 +174,11 @@
     <string name="player_video_dialogue_boost">대화 부스트</string>
     <string name="player_video_dialogue_boost_on">대화 부스트 \u00B7 %1$s</string>
     <string name="player_video_night_mode">야간 모드</string>
+    <string name="player_video_spatial_audio">스페이셜 오디오</string>
+    <string name="player_video_spatial_audio_on">스페이셜 오디오 켜짐 — 시스템 스페이셜라이저 동작 중</string>
+    <string name="player_video_spatial_audio_unavailable">이 출력에서는 공간화할 수 없습니다</string>
+    <string name="player_video_stats_spatial">공간 오디오 상태</string>
+    <string name="player_video_stats_spatial_superseded">(버추얼라이저 비활성)</string>
     <string name="player_video_night_mode_on">야간 모드 \u00B7 %1$s</string>
     <string name="player_video_audio_normalization">오디오 정규화</string>
     <string name="player_video_normalization_on">정규화 \u00B7 %1$s</string>

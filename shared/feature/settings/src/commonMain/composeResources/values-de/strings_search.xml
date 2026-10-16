@@ -520,6 +520,8 @@
     <string name="ss_passthrough_codec_subtitle">Welche Audio-Codecs roh als Bitstream an den Receiver dürfen (hängt am Hauptschalter)</string>
     <string name="ss_max_audio_channels_subtitle">Begrenzt die Ausgabe-Lautsprecheranordnung — breitere Quellen werden downgemischt oder transcodiert</string>
     <string name="ss_downmix_boost_subtitle">Lautstärke-Ausgleich beim Downmix von Surround-Audio zu Stereo (0–12 dB)</string>
+    <string name="ss_spatial_audio_subtitle">Empfehlungs-Schalter: hält Downmix und Lautsprecherbegrenzung aus dem Weg, damit die räumliche Audiowiedergabe von Android greifen kann (ExoPlayer, Android 12L+)</string>
+    <string name="ss_spatial_audio_only_headphones_subtitle">Das Spatial-Audio-Verhalten auf Kopfhörerausgaben beschränken</string>
     <string name="ss_offline_playback_subtitle">Download oder Server-Stream wählen, wenn beides verfügbar ist</string>
     <string name="ss_auto_download_lookahead_subtitle">Wie viele ungesehene Episoden vor der neuesten gesehenen oder heruntergeladenen gehalten werden</string>
     <string name="ss_auto_download_max_per_pass_subtitle">Obergrenze neuer Downloads pro Prüfungsdurchlauf; 0 ist unbegrenzt</string>

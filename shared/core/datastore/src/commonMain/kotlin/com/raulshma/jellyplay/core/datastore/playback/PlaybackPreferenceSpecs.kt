@@ -362,6 +362,36 @@ object PlaybackPreferenceSpecs {
                 isAdvanced = true,
             ),
         ),
+        /*
+         * The ADVISORY "allow spatial audio" toggle (Android-only) — gates what
+         * the ENGINE does, not the spatialization itself; see
+         * AudioEffectsConfig.spatialAudioEnabled (MediaEngine.kt) for the full
+         * rationale. The dependent `spatial_audio_only_headphones` row below is
+         * the knob's qualification, mirroring the `audio_passthrough` ↔
+         * per-codec pair above.
+         */
+        PreferenceSpec.plainBoolean(
+            keyName = "spatial_audio_enabled",
+            default = false,
+            resetCategory = PreferenceResetCategory.PLAYBACK,
+            search = PreferenceSearchSpec(
+                // The search hit restates the row's screen title (the fold): the
+                // catalog row declares no ss_*_title twin.
+                titleKey = "settings_spatial_audio",
+                id = "spatial_audio",
+                subtitleKey = "ss_spatial_audio_subtitle",
+                categoryKey = "ss_cat_playback",
+                keywords = listOf("spatial", "spatializer", "atmos", "surround", "3d audio", "headphones"),
+                routeKind = ROUTE_PLAYBACK_SETTINGS,
+                isAdvanced = true,
+                platformRule = PreferencePlatformRule.ANDROID_ONLY,
+            ),
+        ),
+        PreferenceSpec.plainBoolean(
+            keyName = "spatial_audio_only_headphones",
+            default = true,
+            resetCategory = PreferenceResetCategory.PLAYBACK,
+        ),
     )
 
     /** Frame-rate ↔ refresh-rate matching (legacy bool + enum pair). */
@@ -695,6 +725,10 @@ object PlaybackPreferenceSpecs {
     val MAX_AUDIO_CHANNELS: PreferenceSpec<MaxAudioChannelsEnum> get() = row("max_audio_channels")
 
     val DOWNMIX_BOOST_DB: PreferenceSpec<Float> get() = row("downmix_boost_db")
+
+    val SPATIAL_AUDIO_ENABLED: PreferenceSpec<Boolean> get() = row("spatial_audio_enabled")
+
+    val SPATIAL_AUDIO_ONLY_HEADPHONES: PreferenceSpec<Boolean> get() = row("spatial_audio_only_headphones")
 
     val FRAME_RATE_MATCHING: PreferenceSpec<Boolean> get() = row("frame_rate_matching")
 

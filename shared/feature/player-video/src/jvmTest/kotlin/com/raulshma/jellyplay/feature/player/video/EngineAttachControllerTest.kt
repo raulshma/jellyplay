@@ -113,7 +113,7 @@ class EngineAttachControllerTest {
         }
         effects = mockk(relaxed = true)
         every {
-            effects.seedFromPreferences(any(), any(), any(), any(), any(), any(), any(), any(), any())
+            effects.seedFromPreferences(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
         } answers {
             effectSeedDelays += firstArg<Long>()
             callLog += "effectsSeed(delay=${firstArg<Long>()})"

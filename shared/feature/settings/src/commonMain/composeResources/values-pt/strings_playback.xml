@@ -268,6 +268,12 @@
     <string name="settings_passthrough_codec_off">Decodificado por software</string>
     <string name="settings_max_audio_channels">Canais de áudio máximos</string>
     <string name="settings_downmix_boost">Reforço de downmix estéreo</string>
+    <string name="settings_spatial_audio">Áudio espacial</string>
+    <string name="settings_spatial_audio_on">Permite que o espacializador do sistema reproduza áudio multicanal quando ativo</string>
+    <string name="settings_spatial_audio_off">Processamento de áudio padrão</string>
+    <string name="settings_spatial_audio_only_headphones">Apenas fones</string>
+    <string name="settings_spatial_audio_only_headphones_on">Afastar o downmix apenas em saídas de fone</string>
+    <string name="settings_spatial_audio_only_headphones_off">Aplicar em todas as saídas</string>
     <string name="settings_offline_playback">Reprodução offline</string>
     <string name="settings_offline_playback_prefer_downloaded">Preferir baixado</string>
     <string name="settings_offline_playback_prefer_streaming">Preferir streaming</string>

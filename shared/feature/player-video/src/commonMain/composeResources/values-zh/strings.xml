@@ -174,6 +174,11 @@
     <string name="player_video_dialogue_boost">对白增强</string>
     <string name="player_video_dialogue_boost_on">对白增强 \u00B7 %1$s</string>
     <string name="player_video_night_mode">夜间模式</string>
+    <string name="player_video_spatial_audio">空间音频</string>
+    <string name="player_video_spatial_audio_on">空间音频已开启 — 系统空间音频渲染中</string>
+    <string name="player_video_spatial_audio_unavailable">当前输出不支持空间化</string>
+    <string name="player_video_stats_spatial">空间音频状态</string>
+    <string name="player_video_stats_spatial_superseded">(虚拟器已被取代)</string>
     <string name="player_video_night_mode_on">夜间模式 \u00B7 %1$s</string>
     <string name="player_video_audio_normalization">音频标准化</string>
     <string name="player_video_normalization_on">标准化 \u00B7 %1$s</string>

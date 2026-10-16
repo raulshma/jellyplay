@@ -520,6 +520,8 @@
     <string name="ss_passthrough_codec_subtitle">리시버로 원시 비트스트림으로 전송할 수 있는 오디오 코덱 선택(마스터 토글에 종속)</string>
     <string name="ss_max_audio_channels_subtitle">출력 스피커 구성 제한 — 더 많은 채널의 소스는 다운믹스되거나 트랜스코딩됩니다</string>
     <string name="ss_downmix_boost_subtitle">서라운드 오디오를 스테레오로 다운믹스할 때 적용되는 음량 보정(0–12 dB)</string>
+    <string name="ss_spatial_audio_subtitle">권장 설정: 엔진의 다운믹스와 스피커 제한을 배제해 Android의 공간 오디오가 켜질 수 있도록 합니다 (ExoPlayer, Android 12L+)</string>
+    <string name="ss_spatial_audio_only_headphones_subtitle">스페이셜 오디오 동작을 헤드폰 계열 출력으로 제한합니다</string>
     <string name="ss_offline_playback_subtitle">둘 다 사용할 수 있을 때 다운로드 복사본 또는 서버 스트림 선택</string>
     <string name="ss_auto_download_lookahead_subtitle">가장 최근 시청 또는 다운로드한 에피소드보다 앞서 유지할 미시청 에피소드 수</string>
     <string name="ss_auto_download_max_per_pass_subtitle">매번 확인 시 새로 다운로드할 상한. 0은 무제한</string>

@@ -32,7 +32,11 @@ navigation3 = "1.1.5"
 jbNavigation3Ui = "1.1.1"
 lifecycleViewmodelNav3 = "2.11.0"
 jellyfinSdk = "1.8.12"
-media3 = "1.10.1"
+media3 = "1.11.1"
+# Fork pin (NOT the google artifact): the latest fork published on Maven
+# Central is 1.9.0+1 — no 1.10.x/1.11.x exists. It loads reflectively and its
+# bytecode was verified free of the media3 APIs removed by 1.11.x; a device
+# smoke test for software DTS/TrueHD decode is still pending.
 media3FfmpegDecoder = "1.9.0+1"
 androidDesugarJdkLibs = "2.1.5"
 # Coil 3.4.0 for the shared JVM targets (historical pin, kept to avoid

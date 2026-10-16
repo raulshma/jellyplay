@@ -138,6 +138,8 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.settings_skip
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_skip_loop_filter
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_skip_segments_on_seek
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_skip_silence
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_spatial_audio
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_spatial_audio_only_headphones
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_still_watching_episodes
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_still_watching_episodes_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_still_watching_mode
@@ -301,6 +303,8 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_show_time_
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_skip_back_on_resume_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_skip_back_on_resume_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_skip_segments_on_seek_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_spatial_audio_only_headphones_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_spatial_audio_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_still_watching_episodes_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_still_watching_mode_subtitle
 import com.raulshma.jellyplay.feature.settings.generated.resources.ss_streaming_quality_subtitle
@@ -761,7 +765,7 @@ internal object PlaybackRows {
         gate = RowAdmission.Platform(RowAdmissionCapability.VolumeMemory),
     )
 
-    // -- The "Advanced Video" group's 16 rows (13 spec-backed + the dialogue-boost pair and audio-delay residuals), in catalog order. --
+    // -- The "Advanced Video" group's 18 rows (14 spec-backed + the dialogue-boost pair + the spatial sub-knob and audio-delay residuals), in catalog order. --
 
     // ── RESIDUAL rows (AudioEffectsStore — no spec machinery): the boost
     // toggle and its strength row (the strength row rides the toggle).
@@ -855,6 +859,27 @@ internal object PlaybackRows {
         icon = Tabler.Outline.Volume,
         titleRes = Res.string.settings_downmix_boost,
         searchSubtitleRes = Res.string.ss_downmix_boost_subtitle,
+    )
+
+    val SpatialAudio = SettingsRow(
+        id = "spatial_audio",
+        icon = Tabler.Outline.Headphones,
+        titleRes = Res.string.settings_spatial_audio,
+        searchSubtitleRes = Res.string.ss_spatial_audio_subtitle,
+    )
+
+    // Spec-backed by `spatial_audio_only_headphones` (PlaybackPreferenceSpecs);
+    // the knob rides the master spatial toggle like the dialogue-boost
+    // strength row rides its toggle — hand search faces.
+    val SpatialAudioOnlyHeadphones = SettingsRow(
+        id = "spatial_audio_only_headphones",
+        icon = Tabler.Outline.Headphones,
+        titleRes = Res.string.settings_spatial_audio_only_headphones,
+        searchSubtitleRes = Res.string.ss_spatial_audio_only_headphones_subtitle,
+        keywords = listOf("spatial", "headphones", "earbuds", "bluetooth", "output"),
+        route = Route.PlaybackSettings(),
+        isAdvanced = true,
+        gate = RowAdmission.All(RowAdmission.Advanced, RowAdmission.WhenOn(PlaybackRows.SpatialAudio.id)),
     )
 
     val FrameRateMatching = SettingsRow(
@@ -1580,6 +1605,8 @@ internal val PlaybackAdvancedVideoRows: List<SettingsRow> = listOf(
     PlaybackRows.PassthroughCodecTruehd,
     PlaybackRows.MaxAudioChannels,
     PlaybackRows.DownmixBoost,
+    PlaybackRows.SpatialAudio,
+    PlaybackRows.SpatialAudioOnlyHeadphones,
     PlaybackRows.FrameRateMatching,
     PlaybackRows.OfflinePlayback,
     PlaybackRows.StreamingQuality,

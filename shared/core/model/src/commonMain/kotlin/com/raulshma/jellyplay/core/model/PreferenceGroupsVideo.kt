@@ -100,6 +100,15 @@ data class PlaybackPreferences(
      * loudness-enhancer gain on engines that expose one.
      */
     val downmixBoostDb: Float = 0f,
+    /**
+     * The ADVISORY "allow spatial audio" toggle (Android-only) — see
+     * AudioEffectsConfig.spatialAudioEnabled (MediaEngine.kt) for the full
+     * rationale. Capability reporting:
+     * [com.raulshma.jellyplay.feature.player.video.engine.EngineCapabilities.supportsSpatialAudio].
+     */
+    val spatialAudioEnabled: Boolean = false,
+    /** Qualifies [spatialAudioEnabled] to headphone-class outputs only. */
+    val spatialAudioOnlyHeadphones: Boolean = true,
     val frameRateMatching: Boolean = false,
     /**
      * Granular refresh-rate / resolution switching mode. Supersedes

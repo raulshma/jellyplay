@@ -35,6 +35,7 @@ import org.jetbrains.compose.resources.stringResource
 import androidx.compose.ui.unit.dp
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
+import com.raulshma.jellyplay.feature.player.video.engine.SpatialAudioState
 import com.raulshma.jellyplay.feature.player.video.generated.resources.Res
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_audio_only
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_audio_only_on
@@ -70,6 +71,9 @@ import com.raulshma.jellyplay.feature.player.video.generated.resources.player_vi
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_set_b_point_at
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_sleep_timer
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_sleep_timer_on
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_spatial_audio
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_spatial_audio_on
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_spatial_audio_unavailable
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_for_nerds
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_for_nerds_on
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_subtitles
@@ -142,6 +146,13 @@ internal fun BoxScope.PlayerOverflowMenu(
     nightModeEnabled: Boolean,
     nightModeStrength: EffectStrength,
     audioPassthrough: Boolean,
+    // The ADVISORY spatial-audio toggle: [spatialAudioState] is the engine's
+    // live platform answer (null when none reported — unsupported device /
+    // engine, or stats not yet emitted). UNAVAILABLE disables the row with the
+    // reason label; otherwise the row is a plain preference toggle.
+    supportsSpatialAudio: Boolean = false,
+    spatialAudioEnabled: Boolean = false,
+    spatialAudioState: SpatialAudioState? = null,
     showVideoStats: Boolean = false,
     audioNormalizationMode: AudioNormalizationMode = AudioNormalizationMode.NONE,
     audioNormalizationEnabled: Boolean = false,
@@ -163,6 +174,7 @@ internal fun BoxScope.PlayerOverflowMenu(
     onVersionClick: () -> Unit = {},
     onDecoderClick: () -> Unit,
     onPassthroughClick: () -> Unit,
+    onSpatialAudioClick: () -> Unit = {},
     onVideoStatsClick: () -> Unit = {},
     onAudioNormalizationClick: () -> Unit = {},
     onAudioNormalizationModeChange: (AudioNormalizationMode) -> Unit = {},
@@ -460,6 +472,30 @@ internal fun BoxScope.PlayerOverflowMenu(
                         modifier = Modifier.focusRequester(nightModeFocusRequester),
                     )
                 }
+            }
+            if (supportsSpatialAudio) {
+                // The honest ADVISORY spatial row (see
+                // AudioEffectsConfig.spatialAudioEnabled in MediaEngine.kt for
+                // the full rationale). UNAVAILABLE — the current output cannot
+                // be spatialized — disables the row with the reason instead of
+                // offering a dead switch.
+                val spatialUnavailable = spatialAudioState == SpatialAudioState.UNAVAILABLE
+                OverflowMenuItem(
+                    icon = Tabler.Outline.Headphones,
+                    label = when (spatialAudioState) {
+                        SpatialAudioState.UNAVAILABLE -> stringResource(Res.string.player_video_spatial_audio_unavailable)
+                        SpatialAudioState.ACTIVE -> stringResource(Res.string.player_video_spatial_audio_on)
+                        else -> stringResource(Res.string.player_video_spatial_audio)
+                    },
+                    onClick = onSpatialAudioClick,
+                    tint = if (spatialAudioEnabled && !spatialUnavailable) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurface
+                    },
+                    enabled = !spatialUnavailable,
+                    checked = if (spatialUnavailable) null else spatialAudioEnabled,
+                )
             }
             if (supportsAudioNormalization) {
                 if (showAudioNormalizationSubmenu) {

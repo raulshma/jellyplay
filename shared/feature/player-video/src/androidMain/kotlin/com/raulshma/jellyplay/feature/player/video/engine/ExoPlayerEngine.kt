@@ -72,12 +72,14 @@ import com.raulshma.jellyplay.core.model.SubtitleRenderDefaults
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.TrackType
 import com.raulshma.jellyplay.core.network.auth.JellyfinAuthorizationHeader
+import com.raulshma.jellyplay.feature.player.video.subtitle.AssStyleHeaderRewriter
+import com.raulshma.jellyplay.feature.player.video.subtitle.AssStyleOverrideParserFactory
+import com.raulshma.jellyplay.feature.player.video.subtitle.AssStyleOverrideExtractorsFactory
 import com.raulshma.jellyplay.feature.player.video.subtitle.AssSupport
 import com.raulshma.jellyplay.feature.player.video.subtitle.AndroidFontProvider
 import com.raulshma.jellyplay.feature.player.video.subtitle.OffsettingSubtitleParserFactory
 import com.raulshma.jellyplay.feature.player.video.subtitle.SubtitleFormatCatalog
 import io.github.peerless2012.ass.media.AssHandler
-import io.github.peerless2012.ass.media.kt.withAssMkvSupport
 import io.github.peerless2012.ass.media.parser.AssSubtitleParserFactory
 import io.github.peerless2012.ass.media.type.AssRenderType
 import io.github.peerless2012.ass.media.widget.AssSubtitleView
@@ -237,6 +239,44 @@ class ExoPlayerEngine(
     private val replayGainProcessor = ReplayGainAudioProcessor()
 
     /**
+     * The platform spatializer facts + observer (API-32-guarded; query-only —
+     * there is no app-side enable, see [resolveEffectiveSpatialState]).
+     * Callbacks arrive on the main handler; the engine folds them into the
+     * effective state and, while spatial audio is EFFECTIVE, neutralizes the
+     * in-sink downmix/speaker cap and holds the Virtualizer off (spatial wins
+     * — the recorded supersession is [spatialSupersededVirtualizer]).
+     */
+    private val spatializerHelper = SpatializerHelper(context) { evaluation ->
+        onSpatialEvaluation(evaluation)
+    }
+
+    /**
+     * Whether the CURRENT session is in the spatial-neutralized shape
+     * (downmix + speaker cap held off, virtualizer suppressed). Drives the
+     * apply-path override and the flip-triggered audio-pipeline
+     * reconfiguration; reset on release.
+     */
+    private var spatialNeutralizationActive: Boolean = false
+
+    /**
+     * Set while spatial audio is effective AND the user also had the
+     * Virtualizer enabled — spatial wins, and this records it for the stats
+     * surface. Cleared whenever the evaluation no longer supersedes.
+     */
+    @Volatile
+    private var spatialSupersededVirtualizer: Boolean = false
+
+    /**
+     * Set by [reconfigureAudioPipeline], cleared when the rebuilt media period
+     * reports a selected audio format again (or on release). While set, the
+     * transient empty-track window's null-format evaluation is suppressed in
+     * [updateSpatialState] — otherwise one spatial flip cascades into up to
+     * three media-period rebuilds (flip → rebuild → empty tracks → UNAVAILABLE
+     * → flip back → rebuild → tracks restored → flip again → rebuild).
+     */
+    private var audioPipelineReconfiguring: Boolean = false
+
+    /**
      * Collapses the prior 7-helper + 3-processor sprawl behind a single
      * attach/apply/release surface. Owns the bookkeeping
      * (`audioEffectsAttached`, `lastAudioEffectsConfig`,
@@ -327,6 +367,21 @@ class ExoPlayerEngine(
                     subtitleTrackAutoDisabled = false
                 }
             }
+            // The selected audio track defines the playing format the spatial
+            // qualification answers for. The rebuilt media period re-selects
+            // its tracks here — clear the reconfigure guard once a playing
+            // audio format is back, or once the rebuilt selection is known to
+            // be audio-less: a null format is then the settled answer, not
+            // the reconfigure transient, and holding the guard would freeze
+            // the prior session's evaluation into an audio-less item.
+            val rebuiltSelectionKnown = tracks.groups.isNotEmpty()
+            val audioTrackPresent = tracks.groups.any {
+                it.getType() == androidx.media3.common.C.TRACK_TYPE_AUDIO
+            }
+            if (player?.audioFormat != null || (rebuiltSelectionKnown && !audioTrackPresent)) {
+                audioPipelineReconfiguring = false
+            }
+            updateSpatialState()
         }
 
         override fun onCues(cueGroup: CueGroup) {
@@ -347,8 +402,16 @@ class ExoPlayerEngine(
                 // chain re-binds to the new session instead of short-
                 // circuiting on the cached config.
                 audioEffectChain.release()
-                audioEffectChain.apply(audioSessionId, currentConfig.audioEffects, currentNormalizationGain)
+                audioEffectChain.apply(
+                    audioSessionId,
+                    currentConfig.audioEffects,
+                    currentNormalizationGain,
+                    spatialAudioActive = spatialNeutralizationActive,
+                )
             }
+            // A track switch can move the playing audio format — the
+            // canBeSpatialized answer rides the format.
+            updateSpatialState()
         }
 
         override fun onVolumeChanged(volume: Float) {
@@ -389,12 +452,20 @@ class ExoPlayerEngine(
 
     private var lastRebuildInputs: LoadRebuildInputs? = null
 
+    /**
+     * The current config's [ExoPlayerEngineConfig] payload, or the default
+     * when the config carries none — the single home for that fallback read
+     * (the load path and the spatial-state refresh both need it).
+     */
+    private val currentExoConfig: ExoPlayerEngineConfig
+        get() = (currentConfig.engineSpecific as? ExoPlayerEngineConfig) ?: ExoPlayerEngineConfig()
+
     override fun load(request: PlaybackRequest) {
         ensurePlayerThread("load")
 
         currentNormalizationGain = request.requestSpecific?.normalizationGain
 
-        val exoCfg = (currentConfig.engineSpecific as? ExoPlayerEngineConfig) ?: ExoPlayerEngineConfig()
+        val exoCfg = currentExoConfig
         val assForRequest = AssSupport.hasAssSubtitles(request)
         val streamCacheEligible = isStreamCacheEligible(request)
         val inputs = LoadRebuildInputs(
@@ -508,14 +579,17 @@ class ExoPlayerEngine(
         // One offset mechanism covers both paths: the OffsettingSubtitleParser
         // Factory wraps whichever delegate is active, so the subtitle-delay slider
         // shifts cues on the ASS path too (libass reads the shifted start times).
-        // On the ASS path the delegate is the concrete AssSubtitleParserFactory,
-        // which is also handed (un-wrapped) to withAssMkvSupport below — that
-        // extension requires the concrete type for embedded-MKV ASS extraction,
-        // while the offset wrapper handles side-loaded external ASS subs.
+        // On the ASS path the delegate chain is the AssStyleOverrideParserFactory
+        // (FORCE-mode header rewrite, reads currentConfig lazily) wrapping the
+        // concrete AssSubtitleParserFactory; the same wrapper is handed to
+        // [AssStyleOverrideExtractorsFactory] below for embedded-MKV ASS, while
+        // the offset wrapper handles side-loaded external ASS subs.
         val assParserFactory: AssSubtitleParserFactory? =
             if (assEnabledForSession) AssSubtitleParserFactory(assHandler!!) else null
         val delegateParserFactory: androidx.media3.extractor.text.SubtitleParser.Factory =
-            assParserFactory ?: DefaultSubtitleParserFactory()
+            assParserFactory?.let {
+                AssStyleOverrideParserFactory(it) { currentConfig.subtitleStyle }
+            } ?: DefaultSubtitleParserFactory()
         val offsetFactory = OffsettingSubtitleParserFactory(delegateParserFactory, offsetUsProvider)
 
         val extractorsFactory = DefaultExtractorsFactory().apply {
@@ -532,18 +606,24 @@ class ExoPlayerEngine(
         // On the ASS path, wrap the extractors with Matroska+ASS support (for
         // ASS embedded in MKV) and the renderers with the libass text renderer;
         // otherwise the plain base factories reproduce the pre-ASS build exactly.
-        // withAssMkvSupport takes the extractors factory and the BARE
-        // AssSubtitleParserFactory (the concrete type), per its signature.
+        // The extractor swap mirrors ass-media's withAssMkvSupport extension but
+        // takes the style-override wrapper: AssMatroskaExtractor accepts the
+        // SubtitleParser.Factory INTERFACE, so the FORCE-mode header rewrite
+        // reaches embedded ASS too (the library's extension only accepts the
+        // concrete AssSubtitleParserFactory).
         //
-        // KNOWN LIMITATION: because withAssMkvSupport requires the concrete
-        // AssSubtitleParserFactory type, embedded ASS-in-MKV extraction bypasses
-        // the OffsettingSubtitleParserFactory — the subtitle-delay slider has no
-        // effect on embedded MKV ASS tracks in this engine. This is an ass-media
-        // library signature constraint; mpv and libVLC render embedded ASS at the
-        // correct offset via sub-delay/setSpuDelay regardless. Deliberately left
-        // as-is rather than destabilizing the working ASS path.
+        // KNOWN LIMITATION: embedded ASS-in-MKV extraction still bypasses the
+        // OffsettingSubtitleParserFactory — the subtitle-delay slider has no
+        // effect on embedded MKV ASS tracks in this engine. Preserved from the
+        // previous wiring (which passed the bare concrete factory) rather than
+        // destabilizing the working ASS path; mpv and libVLC render embedded
+        // ASS at the correct offset via sub-delay/setSpuDelay regardless.
         val (finalRenderersFactory, msf) = if (assEnabledForSession) {
-            val assExtractors = extractorsFactory.withAssMkvSupport(assParserFactory!!, assHandler!!)
+            val assExtractors = AssStyleOverrideExtractorsFactory(
+                extractorsFactory,
+                delegateParserFactory,
+                assHandler!!,
+            )
             // Own clock-pump factory instead of ass-media's AssRenderersFactory:
             // the library's appended AssRenderer derives the render clock from
             // the renderer position minus a hardcoded 10¹² µs base, and the
@@ -643,6 +723,9 @@ class ExoPlayerEngine(
         attachMediaItemAndPrepare(exo, mediaItem, subtitleConfigs, request)
 
         applyAudioEffects()
+        // The fresh session's inputs (config + offload mode); the format
+        // arrives with the first tracks/session-id callbacks.
+        updateSpatialState()
     }
 
     /**
@@ -677,6 +760,7 @@ class ExoPlayerEngine(
         attachMediaItemAndPrepare(exo, mediaItem, subtitleConfigs, request)
 
         applyAudioEffects()
+        updateSpatialState()
     }
 
     /**
@@ -987,6 +1071,14 @@ class ExoPlayerEngine(
         serverDurationMs = 0L
         currentSubtitleConfigs.clear()
         releaseAudioEffects()
+        // The spatial session machinery: stop observing the platform (the
+        // callbacks would otherwise fire into a player-less engine) and reset
+        // the neutralization so the next load re-derives it from a fresh
+        // evaluation.
+        spatializerHelper.release()
+        spatialNeutralizationActive = false
+        spatialSupersededVirtualizer = false
+        audioPipelineReconfiguring = false
         cachedVolume = 1f
         lastUnmuteVolume = 1f
         resetPublishedEngineState()
@@ -1068,6 +1160,10 @@ class ExoPlayerEngine(
             if (requiresAudioPipelineReconfiguration(oldConfig.audioEffects, newConfig.audioEffects)) {
                 reconfigureAudioPipeline()
             }
+            // The spatial inputs (advisory toggle, headphones-only
+            // qualification, virtualizer claim) may have moved; the flip
+            // itself re-applies + reconfigures inside the evaluation callback.
+            updateSpatialState()
         }
 
         if (oldConfig.subtitleStyle != newConfig.subtitleStyle) {
@@ -1396,18 +1492,36 @@ class ExoPlayerEngine(
             sv.setVisibility(if (activeTrackIsAss && assOverlayView != null) View.GONE else View.VISIBLE)
         }
 
-        // libass (AssSubtitleView) styling. ass-media 0.4.0 renders ASS via
-        // libass and exposes NO colour/edge override API, so FORCE (colours,
-        // borders, edges) remains DEGRADED to as-authored on this engine — only
-        // mpv honours FORCE fully. SCALE (font size) IS now honoured: ass-kt
-        // 0.4.0's AssRender.setFontScale is reachable at compile time (direct
-        // dependency), and AssHandler.render hands back the live AssRender. The
-        // render is created lazily on the first frame (createRenderIfNeeded),
+        // libass (AssSubtitleView) styling — two mechanisms, per override mode.
+        //
+        // SCALE / embedded-default: AssRender.setFontScale scales the whole
+        // render by style.fontSize / 24 (the same PlayRes-relative ratio mpv's
+        // sub-scale uses).
+        //
+        // FORCE: the user style is baked into the track itself at parse time —
+        // AssStyleOverrideParserFactory rewrites the header's `Style: Default`
+        // line (colors, borders, bold/italic, installed font, Fontsize scaled
+        // by style.fontSize / 24) before AssHandler.createTrack feeds libass.
+        // ass-media 0.5.0 binds no style-override JNI (no ass_track_set_style /
+        // ass_set_style_overrides), so the header text is the only non-fork
+        // seam — which makes FORCE apply-at-load: the track (and header) is
+        // built when the subtitle source is parsed, so a style edit mid-playback
+        // takes effect on the NEXT track load (media item change / engine
+        // rebuild), not live like mpv's --ass-override=force. In FORCE mode the
+        // render-level scale must be neutral (the rewritten header already
+        // carries style.fontSize; a stale SCALE-mode scale on a reused handler
+        // would double-scale), hence the 1f reset.
+        // The render is created lazily on the first frame (createRenderIfNeeded),
         // so it may be null here until playback starts — guard accordingly.
         // Non-ASS tracks use the native SubtitleView path sized above.
         if (activeTrackIsAss && assEnabledForSession) {
             runCatching {
-                assHandler?.render?.setFontScale(style.fontSize / 24f)
+                val render = assHandler?.render
+                if (AssStyleHeaderRewriter.isForceOverride(style)) {
+                    render?.setFontScale(1f)
+                } else {
+                    render?.setFontScale(style.fontSize / 24f)
+                }
             }.onFailure { e ->
                 Log.w(TAG, "setFontScale on AssRender failed", e)
             }
@@ -1431,7 +1545,14 @@ class ExoPlayerEngine(
             AspectRatioMapping.ResizeMode.FIXED_WIDTH -> AspectRatioFrameLayout.RESIZE_MODE_FIXED_WIDTH
         }
         playerView?.setResizeMode(resizeMode)
-        (playerView as? AspectRatioFrameLayout)?.setAspectRatio(plan.aspectValue)
+        // PlayerView delegates resize-mode changes to its content frame; the
+        // forced aspect ratio has to be set on that same frame. There is no
+        // public accessor for it in media3 1.11 (and the PlayerView itself is
+        // never an AspectRatioFrameLayout), so resolve the frame view directly
+        // — same lookup [reparentSubtitleViews] uses.
+        playerView
+            ?.findViewById<AspectRatioFrameLayout>(androidx.media3.ui.R.id.exo_content_frame)
+            ?.setAspectRatio(plan.aspectValue)
     }
 
     override val currentPositionMs: Long get() = player?.currentPosition ?: 0L
@@ -1560,6 +1681,8 @@ class ExoPlayerEngine(
             audioSampleRate = audioFormat?.sampleRate?.let { if (it > 0) it else null },
             audioChannels = audioFormat?.channelCount?.let { if (it > 0) it else null },
             audioBitrate = audioFormat?.bitrate?.let { if (it > 0) it else null },
+            audioSpatialState = spatialStatsState(),
+            audioSpatialSuperseded = spatialSupersededVirtualizer,
             estimatedBandwidthBps = bandwidthEstimate,
             droppedFrames = dropped,
             totalVideoFrames = rendered,
@@ -1576,12 +1699,93 @@ class ExoPlayerEngine(
         else -> mime
     }
 
+    /**
+     * The stats-for-nerds spatial state: the effective [SpatialAudioState].
+     * Null while the platform reports no spatializer support (pre-API-32
+     * devices, devices without the feature) — a row that explains nothing is
+     * not shown. The supersession note rides the separate
+     * [EngineVideoStats.audioSpatialSuperseded] flag, not this value.
+     */
+    private fun spatialStatsState(): SpatialAudioState? {
+        val evaluation = spatializerHelper.evaluation.value
+        if (!evaluation.supported) return null
+        return evaluation.state
+    }
+
     private fun applyAudioEffects() {
-        audioEffectChain.apply(audioSessionId, currentConfig.audioEffects, currentNormalizationGain)
+        // The supersession record tracks two inputs: the spatial evaluation
+        // (refreshed in [onSpatialEvaluation]) and the virtualizer claim
+        // (refreshed here). Toggling the Virtualizer while spatial stays
+        // ACTIVE doesn't re-fire the evaluation — virtualizerEnabled is not
+        // an evaluation input — so the stats note would keep the pre-toggle
+        // answer without this refresh.
+        spatialSupersededVirtualizer = spatialSupersedesVirtualizer(
+            spatializerHelper.evaluation.value.state,
+            currentConfig.audioEffects.virtualizerEnabled,
+        )
+        audioEffectChain.apply(
+            audioSessionId,
+            currentConfig.audioEffects,
+            currentNormalizationGain,
+            spatialAudioActive = spatialNeutralizationActive,
+        )
     }
 
     private fun releaseAudioEffects() {
         audioEffectChain.release()
+    }
+
+    /**
+     * Pushes the current session inputs into the [SpatializerHelper] and
+     * re-evaluates the effective spatial state. Cheap: the platform
+     * canBeSpatialized query is memoized per playing format. Called on every
+     * path that can move an input — load (format/config), config change,
+     * audio-session change (track switch) and tracks change (audio format).
+     */
+    private fun updateSpatialState() {
+        val format = player?.audioFormat
+        // The reconfigure transient: replacing the media item momentarily
+        // clears the track selection, and a null-format evaluation would
+        // report UNAVAILABLE — flipping the neutralization off and cascading
+        // into another rebuild. Hold the last evaluation until the rebuilt
+        // period reports a format (cleared in onTracksChanged above).
+        if (audioPipelineReconfiguring && format == null) return
+        spatializerHelper.update(
+            format = format,
+            inputs = SpatialAudioInputs(
+                userEnabled = currentConfig.audioEffects.spatialAudioEnabled,
+                onlyHeadphones = currentConfig.audioEffects.spatialAudioOnlyHeadphones,
+                offloadActive = currentExoConfig.audioOffloadMode !=
+                    com.raulshma.jellyplay.core.model.ExoAudioOffloadMode.DISABLED,
+            ),
+        )
+    }
+
+    /**
+     * The [SpatializerHelper] evaluation callback (main handler thread).
+     *
+     * The spatial state's effect on the engine is binary — while EFFECTIVE
+     * (ACTIVE) the in-sink downmix/cap + virtualizer are held off; when it
+     * stops being effective the configured values return. A flip changes what
+     * [DefaultAudioSink] must configure, so it re-runs the audio pipeline
+     * ([reconfigureAudioPipeline], the same lever the channel-mix knobs use).
+     * The supersession record (spatial winning over a concurrently-enabled
+     * virtualizer) is refreshed on every evaluation for the stats surface.
+     */
+    private fun onSpatialEvaluation(evaluation: SpatialAudioEvaluation) {
+        val neutralize = evaluation.state == SpatialAudioState.ACTIVE
+        spatialSupersededVirtualizer = spatialSupersedesVirtualizer(
+            evaluation.state,
+            currentConfig.audioEffects.virtualizerEnabled,
+        )
+        if (neutralize != spatialNeutralizationActive) {
+            spatialNeutralizationActive = neutralize
+            // Re-apply so the chain writes the overridden (or restored)
+            // processor state, then rebuild the media period so the sink
+            // reconfigures with the new channel layout.
+            applyAudioEffects()
+            reconfigureAudioPipeline()
+        }
     }
 
     /**
@@ -1594,6 +1798,7 @@ class ExoPlayerEngine(
     private fun reconfigureAudioPipeline() {
         val exo = player ?: return
         val mediaItem = currentMediaItem ?: return
+        audioPipelineReconfiguring = true
         withPreservedPlayback { snap ->
             exo.setMediaItem(mediaItem, snap.positionMs)
             exo.prepare()

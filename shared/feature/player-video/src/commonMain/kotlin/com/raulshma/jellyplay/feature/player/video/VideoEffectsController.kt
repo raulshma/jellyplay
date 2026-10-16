@@ -172,6 +172,23 @@ internal class VideoEffectsController(
     )
 
     /**
+     * The ADVISORY spatial-audio toggle (Android/ExoPlayer only) — see
+     * AudioEffectsConfig.spatialAudioEnabled (MediaEngine.kt) for the full
+     * rationale. Persists via the playback store; the engine config picks it
+     * up through this state (STATE_FIRST), and neutralization only applies
+     * while the platform reports the state EFFECTIVE.
+     */
+    fun setSpatialAudioEnabled(enabled: Boolean) = command(
+        update = { it.copy(spatialAudioEnabled = enabled) },
+        persist = { playbackStore.setSpatialAudioEnabled(enabled) },
+    )
+
+    fun setSpatialAudioOnlyHeadphones(enabled: Boolean) = command(
+        update = { it.copy(spatialAudioOnlyHeadphones = enabled) },
+        persist = { playbackStore.setSpatialAudioOnlyHeadphones(enabled) },
+    )
+
+    /**
      * Seeds the preference-backed fields from the cached aggregate when a new
      * engine binds (the engineFlow collector's former UiState writes). Exactly
      * the fields that collector seeded — bass boost / virtualizer / reverb were
@@ -188,6 +205,8 @@ internal class VideoEffectsController(
         audioNormalizationEnabled: Boolean,
         channelMixMode: ChannelMixMode,
         channelMixEnabled: Boolean,
+        spatialAudioEnabled: Boolean,
+        spatialAudioOnlyHeadphones: Boolean,
     ) {
         core.updateState {
             it.copy(
@@ -200,6 +219,8 @@ internal class VideoEffectsController(
                 audioNormalizationEnabled = audioNormalizationEnabled,
                 channelMixMode = channelMixMode,
                 channelMixEnabled = channelMixEnabled,
+                spatialAudioEnabled = spatialAudioEnabled,
+                spatialAudioOnlyHeadphones = spatialAudioOnlyHeadphones,
             )
         }
     }

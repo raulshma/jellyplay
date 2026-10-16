@@ -111,6 +111,7 @@ import com.raulshma.jellyplay.feature.player.video.engine.AspectRatio
 import com.raulshma.jellyplay.feature.player.video.engine.EngineCapabilities
 import com.raulshma.jellyplay.feature.player.video.engine.EngineVideoStats
 import com.raulshma.jellyplay.feature.player.video.engine.PlaybackMetadataSnapshot
+import com.raulshma.jellyplay.feature.player.video.engine.SpatialAudioState
 import com.raulshma.jellyplay.feature.player.video.TrackOption
 
 
@@ -133,6 +134,9 @@ internal data class PlayerEffectsControls(
     val audioNormalizationEnabled: Boolean = false,
     val channelMixMode: ChannelMixMode = ChannelMixMode.AUTO,
     val channelMixEnabled: Boolean = false,
+    val spatialAudioEnabled: Boolean = false,
+    /** The live platform state name ([SpatialAudioState]); null when the engine reports none. */
+    val spatialAudioState: SpatialAudioState? = null,
     val onDialogueBoostClick: () -> Unit = {},
     val onDialogueBoostStrengthChange: (EffectStrength) -> Unit = {},
     val onNightModeClick: () -> Unit = {},
@@ -142,6 +146,7 @@ internal data class PlayerEffectsControls(
     val onAudioNormalizationModeChange: (AudioNormalizationMode) -> Unit = {},
     val onChannelMixClick: () -> Unit = {},
     val onChannelMixModeChange: (ChannelMixMode) -> Unit = {},
+    val onSpatialAudioClick: () -> Unit = {},
 )
 
 /**
@@ -841,6 +846,7 @@ internal fun PlayerControls(
             supportsAudioPassthrough = capabilities.supportsAudioPassthrough,
             supportsAudioNormalization = capabilities.supportsAudioNormalization,
             supportsChannelMixing = capabilities.supportsChannelMixing,
+            supportsSpatialAudio = capabilities.supportsSpatialAudio,
             dialogueBoostEnabled = effectsControls.dialogueBoostEnabled,
             dialogueBoostStrength = effectsControls.dialogueBoostStrength,
             nightModeEnabled = effectsControls.nightModeEnabled,
@@ -851,6 +857,8 @@ internal fun PlayerControls(
             audioNormalizationEnabled = effectsControls.audioNormalizationEnabled,
             channelMixMode = effectsControls.channelMixMode,
             channelMixEnabled = effectsControls.channelMixEnabled,
+            spatialAudioEnabled = effectsControls.spatialAudioEnabled,
+            spatialAudioState = effectsControls.spatialAudioState,
             onSubtitleHubClick = {
                 showOverflow = false
                 sheets.onSubtitleHubClick()
@@ -886,6 +894,10 @@ internal fun PlayerControls(
             onPassthroughClick = {
                 showOverflow = false
                 effectsControls.onPassthroughClick()
+            },
+            onSpatialAudioClick = {
+                showOverflow = false
+                effectsControls.onSpatialAudioClick()
             },
             onVideoStatsClick = {
                 showOverflow = false

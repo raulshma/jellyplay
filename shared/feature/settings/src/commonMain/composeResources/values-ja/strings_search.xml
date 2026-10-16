@@ -520,6 +520,8 @@
     <string name="ss_passthrough_codec_subtitle">レシーバーにそのままビットストリーム出力できるオーディオコーデックを選択(マスタートグルに連動)</string>
     <string name="ss_max_audio_channels_subtitle">出力スピーカー構成の上限 — より多いチャンネルのソースはダウンミックスまたはトランスコードされます</string>
     <string name="ss_downmix_boost_subtitle">サラウンド音声をステレオにダウンミックスする際のラウドネス補正(0〜12 dB)</string>
+    <string name="ss_spatial_audio_subtitle">推奨設定: エンジンのダウンミックスとスピーカー制限を退け、Android の空間オーディオが有効になるようにします（ExoPlayer、Android 12L 以降）</string>
+    <string name="ss_spatial_audio_only_headphones_subtitle">スペーシャルオーディオの動作をヘッドホン系出力に限定します</string>
     <string name="ss_offline_playback_subtitle">両方利用可能な場合、ダウンロード済みかサーバーストリームを選択</string>
     <string name="ss_auto_download_lookahead_subtitle">最新の視聴済みまたはダウンロード済みエピソードより先に保持する未視聴エピソード数</string>
     <string name="ss_auto_download_max_per_pass_subtitle">各チェック回の新規ダウンロード上限。0 は無制限</string>

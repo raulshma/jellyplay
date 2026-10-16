@@ -165,6 +165,12 @@
     <string name="settings_passthrough_codec_off">Software-decoded</string>
     <string name="settings_max_audio_channels">Max Audio Channels</string>
     <string name="settings_downmix_boost">Stereo Downmix Boost</string>
+    <string name="settings_spatial_audio">Spatial Audio</string>
+    <string name="settings_spatial_audio_on">Lets the system spatializer render multichannel audio when active</string>
+    <string name="settings_spatial_audio_off">Default playback processing</string>
+    <string name="settings_spatial_audio_only_headphones">Headphones Only</string>
+    <string name="settings_spatial_audio_only_headphones_on">Hold the downmix out of the way only on headphone outputs</string>
+    <string name="settings_spatial_audio_only_headphones_off">Apply on every output</string>
     <string name="settings_refresh_rate_match">Refresh Rate Match</string>
     <string name="settings_refresh_rate_matching">Refresh Rate Matching</string>
     <string name="settings_refresh_rate_off">Off</string>

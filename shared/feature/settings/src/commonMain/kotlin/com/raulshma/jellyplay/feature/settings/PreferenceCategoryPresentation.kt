@@ -259,6 +259,9 @@ private val playbackDiffFields: List<DiffField<*>> = listOf(
     DiffField(Res.string.diff_playback_mode, { it.playback.playbackMode }, { v -> v.enumDisplay() }),
     DiffField(Res.string.ss_decoder_title, { it.playback.decoderMode }, { v -> v.enumDisplay() }),
     DiffField(Res.string.ss_audio_passthrough_title, { it.playback.audioPassthrough }, Boolean::onOff),
+    // The spatial toggle folds its search title onto the settings row face
+    // (no ss_*_title twin) — same fold the max-audio-channels row uses.
+    DiffField(Res.string.settings_spatial_audio, { it.playback.spatialAudioEnabled }, Boolean::onOff),
     DiffField(Res.string.ss_frame_rate_matching_title, { it.playback.frameRateMatching }, Boolean::onOff),
     DiffField(Res.string.ss_orientation_title, { it.videoPlayer.videoDefaultOrientation }, enumLabel = OrientationMode::labelResource),
     DiffField(Res.string.ss_default_aspect_title, { it.videoPlayer.videoDefaultAspectRatio }, ::identity),

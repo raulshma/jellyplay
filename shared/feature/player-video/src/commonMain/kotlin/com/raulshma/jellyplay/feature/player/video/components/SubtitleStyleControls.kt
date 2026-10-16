@@ -352,11 +352,12 @@ fun SubtitleStyleControls(
                 ) {
                     onStyleChange(currentStyle.copy(assOverride = AssOverrideMode.SCALE))
                 }
-                // FORCE (full override of ASS colors/edges/font) is only honored by
-                // engines that can apply user style overrides to ASS tracks (mpv via
-                // libass --ass-override=force). ExoPlayer renders ASS as-authored, so
-                // the chip would be a no-op there — hide it. Respect (SCALE) stays
-                // because font scale is honored on both engines.
+                // FORCE (full override of ASS colors/edges/font) is honored by
+                // engines with supportsAssStyleOverride: mpv live via
+                // libass --ass-override=force, ExoPlayer via the ASS header
+                // rewrite at track load (AssStyleOverrideParserFactory —
+                // applies on the next track load, not live). Respect (SCALE)
+                // stays because font scale is honored on both engines.
                 if (capabilities.supportsAssStyleOverride) {
                     AssOverrideChip(
                         label = stringResource(Res.string.player_video_ass_force),
@@ -375,7 +376,9 @@ fun SubtitleStyleControls(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             // Honesty note for engines that render ASS but cannot override its
-            // styling (ExoPlayer: ass-media 0.4.0 has no compile-time override API).
+            // styling. No current backend qualifies (ExoPlayer FORCE rides the
+            // header rewrite) — kept for future engines with supportsAssOverride
+            // but no style override.
             if (!capabilities.supportsAssStyleOverride) {
                 Spacer(Modifier.height(4.dp))
                 Text(
@@ -538,8 +541,9 @@ fun SubtitleStyleControls(
         }
 
         // --- Border Style: outline+shadow, opaque box, or background box ---
-        // Gated on supportsAssStyleOverride: ExoPlayer renders ASS as-authored,
-        // so the border-style control would be a no-op on ASS tracks there.
+        // Gated on supportsAssStyleOverride so the control only appears where
+        // it actually restyles ASS tracks (mpv live; ExoPlayer at track load
+        // via the header rewrite).
         if (capabilities.supportsBorderStyles && capabilities.supportsAssStyleOverride && applyCustomStyle) {
             Spacer(Modifier.height(12.dp))
             Text(

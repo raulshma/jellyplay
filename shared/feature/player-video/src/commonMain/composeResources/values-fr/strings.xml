@@ -174,6 +174,11 @@
     <string name="player_video_dialogue_boost">Ampli des voix</string>
     <string name="player_video_dialogue_boost_on">Ampli des voix \u00B7 %1$s</string>
     <string name="player_video_night_mode">Mode nuit</string>
+    <string name="player_video_spatial_audio">Audio spatial</string>
+    <string name="player_video_spatial_audio_on">Audio spatial actif — spatialiseur système engagé</string>
+    <string name="player_video_spatial_audio_unavailable">Non spatialisable sur cette sortie</string>
+    <string name="player_video_stats_spatial">État spatial</string>
+    <string name="player_video_stats_spatial_superseded">(virtualiseur remplacé)</string>
     <string name="player_video_night_mode_on">Mode nuit \u00B7 %1$s</string>
     <string name="player_video_audio_normalization">Normalisation audio</string>
     <string name="player_video_normalization_on">Normalisation \u00B7 %1$s</string>

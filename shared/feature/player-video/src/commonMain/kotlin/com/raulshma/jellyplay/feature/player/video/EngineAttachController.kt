@@ -115,6 +115,8 @@ internal class EngineAttachController(
                 audioNormalizationEnabled = agg.audio.audioNormalizationEnabled,
                 channelMixMode = agg.audio.channelMixMode,
                 channelMixEnabled = agg.audio.channelMixEnabled,
+                spatialAudioEnabled = agg.playback.spatialAudioEnabled,
+                spatialAudioOnlyHeadphones = agg.playback.spatialAudioOnlyHeadphones,
             )
             cast.updateCastStrategyForEngine(engine)
             notifyUnsupportedAudioDelayIfNeeded(engine, agg.audio.audioDelayMs)

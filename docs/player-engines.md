@@ -39,7 +39,8 @@ engine in JellyPlay and the best choice for most users.
 **Cons**
 
 - ❌ Less flexible than mpv for shader-based post-processing
-- ❌ No user style override on ASS/SSA subtitles (only SRT/VTT)
+- ❌ ASS/SSA style override applies when the subtitle track loads
+  (mpv restyles live)
 - ❌ No audio passthrough, no audio delay tweak
 - ❌ Some niche codecs (RV40, VP6) are not supported
 
@@ -164,27 +165,55 @@ setting simply won't appear in the player UI).
 | Subtitle style (SRT/VTT) | ✅ | ✅ | ✅ | ✗ |
 | Subtitle vertical position | ✅ | ✅ | ✅ | ✗ |
 | ASS/SSA *rendering* | ✅ | ✅ | ✗ | ✗ |
-| ASS/SSA *user style override* | ✗ | ✅ | ✗ | ✗ |
+| ASS/SSA *user style override* | ✅ | ✅ | ✗ | ✗ |
 | Image subtitles (PGS/VobSub sidecars) | ✗ | ✅ | ✗ | ✗ |
 | Font family | ✅ | ✅ | ✅ | ✗ |
-| Free-form subtitle colors | ✗ | ✅ | ✗ | ✗ |
+| Free-form subtitle colors | ✅ | ✅ | ✗ | ✗ |
 | Border styles | ✅ | ✅ | ✗ | ✗ |
 | Dialogue boost | ✅ | ✅ | ✗ | ✗ |
 | Night mode | ✅ | ✅ | ✗ | ✗ |
 | Audio normalization | ✅ | ✅ | ✗ | ✗ |
 | Channel mixing | ✅ | ✅ | ✗ | ✗ |
 | Video filters (brightness/contrast/etc.) | ✗ | ✅ | ✅ | ✗ |
+| Spatial audio (platform spatializer)¹ | ✅ | ✗ | ✗ | ✗ |
 | Live quality switch (ABR) | ✅ | ✗ | ✗ | ✗ |
 | Bandwidth estimate | ✅ | ✗ | ✗ | ✗ |
 
-**Subtitle nuance.** ExoPlayer and mpv both *render* ASS/SSA subtitles.
-Only **mpv** also applies *your* style overrides (colors, borders,
-Force) on top of ASS/SSA tracks (`--ass-override=force`). ExoPlayer
-renders ASS as-authored — your style overrides take effect on SRT/VTT
-only. LibVLC does not render ASS at all. For the same reason, the
-free-form (hex) color picker is offered on **libmpv only**: it requires
-ASS user style override so the picked color also holds on ASS tracks,
-not just SRT/VTT.
+¹ ExoPlayer only (API 32+ devices that expose a spatializer), and declared
+rather than guaranteed: Android's spatializer has **no app-side enable** — it
+engages when the *system* spatial-audio setting is on, the output qualifies
+(headphones), and the stream reaches the `AudioTrack` multichannel. JellyPlay's
+spatial toggle therefore gates what *we* do: while spatial audio is effective
+the engine holds its own 5.1→2.0 downmix, speaker cap, downmix loudness boost
+and the Virtualizer effect off (spatial and the Virtualizer are mutually
+exclusive) so the platform has a multichannel stream to spatialize. The
+headphones-only route qualification is a separate setting
+(`spatial_audio_only_headphones`, on by default). The spec's "auto-disable
+when passthrough or ≥5.1 output is active" case is covered structurally
+rather than by a dedicated rule: ExoPlayer cannot passthrough
+(`supportsAudioPassthrough = false` — it always decodes to PCM), and ≥5.1
+speaker/receiver routes are declined by the platform's own route rules
+(`Spatializer.canBeSpatialized` answers for the route the stream actually
+uses — the app-side headphone check counts any connected headphone-class
+output, so a mixed BT-headphones + HDMI session rests on that platform
+answer, not on the app gate).
+
+**Subtitle nuance.** ExoPlayer and mpv both *render* ASS/SSA subtitles and
+both apply *your* style overrides (colors, borders, Force) on top of
+ASS/SSA tracks. mpv (`--ass-override=force`) restyles live; ExoPlayer
+rewrites the subtitle's embedded `Default` style when the track is
+parsed, so Force changes land the next time the subtitle track loads
+(new media item or engine rebuild) rather than mid-playback. LibVLC does
+not render ASS at all. Free-form (hex) color picking requires ASS user
+style override, so the picker is offered on ExoPlayer and libmpv; on
+ExoPlayer the picked colors hold on ASS tracks in Force mode. Scope of
+the ExoPlayer override (the spec's "font/color/position" ask): it covers
+font, colors, borders, and (PlayRes-scaled) font size — NOT authored ASS
+positioning (alignment/margins): rewriting those would break
+signage/karaoke event positioning, and the user's vertical position keeps
+applying via the overlay host as before. Only the `Style: Default` line
+is rewritten (first style line as fallback); authored sign/song styles
+keep their design.
 
 Image subtitles delivered as files (bitmap PGS `.sup`, VobSub) play on
 mpv only, via its libav decoders — this gates offline side-loading:

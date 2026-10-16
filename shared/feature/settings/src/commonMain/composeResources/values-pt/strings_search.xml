@@ -520,6 +520,8 @@
     <string name="ss_passthrough_codec_subtitle">Escolhe quais codecs de áudio podem ser enviados como bitstream bruto ao receptor (segue o interruptor principal)</string>
     <string name="ss_max_audio_channels_subtitle">Limita a configuração de alto-falantes de saída — fontes mais amplas são downmixadas ou transcodificadas</string>
     <string name="ss_downmix_boost_subtitle">Compensação de loudness ao reduzir áudio surround para estéreo (0–12 dB)</string>
+    <string name="ss_spatial_audio_subtitle">Consultivo: afasta o downmix e o limite de alto-falantes do motor para que o áudio espacial do Android possa ativar (ExoPlayer, Android 12L+)</string>
+    <string name="ss_spatial_audio_only_headphones_subtitle">Restringe o comportamento do áudio espacial a saídas de fones</string>
     <string name="ss_offline_playback_subtitle">Escolhe a cópia baixada ou o streaming do servidor quando ambos estão disponíveis</string>
     <string name="ss_auto_download_lookahead_subtitle">Quantos episódios não vistos manter além do mais recente assistido ou baixado</string>
     <string name="ss_auto_download_max_per_pass_subtitle">Limite de novos downloads por passada de verificação; 0 é ilimitado</string>

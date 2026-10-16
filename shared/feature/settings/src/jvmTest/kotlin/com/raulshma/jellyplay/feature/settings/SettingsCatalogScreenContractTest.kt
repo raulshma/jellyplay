@@ -430,6 +430,7 @@ class SettingsCatalogScreenContractTest {
                 dialogueBoostEnabled = true,
                 videoAutoplayNext = true,
                 audioPassthrough = true,
+                spatialAudioEnabled = true,
             ),
         )
         val declaredParents = listOf(
@@ -1012,11 +1013,12 @@ class SettingsCatalogScreenContractTest {
 
         // Advanced video: the whole group only composes behind the advanced
         // toggle (its declared Advanced base — the flags carry that toggle);
-        // the dialogue-boost strength row AND the five per-codec passthrough
-        // rows additionally ride their parent toggles (their declared All
-        // gates) — with no parents on, those six drop.
+        // the dialogue-boost strength row, the five per-codec passthrough
+        // rows AND the spatial headphones sub-knob additionally ride their
+        // parent toggles (their declared All gates) — with no parents on,
+        // those seven drop.
         assertEquals(
-            SettingsScreenGroups.playbackAdvancedVideo.items.size - 6,
+            SettingsScreenGroups.playbackAdvancedVideo.items.size - 7,
             rowTotalFor(SettingsScreenGroups.playbackAdvancedVideo, RowAdmissionFlags(showAdvanced = true)),
         )
         val boostOn = RowAdmissionFlags(
@@ -1024,6 +1026,7 @@ class SettingsCatalogScreenContractTest {
             parentsOn = rowParentsOn(
                 PlaybackRows.DialogueBoost.id to true,
                 PlaybackRows.AudioPassthrough.id to true,
+                PlaybackRows.SpatialAudio.id to true,
             ),
         )
         assertEquals(
