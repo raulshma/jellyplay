@@ -9,7 +9,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -19,6 +21,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import coil3.compose.LocalPlatformContext
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
@@ -27,6 +32,8 @@ import coil3.request.ImageRequest
 import coil3.request.crossfade
 import coil3.size.isOriginal
 import coil3.size.pxOrElse
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.delay
 import coil3.size.Size as CoilSize
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
@@ -107,9 +114,11 @@ fun MediaImage(
         // subtree instead of the whole Box (including the BlurHash layer). The
         // parent [MediaImage] is now stateless wrt the fallback index. The
         // chain also resets (and re-issues the request) when the host screen
-        // bumps [LocalImageReloadEpoch] — a retried load is the only escape
-        // from a chain that exhausted on a transient failure, since the URL
-        // itself never changes.
+        // bumps [LocalImageReloadEpoch] — the manual escape from a chain that
+        // exhausted its auto-retries on a persistent failure, since the URL
+        // itself never changes. Transient failures no longer strand the image
+        // on its blurHash: the chain schedules bounded automatic retries on
+        // its own (see [FallbackAsyncImage]).
         FallbackAsyncImage(
             primaryRequest = imageRequest,
             fallbackUrls = fallbackUrls,
@@ -122,6 +131,57 @@ fun MediaImage(
             placeholderIcon = placeholderIcon,
         )
     }
+}
+
+/**
+ * Backoff schedule (ms) for [FallbackAsyncImage]'s automatic retries of a
+ * chain that exhausted every URL on a transient failure (server restart,
+ * network blip, momentary offline). Three attempts spread over ~55 s ride out
+ * a restarting Jellyfin server, which is usually accepting requests again
+ * inside that window; the growing gaps keep a slow server from eating the
+ * whole budget in the first seconds. Once the budget is spent the chain parks
+ * dead exactly as before the retries existed — the blurHash (or the icon
+ * placeholder when no hash) — until a manual escape hatch: the host screen
+ * bumping [LocalImageReloadEpoch] (pull-to-refresh), or the composable
+ * leaving and re-entering composition (hero rotation, back-stack return).
+ */
+private val AUTO_RETRY_BACKOFF_MS = longArrayOf(5_000L, 15_000L, 35_000L)
+
+/**
+ * The backoff to wait before the next automatic retry, or null when the
+ * budget is spent and the chain must park dead. `retriesLeft` counts DOWN
+ * from [AUTO_RETRY_BACKOFF_MS]'s size, so a full budget walks the ladder in
+ * order (5 s, 15 s, 35 s). Out-of-range budgets fail safe to null rather than
+ * indexing the schedule. Pure so the composable's retry posture is
+ * unit-testable without a composition.
+ */
+internal fun autoRetryBackoffMs(retriesLeft: Int): Long? =
+    AUTO_RETRY_BACKOFF_MS.getOrNull(AUTO_RETRY_BACKOFF_MS.size - retriesLeft)
+
+/**
+ * All mutable chain + retry state for one [FallbackAsyncImage] lifetime, held
+ * in a single `remember`ed holder so every writer and reader — the onState
+ * callback, the backoff ladder, the lifecycle observer — captures the SAME
+ * snapshot-state fields for the holder's whole lifetime. This is the stale-
+ * delegate trap the file documents, closed by construction: the lifetime
+ * boundary is the holder identity (URL set + reload epoch), not per-field
+ * `remember` keys, so no closure can outlive the delegates it writes to.
+ * A retry deliberately does NOT recreate the holder — [FallbackAsyncImage]
+ * remounts [AsyncImage] via `key(retryEpoch)` instead, which re-issues the
+ * request while every closure keeps observing live state.
+ */
+private class FallbackImageState {
+    /** Index into the URL chain; advances on a mid-chain Error. */
+    var currentIndex by mutableIntStateOf(0)
+
+    /** True once every URL in the chain has errored (the parked state). */
+    var isError by mutableStateOf(false)
+
+    /** Bumped per auto-retry / reload-epoch-driven refresh; remounts AsyncImage. */
+    var retryEpoch by mutableIntStateOf(0)
+
+    /** Remaining auto-retry attempts; counts down the [AUTO_RETRY_BACKOFF_MS] ladder. */
+    var retriesLeft by mutableIntStateOf(AUTO_RETRY_BACKOFF_MS.size)
 }
 
 @Composable
@@ -139,51 +199,103 @@ private fun FallbackAsyncImage(
     val context = LocalPlatformContext.current
     val fallbackKey = remember(fallbackUrls) { fallbackUrls.joinToString("|") }
     val allUrls = remember(primaryRequest.data, fallbackKey) { listOf(primaryRequest.data.toString()) + fallbackUrls }
-    // The reload epoch participates in every state key below: bumping it
-    // recreates the chain state (error flag cleared, index back to the
-    // primary URL), which re-enters AsyncImage and issues a fresh request.
-    // A succeeded image keeps the same Coil model, so it is unaffected.
+    // The reload epoch keys the holder: bumping it discards the chain state
+    // (error flag cleared, index back to the primary URL, retry budget
+    // restored) and re-enters AsyncImage, which issues a fresh request. A
+    // succeeded image keeps the same Coil model, so it is unaffected.
     val reloadEpoch = LocalImageReloadEpoch.current
-    var currentIndex by remember(primaryRequest.data, fallbackKey, reloadEpoch) { mutableIntStateOf(0) }
-    var isError by remember(primaryRequest.data, fallbackKey, reloadEpoch) { mutableStateOf(false) }
+    val imageState = remember(primaryRequest.data, fallbackKey, reloadEpoch) { FallbackImageState() }
 
     // Hoist the onState lambda out of the AsyncImage call so a fresh closure
     // isn't allocated on every recomposition of this (very common) subtree.
-    // currentIndex/isError are MutableState delegates, so reading them inside a
-    // stable lambda still observes changes correctly — which is why the key set
-    // here must match the states': a lambda remembered past a state reset would
-    // write to the discarded delegates and the chain would never advance.
-    val onState = remember(allUrls.size, primaryRequest.data, fallbackKey, reloadEpoch) { { state: AsyncImagePainter.State ->
+    // The lambda writes through the stable [imageState] holder, so it can
+    // never write to discarded delegates.
+    val onState = remember(allUrls.size, primaryRequest.data, reloadEpoch) { { state: AsyncImagePainter.State ->
         if (state is AsyncImagePainter.State.Error) {
-            if (currentIndex < allUrls.size - 1) {
-                currentIndex++
+            if (imageState.currentIndex < allUrls.size - 1) {
+                imageState.currentIndex++
             } else {
-                isError = true
+                imageState.isError = true
             }
         }
     } }
 
-    if (!isError && currentIndex < allUrls.size) {
-        val currentRequest = if (currentIndex == 0) {
+    // Terminal-error auto-retry: a chain that exhausted every URL waits out
+    // the next backoff step, then bumps [FallbackImageState.retryEpoch] to
+    // remount AsyncImage and re-issue the request. The effect re-launches on
+    // every error transition (each retry resets isError to false, and the
+    // next failure flips it true again), a pending delay cancels with the
+    // composition, and a spent budget parks the chain dead — the blurHash or
+    // icon placeholder beneath — until a manual escape hatch. Transient
+    // failures (server restart, network blip) therefore self-heal instead of
+    // stranding the image on its blurHash until the host screen's next
+    // pull-to-refresh.
+    LaunchedEffect(imageState.isError) {
+        if (!imageState.isError) return@LaunchedEffect
+        val backoff = autoRetryBackoffMs(imageState.retriesLeft) ?: return@LaunchedEffect
+        delay(backoff)
+        imageState.retriesLeft--
+        imageState.retryEpoch++
+    }
+
+    // Foreground-return refresh: a long offline ride (subway, wifi blip)
+    // burns the ladder while the screen sits error-parked, so returning to
+    // the app is the natural "try again" moment — every ON_RESUME restores
+    // the full budget and, when the chain is parked, remounts AsyncImage
+    // immediately. Bounded per resume (the ladder still exhausts before the
+    // next park), and a no-op when the budget is untouched so a plain mount
+    // or a foreground flip never re-requests a healthy image. The same
+    // observer idiom as the hero's clip gate (HomeHeroController); all state
+    // goes through the stable holder, so the long-lived closure can't go
+    // stale.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    LaunchedEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event != Lifecycle.Event.ON_RESUME) return@LifecycleEventObserver
+            if (imageState.retriesLeft == AUTO_RETRY_BACKOFF_MS.size) return@LifecycleEventObserver
+            imageState.retriesLeft = AUTO_RETRY_BACKOFF_MS.size
+            if (imageState.isError) imageState.retryEpoch++
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        try {
+            awaitCancellation()
+        } finally {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
+    if (!imageState.isError && imageState.currentIndex < allUrls.size) {
+        val currentRequest = if (imageState.currentIndex == 0) {
             primaryRequest
         } else {
-            remember(allUrls[currentIndex], effectiveSize, effectiveCrossfade) {
+            remember(allUrls[imageState.currentIndex], effectiveSize, effectiveCrossfade) {
                 ImageRequest.Builder(context)
-                    .data(allUrls[currentIndex])
+                    .data(allUrls[imageState.currentIndex])
                     .crossfade(effectiveCrossfade)
                     .size(effectiveSize)
                     .build()
             }
         }
-        AsyncImage(
-            model = currentRequest,
-            contentDescription = contentDescription,
-            modifier = Modifier.fillMaxSize(),
-            contentScale = contentScale,
-            colorFilter = colorFilter,
-            onState = onState,
-        )
-    } else if (showPlaceholder) {
+        // key(retryEpoch): a retry keeps the same (successful or failed)
+        // Coil model, and an equal model alone would be a no-op for a still-
+        // composed AsyncImage — the key forces a remount so the re-issued
+        // request actually runs. Mid-chain fallback advances keep the same
+        // key and restart through the model change instead.
+        key(imageState.retryEpoch) {
+            AsyncImage(
+                model = currentRequest,
+                contentDescription = contentDescription,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = contentScale,
+                colorFilter = colorFilter,
+                onState = onState,
+            )
+        }
+    } else if (showPlaceholder && imageState.retriesLeft <= 0) {
+        // Only park on the placeholder once the retry budget is spent; while
+        // retries remain, render nothing so the blurHash beneath (or the
+        // surrounding surface when there is none — the same look as a load
+        // in flight) keeps showing through the pending retry.
         Box(
             modifier = Modifier
                 .fillMaxSize()
