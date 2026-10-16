@@ -248,6 +248,7 @@
     <string name="settings_player_engine_subtitle">メディア再生エンジンを選択</string>
     <string name="settings_shader_pack">シェーダーパック</string>
     <string name="settings_tone_mapping">トーンマッピング</string>
+    <string name="settings_exo_hdr_tone_mapping">HDRトーンマッピング</string>
     <string name="settings_render_quality">品質プロファイル</string>
     <string name="settings_interpolation_tscale">補間フィルター（tscale）</string>
     <string name="settings_power_user_mode">パワーユーザーモード</string>

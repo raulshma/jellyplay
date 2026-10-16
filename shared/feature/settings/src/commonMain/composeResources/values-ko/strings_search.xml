@@ -490,7 +490,9 @@
     <string name="ss_mpv_render_quality_title">MPV 렌더링 품질</string>
     <string name="ss_mpv_render_quality_subtitle">성능, 균형, 고품질 스케일러 프로필 (데스크톱)</string>
     <string name="ss_mpv_hdr_passthrough_title">MPV HDR 패스스루</string>
-    <string name="ss_mpv_hdr_passthrough_subtitle">HDR 지원 디스플레이로 gpu-next를 통해 HDR 출력 (데스크톱, 다음 재생부터)</string>
+    <string name="ss_mpv_hdr_passthrough_subtitle">HDR 지원 디스플레이로 gpu-next를 통해 HDR 출력 (다음 재생부터)</string>
+    <string name="ss_exo_hdr_tone_mapping_title">HDR 톤 매핑</string>
+    <string name="ss_exo_hdr_tone_mapping_subtitle">HDR 출력이 없는 디스플레이에서 HDR을 SDR로 톤 매핑(자동) 또는 네이티브 출력 유지(끄기)</string>
     <string name="ss_mpv_tscale_title">MPV 보간 필터</string>
     <string name="ss_mpv_tscale_subtitle">모션 보간을 위한 시간 필터 (데스크톱)</string>
     <string name="ss_mpv_audio_device_title">MPV 오디오 기기</string>

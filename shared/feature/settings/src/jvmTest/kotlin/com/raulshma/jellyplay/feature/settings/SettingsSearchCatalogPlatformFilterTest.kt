@@ -135,7 +135,9 @@ class SettingsSearchCatalogPlatformFilterTest {
         PlaybackRows.MpvShaderPack.id,
         PlaybackRows.MpvToneMapping.id,
         PlaybackRows.MpvRenderQuality.id,
-        PlaybackRows.MpvHdrPassthrough.id,
+        // mpv_hdr_passthrough LEFT this set: the passthrough property is fully
+        // wired on Android now (the vo=gpu-next SurfaceView twin of the
+        // desktop's HWND-embed hint) — it ships on both hosts.
         PlaybackRows.MpvInterpolationTscale.id,
         PlaybackRows.RememberVolumePerContentType.id,
         // The desktop-shell integration rows (features 4.2 + 4.3): the

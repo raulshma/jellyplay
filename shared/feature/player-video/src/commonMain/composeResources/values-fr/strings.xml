@@ -310,6 +310,7 @@
     <string name="player_video_stats_clock">Horloge</string>
     <string name="player_video_stats_hdr">HDR</string>
     <string name="player_video_stats_hdr_output_active">Sortie HDR active</string>
+    <string name="player_video_stats_display_hdr">HDR d'écran</string>
     <string name="player_video_stats_color_range">Plage de couleurs</string>
     <string name="player_video_stats_color_depth">Profondeur de couleur</string>
     <string name="player_video_stats_sample_rate">Taux d echantillonnage</string>

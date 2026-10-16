@@ -22,6 +22,9 @@ import com.raulshma.jellyplay.core.ui.generated.resources.ss_cat_playback
 import com.raulshma.jellyplay.core.ui.navigation.Route
 import com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchItem
 import com.raulshma.jellyplay.feature.settings.generated.resources.Res
+import com.raulshma.jellyplay.feature.settings.generated.resources.settings_exo_hdr_tone_mapping
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_exo_hdr_tone_mapping_subtitle
+import com.raulshma.jellyplay.feature.settings.generated.resources.ss_exo_hdr_tone_mapping_title
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_advanced_config
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_delay
 import com.raulshma.jellyplay.feature.settings.generated.resources.settings_audio_device
@@ -1085,8 +1088,14 @@ internal object PlaybackRows {
         keywords = listOf("mpv", "hdr", "hdr10", "passthrough", "gpu-next", "colorspace", "tv"),
         route = Route.PlaybackSettings(),
         isAdvanced = true,
-        platforms = DESKTOP_ONLY_PLATFORMS,
-        gate = RowAdmission.Platform(RowAdmissionCapability.MpvRenderProfiles),
+        // BOTH mpv hosts now: the desktop HWND-embed hint path AND Android's
+        // SurfaceView vo=gpu-next twin (evaluated against the shared
+        // video-target-params probe). Formerly desktop-only.
+        platforms = null,
+        // NOT the MpvRenderProfiles platform gate (Android has no render-
+        // profile surface) — the passthrough property itself is fully wired on
+        // Android, so the plain advanced gate applies like every engine row.
+        gate = null,
     )
 
     val MpvInterpolationTscale = SettingsRow(
@@ -1333,6 +1342,18 @@ internal object PlaybackRows {
         searchTitleRes = Res.string.ss_exo_back_buffer_title,
         searchSubtitleRes = Res.string.ss_exo_back_buffer_subtitle,
         keywords = listOf("exoplayer", "exo", "back buffer", "rewind", "buffer"),
+        route = Route.PlaybackSettings(),
+        isAdvanced = true,
+        platforms = ANDROID_ONLY_PLATFORMS,
+    )
+
+    val ExoHdrToneMapping = SettingsRow(
+        id = "exo_hdr_tone_mapping",
+        icon = Tabler.Outline.SunHigh,
+        titleRes = Res.string.settings_exo_hdr_tone_mapping,
+        searchTitleRes = Res.string.ss_exo_hdr_tone_mapping_title,
+        searchSubtitleRes = Res.string.ss_exo_hdr_tone_mapping_subtitle,
+        keywords = listOf("exoplayer", "exo", "hdr", "tone mapping", "sdr", "dolby vision", "washed out", "color"),
         route = Route.PlaybackSettings(),
         isAdvanced = true,
         platforms = ANDROID_ONLY_PLATFORMS,
@@ -1655,6 +1676,7 @@ internal val PlaybackEngineExoRows: List<SettingsRow> = listOf(
     PlaybackRows.ExoAudioOffload,
     PlaybackRows.ExoDecoderFallback,
     PlaybackRows.ExoBackBuffer,
+    PlaybackRows.ExoHdrToneMapping,
     PlaybackRows.ExoPreferredCodecs,
 )
 

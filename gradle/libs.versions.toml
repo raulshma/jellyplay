@@ -218,6 +218,10 @@ media3-cast = { group = "androidx.media3", name = "media3-cast", version.ref = "
 media3-datasource = { group = "androidx.media3", name = "media3-datasource", version.ref = "media3" }
 media3-datasource-okhttp = { group = "androidx.media3", name = "media3-datasource-okhttp", version.ref = "media3" }
 media3-database = { group = "androidx.media3", name = "media3-database", version.ref = "media3" }
+# GL video-graph path for HDR→SDR tone mapping during playback
+# (ExoPlayerEngine engages it via setVideoEffects; ExoPlayerImpl's
+# reflection check requires SingleInputVideoGraph$Factory on the classpath).
+media3-effect = { group = "androidx.media3", name = "media3-effect", version.ref = "media3" }
 # Prebuilt FFmpeg audio decoder (native .so included) for codecs MediaCodec
 # lacks on most devices (DTS, MLP, TrueHD, etc.). Auto-loaded by
 # DefaultRenderersFactory via reflection when EXTENSION_RENDERER_MODE is ON.

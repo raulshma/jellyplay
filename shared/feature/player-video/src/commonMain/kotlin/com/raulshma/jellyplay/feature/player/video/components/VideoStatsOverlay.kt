@@ -53,6 +53,7 @@ import com.raulshma.jellyplay.feature.player.video.generated.resources.player_vi
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_clock
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_color_depth
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_color_range
+import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_display_hdr
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_display_rate
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_drop_rate
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_stats_dropped_frames
@@ -213,6 +214,11 @@ fun VideoStatsOverlay(
                 stats.videoFrameRate?.let { StatsRow(stringResource(Res.string.player_video_frame_rate), "${formatFixed(it.toDouble(), 2)} fps") }
                 stats.videoBitrate?.let { StatsRow(stringResource(Res.string.player_video_bitrate), formatBitrate(it)) }
                 stats.videoHdrType?.let { StatsRow(stringResource(Res.string.player_video_stats_hdr), it) }
+                // the display's capability answers the content row above —
+                // tone-map decisions read as (content family, display family).
+                stats.displayHdrTypes?.let {
+                    StatsRow(stringResource(Res.string.player_video_stats_display_hdr), it)
+                }
                 stats.videoColorRange?.let { StatsRow(stringResource(Res.string.player_video_stats_color_range), it) }
                 stats.videoColorDepth?.let { StatsRow(stringResource(Res.string.player_video_stats_color_depth), it) }
                 stats.hdrOutputNotice?.let { notice ->

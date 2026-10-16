@@ -1055,7 +1055,7 @@ class SettingsCatalogScreenContractTest {
             playbackEngineScreenRowTotal("exo_"),
         )
         assertEquals(
-            SettingsScreenGroups.playbackEngine.items.count { it.id.startsWith("mpv_") } - 3 - 5 + 1, // minus the audio-device trio and the five render rows (both capabilities off); +1: the reset row
+            SettingsScreenGroups.playbackEngine.items.count { it.id.startsWith("mpv_") } - 3 - 4 + 1, // minus the audio-device trio and the FOUR render rows (both capabilities off — mpv_hdr_passthrough left the render-profile gate for the plain advanced gate when passthrough went cross-host); +1: the reset row
             playbackEngineScreenRowTotal(
                 "mpv_",
                 supportsAudioDeviceSelection = false,

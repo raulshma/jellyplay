@@ -248,6 +248,7 @@
     <string name="settings_player_engine_subtitle">Elegir motor de reproducción de medios</string>
     <string name="settings_shader_pack">Paquete de shaders</string>
     <string name="settings_tone_mapping">Mapeo tonal</string>
+    <string name="settings_exo_hdr_tone_mapping">Mapeo de tonos HDR</string>
     <string name="settings_render_quality">Perfil de calidad</string>
     <string name="settings_interpolation_tscale">Filtro de interpolación (tscale)</string>
     <string name="settings_power_user_mode">Modo usuario avanzado</string>

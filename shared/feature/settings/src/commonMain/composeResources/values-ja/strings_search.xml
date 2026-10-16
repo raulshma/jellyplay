@@ -490,7 +490,9 @@
     <string name="ss_mpv_render_quality_title">MPVレンダリング品質</string>
     <string name="ss_mpv_render_quality_subtitle">パフォーマンス、バランス、高品質のスケーラープロファイル（デスクトップ）</string>
     <string name="ss_mpv_hdr_passthrough_title">MPV HDRパススルー</string>
-    <string name="ss_mpv_hdr_passthrough_subtitle">HDR対応ディスプレイへgpu-nextでHDR出力（デスクトップ、次回再生から）</string>
+    <string name="ss_mpv_hdr_passthrough_subtitle">HDR対応ディスプレイへgpu-nextでHDR出力（次回再生から）</string>
+    <string name="ss_exo_hdr_tone_mapping_title">HDRトーンマッピング</string>
+    <string name="ss_exo_hdr_tone_mapping_subtitle">HDR出力のないディスプレイでHDRをSDRへトーンマッピング（自動）、またはネイティブ出力を維持（オフ）</string>
     <string name="ss_mpv_tscale_title">MPV補間フィルター</string>
     <string name="ss_mpv_tscale_subtitle">モーション補間の時間フィルター（デスクトップ）</string>
     <string name="ss_mpv_audio_device_title">MPVオーディオデバイス</string>

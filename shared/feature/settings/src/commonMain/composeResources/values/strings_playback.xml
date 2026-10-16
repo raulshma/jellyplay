@@ -201,6 +201,7 @@
     <string name="settings_interpolation_off">No frame interpolation</string>
     <string name="settings_shader_pack">Shader Pack</string>
     <string name="settings_tone_mapping">Tone Mapping</string>
+    <string name="settings_exo_hdr_tone_mapping">HDR Tone Mapping</string>
     <string name="settings_render_quality">Quality Profile</string>
     <string name="settings_interpolation_tscale">Interpolation Filter (tscale)</string>
     <string name="settings_buffer_size">Buffer Size</string>

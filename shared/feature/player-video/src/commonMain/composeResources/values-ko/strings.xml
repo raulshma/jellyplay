@@ -309,6 +309,7 @@
     <string name="player_video_stats_clock">시계</string>
     <string name="player_video_stats_hdr">HDR</string>
     <string name="player_video_stats_hdr_output_active">HDR 출력 활성</string>
+    <string name="player_video_stats_display_hdr">디스플레이 HDR</string>
     <string name="player_video_stats_color_range">색상 범위</string>
     <string name="player_video_stats_color_depth">색상 심도</string>
     <string name="player_video_stats_sample_rate">샘플링 레이트</string>

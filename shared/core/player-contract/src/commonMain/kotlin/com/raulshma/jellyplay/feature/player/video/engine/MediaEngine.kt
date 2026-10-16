@@ -163,6 +163,15 @@ data class EngineConfig(
      */
     val hdrSource: Boolean = false,
     /**
+     * The CURRENT item's HDR transfer family — the typed twin of [hdrSource]
+     * (invariant: `hdrSource == (hdrContent != HdrContentInfo.NONE)`), derived
+     * by the config builder via `hdrContentFromStreams`. Transient session
+     * input, never persisted. Engines with an HDR output surface resolve their
+     * passthrough-vs-tone-mapping posture from it
+     * (`resolveExoHdrOutput` / `resolveMpvHdrOutput`); other engines ignore it.
+     */
+    val hdrContent: HdrContentInfo = HdrContentInfo.NONE,
+    /**
      * Optional DRM hook. When non-null, engines that support DRM (currently
      * ExoPlayerEngine on Android) attach the supplied session manager —
      * `androidx.media3.exoplayer.drm.DrmSessionManager` on Android, passed
@@ -335,6 +344,25 @@ data class EngineCapabilities(
      * headphone-class) plus the platform spatializer's own route rules.
      */
     val supportsSpatialAudio: Boolean = false,
+    /**
+     * Honors `MpvEngineConfig.hdrPassthrough` — prefers an HDR output when the
+     * display reports an HDR target. Both mpv hosts qualify (desktop:
+     * `target-colorspace-hint` on the HWND-embed `vo=gpu-next`; Android: the
+     * same property on the SurfaceView `vo=gpu-next` path, evaluated against
+     * the `video-target-params` probe). ExoPlayer/LibVLC have no equivalent
+     * switch — `false`. Gates the settings row's applicability and the stats
+     * overlay's passthrough rows.
+     */
+    val supportsHdrPassthrough: Boolean = false,
+    /**
+     * Applies an in-engine HDR→SDR tone map for HDR content on a display that
+     * cannot output it. ExoPlayer only: the Media3 GL video-graph path
+     * (`setVideoEffects` → `DefaultVideoFrameProcessor`'s SDR-output branch;
+     * see `resolveExoHdrOutput`). mpv needs no flag — its `tone-mapping`
+     * default already handles HDR→SDR (its dial lives in `MpvEngineConfig`).
+     * LibVLC has no tone-mapping surface at all — `false`.
+     */
+    val supportsHdrToneMapping: Boolean = false,
 ) {
     /**
      * Admission for the free-form (hex/HSV) subtitle color pickers: the
@@ -506,10 +534,12 @@ data class EngineVideoStats(
     val voFrameDropCount: Long? = null,
     /**
      * HDR passthrough is ACTIVE for the running session: the setting
-     * is on, the item is HDR, and mpv's `video-target-params` reports an HDR
-     * display target. Drives the "HDR output active" badge in the stats
-     * overlay. `false` on engines that don't expose the target surface
-     * (Android, software-render path).
+     * is on, the item is HDR, and the display target reports HDR — mpv's
+     * `video-target-params` probe on both mpv hosts, the Android
+     * `Display.HdrCapabilities` probe on ExoPlayer (an EXPECTATION there:
+     * Media3's own EGL-capability check remains the render-time arbiter).
+     * Drives the "HDR output active" badge in the stats overlay. `false` on
+     * engines that expose no target surface (LibVLC, software-render mpv).
      */
     val hdrOutputActive: Boolean = false,
     /**
@@ -519,6 +549,16 @@ data class EngineVideoStats(
      * report.
      */
     val hdrOutputNotice: String? = null,
+    /**
+     * The display's HDR capability summary for the stats overlay: the HDR
+     * families the current display accepts ("HDR10, Dolby Vision"), "SDR"
+     * for a display with no HDR types. `null` when no probe answered (the
+     * ExoPlayer probe was unavailable) or the engine has no display probe
+     * at all (mpv answers per-target via `video-target-params` instead;
+     * LibVLC exposes nothing). Sits beside [videoHdrType] so content family
+     * and display capability read as one line of diagnosis.
+     */
+    val displayHdrTypes: String? = null,
     /**
      * The engine's effective spatial-audio state ([SpatialAudioState]).
      * Null on engines/surfaces that expose no spatializer facts (mpv,

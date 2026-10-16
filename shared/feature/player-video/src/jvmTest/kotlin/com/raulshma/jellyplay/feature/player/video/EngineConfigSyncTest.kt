@@ -8,6 +8,7 @@ import com.raulshma.jellyplay.core.model.StreamType
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.VideoEffectsConfig
 import com.raulshma.jellyplay.core.testfixtures.FakeMediaEngine
+import com.raulshma.jellyplay.feature.player.video.engine.HdrContentInfo
 import com.raulshma.jellyplay.feature.player.video.state.AudioEffectsState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -138,6 +139,7 @@ class EngineConfigSyncTest {
         assertEquals(VideoEffectsConfig(saturation = 1.5f), config.videoEffects)
         assertEquals(DeinterlaceMode.ON, config.deinterlace)
         assertTrue(config.hdrSource, "the HDR gate rides every runtime build via the streams slice")
+        assertEquals(HdrContentInfo.HDR10, config.hdrContent, "the typed HDR family rides beside the Boolean gate")
     }
 
     @Test

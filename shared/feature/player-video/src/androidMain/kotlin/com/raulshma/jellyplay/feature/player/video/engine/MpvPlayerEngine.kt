@@ -67,6 +67,12 @@ class MpvPlayerEngine(
         // Upper bound on how long the cheap-scalar guard in
         // updateVideoStatsOnly may skip the full property re-read.
         private const val FULL_STATS_REREAD_MS = 2_000L
+        // `video-target-params/gamma` values that mean an HDR output (the
+        // desktop companion's constants — the shared resolveMpvHdrOutput +
+        // MpvStatsProjection read this property through the stats seam).
+        private const val VIDEO_TARGET_PARAMS_GAMMA = "video-target-params/gamma"
+        private const val TARGET_GAMMA_PQ = "pq"
+        private const val TARGET_GAMMA_HLG = "hlg"
         // Prefix/text filter for which verbose (below WARN) mpv messages are
         // surfaced in debug builds. Covers the subtitle/font/render pipeline
         // (sub/ass/libass/vtt/srt) plus the demux/vo/decode paths that feed it,
@@ -859,20 +865,87 @@ class MpvPlayerEngine(
         core.refreshUserOwnedSubtitleKeys(confText, mpvCfg.mpvExtraConfig)
     }
 
+    // ── HDR passthrough state (the desktop MpvDesktopEngine twin) ──
+    // Written from the main thread (configureMpvForRequest / stats tick /
+    // updateConfig) and read from the mpv event thread (the FILE_LOADED
+    // applyFull's extras lambda) — hence @Volatile, mirroring the desktop's
+    // hdrTargetIsHdr discipline.
+
+    /** Whether mpv's `video-target-params` reports an HDR output for the current file. */
+    @Volatile
+    private var hdrTargetIsHdr: Boolean = false
+
+    /** Latched until the per-file target probe resolves (the desktop's hdrProbePending). */
+    @Volatile
+    private var hdrProbePending: Boolean = true
+
+    /** The last `target-colorspace-hint` value written (a change-only write cache). */
+    @Volatile
+    private var lastTargetColorspaceHint: Boolean? = null
+
     /**
-     * The shared config-delta dispatcher (player-contract, the
-     * [MpvFoldApplier] family): it owns the arm ORDER (ownership refresh →
-     * audio-delay → sub-delay → hwdec → shared pairs → subtitle style →
-     * audio → video — the ladder this engine's hand-mirrored body ran) and
-     * the genuinely-shared arms; this engine contributes only its native
-     * surfaces — the `hwdecOverride`-aware hwdec value, the `ao` chain +
-     * AudioEffect-session arms inside the audio hook, and the low-RAM demuxer
-     * extra. The runtime diff cache (`lastAppliedConfigProps`, seeded by
-     * `initOptions`) lives on the applier.
+     * The HDR-passthrough INTENT (not the active state): the user's setting is
+     * on AND the current item's streams are HDR (the config builder folds
+     * `isHdrFromStreams` into [EngineConfig.hdrSource]). Whether the OUTPUT is
+     * actually HDR additionally depends on the display target
+     * ([hdrTargetIsHdr], read from `video-target-params` after the first
+     * stats tick) — the desktop's `hdrPassthroughRequested` verbatim.
      */
+    private fun hdrPassthroughRequested(config: EngineConfig): Boolean =
+        (config.engineSpecific as? MpvEngineConfig)?.hdrPassthrough == true && config.hdrSource
+
+    /**
+     * The Android `target-colorspace-hint` write — the desktop's engine-factory
+     * hint, generalized to this host. Written "yes" when passthrough is
+     * requested AND the output is `vo=gpu-next` (the only vo honoring the hint
+     * — the desktop factory gates on the same vo); "no" resets a stale value
+     * from a previous HDR item. Runtime-settable on the live handle; the
+     * write is change-cached, and a failed write (an older bundled libmpv
+     * without the property) is absorbed — the probe then reports SDR and the
+     * tone-mapping preset stands.
+     */
+    private fun applyTargetColorspaceHint(config: EngineConfig) {
+        val mpvCfg = config.engineSpecific as? MpvEngineConfig ?: MpvEngineConfig()
+        val requested = mpvCfg.hdrPassthrough &&
+            config.hdrSource &&
+            mpvCfg.videoOutput == MpvVideoOutput.GPU_NEXT
+        if (requested == lastTargetColorspaceHint) return
+        try {
+            mpvView?.mpv?.setPropertyString(
+                MpvProperties.TARGET_COLORSPACE_HINT,
+                if (requested) "yes" else "no",
+            )
+            lastTargetColorspaceHint = requested
+        } catch (_: Exception) {
+            // Absorbed: hint unsupported → SDR output; probe + tone mapping take over.
+        }
+    }
+
+    /**
+     * Per-file reset of the HDR target probe — the next stats tick re-reads
+     * `video-target-params/gamma` for the new file (the desktop re-probes once
+     * per FILE_LOADED; the Android adapter probes at the same granularity
+     * through the stats read seam).
+     */
+    private fun resetHdrTargetProbe() {
+        hdrProbePending = true
+        hdrTargetIsHdr = false
+    }
+
     private val configApplier = MpvConfigApplier(
         surface = { if (binding.isAlive()) binding else null },
-        extras = { MpvConfigApplier.Extras(lowRamDevice = isLowRamDevice) },
+        extras = {
+            MpvConfigApplier.Extras(
+                lowRamDevice = isLowRamDevice,
+                // While HDR passthrough is ACTIVE (setting on + HDR item + HDR
+                // display target) `tone-mapping` falls to mpv's `auto` default
+                // — HDR→HDR, the colorspace-hint path owns the output. Before
+                // the target probe lands the gate is open (the preset is
+                // written): the safe fallback for SDR displays. Desktop twin:
+                // MpvDesktopEngine's extras lambda.
+                toneMappingSuppressed = hdrPassthroughRequested(currentConfig) && hdrTargetIsHdr,
+            )
+        },
         refreshOwnedKeys = ::refreshUserOwnedSubtitleKeys,
         hwdecValue = { cfg ->
             (cfg.engineSpecific as? MpvEngineConfig)?.hwdecOverride?.key
@@ -885,6 +958,10 @@ class MpvPlayerEngine(
 
     override fun onConfigChanged(oldConfig: EngineConfig, newConfig: EngineConfig) {
         configApplier.applyDelta(oldConfig, newConfig)
+        // Engine-side HDR arm: a passthrough/vo/hdrSource flip re-evaluates the
+        // colorspace hint (the shared applier has no native arm for it — the
+        // desktop carries it in its factory instead).
+        applyTargetColorspaceHint(newConfig)
     }
 
     /**
@@ -1098,6 +1175,10 @@ class MpvPlayerEngine(
         // Publish only after initialize() succeeded — otherwise every later
         // op on the engine throws repeatedly against a half-initialized view.
         mpvView = view
+        // The fresh mpv handle starts with mpv's option defaults — the
+        // change-cache of applyTargetColorspaceHint must not believe the old
+        // handle's value carried over.
+        lastTargetColorspaceHint = null
         // postInitOptions has now allocated the audio session on the concrete
         // MPV handle. Bind the Android effects before the first file starts so
         // persisted dialogue boost/night mode settings are audible immediately.
@@ -1218,12 +1299,37 @@ class MpvPlayerEngine(
             }
             lastFullStatsReadMs = nowMs
 
+            // The per-file display-target probe (the desktop's probeHdrTarget
+            // twin): read `video-target-params/gamma` once per file, at the
+            // first stats tick where it resolves after FILE_LOADED. pq/HLG
+            // means the output actually switched to HDR (the colorspace hint
+            // worked / the display chose HDR); anything else stays SDR.
+            if (hdrProbePending) {
+                val gamma = reads.readString(VIDEO_TARGET_PARAMS_GAMMA)
+                if (gamma != null) {
+                    hdrProbePending = false
+                    hdrTargetIsHdr = gamma == TARGET_GAMMA_PQ || gamma == TARGET_GAMMA_HLG
+                }
+            }
+
+            val hdrDecision = resolveMpvHdrOutput(
+                content = currentConfig.hdrContent,
+                passthroughRequested = hdrPassthroughRequested(currentConfig),
+                targetIsHdr = hdrTargetIsHdr,
+            )
             publishStatsIfChanged(
                 MpvStatsProjection.project(
                     reads = reads,
                     scalars = scalars,
                     positionMs = posMs,
                     bufferedPositionMs = bufferedPositionMs,
+                    // The desktop HDR badge fields — always derived on the
+                    // Android host now that the target probe rides the stats
+                    // read seam (the contract KDoc's old "Android always
+                    // false" note is obsolete).
+                ).copy(
+                    hdrOutputActive = hdrDecision.hdrOutputExpected,
+                    hdrOutputNotice = hdrDecision.notice,
                 ),
             )
         } catch (e: Exception) {
@@ -1273,6 +1379,12 @@ class MpvPlayerEngine(
     }
 
     private fun configureMpvForRequest(view: PlayerMPVView, request: PlaybackRequest) {
+        // Per-file HDR state: re-arm the target probe (the next stats tick
+        // re-reads video-target-params for THIS file) and re-evaluate the
+        // colorspace hint for the fresh item's hdrSource (a stale "yes" from a
+        // previous HDR item must not leak onto an SDR one).
+        resetHdrTargetProbe()
+        applyTargetColorspaceHint(currentConfig)
         // mTLS: the tls-* options are file-path options that
         // PERSIST on the view's mpv handle across loads — write the reset
         // trio when no certificate is active (same discipline as

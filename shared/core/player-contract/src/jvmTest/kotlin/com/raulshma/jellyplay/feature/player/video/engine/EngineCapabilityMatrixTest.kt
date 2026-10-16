@@ -53,6 +53,8 @@ class EngineCapabilityMatrixTest {
             caps.supportsImageSubtitles,
             caps.supportsDeinterlace,
             caps.supportsSpatialAudio,
+            caps.supportsHdrPassthrough,
+            caps.supportsHdrToneMapping,
         ).forEach { assertFalse(it, "EXTERNAL must advertise no capabilities") }
     }
 
@@ -199,6 +201,31 @@ class EngineCapabilityMatrixTest {
         assertFalse(EngineCapabilityMatrix.MPV.supportsSpatialAudio)
         assertFalse(EngineCapabilityMatrix.LIBVLC.supportsSpatialAudio)
         assertFalse(EngineCapabilityMatrix.EXTERNAL.supportsSpatialAudio)
+    }
+
+    // ── HDR output capability flags ──
+
+    @Test
+    fun hdrPassthrough_mpvOnly() {
+        // mpv's `target-colorspace-hint` works on BOTH hosts now (desktop
+        // HWND-embed, Android SurfaceView vo=gpu-next); ExoPlayer has no
+        // passthrough switch and LibVLC no HDR surface at all.
+        assertTrue(EngineCapabilityMatrix.MPV.supportsHdrPassthrough)
+        assertFalse(EngineCapabilityMatrix.EXO_PLAYER.supportsHdrPassthrough)
+        assertFalse(EngineCapabilityMatrix.LIBVLC.supportsHdrPassthrough)
+        assertFalse(EngineCapabilityMatrix.EXTERNAL.supportsHdrPassthrough)
+    }
+
+    @Test
+    fun hdrToneMapping_exoPlayerOnly() {
+        // The Media3 GL video-graph path (resolveExoHdrOutput) is the only
+        // in-engine HDR→SDR tone-map ENGAGEMENT flag; mpv tone maps by default
+        // (its dial lives in MpvEngineConfig.toneMapping, not a capability),
+        // LibVLC has no tone mapping surface.
+        assertTrue(EngineCapabilityMatrix.EXO_PLAYER.supportsHdrToneMapping)
+        assertFalse(EngineCapabilityMatrix.MPV.supportsHdrToneMapping)
+        assertFalse(EngineCapabilityMatrix.LIBVLC.supportsHdrToneMapping)
+        assertFalse(EngineCapabilityMatrix.EXTERNAL.supportsHdrToneMapping)
     }
 
     @Test

@@ -22,6 +22,7 @@ import com.raulshma.jellyplay.core.model.SubtitleColor
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.VideoEffectsConfig
 import com.raulshma.jellyplay.feature.player.video.engine.EngineConfig
+import com.raulshma.jellyplay.feature.player.video.engine.HdrContentInfo
 import com.raulshma.jellyplay.feature.player.video.state.VideoFxState
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -263,6 +264,41 @@ class EngineConfigBuilderTest {
         val config = EngineConfigBuilder.buildFromPreferences(agg, streams, null, null)
         assertEquals(userStyle, config.subtitleStyle)
         assertEquals(18, config.subtitleStyle.fontSize)
+    }
+
+    @Test
+    fun hdrContent_propagatesWithBooleanTwin() {
+        // The typed HDR family rides beside the Boolean gate on BOTH entry
+        // points, and the invariant hdrSource == (hdrContent != NONE) holds.
+        val dvStreams = listOf(
+            MediaStream(index = 1, type = StreamType.AUDIO),
+            MediaStream(index = 0, type = StreamType.VIDEO, videoRangeType = "HDR10Plus"),
+        )
+        val built = EngineConfigBuilder.buildFromPreferences(VideoPlayerAggregate(), dvStreams, null, null)
+        assertEquals(HdrContentInfo.HDR10_PLUS, built.hdrContent)
+        assertTrue(built.hdrSource)
+
+        val sliced = EngineConfigBuilder.buildFromSlices(
+            subtitleStyle = SubtitleStyle(),
+            videoEffects = VideoEffectsConfig(),
+            dialogueBoostEnabled = false,
+            dialogueBoostStrength = EffectStrength.MODERATE,
+            mediaStreams = dvStreams,
+            effects = baselineEffects(),
+            equalizerEnabled = false,
+            agg = VideoPlayerAggregate(),
+        )
+        assertEquals(HdrContentInfo.HDR10_PLUS, sliced.hdrContent)
+        assertTrue(sliced.hdrSource)
+
+        val sdr = EngineConfigBuilder.buildFromPreferences(
+            VideoPlayerAggregate(),
+            listOf(MediaStream(index = 0, type = StreamType.VIDEO, videoRange = "SDR")),
+            null,
+            null,
+        )
+        assertEquals(HdrContentInfo.NONE, sdr.hdrContent)
+        assertFalse(sdr.hdrSource)
     }
 
     @Test

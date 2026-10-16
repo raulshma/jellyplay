@@ -83,6 +83,14 @@ object EngineCapabilityMatrix {
         // PCM the platform spatializer (API 32+) can engage. Runtime-gated: see
         // [EngineCapabilities.supportsSpatialAudio].
         supportsSpatialAudio = true,
+        // No HDR passthrough switch — Media3 outputs whatever the display
+        // pipeline accepts. Its HDR surface is the GL tone-mapping path.
+        supportsHdrPassthrough = false,
+        // HDR→SDR tone mapping via the Media3 GL video-graph path
+        // (`resolveExoHdrOutput` decides engagement; the SDR-output branch of
+        // DefaultVideoFrameProcessor applies the map). Not offered for DRM
+        // sessions (`setVideoEffects` limitation).
+        supportsHdrToneMapping = true,
         // Zoom-safe subtitle strategy is declared per-engine via
         // [MediaEngine.zoomSafeSubtitleStrategy] (ExoPlayer = NATIVE_PINNED),
         // not as a capability flag here.
@@ -124,6 +132,14 @@ object EngineCapabilityMatrix {
         // mpv renders through its own audio output (ao); no observable platform
         // Spatializer surface and its own passthrough path.
         supportsSpatialAudio = false,
+        // HDR passthrough on BOTH hosts now: the desktop's HWND-embed
+        // `target-colorspace-hint` path and Android's SurfaceView `vo=gpu-next`
+        // twin (evaluated against the shared `video-target-params` probe).
+        supportsHdrPassthrough = true,
+        // No in-engine HDR→SDR dial beyond `MpvEngineConfig.toneMapping` — mpv
+        // tone maps by default whenever the target is SDR, so the ExoPlayer
+        // engagement flag has no analogue to advertise.
+        supportsHdrToneMapping = false,
     )
 
     /** libVLC backend. */
@@ -162,6 +178,10 @@ object EngineCapabilityMatrix {
         // No spatializer surface: libVLC owns its AudioTrack directly with no
         // observable android.media.Spatializer hook.
         supportsSpatialAudio = false,
+        // No HDR switch and no tone-mapping surface: libVLC 3.7.x renders HDR
+        // content through whatever the display pipeline does with it.
+        supportsHdrPassthrough = false,
+        supportsHdrToneMapping = false,
     )
 
     /**
@@ -193,6 +213,8 @@ object EngineCapabilityMatrix {
         supportsImageSubtitles = false,
         supportsDeinterlace = false,
         supportsSpatialAudio = false,
+        supportsHdrPassthrough = false,
+        supportsHdrToneMapping = false,
     )
 
     /** All declared matrices, keyed by [PlayerType]. Asserted total in tests. */

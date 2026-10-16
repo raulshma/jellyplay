@@ -248,6 +248,7 @@
     <string name="settings_player_engine_subtitle">选择媒体播放引擎</string>
     <string name="settings_shader_pack">着色器包</string>
     <string name="settings_tone_mapping">色调映射</string>
+    <string name="settings_exo_hdr_tone_mapping">HDR色调映射</string>
     <string name="settings_render_quality">画质配置</string>
     <string name="settings_interpolation_tscale">插值滤波器（tscale）</string>
     <string name="settings_power_user_mode">高级用户模式</string>

@@ -309,6 +309,7 @@
     <string name="player_video_stats_clock">時計</string>
     <string name="player_video_stats_hdr">HDR</string>
     <string name="player_video_stats_hdr_output_active">HDR出力アクティブ</string>
+    <string name="player_video_stats_display_hdr">ディスプレイHDR</string>
     <string name="player_video_stats_color_range">色域</string>
     <string name="player_video_stats_color_depth">色深度</string>
     <string name="player_video_stats_sample_rate">サンプリングレート</string>

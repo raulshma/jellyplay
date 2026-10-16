@@ -176,6 +176,8 @@ setting simply won't appear in the player UI).
 | Channel mixing | ✅ | ✅ | ✗ | ✗ |
 | Video filters (brightness/contrast/etc.) | ✗ | ✅ | ✅ | ✗ |
 | Spatial audio (platform spatializer)¹ | ✅ | ✗ | ✗ | ✗ |
+| HDR passthrough (prefer HDR output)² | ✗ | ✅ | ✗ | ✗ |
+| HDR → SDR tone mapping² | ✅ | (default) | ✗ | ✗ |
 | Live quality switch (ABR) | ✅ | ✗ | ✗ | ✗ |
 | Bandwidth estimate | ✅ | ✗ | ✗ | ✗ |
 
@@ -197,6 +199,32 @@ speaker/receiver routes are declined by the platform's own route rules
 uses — the app-side headphone check counts any connected headphone-class
 output, so a mixed BT-headphones + HDMI session rests on that platform
 answer, not on the app gate).
+
+² **HDR playback.** The three engines handle HDR (HDR10 / HDR10+ / HLG /
+Dolby Vision) very differently:
+
+- **ExoPlayer** decodes and renders natively: on a display that supports the
+  content's HDR family you get real HDR output. On a display that does not,
+  the raw HDR signal would look *washed out* — so the engine's **HDR Tone
+  Mapping** setting (default **Auto**) routes video through Media3's GL
+  pipeline whenever the item is HDR and the display probe reports no matching
+  HDR type, letting Media3 tone map HDR → SDR. SDR content never pays the GL
+  pass, and **Off** restores the native path entirely. Two honest caveats:
+  Media3 1.11 has no *forced* tone-map lever (the display's EGL capability
+  makes the final call at render time), and Dolby Vision profile 5 on a
+  non-DV display can decode to uncorrectable colors on some devices — the
+  stats overlay says so, and libmpv is the better engine there.
+- **libmpv** tone maps HDR → SDR *by default* (its `tone-mapping` preset,
+  configurable on desktop), and with **HDR Passthrough** enabled it asks an
+  HDR display to switch to its HDR mode instead (`target-colorspace-hint` on
+  `vo=gpu-next`) — on both desktop and Android. The stats overlay reports
+  whether the output actually switched (mpv's `video-target-params` probe)
+  or the tone mapping took over.
+- **LibVLC** has no HDR handling surface: content renders through whatever
+  the device's display pipeline does with it.
+
+The "HDR output active" and "HDR" rows in the player's stats overlay show
+which posture is live for the current session.
 
 **Subtitle nuance.** ExoPlayer and mpv both *render* ASS/SSA subtitles and
 both apply *your* style overrides (colors, borders, Force) on top of
@@ -251,11 +279,11 @@ everyone; reach for these only if a particular file misbehaves.
 
 - **ExoPlayer** — video scaling mode, frame-rate strategy, preferred
   video MIME types, skip-silence, audio offload mode, back-buffer
-  duration, decoder fallback.
+  duration, decoder fallback, HDR tone mapping.
 - **libmpv** — video output (`gpu-next` default), scaler (bilinear
   default),
   hardware-decode override, audio output, demuxer max bytes, frame drop,
-  skip-loop-filter, interpolation, deband.
+  skip-loop-filter, interpolation, deband, HDR passthrough.
 - **LibVLC** — audio output, video output, network caching,
   time-stretch, skip-loop-filter, decoder threads, drop-late-frames.
 
@@ -298,7 +326,7 @@ try switching to software decoding.
 | -------- | ------ | ------- | ----- |
 | **Streaming services-style content (HLS/DASH)** | ExoPlayer | Hardware | Best perf, lowest battery |
 | **Anime fansubs with .ass subtitles** | libmpv | Hardware | Best ASS rendering + style override |
-| **Local 4K HDR remuxes** | ExoPlayer | Hardware | Direct play, frame-rate matching |
+| **Local 4K HDR remuxes** | ExoPlayer | Hardware | Direct play, frame-rate matching, HDR output on HDR displays, tone-mapped on SDR |
 | **Low-end TV box (ONN, generic)** | libmpv | Hardware | Often more stable than ExoPlayer |
 | **Exotic MKV with audio in AC-3** | LibVLC | Hardware | Best fallback |
 | **Slow WiFi, stutter issues** | ExoPlayer | Hardware | Adaptive bitrate (HLS/DASH) |

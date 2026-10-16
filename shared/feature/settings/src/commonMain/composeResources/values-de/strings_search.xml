@@ -490,7 +490,9 @@
     <string name="ss_mpv_render_quality_title">MPV-Renderqualität</string>
     <string name="ss_mpv_render_quality_subtitle">Leistung-, Ausgewogen- oder Hochwert-Profil (Desktop)</string>
     <string name="ss_mpv_hdr_passthrough_title">MPV-HDR-Durchreichung</string>
-    <string name="ss_mpv_hdr_passthrough_subtitle">HDR-Ausgabe an HDR-fähige Displays über gpu-next (Desktop, nächste Wiedergabe)</string>
+    <string name="ss_mpv_hdr_passthrough_subtitle">HDR-Ausgabe an HDR-fähige Displays über gpu-next (nächste Wiedergabe)</string>
+    <string name="ss_exo_hdr_tone_mapping_title">HDR-Tonemapping</string>
+    <string name="ss_exo_hdr_tone_mapping_subtitle">HDR auf Displays ohne HDR-Ausgabe nach SDR mappen (Auto) oder native Ausgabe behalten (Aus)</string>
     <string name="ss_mpv_tscale_title">MPV-Interpolationsfilter</string>
     <string name="ss_mpv_tscale_subtitle">Temporärer Filter für Bewegungsinterpolation (Desktop)</string>
     <string name="ss_mpv_audio_device_title">MPV-Audiogerät</string>

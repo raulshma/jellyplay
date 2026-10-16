@@ -309,6 +309,7 @@
     <string name="player_video_stats_clock">时钟</string>
     <string name="player_video_stats_hdr">HDR</string>
     <string name="player_video_stats_hdr_output_active">HDR 输出已激活</string>
+    <string name="player_video_stats_display_hdr">显示器HDR</string>
     <string name="player_video_stats_color_range">色彩范围</string>
     <string name="player_video_stats_color_depth">色彩深度</string>
     <string name="player_video_stats_sample_rate">采样率</string>

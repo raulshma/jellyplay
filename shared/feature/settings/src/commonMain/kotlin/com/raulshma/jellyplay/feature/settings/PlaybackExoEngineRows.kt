@@ -5,6 +5,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.MutableState
 import com.raulshma.jellyplay.core.model.PlaybackPreferences
 import com.raulshma.jellyplay.core.model.ExoPlayerEngineConfig
+import com.raulshma.jellyplay.core.model.ExoHdrToneMappingMode
 import com.raulshma.jellyplay.core.model.ExoVideoScalingMode
 import com.raulshma.jellyplay.core.model.ExoFrameRateStrategy
 import com.raulshma.jellyplay.core.model.ExoAudioOffloadMode
@@ -116,6 +117,24 @@ internal fun PlaybackExoEngineRows(
                                 checked = exoCfg.enableDecoderFallback,
                                 highlighted = highlightSettingId == PlaybackRows.ExoDecoderFallback.id,
                                 onCheckedChange = { viewModel.edit { scope -> scope.engine.setExoPlayerConfig(exoCfg.copy(enableDecoderFallback = it)) } },
+                            )
+                            val hdrToneMappingTitle = rowTitle(PlaybackRows.ExoHdrToneMapping)
+                            SettingListItem(
+                                icon = rowIcon(PlaybackRows.ExoHdrToneMapping),
+                                title = hdrToneMappingTitle,
+                                subtitle = exoCfg.hdrToneMapping.displayName,
+                                trailingText = exoCfg.hdrToneMapping.name,
+                                highlighted = highlightSettingId == PlaybackRows.ExoHdrToneMapping.id,
+                                onClick = {
+                                    activePicker.value = PickerState.List(
+                                        title = hdrToneMappingTitle,
+                                        items = ExoHdrToneMappingMode.entries,
+                                        label = { it.displayName },
+                                        subtitle = { it.name },
+                                        isSelected = { it == exoCfg.hdrToneMapping },
+                                        onSelect = { viewModel.edit { scope -> scope.engine.setExoPlayerConfig(exoCfg.copy(hdrToneMapping = it)) } },
+                                    )
+                                },
                             )
                             SettingListItem(
                                 icon = rowIcon(PlaybackRows.ExoBackBuffer),

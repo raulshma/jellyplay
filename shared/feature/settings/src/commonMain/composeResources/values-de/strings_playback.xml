@@ -248,6 +248,7 @@
     <string name="settings_player_engine_subtitle">Medien-Wiedergabe-Engine wählen</string>
     <string name="settings_shader_pack">Shader-Paket</string>
     <string name="settings_tone_mapping">Tonemapping</string>
+    <string name="settings_exo_hdr_tone_mapping">HDR-Tonemapping</string>
     <string name="settings_render_quality">Qualitätsprofil</string>
     <string name="settings_interpolation_tscale">Interpolationsfilter (tscale)</string>
     <string name="settings_power_user_mode">Expertenmodus</string>

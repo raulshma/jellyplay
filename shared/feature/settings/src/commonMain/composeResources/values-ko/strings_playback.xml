@@ -248,6 +248,7 @@
     <string name="settings_player_engine_subtitle">미디어 재생 엔진 선택</string>
     <string name="settings_shader_pack">셰이더 팩</string>
     <string name="settings_tone_mapping">톤 매핑</string>
+    <string name="settings_exo_hdr_tone_mapping">HDR 톤 매핑</string>
     <string name="settings_render_quality">품질 프로필</string>
     <string name="settings_interpolation_tscale">보간 필터(tscale)</string>
     <string name="settings_power_user_mode">파워 유저 모드</string>

@@ -329,6 +329,7 @@
     <string name="player_video_stats_clock">Clock</string>
     <string name="player_video_stats_hdr">HDR</string>
     <string name="player_video_stats_hdr_output_active">HDR output active</string>
+    <string name="player_video_stats_display_hdr">Display HDR</string>
     <string name="player_video_stats_color_range">Color Range</string>
     <string name="player_video_stats_color_depth">Color Depth</string>
     <string name="player_video_stats_sample_rate">Sample Rate</string>

@@ -490,7 +490,9 @@
     <string name="ss_mpv_render_quality_title">MPV 渲染画质</string>
     <string name="ss_mpv_render_quality_subtitle">性能、平衡、高画质缩放配置（桌面端）</string>
     <string name="ss_mpv_hdr_passthrough_title">MPV HDR 直通</string>
-    <string name="ss_mpv_hdr_passthrough_subtitle">通过 gpu-next 向 HDR 显示器输出 HDR（桌面端，下次播放生效）</string>
+    <string name="ss_mpv_hdr_passthrough_subtitle">通过 gpu-next 向 HDR 显示器输出 HDR（下次播放生效）</string>
+    <string name="ss_exo_hdr_tone_mapping_title">HDR色调映射</string>
+    <string name="ss_exo_hdr_tone_mapping_subtitle">在无HDR输出的屏幕上将HDR色调映射为SDR（自动），或保持原生输出（关闭）</string>
     <string name="ss_mpv_tscale_title">MPV 插值滤波器</string>
     <string name="ss_mpv_tscale_subtitle">运动插值的时间滤波器（桌面端）</string>
     <string name="ss_mpv_audio_device_title">MPV 音频设备</string>

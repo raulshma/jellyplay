@@ -434,6 +434,23 @@ enum class ExoAudioOffloadMode(val displayName: String, val key: String, val val
     REQUIRED("Required", "REQUIRED", 2),
 }
 
+/**
+ * The ExoPlayer HDR→SDR tone-mapping posture — when the engine may route
+ * video through Media3's GL video-graph so HDR content tone maps on a display
+ * that cannot output it. There is deliberately no ALWAYS mode: Media3 1.11.1
+ * exposes no force-tone-map lever (`setRequestOpenGlToneMapping` is
+ * instance-level on an unreachable wrapper), so AUTO can only REQUEST the GL
+ * path — Media3's own EGL-capability check decides at render time.
+ */
+@Immutable
+@Serializable
+enum class ExoHdrToneMappingMode(val displayName: String) {
+    /** Tone map only when the item is HDR and the display cannot output that HDR family. */
+    AUTO("Auto (when display is SDR)"),
+    /** Never engage the GL path — native MediaCodec→Surface output, pre-HDR behavior. */
+    OFF("Off (native output)"),
+}
+
 @Immutable
 @Serializable
 data class ExoPlayerEngineConfig(
@@ -444,6 +461,12 @@ data class ExoPlayerEngineConfig(
     val audioOffloadMode: ExoAudioOffloadMode = ExoAudioOffloadMode.DISABLED,
     val backBufferDurationMs: Int = 0,
     val enableDecoderFallback: Boolean = true,
+    /**
+     * HDR→SDR tone-mapping posture (see [ExoHdrToneMappingMode]). [AUTO] only
+     * ever engages when the item's streams are HDR AND the Android display
+     * probe reports no matching HDR type — SDR content never pays the GL pass.
+     */
+    val hdrToneMapping: ExoHdrToneMappingMode = ExoHdrToneMappingMode.AUTO,
 ) : EngineSpecificConfig
 
 /**

@@ -243,7 +243,9 @@
     <string name="ss_mpv_render_quality_title">MPV Render Quality</string>
     <string name="ss_mpv_render_quality_subtitle">Performance / balanced / high-quality scaler profile (desktop)</string>
     <string name="ss_mpv_hdr_passthrough_title">MPV HDR Passthrough</string>
-    <string name="ss_mpv_hdr_passthrough_subtitle">Output HDR to HDR-capable displays via gpu-next (desktop, next playback)</string>
+    <string name="ss_mpv_hdr_passthrough_subtitle">Output HDR to HDR-capable displays via gpu-next (next playback)</string>
+    <string name="ss_exo_hdr_tone_mapping_title">HDR Tone Mapping</string>
+    <string name="ss_exo_hdr_tone_mapping_subtitle">Tone map HDR to SDR on displays without HDR output (Auto) or keep native output (Off)</string>
     <string name="ss_mpv_tscale_title">MPV Interpolation Filter</string>
     <string name="ss_mpv_tscale_subtitle">Temporal filter for motion interpolation (desktop)</string>
     <string name="ss_mpv_buffer_size_title">MPV Buffer Size</string>

@@ -75,8 +75,9 @@ class SettingsSearchCatalogTest {
         // beside the per-library list); +1 for the H5 hidden-libraries
         // restore row (the My Media hidden-libraries drill-in); +2 for the
         // spatial-audio pair (the ADVISORY master toggle + its headphones
-        // sub-knob on the playback slice).
-        assertEquals(364, items.size)
+        // sub-knob on the playback slice); +1 for the HDR wave's ExoPlayer
+        // "HDR Tone Mapping" engine row (exo_hdr_tone_mapping).
+        assertEquals(365, items.size)
         // Curated flat order starts with the account/session pair that used to
         // open the old registry, and the aggregation is a pure concatenation
         // of the decorated per-screen groups (no dedup, no reordering).

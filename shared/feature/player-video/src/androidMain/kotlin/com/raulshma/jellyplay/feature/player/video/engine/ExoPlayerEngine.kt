@@ -251,6 +251,25 @@ class ExoPlayerEngine(
     }
 
     /**
+     * The display's HDR capability facts (`Display.HdrCapabilities` types,
+     * display-event-refreshed) behind [resolveExoHdrOutput]. Read per decision
+     * via [DisplayHdrCapabilitiesProbe.support]; a null snapshot (probe
+     * unavailable) keeps the native output path — unknown is not SDR.
+     */
+    private val displayHdrProbe = DisplayHdrCapabilitiesProbe(context)
+
+    /**
+     * The pure (content × display × setting) decision for the current config —
+     * the single definition both the load-time engagement and the stats fold
+     * read, so the two can never disagree.
+     */
+    private fun resolveHdrDecision(): HdrOutputDecision = resolveExoHdrOutput(
+        content = currentConfig.hdrContent,
+        display = displayHdrProbe.support.value,
+        mode = currentExoConfig.hdrToneMapping,
+    )
+
+    /**
      * Whether the CURRENT session is in the spatial-neutralized shape
      * (downmix + speaker cap held off, virtualizer suppressed). Drives the
      * apply-path override and the flip-triggered audio-pipeline
@@ -468,6 +487,13 @@ class ExoPlayerEngine(
         val exoCfg = currentExoConfig
         val assForRequest = AssSupport.hasAssSubtitles(request)
         val streamCacheEligible = isStreamCacheEligible(request)
+        // The HDR output posture is a CONSTRUCTION-time input: engagement of
+        // the GL video-graph path is sticky for the built player (see
+        // LoadRebuildInputs.hdrGlEngaged). DRM sessions never engage —
+        // `setVideoEffects` explicitly does not support DRM content.
+        val hdrDecision = resolveHdrDecision()
+        val hdrGlEngaged = hdrDecision.toneMappingActive &&
+            currentConfig.drmSessionManagerProvider == null
         val inputs = LoadRebuildInputs(
             decoderMode = currentConfig.decoderMode,
             exoCfg = exoCfg,
@@ -479,6 +505,7 @@ class ExoPlayerEngine(
             assSession = assForRequest,
             drmProvider = currentConfig.drmSessionManagerProvider,
             streamCacheEligible = streamCacheEligible,
+            hdrGlEngaged = hdrGlEngaged,
         )
 
         val existingPlayer = player
@@ -701,6 +728,21 @@ class ExoPlayerEngine(
         exo.addListener(listener)
         exo.addAnalyticsListener(decoderCountersListener)
         player = exo
+
+        // Engage the GL video-graph path for HDR→SDR tone mapping. Media3
+        // 1.11.1 has no force-tone-map lever (`setRequestOpenGlToneMapping` is
+        // instance-level on an unreachable wrapper), so this only REQUESTS the
+        // path: frames route through DefaultVideoFrameProcessor, whose
+        // SDR-output branch applies the HDR→SDR tone map exactly when the
+        // output surface's EGL context cannot present the content's transfer.
+        // Must be called at least once before prepare(); media3-effect is on
+        // the classpath (the implementation reflection-checks it) — a
+        // pathological failure is absorbed, leaving the native path (and the
+        // stats decision as-is, since the resolver reports expectations).
+        if (hdrGlEngaged) {
+            runCatching { exo.setVideoEffects(emptyList()) }
+                .onFailure { Log.w(TAG, "HDR GL tone-mapping path engagement failed", it) }
+        }
 
         // Wire the AssHandler to the player and inject the bundled fallback
         // font (and any user-installed fonts) so libass can resolve families.
@@ -1624,15 +1666,38 @@ class ExoPlayerEngine(
             .toLong()
         val rendered = (counters?.renderedOutputBufferCount ?: 0).toLong()
 
+        // The HDR fold is computed BEFORE the dedup guard and compared by its
+        // PUBLISHED shape: the observed-SDR downgrade (below) can flip
+        // hdrOutputActive while every counter stays frozen, and a guard keyed
+        // on the decision's expectation would swallow that flip.
         val last = lastVideoStats
+        val hdrDecision = resolveHdrDecision()
+        val videoFormat = p.videoFormat
+        // The OBSERVED content transfer (the selected track's color metadata —
+        // what is actually decoding, not what the server metadata claimed). A
+        // clearly-SDR observed format downgrades the decision's passthrough
+        // expectation (the classic case: an adaptive transcode rendition that
+        // is SDR even though the item's streams said HDR).
+        val observedHdr = videoFormat?.let { f ->
+            f.sampleMimeType == MimeTypes.VIDEO_DOLBY_VISION ||
+                f.colorInfo?.hdrStaticInfo != null ||
+                f.colorInfo?.colorTransfer == C.COLOR_TRANSFER_HLG ||
+                f.colorInfo?.colorTransfer == C.COLOR_TRANSFER_ST2084
+        }
+        val hdrOutputActive =
+            if (observedHdr == false) false else hdrDecision.hdrOutputExpected
+        val displayHdrTypes = displayHdrProbe.support.value
+            ?.let { d -> d.supportedTypes.joinToString { it.displayName }.ifEmpty { "SDR" } }
         if (last != null && last.bufferedPositionMs == bufferedPos &&
             last.estimatedBandwidthBps == bandwidthEstimate &&
-            last.droppedFrames == dropped && last.totalVideoFrames == rendered
+            last.droppedFrames == dropped && last.totalVideoFrames == rendered &&
+            last.hdrOutputActive == hdrOutputActive &&
+            last.hdrOutputNotice == hdrDecision.notice &&
+            last.displayHdrTypes == displayHdrTypes
         ) {
             return
         }
 
-        val videoFormat = p.videoFormat
         val audioFormat = p.audioFormat
 
         val combinedBitrate = (videoFormat?.bitrate ?: 0) + (audioFormat?.bitrate ?: 0)
@@ -1654,8 +1719,8 @@ class ExoPlayerEngine(
             videoBitrate = videoFormat?.bitrate?.let { if (it > 0) it else null },
             videoColorRange = videoFormat?.colorInfo?.let { ci ->
                 when (ci.colorRange) {
-                    androidx.media3.common.C.COLOR_RANGE_LIMITED -> "Limited"
-                    androidx.media3.common.C.COLOR_RANGE_FULL -> "Full"
+                    C.COLOR_RANGE_LIMITED -> "Limited"
+                    C.COLOR_RANGE_FULL -> "Full"
                     else -> null
                 }
             },
@@ -1665,17 +1730,17 @@ class ExoPlayerEngine(
                 // function — ST2084/PQ is shared by HDR10 and DV, so the prior
                 // mapping mislabeled every HDR10 stream as "Dolby Vision".
                 when {
-                    f.sampleMimeType == androidx.media3.common.MimeTypes.VIDEO_DOLBY_VISION -> "Dolby Vision"
+                    f.sampleMimeType == MimeTypes.VIDEO_DOLBY_VISION -> "Dolby Vision"
                     ci?.hdrStaticInfo != null -> "HDR10"
-                    ci?.colorTransfer == androidx.media3.common.C.COLOR_TRANSFER_HLG -> "HLG"
-                    ci?.colorTransfer == androidx.media3.common.C.COLOR_TRANSFER_ST2084 -> "HDR10"
-                    ci?.colorTransfer == androidx.media3.common.C.COLOR_TRANSFER_SDR -> null
+                    ci?.colorTransfer == C.COLOR_TRANSFER_HLG -> "HLG"
+                    ci?.colorTransfer == C.COLOR_TRANSFER_ST2084 -> "HDR10"
+                    ci?.colorTransfer == C.COLOR_TRANSFER_SDR -> null
                     else -> null
                 }
             },
             videoColorDepth = videoFormat?.colorInfo?.let { ci ->
                 val depth = ci.lumaBitdepth
-                if (depth > 0 && depth != androidx.media3.common.Format.NO_VALUE) "$depth-bit" else null
+                if (depth > 0 && depth != Format.NO_VALUE) "$depth-bit" else null
             },
             audioCodec = audioFormat?.sampleMimeType?.let { codecFromMime(it) },
             audioSampleRate = audioFormat?.sampleRate?.let { if (it > 0) it else null },
@@ -1683,6 +1748,12 @@ class ExoPlayerEngine(
             audioBitrate = audioFormat?.bitrate?.let { if (it > 0) it else null },
             audioSpatialState = spatialStatsState(),
             audioSpatialSuperseded = spatialSupersededVirtualizer,
+            // The HDR output rows — the decision's expectation, downgraded
+            // when the observed track's transfer is clearly SDR (see
+            // [observedHdr]); the notice rides the decision unchanged.
+            hdrOutputActive = hdrOutputActive,
+            hdrOutputNotice = hdrDecision.notice,
+            displayHdrTypes = displayHdrTypes,
             estimatedBandwidthBps = bandwidthEstimate,
             droppedFrames = dropped,
             totalVideoFrames = rendered,
