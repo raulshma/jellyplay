@@ -2,9 +2,12 @@ package com.raulshma.jellyplay.startup
 
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
+import com.raulshma.jellyplay.core.data.repository.JellyPlayLiveResyncConnector
+import com.raulshma.jellyplay.core.data.session.JellyPlayEventsSessionController
 import com.raulshma.jellyplay.core.data.update.AppUpdateRepository
 import com.raulshma.jellyplay.core.data.worker.AutoDownloadScheduler
 import com.raulshma.jellyplay.core.data.worker.DownloadReconnectListener
+import com.raulshma.jellyplay.core.data.worker.DownloadSummarySurface
 import com.raulshma.jellyplay.core.data.worker.PlaybackSyncReconnectListener
 import com.raulshma.jellyplay.core.data.worker.PlaybackSyncScheduler
 import com.raulshma.jellyplay.core.data.worker.SettingsSyncBackgroundTrigger
@@ -153,6 +156,16 @@ class AppStartupPrewarms(
     // OkHttp) off the cold-start path. cleanupDownloadedUpdate is a cheap file
     // delete, but construction is the cost worth deferring.
     private val appUpdateRepository: Lazy<AppUpdateRepository>,
+    // The de-eagered core:data session machinery (formerly createdAtStart
+    // Koin singles whose construction pulled AuthRepositoryImpl → Room +
+    // migrations + the WebSocket client onto main inside startKoin, and the
+    // Room-opening download summary). Each arms its collector via an
+    // idempotent start() — the desktop twin kick lives in DesktopStartup's
+    // Dispatchers.Default block. Resolved ONLY inside the background-scheduler
+    // IO block, behind the same 2 s deferral as its siblings.
+    private val eventsSessionController: Lazy<JellyPlayEventsSessionController>,
+    private val liveResyncConnector: Lazy<JellyPlayLiveResyncConnector>,
+    private val downloadSummarySurface: Lazy<DownloadSummarySurface>,
 ) {
 
     /**
@@ -245,6 +258,16 @@ class AppStartupPrewarms(
                 async { runCatchingRethrowingCancellation { fontProvider.value.prewarm() } }
                 async { runCatching { videoStreamCache.value.prewarm() } }
             }
+            // Plain CONSTRUCTION of the audio manager at t=0, off main: the
+            // authenticated composition forces
+            // `audioPlaybackManagerLazy.value` (JellyPlayApp.kt), and the
+            // 2 s-deferred group below only start()s it — session restore
+            // usually beats that deferral, so the 14-dep graph (Room queue
+            // restore included) constructed ON MAIN inside first composition.
+            // Resolving the lazy here (Koin memoization = identity-neutral)
+            // moves the construction to IO while the documented side-effect
+            // free ctor and the deferred start() stay exactly where they were.
+            audioPlaybackManager.value
         }
     }
 
@@ -278,6 +301,12 @@ class AppStartupPrewarms(
             notificationReconnectListener.value.start()
             autoDownloadScheduler.value.sync()
             notificationScheduler.value.scheduleOrUpdate()
+            // The de-eagered core:data session machinery (see the parameter
+            // comments): idempotent arms, same background group as the other
+            // process-lifetime collectors.
+            eventsSessionController.value.start()
+            liveResyncConnector.value.start()
+            downloadSummarySurface.value.start()
         }
     }
 

@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertSame
 
 /**
  * Pins the download summary surface's ONE rule: the port sees count
@@ -41,9 +42,23 @@ class DownloadSummarySurfaceTest {
         val counts = flowOf(0, 0, 0, 2, 2, 1, 0)
 
         val surface = DownloadSummarySurface(counts, notifier, scope = backgroundScope)
-        surface.job.join()
+        surface.start().join()
 
         assertEquals(listOf(0, 2, 1, 0), notifier.posts)
+    }
+
+    @Test
+    fun `start is idempotent - the active collector is not duplicated`() = runTest {
+        val notifier = RecordingNotifier()
+        val counts = flowOf(0, 1)
+
+        val surface = DownloadSummarySurface(counts, notifier, scope = backgroundScope)
+        val first = surface.start()
+        val second = surface.start()
+        first.join()
+
+        assertSame(first, second)
+        assertEquals(listOf(0, 1), notifier.posts)
     }
 
     @Test
@@ -52,7 +67,7 @@ class DownloadSummarySurfaceTest {
         val counts = flowOf(0, 1, 2)
 
         val surface = DownloadSummarySurface(counts, notifier, scope = backgroundScope)
-        surface.job.join()
+        surface.start().join()
 
         // The first post (0) hiccuped; the surface kept collecting.
         assertEquals(listOf(1, 2), notifier.posts)

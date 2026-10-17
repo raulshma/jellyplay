@@ -42,6 +42,9 @@ import com.composables.icons.tabler.outline.PlayerStop
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.SessionInfo
 import com.raulshma.jellyplay.core.ui.components.LocalReducedMotion
+import com.raulshma.jellyplay.core.ui.components.NowPlayingBarHeights
+import com.raulshma.jellyplay.core.ui.components.NowPlayingBars
+import com.raulshma.jellyplay.core.ui.components.rememberNowPlayingBarHeights
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.feature.admin.generated.resources.Res
@@ -100,9 +103,15 @@ fun ActiveSessionsSection(
                 ) { Text(stringResource(Res.string.admin_view_all)) }
             }
             Spacer(Modifier.height(8.dp))
+            // One hoisted animation clock for every row's now-playing glyph
+            // (the rows animate in lockstep, per-row transitions
+            // bought nothing; the shared core:ui component replaced this
+            // file's byte-identical private copy).
+            val barHeights = rememberNowPlayingBarHeights()
             sessions.take(5).forEachIndexed { index, session ->
                 SessionItem(
                     session = session,
+                    barHeights = barHeights,
                     onStop = { onStop(session) },
                     showDivider = index < minOf(4, sessions.size - 1),
                 )
@@ -117,6 +126,7 @@ fun ActiveSessionsSection(
 @Composable
 private fun SessionItem(
     session: SessionInfo,
+    barHeights: NowPlayingBarHeights,
     onStop: () -> Unit,
     showDivider: Boolean,
 ) {
@@ -164,7 +174,7 @@ private fun SessionItem(
             )
             session.nowPlayingItem?.let { item ->
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    NowPlayingIndicator()
+                    NowPlayingBars(heights = barHeights)
                     Spacer(Modifier.width(4.dp))
                     Text(
                         item.name,
@@ -230,75 +240,5 @@ private fun SessionItem(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-    }
-}
-
-@Composable
-private fun NowPlayingIndicator() {
-    val reducedMotion = LocalReducedMotion.current
-    val bar1: Float
-    val bar2: Float
-    val bar3: Float
-    if (!reducedMotion) {
-        val infiniteTransition = rememberInfiniteTransition(label = "nowPlaying")
-        bar1 = infiniteTransition.animateFloat(
-            initialValue = 0.3f,
-            targetValue = 1f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(400, easing = FastOutSlowInEasing),
-                repeatMode = RepeatMode.Reverse,
-            ),
-            label = "bar1",
-        ).value
-        bar2 = infiniteTransition.animateFloat(
-            initialValue = 0.6f,
-            targetValue = 0.4f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(350, easing = FastOutSlowInEasing),
-                repeatMode = RepeatMode.Reverse,
-            ),
-            label = "bar2",
-        ).value
-        bar3 = infiniteTransition.animateFloat(
-            initialValue = 0.5f,
-            targetValue = 0.9f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(450, easing = FastOutSlowInEasing),
-                repeatMode = RepeatMode.Reverse,
-            ),
-            label = "bar3",
-        ).value
-    } else {
-        bar1 = 0.6f
-        bar2 = 0.5f
-        bar3 = 0.7f
-    }
-
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(1.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.height(12.dp),
-    ) {
-        Box(
-            modifier = Modifier
-                .width(2.dp)
-                .height(12.dp * bar1)
-                .clip(ShapeCache.smooth4)
-                .background(MaterialTheme.colorScheme.primary),
-        )
-        Box(
-            modifier = Modifier
-                .width(2.dp)
-                .height(12.dp * bar2)
-                .clip(ShapeCache.smooth4)
-                .background(MaterialTheme.colorScheme.primary),
-        )
-        Box(
-            modifier = Modifier
-                .width(2.dp)
-                .height(12.dp * bar3)
-                .clip(ShapeCache.smooth4)
-                .background(MaterialTheme.colorScheme.primary),
-        )
     }
 }

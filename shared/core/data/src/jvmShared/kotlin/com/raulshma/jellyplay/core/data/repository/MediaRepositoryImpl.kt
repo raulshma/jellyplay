@@ -32,6 +32,7 @@ import com.raulshma.jellyplay.core.network.library.HomeSectionsCachePort
 import com.raulshma.jellyplay.core.network.realtime.UserDataRealtimeChannel
 import com.raulshma.jellyplay.core.data.cache.getOrFetch
 import com.raulshma.jellyplay.core.data.cache.getOrFetchGuarded
+import com.raulshma.jellyplay.core.data.concurrency.SingleFlightFetcher
 import com.raulshma.jellyplay.core.data.concurrency.StaleReadGroup
 import com.raulshma.jellyplay.core.data.concurrency.StaleReadGroups
 import kotlinx.coroutines.channels.BufferOverflow
@@ -384,6 +385,21 @@ class MediaRepositoryImpl internal constructor(
     private val homeWriteGeneration = java.util.concurrent.atomic.AtomicLong(0L)
 
     /**
+     * Single-flight wrapper over [homeSectionsCache]: the
+     * assembled home payload is the most expensive fetch in the app (the
+     * ~15-20-call fan-out), yet it rode the plain non-flight
+     * [TtlCache.getOrFetch] whose own KDoc warns concurrent callers can
+     * double-fetch — with three concurrent callers named in
+     * [refreshHomeSection]'s comment (TvWatchNextPublisher, the
+     * UserDataSyncWorker, the HomeRefresher's periodic tick). Overlapping
+     * callers now join ONE flight, keyed on [HomeSectionQuery.cacheKey]; the
+     * epoch is the SAME [homeWriteGeneration] the write funnel bumps, so a
+     * roll/refresh invalidation stall-guards the flight's store exactly as
+     * it guarded the raw path.
+     */
+    private val homeSectionsFlight = SingleFlightFetcher(homeSectionsCache, homeWriteGeneration)
+
+    /**
      * The ONLY writer of [homeWriteGeneration]: bump + assembled-payload drop
      * as one indivisible unit, so no call site can clear the cache without
      * stall-guarding the in-flight fetches racing it (or bump without
@@ -501,25 +517,32 @@ class MediaRepositoryImpl internal constructor(
         // cancelled consuming read re-arms) lives in
         // [StaleReadGroup.staleAwareRead].
         return homeSectionsStale.staleAwareRead(force) { effectiveForce ->
-            homeSectionsCache.getOrFetch(
-                { homeSession.cacheIdentity() },
-                cacheKey,
+            // Force's evict-before-fetch nuance stays caller-owned (the
+            // flight's force lever only bypasses reads): a failed forced
+            // fetch must leave nothing behind, exactly as the raw
+            // [TtlCache.getOrFetch] force shape did.
+            if (effectiveForce) {
+                homeSectionsCache.remove(homeSession.cacheIdentity(), cacheKey)
+            }
+            homeSectionsFlight.getOrFetch(
+                identity = { homeSession.cacheIdentity() },
+                key = cacheKey,
                 force = effectiveForce,
-                // SWR persist: the fetch-path-only write hook — persists the
-                // snapshot for stale-while-revalidate on cold open (the in-memory
-                // cache is lost on process death) after the in-memory put, and
-                // never on a cache hit, so a hit cannot slide the persisted row's
-                // fetchedAt forward and defeat the 24h SWR staleness ceiling.
-                // The choreography itself (dedup window, encode, upsert) lives
-                // on the [homeSnapshotStore].
-                onFetched = { homeSnapshotStore.persist(cacheKey, it) },
-                currentEpoch = homeWriteGeneration::get,
-            ) {
+            ) { _ ->
                 // The query value object crosses the repo → network seam intact;
                 // effectiveForce (not force) so a consumed staleness marker
                 // bypasses the network layer's sub-call caches too, not just
                 // the in-memory one.
+                //
+                // SWR persist: the fetch-path-only write — the flight body runs
+                // exactly once per flight, so a hit, a flight join, and a
+                // locked re-read never slide the persisted snapshot's
+                // fetchedAt forward (the in-memory cache is lost on process
+                // death; the 24h SWR staleness ceiling depends on that
+                // fetch-path-only discipline). The choreography itself (dedup
+                // window, encode, upsert) lives on the [homeSnapshotStore].
                 libraryApiClient.getHomeSections(query, effectiveForce)
+                    .onSuccess { homeSnapshotStore.persist(cacheKey, it) }
             }
         }
     }
@@ -895,12 +918,23 @@ class MediaRepositoryImpl internal constructor(
     }
 
     /**
-     * Evicts before and after a user-data write. The parent series id is
-     * captured before the first eviction because that eviction removes the
-     * cached detail needed to discover an episode's series; [seriesIdHint]
-     * supplies it directly when the mutated id is not detail-cached at all
-     * (e.g. season marks — seasons are never cached, so the caller names the
-     * series).
+     * Evicts after a user-data write. The parent series id is resolved before
+     * the mutation because it is read from the cached detail that the eviction
+     * removes; [seriesIdHint] supplies it directly when the mutated id is not
+     * detail-cached at all (e.g. season marks — seasons are never cached, so
+     * the caller names the series).
+     *
+     * ONE eviction, in the `finally`: the
+     * pre-mutation eviction this wrapper used to also run was redundant — the
+     * post-arm covers the write on BOTH outcomes (success and failure), and
+     * the pre-arm just doubled every invalidation ladder per write. The gap
+     * groups that cannot be evicted by key (album tracks, collection pages —
+     * see [albumTracksStale] / [collectionItemsStale]) arm their markers
+     * BEFORE the mutation — the marker records "a user-data write is in
+     * flight", which is true even if the write then fails. Arming is a
+     * user-data statement, so it stays with this wrapper (and
+     * [invalidateForUserDataChange]), not inside the eviction itself (which
+     * [invalidateFor]'s ALBUM branch also reaches from forced detail reads).
      *
      * The home sections cache is deliberately NOT eagerly evicted here
      * (scroll- and flicker-sensitive: a cleared cache forces the next home
@@ -909,14 +943,8 @@ class MediaRepositoryImpl internal constructor(
      * [notifyUserDataChanged] whose consumers (HomeRefresher's throttled
      * silent forced refresh, open screens) heal live, and the announcement
      * also arms the lazy staleness marker ([homeSectionsStale], #157) so the
-     * next home READ refetches even when no consumer was collecting. The
-     * gap groups that cannot be evicted by key (album tracks, collection
-     * pages — see [albumTracksStale] / [collectionItemsStale]) arm their
-     * markers here, alongside the first eviction — arming is a user-data
-     * statement, so it stays with this wrapper (and
-     * [invalidateForUserDataChange]), not inside the eviction itself (which
-     * [invalidateFor]'s ALBUM branch also reaches from forced detail reads).
-     * The 60s TTL remains the staleness ceiling for the no-event path, and
+     * next home READ refetches even when no consumer was collecting. The 60s
+     * TTL remains the staleness ceiling for the no-event path, and
      * [invalidateCaches] still clears the cache wholesale.
      */
     private suspend fun <T> withUserDataMutationCacheInvalidation(
@@ -925,17 +953,17 @@ class MediaRepositoryImpl internal constructor(
         mutation: suspend () -> Result<T>,
     ): Result<T> {
         val seriesId = seriesIdHint ?: cachedSeriesId(itemId)
-        // Arm the gap-group markers BEFORE the mutation, matching the
-        // pre-eviction this wrapper already runs: the marker records "a
-        // user-data write is in flight", which is true even if the write
-        // then fails (the pre-eviction already dropped the item's own keys).
+        // Arm the gap-group markers BEFORE the mutation: the marker records
+        // "a user-data write is in flight", which is true even if the write
+        // then fails.
         staleReadGroups.announceUserDataWrite()
-        invalidateUserDataCaches(itemId, seriesId)
         return try {
             mutation()
         } finally {
-            // The second eviction closes the race where a fetch started after
-            // the pre-write eviction observed the old server state.
+            // The single eviction — closing both the post-write staleness and
+            // the race where a fetch started before the write observed the old
+            // server state (the race the former pre-write arm existed for; a
+            // fetch that raced the WRITE ITSELF re-runs the eviction here).
             invalidateUserDataCaches(itemId, seriesId)
         }
     }

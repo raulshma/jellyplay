@@ -757,6 +757,7 @@ fun AudioPlayerScreen(
             currentPreset = effects.equalizerPreset,
             onToggle = { viewModel.onEvent(AudioPlayerUiEvent.ToggleEqualizer) },
             onBandChange = { index, level -> viewModel.onEvent(AudioPlayerUiEvent.SetEqualizerBand(index, level)) },
+            onBandChangeLive = { index, level -> viewModel.onEvent(AudioPlayerUiEvent.SetEqualizerBandLive(index, level)) },
             onReset = { viewModel.onEvent(AudioPlayerUiEvent.ResetEqualizer) },
             onPresetChange = { viewModel.onEvent(AudioPlayerUiEvent.SetEqualizerPreset(it)) },
             onDismiss = { sheets.hide(AudioPlayerSheet.Equalizer) },
@@ -865,6 +866,9 @@ fun AudioPlayerScreen(
             onLrBalance = { viewModel.onEvent(AudioPlayerUiEvent.SetLrBalance(it)) },
             onPitchSemitones = { viewModel.onEvent(AudioPlayerUiEvent.SetPitchSemitones(it)) },
             onAutoEqByGenre = { viewModel.onEvent(AudioPlayerUiEvent.SetAutoEqByGenre(it)) },
+            onVirtualizerStrengthLive = { viewModel.onEvent(AudioPlayerUiEvent.SetVirtualizerStrengthLive(it)) },
+            onLrBalanceLive = { viewModel.onEvent(AudioPlayerUiEvent.SetLrBalanceLive(it)) },
+            onPitchSemitonesLive = { viewModel.onEvent(AudioPlayerUiEvent.SetPitchSemitonesLive(it)) },
         )
     }
 

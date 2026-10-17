@@ -259,6 +259,14 @@ class ExoPlayerEngine(
     private val displayHdrProbe = DisplayHdrCapabilitiesProbe(context)
 
     /**
+     * Memo for the stats tick's display-HDR label: the tick
+     * computes the joined display-name string BEFORE the dedup guard, so the
+     * join re-ran per tick even when the result was discarded. Keyed on the
+     * probe snapshot's IDENTITY — a new display snapshot invalidates it.
+     */
+    private var displayHdrTypesCache: Pair<Any?, String?>? = null
+
+    /**
      * The pure (content × display × setting) decision for the current config —
      * the single definition both the load-time engagement and the stats fold
      * read, so the two can never disagree.
@@ -1686,8 +1694,15 @@ class ExoPlayerEngine(
         }
         val hdrOutputActive =
             if (observedHdr == false) false else hdrDecision.hdrOutputExpected
-        val displayHdrTypes = displayHdrProbe.support.value
-            ?.let { d -> d.supportedTypes.joinToString { it.displayName }.ifEmpty { "SDR" } }
+        // Memoized on the probe snapshot's identity - the join is
+        // pure churn while the display list is unchanged.
+        val displayHdrProbeValue = displayHdrProbe.support.value
+        val displayHdrTypes = displayHdrTypesCache
+            ?.takeIf { it.first === displayHdrProbeValue }
+            ?.second
+            ?: displayHdrProbeValue
+                ?.let { d -> d.supportedTypes.joinToString { it.displayName }.ifEmpty { "SDR" } }
+                ?.also { displayHdrTypesCache = displayHdrProbeValue to it }
         if (last != null && last.bufferedPositionMs == bufferedPos &&
             last.estimatedBandwidthBps == bandwidthEstimate &&
             last.droppedFrames == dropped && last.totalVideoFrames == rendered &&

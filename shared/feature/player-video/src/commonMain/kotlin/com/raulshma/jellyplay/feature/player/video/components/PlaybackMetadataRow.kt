@@ -16,6 +16,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -28,6 +30,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Clock
 import com.composables.icons.tabler.outline.Subtitles
@@ -42,9 +45,11 @@ import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.feature.player.video.TrackOption
+import com.raulshma.jellyplay.feature.player.video.engine.EngineVideoStats
 import com.raulshma.jellyplay.feature.player.video.engine.PlaybackMetadataSnapshot
 import com.raulshma.jellyplay.feature.player.video.generated.resources.Res
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_mpv_config_chip
+import kotlinx.coroutines.flow.StateFlow
 import org.jetbrains.compose.resources.stringResource
 
 /**
@@ -73,7 +78,7 @@ internal fun PlaybackMetadataRow(
     isDirectPlayForced: Boolean,
     hdrType: String?,
     mediaStreams: List<MediaStream>,
-    videoStats: PlaybackMetadataSnapshot,
+    videoStatsFlow: StateFlow<EngineVideoStats>,
     audioTracks: List<TrackOption>,
     isConnectionMetered: Boolean = false,
     subtitleDelayMs: Long = 0L,
@@ -83,6 +88,25 @@ internal fun PlaybackMetadataRow(
     onMpvConfigNoticeClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
+    // Leaf collection (the currentPositionFlow pass-down rule): the stats
+    // flow is subscribed HERE, not in PlayerControls' root — while "stats for
+    // nerds" is on, every deduped publication used to re-execute the whole
+    // ~1000-line controls body just to feed this row. The projection below
+    // keeps the row's own recomposition confined to the low-churn
+    // codec/HDR/channels slice it actually renders; the high-churn tick fields
+    // (droppedFrames, bufferedPositionMs, bitrates) never reach composition.
+    val videoStatsFull by videoStatsFlow.collectAsStateWithLifecycle()
+    val videoStats = remember {
+        derivedStateOf {
+            PlaybackMetadataSnapshot(
+                videoCodec = videoStatsFull.videoCodec,
+                videoResolution = videoStatsFull.videoResolution,
+                videoHdrType = videoStatsFull.videoHdrType,
+                audioCodec = videoStatsFull.audioCodec,
+                audioChannels = videoStatsFull.audioChannels,
+            )
+        }
+    }.value
     val videoStream = mediaStreams.firstOrNull { it.type == StreamType.VIDEO }
     val resolutionLabel = deriveResolutionLabel(videoStream, videoStats.videoResolution)
     val videoCodec = formatVideoCodec(videoStream?.codec ?: videoStats.videoCodec)

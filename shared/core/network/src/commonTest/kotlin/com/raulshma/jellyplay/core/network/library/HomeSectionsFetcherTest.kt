@@ -27,6 +27,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -647,12 +648,17 @@ class HomeSectionsFetcherTest {
             ),
         )
 
-        // The batch sub-call (20) AND the recommendations self-seed read (5)
-        // carry the same flag — one query value, no disagreeing twins. (The
-        // refresh arm's forwarding of the same query field is
-        // HomeRowArmsTest's pin.)
+        // The batch sub-call (20) carries the flag. The recommendations
+        // self-seed read (5) runs ONLY when the source row is *not* enabled
+        // (the staged seed-fallback gate: enabled-but-empty seeds are a
+        // terminal "nothing to recommend from", not a re-fetch trigger) —
+        // CW IS enabled here, so no second call exists and the seeds were
+        // consumed from the batch result. The self-seed forwarding pin
+        // without the gate lives in
+        // `classic rows reach the recommendations self-seed resume call`.
         assertTrue("cw:20:false:true" in fake.calls)
-        assertTrue("cw:5:false:true" in fake.calls)
+        assertFalse("cw:5:false:true" in fake.calls)
+        assertTrue(fake.calls.none { it.startsWith("similar:") }, "no seeds → no similar fan-out")
     }
 
     @Test

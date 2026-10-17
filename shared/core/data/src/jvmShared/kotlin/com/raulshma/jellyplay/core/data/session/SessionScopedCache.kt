@@ -135,7 +135,7 @@ class SessionScopedCache<V : Any>(
         fetch: suspend (epochAtStart: Long) -> Result<V>,
     ): Result<V> {
         if (force) invalidate(identity(), key)
-        return fetcher.getOrFetch(identity, key, flightKey, fetch)
+        return fetcher.getOrFetch(identity, key, flightKey, fetch = fetch)
     }
 
     /**
@@ -148,7 +148,7 @@ class SessionScopedCache<V : Any>(
         key: String,
         flightKey: String = key,
         fetch: suspend (epochAtStart: Long) -> Pair<Result<V>, Boolean>,
-    ): Result<V> = fetcher.getOrFetchStorable(identity, key, flightKey, fetch)
+    ): Result<V> = fetcher.getOrFetchStorable(identity, key, flightKey, fetch = fetch)
 
     /**
      * Drops one identity-keyed entry plus the epoch bump — the

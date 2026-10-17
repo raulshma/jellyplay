@@ -80,6 +80,11 @@ fun RequestsScreen(
 ) {
     val state by viewModel.state
     val isAdmin by viewModel.isAdmin.collectAsStateWithLifecycle()
+    // The hot enrichment maps collect beside (not inside) the ui state:
+    // an enrichment completion now recomposes only the rows reading it.
+    val mediaInfo by viewModel.mediaInfo.collectAsStateWithLifecycle()
+    val downloadProgress by viewModel.downloadProgress.collectAsStateWithLifecycle()
+    val queueItems by viewModel.queueItems.collectAsStateWithLifecycle()
 
     var selectedRequest by remember { mutableStateOf<SeerrRequestItem?>(null) }
 
@@ -160,7 +165,7 @@ fun RequestsScreen(
                             items(state.requests, key = { it.id }) { request ->
                                 RequestListItem(
                                     request = request,
-                                    mediaInfo = state.mediaInfo[request.media.tmdbId],
+                                    mediaInfo = mediaInfo[request.media.tmdbId],
                                     isAdmin = isAdmin,
                                     actionInProgress = state.actionInProgress,
                                     selectionMode = state.selectionMode,
@@ -253,9 +258,9 @@ fun RequestsScreen(
             selectedRequest?.let { request ->
                 RequestDetailBottomSheet(
                     request = request,
-                    mediaInfo = state.mediaInfo[request.media.tmdbId],
+                    mediaInfo = mediaInfo[request.media.tmdbId],
                     isAdmin = isAdmin,
-                    downloadProgress = state.downloadProgress[request.media.tmdbId],
+                    downloadProgress = downloadProgress[request.media.tmdbId],
                     onRemoveFromQueue = { b, s ->
                         viewModel.removeQueueItem(request.media.tmdbId, b, s)
                     },

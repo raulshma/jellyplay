@@ -22,6 +22,11 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -74,6 +79,15 @@ internal fun AudioEffectsSheet(
     onLrBalance: (Float) -> Unit,
     onPitchSemitones: (Float) -> Unit,
     onAutoEqByGenre: (Boolean) -> Unit,
+    /**
+     * The continuous sliders' live drag legs: apply-only per
+     * frame, while the matching `on…` callback is the settle leg (apply +
+     * the one persist) fired from `onValueChangeFinished`. Defaults keep an
+     * unwired caller on the old per-frame full command.
+     */
+    onVirtualizerStrengthLive: (Int) -> Unit = onVirtualizerStrength,
+    onLrBalanceLive: (Float) -> Unit = onLrBalance,
+    onPitchSemitonesLive: (Float) -> Unit = onPitchSemitones,
 ) {
     PlayerModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -202,9 +216,17 @@ internal fun AudioEffectsSheet(
                         }
                     }
                     if (state.virtualizerEnabled) {
+                        // The settle callback carries no value — track the last
+                        // drag level locally so release commits exactly what the
+                        // finger left behind.
+                        var dragStrength by remember { mutableIntStateOf(state.virtualizerStrength) }
                         Slider(
                             value = state.virtualizerStrength.toFloat(),
-                            onValueChange = { onVirtualizerStrength(it.toInt()) },
+                            onValueChange = { v ->
+                                dragStrength = v.toInt()
+                                onVirtualizerStrengthLive(dragStrength)
+                            },
+                            onValueChangeFinished = { onVirtualizerStrength(dragStrength) },
                             valueRange = 0f..1000f,
                             modifier = Modifier.width(120.dp),
                         )
@@ -402,9 +424,14 @@ internal fun AudioEffectsSheet(
                             )
                         }
                     }
+                    var dragBalance by remember { mutableFloatStateOf(state.lrBalance) }
                     Slider(
                         value = state.lrBalance,
-                        onValueChange = { onLrBalance(it) },
+                        onValueChange = { v ->
+                            dragBalance = v
+                            onLrBalanceLive(v)
+                        },
+                        onValueChangeFinished = { onLrBalance(dragBalance) },
                         valueRange = -1f..1f,
                         modifier = Modifier.width(140.dp),
                     )
@@ -438,9 +465,14 @@ internal fun AudioEffectsSheet(
                             )
                         }
                     }
+                    var dragPitch by remember { mutableFloatStateOf(state.pitchSemitones) }
                     Slider(
                         value = state.pitchSemitones,
-                        onValueChange = { onPitchSemitones(it) },
+                        onValueChange = { v ->
+                            dragPitch = v
+                            onPitchSemitonesLive(v)
+                        },
+                        onValueChangeFinished = { onPitchSemitones(dragPitch) },
                         valueRange = -12f..12f,
                         steps = 23,
                         modifier = Modifier.width(140.dp),

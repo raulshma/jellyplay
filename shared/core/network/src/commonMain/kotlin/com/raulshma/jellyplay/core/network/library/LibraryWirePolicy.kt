@@ -60,14 +60,21 @@ internal fun <T : MediaItem> List<T>.filterAllowedKinds(allowedKinds: Set<MediaT
  */
 /** The client-side parental-rating filter, verbatim semantics: no max rating →
  * unfiltered; an unrated/unknown-rating item passes (`!= false` keeps it).
+ * The single-item predicate ([parentalRatingAllowed]) is shared with the
+ * folded mapper pass ([com.raulshma.jellyplay.core.network.api.toFilteredMediaItems])
+ * so the list filter and the map-folded filter can never drift.
  */
 internal fun <T : MediaItem> List<T>.filterByParentalRating(maxParentalRating: Int?): List<T> {
     val max = maxParentalRating ?: return this
-    return mapNotNull { item ->
-        if (item.officialRating?.let { rating ->
-                parentalRatingAge(rating)?.let { age -> age <= max }
-            } != false) item else null
-    }
+    return mapNotNull { item -> if (parentalRatingAllowed(item.officialRating, max)) item else null }
+}
+
+/** The one rating→admission predicate behind [filterByParentalRating]. */
+internal fun parentalRatingAllowed(officialRating: String?, maxParentalRating: Int?): Boolean {
+    val max = maxParentalRating ?: return true
+    return officialRating?.let { rating ->
+        parentalRatingAge(rating)?.let { age -> age <= max }
+    } != false
 }
 
 /**

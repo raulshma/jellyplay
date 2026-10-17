@@ -42,6 +42,7 @@ import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.PagedCollectionGrid
 import com.raulshma.jellyplay.core.ui.components.rememberPagedCollectionStatus
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
+import com.raulshma.jellyplay.core.ui.tv.defaultGridCacheWindow
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.feature.photos.generated.resources.Res
@@ -76,9 +77,9 @@ fun PhotoAlbumScreen(
     val gridState = rememberLazyGridState(
         initialFirstVisibleItemIndex = savedScroll.first,
         initialFirstVisibleItemScrollOffset = savedScroll.second,
-        // Same TV cache-window tuning as the library grid — prefetch ahead so fast D-pad
-        // scrolling doesn't pop cards in.
-        cacheWindow = com.raulshma.jellyplay.core.ui.tv.TvGridCacheWindow,
+        // Device-class default cache window: TV keeps the 2× D-pad
+        // prefetch window, touch drops to 1× ahead.
+        cacheWindow = defaultGridCacheWindow(),
     )
 
     LaunchedEffect(gridState) {

@@ -513,10 +513,19 @@ public class HomeSectionsFetcher(
                 val recommendationSeeds =
                     continueWatchingResult.getOrDefault(emptyList()) +
                         nextUpResult.getOrDefault(emptyList())
+                // Whether the seed rows were FETCHED at all: only a
+                // disabled source row justifies the fallback's own seed fetch
+                // — enabled-but-empty rows already proved there is nothing to
+                // seed with, and re-hitting both endpoints per home load was
+                // two guaranteed-wasted round-trips.
+                val seedSourcesDisabled =
+                    HomeSectionType.CONTINUE_WATCHING !in enabledSections &&
+                        HomeSectionType.NEXT_UP !in enabledSections
                 async {
                     recommendations(
                         limit = 20,
                         seeds = recommendationSeeds,
+                        seedSourcesDisabled = seedSourcesDisabled,
                         force = force,
                         identity = identity,
                         classicRows = query.classicRows,
@@ -1106,15 +1115,18 @@ public class HomeSectionsFetcher(
         homeSimilarCache.cacheThrough(identity, "${seedId}_$limit", force = force) { sources.getSimilarItems(seedId, limit) }
 
     /**
-     * The recommendations ("Recommended For You") core. Preserved wart, kept
-     * deliberately: with NO usable seeds it fetches its own via
-     * getContinueWatching(5) / getNextUp(limit 5, rewatching false, maxDays 0)
-     * — a second pair of round-trips when the sections themselves are merely
-     * empty rather than disabled.
+     * The recommendations ("Recommended For You") core. With no usable seeds,
+     * it fetches its own via getContinueWatching(5) / getNextUp(limit 5,
+     * rewatching false, maxDays 0) — but ONLY when the seed source rows are
+     * disabled ([seedSourcesDisabled]): that is the one case where
+     * the data was never fetched. Enabled-but-empty rows already answered
+     * "nothing to seed with" this load; the fallback used to re-hit both
+     * endpoints there anyway — the labeled-in-code wart, now gated.
      */
     private suspend fun recommendations(
         limit: Int,
         seeds: List<MediaItem>,
+        seedSourcesDisabled: Boolean,
         force: Boolean,
         identity: CacheIdentity,
         classicRows: Boolean,
@@ -1123,16 +1135,20 @@ public class HomeSectionsFetcher(
         // Reuse caller-supplied seeds when available (e.g. the home screen has
         // already fetched Continue Watching + Next Up) to avoid duplicate
         // /Items/Resume and /Shows/NextUp round-trips within the same load.
-        val seedItems = if (seeds.isNotEmpty()) {
-            seeds.distinctBy { it.id }.take(5)
-        } else {
-            val continueWatching = sources.getContinueWatching(
-                limit = 5,
-                classicRows = classicRows,
-                excludeActiveSessions = excludeActiveSessions,
-            ).getOrDefault(emptyList())
-            val nextUp = sources.getNextUp(limit = 5, enableRewatching = false, maxDays = 0).getOrDefault(emptyList())
-            (continueWatching + nextUp).distinctBy { it.id }.take(5)
+        val seedItems = when {
+            seeds.isNotEmpty() -> seeds.distinctBy { it.id }.take(5)
+            seedSourcesDisabled -> {
+                val continueWatching = sources.getContinueWatching(
+                    limit = 5,
+                    classicRows = classicRows,
+                    excludeActiveSessions = excludeActiveSessions,
+                ).getOrDefault(emptyList())
+                val nextUp = sources.getNextUp(limit = 5, enableRewatching = false, maxDays = 0).getOrDefault(emptyList())
+                (continueWatching + nextUp).distinctBy { it.id }.take(5)
+            }
+            // Seeds empty AND their source rows ran this load: there is
+            // genuinely nothing to recommend from.
+            else -> emptyList()
         }
 
         if (seedItems.isEmpty()) return@runCatchingRethrowingCancellation RecommendationResult(emptyList(), null)

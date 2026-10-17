@@ -36,7 +36,7 @@ import com.raulshma.jellyplay.core.model.TaskExecutionInfo
 import com.raulshma.jellyplay.core.model.TaskState
 import com.raulshma.jellyplay.core.model.TaskTriggerInfo
 import com.raulshma.jellyplay.core.model.TrickplayInfo
-import com.raulshma.jellyplay.core.network.library.filterByParentalRating
+import com.raulshma.jellyplay.core.network.library.parentalRatingAllowed
 import com.raulshma.jellyplay.core.network.library.parseItemSortList as parseItemSortTokens
 import org.jellyfin.sdk.model.api.BaseItemDto
 import org.jellyfin.sdk.model.api.BaseItemKind
@@ -59,7 +59,7 @@ import java.time.format.DateTimeFormatter
 // core:datastore shim, so the channels (and thus the org.json mappers)
 // could not move into this module.
 
-internal fun BaseItemDto.toMediaItem() = MediaItem(
+internal fun BaseItemDto.toMediaItem(now: DateTime = DateTime.now()) = MediaItem(
     id = id.toString(),
     name = name ?: "",
     originalTitle = originalTitle,
@@ -99,7 +99,7 @@ internal fun BaseItemDto.toMediaItem() = MediaItem(
     lastPlayedDate = userData?.lastPlayedDate?.toString(),
     unplayedItemCount = userData?.unplayedItemCount,
     isVirtual = locationType == LocationType.VIRTUAL,
-    missingReason = deriveMissingEpisodeReason(locationType, premiereDate, DateTime.now()),
+    missingReason = deriveMissingEpisodeReason(locationType, premiereDate, now),
     // Stream badges (D11): derived from the item's own MediaStreams when the
     // fetch projected them (the per-season getEpisodes call); every listing
     // without sources (all-episodes, list projections, older servers) has an
@@ -361,15 +361,27 @@ internal fun BaseItemDto.toMediaDetail() = MediaDetail(
 
 /**
  * The standard tail of every library listing call: map the DTOs to
- * [MediaItem]s, then parental-rate them through the commonMain policy
- * ([filterByParentalRating] over the caller-supplied max, e.g.
- * `JellyfinApiEngine.currentMaxParentalRating`). The
- * map-then-filter order is equivalent to the former engine member
- * (filter-then-map keyed on `officialRating`) because [toMediaItem] carries
- * `officialRating` through unchanged.
+ * [MediaItem]s, parental-rated through the commonMain policy (the
+ * caller-supplied max, e.g. `JellyfinApiEngine.currentMaxParentalRating`).
+ *
+ * Two folds over the former `map { toMediaItem() }.
+ * filterByParentalRating(..)`: the parental predicate reads the DTO's
+ * `officialRating` — the exact value [toMediaItem] carries through — so the
+ * check folds into the map pass via [mapNotNull] (no intermediate filtered
+ * list, and a filtered-out DTO never pays the mapping at all), and the
+ * missing-episode clock read hoists to ONE `DateTime.now()` per list (the
+ * `toLiveTvProgram` pattern) instead of one per mapped item.
  */
-internal fun List<BaseItemDto>.toFilteredMediaItems(maxParentalRating: Int?): List<MediaItem> =
-    map { it.toMediaItem() }.filterByParentalRating(maxParentalRating)
+internal fun List<BaseItemDto>.toFilteredMediaItems(maxParentalRating: Int?): List<MediaItem> {
+    val now = DateTime.now()
+    return mapNotNull { dto ->
+        if (parentalRatingAllowed(dto.officialRating, maxParentalRating)) {
+            dto.toMediaItem(now)
+        } else {
+            null
+        }
+    }
+}
 
 internal fun BaseItemKind.toMediaType(): MediaType = when (this) {
     BaseItemKind.MOVIE -> MediaType.MOVIE

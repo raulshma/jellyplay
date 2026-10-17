@@ -358,7 +358,8 @@ internal fun PlayerSheetRouter(
             val effectsState by sheets.effectsState.collectAsStateWithLifecycle()
             AVSyncSheet(
                 currentAudioDelayMs = effectsState.audioDelayMs,
-                onAudioDelayChange = { sheets.setAudioDelay(it) },
+                onAudioDelayChange = { sheets.setAudioDelayLive(it) },
+                onAudioDelayChangeFinished = { sheets.setAudioDelay(it) },
                 onDismiss = inputs.dismissSheet,
                 audioDelaySupported = uiState.engineCapabilities.supportsAudioDelay,
             )
@@ -490,6 +491,7 @@ internal fun PlayerSheetRouter(
             VideoFilterSheet(
                 currentEffects = uiState.videoFx.videoEffects,
                 onEffectsChange = { viewModel.onEvent(VideoPlayerUiEvent.SetVideoEffects(it)) },
+                onEffectsSettled = { viewModel.onEvent(VideoPlayerUiEvent.SetVideoEffectsSettled(it)) },
                 onDismiss = inputs.dismissSheet,
             )
         }

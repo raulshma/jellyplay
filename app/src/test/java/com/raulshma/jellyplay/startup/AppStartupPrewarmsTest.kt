@@ -1,9 +1,12 @@
 package com.raulshma.jellyplay.startup
 
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
+import com.raulshma.jellyplay.core.data.repository.JellyPlayLiveResyncConnector
+import com.raulshma.jellyplay.core.data.session.JellyPlayEventsSessionController
 import com.raulshma.jellyplay.core.data.update.AppUpdateRepository
 import com.raulshma.jellyplay.core.data.worker.AutoDownloadScheduler
 import com.raulshma.jellyplay.core.data.worker.DownloadReconnectListener
+import com.raulshma.jellyplay.core.data.worker.DownloadSummarySurface
 import com.raulshma.jellyplay.core.data.worker.PlaybackSyncReconnectListener
 import com.raulshma.jellyplay.core.data.worker.PlaybackSyncScheduler
 import com.raulshma.jellyplay.core.data.worker.SettingsSyncBackgroundTrigger
@@ -133,6 +136,21 @@ class AppStartupPrewarmsTest {
     private val appUpdateRepository: AppUpdateRepository = mockk(relaxed = true) {
         every { cleanupDownloadedUpdate() } answers { tag("update.sweep") }
     }
+    private val eventsSessionController: JellyPlayEventsSessionController =
+        mockk(relaxed = true) {
+            every { start() } answers { tag("eventsSession.start") }
+        }
+    private val liveResyncConnector: JellyPlayLiveResyncConnector =
+        mockk(relaxed = true) {
+            every { start() } answers { tag("liveResync.start") }
+        }
+    private val downloadSummarySurface: DownloadSummarySurface =
+        mockk(relaxed = true) {
+            every { start() } answers {
+                tag("downloadSummary.start")
+                mockk<kotlinx.coroutines.Job>()
+            }
+        }
 
     private fun createPrewarms(
         scope: CoroutineScope,
@@ -158,6 +176,9 @@ class AppStartupPrewarmsTest {
         notificationScheduler = lazy { notificationScheduler },
         downloadRecoveryInitializer = lazy { downloadRecoveryInitializer },
         appUpdateRepository = lazy { appUpdateRepository },
+        eventsSessionController = lazy { eventsSessionController },
+        liveResyncConnector = lazy { liveResyncConnector },
+        downloadSummarySurface = lazy { downloadSummarySurface },
     )
 
     private fun indexOf(name: String) = events.indexOfFirst { it.name == name }
@@ -210,6 +231,9 @@ class AppStartupPrewarmsTest {
             "notificationReconnect.start",
             "autoDownload.sync",
             "notificationScheduler.scheduleOrUpdate",
+            "eventsSession.start",
+            "liveResync.start",
+            "downloadSummary.start",
         )
         assertEquals(postDeferralOrder, events.takeLast(postDeferralOrder.size).map { it.name })
         assertTrue(

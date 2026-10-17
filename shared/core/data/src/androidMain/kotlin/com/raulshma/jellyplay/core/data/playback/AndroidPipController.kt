@@ -155,6 +155,12 @@ class AndroidPipController() : PipController {
     }
 
     override fun updatePipSourceRect(left: Int, top: Int, right: Int, bottom: Int) {
+        // Fires per layout pass on the video surface (even when PiP is never
+        // entered) — short-circuit unchanged bounds so the steady state stops
+        // allocating a Rect per relayout.
+        pipSourceRect?.let { r ->
+            if (r.left == left && r.top == top && r.right == right && r.bottom == bottom) return
+        }
         updatePipSourceRect(android.graphics.Rect(left, top, right, bottom))
     }
 }

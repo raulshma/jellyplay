@@ -40,6 +40,7 @@ import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
+import org.koin.core.Koin
 
 /**
  * The shell-services holder extracted from [DesktopNavScaffold] (the
@@ -304,6 +305,35 @@ internal class DesktopShellServices(
         remoteNavigation.collect(remoteNavigationBridge.targets, DESKTOP_CONTEXT_MENU_UNAVAILABLE)
     }
 }
+
+/**
+ * The Koin singles [rememberDesktopShellServices] resolves via koinInject()
+ * below, as off-main prewarm thunks: launchDesktopStartup iterates
+ * this list on its Default-dispatcher block so first composition's koinInject
+ * hands hit Koin's memoized instances instead of paying construction there.
+ * ONE source of truth — adding a shell service means adding its typed val
+ * below AND one entry here, in the same file; the prewarm side never names
+ * types itself. Resolution order is arbitrary (construction is documented
+ * side-effect free) but kept identical to the koinInject order for review.
+ */
+internal val desktopShellServicePrewarms: List<(Koin) -> Any> = listOf(
+    { it.get<AuthRepository>() },
+    { it.get<HomeDiscoveryStore>() },
+    { it.get<AppUpdateRepository>() },
+    { it.get<UserMessageBus>() },
+    { it.get<MusicMessageBus>() },
+    { it.get<RemoteControlReceiver>() },
+    { it.get<RemoteNavigationBridge>() },
+    { it.get<DesktopAudioQueueManager>() },
+    { it.get<ActivePlayerController>() },
+    { it.get<JellyfinWebSocketClient>() },
+    { it.get<ScreensaverStore>() },
+    { it.get<NowPlayingReporter>() },
+    { it.get<NetworkMonitor>() },
+    { it.get<NavigationStore>() },
+    { it.get<AppRuntimeStateStore>() },
+    { it.get<AppearanceStore>() },
+)
 
 /**
  * Constructs and arms [DesktopShellServices] for one scaffold composition:

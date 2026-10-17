@@ -486,11 +486,15 @@ internal val dataSessionPlaybackModule: Module = module {
     // JellyPlayNewMediaNotifier — the Android tray path, registered in the
     // platform notification module (desktop registers nothing → log-only);
     // JellyPlayBroadcastMessenger — bridged to the shared UserMessageBus by
-    // both shells' interop modules. Self-starting on the shared application
-    // scope at Koin creation, the same singleton-collector idiom as
-    // HomeSession / SessionCacheRegistry — one wiring covers the Android and
-    // desktop shells.
-    single(createdAtStart = true) {
+    // both shells' interop modules. LAZY on purpose: constructing this graph
+    // eagerly would pull AuthRepositoryImpl → Room + migrations + the WebSocket
+    // client onto the main thread inside startKoin, for signed-out sessions
+    // too. The shells' background prewarm groups call the idempotent start()
+    // (desktop DesktopStartup's Dispatchers.Default block, Android
+    // AppStartupPrewarms' background-scheduler group) — the same
+    // singleton-collector idiom as HomeSession / SessionCacheRegistry, one
+    // wiring covers both shells.
+    single {
         com.raulshma.jellyplay.core.data.session.JellyPlayEventsSessionController(
             authRepository = get(),
             eventsRepository = get(),
@@ -500,16 +504,18 @@ internal val dataSessionPlaybackModule: Module = module {
             newMediaNotifier = getOrNull(),
             pushRepository = get(),
             scope = get(com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers.applicationScope),
-        ).apply { start() }
+        )
     }
 
     // The sync engine's live half (ADR 0010 §4): the settings SSE stream →
     // requestSync. Rides auth AND the engine's own enabled edge (no connection
-    // for a user who never opted in, none doomed while signed out); the
-    // createdAtStart singleton-collector idiom again — one wiring covers both
-    // shells. Reconnects resume from the last-seen event id, persisted per
-    // user beside the delta cursor (the `Last-Event-ID` reconnect contract).
-    single(createdAtStart = true) {
+    // for a user who never opted in, none doomed while signed out); lazy for
+    // the same off-main reason as the events controller above, with the
+    // idempotent start() kicked from the shells' background prewarm groups —
+    // one wiring covers both shells. Reconnects resume from the last-seen
+    // event id, persisted per user beside the delta cursor (the
+    // `Last-Event-ID` reconnect contract).
+    single {
         val dataStore: androidx.datastore.core.DataStore<androidx.datastore.preferences.core.Preferences> =
             get(com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers.userPreferencesDataStore)
         com.raulshma.jellyplay.core.data.repository.JellyPlayLiveResyncConnector(
@@ -520,7 +526,7 @@ internal val dataSessionPlaybackModule: Module = module {
             scope = get(com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers.applicationScope),
             loadLastEventId = jpsyncCursorLoader(dataStore, get<SessionIdentityProvider>(), CURSOR_SSE),
             saveLastEventId = jpsyncCursorSaver(dataStore, get<SessionIdentityProvider>(), CURSOR_SSE),
-        ).apply { start() }
+        )
     }
 }
 

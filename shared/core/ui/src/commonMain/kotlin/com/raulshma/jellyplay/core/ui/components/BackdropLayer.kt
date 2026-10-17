@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.core.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -17,6 +18,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.ui.image.MediaImage
+import kotlin.math.roundToInt
 
 /**
  * The fixed backdrop layer behind the scrolling content. Matches the online
@@ -51,7 +53,7 @@ fun BackdropLayer(
     // @Composable read and can't be accessed inside drawWithCache's DrawScope).
     val startYPx = with(density) { (baseBackdropHeight - 200.dp).toPx() }
     Box(modifier = modifier) {
-        Box(
+        BoxWithConstraints(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(height)
@@ -61,12 +63,22 @@ fun BackdropLayer(
                 },
         ) {
             if (!backdropUrl.isNullOrBlank()) {
+                // Full-bleed opt-out (the MediaImage contract): an
+                // explicit viewport-derived decode size + performanceModeAware
+                // = false. The old call inherited the 384² poster default AND
+                // the performance-mode clamp — the perf-mode arm crushed the
+                // one full-screen image on screen to 256², directly against
+                // MediaImage's documented full-screen exemption.
+                val backdropWidthPx = with(density) { maxWidth.toPx() }.roundToInt().coerceAtLeast(1)
+                val backdropHeightPx = with(density) { maxHeight.toPx() }.roundToInt().coerceAtLeast(1)
                 MediaImage(
                     url = backdropUrl,
                     contentDescription = null,
                     blurHash = blurHash,
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop,
+                    size = coil3.size.Size(backdropWidthPx, backdropHeightPx),
+                    performanceModeAware = false,
                 )
             } else {
                 Box(

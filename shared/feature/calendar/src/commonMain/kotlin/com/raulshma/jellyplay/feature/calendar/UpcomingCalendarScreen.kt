@@ -100,6 +100,9 @@ fun UpcomingCalendarScreen(
 ) {
     val state by viewModel.state
     val featureEnabled by viewModel.featureEnabled.collectAsStateWithLifecycle()
+    // The hot poster map collects beside (not inside) the ui state:
+    // an enrichment completion recomposes only the cards reading it.
+    val enrichedPosters by viewModel.enrichedPosters.collectAsStateWithLifecycle()
     // No-detail tap feedback (screen-forward seam): resolve the string here and
     // post it through the app-wide UserMessageBus (the drop-by-default local
     // simply discards the message when no host provides a bus).
@@ -233,7 +236,7 @@ fun UpcomingCalendarScreen(
                                     ) { item ->
                                         CalendarCard(
                                             item = item,
-                                            enrichedPosterUrl = item.tmdbId?.let { state.enrichedPosters[it] },
+                                            enrichedPosterUrl = item.tmdbId?.let { enrichedPosters[it] },
                                             enabled = item.tmdbId != null,
                                             onClick = {
                                                 val tmdbId = item.tmdbId

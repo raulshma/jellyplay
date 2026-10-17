@@ -26,6 +26,27 @@ import com.raulshma.jellyplay.core.ui.animation.lazyItemPlacementSpec
 val TvGridCacheWindow = LazyLayoutCacheWindow(aheadFraction = 2f, behindFraction = 0.5f)
 
 /**
+ * The touch-side default: 1× viewport ahead. The TV window's 2×
+ * ahead is justified by D-pad flick scrolling — on a touch fling it composes
+ * roughly triple the set and triples the resident-bitmap count for prefetch
+ * the finger-driven scroll doesn't need. Same behind-fraction as the TV
+ * window so backwards revisits stay covered.
+ */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+val TouchGridCacheWindow = LazyLayoutCacheWindow(aheadFraction = 1f, behindFraction = 0.5f)
+
+/**
+ * Device-class default cache window for the shared grids: the TV window on
+ * TV, the 1×-ahead window on touch. Default-parameter friendly (it is a
+ * composable), so every grid default sites one call instead of duplicating
+ * the branch.
+ */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@Composable
+fun defaultGridCacheWindow(): LazyLayoutCacheWindow =
+    if (LocalTvMode.current) TvGridCacheWindow else TouchGridCacheWindow
+
+/**
  * Paging-friendly TV focus grid. Drives an initial focus grab once data arrives (the contract that
  * `focusRestorer(fallback)` and `focusProperties { onEnter }` do not proactively satisfy), clamps
  * the saveable focused index to the live item count, and wires the container + per-item focus
@@ -47,7 +68,7 @@ fun TvFocusableGrid(
     refreshGeneration: Int = 0,
     state: LazyGridState = rememberLazyGridState(
         initialFirstVisibleItemIndex = initialIndex,
-        cacheWindow = TvGridCacheWindow,
+        cacheWindow = defaultGridCacheWindow(),
     ),
     contentPadding: PaddingValues = PaddingValues(0.dp),
     horizontalArrangement: Arrangement.Horizontal = Arrangement.spacedBy(0.dp),
@@ -141,7 +162,7 @@ fun <T> TvFocusableGrid(
     refreshGeneration: Int = 0,
     state: LazyGridState = rememberLazyGridState(
         initialFirstVisibleItemIndex = initialIndex,
-        cacheWindow = TvGridCacheWindow,
+        cacheWindow = defaultGridCacheWindow(),
     ),
     contentPadding: PaddingValues = PaddingValues(0.dp),
     horizontalArrangement: Arrangement.Horizontal = Arrangement.spacedBy(0.dp),

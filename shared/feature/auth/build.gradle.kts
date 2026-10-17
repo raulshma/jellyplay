@@ -16,6 +16,9 @@ kotlin {
 
         commonMain.dependencies {
             implementation(project(":shared:core:model"))
+            // mapConcurrent + DEFAULT_FANOUT_PARALLELISM for the health-probe
+            // fan-out (arrqueue/details pattern).
+            implementation(project(":shared:core:concurrency"))
             implementation(project(":shared:core:designsystem"))
             // AuthRepository + ServerDiscoveryRepository (both Koin singles in
             // dataJvmModule — the whole ctor graph is Koin-native on BOTH

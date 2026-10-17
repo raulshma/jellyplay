@@ -22,6 +22,8 @@ import com.raulshma.jellyplay.core.model.PlaylistItem
 import com.raulshma.jellyplay.core.model.SearchResult
 import com.raulshma.jellyplay.core.model.Studio
 import com.raulshma.jellyplay.core.model.TimeSource
+import com.raulshma.jellyplay.core.concurrency.DEFAULT_FANOUT_PARALLELISM
+import com.raulshma.jellyplay.core.concurrency.mapConcurrent
 import com.raulshma.jellyplay.core.concurrency.mapConcurrentCatching
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.network.LyricsApi
@@ -87,6 +89,15 @@ private val SEARCH_SUGGESTIONS_SORT = SEARCH_SUGGESTIONS_SORT_BY.map { token ->
     ItemSortBy.entries.firstOrNull { it.serialName == token }
         ?: error("ItemSortBy has no serial name '$token' — SDK drift vs the search-suggestions projection")
 }
+
+/**
+ * Cap on the BoxSets enumeration feeding [LibraryApiClient.getBoxSetsContaining]:
+ * the old enumerate was unbounded, and the concurrent probes
+ * multiply it. 100 covers every realistic library (server default SortName
+ * order); a server past the cap gets its first-100 probed — the accepted,
+ * documented truncation.
+ */
+private const val BOX_SET_ENUMERATE_CAP = 100
 
 private val SEARCH_SUGGESTIONS_KINDS = SEARCH_SUGGESTIONS_ITEM_TYPES.map { token ->
     BaseItemKind.entries.firstOrNull { it.serialName == token }
@@ -870,26 +881,39 @@ class LibraryApiClientImpl(
             // findItemByProviderId): ids/names/poster tags feed a navigation
             // row, and the server scopes the read to the authenticated user.
             // Members resolve through getCollectionItems — not duplicated here.
+            //
+            // Probes run CONCURRENTLY: the old serial `filter`
+            // paid one HTTP round-trip per collection in sequence — 30
+            // collections at 50-100 ms RTT was 1.5-3 s of wall time on every
+            // movie/series detail open. [mapConcurrent] preserves the
+            // enumeration order AND the old failure semantics (a failed probe
+            // fails the whole call, like the serial filter did). The
+            // enumerate itself is capped at [BOX_SET_ENUMERATE_CAP] rows
+            // (server default sort) so a pathological collection count can't
+            // fan out unbounded.
             val itemUuid = itemId.toUUID()
             val boxSets = api.itemsApi.getItems(
                 includeItemTypes = listOf(BaseItemKind.BOX_SET),
                 recursive = true,
                 fields = listOf(ItemFields.CHILD_COUNT),
+                limit = BOX_SET_ENUMERATE_CAP,
             ).content.items
-            boxSets.filter { boxSet ->
-                api.itemsApi.getItems(
+            Semaphore(DEFAULT_FANOUT_PARALLELISM).mapConcurrent(boxSets) { boxSet ->
+                boxSet to api.itemsApi.getItems(
                     parentId = boxSet.id,
                     ids = listOf(itemUuid),
                     limit = 1,
                 ).content.items.isNotEmpty()
-            }.map { item ->
-                CollectionSummary(
-                    id = item.id.toString(),
-                    name = item.name ?: "",
-                    itemCount = item.childCount ?: 0,
-                    imageTag = item.imageTags?.get(ImageType.PRIMARY)?.toString(),
-                )
             }
+                .filter { it.second }
+                .map { (item, _) ->
+                    CollectionSummary(
+                        id = item.id.toString(),
+                        name = item.name ?: "",
+                        itemCount = item.childCount ?: 0,
+                        imageTag = item.imageTags?.get(ImageType.PRIMARY)?.toString(),
+                    )
+                }
         }
 
     override suspend fun getThemeSongs(itemId: String): Result<List<MediaItem>> =

@@ -284,18 +284,18 @@ class UpcomingCalendarViewModelTest {
         advanceUntilIdle()
         flushSnapshots()
 
-        awaitReal { vm.state.value.enrichedPosters.keys == setOf(101, 202) }
+        awaitReal { vm.enrichedPosters.value.keys == setOf(101, 202) }
 
         assertEquals(
             "${TmdbImageUrls.POSTER_W500}/movie.jpg",
-            vm.state.value.enrichedPosters[101],
+            vm.enrichedPosters.value[101],
         )
         assertEquals(
             "${TmdbImageUrls.POSTER_W500}/tv.jpg",
-            vm.state.value.enrichedPosters[202],
+            vm.enrichedPosters.value[202],
         )
         // No tmdbId → nothing to enrich.
-        assertFalse(vm.state.value.enrichedPosters.containsKey(0))
+        assertFalse(vm.enrichedPosters.value.containsKey(0))
     }
 
     @Test
@@ -307,9 +307,9 @@ class UpcomingCalendarViewModelTest {
         advanceUntilIdle()
         flushSnapshots()
 
-        awaitReal { vm.state.value.enrichedPosters.size == 8 }
+        awaitReal { vm.enrichedPosters.value.size == 8 }
 
-        assertEquals(8, vm.state.value.enrichedPosters.size)
+        assertEquals(8, vm.enrichedPosters.value.size)
         assertTrue(seerr.maxConcurrent.get() <= 4, "semaphore must cap concurrency at 4, saw ${seerr.maxConcurrent.get()}")
         assertTrue(seerr.maxConcurrent.get() >= 2, "cap must still allow parallel lookups, saw ${seerr.maxConcurrent.get()}")
     }
@@ -321,7 +321,7 @@ class UpcomingCalendarViewModelTest {
         val vm = newViewModel()
         advanceUntilIdle()
         flushSnapshots()
-        awaitReal { vm.state.value.enrichedPosters.containsKey(1) }
+        awaitReal { vm.enrichedPosters.value.containsKey(1) }
         val served = seerr.servedMovieIds.size
 
         // Same items re-emit (e.g. collector refresh): nothing re-fetched.

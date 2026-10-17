@@ -13,8 +13,11 @@ import com.raulshma.jellyplay.core.ui.viewmodel.IdEnricher
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
 import com.raulshma.jellyplay.core.ui.viewmodel.loadInto
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.update
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
@@ -38,7 +41,6 @@ data class UpcomingCalendarUiState(
     val filter: CalendarFilter = CalendarFilter.ALL,
     val isLoading: Boolean = false,
     val error: String? = null,
-    val enrichedPosters: Map<Int, String> = emptyMap(),
 )
 
 class UpcomingCalendarViewModel(
@@ -49,6 +51,14 @@ class UpcomingCalendarViewModel(
 
     private val _state = composeState(UpcomingCalendarUiState())
     val state: State<UpcomingCalendarUiState> = _state.asState()
+
+    // The poster-enrichment map lives OUTSIDE the ui state (the
+    // DownloadsViewModel split): one settled lookup per tmdb id used to copy
+    // the whole-screen ui state per network-paced completion, so N sequential
+    // emissions recomposed the whole calendar N times during load. Cards read
+    // their moving value from this flow; the ui state carries only structure.
+    private val _enrichedPosters = MutableStateFlow<Map<Int, String>>(emptyMap())
+    val enrichedPosters: StateFlow<Map<Int, String>> = _enrichedPosters.asStateFlow()
 
     /**
      * Whether the Direct *arr Integration experimental flag is enabled —
@@ -79,9 +89,9 @@ class UpcomingCalendarViewModel(
             posterPath?.let { buildPosterUrl(it) }
         },
         merge = { (tmdbId, _), url ->
-            val current = _state.value.enrichedPosters
-            if (tmdbId !in current) {
-                _state.value = _state.value.copy(enrichedPosters = current + (tmdbId to url))
+            // Append-only rule preserved: existing entries are never clobbered.
+            _enrichedPosters.update { current ->
+                if (tmdbId in current) current else current + (tmdbId to url)
             }
         },
     )
@@ -138,7 +148,7 @@ class UpcomingCalendarViewModel(
      * re-emission re-fetches nothing.
      */
     private fun enrichMissing(items: List<ArrCalendarItem>) {
-        val already = _state.value.enrichedPosters
+        val already = _enrichedPosters.value
         val toEnrich = items
             .mapNotNull { item -> item.tmdbId?.let { it to item.mediaType } }
             .filter { (tmdbId, _) -> tmdbId !in already }

@@ -1,6 +1,9 @@
 package com.raulshma.jellyplay.core.data.repository
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Semaphore
+import com.raulshma.jellyplay.core.concurrency.DEFAULT_FANOUT_PARALLELISM
+import com.raulshma.jellyplay.core.concurrency.mapConcurrent
 import com.raulshma.jellyplay.core.data.sync.toOfflineSyncState
 import com.raulshma.jellyplay.core.data.sync.toOfflineSyncUpdate
 import com.raulshma.jellyplay.core.data.util.SQLITE_HOST_VARIABLE_CHUNK_SIZE
@@ -474,16 +477,26 @@ class OfflineRepositoryImpl constructor(
         }
 
         // Genre matches first (strongest signal); one query per genre because
-        // Room cannot expand a list bind into multiple LIKE OR clauses.
-        for (genre in genres) {
+        // Room cannot expand a list bind into multiple LIKE OR clauses. The
+        // probes run CONCURRENTLY and merge in GENRE order, so the
+        // dedup/limit walk below sees exactly the sequence the serial loop
+        // produced — only the wall time shrinks. A early-limit leaves a few
+        // extra local queries in flight; Room-local LIKE probes are cheap.
+        val genreRows = Semaphore(DEFAULT_FANOUT_PARALLELISM).mapConcurrent(genres) { genre ->
+            offlineMediaDao.getRelatedByGenre(currentId, genre, limit)
+        }
+        for (rows in genreRows) {
             if (matches.size >= limit) break
-            addAll(offlineMediaDao.getRelatedByGenre(currentId, genre, limit))
+            addAll(rows)
         }
         // Studio fallback only when genre matches were sparse.
-        if (matches.size < limit) {
-            for (studio in studios) {
+        if (matches.size < limit && studios.isNotEmpty()) {
+            val studioRows = Semaphore(DEFAULT_FANOUT_PARALLELISM).mapConcurrent(studios) { studio ->
+                offlineMediaDao.getRelatedByStudio(currentId, studio, limit)
+            }
+            for (rows in studioRows) {
                 if (matches.size >= limit) break
-                addAll(offlineMediaDao.getRelatedByStudio(currentId, studio, limit))
+                addAll(rows)
             }
         }
         if (matches.isEmpty()) return emptyList()

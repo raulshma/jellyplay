@@ -1,5 +1,7 @@
 package com.raulshma.jellyplay.feature.auth
 
+import com.raulshma.jellyplay.core.concurrency.DEFAULT_FANOUT_PARALLELISM
+import com.raulshma.jellyplay.core.concurrency.mapConcurrent
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.model.ServerHealth
 import com.raulshma.jellyplay.core.model.ServerInfo
@@ -17,6 +19,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.sync.Semaphore
 import kotlin.time.TimeSource
 import com.raulshma.jellyplay.core.ui.message.UiMessage
 
@@ -60,10 +63,15 @@ class AuthViewModel(
      * into [serverHealth] (keyed by the server's primary address, which the
      * server list renders). A server counts as reachable when ANY of its
      * addresses answers — primary first, then alternates — mirroring the
-     * app's address failover. Safe to call repeatedly; concurrent calls are
-     * guarded by cancelling any in-flight batch.
+     * app's address failover. Servers fan out bounded by
+     * [DEFAULT_FANOUT_PARALLELISM] (the MusicHomeViewModel/arrqueue
+     * pattern), so one slow server no longer delays the other rows' dots.
+     * Safe to call repeatedly; concurrent calls are guarded by cancelling
+     * any in-flight batch.
      */
     private var healthCheckJob: Job? = null
+    private val healthSemaphore = Semaphore(DEFAULT_FANOUT_PARALLELISM)
+
     fun checkServersHealth(servers: List<ServerInfo>) {
         healthCheckJob?.cancel()
         if (servers.isEmpty()) {
@@ -73,7 +81,7 @@ class AuthViewModel(
         // Immediately mark everything as Checking so the UI can render a dot.
         _serverHealth.set(servers.associate { it.address to ServerHealth.Checking })
         healthCheckJob = launch {
-            servers.forEach { server ->
+            healthSemaphore.mapConcurrent(servers) { server ->
                 // Monotonic elapsed read (stdlib) — latency wants the
                 // wall-clock-independent measure anyway.
                 val probeClock = TimeSource.Monotonic.markNow()

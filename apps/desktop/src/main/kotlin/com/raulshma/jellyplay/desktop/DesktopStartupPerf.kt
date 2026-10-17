@@ -33,10 +33,13 @@ import kotlin.system.exitProcess
  *    anything else (used for manual one-off runs).
  *
  * Output schema (single compact JSON line each):
- *  * `<logs>/startup-latest.json`: bootNanos/koinStartedNanos/windowShownNanos/
- *    firstFrameNanos (absolute monotonic System.nanoTime, machine-local) plus
- *    koinStartMs/windowShownMs/firstFrameMs deltas relative to bootNanos;
- *    unrecorded marks serialize as null.
+ *  * `<logs>/startup-latest.json`: bootNanos/preKoinDoneNanos/koinStartedNanos/
+ *    windowShownNanos/firstFrameNanos (absolute monotonic System.nanoTime,
+ *    machine-local) plus preKoinDoneMs/koinStartMs/windowShownMs/firstFrameMs
+ *    deltas relative to bootNanos; unrecorded marks serialize as null. The
+ *    pre-Koin mark splits Main's synchronous pre-Koin IO (paths/lock/drop-file/
+ *    crash-marker) from the `startKoin` graph-construction segment, so Koin
+ *    A/Bs (e.g. eager-singleton changes) aren't polluted by the IO share.
  *  * `<logs>/memory-latest.json`: sampledUptimeMs + used/max heap bytes.
  */
 class DesktopStartupPerf(
@@ -47,6 +50,7 @@ class DesktopStartupPerf(
     private val memoryFile = logsDirNio.resolve("memory-latest.json")
 
     private val boot = AtomicLong(bootT0Nanos)
+    private val preKoinDone = AtomicLong(MISSING_MARK)
     private val koinStarted = AtomicLong(MISSING_MARK)
     private val windowShown = AtomicLong(MISSING_MARK)
     private val firstFrame = AtomicLong(MISSING_MARK)
@@ -58,6 +62,11 @@ class DesktopStartupPerf(
     val persistRequested: Boolean =
         listOf(PROP_DATA_DIR, PROP_AUTO_EXIT_SECONDS, PROP_HEAP_SAMPLE_SECONDS, PROP_PERSIST)
             .any { System.getProperty(it) != null }
+
+    /** Called immediately before `startKoin` — closes Main's pre-Koin IO segment. */
+    fun markPreKoinDone() {
+        preKoinDone.set(System.nanoTime())
+    }
 
     fun markKoinStarted() {
         koinStarted.set(System.nanoTime())
@@ -172,9 +181,11 @@ class DesktopStartupPerf(
             val json = buildString {
                 append('{')
                 append("\"bootNanos\":").append(b)
+                append(",\"preKoinDoneNanos\":").append(jsonNumber(preKoinDone.get()))
                 append(",\"koinStartedNanos\":").append(jsonNumber(koinStarted.get()))
                 append(",\"windowShownNanos\":").append(jsonNumber(windowShown.get()))
                 append(",\"firstFrameNanos\":").append(jsonNumber(firstFrame.get()))
+                append(",\"preKoinDoneMs\":").append(jsonDeltaMs(b, preKoinDone.get()))
                 append(",\"koinStartMs\":").append(jsonDeltaMs(b, koinStarted.get()))
                 append(",\"windowShownMs\":").append(jsonDeltaMs(b, windowShown.get()))
                 append(",\"firstFrameMs\":").append(jsonDeltaMs(b, firstFrame.get()))

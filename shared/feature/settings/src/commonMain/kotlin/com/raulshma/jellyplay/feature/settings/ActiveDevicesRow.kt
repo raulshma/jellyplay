@@ -54,7 +54,10 @@ import com.composables.icons.tabler.outline.Message
 import com.composables.icons.tabler.outline.PlayerPause
 import com.raulshma.jellyplay.core.ui.components.ImeAlertDialog
 import com.raulshma.jellyplay.core.ui.components.LocalReducedMotion
+import com.raulshma.jellyplay.core.ui.components.NowPlayingBarHeights
+import com.raulshma.jellyplay.core.ui.components.NowPlayingBars
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
+import com.raulshma.jellyplay.core.ui.components.rememberNowPlayingBarHeights
 import com.raulshma.jellyplay.core.ui.tv.tvFocusRestorer
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.SessionInfo
@@ -124,6 +127,9 @@ internal fun ActiveDevicesRow(
 
         Spacer(Modifier.height(12.dp))
 
+        // One hoisted animation clock for every row's now-playing glyph
+        // (the rows animate in lockstep, per-row transitions bought nothing).
+        val barHeights = rememberNowPlayingBarHeights()
         LazyRow(
             contentPadding = PaddingValues(horizontal = 20.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -135,6 +141,7 @@ internal fun ActiveDevicesRow(
                 ActiveDeviceCard(
                     session = session,
                     serverAddress = serverAddress,
+                    barHeights = barHeights,
                     onSendMessage = { messageTarget = session },
                 )
             }
@@ -158,6 +165,7 @@ internal fun ActiveDevicesRow(
 private fun ActiveDeviceCard(
     session: SessionInfo,
     serverAddress: String,
+    barHeights: NowPlayingBarHeights,
     onSendMessage: () -> Unit,
 ) {
     val nowPlayingItem = session.nowPlayingItem
@@ -314,7 +322,10 @@ private fun ActiveDeviceCard(
                                     tint = if (backgroundImageUrl != null) androidx.compose.ui.graphics.Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             } else {
-                                NowPlayingBars(color = if (backgroundImageUrl != null) androidx.compose.ui.graphics.Color.White else MaterialTheme.colorScheme.primary)
+                                NowPlayingBars(
+                                    heights = barHeights,
+                                    color = if (backgroundImageUrl != null) androidx.compose.ui.graphics.Color.White else MaterialTheme.colorScheme.primary,
+                                )
                             }
                             Spacer(Modifier.width(6.dp))
                             Text(
@@ -367,78 +378,9 @@ private fun ActiveDeviceCard(
     }
 }
 
-@Composable
-private fun NowPlayingBars(color: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.primary) {
-    val reducedMotion = LocalReducedMotion.current
-    // Each NowPlayingBars row runs three infinite animations; the active-devices
-    // list can show several rows. In performance/reduced-motion mode freeze the
-    // equalizer bars to a static mid height instead of driving a per-row redraw coroutine.
-    val bar1: Float
-    val bar2: Float
-    val bar3: Float
-    if (!reducedMotion) {
-        val infiniteTransition = rememberInfiniteTransition(label = "nowPlaying")
-        bar1 = infiniteTransition.animateFloat(
-            initialValue = 0.3f,
-            targetValue = 1f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(400, easing = FastOutSlowInEasing),
-                repeatMode = RepeatMode.Reverse,
-            ),
-            label = "bar1",
-        ).value
-        bar2 = infiniteTransition.animateFloat(
-            initialValue = 0.6f,
-            targetValue = 0.4f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(350, easing = FastOutSlowInEasing),
-                repeatMode = RepeatMode.Reverse,
-            ),
-            label = "bar2",
-        ).value
-        bar3 = infiniteTransition.animateFloat(
-            initialValue = 0.5f,
-            targetValue = 0.9f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(450, easing = FastOutSlowInEasing),
-                repeatMode = RepeatMode.Reverse,
-            ),
-            label = "bar3",
-        ).value
-    } else {
-        bar1 = 0.6f
-        bar2 = 0.5f
-        bar3 = 0.7f
-    }
-
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(1.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.height(12.dp),
-    ) {
-        Box(
-            modifier = Modifier
-                .width(2.dp)
-                .height(12.dp * bar1)
-                .clip(ShapeCache.smooth4)
-                .background(color),
-        )
-        Box(
-            modifier = Modifier
-                .width(2.dp)
-                .height(12.dp * bar2)
-                .clip(ShapeCache.smooth4)
-                .background(color),
-        )
-        Box(
-            modifier = Modifier
-                .width(2.dp)
-                .height(12.dp * bar3)
-                .clip(ShapeCache.smooth4)
-                .background(color),
-        )
-    }
-}
+// The now-playing equalizer glyph lives in core:ui (NowPlayingBars.kt) -
+// this file's private copy and the admin dashboard's byte-identical twin
+// deduplicated there with the transition hoisted per screen.
 
 @Composable
 private fun SendMessageDialog(

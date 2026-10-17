@@ -253,8 +253,19 @@ sealed interface VideoPlayerUiEvent {
     /** Toggles adaptive bitrate (the AUTO-mode network cap). */
     data class SetAdaptiveBitrateEnabled(val enabled: Boolean) : VideoPlayerUiEvent
 
-    /** Applies a video-effects (filters) config to the session, persisted per item. */
+    /**
+     * Applies a video-effects (filters) config to the session — the LIVE drag
+     * leg: uiState + debounced engine sync only, no per-frame disk write.
+     * Persist lands via [SetVideoEffectsSettled].
+     */
     data class SetVideoEffects(val effects: VideoEffectsConfig) : VideoPlayerUiEvent
+
+    /**
+     * The filters sheet's drag-settle leg: same state write, plus the one
+     * per-item persist that matters (fire-and-forget DataStore edit of the
+     * per-item map). Reset chips and reset-all commit through this directly.
+     */
+    data class SetVideoEffectsSettled(val effects: VideoEffectsConfig) : VideoPlayerUiEvent
 
     /** The Rendering sheet's shader-pack pick (persist pins the per-series/item override). */
     data class SetRenderShaderPack(val pack: MpvShaderPack, val persist: Boolean) : VideoPlayerUiEvent

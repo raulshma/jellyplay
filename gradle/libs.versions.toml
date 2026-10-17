@@ -39,15 +39,16 @@ media3 = "1.11.1"
 # smoke test for software DTS/TrueHD decode is still pending.
 media3FfmpegDecoder = "1.9.0+1"
 androidDesugarJdkLibs = "2.1.5"
-# Coil 3.4.0 for the shared JVM targets (historical pin, kept to avoid
-# churn; JVM class files are version-tolerant here).
-coil = "3.4.0"
-# Coil for the ANDROID app only: release/v0.10.6 shipped 3.5.0, and the
-# artwork pipeline (rememberDominantColor / rememberArtworkColors → Palette)
-# is version-sensitive through decode defaults. The app resolves 3.5.0 via
-# this BOM to keep its bitmap→swatch behavior byte-identical to the release
-# build while shared JVM targets stay on 3.4.0.
-coilAndroid = "3.5.0"
+# Coil for ALL targets: the 3.4.0-shared / 3.5.0-android split
+# existed to keep v0.10.6's bitmap→swatch behavior byte-identical through
+# decode defaults. Both pins moved to 3.6.3 (Aug-Oct 2026 line, carries
+# decode-pipeline fixes; artwork/dominant-color is the hottest image path in
+# the app) — the artwork regression gate (ArtworkColorsTest /
+# ArtworkColorExtractorTest byte-identical swatch expectations + the visual
+# smoke of home/detail rows) is what signs off the bump. If a future bump
+# needs a split again, keep the android pin >= the shared pin.
+coil = "3.6.3"
+coilAndroid = "3.6.3"
 multiplatformMarkdownRenderer = "0.41.0"
 # Room 3 (spike/room3): androidx.room3 package, KSP-only, coroutine DB ops.
 # 3.0.3 is the latest stable (2026-09-09). Its POM pins androidx.sqlite 2.7.1

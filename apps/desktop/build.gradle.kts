@@ -178,8 +178,27 @@ compose.desktop {
         // tools/perf/desktop-baseline.sh.
 
         buildTypes.release.proguard {
-            // Ship unsigned minimal packaging for V1.
+            // READY-TO-FLIP (TOOLCHAIN-BLOCKED, see below): shrink-only first
+            // round (obfuscate stays OFF so the
+            // reflective seams — JNA name-mapped natives, kotlin-reflect,
+            // Koin by-type — hold without the full Android keep book); rules
+            // in proguard-rules.pro; measurement gate via
+            // tools/perf/desktop-baseline.sh before any ship.
+            //
+            // THE BLOCKER: both ProGuard releases that exist today fail on
+            // this graph's Kotlin metadata. 7.7.0 (the plugin default)
+            // bundles kotlin-metadata-jvm 2.1.0 → cannot read this build's
+            // Kotlin 2.3.21 module metadata ("version 2.3.0 > max 2.2.0");
+            // 7.8.0 (latest, `version` below) reads ≤2.3 → dies on the
+            // kotlin-stdlib 2.4.10 the desktop runtime classpath resolves
+            // (the Compose/Kotlin 2.4 toolchain side of the same story as
+            // the klib notes). UNLOCK: a ProGuard with kotlin-metadata-jvm
+            // ≥2.4 (or CMP moving to R8) — re-attempt alongside the toolchain
+            // toolchain upgrade, then run the A/B + e2e smoke.
+            version = "7.8.0"
             isEnabled = false
+            obfuscate = false
+            configurationFiles.from("proguard-rules.pro")
         }
         nativeDistributions {
             targetFormats(TargetFormat.Msi, TargetFormat.Deb, TargetFormat.Rpm, TargetFormat.Dmg)

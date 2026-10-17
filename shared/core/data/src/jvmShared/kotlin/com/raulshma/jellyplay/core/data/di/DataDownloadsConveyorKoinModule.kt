@@ -112,11 +112,16 @@ internal val dataDownloadsConveyorModule: Module = module {
 
     // The download summary surface (glossary: Download summary surface) — ONE
     // collector over the in-flight count flow, posting through the
-    // DownloadProgressNotifier port on transitions only. createdAtStart: the
-    // summary tracks the pipeline whether or not anything resolves the surface
-    // (download lifecycles span screens and workers); the application scope is
-    // the MediaDownloadActions precedent for a process-lifetime coroutine home.
-    single(createdAtStart = true) {
+    // DownloadProgressNotifier port on transitions only. LAZY on purpose: the
+    // registration here would otherwise resolve DownloadDao → open Room and
+    // start the invalidation tracker on the main thread inside startKoin. The
+    // shells' background prewarm groups call the idempotent start() (desktop
+    // DesktopStartup's Dispatchers.Default block, Android AppStartupPrewarms'
+    // background-scheduler group); the summary tracks the pipeline whether or
+    // not anything resolves the surface (download lifecycles span screens and
+    // workers); the application scope is the MediaDownloadActions precedent
+    // for a process-lifetime coroutine home.
+    single {
         DownloadSummarySurface(
             inFlightCount = get<DownloadDao>().getInFlightDownloadCountFlow(),
             notifier = get<DownloadProgressNotifier>(),

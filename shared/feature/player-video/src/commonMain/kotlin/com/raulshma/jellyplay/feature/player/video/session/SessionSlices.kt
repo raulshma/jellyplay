@@ -373,6 +373,9 @@ internal class SheetsSessionSlice(
 
     fun setAudioDelay(ms: Long) = effects.setAudioDelay(ms)
 
+    /** The AV-sync slider's live drag leg — debounced engine sync, no persist. */
+    fun setAudioDelayLive(ms: Long) = effects.setAudioDelayLive(ms)
+
     fun setDecoderMode(mode: DecoderMode) = effects.setDecoderMode(mode)
 
     // ── SyncPlay sheet ────────────────────────────────────────────────────

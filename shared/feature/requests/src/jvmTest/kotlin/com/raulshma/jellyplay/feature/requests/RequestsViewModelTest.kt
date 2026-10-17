@@ -474,11 +474,11 @@ class RequestsViewModelTest {
         val viewModel = newViewModel()
         advanceUntilIdle()
 
-        val movie = viewModel.state.value.mediaInfo[11]
+        val movie = viewModel.mediaInfo.value[11]
         assertNotNull(movie)
         assertEquals("Movie", movie.title)
         assertEquals(2024, movie.year)
-        val tv = viewModel.state.value.mediaInfo[30]
+        val tv = viewModel.mediaInfo.value[30]
         assertNotNull(tv)
         assertEquals("Show", tv.title)
         assertEquals(2019, tv.year)
@@ -495,9 +495,9 @@ class RequestsViewModelTest {
         val viewModel = newViewModel()
         advanceUntilIdle()
 
-        assertEquals(6, viewModel.state.value.mediaInfo.size)
-        assertEquals("T101", viewModel.state.value.mediaInfo[101]?.title)
-        assertEquals("T106", viewModel.state.value.mediaInfo[106]?.title)
+        assertEquals(6, viewModel.mediaInfo.value.size)
+        assertEquals("T101", viewModel.mediaInfo.value[101]?.title)
+        assertEquals("T106", viewModel.mediaInfo.value[106]?.title)
     }
 
     // ── DIRECT_ARR_INTEGRATION gating + queue management ──────────────────
@@ -511,8 +511,8 @@ class RequestsViewModelTest {
         advanceUntilIdle()
 
         coVerify(exactly = 0) { arrRepository.getQueueForTmdb(any()) }
-        assertTrue(viewModel.state.value.downloadProgress.isEmpty())
-        assertTrue(viewModel.state.value.queueItems.isEmpty())
+        assertTrue(viewModel.downloadProgress.value.isEmpty())
+        assertTrue(viewModel.queueItems.value.isEmpty())
     }
 
     @Test
@@ -540,11 +540,11 @@ class RequestsViewModelTest {
         // load re-queries (HEAD behavior).
         coVerify(exactly = 2) { arrRepository.getQueueForTmdb(42) }
         coVerify(exactly = 0) { arrRepository.getQueueForTmdb(0) }
-        val summary = viewModel.state.value.downloadProgress[42]
+        val summary = viewModel.downloadProgress.value[42]
         assertNotNull(summary)
         assertEquals(ArrDownloadStatus.DOWNLOADING, summary.status)
         assertEquals(50, summary.percent)
-        assertSame(queueItem, viewModel.state.value.queueItems[42])
+        assertSame(queueItem, viewModel.queueItems.value[42])
     }
 
     @Test
@@ -568,7 +568,7 @@ class RequestsViewModelTest {
 
         val viewModel = newViewModel()
         advanceUntilIdle()
-        assertTrue(viewModel.state.value.queueItems.containsKey(42))
+        assertTrue(viewModel.queueItems.value.containsKey(42))
         // After the deletion the queue no longer holds the row — the refresh
         // following removeQueueItem must not re-populate it.
         coEvery { arrRepository.getQueueForTmdb(42) } returns null
@@ -580,8 +580,8 @@ class RequestsViewModelTest {
         // its success leg — pinned in ArrRepositoryImplTest).
         coVerify(exactly = 1) { arrRepository.deleteQueueRow(queueItem, blocklist = true, searchAgain = true) }
         val state = viewModel.state.value
-        assertFalse(state.queueItems.containsKey(42))
-        assertFalse(state.downloadProgress.containsKey(42))
+        assertFalse(viewModel.queueItems.value.containsKey(42))
+        assertFalse(viewModel.downloadProgress.value.containsKey(42))
         assertFalse(state.actionInProgress)
     }
 
@@ -621,7 +621,7 @@ class RequestsViewModelTest {
         assertEquals("boom", viewModel.state.value.actionError)
         assertFalse(viewModel.state.value.actionInProgress)
         // Failure path keeps the cached queue row for a retry.
-        assertTrue(viewModel.state.value.queueItems.containsKey(42))
+        assertTrue(viewModel.queueItems.value.containsKey(42))
     }
 
     @Test

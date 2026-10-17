@@ -43,6 +43,14 @@ class VideoEffectsControllerTest {
         audioEffectsStore = audioEffectsStore,
         playbackStore = playbackStore,
         syncConfig = { syncCalls++ },
+        // Live drag legs count on the same counter the settle legs do (the
+        // old null default fell back to syncConfig; same observable shape).
+        syncConfigDebounced = { syncCalls++ },
+        // No playback item in this harness, so the per-item persist gate
+        // stays closed — the same effective behavior the old defaults had,
+        // now explicit at the (required) wiring site.
+        persistEffectsGate = { null },
+        persistVideoEffectsForItem = { _, _ -> },
     )
 
     private lateinit var c: VideoEffectsController
@@ -275,6 +283,9 @@ class VideoEffectsControllerTest {
             audioEffectsStore = audioEffectsStore,
             playbackStore = playbackStore,
             syncConfig = { seen += c0.state.value },
+            syncConfigDebounced = {},
+            persistEffectsGate = { null },
+            persistVideoEffectsForItem = { _, _ -> },
         )
 
         c0.toggleNightMode()

@@ -131,17 +131,22 @@ fun WaveformSeekBar(
                         val down = awaitFirstDown(requireUnconsumed = false)
                         down.consume()
                         isDragging = true
-                        val initialFraction = (down.position.x / size.width).coerceIn(0f, 1f)
-                        dragFraction = initialFraction
-                        onSeek(initialFraction)
+                        dragFraction = (down.position.x / size.width).coerceIn(0f, 1f)
 
-                        drag(down.id) { change ->
+                        // Scrub-then-commit (LiveSeekBar/TvControllableSeekBar
+                        // discipline): the drag publishes only the LOCAL
+                        // dragFraction — the visuals already follow the finger
+                        // through it, so seeking the engine per pointer frame
+                        // (StateFlow publish → recompose-every-position-reader
+                        // → decoder reposition → media-session update) added
+                        // cost with no UI benefit. The ONE engine seek lands
+                        // on drag end; a stolen/cancelled gesture drops it.
+                        val completed = drag(down.id) { change ->
                             change.consume()
-                            val fraction = (change.position.x / size.width).coerceIn(0f, 1f)
-                            dragFraction = fraction
-                            onSeek(fraction)
+                            dragFraction = (change.position.x / size.width).coerceIn(0f, 1f)
                         }
                         isDragging = false
+                        if (completed) onSeek(dragFraction)
                     }
                 }
                 .drawWithCache {

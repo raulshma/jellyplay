@@ -140,6 +140,12 @@ fun main(args: Array<String>) {
     )
     startupPerf.scheduleMeasurementHooksIfRequested()
 
+    //  startup mark: closes Main's synchronous pre-Koin segment (paths +
+    // mkdirs, single-instance file lock, drop-file clear + WatchService,
+    // crash-marker consume) so the koinStart delta below measures GRAPH
+    // CONSTRUCTION only — Koin A/Bs are no longer polluted by that IO share.
+    startupPerf.markPreKoinDone()
+
     val koinApp = startKoin {
         // Koin's default no-override policy holds — every definition in the
         // list is keyed and unique (the desktop auto-update binding is the

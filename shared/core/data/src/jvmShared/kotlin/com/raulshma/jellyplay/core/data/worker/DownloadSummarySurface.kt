@@ -25,22 +25,33 @@ import kotlinx.coroutines.launch
  * is the no-op. Best-effort by the port's contract: a failed post must not
  * kill the collector, so the post is guarded per emission.
  *
- * Process-scoped by construction: the Koin single starts this collector at
- * app start on the application scope — download lifecycles span screens and
- * workers, so no screen/worker can own it.
+ * Process-scoped by construction: the Koin single lives for the whole
+ * process on the application scope — download lifecycles span screens and
+ * workers, so no screen/worker can own it. The collector arm is a separate
+ * idempotent [start] (JellyPlayEventsSessionController idiom) so the shells'
+ * background prewarm groups can kick it off the main thread instead of the
+ * construction landing inside `startKoin`.
  */
 class DownloadSummarySurface(
-    inFlightCount: Flow<Int>,
-    notifier: DownloadProgressNotifier,
-    scope: CoroutineScope,
+    private val inFlightCount: Flow<Int>,
+    private val notifier: DownloadProgressNotifier,
+    private val scope: CoroutineScope,
 ) {
 
-    /** The one collector; lives as long as the application scope. */
-    val job: Job = scope.launch {
-        inFlightCount
-            .distinctUntilChanged()
-            .collect { count ->
-                runCatchingRethrowingCancellation { notifier.refreshSummary(count) }
-            }
+    private var job: Job? = null
+
+    /**
+     * Arms the one collector. Idempotent — the Koin singleton memoizes, but
+     * both shells' prewarm paths guard against a double kick regardless.
+     */
+    fun start(): Job {
+        job?.let { if (it.isActive) return it }
+        return scope.launch {
+            inFlightCount
+                .distinctUntilChanged()
+                .collect { count ->
+                    runCatchingRethrowingCancellation { notifier.refreshSummary(count) }
+                }
+        }.also { job = it }
     }
 }

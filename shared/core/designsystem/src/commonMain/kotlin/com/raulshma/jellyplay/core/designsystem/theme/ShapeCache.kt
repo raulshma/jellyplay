@@ -4,6 +4,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.dp
+import kotlin.math.roundToInt
 import racra.compose.smooth_corner_rect_library.AbsoluteSmoothCornerShape
 
 /**
@@ -132,7 +133,7 @@ fun expressiveListShape(
     // keys themselves stay radii-only — and the flag read remains
     // composition-observed so a flip re-resolves every list shape.
     if (_isSynthwaveActive.value) return zeroCornerShape
-    val key = "${index}_${count}_${outerRadius.value}_${innerRadius.value}"
+    val key = listShapeKey(index, count, outerRadius, innerRadius)
     val cached = expressiveListShapeCache[key]
     if (cached != null) {
         return cached
@@ -168,20 +169,35 @@ fun expressiveListShape(
 }
 
 /**
+ * The grouped-list shape LRU key packed into one primitive: the
+ * old `"${index}_${count}_${outer}_${inner}"` string interpolated a fresh
+ * String per grouped-list row per recomposition before the LRU probe. Four
+ * 16-bit fields: outer/inner radii quantized to 1/4 dp steps (values under
+ * 16384 dp — every real corner radius), then count and index.
+ */
+private fun listShapeKey(index: Int, count: Int, outerRadius: androidx.compose.ui.unit.Dp, innerRadius: androidx.compose.ui.unit.Dp): Long {
+    val outerQ = (outerRadius.value * 4).roundToInt().coerceIn(0, 0xFFFF)
+    val innerQ = (innerRadius.value * 4).roundToInt().coerceIn(0, 0xFFFF)
+    val countQ = count.coerceIn(0, 0xFFFF)
+    val indexQ = index.coerceIn(0, 0xFFFF)
+    return (outerQ.toLong() shl 48) or (innerQ.toLong() shl 32) or (countQ.toLong() shl 16) or indexQ.toLong()
+}
+
+/**
  * Minimal insertion-ordered LRU standing in for `android.util.LruCache` on
  * non-Android targets: reads refresh recency, writes evict the eldest past
  * [maxSize]. UI-thread-only access, so no locking.
  */
 private class ShapeLruCache<V : Any>(private val maxSize: Int) {
-    private val map = LinkedHashMap<String, V>(16, 0.75f)
+    private val map = LinkedHashMap<Long, V>(16, 0.75f)
 
-    operator fun get(key: String): V? {
+    operator fun get(key: Long): V? {
         val value = map.remove(key) ?: return null
         map[key] = value
         return value
     }
 
-    fun put(key: String, value: V) {
+    fun put(key: Long, value: V) {
         map.remove(key)
         map[key] = value
         while (map.size > maxSize) {

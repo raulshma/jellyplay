@@ -9,6 +9,7 @@ import com.raulshma.jellyplay.core.model.ChannelMixMode
 import com.raulshma.jellyplay.core.model.DecoderMode
 import com.raulshma.jellyplay.core.model.EffectStrength
 import com.raulshma.jellyplay.core.model.ReverbPreset
+import com.raulshma.jellyplay.core.model.VideoEffectsConfig
 import com.raulshma.jellyplay.feature.player.video.state.AudioEffectsState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.StateFlow
@@ -56,6 +57,23 @@ internal class VideoEffectsController(
     private val audioEffectsStore: AudioEffectsStore,
     private val playbackStore: PlaybackStore,
     private val syncConfig: () -> Unit,
+    /**
+     * The drag-settling twin (PlaybackSession.markEngineConfigDirtyDebounced).
+     * Required: the live drag legs route the engine apply through it, and a
+     * defaulted null would silently fall back to the synchronous
+     * [syncConfig] per drag frame — resurrecting the per-frame cost this
+     * leg removes.
+     */
+    private val syncConfigDebounced: () -> Unit,
+    /**
+     * The per-item persist gate: the current playback item id, or
+     * null when the persist must not land (nothing loaded, or Cinema Mode
+     * pre-roll — the intro is transient). Required: a defaulted never-gate
+     * would silently drop every per-item persist.
+     */
+    private val persistEffectsGate: () -> String?,
+    /** The engine store's per-item write, wired by the session. Required for the same reason as [persistEffectsGate]. */
+    private val persistVideoEffectsForItem: (String, VideoEffectsConfig) -> Unit,
 ) {
     private val core = EffectsCommandCore(
         initialState = AudioEffectsState(),
@@ -91,6 +109,37 @@ internal class VideoEffectsController(
         update = { it.copy(audioDelayMs = ms) },
         persist = { audioStore.setAudioDelay(ms) },
     )
+
+    /**
+     * The AV-sync slider's LIVE drag leg: the slider fires 60-120
+     * `onValueChange` frames per drag, and the old single command per frame
+     * paid a full synchronous EngineConfig rebuild + a DataStore write each
+     * time — dozens of queued disk edits per second of drag, each overwritten
+     * milliseconds later. The live leg flips the state slice (the config
+     * input) and routes the engine apply through the 150 ms debounced twin
+     * (`CONFIG_SYNC_DEBOUNCE_MS`), and writes NOTHING to disk. The settle
+     * leg — [setAudioDelay] with the final value, wired to the slider's
+     * `onValueChangeFinished` — lands the same final state, one immediate
+     * config apply, and the one persist that matters (D-pad steps invoke
+     * finished per nudge, so TV keeps per-step commits; keyboard/remote paths
+     * keep calling [setAudioDelay] directly).
+     */
+    fun setAudioDelayLive(ms: Long) {
+        core.updateState { it.copy(audioDelayMs = ms) }
+        syncConfigDebounced()
+    }
+
+    /**
+     * The video-effects SETTLE persist leg: per-item store write
+     * so the same filter preset is restored next time. The item and
+     * Cinema-Mode gates live here; the store access arrives via the
+     * constructor lambda (the session's engine store is not a controller
+     * dependency).
+     */
+    fun persistVideoEffects(effects: VideoEffectsConfig) {
+        val itemId = persistEffectsGate() ?: return
+        persistVideoEffectsForItem(itemId, effects)
+    }
 
     fun setDecoderMode(mode: DecoderMode) = command(
         update = { it.copy(decoderMode = mode) },

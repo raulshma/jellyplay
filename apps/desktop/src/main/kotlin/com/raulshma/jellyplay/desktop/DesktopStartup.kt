@@ -2,9 +2,13 @@ package com.raulshma.jellyplay.desktop
 
 import androidx.compose.ui.graphics.painter.Painter
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
+import com.raulshma.jellyplay.core.data.repository.JellyPlayLiveResyncConnector
+import com.raulshma.jellyplay.core.data.session.JellyPlayEventsSessionController
 import com.raulshma.jellyplay.core.data.worker.DesktopAutoDownloadScheduler
 import com.raulshma.jellyplay.core.data.worker.DesktopDownloadManager
 import com.raulshma.jellyplay.core.data.worker.DesktopPlaybackSyncScheduler
+import com.raulshma.jellyplay.core.data.worker.DesktopSettingsSyncScheduler
+import com.raulshma.jellyplay.core.data.worker.DownloadSummarySurface
 import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.data.playback.DesktopAudioQueueManager
@@ -87,7 +91,46 @@ internal fun launchDesktopStartup(
             // transition observer + the window-focus edge Main.kt's AWT
             // listener feeds): the desktop actual of Android's
             // SettingsSyncWorker/SettingsSyncBackgroundTrigger pair.
-            koinApp.koin.get<com.raulshma.jellyplay.core.data.worker.DesktopSettingsSyncScheduler>().start()
+            koinApp.koin.get<DesktopSettingsSyncScheduler>().start()
+
+            // The de-eagered core:data session machinery (formerly
+            // createdAtStart singles that constructed Room/WS graphs on MAIN
+            // inside startKoin, signed-out sessions included): the events SSE
+            // face, the live-resync half, and the download summary surface.
+            // Construction is documented side-effect free; all three start()s
+            // are idempotent (JellyPlayEventsSessionController idiom), and
+            // resolving them here is identity-neutral — a first composition
+            // racing this block gets the SAME memoized instance. Android's
+            // twin kick lives in AppStartupPrewarms' background-scheduler
+            // group.
+            koinApp.koin.get<JellyPlayEventsSessionController>().start()
+            koinApp.koin.get<JellyPlayLiveResyncConnector>().start()
+            koinApp.koin.get<DownloadSummarySurface>().start()
+
+            // Pre-resolve the desktop shell's Koin singles - exactly the
+            // set rememberDesktopShellServices resolves during
+            // first composition. The list lives in DesktopShellServices.kt
+            // NEXT TO the koinInject block it mirrors, so the two sides
+            // cannot drift; each entry is identity-neutral (Koin memoizes,
+            // so the composition's later koinInject() hands back the SAME
+            // instance; when the race goes the other way nothing changes).
+            // The point is the two heavyweight stragglers:
+            // DesktopNetworkMonitor's stateIn seed runs a synchronous
+            // NetworkInterface enumeration (slow on adapter-heavy Windows —
+            // the codebase's own comment calls it out), and the websocket
+            // client pulls the Room/WS graph. Resolution runs on THIS
+            // Default-dispatcher coroutine, off the UI thread's first-frame
+            // window.
+            desktopShellServicePrewarms.forEach { resolve -> resolve(koinApp.koin) }
+
+            // Warm the mpv software-surface probe: the lazy's
+            // first access pays a throwaway mpv create/init/free plus a dll
+            // map — "tens to low hundreds of ms" by its own KDoc — and
+            // DesktopNavScaffold touches it during first composition, on the
+            // UI thread. Poking it here moves that cost onto this dispatcher.
+            runCatchingRethrowingCancellation {
+                com.raulshma.jellyplay.desktop.player.MpvSoftwareSurfaceSupport.isSupported
+            }
 
             // Extract the bundled Anime4K chains into the user's
             // shaders dir (idempotent; re-runs only on a version bump).

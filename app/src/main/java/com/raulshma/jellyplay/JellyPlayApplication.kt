@@ -25,8 +25,12 @@ import org.koin.mp.KoinPlatform
 
 class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Configuration.Provider {
 
-    override val workManagerConfiguration: Configuration
-        get() = Configuration.Builder()
+    // Memoized: the getter re-ran the Builder + three addFactory
+    // calls per access — WorkManager can read the property more than once
+    // during initialization/retry paths. Same lazy idiom the file already
+    // uses below.
+    override val workManagerConfiguration: Configuration by lazy {
+        Configuration.Builder()
             .setWorkerFactory(
                 DelegatingWorkerFactory().apply {
                     // App widget recommendation workers (plain CoroutineWorker
@@ -39,6 +43,7 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
                 },
             )
             .build()
+    }
 
     // Deferred single access (Hilt removal): the former
     // javax.inject.Provider fields deferred Hilt construction off the

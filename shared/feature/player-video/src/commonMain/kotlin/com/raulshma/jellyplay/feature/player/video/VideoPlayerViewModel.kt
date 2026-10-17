@@ -607,6 +607,7 @@ class VideoPlayerViewModel(
             is VideoPlayerUiEvent.SetStreamingQuality -> setStreamingQuality(event.quality)
             is VideoPlayerUiEvent.SetAdaptiveBitrateEnabled -> setAdaptiveBitrateEnabled(event.enabled)
             is VideoPlayerUiEvent.SetVideoEffects -> setVideoEffects(event.effects)
+            is VideoPlayerUiEvent.SetVideoEffectsSettled -> setVideoEffectsSettled(event.effects)
             is VideoPlayerUiEvent.SetRenderShaderPack -> setRenderShaderPack(event.pack, event.persist)
             is VideoPlayerUiEvent.SetRenderToneMapping -> setRenderToneMapping(event.mapping, event.persist)
             is VideoPlayerUiEvent.SetRenderQuality -> setRenderQuality(event.quality)
@@ -1313,14 +1314,13 @@ class VideoPlayerViewModel(
     private fun setVideoEffects(effects: VideoEffectsConfig) {
         _uiState.update { it.copy(videoFx = it.videoFx.copy(videoEffects = effects)) }
         playbackSession.markEngineConfigDirtyDebounced()
-        // Persist per item so the same filter preset is restored next time.
-        // Skip when in Cinema Mode pre-roll — the intro is transient.
-        val itemId = playbackSession.playerSessionManager.sessionState.value.currentItemId
-        if (itemId != null && playbackSession.cinemaIntroContext == null) {
-            launch {
-                stores.engine.setVideoEffectsForItem(itemId, effects)
-            }
-        }
+    }
+
+    private fun setVideoEffectsSettled(effects: VideoEffectsConfig) {
+        setVideoEffects(effects)
+        // The settle-gated per-item persist lives on the effects
+        // controller (item + cinema gates inside) — the VM stays a thin caller.
+        playbackSession.effects.persistVideoEffects(effects)
     }
 
     // ── Rendering sheet + deinterlace ──────────────

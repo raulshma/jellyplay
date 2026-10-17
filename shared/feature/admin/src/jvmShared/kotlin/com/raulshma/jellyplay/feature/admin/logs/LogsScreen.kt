@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.admin.logs
 
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -115,6 +116,15 @@ fun LogsScreen(
     val isTv = LocalTvMode.current
     val backgroundColorState = rememberScreenBackgroundColorState()
     val tabs = listOf(Res.string.admin_tab_log_files, Res.string.admin_tab_activity_log)
+
+    // The 5 s selected-file poll is visibility-bound (the JellyPlayTranscodesScreen
+    // shape): it runs only between START and STOP, so a back-stacked Logs
+    // screen no longer polls. The user's pause toggle stays the VM-internal
+    // round gate.
+    LifecycleStartEffect(Unit) {
+        viewModel.startLogPolling()
+        onStopOrDispose { viewModel.stopLogPolling() }
+    }
 
     // TV focus-on-launch: focus the active tab's list once data arrives so D-pad input lands on
     // content, not the navigation drawer. Resets when the user switches tabs.

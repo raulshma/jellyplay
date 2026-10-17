@@ -87,10 +87,17 @@ fun ArtistCard(
 
     // The ring runs two infinite animations (rotation + pulse). On low-end
     // devices these drive a continuous redraw coroutine per card, and artist
-    // grids show dozens at once — collapse to static values in performance mode.
+    // grids show dozens at once — collapse to static values in performance
+    // mode, and GATE the transition behind press/focus (the
+    // VinylRecordPeek discipline: no rememberInfiniteTransition below screen
+    // scope without a visibility/press gate). At rest the ring sits static
+    // (rotation 0, base pulse width) — the resting breathing ring is the one
+    // deliberate, near-invisible visual change; while pressed or focused the
+    // animations run exactly as before.
     val ringRotation: Float
     val ringPulse: Float
-    if (!reducedMotion) {
+    val ringActive = isPressed || tvFocusState.isFocused
+    if (!reducedMotion && ringActive) {
         val ringTransition = rememberInfiniteTransition(label = "artist_ring")
         ringRotation = ringTransition.animateFloat(
             initialValue = 0f,

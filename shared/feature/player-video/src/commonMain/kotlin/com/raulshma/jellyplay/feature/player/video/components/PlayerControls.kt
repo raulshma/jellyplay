@@ -26,7 +26,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -110,7 +109,6 @@ import com.raulshma.jellyplay.core.model.MediaStream
 import com.raulshma.jellyplay.feature.player.video.engine.AspectRatio
 import com.raulshma.jellyplay.feature.player.video.engine.EngineCapabilities
 import com.raulshma.jellyplay.feature.player.video.engine.EngineVideoStats
-import com.raulshma.jellyplay.feature.player.video.engine.PlaybackMetadataSnapshot
 import com.raulshma.jellyplay.feature.player.video.engine.SpatialAudioState
 import com.raulshma.jellyplay.feature.player.video.TrackOption
 
@@ -367,27 +365,11 @@ internal fun PlayerControls(
     // composables that actually need them (TvControllableSeekBar and
     // EndsAtLabel), NOT here. Collecting at the root invalidated this entire
     // ~670-line body on every 4 Hz position tick and was a primary driver of
-    // the MPV playback ANR. videoStats is projected through a derivedStateOf
-    // below so only the low-churn codec/HDR slice reaches PlaybackMetadataRow;
+    // the MPV playback ANR. videoStatsFlow is likewise passed through to its
+    // only reader — PlaybackMetadataRow collects + projects it at the leaf
+    // (a root collect re-executed this whole body per deduped stats
+    // publication while stats-for-nerds was on);
     // sleepTimerRemainingMs is collected inside PlayerOverflowMenu, its only reader.
-    val videoStats by videoStatsFlow.collectAsStateWithLifecycle()
-    // Project only the static codec/HDR/audio-channel slice that
-    // PlaybackMetadataRow reads. The full EngineVideoStats stream also carries
-    // high-churn fields (droppedFrames, bufferedPositionMs, videoBitrate,
-    // estimatedBandwidthBps) that tick multiple times per second; without this
-    // projection PlaybackMetadataRow would recompose on every tick even though
-    // its displayed fields almost never change.
-    val playbackMetadata by remember {
-        derivedStateOf {
-            PlaybackMetadataSnapshot(
-                videoCodec = videoStats.videoCodec,
-                videoResolution = videoStats.videoResolution,
-                videoHdrType = videoStats.videoHdrType,
-                audioCodec = videoStats.audioCodec,
-                audioChannels = videoStats.audioChannels,
-            )
-        }
-    }
 
     val isTv = LocalTvMode.current
     val isPortrait = rememberIsPortraitOrientation()
@@ -660,7 +642,7 @@ internal fun PlayerControls(
                         isDirectPlayForced = tracks.isDirectPlayForced,
                         hdrType = tracks.hdrType,
                         mediaStreams = tracks.mediaStreams,
-                        videoStats = playbackMetadata,
+                        videoStatsFlow = videoStatsFlow,
                         audioTracks = tracks.audioTracks,
                         isConnectionMetered = tracks.isConnectionMetered,
                         subtitleDelayMs = tracks.subtitleDelayMs,

@@ -808,10 +808,27 @@ fun CompanionControlBar(
             Text(formattedDuration, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
 
+        // Scrub-then-commit: the drag publishes only the local
+        // dragValue — the old wiring sent a Cast-channel RPC per pointer
+        // frame, each running the full SyncPlay→cast→local seek ladder. One
+        // commit lands on release; while dragging, the local value wins over
+        // the incoming position ticks (the LiveSeekBar anti-fight pattern).
+        var isSeekDragging by remember { mutableStateOf(false) }
+        var dragPositionMs by remember { mutableFloatStateOf(currentPositionMs.toFloat()) }
+        LaunchedEffect(currentPositionMs) {
+            if (!isSeekDragging) dragPositionMs = currentPositionMs.toFloat()
+        }
         Slider(
-            value = if (durationMs > 0) currentPositionMs.toFloat() else 0f,
+            value = if (durationMs > 0) dragPositionMs else 0f,
             valueRange = 0f..(if (durationMs > 0) durationMs.toFloat() else 1f),
-            onValueChange = { pos -> onSeekTo(pos.toLong()) },
+            onValueChange = { pos ->
+                isSeekDragging = true
+                dragPositionMs = pos
+            },
+            onValueChangeFinished = {
+                isSeekDragging = false
+                onSeekTo(dragPositionMs.toLong())
+            },
             colors = SliderDefaults.colors(
                 thumbColor = MaterialTheme.colorScheme.primary,
                 activeTrackColor = MaterialTheme.colorScheme.primary,
@@ -841,10 +858,10 @@ fun CompanionControlBar(
                 Spacer(Modifier.width(6.dp))
                 Slider(
                     value = localVolume,
-                    onValueChange = {
-                        localVolume = it
-                        onVolumeChange(it)
-                    },
+                    onValueChange = { localVolume = it },
+                    // Commit-on-release: the RPC moves out of the
+                    // drag frames; the settled value lands once.
+                    onValueChangeFinished = { onVolumeChange(localVolume) },
                     modifier = Modifier.weight(1f)
                 )
             }

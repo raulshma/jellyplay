@@ -26,6 +26,36 @@ import coil3.size.Size as CoilSize
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.Folder
 
+private const val FOLDER_CELL_CORNER_RADIUS_DP = 4
+
+/**
+ * The 16 possible corner-radius combos for a ≤2×2 folder-poster cell grid,
+ * precomputed at file level (the PhotoViewerScreen file-level-shapes idiom):
+ * the old body built a [RoundedCornerShape] per cell per composition.
+ * Indexed by a 4-bit mask of which corners are on the grid edge.
+ */
+private val folderCellShapes: List<RoundedCornerShape> = List(16) { mask ->
+    val r = FOLDER_CELL_CORNER_RADIUS_DP.dp
+    RoundedCornerShape(
+        topStart = if (mask and 1 != 0) r else 0.dp,
+        topEnd = if (mask and 2 != 0) r else 0.dp,
+        bottomStart = if (mask and 4 != 0) r else 0.dp,
+        bottomEnd = if (mask and 8 != 0) r else 0.dp,
+    )
+}
+
+private fun folderCellShape(rowIndex: Int, rowCount: Int, colIndex: Int, colCount: Int): RoundedCornerShape {
+    val top = rowIndex == 0
+    val bottom = rowIndex == rowCount - 1
+    val left = colIndex == 0
+    val right = colIndex == colCount - 1
+    val mask = (if (top && left) 1 else 0) or
+        (if (top && right) 2 else 0) or
+        (if (bottom && left) 4 else 0) or
+        (if (bottom && right) 8 else 0)
+    return folderCellShapes[mask]
+}
+
 @Composable
 fun PhotoFolderPoster(
     imageUrls: List<String>,
@@ -34,7 +64,6 @@ fun PhotoFolderPoster(
 ) {
     val context = LocalPlatformContext.current
     val gap = 2.dp
-    val cornerRadius = 4.dp
     val urls = remember(imageUrls) { imageUrls.take(4) }
 
     if (urls.isEmpty()) {
@@ -95,14 +124,7 @@ fun PhotoFolderPoster(
                                 start = if (colIndex == 0) 0.dp else gap / 2,
                                 end = if (colIndex == rowUrls.lastIndex) 0.dp else gap / 2,
                             )
-                            .clip(
-                                RoundedCornerShape(
-                                    topStart = if (rowIndex == 0 && colIndex == 0) cornerRadius else 0.dp,
-                                    topEnd = if (rowIndex == 0 && colIndex == rowUrls.lastIndex) cornerRadius else 0.dp,
-                                    bottomStart = if (rowIndex == rows.lastIndex && colIndex == 0) cornerRadius else 0.dp,
-                                    bottomEnd = if (rowIndex == rows.lastIndex && colIndex == rowUrls.lastIndex) cornerRadius else 0.dp,
-                                )
-                            ),
+                            .clip(folderCellShape(rowIndex, rows.size, colIndex, rowUrls.size)),
                         contentScale = ContentScale.Crop,
                     )
                 }

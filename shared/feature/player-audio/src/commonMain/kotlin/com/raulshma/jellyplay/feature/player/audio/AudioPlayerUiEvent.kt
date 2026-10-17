@@ -95,8 +95,14 @@ sealed interface AudioPlayerUiEvent {
     /** Toggles the equalizer. */
     data object ToggleEqualizer : AudioPlayerUiEvent
 
-    /** Sets one equalizer band's level. */
+    /** Sets one equalizer band's level — apply + persist (the slider's settle leg). */
     data class SetEqualizerBand(val bandIndex: Int, val levelDb: Int) : AudioPlayerUiEvent
+
+    /**
+     * The EQ-band slider's LIVE drag leg: DSP apply only, no
+     * per-frame DataStore write. The settle leg reuses [SetEqualizerBand].
+     */
+    data class SetEqualizerBandLive(val bandIndex: Int, val levelDb: Int) : AudioPlayerUiEvent
 
     /** Resets the equalizer to flat and clears the preset. */
     data object ResetEqualizer : AudioPlayerUiEvent
@@ -113,17 +119,26 @@ sealed interface AudioPlayerUiEvent {
     /** Toggles the virtualizer. */
     data object ToggleVirtualizer : AudioPlayerUiEvent
 
-    /** Sets the virtualizer strength (0..1000). */
+    /** Sets the virtualizer strength (0..1000) — apply + persist (settle leg). */
     data class SetVirtualizerStrength(val strength: Int) : AudioPlayerUiEvent
+
+    /** The virtualizer slider's LIVE drag leg - apply-only. */
+    data class SetVirtualizerStrengthLive(val strength: Int) : AudioPlayerUiEvent
 
     /** Applies a reverb preset. */
     data class SetReverbPreset(val preset: ReverbPreset) : AudioPlayerUiEvent
 
-    /** Sets the L/R balance (-1f..1f). */
+    /** Sets the L/R balance (-1f..1f) — apply + persist (settle leg). */
     data class SetLrBalance(val balance: Float) : AudioPlayerUiEvent
 
-    /** Sets the pitch shift in semitones. */
+    /** The balance slider's LIVE drag leg - apply-only. */
+    data class SetLrBalanceLive(val balance: Float) : AudioPlayerUiEvent
+
+    /** Sets the pitch shift in semitones — apply + persist (settle leg). */
     data class SetPitchSemitones(val semitones: Float) : AudioPlayerUiEvent
+
+    /** The pitch slider's LIVE drag leg - apply-only. */
+    data class SetPitchSemitonesLive(val semitones: Float) : AudioPlayerUiEvent
 
     /** Enables or disables genre-based AutoEQ. */
     data class SetAutoEqByGenre(val enabled: Boolean) : AudioPlayerUiEvent

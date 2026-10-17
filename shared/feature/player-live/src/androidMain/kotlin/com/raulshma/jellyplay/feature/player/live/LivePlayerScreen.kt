@@ -419,6 +419,27 @@ fun LivePlayerScreen(
                 (viewModel.engineForRendering() as? Media3LivePlayerEngine)?.media3Player
             }
             if (media3Player != null) {
+                // PiP aspect-ratio feed: forward the decoded video's
+                // dimensions so the host PlayerActivity shapes the PiP window
+                // to the content instead of its 16:9 fallback. Remembered +
+                // DisposableEffect-removed: the old factory-resident
+                // anonymous listener stacked a new registration on every
+                // surface recreation while the VM-scoped engine lived, so each
+                // onVideoSizeChanged dispatched once per dead surface too.
+                val videoSizeListener = remember(media3Player) {
+                    object : Player.Listener {
+                        override fun onVideoSizeChanged(videoSize: VideoSize) {
+                            viewModel.onVideoSizeChanged(
+                                videoSize.width,
+                                videoSize.height,
+                            )
+                        }
+                    }
+                }
+                DisposableEffect(media3Player) {
+                    media3Player.addListener(videoSizeListener)
+                    onDispose { media3Player.removeListener(videoSizeListener) }
+                }
                 AndroidView(
                     modifier = Modifier.fillMaxSize(),
                     factory = { ctx ->
@@ -439,19 +460,6 @@ fun LivePlayerScreen(
                             // LiveErrorBanner (M3 Expressive LoadingIndicator);
                             // disable Media3's native spinner to avoid doubles.
                             setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
-                            // PiP aspect-ratio feed: forward the
-                            // decoded video's dimensions so the host
-                            // PlayerActivity shapes the PiP window to the
-                            // content instead of its 16:9 fallback. Fires on
-                            // every track selection while the engine lives.
-                            media3Player?.addListener(object : Player.Listener {
-                                override fun onVideoSizeChanged(videoSize: VideoSize) {
-                                    viewModel.onVideoSizeChanged(
-                                        videoSize.width,
-                                        videoSize.height,
-                                    )
-                                }
-                            })
                         }
                     },
                 )

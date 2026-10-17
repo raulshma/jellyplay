@@ -11,13 +11,17 @@ import com.raulshma.jellyplay.core.data.cast.CastManager
 import com.raulshma.jellyplay.core.data.download.DownloadOutcomeMessenger
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
 import com.raulshma.jellyplay.core.data.playback.ThemeMusicPlayer
+import com.raulshma.jellyplay.core.data.repository.JellyPlayLiveResyncConnector
+import com.raulshma.jellyplay.core.data.session.JellyPlayEventsSessionController
 import com.raulshma.jellyplay.core.data.update.AppUpdateRepository
 import com.raulshma.jellyplay.core.data.widget.ContinueWatchingBroadcaster
 import com.raulshma.jellyplay.core.data.widget.LibrarySyncHook
 import com.raulshma.jellyplay.core.data.worker.AutoDownloadScheduler
 import com.raulshma.jellyplay.core.data.worker.DownloadReconnectListener
+import com.raulshma.jellyplay.core.data.worker.DownloadSummarySurface
 import com.raulshma.jellyplay.core.data.worker.PlaybackSyncReconnectListener
 import com.raulshma.jellyplay.core.data.worker.PlaybackSyncScheduler
+import com.raulshma.jellyplay.core.data.worker.SettingsSyncBackgroundTrigger
 import com.raulshma.jellyplay.core.data.worker.UserDataSyncScheduler
 import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
@@ -179,13 +183,16 @@ fun androidAppModule(context: Context): Module = module {
             userDataSyncScheduler = lazy { get<UserDataSyncScheduler>() },
             playbackSyncScheduler = lazy { get<PlaybackSyncScheduler>() },
             playbackSyncReconnectListener = lazy { get<PlaybackSyncReconnectListener>() },
-            settingsSyncBackgroundTrigger = lazy { get<com.raulshma.jellyplay.core.data.worker.SettingsSyncBackgroundTrigger>() },
+            settingsSyncBackgroundTrigger = lazy { get<SettingsSyncBackgroundTrigger>() },
             downloadReconnectListener = lazy { get<DownloadReconnectListener>() },
             notificationReconnectListener = lazy { get<NotificationReconnectListener>() },
             autoDownloadScheduler = lazy { get<AutoDownloadScheduler>() },
             notificationScheduler = lazy { get<NotificationScheduler>() },
             downloadRecoveryInitializer = lazy { get<DownloadRecoveryInitializer>() },
             appUpdateRepository = lazy { get<AppUpdateRepository>() },
+            eventsSessionController = lazy { get<JellyPlayEventsSessionController>() },
+            liveResyncConnector = lazy { get<JellyPlayLiveResyncConnector>() },
+            downloadSummarySurface = lazy { get<DownloadSummarySurface>() },
         )
     }
 

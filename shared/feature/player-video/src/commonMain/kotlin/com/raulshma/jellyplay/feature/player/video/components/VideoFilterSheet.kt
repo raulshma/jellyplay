@@ -66,6 +66,15 @@ fun VideoFilterSheet(
     currentEffects: VideoEffectsConfig,
     onEffectsChange: (VideoEffectsConfig) -> Unit,
     onDismiss: () -> Unit,
+    /**
+     * The drag-settle leg: [onEffectsChange] is the live leg
+     * (state + debounced engine sync — the live preview is free); this one
+     * fires on slider release (D-pad: per step) and carries the persist.
+     * Resets commit through both, exactly like the old per-change wiring.
+     * Required: defaulting it to [onEffectsChange] would silently route
+     * every settle through the live leg and drop the persist.
+     */
+    onEffectsSettled: (VideoEffectsConfig) -> Unit,
 ) {
     var brightness by remember { mutableFloatStateOf(currentEffects.brightness) }
     var contrast by remember { mutableFloatStateOf(currentEffects.contrast) }
@@ -120,6 +129,7 @@ fun VideoFilterSheet(
                         blueGain = 1f
                         blur = 0f
                         onEffectsChange(VideoEffectsConfig())
+                        onEffectsSettled(VideoEffectsConfig())
                     }
                     .padding(horizontal = 12.dp, vertical = 6.dp),
             ) {
@@ -139,7 +149,8 @@ fun VideoFilterSheet(
                 valueRange = -1f..1f,
                 valueLabel = String.format("%+.1f", brightness),
                 onValueChange = { brightness = it; onEffectsChange(emit()) },
-                onReset = { brightness = 0f; onEffectsChange(emit()) },
+                onValueChangeFinished = { onEffectsSettled(emit()) },
+                onReset = { brightness = 0f; onEffectsChange(emit()); onEffectsSettled(emit()) },
                 isTv = isTv,
                 focusRequester = focusRequester,
             )
@@ -150,7 +161,8 @@ fun VideoFilterSheet(
                 valueRange = 0.5f..2f,
                 valueLabel = String.format("%.1f", contrast),
                 onValueChange = { contrast = it; onEffectsChange(emit()) },
-                onReset = { contrast = 1f; onEffectsChange(emit()) },
+                onValueChangeFinished = { onEffectsSettled(emit()) },
+                onReset = { contrast = 1f; onEffectsChange(emit()); onEffectsSettled(emit()) },
                 isTv = isTv,
             )
             FilterSpacer()
@@ -160,7 +172,8 @@ fun VideoFilterSheet(
                 valueRange = 0f..3f,
                 valueLabel = String.format("%.1f", saturation),
                 onValueChange = { saturation = it; onEffectsChange(emit()) },
-                onReset = { saturation = 1f; onEffectsChange(emit()) },
+                onValueChangeFinished = { onEffectsSettled(emit()) },
+                onReset = { saturation = 1f; onEffectsChange(emit()); onEffectsSettled(emit()) },
                 isTv = isTv,
             )
             FilterSpacer()
@@ -170,7 +183,8 @@ fun VideoFilterSheet(
                 valueRange = 0f..1f,
                 valueLabel = String.format("%.1f", sharpness),
                 onValueChange = { sharpness = it; onEffectsChange(emit()) },
-                onReset = { sharpness = 0f; onEffectsChange(emit()) },
+                onValueChangeFinished = { onEffectsSettled(emit()) },
+                onReset = { sharpness = 0f; onEffectsChange(emit()); onEffectsSettled(emit()) },
                 isTv = isTv,
             )
             FilterSpacer()
@@ -180,7 +194,8 @@ fun VideoFilterSheet(
                 valueRange = 0f..360f,
                 valueLabel = String.format("%.0f°", hue),
                 onValueChange = { hue = it; onEffectsChange(emit()) },
-                onReset = { hue = 0f; onEffectsChange(emit()) },
+                onValueChangeFinished = { onEffectsSettled(emit()) },
+                onReset = { hue = 0f; onEffectsChange(emit()); onEffectsSettled(emit()) },
                 isTv = isTv,
             )
             FilterSpacer()
@@ -190,7 +205,8 @@ fun VideoFilterSheet(
                 valueRange = -180f..180f,
                 valueLabel = String.format("%.0f°", rotation),
                 onValueChange = { rotation = it; onEffectsChange(emit()) },
-                onReset = { rotation = 0f; onEffectsChange(emit()) },
+                onValueChangeFinished = { onEffectsSettled(emit()) },
+                onReset = { rotation = 0f; onEffectsChange(emit()); onEffectsSettled(emit()) },
                 isTv = isTv,
             )
             FilterSpacer()
@@ -200,7 +216,8 @@ fun VideoFilterSheet(
                 valueRange = 0f..2f,
                 valueLabel = String.format("%.2f", redGain),
                 onValueChange = { redGain = it; onEffectsChange(emit()) },
-                onReset = { redGain = 1f; onEffectsChange(emit()) },
+                onValueChangeFinished = { onEffectsSettled(emit()) },
+                onReset = { redGain = 1f; onEffectsChange(emit()); onEffectsSettled(emit()) },
                 isTv = isTv,
             )
             FilterSpacer()
@@ -210,7 +227,8 @@ fun VideoFilterSheet(
                 valueRange = 0f..2f,
                 valueLabel = String.format("%.2f", greenGain),
                 onValueChange = { greenGain = it; onEffectsChange(emit()) },
-                onReset = { greenGain = 1f; onEffectsChange(emit()) },
+                onValueChangeFinished = { onEffectsSettled(emit()) },
+                onReset = { greenGain = 1f; onEffectsChange(emit()); onEffectsSettled(emit()) },
                 isTv = isTv,
             )
             FilterSpacer()
@@ -220,7 +238,8 @@ fun VideoFilterSheet(
                 valueRange = 0f..2f,
                 valueLabel = String.format("%.2f", blueGain),
                 onValueChange = { blueGain = it; onEffectsChange(emit()) },
-                onReset = { blueGain = 1f; onEffectsChange(emit()) },
+                onValueChangeFinished = { onEffectsSettled(emit()) },
+                onReset = { blueGain = 1f; onEffectsChange(emit()); onEffectsSettled(emit()) },
                 isTv = isTv,
             )
             FilterSpacer()
@@ -230,7 +249,8 @@ fun VideoFilterSheet(
                 valueRange = 0f..10f,
                 valueLabel = String.format("%.1f", blur),
                 onValueChange = { blur = it; onEffectsChange(emit()) },
-                onReset = { blur = 0f; onEffectsChange(emit()) },
+                onValueChangeFinished = { onEffectsSettled(emit()) },
+                onReset = { blur = 0f; onEffectsChange(emit()); onEffectsSettled(emit()) },
                 isTv = isTv,
             )
         }
@@ -249,6 +269,7 @@ private fun FilterSlider(
     valueRange: ClosedFloatingPointRange<Float>,
     valueLabel: String,
     onValueChange: (Float) -> Unit,
+    onValueChangeFinished: () -> Unit,
     onReset: () -> Unit,
     isTv: Boolean,
     focusRequester: FocusRequester? = null,
@@ -302,6 +323,7 @@ private fun FilterSlider(
             valueRange = valueRange,
             modifier = Modifier.fillMaxWidth(),
             isTv = isTv,
+            onValueChangeFinished = onValueChangeFinished,
             colors = androidx.compose.material3.SliderDefaults.colors(
                 activeTrackColor = MaterialTheme.colorScheme.primary,
                 inactiveTrackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),

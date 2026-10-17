@@ -1120,10 +1120,10 @@ internal class PlaybackSession(
      */
     internal val effects = VideoEffectsController(
         scope = scope,
-        audioStore = stores.audio,
-        audioEffectsStore = stores.audioEffects,
-        playbackStore = playbackStore,
-        syncConfig = { markEngineConfigDirty() },
+        audioStore = stores.audio, audioEffectsStore = stores.audioEffects, playbackStore = playbackStore,
+        syncConfig = { markEngineConfigDirty() }, syncConfigDebounced = { markEngineConfigDirtyDebounced() },
+        persistEffectsGate = { playerSessionManager.sessionState.value.currentItemId?.takeIf { cinemaIntroContext == null } },
+        persistVideoEffectsForItem = { itemId, fx -> scope.launch { stores.engine.setVideoEffectsForItem(itemId, fx) } },
     )
 
     /**
