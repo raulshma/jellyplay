@@ -51,7 +51,12 @@ jobs:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-        run: ./gradlew :app:generatePhoneReleaseBaselineProfile --stacktrace
+        # -PbuildUniversal=true is REQUIRED here, same as release.yml's
+        # generate step: the default split config is arm64-only (the universal
+        # APK is gated behind this property), and the x86_64 ciPixel8 GMD has
+        # no arm64 ABI to install — without the flag the task dies with
+        # "No matching Apks found for ciPixel8" (both Oct-2026 dispatches).
+        run: ./gradlew :app:generatePhoneReleaseBaselineProfile -PbuildUniversal=true --stacktrace
 
       # Same both-artifacts-must-exist gate the release lane applies — a
       # partial/empty write must fail here, not land as a "refreshed" commit.
