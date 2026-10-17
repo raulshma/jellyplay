@@ -88,3 +88,12 @@ internal class DisplayHdrCapabilitiesProbe(
         }
     }
 }
+
+/**
+ * The [EngineVideoStats.displayHdrTypes] summary shape every Android engine
+ * publishes: the accepted families joined ("HDR10, Dolby Vision"), "SDR" for
+ * a declared-SDR display, and `null` left for the caller when the probe has
+ * no answer (UNKNOWN stays UNKNOWN — never the "SDR" label).
+ */
+internal fun DisplayHdrSupport.displayHdrTypesSummary(): String =
+    supportedTypes.joinToString { it.displayName }.ifEmpty { "SDR" }

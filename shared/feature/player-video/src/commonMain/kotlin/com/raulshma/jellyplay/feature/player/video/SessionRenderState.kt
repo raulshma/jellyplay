@@ -18,9 +18,9 @@ import com.raulshma.jellyplay.core.model.MpvRenderOverrides
  *    overwritten synchronously by sheet edits. `null` = the global settings
  *    stand.
  *  - [pending] — sheet picks of GLOBAL-only fields (render quality, `tscale`,
- *    custom shader files) ahead of the async DataStore round-trip, so the
- *    engine config reflects the pick immediately instead of one aggregate
- *    refresh later.
+ *    custom shader files, mpv HDR passthrough) ahead of the async DataStore
+ *    round-trip, so the engine config reflects the pick immediately instead of
+ *    one aggregate refresh later.
  *  - [deinterlace] — the gear-menu cycle (AUTO→ON→OFF→AUTO). Held
  *    ONLY for the session's lifetime: it survives a next-episode advance
  *    (the session lives on) and reverts on player exit ([onReleased]) —
@@ -37,6 +37,7 @@ internal class SessionRenderState {
         val renderQuality: MpvRenderQuality? = null,
         val interpolationTscale: com.raulshma.jellyplay.core.model.MpvInterpolationTscale? = null,
         val customShaderFiles: List<String>? = null,
+        val hdrPassthrough: Boolean? = null,
     )
 
     @Volatile var override: MpvRenderOverrides? = null
@@ -58,6 +59,7 @@ internal class SessionRenderState {
         pending.renderQuality?.let { effective = effective.copy(renderQuality = it) }
         pending.interpolationTscale?.let { effective = effective.copy(interpolationTscale = it) }
         pending.customShaderFiles?.let { effective = effective.copy(customShaderFiles = it) }
+        pending.hdrPassthrough?.let { effective = effective.copy(hdrPassthrough = it) }
         return effective
     }
 

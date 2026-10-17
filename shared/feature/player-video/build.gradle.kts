@@ -6,7 +6,7 @@ kotlin {
     android {
         namespace = "com.raulshma.jellyplay.shared.feature.player.video"
         // Rehomed :app androidTest suites (AVSyncSheet, AspectRatioSheet,
-        // DecoderPickerSheet, HdrBadge, NextEpisodeOverlay, PlaybackInfoOverlay,
+        // DecoderPickerSheet, NextEpisodeOverlay, PlaybackInfoOverlay,
         // SkipOverlay, SubtitleDelayOverlay, SubtitleManagerSection,
         // SubtitleStyleSheet, TrickplayOverlay) — withHostTest creates the
         // androidUnitTest variant bound to the Kotlin test tree (AGP-9 KMP

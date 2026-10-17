@@ -9,11 +9,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -40,7 +37,6 @@ import com.raulshma.jellyplay.core.model.SegmentBehavior
 import com.raulshma.jellyplay.core.model.TrickplayInfo
 import com.raulshma.jellyplay.core.ui.components.JellyPlayLoadingIndicator
 import com.raulshma.jellyplay.core.ui.model.localizedDisplayName
-import com.raulshma.jellyplay.feature.player.video.components.HdrBadge
 import com.raulshma.jellyplay.feature.player.video.components.IntroSkipOverlay
 import com.raulshma.jellyplay.feature.player.video.components.NextEpisodeOverlay
 import com.raulshma.jellyplay.feature.player.video.components.PinLockOverlay
@@ -54,7 +50,7 @@ import com.raulshma.jellyplay.feature.player.video.generated.resources.player_vi
 
 // ── Section host: overlay tiers over the video surface ───────────────────
 // Owns the center overlays (gesture trickplay, intro/segment skip, skipped
-// notice, up-next, HDR badge, buffering spinner), the full-screen lock
+// notice, up-next, buffering spinner), the full-screen lock
 // overlays (PIN pad / slide-to-unlock), the seek-scrub trickplay thumbnail,
 // the transparent VLC-style subtitle-delay overlay, and the shared trickplay
 // thumbnail collector feeding both trickplay surfaces. Moved verbatim from
@@ -113,7 +109,7 @@ internal data class CenterOverlayInputs(
     val stillWatchingPrompt: StillWatchingPromptState?,
 )
 
-/** Center/anchored overlays: gesture trickplay, intro/segment skip, skipped notice, up-next, HDR badge, buffering spinner. */
+/** Center/anchored overlays: gesture trickplay, intro/segment skip, skipped notice, up-next, buffering spinner. */
 @Composable
 internal fun BoxScope.PlayerCenterOverlayTier(
     viewModel: VideoPlayerViewModel,
@@ -241,14 +237,6 @@ internal fun BoxScope.PlayerCenterOverlayTier(
         onTick = { viewModel.onEvent(VideoPlayerUiEvent.StillWatchingTick) },
         pauseCountdown = inputs.isSheetOpen || inputs.isScreenLocked,
         modifier = Modifier.align(Alignment.Center),
-    )
-
-    HdrBadge(
-        hdrType = uiState.hdrType,
-        modifier = Modifier
-            .align(Alignment.TopEnd)
-            .windowInsetsPadding(WindowInsets.statusBars)
-            .padding(top = 16.dp, end = 16.dp),
     )
 
     // Buffering spinner fades/scales in and out — an abrupt pop mid-playback

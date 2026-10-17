@@ -94,4 +94,23 @@ class DisplayHdrCapabilitiesProbeTest {
         val display = displayManager.getDisplay(Display.DEFAULT_DISPLAY)
         assertNull(DisplayHdrCapabilitiesProbe.readDisplayHdrTypes(display))
     }
+
+    // ── displayHdrTypesSummary (the stats display-Hdr types row) ──
+
+    @Test
+    fun summary_joinsTheAcceptedFamilies() {
+        val probe = DisplayHdrCapabilitiesProbe(context) {
+            intArrayOf(
+                HdrContentInfo.ANDROID_HDR_TYPE_HDR10,
+                HdrContentInfo.ANDROID_HDR_TYPE_DOLBY_VISION,
+            )
+        }
+        assertEquals("HDR10, Dolby Vision", probe.support.value?.displayHdrTypesSummary())
+    }
+
+    @Test
+    fun summary_declaredSdrDisplay_reportsSdrNotUnknown() {
+        val probe = DisplayHdrCapabilitiesProbe(context) { intArrayOf() }
+        assertEquals("SDR", probe.support.value?.displayHdrTypesSummary())
+    }
 }

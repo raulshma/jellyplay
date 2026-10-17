@@ -6,6 +6,8 @@ import com.raulshma.jellyplay.core.model.AudioNormalizationMode
 import com.raulshma.jellyplay.core.model.ChannelMixMode
 import com.raulshma.jellyplay.core.model.DecoderMode
 import com.raulshma.jellyplay.core.model.EffectStrength
+import com.raulshma.jellyplay.core.model.ExoHdrToneMappingMode
+import com.raulshma.jellyplay.core.model.ExoPlayerEngineConfig
 import com.raulshma.jellyplay.core.model.MpvEngineConfig
 import com.raulshma.jellyplay.core.model.RemoteSubtitleInfo
 import com.raulshma.jellyplay.core.model.SubtitleStyle
@@ -418,6 +420,17 @@ internal class SheetsSessionSlice(
 
     /** The global mpv slice the sheet's pickers start from (before the session lens). */
     val globalMpvConfig: MpvEngineConfig get() = renderControls.globalMpvConfig
+
+    // ── HDR output sheet ─────────────────────────────────────────────────
+
+    /** The global ExoPlayer slice the HDR sheet's tone-mapping picker starts from. */
+    val globalExoConfig: ExoPlayerEngineConfig get() = renderControls.globalExoConfig
+
+    /** The HDR sheet's mpv passthrough toggle (global pick, session-lens bridge — see [RenderControls]). */
+    fun setMpvHdrPassthrough(enabled: Boolean) = renderControls.setMpvHdrPassthrough(enabled)
+
+    /** The HDR sheet's ExoPlayer tone-mapping pick (global pick — applies on next playback). */
+    fun setExoHdrToneMapping(mode: ExoHdrToneMappingMode) = renderControls.setExoHdrToneMapping(mode)
 }
 
 /**

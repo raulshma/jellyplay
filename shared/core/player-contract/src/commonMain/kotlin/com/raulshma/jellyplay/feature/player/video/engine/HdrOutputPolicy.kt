@@ -88,9 +88,11 @@ private fun hdrContentOfStream(stream: MediaStream): HdrContentInfo {
 /**
  * The display's HDR output capability — the set of [HdrContentInfo] families
  * the CURRENT display accepts. Empty set = SDR display. Sourced per engine:
- * ExoPlayer reads the Android `Display.HdrCapabilities` types (via the
- * androidMain probe); the mpv engines answer from mpv's own
- * `video-target-params` probe instead, so they never build this value.
+ * both Android hosts (ExoPlayer AND the mpv engine — the same
+ * `DisplayHdrCapabilitiesProbe` helper, built to be owned by every engine
+ * that wants the facts) read the Android `Display.HdrCapabilities` types;
+ * the DESKTOP mpv host answers from mpv's own `video-target-params` probe
+ * instead, so it never builds this value.
  */
 @Immutable
 data class DisplayHdrSupport(val supportedTypes: Set<HdrContentInfo>) {

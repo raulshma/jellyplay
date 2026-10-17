@@ -1,6 +1,8 @@
 package com.raulshma.jellyplay.feature.player.video
 
 import com.raulshma.jellyplay.core.model.DeinterlaceMode
+import com.raulshma.jellyplay.core.model.ExoHdrToneMappingMode
+import com.raulshma.jellyplay.core.model.ExoPlayerEngineConfig
 import com.raulshma.jellyplay.core.model.ItemPlaybackPreference
 import com.raulshma.jellyplay.core.model.MpvEngineConfig
 import com.raulshma.jellyplay.core.model.MpvInterpolationTscale
@@ -40,10 +42,12 @@ class RenderControlsTest {
 
     // Mirror fakes (the VM-side state the lambdas read/write).
     private var globalConfig = MpvEngineConfig()
+    private var globalExoConfig = ExoPlayerEngineConfig()
     private var storedRows: Map<PlaybackPrefScope, ItemPlaybackPreference> = emptyMap()
 
     // Recording sinks.
     private val savedGlobalConfigs = mutableListOf<MpvEngineConfig>()
+    private val savedGlobalExoConfigs = mutableListOf<ExoPlayerEngineConfig>()
     private val savedProfiles = mutableListOf<MpvRenderOverrides>()
     private var clearedProfiles = 0
     private var configDirties = 0
@@ -56,6 +60,8 @@ class RenderControlsTest {
             scope = testScope,
             getGlobalMpvConfig = { globalConfig },
             saveGlobalMpvConfig = { savedGlobalConfigs.add(it) },
+            getGlobalExoConfig = { globalExoConfig },
+            saveGlobalExoConfig = { savedGlobalExoConfigs.add(it) },
             loadStoredRow = { prefScope, _ -> storedRows[prefScope] },
             saveRenderProfile = { savedProfiles.add(it) },
             clearStoredRenderProfile = { clearedProfiles++ },
@@ -185,6 +191,40 @@ class RenderControlsTest {
             savedGlobalConfigs[1],
         )
         assertEquals(2, configDirties)
+    }
+
+    // ── HDR output sheet picks ─────────────────────────────────────────────
+
+    @Test
+    fun mpvHdrPassthroughPick_mirrorsThroughPendingThenPersists() = testScope.runTest {
+        controller.setMpvHdrPassthrough(true)
+
+        // The session lens reflects the flip immediately — this is what arms
+        // the engine's `target-colorspace-hint` on the live config rebuild
+        // before the DataStore round-trip lands.
+        assertEquals(true, controller.state.effectiveMpvConfig(globalConfig).hdrPassthrough)
+        // …and the persisted slice is the pick over the PRE-write mirror.
+        assertEquals(listOf(globalConfig.copy(hdrPassthrough = true)), savedGlobalConfigs)
+        assertEquals(1, configDirties)
+    }
+
+    @Test
+    fun exoHdrToneMappingPick_persistsTheGlobalSlice_withoutASessionLens() = testScope.runTest {
+        globalConfig = MpvEngineConfig(renderQuality = MpvRenderQuality.HIGH)
+
+        controller.setExoHdrToneMapping(ExoHdrToneMappingMode.OFF)
+
+        // One global Exo write, the pick over the pre-mirror global slice.
+        assertEquals(
+            listOf(ExoPlayerEngineConfig(hdrToneMapping = ExoHdrToneMappingMode.OFF)),
+            savedGlobalExoConfigs,
+        )
+        // No mpv-side writes: the exo pick must not stray into the mpv slice.
+        assertTrue(savedGlobalConfigs.isEmpty())
+        assertTrue(savedProfiles.isEmpty())
+        // Still a dirty-config report — a no-op for the exo engine at runtime,
+        // but zero surprises for whatever rebuild follows.
+        assertEquals(1, configDirties)
     }
 
     @Test

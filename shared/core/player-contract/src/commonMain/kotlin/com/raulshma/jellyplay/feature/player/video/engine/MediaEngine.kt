@@ -553,10 +553,11 @@ data class EngineVideoStats(
      * The display's HDR capability summary for the stats overlay: the HDR
      * families the current display accepts ("HDR10, Dolby Vision"), "SDR"
      * for a display with no HDR types. `null` when no probe answered (the
-     * ExoPlayer probe was unavailable) or the engine has no display probe
-     * at all (mpv answers per-target via `video-target-params` instead;
-     * LibVLC exposes nothing). Sits beside [videoHdrType] so content family
-     * and display capability read as one line of diagnosis.
+     * Android display probe was unavailable) or the engine has no display
+     * probe at all (the desktop mpv host answers per-target via
+     * `video-target-params` instead; LibVLC exposes nothing). Sits beside
+     * [videoHdrType] so content family and display capability read as one
+     * line of diagnosis.
      */
     val displayHdrTypes: String? = null,
     /**

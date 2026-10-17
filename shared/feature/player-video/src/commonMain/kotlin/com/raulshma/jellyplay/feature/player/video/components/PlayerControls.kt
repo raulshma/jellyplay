@@ -648,6 +648,7 @@ internal fun PlayerControls(
                         subtitleDelayMs = tracks.subtitleDelayMs,
                         onSubtitleDelayClick = sheets.onSubtitleDelayClick,
                         onPlayMethodClick = { sheets.openSheet(PlayerSheet.PlaybackMode) },
+                        onHdrClick = { sheets.openSheet(PlayerSheet.Hdr) },
                         mpvConfigNoticeActive = tracks.mpvConfigNoticeActive,
                         onMpvConfigNoticeClick = sheets.onMpvConfigNoticeClick,
                         modifier = Modifier.padding(bottom = 4.dp)

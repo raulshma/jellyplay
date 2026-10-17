@@ -16,6 +16,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.StateFlow
 import org.jetbrains.compose.resources.stringResource
+import com.raulshma.jellyplay.core.model.ExoHdrToneMappingMode
+import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.ui.components.PlayerModalBottomSheet
 import com.raulshma.jellyplay.feature.player.video.components.AVSyncSheet
 import com.raulshma.jellyplay.feature.player.video.components.AspectRatioSheet
@@ -23,6 +25,7 @@ import com.raulshma.jellyplay.feature.player.video.components.ChapterPickerSheet
 import com.raulshma.jellyplay.feature.player.video.components.VideoQueueSheet
 import com.raulshma.jellyplay.feature.player.video.components.DecoderPickerSheet
 import com.raulshma.jellyplay.feature.player.video.components.EpisodePickerSheet
+import com.raulshma.jellyplay.feature.player.video.components.HdrOptionsSheet
 import com.raulshma.jellyplay.feature.player.video.components.PlaybackInfoOverlay
 import com.raulshma.jellyplay.feature.player.video.components.PlaybackModeSheet
 import com.raulshma.jellyplay.feature.player.video.components.QualityPickerSheet
@@ -492,6 +495,43 @@ internal fun PlayerSheetRouter(
                 currentEffects = uiState.videoFx.videoEffects,
                 onEffectsChange = { viewModel.onEvent(VideoPlayerUiEvent.SetVideoEffects(it)) },
                 onEffectsSettled = { viewModel.onEvent(VideoPlayerUiEvent.SetVideoEffectsSettled(it)) },
+                onDismiss = inputs.dismissSheet,
+            )
+        }
+        is PlayerSheet.Hdr -> {
+            // HDR output sheet. The engine's live output facts are collected
+            // HERE (sheet-local) so the router root doesn't tick with the
+            // stats cadence. Both engine picks read through the sheets slice;
+            // the toggles keep a sheet-local optimistic mirror (seeded from
+            // the pending lens / the global slice, re-seeded when the async
+            // store round-trip lands) so the switch reflects the tap
+            // immediately without a whole-vm state round trip.
+            val stats by viewModel.videoStats.collectAsStateWithLifecycle()
+            val globalMpv = sheets.globalMpvConfig
+            val globalExo = sheets.globalExoConfig
+            val seededMpvPass = sheets.render.pending.hdrPassthrough ?: globalMpv.hdrPassthrough
+            var mpvPassthrough by remember(seededMpvPass) { mutableStateOf(seededMpvPass) }
+            var exoMode by remember(globalExo.hdrToneMapping) { mutableStateOf(globalExo.hdrToneMapping) }
+            val isMpv = uiState.preferredPlayerType == PlayerType.MPV
+            val isExo = uiState.preferredPlayerType == PlayerType.EXO_PLAYER
+            HdrOptionsSheet(
+                contentHdrType = uiState.hdrType,
+                observedHdrType = stats.videoHdrType,
+                playerType = uiState.preferredPlayerType,
+                hdrOutputActive = stats.hdrOutputActive,
+                hdrOutputNotice = stats.hdrOutputNotice,
+                displayHdrTypes = stats.displayHdrTypes,
+                mpvHdrPassthrough = mpvPassthrough.takeIf { isMpv },
+                onMpvHdrPassthroughChange = { enabled ->
+                    mpvPassthrough = enabled
+                    viewModel.onEvent(VideoPlayerUiEvent.SetMpvHdrPassthrough(enabled))
+                },
+                exoHdrToneMapping = exoMode.takeIf { isExo },
+                onExoHdrToneMappingSelect = { mode ->
+                    exoMode = mode
+                    viewModel.onEvent(VideoPlayerUiEvent.SetExoHdrToneMapping(mode))
+                },
+                onOpenRender = { inputs.onSheetChange(PlayerSheet.Render) },
                 onDismiss = inputs.dismissSheet,
             )
         }

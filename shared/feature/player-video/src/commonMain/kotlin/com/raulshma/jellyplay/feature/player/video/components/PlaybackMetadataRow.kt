@@ -60,8 +60,9 @@ import org.jetbrains.compose.resources.stringResource
  * Each metadata item is rendered as a refined glassmorphic pill chip with a
  * category-tuned translucent backdrop, delicate hairline border, and crisp
  * typography. The play-method chip is clickable (when [onPlayMethodClick] is
- * provided) and opens the playback-mode picker; the subtitle delay chip is
- * clickable and triggers the subtitle delay overlay.
+ * provided) and opens the playback-mode picker; the HDR chip is clickable
+ * (when [onHdrClick] is provided) and opens the HDR options sheet; the
+ * subtitle delay chip is clickable and triggers the subtitle delay overlay.
  *
  * When [mpvConfigNoticeActive] (the engine's custom-mpv-config subtitle
  * ownership snapshot reports user-owned `sub-*` keys), a warning-tinted chip
@@ -84,6 +85,7 @@ internal fun PlaybackMetadataRow(
     subtitleDelayMs: Long = 0L,
     onSubtitleDelayClick: () -> Unit = {},
     onPlayMethodClick: (() -> Unit)? = null,
+    onHdrClick: (() -> Unit)? = null,
     mpvConfigNoticeActive: Boolean = false,
     onMpvConfigNoticeClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
@@ -212,6 +214,7 @@ internal fun PlaybackMetadataRow(
         isConnectionMetered,
         subtitleDelayMs,
         onPlayMethodClick,
+        onHdrClick,
         onSubtitleDelayClick,
         mpvConfigNoticeActive,
         mpvConfigChipLabel,
@@ -250,6 +253,7 @@ internal fun PlaybackMetadataRow(
                         textColor = dolbyVisionGold,
                         containerColor = dolbyVisionGold.copy(alpha = 0.12f),
                         borderColor = hdrGold.copy(alpha = 0.50f),
+                        onClick = onHdrClick,
                     )
                 } else {
                     MetadataItem(
@@ -257,6 +261,7 @@ internal fun PlaybackMetadataRow(
                         textColor = hdrGold,
                         containerColor = hdrGold.copy(alpha = 0.12f),
                         borderColor = hdrGold.copy(alpha = 0.40f),
+                        onClick = onHdrClick,
                     )
                 }
             },

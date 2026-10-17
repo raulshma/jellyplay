@@ -1028,17 +1028,18 @@ internal class PlaybackSession(
      * [SubtitleStyleController] shape): the pure session semantics live in
      * [SessionRenderState] (composed as [RenderControls.state]); the
      * controller composes them with the repository/DataStore writes around
-     * them — the global mpv slice persist, the per-item/series render-profile
+     * them — the global mpv/exo slice persist, the per-item/series render-profile
      * rows and the session item-change re-resolution. The config-dirty
-     * trigger routes through this session's [markEngineConfigDirty] funnel —
-     * cycle 6's ownership pattern (the controllers depend on their owner; the
-     * sync reads their state backwards). Engine-side application stays in the
-     * sync: the controller only reports a dirty config through `onConfigDirty`.
+     * trigger routes through this session's [markEngineConfigDirty] funnel.
+     * Engine-side application stays in the sync: the controller only reports a
+     * dirty config through `onConfigDirty`.
      */
     internal val render = RenderControls(
         scope = scope,
         getGlobalMpvConfig = { cachedAggregate.engine.mpvConfig },
         saveGlobalMpvConfig = { config -> stores.engine.setMpvConfig(config) },
+        getGlobalExoConfig = { cachedAggregate.engine.exoPlayerConfig },
+        saveGlobalExoConfig = { config -> stores.engine.setExoPlayerConfig(config) },
         loadStoredRow = { prefScope, id -> itemPlaybackPreferenceRepository.get(prefScope, id) },
         saveRenderProfile = { overrides -> playbackPreferenceWriter.setRenderProfile(overrides) },
         clearStoredRenderProfile = { playbackPreferenceWriter.clearRenderProfile() },

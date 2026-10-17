@@ -277,9 +277,7 @@
     <string name="player_video_no_episodes_found">未找到此季的剧集</string>
     <string name="player_video_poster">海报</string>
     <string name="player_video_selected">已选中</string>
-    <string name="player_video_volume">音量</string>
-    <string name="player_video_hdr_label">HDR：%1$s</string>
-    <string name="player_video_duration">时长</string>
+    <string name="player_video_volume">音量</string>    <string name="player_video_duration">时长</string>
     <string name="player_video_remember_audio_language">为此剧集记住音频语言</string>
     <string name="player_video_remember_audio_description">此系列优先使用音频描述</string>
     <string name="player_video_remember_subtitle_language">为此剧集记住字幕语言</string>

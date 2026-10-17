@@ -277,9 +277,7 @@
     <string name="player_video_no_episodes_found">このシーズンのエピソードが見つかりません</string>
     <string name="player_video_poster">ポスター</string>
     <string name="player_video_selected">選択済み</string>
-    <string name="player_video_volume">音量</string>
-    <string name="player_video_hdr_label">HDR: %1$s</string>
-    <string name="player_video_duration">時間</string>
+    <string name="player_video_volume">音量</string>    <string name="player_video_duration">時間</string>
     <string name="player_video_remember_audio_language">このシリーズの音声言語を記憶</string>
     <string name="player_video_remember_audio_description">このシリーズは音声解説を優先</string>
     <string name="player_video_remember_subtitle_language">このシリーズの字幕言語を記憶</string>

@@ -1701,7 +1701,7 @@ class ExoPlayerEngine(
             ?.takeIf { it.first === displayHdrProbeValue }
             ?.second
             ?: displayHdrProbeValue
-                ?.let { d -> d.supportedTypes.joinToString { it.displayName }.ifEmpty { "SDR" } }
+                ?.let { it.displayHdrTypesSummary() }
                 ?.also { displayHdrTypesCache = displayHdrProbeValue to it }
         if (last != null && last.bufferedPositionMs == bufferedPos &&
             last.estimatedBandwidthBps == bandwidthEstimate &&

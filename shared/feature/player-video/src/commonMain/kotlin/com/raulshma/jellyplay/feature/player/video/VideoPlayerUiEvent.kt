@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.player.video
 
 import com.raulshma.jellyplay.core.model.EffectStrength
+import com.raulshma.jellyplay.core.model.ExoHdrToneMappingMode
 import com.raulshma.jellyplay.core.model.MediaSegment
 import com.raulshma.jellyplay.core.model.MpvRenderQuality
 import com.raulshma.jellyplay.core.model.MpvShaderPack
@@ -275,6 +276,19 @@ sealed interface VideoPlayerUiEvent {
 
     /** The Rendering sheet's render-quality pick (a global mpv preference). */
     data class SetRenderQuality(val quality: MpvRenderQuality) : VideoPlayerUiEvent
+
+    /**
+     * The HDR sheet's mpv passthrough toggle (a global mpv preference —
+     * global-only-pick choreography: the session lens bridges the pick to the
+     * live config rebuild, then the DataStore persist lands).
+     */
+    data class SetMpvHdrPassthrough(val enabled: Boolean) : VideoPlayerUiEvent
+
+    /**
+     * The HDR sheet's ExoPlayer tone-mapping pick (a global exo preference —
+     * the output posture is applied on the next playback).
+     */
+    data class SetExoHdrToneMapping(val mode: ExoHdrToneMappingMode) : VideoPlayerUiEvent
 
     /** "Inherit (follow global)": clears the persisted render override + the session lens. */
     data object ClearRenderOverride : VideoPlayerUiEvent

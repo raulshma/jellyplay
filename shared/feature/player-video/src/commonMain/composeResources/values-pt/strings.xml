@@ -277,9 +277,7 @@
     <string name="player_video_no_episodes_found">Nenhum episódio encontrado para esta temporada</string>
     <string name="player_video_poster">Cartaz</string>
     <string name="player_video_selected">Selecionado</string>
-    <string name="player_video_volume">Volume</string>
-    <string name="player_video_hdr_label">HDR: %1$s</string>
-    <string name="player_video_duration">Duração</string>
+    <string name="player_video_volume">Volume</string>    <string name="player_video_duration">Duração</string>
     <string name="player_video_remember_audio_language">Memorizar idioma de áudio para esta série</string>
     <string name="player_video_remember_audio_description">Preferir audiodescrição para esta série</string>
     <string name="player_video_remember_subtitle_language">Memorizar idioma de legendas para esta série</string>

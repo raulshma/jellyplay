@@ -37,6 +37,14 @@ sealed class PlayerSheet {
     data object VideoFilter : PlayerSheet() { override val key = "VideoFilter" }
 
     /**
+     * HDR output options (opened from the HDR chip in the playback-metadata
+     * row): the live output facts (content family / active output / display
+     * capability) plus the engine's HDR-specific config — mpv passthrough
+     * (toggle) or ExoPlayer tone mapping (picker).
+     */
+    data object Hdr : PlayerSheet() { override val key = "Hdr" }
+
+    /**
      * shader pack / tone mapping / quality profile (mpv engines). The
      * pickers write the session render state (immediate) and optionally the
      * per-series override row ("Save for this series").
@@ -82,6 +90,7 @@ private val ALL_SHEETS: List<PlayerSheet> = listOf(
     PlayerSheet.PlaybackMode,
     PlayerSheet.SleepTimer,
     PlayerSheet.VideoFilter,
+    PlayerSheet.Hdr,
     PlayerSheet.Render,
     PlayerSheet.Version,
 )

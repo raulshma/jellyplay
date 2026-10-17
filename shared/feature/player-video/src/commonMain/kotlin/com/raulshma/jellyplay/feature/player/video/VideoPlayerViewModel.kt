@@ -610,8 +610,10 @@ class VideoPlayerViewModel(
             is VideoPlayerUiEvent.SetVideoEffectsSettled -> setVideoEffectsSettled(event.effects)
             is VideoPlayerUiEvent.SetRenderShaderPack -> setRenderShaderPack(event.pack, event.persist)
             is VideoPlayerUiEvent.SetRenderToneMapping -> setRenderToneMapping(event.mapping, event.persist)
-            is VideoPlayerUiEvent.SetRenderQuality -> setRenderQuality(event.quality)
-            is VideoPlayerUiEvent.ClearRenderOverride -> clearRenderOverride()
+            is VideoPlayerUiEvent.SetRenderQuality -> playbackSession.render.setRenderQuality(event.quality)
+            is VideoPlayerUiEvent.SetMpvHdrPassthrough -> playbackSession.render.setMpvHdrPassthrough(event.enabled)
+            is VideoPlayerUiEvent.SetExoHdrToneMapping -> playbackSession.render.setExoHdrToneMapping(event.mode)
+            is VideoPlayerUiEvent.ClearRenderOverride -> playbackSession.render.clearRenderOverride()
             is VideoPlayerUiEvent.CycleDeinterlace -> cycleDeinterlace()
             is VideoPlayerUiEvent.CancelAutoplay -> playbackSession.upNext.cancelAutoplay()
             is VideoPlayerUiEvent.StillWatchingContinue -> playbackSession.stillWatching.onContinue()
@@ -1342,22 +1344,6 @@ class VideoPlayerViewModel(
     /** The sheet's tone-mapping pick — same session/persist choreography as [setRenderShaderPack]. */
     private fun setRenderToneMapping(mapping: com.raulshma.jellyplay.core.model.MpvToneMapping, persist: Boolean) =
         playbackSession.render.setRenderToneMapping(mapping, persist)
-
-    /**
-     * "Inherit (follow global)": clears the persisted override (both scopes)
-     * and drops the session lens — the effective config is derived from the
-     * global settings again.
-     */
-    private fun clearRenderOverride() = playbackSession.render.clearRenderOverride()
-
-    /**
-     * The sheet's render-quality pick: a GLOBAL preference (part of the mpv
-     * config slice, not the per-item override). Written through the store —
-     * the session lens mirrors it so the engine reflects the pick before the
-     * DataStore round-trip lands.
-     */
-    private fun setRenderQuality(quality: com.raulshma.jellyplay.core.model.MpvRenderQuality) =
-        playbackSession.render.setRenderQuality(quality)
 
     /**
      * cycle the session-scoped deinterlace override AUTO→ON→OFF→AUTO.

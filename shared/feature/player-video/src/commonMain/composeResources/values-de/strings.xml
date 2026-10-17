@@ -277,9 +277,7 @@
     <string name="player_video_no_episodes_found">Keine Episoden für diese Staffel gefunden</string>
     <string name="player_video_poster">Poster</string>
     <string name="player_video_selected">Ausgewählt</string>
-    <string name="player_video_volume">Lautstärke</string>
-    <string name="player_video_hdr_label">HDR: %1$s</string>
-    <string name="player_video_duration">Dauer</string>
+    <string name="player_video_volume">Lautstärke</string>    <string name="player_video_duration">Dauer</string>
     <string name="player_video_remember_audio_language">Audiosprache für diese Serie merken</string>
     <string name="player_video_remember_audio_description">Audiobeschreibung für diese Serie bevorzugen</string>
     <string name="player_video_remember_subtitle_language">Untertitelsprache für diese Serie merken</string>

@@ -56,6 +56,9 @@ import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvSubtitleStylePh
 import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvUserSubtitleKeys
 import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvVideoEffectChain
 import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvPropertySurface
+import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvStallRecoveryAction
+import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvStallWatchdog
+import com.raulshma.jellyplay.feature.player.video.engine.mpv.isAimagereaderFailureLog
 
 class MpvPlayerEngine(
     private val context: Context,
@@ -113,6 +116,19 @@ class MpvPlayerEngine(
 
     private var mpvView: PlayerMPVView? = null
     private var pendingRequest: PlaybackRequest? = null
+
+    // ── Stall watchdog (MpvStallWatchdog for the WHY) ───────────────────────
+    // The wedged-session rescues: the per-load decision state, the mpv log
+    // evidence that the zero-copy hwdec path is implicated (set from the log
+    // observer thread), and the session-sticky hwdec override the watchdog's
+    // switch writes — sticky so every later load of this engine instance
+    // starts directly on the copy path instead of re-wedging for another
+    // confirm window. Cleared when the user's own config moves the hwdec
+    // value elsewhere (their explicit choice governs until mpv re-implicates
+    // it).
+    private val stallWatchdog = MpvStallWatchdog()
+    @Volatile private var aimagereaderFailureObserved = false
+    private var stallHwdecOverride: String? = null
 
     // Android audio session id generated via AudioManager and pushed into
     // mpv's audiotrack/aaudio outputs so Android AudioEffects (dialogue
@@ -474,7 +490,15 @@ class MpvPlayerEngine(
 
             val mpvCfg = (currentConfig.engineSpecific as? MpvEngineConfig) ?: MpvEngineConfig()
 
-            val hwdecValue = mpvCfg.hwdecOverride?.key ?: decoderModeToHwdec(currentConfig.decoderMode)
+            // The watchdog's stall override wins: once the zero-copy path has
+            // wedged on this engine instance, every fresh handle starts on the
+            // copy path (the sticky value survives release-as-reset re-inits
+            // precisely so the next item doesn't re-wedge for another confirm
+            // window). User config below is the default when no override is
+            // armed.
+            val hwdecValue = stallHwdecOverride
+                ?: mpvCfg.hwdecOverride?.key
+                ?: decoderModeToHwdec(currentConfig.decoderMode)
             mpv.setOptionString(MpvProperties.HWDEC, hwdecValue)
             mpv.setOptionString(MpvProperties.HWDEC_CODECS, "all")
 
@@ -727,6 +751,11 @@ class MpvPlayerEngine(
         // demuxer resolves. The playhead seeds from the request's start.
         core.resetPlaybackCaches(positionMs = request.startPositionMs)
         pendingRequest = request
+        // Fresh per-file watchdog state (the sticky hwdec override survives —
+        // once this instance has proven the zero-copy path wedges, later
+        // items start directly on the copy path).
+        stallWatchdog.reset()
+        aimagereaderFailureObserved = false
         Log.d(
             TAG,
             "MPV load requested: uri=${redactSensitive(request.uri)}, start=${request.startPositionMs}ms, " +
@@ -865,6 +894,17 @@ class MpvPlayerEngine(
         core.refreshUserOwnedSubtitleKeys(confText, mpvCfg.mpvExtraConfig)
     }
 
+    // ── Platform display-HDR probe (the Exo engine's identical helper) ──
+    // The mpv OUTPUT verdict stays per-target (video-target-params, above /
+    // in the stats fold), but the DISPLAY capability fact — "this display
+    // accepts HDR10, HLG" — is the same Android display-managed fact Exo
+    // reads, so the stats share it for the HDR sheet's elaborate diagnosis
+    // rows (EngineVideoStats.displayHdrTypes). Owned for the engine's
+    // lifetime (the probe's own KDoc covers the listener discipline); reads
+    // are main-thread, matching the stats tick.
+
+    private val displayHdrProbe = DisplayHdrCapabilitiesProbe(context)
+
     // ── HDR passthrough state (the desktop MpvDesktopEngine twin) ──
     // Written from the main thread (configureMpvForRequest / stats tick /
     // updateConfig) and read from the mpv event thread (the FILE_LOADED
@@ -957,6 +997,17 @@ class MpvPlayerEngine(
     )
 
     override fun onConfigChanged(oldConfig: EngineConfig, newConfig: EngineConfig) {
+        // A user-authored hwdec move retires the watchdog's stall override —
+        // their explicit choice governs (and if that choice wedges again, the
+        // log detector re-implicates it and the watchdog re-arms). When the
+        // configured value EQUALS the sticky one (the watchdog already moved
+        // here, or the user picked copy themselves) the sticky survives —
+        // identical value, nothing to decide.
+        val configuredHwdec = (newConfig.engineSpecific as? MpvEngineConfig)?.hwdecOverride?.key
+            ?: decoderModeToHwdec(newConfig.decoderMode)
+        if (stallHwdecOverride != null && stallHwdecOverride != configuredHwdec) {
+            stallHwdecOverride = null
+        }
         configApplier.applyDelta(oldConfig, newConfig)
         // Engine-side HDR arm: a passthrough/vo/hdrSource flip re-evaluates the
         // colorspace hint (the shared applier has no native arm for it — the
@@ -1257,6 +1308,16 @@ class MpvPlayerEngine(
         } else {
             _bufferedPositionMs.value = core.cachedBufferedPositionMs
         }
+        // The stall watchdog runs OUTSIDE the stats gate — it must fire with
+        // the stats sheet closed (the wedged session's only observable is the
+        // frozen position on these very ticks).
+        stallWatchdog.onTick(
+            nowMs = android.os.SystemClock.elapsedRealtime(),
+            playbackState = _playbackState.value,
+            isPlaying = _isPlaying.value,
+            positionMs = posMs,
+            aimagereaderFailureObserved = aimagereaderFailureObserved,
+        )?.let(::executeStallRecovery)
         if (_videoStatsEnabled.value) {
             // Stats require ~12 property reads. Run them on the MAIN thread (the
             // ticker's onActive already runs on engineScope = Dispatchers.Main) to
@@ -1330,10 +1391,48 @@ class MpvPlayerEngine(
                 ).copy(
                     hdrOutputActive = hdrDecision.hdrOutputExpected,
                     hdrOutputNotice = hdrDecision.notice,
+                    // The display capability fact — the same platform probe
+                    // Exo reads. Null while the probe has no answer
+                    // (UNKNOWN, not SDR), letting the sheet/stats fall back
+                    // to the output spot-check.
+                    displayHdrTypes = displayHdrProbe.support.value?.displayHdrTypesSummary(),
                 ),
             )
         } catch (e: Exception) {
             Log.w(TAG, "Failed to read MPV video stats", e)
+        }
+    }
+
+    /**
+     * The stall watchdog's hand: [MpvStallRecoveryAction.SwitchHwdecThenKick]
+     * writes the copy-path hwdec (runtime write → mpv reselects the video
+     * decoder) and remembers it session-sticky; both actions then kick the
+     * wedged play loop with the absolute seek restart — the rescue that
+     * verified live on the repro device (a frozen-at-0:00 session resumed
+     * video + audio the moment the seek's playback restart re-opened the
+     * audio chain).
+     */
+    private fun executeStallRecovery(action: MpvStallRecoveryAction) {
+        val mpv = mpvView?.mpv ?: return
+        try {
+            if (action is MpvStallRecoveryAction.SwitchHwdecThenKick) {
+                stallHwdecOverride = action.hwdecValue
+                mpv.setPropertyString(MpvProperties.HWDEC, action.hwdecValue)
+                Log.w(
+                    TAG,
+                    "Stall watchdog: zero-copy hwdec implicated — switching hwdec to " +
+                        "${action.hwdecValue} and kicking the play loop"
+                )
+            } else {
+                Log.w(
+                    TAG,
+                    "Stall watchdog: play loop wedged at ${core.cachedPositionMs}ms " +
+                        "(position frozen while playing) — kicking with a seek restart"
+                )
+            }
+            core.seekTo(action.kickToMs)
+        } catch (e: Exception) {
+            Log.e(TAG, "Stall watchdog recovery failed", e)
         }
     }
 
@@ -1635,6 +1734,14 @@ class MpvPlayerEngine(
     }
 
     private fun logMpvMessage(prefix: String, level: Int, text: String) {
+        // The stall watchdog's log evidence — checked BEFORE any level filter
+        // so the detection never depends on the build's msg-level (the WARN
+        // "Waiting for frame timed out!" and ERROR "acquireLatestImage
+        // failed" lines pass this filter anyway, but the guarantee belongs to
+        // the detector, not the logger).
+        if (isAimagereaderFailureLog(prefix, text)) {
+            aimagereaderFailureObserved = true
+        }
         if (!debugBuild && level > MPV.mpvLogLevel.MPV_LOG_LEVEL_WARN) return
         val cleanText = redactSensitive(text.trim()).takeIf { it.isNotBlank() } ?: return
         if (level > MPV.mpvLogLevel.MPV_LOG_LEVEL_WARN && !MPV_SUBTITLE_LOG_PATTERN.containsMatchIn("$prefix $cleanText")) {
