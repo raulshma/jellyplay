@@ -87,7 +87,9 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -361,6 +363,13 @@ class HomeViewModelEventsTest {
             }
         }
 
+    /** [HomeViewModel.refreshSpinners] is WhileSubscribed — leaf-collect like the content rows do. */
+    private fun kotlinx.coroutines.test.TestScope.collectRefreshSpinners() {
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.refreshSpinners.collect { }
+        }
+    }
+
     // ── RollDiscoverRow (dice affordance, end-to-end through uiState) ────────
 
     @Test
@@ -393,6 +402,7 @@ class HomeViewModelEventsTest {
             listOf("m1", "m2"),
             viewModel.uiState.value.sections.first { it.type == HomeSectionType.DISCOVER }.items.map { it.id },
         )
+        collectRefreshSpinners()
 
         val rolled = listOf(item("r9"), item("r4"))
         coEvery { homeFeed.rerollDiscoverRow(row) } returns Result.success(rolled)
@@ -435,6 +445,7 @@ class HomeViewModelEventsTest {
         viewModel = buildViewModel()
         signIn("u1")
         runCurrent()
+        collectRefreshSpinners()
 
         coEvery { homeFeed.rerollDiscoverRow(row) } returns
             Result.failure(RuntimeException("server hiccup"))

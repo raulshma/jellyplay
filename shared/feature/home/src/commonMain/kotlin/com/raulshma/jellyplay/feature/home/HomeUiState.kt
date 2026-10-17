@@ -55,8 +55,9 @@ data class HomeUiState(
      * The rendered rows — a persistent list so the @Immutable bag's largest
      * field stays Compose-stable (a plain List parameter is unstable and
      * would un-skip every consumer). The refresher fold (the sole writer)
-     * converts with `toImmutableList()` — a no-op wrap once the value is
-     * already immutable.
+     * converts with `toImmutableList()` under an identity guard: the
+     * refresher's own sections are a plain List rebuilt only on a real
+     * sections change, so only genuinely new lists are re-wrapped.
      */
     val sections: ImmutableList<HomeSection> = persistentListOf(),
     /**

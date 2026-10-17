@@ -28,6 +28,8 @@ import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.PlaybackReportingStatus
 import com.raulshma.jellyplay.core.network.api.MediaInfoApiClient
 import com.raulshma.jellyplay.core.ui.components.focusIndicator
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
 import com.raulshma.jellyplay.feature.home.generated.resources.Res
 import com.raulshma.jellyplay.feature.home.generated.resources.home_stats_card_counts
@@ -115,21 +117,34 @@ internal class HomeStatsCardLoader(
     /**
      * Loads the card for [userId]; null when a core count fails (the card
      * hides). [isAdmin] only widens the fetch — never the base triplet.
+     *
+     * The three base reads are independent — fan them out so the card
+     * waits on the slowest leg, not their serial sum. Everything stays
+     * Result-folded, so a failed leg no longer aborts its siblings mid-flight
+     * either: the early return below cancels the remaining legs through the
+     * [coroutineScope] unwind, exactly as the sequential version's stack
+     * unwind would have.
      */
-    suspend fun load(userId: String, isAdmin: Boolean): HomeStatsCardData? {
-        val played = mediaInfoApiClient.getUserPlayedItemCount(userId).getOrNull() ?: return null
-        val unplayed = mediaInfoApiClient.getUserUnplayedItemCount(userId).getOrNull() ?: return null
-        val runtimeTicks = mediaInfoApiClient.getItemsWithUserData(
-            userId = userId,
-            includeItemTypes = WATCHED_RUNTIME_ITEM_TYPES,
-            isPlayed = true,
-            // The WatchHistoryRepository usage shape: newest-played first, so
-            // the cap keeps the RECENT window when the library exceeds it.
-            sortBy = "DatePlayed",
-            sortOrder = "Descending",
-            startIndex = 0,
-            limit = RUNTIME_SAMPLE_CAP,
-        ).map { (_, items) -> items.map { it.runTimeTicks } }.getOrDefault(emptyList())
+    suspend fun load(userId: String, isAdmin: Boolean): HomeStatsCardData? = coroutineScope {
+        val playedDeferred = async { mediaInfoApiClient.getUserPlayedItemCount(userId) }
+        val unplayedDeferred = async { mediaInfoApiClient.getUserUnplayedItemCount(userId) }
+        val runtimeDeferred = async {
+            mediaInfoApiClient.getItemsWithUserData(
+                userId = userId,
+                includeItemTypes = WATCHED_RUNTIME_ITEM_TYPES,
+                isPlayed = true,
+                // The WatchHistoryRepository usage shape: newest-played first, so
+                // the cap keeps the RECENT window when the library exceeds it.
+                sortBy = "DatePlayed",
+                sortOrder = "Descending",
+                startIndex = 0,
+                limit = RUNTIME_SAMPLE_CAP,
+            ).map { (_, items) -> items.map { it.runTimeTicks } }.getOrDefault(emptyList())
+        }
+
+        val played = playedDeferred.await().getOrNull() ?: return@coroutineScope null
+        val unplayed = unplayedDeferred.await().getOrNull() ?: return@coroutineScope null
+        val runtimeTicks = runtimeDeferred.await()
 
         var exactWatchHours: Double? = null
         var currentStreakDays: Int? = null
@@ -155,7 +170,7 @@ internal class HomeStatsCardLoader(
             }
         }
 
-        return HomeStatsCardData(
+        return@coroutineScope HomeStatsCardData(
             playedCount = played,
             unplayedCount = unplayed,
             approximateWatchMinutes = HomeStatsMath.approximateWatchMinutes(runtimeTicks),

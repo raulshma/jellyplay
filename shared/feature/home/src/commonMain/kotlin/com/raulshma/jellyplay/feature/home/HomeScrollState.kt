@@ -71,11 +71,14 @@ internal fun rememberHomeScrollState(
     val state = remember(listState) { HomeScrollState(listState, savePosition) }
 
     // Persist the scroll position as the user scrolls (debounced) so it
-    // survives process death.
+    // survives process death. distinctUntilChanged runs BEFORE the debounce:
+    // unchanged frames (the common no-op emission) no longer keep
+    // resetting the debounce timer — the save lands 500 ms after the position
+    // actually settles instead of after the stream goes quiet.
     LaunchedEffect(listState) {
         snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }
-            .debounce(500)
             .distinctUntilChanged()
+            .debounce(500)
             .collect { (index, offset) ->
                 savePosition(index, offset)
             }

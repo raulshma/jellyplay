@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.flow.StateFlow
 import com.composables.icons.tabler.Tabler
 import kotlinx.coroutines.launch
 import com.composables.icons.tabler.outline.Trash
@@ -128,11 +129,14 @@ fun MediaDetailScreen(
     }
 
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    // Download-lifecycle slice: collected ONCE here because the always-composed
-    // content tree needs the button spinner + picker + downloaded-ids fields
-    // (they flow into DetailContentState below); the sheets read the same
-    // value with no per-sheet subscription.
-    val downloads by viewModel.downloads.state.collectAsStateWithLifecycle()
+    // Download-lifecycle slice, slim projection: the always-composed
+    // root needs only the button spinner + picker + downloaded-ids +
+    // cellular-warning fields (they flow into DetailContentState below), so
+    // collecting the slim rootState keeps a ~2 s transfer tick — which only
+    // moves episodeDownloadProgress — from recomposing this root scope and
+    // re-running the ~60-field bag construction. The per-tick map and the
+    // sheets read the full state in their own narrow scopes below.
+    val downloads by viewModel.downloads.rootState.collectAsStateWithLifecycle()
     // Resync slice: same story — the always-composed freshness banner reads it
     // through the bag; the resync sheet reads the same value.
     val resyncState by viewModel.resync.state.collectAsStateWithLifecycle()
@@ -891,27 +895,29 @@ fun MediaDetailScreen(
                     provider
                 }
 
-                CompositionLocalProvider(
-                    LocalMediaQuickActionController provides quickActionIntake.controller,
-                    // D16: live in-flight download fraction per episode id for
-                    // the seasons section's rows — read through the local (not
-                    // the state bag) so a ~2 s progress tick recomposes only
-                    // the downloading rows.
-                    LocalEpisodeDownloadProgress provides downloads.episodeDownloadProgress,
-                    // The current item's live download row rides the flow
-                    // local (not DetailContentState — see the local's KDoc):
-                    // providing the flow object is stable, and only the leaf
-                    // that reads the value (the ⋮ options-menu builder)
-                    // collects it, so a ~2 s transfer tick never re-executes
-                    // the DetailContentState construction above.
-                    LocalActiveDownloadFlow provides
-                        remember(itemId) { viewModel.downloads.downloadFlow(itemId) },
-                ) {
-                    DetailContent(
-                        state = state,
-                        callbacks = callbacks,
-                        availableStorageProvider = availableStorageProvider,
-                    )
+                // The per-tick episodeDownloadProgress map is collected in
+                // the narrow provider scope below — the only root-scope reader
+                // of the full download state — so a ~2 s transfer tick
+                // recomposes the provider plus the local's read-tracked rows,
+                // never this scope's DetailContentState construction.
+                EpisodeDownloadProgressProvider(viewModel.downloads.state) {
+                    CompositionLocalProvider(
+                        LocalMediaQuickActionController provides quickActionIntake.controller,
+                        // The current item's live download row rides the flow
+                        // local (not DetailContentState — see the local's KDoc):
+                        // providing the flow object is stable, and only the leaf
+                        // that reads the value (the ⋮ options-menu builder)
+                        // collects it, so a ~2 s transfer tick never re-executes
+                        // the DetailContentState construction above.
+                        LocalActiveDownloadFlow provides
+                            remember(itemId) { viewModel.downloads.downloadFlow(itemId) },
+                    ) {
+                        DetailContent(
+                            state = state,
+                            callbacks = callbacks,
+                            availableStorageProvider = availableStorageProvider,
+                        )
+                    }
                 }
 
                 // Seerr request dialog — the dialog holder owns the open
@@ -995,19 +1001,23 @@ fun MediaDetailScreen(
         val detailItem = detail?.item
         if (dialogSession.showSeriesDownloadSheet && detailItem?.mediaType == MediaType.SERIES) {
             val downloadSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+            // Sheet-scoped full-state collect — these fields ride the
+            // sheet cache, not the slim root projection; this subscription
+            // lives only while the sheet is composed.
+            val sheetDownloads by viewModel.downloads.state.collectAsStateWithLifecycle()
             TvSafeSheet(
                 onDismissRequest = { dialogSession.dismissSeriesDownloadSheet() },
                 sheetState = downloadSheetState,
             ) {
                 SeriesDownloadSheet(
                     seasons = uiState.seasons,
-                    episodes = downloads.downloadSheetEpisodes,
-                    loadingSeasons = downloads.downloadSheetLoadingSeasons,
-                    downloadedEpisodeIds = downloads.downloadedEpisodeIds,
+                    episodes = sheetDownloads.downloadSheetEpisodes,
+                    loadingSeasons = sheetDownloads.downloadSheetLoadingSeasons,
+                    downloadedEpisodeIds = sheetDownloads.downloadedEpisodeIds,
                     onLoadEpisodes = { seasonId ->
                         viewModel.downloads.loadDownloadSheetEpisodes(seasonId)
                     },
-                    isDownloading = downloads.isDownloadingSeries,
+                    isDownloading = sheetDownloads.isDownloadingSeries,
                     onDownload = { selectedEpisodes ->
                         val nonEmpty = selectedEpisodes.filter { it.value.isNotEmpty() }
                         dialogSession.seriesDownloadConfirmed {
@@ -1285,6 +1295,9 @@ fun MediaDetailScreen(
         // item so a mid-open clearance simply dismisses it. ──
         val detailsItem = detail?.item
         if (dialogSession.showDownloadDetailsSheet && detailsItem != null) {
+            // Sheet-scoped full-state collect (inventory fields aren't on
+            // the slim root projection); lives only while the sheet is composed.
+            val sheetDownloads by viewModel.downloads.state.collectAsStateWithLifecycle()
             val sheetBackdropUrl = uiState.assets.backdropPath
                 ?: viewModel.getBackdropUrl(detailsItem.seriesId ?: detailsItem.id)
 
@@ -1295,8 +1308,8 @@ fun MediaDetailScreen(
                 download = uiState.detailContext?.download,
                 item = detailsItem,
                 mediaSources = detail.mediaSources,
-                inventory = downloads.downloadFileInventory,
-                isLoadingInventory = downloads.isLoadingDownloadFiles,
+                inventory = sheetDownloads.downloadFileInventory,
+                isLoadingInventory = sheetDownloads.isLoadingDownloadFiles,
                 backdropUrl = sheetBackdropUrl,
                 posterUrl = sheetPosterUrl,
                 onDismiss = { dialogSession.dismissDownloadDetailsSheet() },
@@ -1344,4 +1357,25 @@ private data class MarkPlayedConfirmRequest(
         data object Item : Scope
         data class Season(val seasonId: String) : Scope
     }
+}
+
+/**
+ * The one place the always-composed content tree reads the FULL download
+ * state — the per-tick [DownloadLifecycleState.episodeDownloadProgress] map
+ * for the seasons section's bars. Collecting here (not at the screen root)
+ * keeps a ~2 s transfer tick's invalidation inside this provider scope plus
+ * [LocalEpisodeDownloadProgress]'s read-tracked rows (`compositionLocalOf` —
+ * see the local's KDoc); the root scope's slim [DownloadRootState] collect
+ * and the ~60-field DetailContentState construction never see a tick.
+ */
+@Composable
+private fun EpisodeDownloadProgressProvider(
+    state: StateFlow<DownloadLifecycleState>,
+    content: @Composable () -> Unit,
+) {
+    val downloads by state.collectAsStateWithLifecycle()
+    CompositionLocalProvider(
+        LocalEpisodeDownloadProgress provides downloads.episodeDownloadProgress,
+        content = content,
+    )
 }

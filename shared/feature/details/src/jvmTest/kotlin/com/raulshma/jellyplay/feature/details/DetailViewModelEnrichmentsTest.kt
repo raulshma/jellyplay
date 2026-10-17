@@ -7,6 +7,9 @@ import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.DetailLoadState
 import com.raulshma.jellyplay.core.data.repository.MediaDetailProvider
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
+import com.raulshma.jellyplay.core.network.api.JellyPlayEpisodeRatings
+import com.raulshma.jellyplay.core.network.api.JellyPlayRatingsResult
+import com.raulshma.jellyplay.core.network.api.JellyPlayRatingsRoutes
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.MetadataEditorRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
@@ -191,6 +194,7 @@ class DetailViewModelEnrichmentsTest {
         tmdbApiClient: com.raulshma.jellyplay.core.network.api.TmdbApiClient? = null,
         pluginStatusStore: com.raulshma.jellyplay.core.data.session.JellyPlayPluginStatusStore? = null,
         jellyPlayFeatureGate: com.raulshma.jellyplay.core.data.session.JellyPlayFeatureGate? = null,
+        pluginRatingsApi: com.raulshma.jellyplay.core.network.api.JellyPlayRatingsRoutes? = null,
     ): DetailViewModel = DetailViewModel(
         storageProbe = mockk<DetailStorageProbe>(relaxed = true),
         strings = strings,
@@ -259,6 +263,7 @@ class DetailViewModelEnrichmentsTest {
         smartPlayDispatcher = mainDispatcher,
         tmdbApiClient = tmdbApiClient,
         pluginStatusStore = pluginStatusStore,
+        pluginRatingsApi = pluginRatingsApi,
         jellyPlayFeatureGate = jellyPlayFeatureGate,
     )
 
@@ -277,6 +282,7 @@ class DetailViewModelEnrichmentsTest {
         detail: MediaDetail,
         remoteDiscoveryAllowed: Boolean,
         contentGeneration: Long = 0L,
+        seasons: List<MediaItem> = emptyList(),
     ): DetailLoadState.Loaded = DetailLoadState.Loaded(
         MediaDetailSnapshot(
             detail = detail,
@@ -305,7 +311,7 @@ class DetailViewModelEnrichmentsTest {
                 chapters = false,
             ),
             assets = DetailAssets(),
-            seasons = emptyList(),
+            seasons = seasons,
             episodesBySeason = emptyMap(),
             fetchedSeasonIds = emptySet(),
             sortedEpisodes = emptyList(),
@@ -908,6 +914,235 @@ class DetailViewModelEnrichmentsTest {
 
         coVerify(exactly = 0) { libraryApiClient.getBoxSetsContaining(any()) }
         assertTrue(viewModel.uiState.value.franchiseCollections.isEmpty())
+    }
+
+    // ── pluginSeasonRatings: the bounded-parallel per-season TMDB fetch ──
+
+    /**
+     * The ratings role's minimal counting fake: per-season canned results
+     * (missing seasons degrade to the plugin-404 null payload) plus a
+     * per-season-number call log the merge assertions read — a re-run that
+     * re-fetches a settled season shows up here immediately.
+     */
+    private class CountingSeasonRatingsApi(
+        private val resultsBySeasonNumber: Map<Int, Result<Map<Int, JellyPlayEpisodeRatings>?>> = emptyMap(),
+    ) : JellyPlayRatingsRoutes {
+        val callsBySeasonNumber = mutableMapOf<Int, Int>()
+
+        override suspend fun getMdbListRatings(imdbId: String): Result<JellyPlayRatingsResult?> =
+            Result.success(null)
+
+        override suspend fun getTmdbSeasonRatings(
+            tmdbId: String,
+            seasonNumber: Int,
+        ): Result<Map<Int, JellyPlayEpisodeRatings>?> {
+            callsBySeasonNumber[seasonNumber] = (callsBySeasonNumber[seasonNumber] ?: 0) + 1
+            return resultsBySeasonNumber[seasonNumber] ?: Result.success(null)
+        }
+    }
+
+    private fun tmdbRatedSeries(itemId: String) =
+        MediaDetail(
+            item = MediaItem(id = itemId, name = "Series", mediaType = MediaType.SERIES),
+            providerIds = mapOf("tmdb" to "123"),
+        )
+
+    private fun season(id: String, indexNumber: Int?) =
+        MediaItem(id = id, name = "Season", mediaType = MediaType.SEASON, indexNumber = indexNumber)
+
+    /** The plugin wiring the season-ratings enrichment needs: the status
+     *  store probe plus a feature gate whose catch-all answers first so only
+     *  the `Ratings` feature is live. */
+    private fun ratingsFeatureWiredViewModel(ratingsApi: JellyPlayRatingsRoutes): DetailViewModel {
+        val pluginStatusStore =
+            mockk<com.raulshma.jellyplay.core.data.session.JellyPlayPluginStatusStore>(relaxed = true)
+        val featureGate = mockk<com.raulshma.jellyplay.core.data.session.JellyPlayFeatureGate>(relaxed = true)
+        // The catch-all must be registered FIRST: a later matching stub wins,
+        // and only Ratings may answer true (the externalRatings test's convention).
+        coEvery { featureGate.isAvailableNow(any()) } returns false
+        coEvery { featureGate.isAvailableNow(JellyPlayPluginFeatures.Ratings) } returns true
+        return buildViewModel(
+            pluginStatusStore = pluginStatusStore,
+            jellyPlayFeatureGate = featureGate,
+            pluginRatingsApi = ratingsApi,
+        )
+    }
+
+    @Test
+    fun seasonRatings_multipleSeasons_mapsEveryScoredSeasonById() = runTest(mainDispatcher) {
+        val ratingsApi = CountingSeasonRatingsApi(
+            mapOf(
+                1 to Result.success(mapOf(1 to JellyPlayEpisodeRatings(tmdbScore = 7.5, tmdbVotes = 120))),
+                2 to Result.success(
+                    mapOf(
+                        3 to JellyPlayEpisodeRatings(tmdbScore = 8.0, tmdbVotes = 90),
+                        4 to JellyPlayEpisodeRatings(tmdbScore = 6.5, tmdbVotes = 70),
+                    ),
+                ),
+                // An empty payload drops its season (the serial loop's
+                // `isEmpty → continue` leg).
+                3 to Result.success(emptyMap()),
+            ),
+        )
+        viewModel = ratingsFeatureWiredViewModel(ratingsApi)
+        backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+        stubProvider(
+            "sr1",
+            snapshot(
+                origin = DetailOrigin.REMOTE,
+                detail = tmdbRatedSeries("sr1"),
+                remoteDiscoveryAllowed = true,
+                seasons = listOf(
+                    season("season1", 1),
+                    season("season2", 2),
+                    season("season3", 3),
+                    // Numberless seasons never fetch (the `?: continue` leg).
+                    season("seasonUnnumbered", null),
+                ),
+            ),
+        )
+
+        viewModel.onEvent(DetailUiEvent.LoadItem("sr1"))
+        advanceUntilIdle()
+
+        val seasonRatings = viewModel.uiState.value.seasonRatings
+        assertEquals(setOf("season1", "season2"), seasonRatings.keys)
+        assertEquals(7.5, seasonRatings["season1"]?.get(1)?.tmdbScore)
+        assertEquals(120, seasonRatings["season1"]?.get(1)?.tmdbVotes)
+        assertEquals(8.0, seasonRatings["season2"]?.get(3)?.tmdbScore)
+        assertEquals(6.5, seasonRatings["season2"]?.get(4)?.tmdbScore)
+    }
+
+    @Test
+    fun seasonRatings_perSeasonFailure_dropsOnlyTheFailedSeason() = runTest(mainDispatcher) {
+        val ratingsApi = CountingSeasonRatingsApi(
+            mapOf(
+                1 to Result.success(mapOf(1 to JellyPlayEpisodeRatings(tmdbScore = 7.0))),
+                2 to Result.failure(RuntimeException("season 2 down")),
+            ),
+        )
+        viewModel = ratingsFeatureWiredViewModel(ratingsApi)
+        backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+        stubProvider(
+            "sr2",
+            snapshot(
+                origin = DetailOrigin.REMOTE,
+                detail = tmdbRatedSeries("sr2"),
+                remoteDiscoveryAllowed = true,
+                seasons = listOf(season("season1", 1), season("season2", 2)),
+            ),
+        )
+
+        viewModel.onEvent(DetailUiEvent.LoadItem("sr2"))
+        advanceUntilIdle()
+
+        // The failed season drops alone — the survivors keep their scores
+        // and no error surfaces.
+        val seasonRatings = viewModel.uiState.value.seasonRatings
+        assertEquals(setOf("season1"), seasonRatings.keys)
+        assertEquals(7.0, seasonRatings["season1"]?.get(1)?.tmdbScore)
+    }
+
+    @Test
+    fun seasonRatings_lazySeasonExpansion_rerunFetchesOnlyTheNewSeason() = runTest(mainDispatcher) {
+        val ratingsApi = CountingSeasonRatingsApi(
+            mapOf(
+                1 to Result.success(mapOf(1 to JellyPlayEpisodeRatings(tmdbScore = 7.5))),
+                2 to Result.success(mapOf(2 to JellyPlayEpisodeRatings(tmdbScore = 8.0))),
+            ),
+        )
+        viewModel = ratingsFeatureWiredViewModel(ratingsApi)
+        backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+        val flow = stubProvider(
+            "sr3",
+            snapshot(
+                origin = DetailOrigin.REMOTE,
+                detail = tmdbRatedSeries("sr3"),
+                remoteDiscoveryAllowed = true,
+                contentGeneration = 0L,
+                seasons = listOf(season("season1", 1)),
+            ),
+        )
+
+        viewModel.onEvent(DetailUiEvent.LoadItem("sr3"))
+        advanceUntilIdle()
+        assertEquals(setOf("season1"), viewModel.uiState.value.seasonRatings.keys)
+
+        // The lazily-expanded season re-emits a NEW contentGeneration, the
+        // fan-out re-runs, and the merge must fetch (and change) only the
+        // new arrival — season 1's entry survives from the previous
+        // generation untouched.
+        flow.value = (flow.value as DetailLoadState.Loaded).let { loaded ->
+            loaded.copy(
+                snapshot = loaded.snapshot.copy(
+                    seasons = loaded.snapshot.seasons + season("season2", 2),
+                    contentGeneration = 1L,
+                ),
+            )
+        }
+        advanceUntilIdle()
+
+        assertEquals(1, ratingsApi.callsBySeasonNumber[1])
+        assertEquals(1, ratingsApi.callsBySeasonNumber[2])
+        val seasonRatings = viewModel.uiState.value.seasonRatings
+        assertEquals(setOf("season1", "season2"), seasonRatings.keys)
+        assertEquals(7.5, seasonRatings["season1"]?.get(1)?.tmdbScore)
+        assertEquals(8.0, seasonRatings["season2"]?.get(2)?.tmdbScore)
+    }
+
+    @Test
+    fun seasonRatings_gateOffOrWhollyFailingFetch_leavesTheFieldEmpty() = runTest(mainDispatcher) {
+        // (a) The Ratings feature toggled off: the enrichment never reaches
+        // the fetch (the franchise preferenceOff convention).
+        val gatedApi = CountingSeasonRatingsApi(
+            mapOf(1 to Result.success(mapOf(1 to JellyPlayEpisodeRatings(tmdbScore = 7.0)))),
+        )
+        val featureGate = mockk<com.raulshma.jellyplay.core.data.session.JellyPlayFeatureGate>(relaxed = true)
+        coEvery { featureGate.isAvailableNow(any()) } returns false
+        viewModel = buildViewModel(
+            pluginStatusStore = mockk(relaxed = true),
+            jellyPlayFeatureGate = featureGate,
+            pluginRatingsApi = gatedApi,
+        )
+        backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+        stubProvider(
+            "sr4",
+            snapshot(
+                origin = DetailOrigin.REMOTE,
+                detail = tmdbRatedSeries("sr4"),
+                remoteDiscoveryAllowed = true,
+                seasons = listOf(season("season1", 1)),
+            ),
+        )
+
+        viewModel.onEvent(DetailUiEvent.LoadItem("sr4"))
+        advanceUntilIdle()
+
+        assertTrue(gatedApi.callsBySeasonNumber.isEmpty())
+        assertTrue(viewModel.uiState.value.seasonRatings.isEmpty())
+
+        // (b) Default prefs again so the wholly-failing fetch exercises the
+        // fetch, not the gate: every season drops, the fold comes up empty,
+        // and the field stays empty — silent absence, never an error.
+        val failingApi = CountingSeasonRatingsApi(
+            mapOf(1 to Result.failure(RuntimeException("plugin down"))),
+        )
+        viewModel = ratingsFeatureWiredViewModel(failingApi)
+        backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
+        stubProvider(
+            "sr5",
+            snapshot(
+                origin = DetailOrigin.REMOTE,
+                detail = tmdbRatedSeries("sr5"),
+                remoteDiscoveryAllowed = true,
+                seasons = listOf(season("season1", 1)),
+            ),
+        )
+        viewModel.onEvent(DetailUiEvent.LoadItem("sr5"))
+        advanceUntilIdle()
+
+        assertEquals(1, failingApi.callsBySeasonNumber[1])
+        assertTrue(viewModel.uiState.value.seasonRatings.isEmpty())
     }
 
     // ── D7: the upcoming enrichment ──────────────────────────────────────

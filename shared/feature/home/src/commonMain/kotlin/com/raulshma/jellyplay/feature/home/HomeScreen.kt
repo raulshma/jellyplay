@@ -299,8 +299,22 @@ private fun MainHomeContent(
     // single value; derived here (above the hero setup, not inside the content
     // lambda) so the hero rotates the same offline titles while offline.
     val offlineTitles = rememberOfflineHomeSectionTitles()
+    // Render-relevant fingerprints over the two big offline lists —
+    // remembered off each coarse list so the hashing runs only when a new
+    // list arrives, while the key compare below is one Int per body
+    // recomposition instead of deep-equals over every item. A
+    // download-progress emission rebuilds these lists with unchanged
+    // rendered fields (see [offlineHomeRenderFingerprint] for the field
+    // set), and those re-instances are exactly what this key skips. The
+    // remember sites downstream of [offlineContent] keep keying on the
+    // aggregate itself: it now re-derives only on a real input change, so
+    // their equals are same-instance O(1) in the steady state.
+    val offlineLibraryFingerprint =
+        remember(state.offlineLibrary) { offlineHomeRenderFingerprint(state.offlineLibrary) }
+    val offlineEpisodesFingerprint =
+        remember(state.offlineEpisodes) { offlineHomeRenderFingerprint(state.offlineEpisodes) }
     val offlineContent = remember(
-        state.offlineLibrary, state.offlineEpisodes, state.homeMode, offlineTitles,
+        offlineLibraryFingerprint, offlineEpisodesFingerprint, state.homeMode, offlineTitles,
         state.offlineSectionPrefs, state.offlineLayoutSections,
     ) {
         buildOfflineHomeContent(

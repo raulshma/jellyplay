@@ -1,5 +1,7 @@
 package com.raulshma.jellyplay.feature.home
 
+import com.raulshma.jellyplay.core.concurrency.DEFAULT_FANOUT_PARALLELISM
+import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.repository.BookTocCache
 import com.raulshma.jellyplay.core.data.repository.BookTocCacheRepository
 import com.raulshma.jellyplay.core.model.BookFormat
@@ -7,12 +9,14 @@ import com.raulshma.jellyplay.core.model.BookProgressPolicy
 import com.raulshma.jellyplay.core.model.BookTocEntry
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.bookProgressFraction
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 
@@ -121,6 +125,70 @@ class BookProgressFractionsTest {
     fun `an empty row decodes to an empty map`() = runTest {
         assertNull(FakeTocCache().getToc("missing"))
         assertEquals(emptyMap(), FakeTocCache().decodeBookProgressFractions(emptyList()))
+    }
+
+    @Test
+    fun `parallel decode matches the sequential reference exactly`() = runTest {
+        // The fan-out is an ordering/latency change only: a mixed row (known
+        // counts, a miss, a zero count, a throwing read, a no-position item)
+        // must decode to exactly what the sequential loop produced.
+        val cache = FakeTocCache(
+            caches = mapOf(
+                "b1" to toc(200),
+                "b2" to toc(0), // zero count → percent fallback
+                "b4" to toc(200), // throws → percent fallback
+            ),
+            throwFor = setOf("b4"),
+        )
+        val items = listOf(
+            book("b1", BookProgressPolicy.pageToTicks(4)),
+            book("b2", BookProgressPolicy.percentToTicks(0.35)),
+            book("b3", BookProgressPolicy.pageToTicks(9)), // cache miss → percent fallback
+            book("b4", BookProgressPolicy.pageToTicks(50)),
+            book("b5", null), // no position → skipped
+        )
+        val parallel = cache.decodeBookProgressFractions(items)
+        val sequential = buildMap {
+            for (item in items) {
+                val pageCount = runCatchingRethrowingCancellation {
+                    cache.getToc(item.id)?.pageCount?.takeIf { it > 0 }
+                }.getOrNull()
+                val fraction = item.bookProgressFraction(pageCount) ?: continue
+                put(item.id, fraction)
+            }
+        }
+        assertEquals(sequential, parallel)
+    }
+
+    @Test
+    fun `decode fans out up to DEFAULT_FANOUT_PARALLELISM concurrent cache reads`() = runTest {
+        // The whole point: the lookups overlap. Counting entries/exits of the
+        // suspending read pins the width at the constant and keeps the
+        // semaphore an actual gate (virtual time makes the interleaving
+        // deterministic).
+        var inFlight = 0
+        var maxInFlight = 0
+        val cache = object : BookTocCacheRepository {
+            override fun observeToc(itemId: String) = flowOf(null)
+            override suspend fun getToc(itemId: String): BookTocCache? {
+                inFlight++
+                maxInFlight = maxOf(maxInFlight, inFlight)
+                delay(1)
+                inFlight--
+                return toc(200)
+            }
+            override suspend fun putToc(itemId: String, format: BookFormat, pageCount: Int, entries: List<BookTocEntry>) = Unit
+            override suspend fun deleteToc(itemId: String) = Unit
+        }
+        val items = (1..DEFAULT_FANOUT_PARALLELISM * 2).map { book("b$it", BookProgressPolicy.pageToTicks(4)) }
+
+        val fractions = cache.decodeBookProgressFractions(items)
+
+        assertEquals(DEFAULT_FANOUT_PARALLELISM, maxInFlight)
+        assertEquals(
+            items.associate { it.id to 5f / 200f },
+            fractions,
+        )
     }
 
     @Test

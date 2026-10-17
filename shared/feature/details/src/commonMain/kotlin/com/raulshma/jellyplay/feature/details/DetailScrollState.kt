@@ -10,7 +10,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.derivedStateOf
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
@@ -42,34 +41,26 @@ enum class DetailBackdropTier(val dp: Dp) {
  * Hoists the media-detail scroll-driven visual state out of [DetailContent].
  *
  * Owns the scroll-offset/fraction `derivedStateOf` chain, the density-derived
- * backdrop dimensions, the animated background/container/title-alpha states,
- * and the navigation-bar colour sync side-effect.
+ * backdrop dimensions, the animated background/container/collapse/content-alpha
+ * states, and the navigation-bar colour sync side-effect.
  *
- * Scroll-derived values are exposed both as plain snapshot values (read at the
- * call site to pass into non-lambda APIs) and as [State]s (read *inside*
- * `graphicsLayer`/`drawBehind` lambdas). Reading the [State] form inside a
- * draw-phase lambda defers invalidation to the draw phase only, so scroll-driven
- * *visuals* update without recomposing the subtree.
+ * Per-frame values are exposed ONLY as [State] refs: read them *inside*
+ * `graphicsLayer`/`drawBehind` lambdas (or collapse them to booleans via
+ * `derivedStateOf` in composition) so a scroll-driven change invalidates the
+ * draw phase only, or recomposes just the reading scope on a real value flip.
+ * The plain fields carry rare-change data (the backdrop dimensions) that
+ * composition may read freely.
  *
- * Note: this holder is reconstructed fresh each recomposition (the underlying
- * `derivedStateOf`/animation states are remembered by their factories), and its
- * plain `Float`/`Color` fields change every scroll frame, so it is structurally
- * unequal each frame. Composables that take the whole `DetailScrollState` still
- * recompose while scrolling — they just no longer need to. Fully removing them
- * from scroll recomposition requires passing only the individual derived values
- * (e.g. `contentAlpha`) instead of the whole holder; tracked separately.
+ * The holder is reconstructed fresh each recomposition (the underlying
+ * `derivedStateOf`/animation states are remembered by their factories), but
+ * every field is either a remembered [State] ref or a rare-change `Dp`, so it
+ * is structurally equal between scroll frames and composables that take the
+ * whole [DetailScrollState] skip while scrolling.
  */
 @Immutable
 data class DetailScrollState internal constructor(
     val backdropHeight: Dp,
     val baseBackdropHeight: Dp,
-    val scrollOffset: Float,
-    val scrollFraction: Float,
-    val scrollCollapsed: Float,
-    val contentAlpha: Float,
-    val backgroundColor: Color,
-    val animatedContainerColor: Color,
-    val animatedTitleAlpha: Float,
     /**
      * Snapshot-read scroll offset. Read this inside a `graphicsLayer`/`drawBehind`
      * lambda so the consumer only re-invalidates the draw phase (not recomposition)
@@ -78,10 +69,28 @@ data class DetailScrollState internal constructor(
     val scrollOffsetState: State<Float>,
     val scrollFractionState: State<Float>,
     /**
+     * Snapshot-read collapse progress, 0..1 (1 = bar collapsed; the animation
+     * target flips at scroll fraction 0.7). Read inside a `graphicsLayer`
+     * lambda, or behind a `derivedStateOf` threshold in composition.
+     */
+    val scrollCollapsedState: State<Float>,
+    /**
+     * Snapshot-read content fade (0 while the detail is loading, 1 once the
+     * content exists). Read inside a `graphicsLayer` lambda.
+     */
+    val contentAlphaState: State<Float>,
+    /**
      * Snapshot-read background color. Read inside a `drawBehind` lambda so a
      * scroll-driven color change re-draws without recomposing the subtree.
      */
     val backgroundColorState: State<Color>,
+    /**
+     * Snapshot-read top-bar container colour: transparent lerped to the
+     * background at 0.95 alpha as the bar collapses. Read inside a
+     * `drawBehind` lambda (or, for M3 `colors` APIs that take plain Colors,
+     * in a scope isolated to the bar itself).
+     */
+    val containerColorState: State<Color>,
 )
 
 /**
@@ -126,13 +135,11 @@ internal fun rememberDetailScrollState(
             (if (listState.firstVisibleItemIndex > 0) spacerHeightPx else 0f) + listState.firstVisibleItemScrollOffset.toFloat()
         }
     }
-    val scrollOffset by scrollOffsetState
     val scrollFractionState = remember(collapsedHeight) {
         derivedStateOf {
-            (scrollOffset / collapsedHeight).coerceIn(0f, 1f)
+            (scrollOffsetState.value / collapsedHeight).coerceIn(0f, 1f)
         }
     }
-    val scrollFraction by scrollFractionState
 
     val isLightTheme = rememberIsLightTheme()
     val artworkColors = LocalArtworkColors.current
@@ -163,7 +170,6 @@ internal fun rememberDetailScrollState(
         animationSpec = MaterialTheme.motionScheme.slowEffectsSpec(),
         label = "backgroundColor",
     )
-    val backgroundColor by backgroundColorState
 
     val navBarColor = LocalNavigationBarColor.current
     // Write the nav-bar colour only when the target actually changes — a plain
@@ -174,40 +180,49 @@ internal fun rememberDetailScrollState(
         if (navBarColor.value != targetBackgroundColor) navBarColor.value = targetBackgroundColor
     }
 
-    val contentAlpha by animateFloatAsState(
+    val contentAlphaState = animateFloatAsState(
         targetValue = if (contentVisible) 1f else 0f,
         animationSpec = MaterialTheme.motionScheme.slowEffectsSpec(),
         label = "contentAlpha",
     )
 
-    val scrollCollapsed by animateFloatAsState(
-        targetValue = if (scrollFraction > 0.7f) 1f else 0f,
+    // The animation target flips at the same 0.7 fraction as before, but as a
+    // derived boolean: the factory's composition only re-runs on the crossing,
+    // while the animation itself drives the exposed State without recomposition.
+    val scrollCollapsedTarget = remember(scrollFractionState) {
+        derivedStateOf { scrollFractionState.value > 0.7f }
+    }
+    val scrollCollapsedState = animateFloatAsState(
+        targetValue = if (scrollCollapsedTarget.value) 1f else 0f,
         animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
         label = "scrollCollapsed",
     )
 
-    val animatedContainerColor = lerp(
-        Color.Transparent,
-        backgroundColor.copy(alpha = 0.95f),
-        scrollCollapsed,
-    )
-    val animatedTitleAlpha = scrollCollapsed
+    // Container colour derivation of the two animated states, behind
+    // derivedStateOf so consumers read it as a State (draw-phase reads) instead
+    // of recomposing per animation tick.
+    val containerColorState = remember(backgroundColorState, scrollCollapsedState) {
+        derivedStateOf {
+            lerp(
+                Color.Transparent,
+                backgroundColorState.value.copy(alpha = 0.95f),
+                scrollCollapsedState.value,
+            )
+        }
+    }
 
     // Constructed fresh each recomposition; the underlying animation + derived
     // states are remembered internally by their respective factories, so this
-    // holder is a cheap value bag that simply reflects the current snapshot.
+    // holder is a cheap value bag whose fields are structurally equal between
+    // scroll frames.
     return DetailScrollState(
         backdropHeight = backdropHeight,
         baseBackdropHeight = baseBackdropHeight,
-        scrollOffset = scrollOffset,
-        scrollFraction = scrollFraction,
-        scrollCollapsed = scrollCollapsed,
-        contentAlpha = contentAlpha,
-        backgroundColor = backgroundColor,
-        animatedContainerColor = animatedContainerColor,
-        animatedTitleAlpha = animatedTitleAlpha,
         scrollOffsetState = scrollOffsetState,
         scrollFractionState = scrollFractionState,
+        scrollCollapsedState = scrollCollapsedState,
+        contentAlphaState = contentAlphaState,
         backgroundColorState = backgroundColorState,
+        containerColorState = containerColorState,
     )
 }

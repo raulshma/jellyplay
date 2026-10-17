@@ -44,7 +44,6 @@ class HomeFreshnessTest {
         assertTrue(HomeFreshness.DISCOVER_TTL_MS > 0)
         assertTrue(HomeFreshness.USER_DATA_REFRESH_MIN_INTERVAL_MS > 0)
         assertTrue(HomeFreshness.REFRESH_INTERVAL_FOREGROUND_MS > 0)
-        assertTrue(HomeFreshness.REFRESH_INTERVAL_BACKGROUND_MS > 0)
         assertTrue(HomeFreshness.MIN_REFRESH_INTERVAL_MS > 0)
         assertTrue(HomeFreshness.USER_DATA_CHANGE_REFRESH_DEBOUNCE_MS > 0)
     }

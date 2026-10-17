@@ -958,8 +958,11 @@ internal fun DetailChaptersSection(
                     // which crashes LazyRow with a duplicate key. Pair each chapter with
                     // its list index so the key is collision-free. The index is already
                     // the stable identity used for /Images/Chapter/{index} lookups below.
+                    // Memoized on [chapters] so the pair list is not re-allocated per
+                    // recomposition (the SeasonsPresentation idiom).
+                    val chapterPairs = remember(chapters) { chapters.mapIndexed { i, c -> i to c } }
                     TvFocusableItemRow(
-                        items = chapters.mapIndexed { i, c -> i to c },
+                        items = chapterPairs,
                         key = { (index, chapter) -> "chapter_${index}_${chapter.startPositionTicks}" },
                         contentPadding = PaddingValues(horizontal = bodyContentPad),
                         horizontalArrangement = Arrangement.spacedBy(12.dp),

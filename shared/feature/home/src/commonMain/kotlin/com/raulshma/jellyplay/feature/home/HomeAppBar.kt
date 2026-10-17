@@ -388,8 +388,15 @@ private fun SyncStatusIcon(
 ) {
     val syncFocusState = rememberTvFocusState()
     val reducedMotion = LocalReducedMotion.current
-    val infiniteTransition = rememberInfiniteTransition(label = "sync_draining")
+    // One remembered fallback rotation shared by both branches — the
+    // non-draining branch (badge visible, motor idle: the common state) used
+    // to allocate a fresh, un-remembered MutableState per recomposition. The
+    // transition is created only while draining; while draining the delegate
+    // is still the animation's own State, so frames land in the draw phase
+    // exactly as before.
+    val fallbackRotation = remember { mutableStateOf(0f) }
     val rotation by if (isDraining && !reducedMotion) {
+        val infiniteTransition = rememberInfiniteTransition(label = "sync_draining")
         infiniteTransition.animateFloat(
             initialValue = 0f,
             targetValue = 360f,
@@ -399,7 +406,7 @@ private fun SyncStatusIcon(
             ),
             label = "sync_draining_rotation",
         )
-    } else androidx.compose.runtime.mutableStateOf(0f)
+    } else fallbackRotation
     val contentDescription = stringResource(
         Res.string.sync_icon_content_description,
         pendingCount,

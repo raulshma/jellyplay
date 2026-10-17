@@ -21,6 +21,8 @@ import com.raulshma.jellyplay.core.data.repository.PlayedStateSync
 import com.raulshma.jellyplay.core.data.repository.PlayedStateSyncImpl
 import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
 import com.raulshma.jellyplay.core.data.repository.PlaylistRepositoryImpl
+import com.raulshma.jellyplay.core.data.repository.RecentLocalUserDataWrites
+import com.raulshma.jellyplay.core.data.repository.RecentLocalUserDataWritesImpl
 import com.raulshma.jellyplay.core.data.repository.SyncPlayRepository
 import com.raulshma.jellyplay.core.data.repository.SyncPlayRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.UnifiedMediaDetailProviderImpl
@@ -115,6 +117,12 @@ internal val dataMediaRepositoryModule: Module = module {
             timeSource = get(),
         )
     }
+    // The local-write log the user-data echo demotion consults — recorded
+    // by MediaRepositoryImpl's local-notify path, consulted by the home
+    // refresher's user-data chain. ONE single so an echo is matched against
+    // the writes that caused it; declared before its two consumers.
+    single { RecentLocalUserDataWritesImpl() }
+    single<RecentLocalUserDataWrites> { get<RecentLocalUserDataWritesImpl>() }
     single {
         MediaRepositoryImpl(
             libraryApiClient = get(),
@@ -128,6 +136,7 @@ internal val dataMediaRepositoryModule: Module = module {
             homeSession = get(),
             sessionCacheRegistry = get(),
             internals = get(),
+            recentLocalWrites = get(),
         )
     }
     single<MediaRepository> { get<MediaRepositoryImpl>() }

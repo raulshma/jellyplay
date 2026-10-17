@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
@@ -94,10 +95,14 @@ internal class OfflineHomeGate(
                     }
                 }
                 // The repository flow re-emits on every download-progress
-                // write; identical (gate, items) pairs — Room re-emissions
-                // with nothing changed — are dropped here so the suspend
-                // TOC decode below only runs for a real list change.
-                .distinctUntilChanged()
+                // write; re-emissions whose render-relevant fingerprint
+                // (see [offlineRenderKey]) is unchanged are dropped here, so
+                // a progress tick no longer pays the O(n) whole-item
+                // structural compare and the suspend TOC decode below only
+                // runs for a real render change.
+                .distinctUntilChangedBy { (gate, emission) ->
+                    offlineRenderKey(gate, emission)
+                }
                 .collect { (gate, emission) ->
                     // Book progress decodes ride the library emission (the
                     // TOC cache is local Room — readable offline, and the
@@ -229,3 +234,58 @@ internal data class OfflineLibraryEmission(
     val items: List<OfflineMediaItem> = emptyList(),
     val pending: Boolean = false,
 )
+
+/**
+ * The per-item fields the offline home renders that can realistically churn
+ * while the gate is open: the download lifecycle (local art and download
+ * paths, status, the episode-derived badge and child count), the playback
+ * lifecycle (played flag, resume position, last-played) — everything else is
+ * either static per download (metadata, cast, chapters) or never rendered by
+ * home (byte counters). One shared list so the gate's flow dedupe and
+ * the screen layer's remember fingerprints can never drift.
+ */
+internal fun OfflineMediaItem.offlineRenderKeyFields(): List<Any?> = listOf(
+    id,
+    posterPath,
+    backdropPath,
+    downloadPath,
+    downloadStatus,
+    isPlayed,
+    playbackPositionTicks,
+    lastPlayedDate,
+    unplayedEpisodeCount,
+    childCount,
+)
+
+/**
+ * The render-relevant fingerprint of a gated library emission: the gate, the
+ * pending flag, and the per-item [offlineRenderKeyFields]. The repository
+ * flow re-emits on every download-progress write with byte-count mutations
+ * home never shows, so keying the gate's dedupe on this instead of
+ * whole-[OfflineMediaItem] equality collapses those ticks before the suspend
+ * TOC decode and the downstream offline rebuild — the same render-relevant
+ * idiom as the screen layer's `offlineResolverKey`. [pending] rides along so
+ * the empty pending emission never dedupes against the closed-gate empty
+ * emission it precedes (the FallbackPending → known-empty transition).
+ */
+private fun offlineRenderKey(gate: OfflineGate, emission: OfflineLibraryEmission): List<Any?> =
+    buildList(emission.items.size + 2) {
+        add(gate)
+        add(emission.pending)
+        emission.items.forEach { addAll(it.offlineRenderKeyFields()) }
+    }
+
+/**
+ * A cheap, order-sensitive Int fingerprint over an offline item list's
+ * [offlineRenderKeyFields] (size folded in). Remembered off the coarse list
+ * at the screen layer, so the hashing runs only when a new list arrives,
+ * while the remember keys there compare one Int per body recomposition
+ * instead of deep-equals over every item.
+ */
+internal fun offlineHomeRenderFingerprint(items: List<OfflineMediaItem>): Int {
+    var hash = items.size
+    for (item in items) {
+        hash = hash * 31 + item.offlineRenderKeyFields().hashCode()
+    }
+    return hash
+}

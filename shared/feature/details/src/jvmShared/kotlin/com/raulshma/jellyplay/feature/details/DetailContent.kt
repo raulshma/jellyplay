@@ -15,6 +15,7 @@ import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
@@ -437,12 +438,17 @@ private fun DetailScrollContent(
 
         item {
             val gradientEndPx = with(LocalDensity.current) { 150.dp.toPx() }
-            val fadeBrush = remember(scrollState.backgroundColor, gradientEndPx) {
+            // Read the colour here (the item's own scope) so colour-animation
+            // frames rebuild the brush without recomposing anything above, and
+            // scroll-offset frames — which don't touch the colour — rebuild
+            // nothing at all.
+            val fadeColor by scrollState.backgroundColorState
+            val fadeBrush = remember(fadeColor, gradientEndPx) {
                 Brush.verticalGradient(
                     colors = listOf(
                         Color.Transparent,
-                        scrollState.backgroundColor.copy(alpha = 0.9f),
-                        scrollState.backgroundColor,
+                        fadeColor.copy(alpha = 0.9f),
+                        fadeColor,
                     ),
                     startY = 0f,
                     endY = gradientEndPx,

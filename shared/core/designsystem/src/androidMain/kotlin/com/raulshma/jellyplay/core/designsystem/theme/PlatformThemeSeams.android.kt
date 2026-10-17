@@ -39,7 +39,10 @@ private val colorCache = LruCache<String, ArtworkColors>(100)
 actual fun rememberArtworkColors(imageUrl: String?): ArtworkColors? {
     val context = LocalContext.current
     val cached = imageUrl?.let { colorCache.get(it) }
-    var artworkColors by remember { mutableStateOf(cached) }
+    // Keyed on imageUrl so a navigation to a different artwork resets the state
+    // immediately — otherwise the previous item's palette shows until the async
+    // extraction for the new image lands.
+    var artworkColors by remember(imageUrl) { mutableStateOf(cached) }
     val loader = coil3.SingletonImageLoader.get(context)
 
     LaunchedEffect(imageUrl) {

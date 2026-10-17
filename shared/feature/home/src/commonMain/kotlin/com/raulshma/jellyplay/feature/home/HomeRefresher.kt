@@ -9,6 +9,8 @@ import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import com.raulshma.jellyplay.core.data.repository.BookTocCacheRepository
 import com.raulshma.jellyplay.core.data.repository.HomeFeed
 import com.raulshma.jellyplay.core.data.repository.NoopBookTocCacheRepository
+import com.raulshma.jellyplay.core.data.repository.NoopRecentLocalUserDataWrites
+import com.raulshma.jellyplay.core.data.repository.RecentLocalUserDataWrites
 import com.raulshma.jellyplay.core.data.repository.UserDataChanges
 import com.raulshma.jellyplay.core.data.usecase.OrderHomeSectionsUseCase
 import com.raulshma.jellyplay.core.data.widget.ContinueWatchingBroadcaster
@@ -124,6 +126,16 @@ internal class HomeRefresher(
      * passes the Room-backed single.
      */
     private val bookTocCacheRepository: BookTocCacheRepository = NoopBookTocCacheRepository(),
+    /**
+     * The write-log of this device's recent user-data writes (the same
+     * single MediaRepositoryImpl's local-notify path records into). A
+     * `UserDataChanged` push names only user + item ids, so this is what
+     * lets the user-data chain below tell a socket echo of THIS device's
+     * own write burst from an external push and run the echo non-forced.
+     * Defaults to the neutral no-op (tests, no recorder wired): every echo
+     * stays forced, the pre-demotion behavior.
+     */
+    private val recentLocalWrites: RecentLocalUserDataWrites = NoopRecentLocalUserDataWrites(),
     /** Offline gate consulted inside the fetch (plus the loop's skip check), and the source of the offline-mode mirror below. */
     private val offlineModeManager: OfflineModeManager,
     /**
@@ -234,6 +246,16 @@ internal class HomeRefresher(
     private var isAppInForeground = true
     // Set when a user-data change lands while backgrounded; consumed by [start].
     private var pendingUserDataRefresh = false
+    /**
+     * The item ids of the most recent (debounced) [UserDataChange] —
+     * overwritten on every push, consumed by [flushPendingUserDataChange]:
+     * consulting the write-log with them is what demotes an echo of
+     * this device's own writes to a non-forced fetch. Cleared once that
+     * fetch lands, alongside [pendingUserDataRefresh]; empty makes
+     * [RecentLocalUserDataWrites.wereAllRecentlyWritten] answer false, so a
+     * flush reached without a named change stays forced.
+     */
+    private var pendingUserDataChangeItemIds: List<String> = emptyList()
     /**
      * The trailing-edge deferral timer of [refreshAfterUserDataChange], on its
      * OWN job — deliberately not [refreshJob]. Installing the delay by
@@ -517,8 +539,9 @@ internal class HomeRefresher(
      *    Previously this fetch ran in the VM's prefs collector outside any
      *    refresh job, so a backgrounding could not cancel it; folding it
      *    into the refresh job aligns it with every other trigger.
-     *  * [UserDataChanged]: throttled silent forced refresh — see
-     *    [refreshAfterUserDataChange].
+     *  * [UserDataChanged]: throttled silent refresh — forced for external
+     *    pushes, non-forced for echoes of this device's own writes —
+     *    see [refreshAfterUserDataChange].
      *  * [UserSwitched] / [SignedOut]: identity-transition choreography —
      *    the SWR snapshot paint + outside-the-job fetch below, and the
      *    sign-out reset respectively.
@@ -585,19 +608,31 @@ internal class HomeRefresher(
     /**
      * The single sanctioned way to mutate items inside the cached sections
      * from outside the fetch machinery — the VM's optimistic played/unplayed
-     * container forwards here. Maps the patch over EVERY section, because
-     * the same item can appear in several (e.g. Continue Watching and Latest
-     * in X) and every visible card must flip together. Keeps
-     * [HomeRefreshState.sections] single-writer: the VM folds emissions, it
-     * never writes them.
+     * container forwards here. Checks EVERY section, because the same item
+     * can appear in several (e.g. Continue Watching and Latest in X) and
+     * every visible card must flip together — but only a section actually
+     * containing the id rebuilds (the patch used to remap every item of
+     * every section, a whole-home allocation per quick-action toggle).
+     * Keeps [HomeRefreshState.sections] single-writer: the VM folds
+     * emissions, it never writes them.
      */
     fun patchItems(itemId: String, patch: (MediaItem) -> MediaItem) {
         _state.update { state ->
             state.copy(
                 sections = state.sections.map { section ->
-                    section.copy(
-                        items = section.items.map { if (it.id == itemId) patch(it) else it }
-                    )
+                    // The id can repeat WITHIN a section too, not just across
+                    // sections — every occurrence must flip. The `none` scan is
+                    // allocation-free, so non-containing sections still don't
+                    // rebuild.
+                    if (section.items.none { it.id == itemId }) {
+                        section
+                    } else {
+                        section.copy(
+                            items = section.items.map { item ->
+                                if (item.id == itemId) patch(item) else item
+                            },
+                        )
+                    }
                 }
             )
         }
@@ -715,8 +750,8 @@ internal class HomeRefresher(
      * share ONE [refreshJob] (a bare scope.launch here was invisible to
      * [stop], so a fetch started at onStart kept running after an immediate
      * onStop); the loop continues in the same job once the (possible) stale
-     * fetch lands. The deferred flush below REPLACES this job — its forced
-     * fetch supersedes the stale-check.
+     * fetch lands. The deferred flush below REPLACES this job — its fetch
+     * supersedes the stale-check.
      */
     fun start() {
         isAppInForeground = true
@@ -734,7 +769,7 @@ internal class HomeRefresher(
         // and the user is looking at it now. The pending flag is NOT cleared
         // before the fetch lands, so a stop() mid-fetch re-arms the flush for
         // the next onStart. Runs AFTER startPeriodicRefresh so the deferred
-        // refresh's job (forced fetch + loop) replaces the bare periodic loop
+        // refresh's job (fetch + loop) replaces the bare periodic loop
         // instead of being cancelled by it.
         if (pendingUserDataRefresh) {
             flushPendingUserDataChange()
@@ -878,9 +913,12 @@ internal class HomeRefresher(
                         )
                             .onSuccess { fresh ->
                                 if (fresh != null) {
-                                    val patched = _state.value.sections.map {
-                                        if (it.id == sectionId) fresh else it
-                                    }
+                                    // Single-index replacement — the swap
+                                    // used to re-map ALL sections to replace
+                                    // one.
+                                    val sections = _state.value.sections
+                                    val index = sections.indexOfFirst { it.id == sectionId }
+                                    val patched = if (index < 0) sections else sections.toMutableList().also { it[index] = fresh }
                                     // Swap arm of [applySectionOutcome] — the
                                     // batch fetch's single-emission CR pairing
                                     // and CW widget choreography, scoped to
@@ -915,7 +953,11 @@ internal class HomeRefresher(
                                     // no items — the batch arm's empty-list
                                     // comparison (widget clear on a vanished
                                     // row) stays batch-only.
-                                    val remaining = _state.value.sections.filterNot { it.id == sectionId }
+                                    // Single-index removal — same principle
+                                    // as the swap arm, for the drop.
+                                    val sections = _state.value.sections
+                                    val index = sections.indexOfFirst { it.id == sectionId }
+                                    val remaining = if (index < 0) sections else sections.toMutableList().also { it.removeAt(index) }
                                     applySectionOutcome(
                                         sections = remaining,
                                         bookProgressFractions =
@@ -1079,14 +1121,19 @@ internal class HomeRefresher(
      * favorite flips from any client, including this one). Bursts are
      * debounced into a single silent refresh; a change that lands while
      * backgrounded (or offline) is deferred to the next [start] instead of
-     * refreshing into the void.
+     * refreshing into the void. Whether the refresh runs forced is decided
+     * at the flush: an echo of this device's own recent writes runs
+     * non-forced, an external push stays forced.
      */
     @OptIn(FlowPreview::class)
     private fun observeUserDataChanges() {
         scope.launch {
             userDataChanges.userDataChanges
                 .debounce(HomeFreshness.USER_DATA_CHANGE_REFRESH_DEBOUNCE_MS)
-                .collect {
+                .collect { change ->
+                    // Remember what the (debounced) change named — the
+                    // flush consults the write-log with these ids.
+                    pendingUserDataChangeItemIds = change.itemIds
                     when {
                         // Offline behaves like backgrounded: arm the pending
                         // flag rather than swallowing the change — a push that
@@ -1102,21 +1149,27 @@ internal class HomeRefresher(
     }
 
     /**
-     * Silent forced refresh after a user-data change. force = true because
-     * server-side changes must bypass the TtlCache'd home sections. Guarded
-     * by [HomeFreshness.USER_DATA_REFRESH_MIN_INTERVAL_MS] against
+     * Silent refresh after a user-data change. FORCE remains the rule for
+     * external pushes: server-side changes must bypass the TtlCache'd home
+     * sections. An echo of THIS device's own writes — every item id of the
+     * pushed change recently recorded by [recentLocalWrites] — now demotes
+     * to a non-forced fetch (TTL semantics): it used to force a full
+     * cache-bypassing refetch behind the player for every playback-save
+     * burst, even though only this device's own state moved. The
+     * demotion decision itself lives at the flush; this function owns the
+     * throttle either way, guarded by
+     * [HomeFreshness.USER_DATA_REFRESH_MIN_INTERVAL_MS] against
      * [lastRefreshTime] (same clock the refresh path writes) so a push
-     * arriving right after a regular refresh doesn't re-fetch, and so the
-     * server's echo of this device's own playback saves cannot force-refresh
-     * more than once a minute — UNLESS the last fetch raced a still-pending
-     * outbox drain ([lastFetchRacedPendingSync]): the drain-completion echo is
-     * then the sync-complete signal, the one notice that the painted snapshot
-     * is pre-sync, and must refresh regardless of the clock. No spinner:
+     * arriving right after a regular refresh doesn't re-fetch — UNLESS the
+     * last fetch raced a still-pending outbox drain
+     * ([lastFetchRacedPendingSync]): the drain-completion echo is then the
+     * sync-complete signal, the one notice that the painted snapshot is
+     * pre-sync, and must refresh regardless of the clock. No spinner:
      * isRefreshing/isLoading stay untouched.
      *
      * A change that lands inside the throttle window is DEFERRED, not
-     * dropped: it arms [pendingUserDataRefresh] and schedules the forced
-     * fetch at throttle expiry (each further echo re-arms the timer on
+     * dropped: it arms [pendingUserDataRefresh] and schedules the fetch at
+     * throttle expiry (each further echo re-arms the timer on
      * [userDataRefreshJob] — trailing edge, so a playback session's ~10s
      * position saves collapse into one fetch after the last save). Dropping
      * instead used to strand the final echo of a session — the position save
@@ -1147,14 +1200,19 @@ internal class HomeRefresher(
 
     /**
      * The shared tail of [refreshAfterUserDataChange]: the armed pending
-     * flag becomes an immediate forced fetch. Also called directly as the
-     * [start] flush (the pending change predates the return to the screen,
-     * the user is looking at it now, and the throttle's anti-spam rationale —
-     * don't refetch behind the player for every position save — does not
-     * apply) and as the [lastFetchRacedPendingSync] consumer (the
-     * sync-complete echo must refresh regardless of the clock).
+     * flag becomes an immediate fetch — forced for external pushes,
+     * non-forced when the change was an echo of this device's own recent
+     * writes (the [recentLocalWrites] consult below). Also called
+     * directly as the [start] flush (the pending change predates the return
+     * to the screen, the user is looking at it now, and the throttle's
+     * anti-spam rationale — don't refetch behind the player for every
+     * position save — does not apply) and as the
+     * [lastFetchRacedPendingSync] consumer (the sync-complete echo must
+     * refresh regardless of the clock — and stays forced regardless of the
+     * demotion, since a TTL-semantics fetch could serve the pre-drain
+     * cache).
      *
-     * Tracked in refreshJob so onStop cancels the forced fetch with it;
+     * Tracked in refreshJob so onStop cancels the fetch with it;
      * the periodic loop continues in the same job once the fetch lands
      * (a separate startPeriodicRefresh() call here would either be
      * cancelled by its own refreshJob hand-off or restart the loop while
@@ -1172,9 +1230,18 @@ internal class HomeRefresher(
         userDataRefreshJob = null
         replaceRefreshJob {
             bumpImageReloadEpoch()
-            fetchOnce(force = true)
+            // An echo whose every named item was recently written by THIS
+            // device runs non-forced (TTL semantics — still debounced,
+            // throttled and chained exactly as before); the forced path stays
+            // reserved for external pushes. The raced-sync bypass overrides
+            // the demotion: that echo is the sync-complete signal, and a
+            // non-forced fetch could serve the pre-drain cache — exactly what
+            // the going-online handshake's forced fetch exists to prevent.
+            val echoOfOwnWrites = recentLocalWrites.wereAllRecentlyWritten(pendingUserDataChangeItemIds)
+            fetchOnce(force = !echoOfOwnWrites || lastFetchRacedPendingSync)
             lastFetchRacedPendingSync = false
             pendingUserDataRefresh = false
+            pendingUserDataChangeItemIds = emptyList()
             periodicRefreshLoop()
         }
     }
@@ -1233,18 +1300,19 @@ internal class HomeRefresher(
     }
 
     /**
-     * The periodic home-refresh loop: sleep one jittered interval, skip
-     * while offline or when a fetch landed recently, then fetch. Runs inside
-     * [refreshJob] so lifecycle ([stop]) cancels it together with any forced
-     * fetch that preceded it in the same job.
+     * The periodic home-refresh loop: sleep one jittered foreground interval,
+     * skip while offline or when a fetch landed recently, then fetch. Runs
+     * inside [refreshJob] so lifecycle ([stop]) cancels it together with any
+     * forced fetch that preceded it in the same job.
+     *
+     * Foreground cadence unconditionally: a backgrounded interval once
+     * existed here, but [stop] cancels [refreshJob] on backgrounding before
+     * the loop ever sleeps through a tick, so the branch was unreachable —
+     * and reading it suggested a background cadence policy that is not there.
      */
     private suspend fun periodicRefreshLoop() {
         while (true) {
-            val interval = if (isAppInForeground) {
-                HomeFreshness.REFRESH_INTERVAL_FOREGROUND_MS
-            } else {
-                HomeFreshness.REFRESH_INTERVAL_BACKGROUND_MS
-            }
+            val interval = HomeFreshness.REFRESH_INTERVAL_FOREGROUND_MS
             // ±10% jitter avoids synchronized refresh storms when multiple
             // devices hit the server on the same fixed mark.
             val jitter = (interval * 0.1f * (kotlin.random.Random.nextFloat() * 2f - 1f)).toLong()
@@ -1364,7 +1432,7 @@ internal enum class RefreshTrigger {
     PullToRefresh,
     /** Home-section preference diff: non-forced fetch with the new query, then loop restart. */
     PrefsChanged,
-    /** Server UserDataChanged push: debounced, throttled, silent forced fetch. */
+    /** Server UserDataChanged push: debounced, throttled, silent refresh (force per the echo demotion). */
     UserDataChanged,
     /**
      * Sign-in / user switch (from the HomeSession transitions collector):

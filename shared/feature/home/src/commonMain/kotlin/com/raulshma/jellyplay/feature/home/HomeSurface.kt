@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.feature.home
 
+import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.model.HomeMode
 
 /**
@@ -57,6 +58,7 @@ internal sealed interface HomeSurface {
      * gate's offline decodes for an offline one — FallbackPending included,
      * its feed is offline), so no render site re-derives the pick.
      */
+    @Immutable
     data class Content(
         val feed: HomeRenderFeed,
         val renderSource: HomeRenderSource,

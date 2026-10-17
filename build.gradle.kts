@@ -53,6 +53,13 @@ subprojects {
     pluginManager.withPlugin("org.jetbrains.kotlin.plugin.compose") {
         extensions.configure<org.jetbrains.kotlin.compose.compiler.gradle.ComposeCompilerGradlePluginExtension>("composeCompiler") {
             stabilityConfigurationFiles.add(rootProject.layout.projectDirectory.file("compose-stability.conf"))
+            // Strong skipping: default-on in this toolchain (compiler 2.0.20+)
+            // and permanently so — the plugin removed the explicit
+            // `strongSkipping` toggle once it became the default (the remaining
+            // featureFlags spelling is itself deprecated and slated for
+            // deletion), so the toolchain default IS the declaration and there
+            // is deliberately nothing to pin here. The metrics gate below is
+            // the check that skipping behavior stays as expected.
             // hasProperty() would be true for the gradle.properties default
             // "enableComposeMetrics=false" — parse the value instead.
             if (providers.gradleProperty("enableComposeMetrics").map(String::toBoolean).getOrElse(false)) {

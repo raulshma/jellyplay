@@ -119,6 +119,11 @@ class HomeStatsCardTest {
     fun playedCountFailure_hidesTheCardSilently() = runTest {
         coEvery { mediaInfoApiClient.getUserPlayedItemCount(any()) } returns Result.failure(IllegalStateException("offline"))
         coEvery { mediaInfoApiClient.getUserUnplayedItemCount(any()) } returns Result.success(34)
+        // The three base legs now fire concurrently, so the runtime leg
+        // runs even though the played count fails and hides the card — stub
+        // it explicitly (the relaxed mock's bare Result can't serve .map).
+        coEvery { mediaInfoApiClient.getItemsWithUserData(any(), any(), any(), any(), any(), any(), any()) } returns
+            Result.success(0 to emptyList())
 
         val data = buildLoader().load(userId = "u1", isAdmin = false)
 

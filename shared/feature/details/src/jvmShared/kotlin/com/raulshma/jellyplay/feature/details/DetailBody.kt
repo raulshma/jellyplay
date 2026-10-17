@@ -24,6 +24,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.State
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -103,7 +104,7 @@ internal fun DetailBodyLandscape(
                         getImageUrl = { posterImageUrl },
                         posterWidth = 220.dp,
                         posterHeight = 330.dp,
-                        contentAlpha = scrollState.contentAlpha,
+                        contentAlphaState = scrollState.contentAlphaState,
                         sharedElementKey = "poster_${state.itemId}",
                         smoothShape = ShapeCache.smooth12,
                         decodeWidth = 660,
@@ -226,7 +227,7 @@ internal fun DetailBodyPortrait(
                                 modifier = Modifier
                                     .fillMaxSize()
                                     .clip(ShapeCache.smooth8)
-                                    .graphicsLayer { alpha = scrollState.contentAlpha },
+                                    .graphicsLayer { alpha = scrollState.contentAlphaState.value },
                                 contentScale = ContentScale.Crop,
                             )
                         }
@@ -274,7 +275,8 @@ private fun DetailPoster(
     getImageUrl: (String) -> String,
     posterWidth: androidx.compose.ui.unit.Dp,
     posterHeight: androidx.compose.ui.unit.Dp,
-    contentAlpha: Float,
+    /** Snapshot-read content fade; read inside the graphicsLayer below. */
+    contentAlphaState: State<Float>,
     sharedElementKey: String,
     smoothShape: androidx.compose.ui.graphics.Shape,
     decodeWidth: Int,
@@ -303,7 +305,7 @@ private fun DetailPoster(
             .fillMaxWidth()
             .aspectRatio(2f / 3f)
             .clip(smoothShape)
-            .graphicsLayer { alpha = contentAlpha }
+            .graphicsLayer { alpha = contentAlphaState.value }
             .then(sharedPosterModifier),
         contentScale = ContentScale.Crop,
     )

@@ -43,6 +43,7 @@ import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.model.UserInfo
 import com.raulshma.jellyplay.core.model.ExperimentalFeature
 import com.raulshma.jellyplay.core.model.HomeFreshness
+import com.raulshma.jellyplay.core.model.HomeSection
 import com.raulshma.jellyplay.core.model.HomeSectionPrefs
 import com.raulshma.jellyplay.core.model.HomeSectionType
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
@@ -288,13 +289,15 @@ internal class HomeViewModel(
      * instead of re-executing the ~510-line MainHomeContent body three
      * times. These two mirrors deliberately no longer ride the
      * [HomeUiState] fold — its whole-object copy made every spinner flip an
-     * orchestrator-wide invalidation. Eagerly (not the base class'
-     * WhileSubscribed default) so the mirror is always live for a `.value`
-     * read and a flip during a brief unsubscribe can't be missed.
+     * orchestrator-wide invalidation. Shared WhileSubscribed(5_000) (the
+     * base-class default): the only consumers leaf-collect per row (the
+     * spinner read in HomeContentSections), so the mapping needs to run only
+     * while rows are composed — not on every refresher emission while home
+     * is backgrounded or disposed.
      */
     val refreshSpinners: StateFlow<HomeRefreshSpinnerState> = stateIn(
         initial = HomeRefreshSpinnerState(),
-        started = SharingStarted.Eagerly,
+        started = SharingStarted.WhileSubscribed(5_000),
         flow = refresher.state.map {
             HomeRefreshSpinnerState(
                 refreshingSectionIds = it.refreshingSectionIds,
@@ -483,6 +486,17 @@ internal class HomeViewModel(
     private val seerrRequestStateHolder = SeerrRequestStateHolder(scope, seerrRequestDelegate)
 
     /**
+     * Process-foreground mirror for the presence-chip poll: combined
+     * into the poll gate so the /Sessions + SyncPlay cadence stops while the
+     * app is backgrounded, and the gate re-emission on re-entry restarts the
+     * loop with an immediate poll before the cadence resumes. Defaults to
+     * true — the lifecycle seam never fires where the platform has no
+     * process lifecycle (JVM tests, desktop), so the poll runs ungated there,
+     * exactly as before.
+     */
+    private val _homeForeground = stateFlow(true)
+
+    /**
      * Removal handle for the process-lifecycle registration below, or null
      * where the platform has no process lifecycle — see
      * [registerHomeProcessLifecycle] (the seam that replaced the legacy
@@ -498,11 +512,15 @@ internal class HomeViewModel(
         // had, so construction never crashes.
         processLifecycleRemoval = registerHomeProcessLifecycle(
             onStart = {
+                _homeForeground.set(true)
                 // Order matters inside start(): network check → stale fetch → loop
                 // start → deferred user-data flush. See HomeRefresher.start.
                 refresher.start()
             },
-            onStop = { refresher.stop() },
+            onStop = {
+                _homeForeground.set(false)
+                refresher.stop()
+            },
         )
 
         launch {
@@ -776,17 +794,20 @@ internal class HomeViewModel(
 
         // ── H19 watch-party presence chips ───────────────────────────────
         // The same gate shape as the genre rail above (pref on, online,
-        // signed-in user), plus a poll loop on the home refresh cadence
-        // (HomeFreshness.REFRESH_INTERVAL_FOREGROUND_MS): the websocket
-        // `Sessions` push was rejected because the shared socket is
+        // signed-in user, app foreground), plus a poll loop on the home
+        // refresh cadence (HomeFreshness.REFRESH_INTERVAL_FOREGROUND_MS): the
+        // websocket `Sessions` push was rejected because the shared socket is
         // connect-on-demand infrastructure (SyncPlay joins, admin dashboard,
         // cast) and is NOT connected while home shows — the controller's
         // KDoc records the decision. The FIRST poll of a session is also the
         // /Sessions capability probe (probe-once, hide-forever — inside the
         // controller). collectLatest cancels the parked delay on every gate
         // change, so a toggle/user switch/going-offline re-polls immediately
-        // or drops the loop; the default-off pref means the loop never runs
-        // (and never probes) until the user opts in.
+        // or drops the loop; the foreground leg suspends the cadence
+        // while the app is backgrounded, and the re-emission on re-entry
+        // restarts the loop with an immediate poll. The default-off pref
+        // means the loop never runs (and never probes) until the user opts
+        // in.
         launch {
             combine(
                 prefs.homeDiscovery.homeDiscovery
@@ -796,11 +817,14 @@ internal class HomeViewModel(
                 offlineModeManager.offlineMode
                     .map { it == OfflineMode.ONLINE }
                     .distinctUntilChanged(),
-            ) { enabled, userId, online -> PresenceGate(enabled, userId, online) }
+                _homeForeground.flow,
+            ) { enabled, userId, online, foreground ->
+                PresenceGate(enabled, userId, online, foreground)
+            }
                 .distinctUntilChanged()
                 .collectLatest { gate ->
                     while (true) {
-                        val chips = if (gate.enabled && gate.online && gate.userId != null) {
+                        val chips = if (gate.enabled && gate.online && gate.foreground && gate.userId != null) {
                             presenceChipsController.refresh(gate.userId)
                         } else {
                             emptyList()
@@ -808,7 +832,7 @@ internal class HomeViewModel(
                         // The chips' own flow (see [presenceChips]) — never a
                         // whole-[HomeUiState] write per cadence tick.
                         _presenceChips.set(chips)
-                        if (!(gate.enabled && gate.online && gate.userId != null)) break
+                        if (!(gate.enabled && gate.online && gate.foreground && gate.userId != null)) break
                         delay(HomeFreshness.REFRESH_INTERVAL_FOREGROUND_MS)
                     }
                 }
@@ -872,12 +896,27 @@ internal class HomeViewModel(
         // spin-up/data/spin-down emissions must not re-execute this fold,
         // and with it the ~510-line MainHomeContent body, three times).
         launch {
+            // `sections` is the one fold field needing a conversion — the
+            // refresher holds a plain List ([HomeRefreshState.sections]), rebuilt
+            // only when its sections actually change. Refresher emissions that
+            // touch spinner/error/partial flags reuse the SAME list instance, so
+            // identity-guard the conversion: only a genuinely new list is
+            // re-wrapped into the persistent ImmutableList. Converting
+            // unconditionally deep-copied the entire home item set on every
+            // emission (4-6× per fetch) only to structurally re-equal it inside
+            // MutableStateFlow. The guard changes no emission count — equal
+            // sections conflate exactly as before.
+            var lastFoldedSections: List<HomeSection> = emptyList()
             refresher.state.collect { refresh ->
+                val sections = if (refresh.sections !== lastFoldedSections) {
+                    lastFoldedSections = refresh.sections
+                    refresh.sections.toImmutableList()
+                } else {
+                    null
+                }
                 _uiState.update {
                     it.copy(
-                        // Persistent list — see [HomeUiState.sections]; the
-                        // conversion is a no-op wrap once already immutable.
-                        sections = refresh.sections.toImmutableList(),
+                        sections = sections ?: it.sections,
                         curatedHero = refresh.curatedHero,
                         bookProgressFractions = refresh.bookProgressFractions,
                         isLoading = refresh.isLoading,
@@ -926,14 +965,16 @@ internal class HomeViewModel(
     )
 
     /**
-     * The H19 presence-chip gate triple — pref on, online mode, and the
-     * signed-in user id (the probe's identity key). One value so the
-     * combine's distinctUntilChanged compares all three atomically.
+     * The H19 presence-chip poll gate — pref on, online mode, the signed-in
+     * user id (the probe's identity key) and the app-foreground mirror (the
+     * cadence must not poll from a backgrounded process). One value so
+     * the combine's distinctUntilChanged compares all four atomically.
      */
     private data class PresenceGate(
         val enabled: Boolean,
         val userId: String?,
         val online: Boolean,
+        val foreground: Boolean,
     )
 
     /**

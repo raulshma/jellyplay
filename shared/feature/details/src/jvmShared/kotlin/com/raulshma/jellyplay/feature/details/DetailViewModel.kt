@@ -1216,26 +1216,40 @@ class DetailViewModel internal constructor(
             // feature family's season leg). Same series context as the anime
             // badges; one fetch per LOADED season (a lazily-expanded season
             // re-emits a new generation, so the enrichment re-runs and picks
-            // it up). Per-season null/empty results drop out; a wholly empty
-            // fold leaves the field empty — silent absence, never an error.
+            // it up — seasons already scored on a previous generation merge
+            // in place of a re-fetch, so the re-run requests only the new
+            // arrivals). The shared bounded-parallel per-season fetch (the
+            // pluginSimilarItems idiom): per-season null/empty results and
+            // failures drop out; a wholly empty fold leaves the field empty
+            // — silent absence, never an error.
             gate = {
                 it.remoteDiscoveryAllowed && it.detail.item.seriesIdForDetail != null
             },
         ) { inputs ->
             if (!pluginFeature(JellyPlayPluginFeatures.Ratings, inputs.itemId)) return@DetailEnrichment
             val tmdbId = resolveTmdbId(inputs.detail) ?: return@DetailEnrichment
-            val ratingsBySeasonId = buildMap {
-                for (season in inputs.snapshot.seasons) {
-                    val seasonNumber = season.indexNumber ?: continue
-                    val ratings = pluginRatingsApi?.getTmdbSeasonRatings(tmdbId.toString(), seasonNumber)
-                        ?.getOrNull() ?: continue
-                    if (ratings.isEmpty()) continue
-                    put(season.id, ratings.mapValues { (_, episode) -> episode.toModel() })
-                }
+            // Seasons still unscored on this field's last emission (the
+            // merge source) — numberless seasons never fetch (the serial
+            // loop's `?: continue`).
+            val alreadyScored = _uiState.value.seasonRatings.keys
+            val seasonsToFetch = inputs.snapshot.seasons.mapNotNull { season ->
+                val seasonNumber = season.indexNumber ?: return@mapNotNull null
+                if (season.id in alreadyScored) return@mapNotNull null
+                season to seasonNumber
             }
-            if (ratingsBySeasonId.isEmpty()) return@DetailEnrichment
+            if (seasonsToFetch.isEmpty()) return@DetailEnrichment
+            val fetchedRatingsBySeasonId = hydrationSemaphore
+                .mapConcurrentCatching(seasonsToFetch) { (season, seasonNumber) ->
+                    pluginRatingsApi?.getTmdbSeasonRatings(tmdbId.toString(), seasonNumber)
+                        ?.getOrNull()
+                        ?.takeIf { it.isNotEmpty() }
+                        ?.let { ratings -> season.id to ratings.mapValues { (_, episode) -> episode.toModel() } }
+                }
+                .filterNotNull()
+                .toMap()
+            if (fetchedRatingsBySeasonId.isEmpty()) return@DetailEnrichment
             if (!loadGuard.isCurrent(inputs.itemId)) return@DetailEnrichment
-            _uiState.update { it.copy(seasonRatings = ratingsBySeasonId) }
+            _uiState.update { it.copy(seasonRatings = it.seasonRatings + fetchedRatingsBySeasonId) }
         },
         DetailEnrichment(
             name = "franchise",
@@ -1262,7 +1276,12 @@ class DetailViewModel internal constructor(
                 ?.take(FRANCHISE_MAX_COLLECTIONS)
                 .orEmpty()
             if (boxSets.isEmpty()) return@DetailEnrichment
-            val rows = boxSets.mapNotNull { boxSet ->
+            // The shared bounded-parallel members hydration (the
+            // pluginSimilarItems idiom): per-BoxSet failures and empty member
+            // lists drop out; the source order is preserved
+            // (mapConcurrentCatching is order-preserving), so the rows keep
+            // the server's default order.
+            val rows = hydrationSemaphore.mapConcurrentCatching(boxSets) { boxSet ->
                 val members = mediaRepository
                     .getCollectionItems(boxSet.id, limit = FRANCHISE_MEMBER_LIMIT)
                     .getOrNull()
@@ -1276,7 +1295,7 @@ class DetailViewModel internal constructor(
                 } else {
                     DetailUiState.FranchiseCollection(id = boxSet.id, name = boxSet.name, members = members)
                 }
-            }
+            }.filterNotNull()
             if (rows.isEmpty()) return@DetailEnrichment
             if (!loadGuard.isCurrent(inputs.itemId)) return@DetailEnrichment
             _uiState.update { it.copy(franchiseCollections = rows) }
@@ -1658,23 +1677,43 @@ class DetailViewModel internal constructor(
      * (resume-zeroing on played flips, favorite-only flips) is derived from
      * the [com.raulshma.jellyplay.core.data.repository.AppliedMutation] the
      * mutator resolved.
+     *
+     * Membership is checked before rebuilding: a projection that cannot
+     * contain the item keeps its list instance, so a detail-item flip leaves
+     * every episode list untouched (and vice versa) instead of paying an
+     * O(total episodes) copy per optimistic toggle. The smart-play predicate
+     * itself is unchanged.
      */
     private val detailItemContainer = UserDataContainer { itemId, patch ->
         var shouldRecomputeSmartPlay = false
         _uiState.update { state ->
             val currentDetail = state.detail
             val isCurrentDetail = currentDetail?.item?.id == itemId
-            shouldRecomputeSmartPlay = isCurrentDetail || state.sortedEpisodes.any { it.id == itemId }
+            val inSortedEpisodes = state.sortedEpisodes.any { it.id == itemId }
+            shouldRecomputeSmartPlay = isCurrentDetail || inSortedEpisodes
+
+            fun List<MediaItem>.patchedWhereContained(): List<MediaItem> =
+                if (any { it.id == itemId }) map { if (it.id == itemId) patch(it) else it } else this
+
             state.copy(
                 detail = currentDetail?.let { detail ->
                     if (isCurrentDetail) detail.copy(item = patch(detail.item)) else detail
                 },
-                relatedItems = state.relatedItems.map { if (it.id == itemId) patch(it) else it },
-                collectionItems = state.collectionItems.map { if (it.id == itemId) patch(it) else it },
-                episodes = state.episodes.mapValues { (_, episodes) ->
-                    episodes.map { if (it.id == itemId) patch(it) else it }
+                relatedItems = state.relatedItems.patchedWhereContained(),
+                collectionItems = state.collectionItems.patchedWhereContained(),
+                episodes = if (state.episodes.any { (_, seasonEpisodes) ->
+                        seasonEpisodes.any { it.id == itemId }
+                    }
+                ) {
+                    state.episodes.mapValues { (_, seasonEpisodes) -> seasonEpisodes.patchedWhereContained() }
+                } else {
+                    state.episodes
                 },
-                sortedEpisodes = state.sortedEpisodes.map { if (it.id == itemId) patch(it) else it },
+                sortedEpisodes = if (inSortedEpisodes) {
+                    state.sortedEpisodes.map { if (it.id == itemId) patch(it) else it }
+                } else {
+                    state.sortedEpisodes
+                },
             )
         }
         if (shouldRecomputeSmartPlay) maybeComputeSmartPlayTarget()

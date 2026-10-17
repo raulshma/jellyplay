@@ -302,13 +302,16 @@ fun JellyPlayTheme(
     val effectiveDarkTheme = darkTheme || isTv || variant.isDarkLocked
     val effectiveOledMode = (oledMode || monochromeMode) && effectiveDarkTheme && variant.allowsOled
 
-    // Bridge the Compose-visible synthwave flag to the global state that
-    // `SynthwaveDynamicShape` reads from `Shape.createOutline` (which runs outside of
-    // composition and therefore can't consult `LocalIsSynthwave` directly). Using
-    // `SideEffect` ensures the write only happens after a *successful* composition, so
-    // intermediate recompositions from previews or parallel compositions don't flicker the
-    // global state. The CompositionLocal itself remains the source of truth for any
-    // composable consumer; this SideEffect only mirrors it for the non-composable Shape path.
+    // Bridge the Compose-visible synthwave flag to the snapshot state that the
+    // ShapeCache accessors and `expressiveListShape` consult when handing out
+    // shapes. Composition observes reads of that state, so a flip recomposes
+    // the readers and they resolve to a different shape instance — the changed
+    // draw input that makes already-composed surfaces redraw deterministically.
+    // Using `SideEffect` ensures the write only happens after a *successful*
+    // composition, so intermediate recompositions from previews or parallel
+    // compositions don't flicker the global state. The CompositionLocal itself
+    // remains the source of truth for any composable consumer; this SideEffect
+    // only mirrors it for the Shape resolution path.
     androidx.compose.runtime.SideEffect { _isSynthwaveActive.value = synthwaveMode }
 
     // Material You dynamic color is a platform seam: null on desktop means

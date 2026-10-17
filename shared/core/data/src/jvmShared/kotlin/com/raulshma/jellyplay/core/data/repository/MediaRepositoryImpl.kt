@@ -151,6 +151,16 @@ class MediaRepositoryImpl internal constructor(
      * copies. A Koin single in dataJvmModule; both impls take the same one.
      */
     private val internals: MediaRepositoryInternals,
+    /**
+     * The in-memory log of this device's recent writes. Every
+     * [notifyUserDataChanged] announcement records its item ids here so the
+     * home refresher can tell a socket echo of THIS device's own write
+     * burst from an external push and demote the echo to a non-forced
+     * (TTL-semantics) refresh. Defaults to the neutral no-op (tests);
+     * production wiring (Koin) passes the shared single the refresher
+     * consults.
+     */
+    private val recentLocalWrites: RecentLocalUserDataWrites = NoopRecentLocalUserDataWrites(),
 ) : MediaRepository,
     // Family seams (the SonarrSeriesOperations over-the-impl pattern): the
     // same single carries the music-catalogue and user-data-write families,
@@ -832,7 +842,13 @@ class MediaRepositoryImpl internal constructor(
         // (album tracks, collection pages) arm coarsely — one marker per
         // group, never per item.
         staleReadGroups.announceConfirmedWrite()
-        syntheticUserDataChanges.tryEmit(UserDataChange(userId, itemIds.distinct()))
+        val distinctIds = itemIds.distinct()
+        // Record the confirmed write BEFORE the announcement so the
+        // refresher can recognize the resulting push (and the socket echo of
+        // the underlying server write) as this device's own and demote it to
+        // a non-forced refresh.
+        recentLocalWrites.record(distinctIds)
+        syntheticUserDataChanges.tryEmit(UserDataChange(userId, distinctIds))
     }
 
     override suspend fun toggleFavorite(itemId: String): Result<Boolean> {

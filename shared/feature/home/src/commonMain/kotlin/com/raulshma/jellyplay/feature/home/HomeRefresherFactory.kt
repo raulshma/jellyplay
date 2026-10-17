@@ -4,6 +4,8 @@ import com.raulshma.jellyplay.core.data.offline.OfflineModeManager
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
 import com.raulshma.jellyplay.core.data.repository.BookTocCacheRepository
 import com.raulshma.jellyplay.core.data.repository.HomeFeed
+import com.raulshma.jellyplay.core.data.repository.NoopRecentLocalUserDataWrites
+import com.raulshma.jellyplay.core.data.repository.RecentLocalUserDataWrites
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.repository.UserDataChanges
 import com.raulshma.jellyplay.core.data.usecase.OrderHomeSectionsUseCase
@@ -50,6 +52,13 @@ internal class HomeRefresherFactory constructor(
     private val librarySyncHook: LibrarySyncHook,
     /** Local TOC cache — the Continue Reading row's page-count source. */
     private val bookTocCacheRepository: BookTocCacheRepository,
+    /**
+     * The local-write log the refresher's user-data chain consults to
+     * demote echoes of this device's own writes to a non-forced fetch.
+     * Defaults to the neutral no-op (tests); production wiring (Koin)
+     * passes the single MediaRepositoryImpl records into.
+     */
+    private val recentLocalWrites: RecentLocalUserDataWrites = NoopRecentLocalUserDataWrites(),
 ) {
     fun create(
         scope: CoroutineScope,
@@ -73,6 +82,7 @@ internal class HomeRefresherFactory constructor(
             tvWatchNextScheduler = tvWatchNextScheduler,
             librarySyncHook = librarySyncHook,
             bookTocCacheRepository = bookTocCacheRepository,
+            recentLocalWrites = recentLocalWrites,
             offlineModeManager = offlineModeManager,
             stateStore = state,
             discoverSources = HomeDiscoverSources(

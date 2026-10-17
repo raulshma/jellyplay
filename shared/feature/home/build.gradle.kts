@@ -39,7 +39,12 @@ kotlin {
             // not api-exported by shared/core:ui (insights precedent).
             implementation(libs.coil.compose)
         }
-        // (kotlin("test") comes from the convention plugin.)
+        // (kotlin("test") comes from the convention plugin.) coroutines-test on
+        // commonTest: BookProgressFractionsTest is pure common logic (ADR-0006
+        // rule 1) and covers both lanes through the commonTest → jvmTest edge.
+        getByName("commonTest").dependencies {
+            implementation(libs.coroutines.test)
+        }
         getByName("jvmTest").dependencies {
             implementation(libs.coroutines.test)
             implementation(libs.mockk)

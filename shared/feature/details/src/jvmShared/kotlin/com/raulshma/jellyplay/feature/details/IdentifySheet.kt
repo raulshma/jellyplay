@@ -12,7 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -142,7 +142,16 @@ internal fun IdentifySheet(
                         .height(320.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    items(state.results) { result ->
+                    itemsIndexed(
+                        state.results,
+                        // IdentifyResult carries no server id; its stable identity is
+                        // the provider-id map (what the search providers key matches
+                        // by), with name/year disambiguating id-less results. The
+                        // index prefix keeps the key unique — two id-less results can
+                        // share name+year, and a duplicate key crashes the LazyColumn.
+                        key = { index, it -> "$index|${it.providerIds}|${it.name}|${it.year}" },
+                        contentType = { _, _ -> "identifyResult" },
+                    ) { _, result ->
                         IdentifyResultRow(
                             result = result,
                             selected = selected == result,

@@ -202,50 +202,65 @@ internal class DetailContentResolver(
                 ),
             ))
         }
-        val usable = playbackSourceResolver.resolveUsableDownload(itemId) != null
-        val seriesData = loadSeriesData(detail, offline = true)
-        val album = loadAlbumTracks(detail, offline = true)
-        val subtitles = loadLocalSubtitles(itemId, local.downloadPath)
-        // One-shot read of the local series' episodes: the catalogue's
-        // [MediaItem] projection drops `posterPath` and `totalSizeBytes`
-        // (storage concerns), so the aggregate header AND the per-episode
-        // artwork map are derived from the raw offline rows in a single pass.
-        val seriesEpisodes: List<OfflineMediaItem> = detail.item.seriesIdForDetail
-            ?.let { localSeriesEpisodes(it) }
-            .orEmpty()
-        val assets = DetailAssets(
-            posterPath = local.posterPath,
-            backdropPath = local.backdropPath,
-            castImages = local.cast
-                .mapNotNull { p -> p.localImagePath?.let { p.id to it } }
-                .toMap(),
-            episodeImages = seriesEpisodes
-                .mapNotNull { e -> e.posterPath?.let { e.id to it } }
-                .toMap(),
-        )
-        val aggregate = if (detail.item.mediaType == MediaType.SERIES) {
-            LocalSeriesAggregate(
-                downloadedEpisodeCount = seriesEpisodes.size,
-                totalSizeBytes = seriesEpisodes.sumOf { it.totalSizeBytes },
-                episodeSizeBytes = seriesEpisodes.associate { it.id to it.totalSizeBytes },
+        // The independent local reads run as one async cluster (same shape as
+        // the remote path above): none of them depends on another's result, so
+        // the strictly-sequential chain only added their latencies together.
+        // Aggregation is unchanged, and failure semantics stay identical — each
+        // load keeps its own error handling and any thrown exception still
+        // propagates out of [publishLocal].
+        return coroutineScope {
+            val usableDeferred = async { playbackSourceResolver.resolveUsableDownload(itemId) != null }
+            val seriesDeferred = async { loadSeriesData(detail, offline = true) }
+            val albumDeferred = async { loadAlbumTracks(detail, offline = true) }
+            val subtitlesDeferred = async { loadLocalSubtitles(itemId, local.downloadPath) }
+            // One-shot read of the local series' episodes: the catalogue's
+            // [MediaItem] projection drops `posterPath` and `totalSizeBytes`
+            // (storage concerns), so the aggregate header AND the per-episode
+            // artwork map are derived from the raw offline rows in a single pass.
+            val seriesEpisodesDeferred = async {
+                detail.item.seriesIdForDetail
+                    ?.let { localSeriesEpisodes(it) }
+                    .orEmpty()
+            }
+            val usable = usableDeferred.await()
+            val seriesData = seriesDeferred.await()
+            val album = albumDeferred.await()
+            val subtitles = subtitlesDeferred.await()
+            val seriesEpisodes: List<OfflineMediaItem> = seriesEpisodesDeferred.await()
+            val assets = DetailAssets(
+                posterPath = local.posterPath,
+                backdropPath = local.backdropPath,
+                castImages = local.cast
+                    .mapNotNull { p -> p.localImagePath?.let { p.id to it } }
+                    .toMap(),
+                episodeImages = seriesEpisodes
+                    .mapNotNull { e -> e.posterPath?.let { e.id to it } }
+                    .toMap(),
             )
-        } else {
-            null
+            val aggregate = if (detail.item.mediaType == MediaType.SERIES) {
+                LocalSeriesAggregate(
+                    downloadedEpisodeCount = seriesEpisodes.size,
+                    totalSizeBytes = seriesEpisodes.sumOf { it.totalSizeBytes },
+                    episodeSizeBytes = seriesEpisodes.associate { it.id to it.totalSizeBytes },
+                )
+            } else {
+                null
+            }
+            ContentResolution.Resolved(
+                contentGen = targetGen,
+                origin = origin,
+                detail = detailWithStreams,
+                seasons = seriesData.seasons,
+                episodesBySeason = seriesData.episodesBySeason,
+                fetchedSeasonIds = seriesData.fetchedSeasonIds,
+                sortedEpisodes = seriesData.sortedEpisodes,
+                albumTracks = album,
+                localSubtitles = subtitles,
+                assets = assets,
+                seriesAggregate = aggregate,
+                confirmedUsable = usable,
+            )
         }
-        return ContentResolution.Resolved(
-            contentGen = targetGen,
-            origin = origin,
-            detail = detailWithStreams,
-            seasons = seriesData.seasons,
-            episodesBySeason = seriesData.episodesBySeason,
-            fetchedSeasonIds = seriesData.fetchedSeasonIds,
-            sortedEpisodes = seriesData.sortedEpisodes,
-            albumTracks = album,
-            localSubtitles = subtitles,
-            assets = assets,
-            seriesAggregate = aggregate,
-            confirmedUsable = usable,
-        )
     }
 
     /**

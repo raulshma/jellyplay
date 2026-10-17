@@ -3,7 +3,9 @@ package com.raulshma.jellyplay.feature.home
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Stable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -144,9 +146,14 @@ internal fun rememberHeroVideoGates(): HeroVideoGates {
     val homeDiscovery = koinInject<HomeDiscoveryStore>()
     val discoverySlice by homeDiscovery.homeDiscovery.collectAsStateWithLifecycle()
     val performanceMode = LocalPerformanceMode.current
-    return remember(isTv, discoverySlice, performanceMode) {
+    // Only the two hero-video flags are consumed — map them out and key
+    // on them, not the whole slice, so an unrelated home-pref change (row
+    // order, banners, stats) doesn't invalidate the gates and their readers.
+    val videoEnabled = discoverySlice.homeHeroVideoEnabled
+    val videoTvEnabled = discoverySlice.homeHeroVideoTvEnabled
+    return remember(isTv, videoEnabled, videoTvEnabled, performanceMode) {
         HeroVideoGates(
-            prefEnabled = if (isTv) discoverySlice.homeHeroVideoTvEnabled else discoverySlice.homeHeroVideoEnabled,
+            prefEnabled = if (isTv) videoTvEnabled else videoEnabled,
             performanceMode = performanceMode,
         )
     }
@@ -257,10 +264,26 @@ internal fun rememberHeroController(
     // write back into the next composition (the recomposition-loop pattern
     // Compose warns about). Keyed on the controller too, so a rebuilt
     // controller can never sit with empty candidates until the list happens
-    // to change.
+    // to change. The epoch rides alongside: candidates identity churns
+    // per refresh emission, so the cadence effect keys on this epoch instead
+    // of the list — it advances only when a write crosses the pool's
+    // availability boundary (empty ↔ non-empty), the one transition the
+    // collector must re-run on; content churn leaves a pending idle wait
+    // alone. The epoch bump itself is a SideEffect, not an in-composition
+    // write: the pending flag is a plain local (a composition-phase snapshot
+    // write costs a guaranteed extra recomposition), and the one-frame lag
+    // before the cadence effect sees the new key is irrelevant at an 8 s/2 s
+    // cadence.
+    var candidatesEpoch by remember { mutableIntStateOf(0) }
+    var epochBumpPending = false
     remember(getBackdropUrl, featuredCandidates) {
+        val wasEmpty = controller.candidates.isEmpty()
         controller.updateCandidates(featuredCandidates)
+        epochBumpPending = wasEmpty != featuredCandidates.isEmpty()
         true
+    }
+    SideEffect {
+        if (epochBumpPending) candidatesEpoch++
     }
 
     // Honor the "Surprise Me" launcher shortcut when the
@@ -280,10 +303,14 @@ internal fun rememberHeroController(
     // Cadence shell: every decision (gates, delays, post-delay re-check) is the
     // controller's [HeroController.rotationCadence]/[shouldTickNow]; this is
     // just the collector — collectLatest cancels a pending delay on any
-    // scroll-state change. Effect keys preserved from the inline implementation.
-    LaunchedEffect(featuredCandidates, listState, controller.autoRotateEnabled) {
-        snapshotFlow { listState.isScrollInProgress }
-            .collectLatest { isScrolling ->
+    // scroll-state change. The effect keys are [listState] plus the
+    // candidates epoch, and autoRotateEnabled is read inside the
+    // snapshotFlow instead — a pref or "Surprise Me" flip still re-evaluates
+    // the cadence immediately, while per-emission candidates churn no longer
+    // cancels a pending 8 s idle wait.
+    LaunchedEffect(listState, candidatesEpoch) {
+        snapshotFlow { listState.isScrollInProgress to controller.autoRotateEnabled }
+            .collectLatest { (isScrolling, _) ->
                 when (
                     val cadence = controller.rotationCadence(
                         isScrolling = isScrolling,
@@ -349,7 +376,14 @@ internal class HeroController(
     internal var focusSnapSettled: Boolean by mutableStateOf(false)
 
     val featuredItem: MediaItem? get() = candidates.getOrNull(featuredIndex)
-    val backdropUrl: String? get() = featuredItem?.let { getBackdropUrl(it.id) }
+
+    /**
+     * Memoized per (candidates, featuredIndex) read: [featuredItem]'s
+     * backdrop string is resolved once per actual featured-item change instead
+     * of on every read. [derivedStateOf] tracks both state reads, so the
+     * value is identical to the old per-read resolution.
+     */
+    val backdropUrl: String? by derivedStateOf { featuredItem?.let { getBackdropUrl(it.id) } }
 
     fun updateCandidates(items: List<MediaItem>) {
         candidates = items

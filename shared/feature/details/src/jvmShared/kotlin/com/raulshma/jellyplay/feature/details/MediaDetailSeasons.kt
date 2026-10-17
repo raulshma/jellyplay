@@ -684,7 +684,8 @@ internal fun EpisodeCard(
 
     // D16: this row's in-flight download fraction (provided by the screen from
     // the download-lifecycle slice); null = not downloading. Read here so a
-    // ~2 s progress tick recomposes only the downloading rows.
+    // ~2 s progress tick recomposes only the downloading rows — the local is a
+    // compositionLocalOf (reader-tracked), not static.
     val downloadProgressFraction = if (showDownloadProgress) {
         LocalEpisodeDownloadProgress.current[episode.id]
     } else {

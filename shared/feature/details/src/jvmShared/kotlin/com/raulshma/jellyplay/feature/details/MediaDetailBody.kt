@@ -227,14 +227,20 @@ internal fun DetailContentBody(
     // The body's admission is two disjoint halves merged in [DetailSectionKind]
     // declaration order (= the emission order): the hand-written fold for the
     // unmigrated sections, the detail section registry's modules for the
-    // migrated ones (wave 1: PLUGIN_RATINGS, TMDB_REVIEWS).
-    val admittedSections = DetailSectionRegistry.admittedSections(
-        handFold = DetailSectionAdmission
-            .from(state, detail, showActionButtons, showMediaInfo)
-            .admit(),
-        state = state,
-        detail = detail,
-    )
+    // migrated ones (wave 1: PLUGIN_RATINGS, TMDB_REVIEWS). Memoized on exactly
+    // the fold's inputs (detail == state.detail) so the Compose-free fold +
+    // registry merge + re-sort is not re-executed per recomposition (the
+    // screen-level entrance animation re-runs this body per frame while it
+    // plays).
+    val admittedSections = remember(state, showActionButtons, showMediaInfo) {
+        DetailSectionRegistry.admittedSections(
+            handFold = DetailSectionAdmission
+                .from(state, detail, showActionButtons, showMediaInfo)
+                .admit(),
+            state = state,
+            detail = detail,
+        )
+    }
 
     CompositionLocalProvider(LocalDetailEntrance provides entranceProgress) {
         Box(

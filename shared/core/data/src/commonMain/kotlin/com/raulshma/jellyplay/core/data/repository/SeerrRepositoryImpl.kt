@@ -34,9 +34,9 @@ private const val POLL_INTERVAL_MS = 60_000L
 /**
  * Idle cadence for the same poll while NO collector watches the badge flow
  * (app backgrounded, or polling kept alive by a consumer with no badge on
- * screen): 15 minutes, matching HomeRefresher's
- * `HomeFreshness.REFRESH_INTERVAL_BACKGROUND_MS` discipline — the singleton
- * keeps the shared count warm, but at 1/15th of the foreground rate.
+ * screen): 15 minutes, matching HomeRefresher's background-refresh
+ * discipline — the singleton keeps the shared count warm, but at 1/15th of
+ * the foreground rate.
  */
 private const val POLL_INTERVAL_IDLE_MS = 15 * 60_000L
 

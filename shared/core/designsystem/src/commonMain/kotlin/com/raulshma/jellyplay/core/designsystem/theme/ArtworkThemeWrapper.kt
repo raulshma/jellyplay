@@ -28,6 +28,11 @@ fun ArtworkThemeWrapper(
     }
 
     val colors = rememberArtworkColors(imageUrl)
+    // Palette arrival and scheme regeneration land in ONE recomposition pass:
+    // `rememberArtworkColors` returns state, and when the async extraction
+    // writes it the wrapper recomposes once, re-running this synchronous
+    // remember — so the CompositionLocal update and the MaterialTheme remount
+    // below always apply together in the same frame, not as separate waves.
     val colorScheme: androidx.compose.material3.ColorScheme? = remember(
         colors, darkTheme, oledMode, colorStyle, accentColorSwatch,
     ) {

@@ -192,12 +192,7 @@ fun MediaCardScaffold(
     val borderAlpha = border?.alpha
     val surfaceColor = MaterialTheme.colorScheme.surface
     val resolvedScrimBrush = scrim?.brush ?: remember(surfaceColor) {
-        Brush.verticalGradient(
-            colors = listOf(
-                Color.Transparent,
-                surfaceColor.copy(alpha = 0.45f),
-            ),
-        )
+        DefaultCardScrimBrushCache.brushFor(surfaceColor)
     }
     val resolvedScrimHeight = scrim?.height ?: DefaultCardScrimHeight
 
@@ -289,6 +284,33 @@ fun MediaCardScaffold(
                 modifier = Modifier.enableMarqueeOnFocus(focused = chrome.focus.isFocused),
             )
             footer()
+        }
+    }
+}
+
+/**
+ * Tiny LRU behind the scaffold's default bottom-scrim path: cards that don't
+ * receive a caller-supplied [CardScrim] all draw the same
+ * transparent→surface gradient, so the [Brush] is cached per surface colour
+ * instead of being re-allocated by every card composition. Same shape and
+ * rationale as [DominantColorLruCache] ([AccessOrderLruMap] + [withUiLock]).
+ */
+private object DefaultCardScrimBrushCache {
+    private const val MAX_ENTRIES = 16
+    private val lock = Any()
+    private val map = AccessOrderLruMap<Color, Brush>()
+
+    fun brushFor(surfaceColor: Color): Brush = withUiLock(lock) {
+        map[surfaceColor] ?: Brush.verticalGradient(
+            colors = listOf(
+                Color.Transparent,
+                surfaceColor.copy(alpha = 0.45f),
+            ),
+        ).also { brush ->
+            map.put(surfaceColor, brush)
+            while (map.size > MAX_ENTRIES) {
+                map.removeEldestOrNull() ?: break
+            }
         }
     }
 }

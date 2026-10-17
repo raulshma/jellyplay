@@ -694,4 +694,51 @@ class DownloadLifecycleActionsTest {
         )
     }
     // endregion
+
+    // region rootState projection
+    @Test
+    fun `rootState mirrors root fields but excludes the per-tick progress map`() = runTest {
+        val progressFlow = MutableStateFlow(
+            mapOf(
+                "d1" to DownloadProgress(
+                    id = "d1", downloadedBytes = 250, speedBytesPerSec = 10,
+                    mediaItemId = "e1", totalSizeBytes = 1000,
+                ),
+            ),
+        )
+        // Metered link over the warning threshold: startDownload surfaces the
+        // cellular warning — a real root-field change — without touching the
+        // intake.
+        val detail = MediaDetail(
+            item = MediaItem(id = "m1", name = "Movie", mediaType = MediaType.MOVIE),
+            mediaSources = listOf(MediaSource(id = "src-1", name = "Source", size = 60L * 1024L * 1024L)),
+        )
+        val h = makeActions(
+            scope = helperScope(),
+            detail = detail,
+            unmetered = false,
+            downloadsSlice = DownloadsSlice(cellularDownloadSizeWarningMb = 50),
+            activeProgressFlow = progressFlow,
+        )
+        advanceUntilIdle()
+
+        // The full state carries the tick map; the slim projection does not —
+        // a ~2 s transfer tick must not reach the screen root's collect.
+        assertEquals(mapOf("e1" to 0.25f), h.state.value.episodeDownloadProgress)
+        assertEquals(
+            DownloadRootState(
+                isDownloading = false,
+                isDownloadingSeries = false,
+                downloadedEpisodeIds = emptySet(),
+                downloadPicker = DownloadPickerState(),
+                cellularDownloadWarningMb = null,
+            ),
+            h.rootState.value,
+        )
+
+        h.startDownload()
+        advanceUntilIdle()
+        assertEquals(60, h.rootState.value.cellularDownloadWarningMb)
+    }
+    // endregion
 }

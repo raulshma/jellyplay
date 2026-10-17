@@ -6,6 +6,7 @@ import com.raulshma.jellyplay.core.data.repository.ArrRepository
 import com.raulshma.jellyplay.core.data.repository.BookTocCache
 import com.raulshma.jellyplay.core.data.repository.BookTocCacheRepository
 import com.raulshma.jellyplay.core.data.repository.HomeFeed
+import com.raulshma.jellyplay.core.data.repository.RecentLocalUserDataWritesImpl
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.repository.UserDataChanges
 import com.raulshma.jellyplay.core.data.sync.SyncStatusStateHolder
@@ -102,6 +103,12 @@ class HomeRefresherTest {
     private lateinit var librarySyncHook: LibrarySyncHook
     private lateinit var offlineModeManager: OfflineModeManager
     private lateinit var fakeTimeSource: FakeTimeSource
+    /**
+     * The real write-log the refresher under test consults, on the fake
+     * clock — the echo-demotion tests record into it before emitting a
+     * user-data change.
+     */
+    private lateinit var localWrites: RecentLocalUserDataWritesImpl
 
     private var refresher: HomeRefresher? = null
     private var refresherScope: CoroutineScope? = null
@@ -198,6 +205,7 @@ class HomeRefresherTest {
     private fun TestScope.buildRefresher(mergeCwAndNextUp: Boolean = false): HomeRefresher {
         val scope = CoroutineScope(SupervisorJob() + StandardTestDispatcher(testScheduler))
         refresherScope = scope
+        localWrites = RecentLocalUserDataWritesImpl(clock = { fakeTimeSource.nowMs })
         // One state store shared by the refresher and its side-fetch
         // collaborator (the factory seam, mirrored here).
         val state = MutableStateFlow(HomeRefreshState())
@@ -213,6 +221,7 @@ class HomeRefresherTest {
             librarySyncHook = librarySyncHook,
             offlineModeManager = offlineModeManager,
             stateStore = state,
+            recentLocalWrites = localWrites,
             discoverSources = HomeDiscoverSources(
                 clock = fakeTimeSource,
                 seerrRepository = seerrRepository,
@@ -781,6 +790,86 @@ class HomeRefresherTest {
         // Past the throttle expiry the deferred fetch fires on its own.
         advanceTimeBy(31_500)
         runCurrent()
+        coVerify(exactly = 1) { homeFeed.getHomeSections(any(), force = true) }
+        refresher.stop()
+    }
+
+    @Test
+    fun userDataChange_echoOfOwnWrites_demotesToNonForcedFetch() = runTest {
+        // The socket echo of THIS device's own write burst is item-id
+        // identical to the write (UserDataChange carries only user + item
+        // ids), so the write-log is what lets the flush tell it apart from an
+        // external push. With every named item recently recorded, the fetch
+        // runs with TTL semantics — still debounced and throttled exactly as
+        // before.
+        coEvery {
+            homeFeed.getHomeSections(any(), any())
+        } returns Result.success(HomeSectionsResult(sections = emptyList()))
+        val refresher = buildRefresher()
+        runCurrent()
+        // Prime the refresh clock the way a sign-in fetch would (the fake's
+        // 1_000 becomes lastRefreshTime); this priming fetch is non-forced.
+        refresher.fetchOnce()
+        runCurrent()
+
+        // The device itself just saved state for i1 (the
+        // notifyUserDataChanged record), then its echo lands past the 60s
+        // throttle window.
+        fakeTimeSource.nowMs = 61_000L
+        localWrites.record(listOf("i1"))
+        userDataEvents.tryEmit(UserDataChange(userId = "u1", itemIds = listOf("i1")))
+        advanceTimeBy(1_000)
+        runCurrent()
+
+        coVerify(exactly = 0) { homeFeed.getHomeSections(any(), force = true) }
+        // Priming fetch + the demoted echo — the only two fetches so far.
+        coVerify(exactly = 2) { homeFeed.getHomeSections(any(), force = false) }
+        refresher.stop()
+    }
+
+    @Test
+    fun userDataChange_containingAForeignItemId_staysForced() = runTest {
+        // The demotion is all-or-nothing: one foreign id means the change
+        // could name server-side state this device cannot know, so the
+        // forced path stays.
+        coEvery {
+            homeFeed.getHomeSections(any(), any())
+        } returns Result.success(HomeSectionsResult(sections = emptyList()))
+        val refresher = buildRefresher()
+        runCurrent()
+        refresher.fetchOnce()
+        runCurrent()
+
+        fakeTimeSource.nowMs = 61_000L
+        localWrites.record(listOf("mine"))
+        userDataEvents.tryEmit(UserDataChange(userId = "u1", itemIds = listOf("mine", "external")))
+        advanceTimeBy(1_000)
+        runCurrent()
+
+        coVerify(exactly = 1) { homeFeed.getHomeSections(any(), force = true) }
+        refresher.stop()
+    }
+
+    @Test
+    fun userDataChange_writeOlderThanEchoWindow_staysForced() = runTest {
+        // A log entry past the echo window no longer demotes: the write is
+        // old enough that the push may as well be external (and a stale
+        // entry must not pin the TTL path forever).
+        coEvery {
+            homeFeed.getHomeSections(any(), any())
+        } returns Result.success(HomeSectionsResult(sections = emptyList()))
+        val refresher = buildRefresher()
+        runCurrent()
+        refresher.fetchOnce()
+        runCurrent()
+
+        fakeTimeSource.nowMs = 61_000L
+        localWrites.record(listOf("i1"))
+        fakeTimeSource.nowMs = 61_000L + RecentLocalUserDataWritesImpl.ECHO_WINDOW_MS
+        userDataEvents.tryEmit(UserDataChange(userId = "u1", itemIds = listOf("i1")))
+        advanceTimeBy(1_000)
+        runCurrent()
+
         coVerify(exactly = 1) { homeFeed.getHomeSections(any(), force = true) }
         refresher.stop()
     }

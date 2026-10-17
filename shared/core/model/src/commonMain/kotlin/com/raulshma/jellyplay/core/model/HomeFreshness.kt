@@ -60,13 +60,6 @@ object HomeFreshness {
     /** Foreground periodic-refresh interval. */
     const val REFRESH_INTERVAL_FOREGROUND_MS = 60_000L
 
-    /**
-     * Background periodic-refresh interval: the Home VM survives in the back
-     * stack, so a short interval kept fanning out Seerr requests while the user
-     * was on another screen; the resume-if-stale check re-syncs on return.
-     */
-    const val REFRESH_INTERVAL_BACKGROUND_MS = 15 * 60_000L
-
     /** Minimum spacing between any two periodic-loop fetches (jitter guard). */
     const val MIN_REFRESH_INTERVAL_MS = 30_000L
 

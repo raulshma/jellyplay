@@ -268,12 +268,17 @@ fun HomeSearchResultsOverlay(
                             jellyfinResultSubtitle(item, movieLabel, seriesLabel, musicLabel)
                         }
                         Box(modifier = Modifier.animateItem(placementSpec = placementSpec)) {
+                            // Per-row lambdas remembered on the item: a
+                            // recomposition without a new results emission reuses
+                            // them instead of reallocating per row. Keyed on the
+                            // instance so a refreshed result never keeps a stale
+                            // capture.
                             HomeSearchResultRow(
                                 title = item.name,
                                 subtitle = subtitle,
-                                onClick = { onJellyfinClick(item) },
+                                onClick = remember(item) { { onJellyfinClick(item) } },
                                 tileBackground = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f),
-                                leading = { HomeResultTile(getImageUrl(item.id)) },
+                                leading = remember(item.id) { { HomeResultTile(getImageUrl(item.id)) } },
                             )
                         }
                     }
@@ -303,12 +308,14 @@ fun HomeSearchResultsOverlay(
                             seerrResultSubtitle(item, movieLabel, seriesLabel)
                         }
                         Box(modifier = Modifier.animateItem(placementSpec = placementSpec)) {
+                            // Per-row lambdas remembered on the item —
+                            // same contract as the library rows above.
                             HomeSearchResultRow(
                                 title = item.displayName,
                                 subtitle = subtitle,
-                                onClick = { onSeerrClick(item) },
+                                onClick = remember(item) { { onSeerrClick(item) } },
                                 tileBackground = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f),
-                                leading = { HomeResultTile(item.posterUrl) },
+                                leading = remember(item) { { HomeResultTile(item.posterUrl) } },
                             )
                         }
                     }
@@ -335,30 +342,36 @@ fun HomeSearchResultsOverlay(
                         val item = settingsResults[index]
                         val placementSpec = lazyItemPlacementSpec()
                         Box(modifier = Modifier.animateItem(placementSpec = placementSpec)) {
+                            // Per-row lambdas remembered on the item —
+                            // same contract as the library rows above.
                             HomeSearchResultRow(
                                 title = item.title,
                                 subtitle = item.subtitle,
-                                onClick = { onSettingsClick(item) },
+                                onClick = remember(item) { { onSettingsClick(item) } },
                                 tileBackground = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
-                                leading = {
-                                    Icon(
-                                        imageVector = item.icon,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(22.dp),
-                                        tint = MaterialTheme.colorScheme.primary,
-                                    )
+                                leading = remember(item) {
+                                    {
+                                        Icon(
+                                            imageVector = item.icon,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(22.dp),
+                                            tint = MaterialTheme.colorScheme.primary,
+                                        )
+                                    }
                                 },
                                 trailing = if (item.isAdvanced) {
-                                    {
-                                        Text(
-                                            text = item.category,
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            modifier = Modifier
-                                                .clip(ShapeCache.smooth8)
-                                                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f))
-                                                .padding(horizontal = 6.dp, vertical = 2.dp),
-                                        )
+                                    remember(item) {
+                                        {
+                                            Text(
+                                                text = item.category,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier
+                                                    .clip(ShapeCache.smooth8)
+                                                    .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f))
+                                                    .padding(horizontal = 6.dp, vertical = 2.dp),
+                                            )
+                                        }
                                     }
                                 } else null,
                             )

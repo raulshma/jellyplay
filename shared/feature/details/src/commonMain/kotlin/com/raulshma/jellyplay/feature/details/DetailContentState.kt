@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.feature.details
 
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.staticCompositionLocalOf
 import com.raulshma.jellyplay.core.model.DetailAssets
 import com.raulshma.jellyplay.core.model.DetailCapabilities
@@ -24,10 +25,12 @@ import com.raulshma.jellyplay.core.ui.navigation.Route
  * [DetailContentState] — on purpose: the map moves on every ~2 s transfer
  * tick, and the seasons section memoizes its [SeasonsPresentation] on inputs
  * that deliberately exclude per-tick data, so threading the map through the
- * state bag would freeze the rows' bars at their first value. Reading the
- * local inside each row recomposes only the affected rows.
+ * state bag would freeze the rows' bars at their first value. The local is
+ * `compositionLocalOf` (not static) so reads are tracked: a ~2 s tick
+ * recomposes only the rows whose entry actually changed — a static local
+ * would invalidate the entire provider subtree per tick.
  */
-internal val LocalEpisodeDownloadProgress = staticCompositionLocalOf<Map<String, Float>> { emptyMap() }
+internal val LocalEpisodeDownloadProgress = compositionLocalOf<Map<String, Float>> { emptyMap() }
 
 /**
  * The current item's live download row (`DownloadLifecycleActions.downloadFlow`),

@@ -14,7 +14,13 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.raulshma.jellyplay.core.designsystem.theme.AmbientColors
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
@@ -82,7 +88,8 @@ fun AmbientColorBackdrop(
     }
 
     // The blobs drift on a shared ~30 Hz-gated frame clock (see
-    // [LaunchBlobDrift]) instead of per-blob Animatables. Frozen
+    // [LaunchBlobDrift]) instead of per-blob Animatables. The clock pauses
+    // while the host window/app is stopped. Frozen
     // under reduced motion (the effect body is skipped, values stay 0f) which
     // also serves as the performance-mode freeze — callers gate this
     // composable on performance mode themselves when they want zero animation
@@ -119,12 +126,48 @@ fun AmbientColorBackdrop(
  * audio player's `AmbientBackground` so the gated clock loop lives in one
  * place. Not composing this (the reduced-motion path) freezes the blobs at
  * their current values.
+ *
+ * The clock also pauses while the host window/app is not resumed (the local
+ * lifecycle owner's ON_STOP/ON_RESUME): an Android activity gets no
+ * Choreographer frames while stopped anyway, but a desktop window keeps
+ * composing while hidden behind other windows, so without the gate the loop
+ * would keep issuing gated phase writes while backgrounded. While paused the
+ * loop suspends on a lifecycle-driven flag instead of reading frames, the
+ * blobs hold their last values, and the first frame after resume continues
+ * the drift from the frame timestamp — exactly as a frame-starved resume
+ * behaves today.
  */
 @Composable
 fun LaunchBlobDrift(blobProgress: List<MutableFloatState>) {
+    val lifecycleOwner = LocalLifecycleOwner.current
+    // Seeded from the current state because composition usually happens after
+    // ON_RESUME has already fired — waiting for the next ON_RESUME event would
+    // freeze the blobs until the following foreground trip.
+    val running = remember(lifecycleOwner) {
+        MutableStateFlow(lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED))
+    }
+
+    LaunchedEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_RESUME -> running.value = true
+                Lifecycle.Event.ON_STOP -> running.value = false
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        try {
+            awaitCancellation()
+        } finally {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
     LaunchedEffect(blobProgress) {
         var lastPhaseUpdateNanos = 0L
         while (true) {
+            // Suspend — not spin — while the window is stopped.
+            running.first { it }
             withFrameNanos { nanoTime ->
                 if (nanoTime - lastPhaseUpdateNanos >= MIN_PHASE_UPDATE_INTERVAL_NS) {
                     lastPhaseUpdateNanos = nanoTime

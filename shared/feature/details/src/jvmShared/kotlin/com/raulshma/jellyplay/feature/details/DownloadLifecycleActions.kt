@@ -19,8 +19,12 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import com.raulshma.jellyplay.feature.details.generated.resources.Res
@@ -61,6 +65,27 @@ internal data class DownloadLifecycleState(
     // in-flight status window (completes/fails/cancelled), so the map is a
     // live global projection that needs no per-navigation reset.
     val episodeDownloadProgress: Map<String, Float> = emptyMap(),
+)
+
+/**
+ * The slim, low-frequency slice of [DownloadLifecycleState] the
+ * ALWAYS-composed detail screen root collects — spinner booleans, picker,
+ * downloaded-ids and the cellular warning. Deliberately excludes
+ * [DownloadLifecycleState.episodeDownloadProgress] (the ~2 s transfer-tick
+ * map) and the sheet-scoped caches: without this projection every tick's
+ * `copy(...)` recomposed the ~1,300-line root scope and re-ran the ~60-field
+ * `DetailContentState` construction. The per-tick map reaches the rows
+ * through the narrow [EpisodeDownloadProgressProvider] scope instead; the
+ * sheets collect the full [DownloadLifecycleActions.state] themselves while
+ * open.
+ */
+@Immutable
+internal data class DownloadRootState(
+    val isDownloading: Boolean = false,
+    val isDownloadingSeries: Boolean = false,
+    val downloadedEpisodeIds: Set<String> = emptySet(),
+    val downloadPicker: DownloadPickerState = DownloadPickerState(),
+    val cellularDownloadWarningMb: Int? = null,
 )
 
 /**
@@ -120,6 +145,27 @@ internal class DownloadLifecycleActions(
 
     private val _state = MutableStateFlow(DownloadLifecycleState())
     val state: StateFlow<DownloadLifecycleState> = _state.asStateFlow()
+
+    /**
+     * The [DownloadRootState] projection, deduped so only an actual
+     * root-field change reaches the screen root. Eagerly (not
+     * WhileSubscribed): the mapping is five scalar fields per emission —
+     * trivial next to a recomposition — and the always-live contract mirrors
+     * [state]'s `asStateFlow`, so direct `.value` reads (tests) never see a
+     * stale initial.
+     */
+    val rootState: StateFlow<DownloadRootState> = _state
+        .map {
+            DownloadRootState(
+                isDownloading = it.isDownloading,
+                isDownloadingSeries = it.isDownloadingSeries,
+                downloadedEpisodeIds = it.downloadedEpisodeIds,
+                downloadPicker = it.downloadPicker,
+                cellularDownloadWarningMb = it.cellularDownloadWarningMb,
+            )
+        }
+        .distinctUntilChanged()
+        .stateIn(scope, SharingStarted.Eagerly, DownloadRootState())
 
     init {
         // Live in-flight download progress (D16): one collector for the screen's

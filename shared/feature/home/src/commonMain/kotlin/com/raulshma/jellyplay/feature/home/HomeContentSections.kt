@@ -107,6 +107,7 @@ internal sealed interface HomeRenderFeed {
      * online-only surfaces — offline rendering short-circuits them by
      * construction, not by boolean masks at the read sites.
      */
+    @Immutable
     data class Online(
         override val sections: List<HomeSection>,
         override val isLoading: Boolean,
@@ -119,6 +120,7 @@ internal sealed interface HomeRenderFeed {
      * [isLoading] covers the FallbackPending window after the gate opens but
      * before the first library emission (downloads may yet exist).
      */
+    @Immutable
     data class Offline(
         val content: OfflineHomeContent,
         override val isLoading: Boolean = false,
@@ -253,6 +255,24 @@ private fun offlineSectionItems(
 ): List<OfflineMediaItem> = section.items.mapNotNull { byId[it.id] }
 
 /**
+ * A cheap, order-sensitive Int fingerprint over a section list's item
+ * ids (sizes folded in) — the only thing the downloaded-row dedupe consumes.
+ * Remembered off the coarse list, so the hashing runs once per new list
+ * instance while the remember key comparing it is a single Int per body
+ * recomposition.
+ */
+private fun sectionItemIdFingerprint(sections: List<HomeSection>): Int {
+    var hash = sections.size
+    for (section in sections) {
+        hash = hash * 31 + section.items.size
+        for (item in section.items) {
+            hash = hash * 31 + item.id.hashCode()
+        }
+    }
+    return hash
+}
+
+/**
  * The home LazyColumn: hero, partial-load / newsletter banners, media rows,
  * Seerr discover grid, *arr "Recently Grabbed" row, downloaded row, and the
  * continue-watching "Resume vs Details" dialog.
@@ -360,7 +380,13 @@ internal fun HomeContentList(
         // isn't shown twice. Reads the aggregate's (already mode-filtered)
         // library slice.
         val offlineContent = state.offlineContent
-        val dedupedOfflineLibrary = remember(offlineContent, sections) {
+        // The dedupe consumes only the online sections' item ids, and the
+        // sections list identity churns per refresher emission — so the
+        // remember keys on a cheap ids fingerprint instead of the list, and
+        // the fold below re-runs only when the online id set actually changes
+        // (same idiom as the screen layer's offline fingerprints).
+        val onlineSectionIdsFingerprint = remember(sections) { sectionItemIdFingerprint(sections) }
+        val dedupedOfflineLibrary = remember(offlineContent, onlineSectionIdsFingerprint) {
             val library = offlineContent?.library.orEmpty()
             if (library.isEmpty()) library
             else {
@@ -668,7 +694,12 @@ internal fun HomeContentList(
 
                 items(
                     count = state.discoverRows.size,
-                    key = { rowIndex -> "seerr_row_${state.discoverRows[rowIndex].firstOrNull()?.id ?: 0}" },
+                    // Row content is positional (a reroll reorders items within
+                    // the rows), so the key is the stable slot index — keying
+                    // on the row's first item id re-keyed EVERY row the moment
+                    // a roll reordered its items, forcing a full re-layout
+                    // mid-repaint.
+                    key = { rowIndex -> "seerr_row_$rowIndex" },
                     contentType = { "seerrRow" },
                 ) { rowIndex ->
                     DiscoverRowSlot(

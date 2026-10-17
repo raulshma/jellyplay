@@ -55,6 +55,7 @@ val homeModule: Module = module {
             tvWatchNextScheduler = get(),
             librarySyncHook = get(),
             bookTocCacheRepository = get(),
+            recentLocalWrites = get(),
         )
     }
     single {

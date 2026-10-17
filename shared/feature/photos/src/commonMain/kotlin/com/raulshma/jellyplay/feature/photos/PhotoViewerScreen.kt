@@ -110,9 +110,9 @@ import com.raulshma.jellyplay.feature.photos.generated.resources.photos_reset
 
 // Filmstrip thumbnails all share the same 6dp smooth-corner shape; a single
 // file-level val avoids allocating a fresh AbsoluteSmoothCornerShape per item
-// on every recomposition (the same rationale as ShapeCache — kept local here
-// rather than as a ShapeCache entry because that would wrap it in
-// SynthwaveDynamicShape and square these corners in synthwave mode).
+// on every recomposition (kept local rather than as a ShapeCache entry because
+// ShapeCache tokens flatten to zero corner in synthwave mode, and this shape
+// must stay rounded).
 private val filmstripThumbShape = smoothCornerShape(6.dp)
 
 /** One arm of the photo viewer's ordered back ladder. */

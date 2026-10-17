@@ -114,13 +114,21 @@ internal fun SeerrDiscoverRow(
                 contentType = { "seerrCard" },
             ) { idx ->
                 val seerrItem = items[idx]
+                // Per-card bindings, remembered on the item instance: the
+                // row-level closures above stay stable across recompositions,
+                // and these thin wrappers no longer reallocate per card per
+                // recomposition (the loading-state flip invalidates this slot
+                // on every request star). Keyed on the instance so a reroll
+                // that replaces the item never keeps a stale capture.
+                val onClick = remember(seerrItem) { { onCardClick(seerrItem) } }
+                val onRequestClick = remember(seerrItem) { { onCardRequestClick(seerrItem) } }
                 SeerrMediaCard(
                     item = seerrItem,
                     imageUrl = seerrItem.posterUrl,
                     isLoading = seerrCardLoadingState.isLoading(seerrItem.id),
                     clipToShape = clippingEnabled,
-                    onClick = { onCardClick(seerrItem) },
-                    onRequestClick = { onCardRequestClick(seerrItem) },
+                    onClick = onClick,
+                    onRequestClick = onRequestClick,
                     modifier = Modifier.animateItem(placementSpec = lazyItemPlacementSpec()).width(itemWidth),
                 )
             }
