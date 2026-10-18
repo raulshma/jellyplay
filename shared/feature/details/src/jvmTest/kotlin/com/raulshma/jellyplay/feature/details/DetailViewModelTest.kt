@@ -13,6 +13,7 @@ import com.raulshma.jellyplay.core.data.repository.DownloadRepository
 import com.raulshma.jellyplay.core.data.repository.MediaDetailProvider
 import com.raulshma.jellyplay.core.data.repository.MetadataEditorRepository
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
+import com.raulshma.jellyplay.core.data.repository.MediaCatalogueEnrichments
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.PlaylistRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
@@ -162,9 +163,6 @@ class DetailViewModelTest {
         // launch doesn't crash casting the relaxed-mock Result default. Individual
         // tests override this to drive the specialFeatures list.
         coEvery { libraryApiClient.getSpecialFeatures(any()) } returns Result.success(emptyList())
-        // D6: the franchise rows' BoxSet-ancestor read — empty keeps every
-        // pre-D6 behavior (no ancestor → no rows). Individual tests override.
-        coEvery { libraryApiClient.getBoxSetsContaining(any()) } returns Result.success(emptyList())
         // D7: the "Airing next" strip fetch — empty keeps the strip absent.
         // Individual tests override.
         coEvery { libraryApiClient.getUpcoming(any(), any(), any()) } returns Result.success(emptyList())
@@ -251,6 +249,11 @@ class DetailViewModelTest {
             storageProbe = mockk<DetailStorageProbe>(relaxed = true),
             strings = strings,
             mediaRepository = mediaRepository,
+            mediaCatalogueEnrichments = object : MediaCatalogueEnrichments {
+                override suspend fun getTags(parentId: String?) = Result.success(emptyList<String>())
+                override suspend fun getBoxSetsContaining(itemId: String) =
+                    Result.success(emptyList<com.raulshma.jellyplay.core.model.CollectionSummary>())
+            },
             libraryApiClient = libraryApiClient,
             collectionApiClient = mockk<com.raulshma.jellyplay.core.network.api.CollectionApiClient>(relaxed = true),
             userDataMutator = userDataMutator,

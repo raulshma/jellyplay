@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.core.data.playback
 import androidx.compose.runtime.Stable
 import com.raulshma.jellyplay.core.concurrency.TaskBundle
 import com.raulshma.jellyplay.core.data.remote.RemotePlayableEngine
+import com.raulshma.jellyplay.core.data.session.SessionCacheRegistry
 import com.raulshma.jellyplay.feature.player.video.engine.MediaEngine
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -41,7 +42,15 @@ import kotlinx.coroutines.launch
  * DataModule bridge left with the extinction).
  */
 @Stable
-class VideoMiniPlayerState {
+class VideoMiniPlayerState(
+    /**
+     * The identity-reaction registry (see [registerAction]'s init use): the
+     * seam that releases a deposited native engine on sign-out / user switch
+     * / server switch. Nullable so bare constructions (tests) skip the
+     * registration — production resolves the Koin single, which injects it.
+     */
+    private val sessionCacheRegistry: SessionCacheRegistry? = null,
+) {
     companion object {
         // How long the video engine (MPV/LibVLC holding native memory) is
         // retained after the user dismisses the mini player, in case they
@@ -53,6 +62,10 @@ class VideoMiniPlayerState {
         // isPlaying collector and the auto-release timeout.
         private const val COLLECTOR = "VideoMiniPlayerState.collector"
         private const val TIMEOUT = "VideoMiniPlayerState.timeout"
+
+        // The owner slot this class registers its identity reaction under
+        // (singletons register exactly once; the slot is replace-not-accumulate).
+        private const val OWNER = "VideoMiniPlayerState"
     }
 
     private val _isMiniMode = MutableStateFlow(false)
@@ -87,6 +100,21 @@ class VideoMiniPlayerState {
      * same contract the plain vars ran under.
      */
     private val tasks = TaskBundle(miniScope)
+
+    init {
+        // Identity/user seam: on every non-SignedIn transition (sign-out,
+        // user switch, server switch) a deposited engine's native memory must
+        // not ride into the next identity on the 5-minute auto-release window
+        // — release through the normal path now. Fire-and-forget on the mini
+        // scope: every existing release path runs on Main (the auto-release
+        // job, the UI reclaims), while the registry's collector runs on the
+        // application scope's Default dispatcher — the hop keeps both
+        // contracts, and a hung release can never stall the other owners'
+        // reactions.
+        sessionCacheRegistry?.registerAction(OWNER) {
+            miniScope.launch { release() }
+        }
+    }
 
     private val _itemId = MutableStateFlow<String?>(null)
     val itemId: StateFlow<String?> = _itemId.asStateFlow()

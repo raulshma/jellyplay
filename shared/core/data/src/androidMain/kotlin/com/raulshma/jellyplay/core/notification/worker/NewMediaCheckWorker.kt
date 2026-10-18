@@ -7,7 +7,9 @@ import android.os.Build
 import androidx.core.content.ContextCompat
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
+import com.raulshma.jellyplay.core.concurrency.DEFAULT_FANOUT_PARALLELISM
 import com.raulshma.jellyplay.core.concurrency.mapConcurrent
+import com.raulshma.jellyplay.core.concurrency.mapConcurrentCatching
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.repository.ArrRepository
 import com.raulshma.jellyplay.core.data.repository.SeenMediaRecord
@@ -168,8 +170,27 @@ class NewMediaCheckWorker(
      * enabled, fetch the series' next-up episode (`getSeriesNextUpEpisode` —
      * the spec's `getNextUp(seriesId, enableResumable=false)` read; a
      * half-watched episode is not "new"), diff against the config's baseline,
-     * notify on the shared new-episodes channel, and write the baseline back.
+     * notify on the shared new-episodes channel, and record the new baseline.
      * Then re-schedule the *arr accelerator one-shots for the same series.
+     *
+     * Cost shape (one pass, not one series):
+     *  - the newest-episode reads are independent per series, so they run
+     *    bounded-concurrent (the folder pass's gate pattern at the standard
+     *    fan-out width) instead of one serial round-trip per series. They
+     *    keep the per-series seam read exactly as-is — series-scoped,
+     *    `enableResumable=false`, top row — rather than one un-scoped
+     *    NextUp sweep: a cross-series sweep is recency-ordered and
+     *    limit-bounded, so it can silently omit an opted-in series on a
+     *    library with many active series, and a missed read would skip the
+     *    diff (a changed notification outcome) — the per-series read cannot.
+     *  - the diffs run serially in config order (dispatch + accelerator
+     *    scheduling keep their exact per-series behavior) and only collect
+     *    the updated configs in memory; every baseline write-back merges
+     *    into ONE [NotificationStore.updateSeriesNotificationConfigs] edit
+     *    at the end of the pass, instead of one DataStore write per series
+     *    (each of which re-ran the preference store's full slice
+     *    re-projection). No read → no entry (and no write for it), exactly
+     *    the serial loop's early-return shape.
      *
      * [com.raulshma.jellyplay.core.model.NotificationPreferences.newEpisodesEnabled]
      * is the family's master switch — OFF suppresses ALL series work (the
@@ -194,45 +215,52 @@ class NewMediaCheckWorker(
             arrRepository.calendar(today, end).first()
         }.getOrNull().orEmpty()
 
-        optedIn.forEach { (seriesId, config) ->
-            if (isStopped) return
-            checkSeriesNewEpisode(seriesId, config, prefs)
+        // Bounded-concurrent newest-episode fetch. A failed (or empty) read
+        // drops its series from the map — the pure degrade the serial loop's
+        // `getOrNull() ?: return` applied, per series.
+        val newestBySeries = Semaphore(MAX_CONCURRENT_SERIES_FETCHES)
+            .mapConcurrentCatching(optedIn.keys.toList()) { seriesId ->
+                seriesId to seriesNotificationReads.getSeriesNextUpEpisode(seriesId).getOrNull()
+            }
+            .toMap()
+
+        // The diff ladder (the pure [decideSeriesEpisode]): a null baseline
+        // (first check after opt-in) records the newest id WITHOUT notifying
+        // (the first-scan anti-spam rule at series granularity); a genuinely
+        // newer id dispatches then records; the same id (or no newest read)
+        // only moves the check stamp. Series with no newest read contribute
+        // no config entry — but still re-schedule the accelerator, exactly
+        // as the serial loop did (the check's early return never skipped it).
+        val updatedConfigs = HashMap<String, SeriesNotificationConfig>()
+        val now = timeSource.nowEpochMillis()
+        for ((seriesId, config) in optedIn) {
+            if (isStopped) break
+            val newest = newestBySeries[seriesId]
+            if (newest != null) {
+                updatedConfigs[seriesId] = when (
+                    decideSeriesEpisode(config.lastNotifiedEpisodeId, newest.id)
+                ) {
+                    SeriesEpisodeDecision.NONE ->
+                        config.copy(lastCheckAt = now)
+                    SeriesEpisodeDecision.BASELINE ->
+                        config.copy(lastNotifiedEpisodeId = newest.id, lastCheckAt = now)
+                    SeriesEpisodeDecision.NOTIFY -> {
+                        dispatcher.dispatchSeriesNewEpisode(seriesId, newest, prefs)
+                        config.copy(lastNotifiedEpisodeId = newest.id, lastCheckAt = now)
+                    }
+                }
+            }
             scheduleSeriesAccelerators(seriesId, calendarRows)
         }
-    }
 
-    /**
-     * One series' newest-episode check + the baseline write-back. The diff
-     * decision is the pure [decideSeriesEpisode]:
-     *  - [SeriesEpisodeDecision.BASELINE] — first check after opt-in (no
-     *    baseline yet): record the newest id WITHOUT notifying (the
-     *    worker's first-scan anti-spam rule at series granularity);
-     *  - [SeriesEpisodeDecision.NOTIFY] — a genuinely newer episode:
-     *    dispatch, then write the new baseline;
-     *  - [SeriesEpisodeDecision.NONE] — nothing new (or no episode read):
-     *    only the check stamp moves.
-     */
-    private suspend fun checkSeriesNewEpisode(
-        seriesId: String,
-        config: SeriesNotificationConfig,
-        prefs: NotificationPreferences,
-    ) {
-        val newest = seriesNotificationReads.getSeriesNextUpEpisode(seriesId)
-            .getOrNull()
-            ?: return
-        val now = timeSource.nowEpochMillis()
-        val updated = when (decideSeriesEpisode(config.lastNotifiedEpisodeId, newest.id)) {
-            SeriesEpisodeDecision.NONE ->
-                config.copy(lastCheckAt = now)
-            SeriesEpisodeDecision.BASELINE ->
-                config.copy(lastNotifiedEpisodeId = newest.id, lastCheckAt = now)
-            SeriesEpisodeDecision.NOTIFY -> {
-                dispatcher.dispatchSeriesNewEpisode(seriesId, newest, prefs)
-                config.copy(lastNotifiedEpisodeId = newest.id, lastCheckAt = now)
-            }
-        }
+        // The pass's SINGLE store write: the merged read-modify-write keeps
+        // concurrent writers (the opt-in/out UI commands) loss-free and
+        // re-runs the preference slices once, not once per series. Skipped
+        // entirely when nothing was read (no entries — no write, exactly the
+        // old per-series early return).
+        if (updatedConfigs.isEmpty()) return
         notificationStore.updateSeriesNotificationConfigs { configs ->
-            configs + (seriesId to updated)
+            configs + updatedConfigs
         }
     }
 
@@ -350,6 +378,12 @@ class NewMediaCheckWorker(
         /** Bounds concurrent per-folder network fetches so a server with many
          *  enabled libraries is not hit with N simultaneous requests. */
         private const val MAX_CONCURRENT_FOLDER_FETCHES = 4
+
+        /**
+         * Bounds the series pass's concurrent per-series next-up fetches
+         * (the folder pass's gate pattern) at the standard fan-out width.
+         */
+        private val MAX_CONCURRENT_SERIES_FETCHES = DEFAULT_FANOUT_PARALLELISM
 
         // ── D12 series-pass constants ───────────────────────────────────
 

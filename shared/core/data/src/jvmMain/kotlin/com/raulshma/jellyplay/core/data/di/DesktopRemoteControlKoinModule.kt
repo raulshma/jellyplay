@@ -7,6 +7,7 @@ import com.raulshma.jellyplay.core.data.remote.RemoteControlReceiver
 import com.raulshma.jellyplay.core.data.remote.VideoRemoteControlDispatcher
 import org.koin.core.module.Module
 import org.koin.dsl.module
+import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
 
 /**
  * Remote-control family of the desktopDataModule split: the desktop
@@ -46,6 +47,7 @@ internal val desktopRemoteControlModule: Module = module {
             securityStore = get(),
             remoteNavigationBridge = get(),
             audioQueueManager = get(),
+            applicationScope = get(DatastoreQualifiers.applicationScope),
         )
     }
 }

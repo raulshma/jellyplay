@@ -27,9 +27,10 @@ import kotlinx.coroutines.flow.asStateFlow
  * (the pre-probe behavior) instead of forcing tone mapping on a device the
  * probe simply could not answer.
  *
- * Every engine that wants the facts owns one instance (the probe registers
- * its listener for the engine's lifetime — the spatializer precedent; a
- * released engine's refresh writing a dead engine's field is harmless).
+ * Every engine that wants the facts owns one instance and releases it from
+ * its own `release()` — [release] unregisters the listener (DisplayManager
+ * holds it strongly, so an un-released probe would anchor the whole engine
+ * object graph across engine swaps) and latches [refresh] off.
  * Threading: reads and listener callbacks arrive on the main handler, matching
  * the engines' main-thread config/stats paths.
  */
@@ -53,14 +54,32 @@ internal class DisplayHdrCapabilitiesProbe(
     /** The display's HDR support, or `null` while the probe has no answer (UNKNOWN — not SDR). */
     val support: StateFlow<DisplayHdrSupport?> = _support.asStateFlow()
 
+    /** Latched by [release]; a late display callback's refresh must stay a no-op. */
+    @Volatile
+    private var released = false
+
     init {
         runCatching {
             displayManager?.registerDisplayListener(listener, mainHandler)
         }
     }
 
-    /** Re-reads the default display's HDR types; emits only on an actual change. */
+    /**
+     * Unregisters the display listener and latches [refresh] off. Idempotent —
+     * engines call this from their own `release()`, which itself runs on every
+     * release-as-reset load swap. Without the unregister the strongly-held
+     * listener keeps every stale probe running binder reads on the main thread
+     * at display-event rate for the rest of the process.
+     */
+    fun release() {
+        released = true
+        val dm = displayManager ?: return
+        runCatching { dm.unregisterDisplayListener(listener) }
+    }
+
+    /** Re-reads the default display's HDR types; emits only on an actual change. No-op after [release]. */
     fun refresh() {
+        if (released) return
         val next = readCurrent()
         if (next != _support.value) {
             _support.value = next

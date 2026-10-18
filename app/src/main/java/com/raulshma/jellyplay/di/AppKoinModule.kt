@@ -11,6 +11,7 @@ import com.raulshma.jellyplay.core.data.cast.CastManager
 import com.raulshma.jellyplay.core.data.download.DownloadOutcomeMessenger
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
 import com.raulshma.jellyplay.core.data.playback.ThemeMusicPlayer
+import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.JellyPlayLiveResyncConnector
 import com.raulshma.jellyplay.core.data.session.JellyPlayEventsSessionController
 import com.raulshma.jellyplay.core.data.update.AppUpdateRepository
@@ -59,6 +60,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import okhttp3.OkHttpClient
 import org.koin.core.module.Module
 import org.koin.compose.viewmodel.dsl.viewModel
 import org.koin.dsl.module
@@ -193,6 +195,12 @@ fun androidAppModule(context: Context): Module = module {
             eventsSessionController = lazy { get<JellyPlayEventsSessionController>() },
             liveResyncConnector = lazy { get<JellyPlayLiveResyncConnector>() },
             downloadSummarySurface = lazy { get<DownloadSummarySurface>() },
+            okHttpClient = lazy { get<OkHttpClient>() },
+            authRepository = lazy { get<AuthRepository>() },
+            sessionCoordinator = lazy { get<SessionCoordinator>() },
+            updateCoordinator = lazy { get<UpdateCoordinator>() },
+            whatsNewCoordinator = lazy { get<WhatsNewCoordinator>() },
+            syncPlayOpenCoordinator = lazy { get<SyncPlayOpenCoordinator>() },
         )
     }
 
@@ -202,6 +210,7 @@ fun androidAppModule(context: Context): Module = module {
         NowPlayingWidgetUpdater(
             context = context,
             audioPlaybackManager = get(),
+            applicationScope = get(DatastoreQualifiers.applicationScope),
         )
     }
     single<WidgetWorkScheduler> {
@@ -349,9 +358,14 @@ private class AppAudioPlayerCast(
     private val appContext = application
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     override val isConnected get() = castManager.isConnectedFlow
+    // WhileSubscribed: the only consumers are screens (the audio cast
+    // picker), collected via collectAsStateWithLifecycle — so the
+    // Main-dispatcher collector runs only while a picker is open, not for
+    // the whole process from singleton construction. 5 s stop timeout rides
+    // out configuration changes.
     override val discoveredDeviceNames = castManager.discoveredDevices
         .map { devices -> devices.map { it.name } }
-        .stateIn(scope, SharingStarted.Eagerly, emptyList())
+        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), emptyList())
     override fun startDiscovery() = castManager.startDiscovery(appContext)
     override fun stopDiscovery() = castManager.stopDiscovery()
     override fun connect(deviceName: String) {

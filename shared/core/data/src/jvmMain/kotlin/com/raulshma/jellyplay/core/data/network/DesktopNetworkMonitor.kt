@@ -6,6 +6,7 @@ import java.net.NetworkInterface
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -57,9 +58,16 @@ import kotlinx.coroutines.isActive
  * the NetworkInterface statics and the polling plumbing are covered by
  * compilation and the synchronous-seed read only.
  */
-class DesktopNetworkMonitor : NetworkMonitor {
+class DesktopNetworkMonitor(
+    /**
+     * The Koin application scope (DatastoreQualifiers.applicationScope) the
+     * IO scope hangs off as a SupervisorJob child — the monitor never cancels
+     * its own scope, so the child now dies with an app-level teardown.
+     */
+    applicationScope: CoroutineScope,
+) : NetworkMonitor {
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val scope = CoroutineScope(SupervisorJob(applicationScope.coroutineContext[Job]) + Dispatchers.IO)
 
     override val networkStatus: StateFlow<NetworkStatus> = flow {
         var last: NetworkStatus? = null

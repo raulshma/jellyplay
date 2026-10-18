@@ -4,6 +4,7 @@ import androidx.paging.PagingData
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.download.QuickDownloadActions
 import com.raulshma.jellyplay.core.data.download.pagedGridQuickActions
+import com.raulshma.jellyplay.core.data.repository.MediaCatalogueEnrichments
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.SearchHistoryItem
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
@@ -43,8 +44,10 @@ import com.raulshma.jellyplay.core.data.util.FilterDimensionsHolder
 @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
 internal class SearchViewModel(
     private val mediaRepository: MediaRepository,
-    /** The library client's uncached reads (the filter row's tag list and the
-     *  empty-search suggestions — both off the union). */
+    private val mediaCatalogueEnrichments: MediaCatalogueEnrichments,
+    /** The library client's uncached reads (the empty-search suggestions —
+     *  off the union; the filter row's tag list rides the repository's
+     *  cached getTags). */
     private val libraryApiClient: com.raulshma.jellyplay.core.network.api.LibraryApiClient,
     private val userDataMutator: com.raulshma.jellyplay.core.data.repository.UserDataMutator,
     private val imageUrlProvider: ImageUrlProvider,
@@ -72,7 +75,7 @@ internal class SearchViewModel(
     private val filterDimensions = FilterDimensionsHolder(
         scope = scope,
         getGenres = { force -> mediaRepository.getGenres(force = force) },
-        getTags = { libraryApiClient.getTags() },
+        getTags = { mediaCatalogueEnrichments.getTags(null) },
     )
     val genres: StateFlow<List<Genre>> = filterDimensions.genres
     val tags: StateFlow<List<String>> = filterDimensions.tags

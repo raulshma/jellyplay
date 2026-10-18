@@ -28,6 +28,7 @@ import coil3.size.Size as CoilSize
 import com.raulshma.jellyplay.core.model.DetailPreferences
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.ui.image.MediaImage
+import com.raulshma.jellyplay.core.ui.image.rememberMediaImageMemoryCacheKey
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 
 /**
@@ -165,10 +166,20 @@ internal fun DetailBackdrop(
             // Prefer the on-disk backdrop (DetailAssets.backdropPath, or the
             // book cover's poster path) for a LOCAL origin; fall back to the
             // server URL for REMOTE or when no local path was resolved.
+            // The placeholder handoff reuses the wide-row tile's cached decode
+            // (the resume/next-up cards show the SAME server backdrop URL at
+            // MediaImage's 384² default) while this full-bleed decode runs, so
+            // the artwork stays on screen across the navigation instead of
+            // dropping to the blurHash. Key built from the DISPLAY url: a local
+            // origin hands off from the offline row's identical local path.
             MediaImage(
                 url = localBackdropPath ?: getBackdropUrl(backdropId),
                 contentDescription = null,
                 blurHash = backdropBlurHash,
+                placeholderMemoryCacheKey = rememberMediaImageMemoryCacheKey(
+                    url = localBackdropPath ?: getBackdropUrl(backdropId),
+                    size = CoilSize(384, 384),
+                ),
                 modifier = backdropModifier
                     .then(
                         if (coverHero == BookCoverHero.BLURRED) Modifier.blur(28.dp)

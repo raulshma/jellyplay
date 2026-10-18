@@ -179,6 +179,9 @@ class PlayedStateSyncImpl(
             if (download.status != DownloadStatus.COMPLETED) return
             runCatchingRethrowingCancellation { downloadRepository.value.deleteDownload(download.id) }
                 .onFailure { Log.w(TAG, "Auto-delete-after-watch failed for $itemId", it) }
+        } catch (ce: kotlinx.coroutines.CancellationException) {
+            // Never swallow cancellation — breaks structured concurrency.
+            throw ce
         } catch (e: Exception) {
             Log.w(TAG, "Auto-delete-after-watch lookup failed for $itemId", e)
         }

@@ -1,5 +1,6 @@
 package com.raulshma.jellyplay.desktop.player
 
+import com.raulshma.jellyplay.core.data.log.Log
 import com.raulshma.jellyplay.core.model.DecoderMode
 import com.raulshma.jellyplay.core.model.MpvEngineConfig
 import com.raulshma.jellyplay.core.model.PlayerType
@@ -741,7 +742,26 @@ open class MpvDesktopEngine(
         scopeJob?.cancel()
         runCatching {
             kotlinx.coroutines.runBlocking {
-                scopeJob?.children?.toList().orEmpty().forEach { it.join() }
+                // Bounded join, same budget as the event thread's join above:
+                // a child wedged inside a native call never reaches a
+                // suspension point, so an unbounded join would hang release
+                // forever. The normal path is unchanged — children finish
+                // their in-flight native reads and the join completes well
+                // inside the budget; only a pathologically wedged child
+                // expires it, and that case proceeds to destroy like the
+                // event-thread arm above (the wedged coroutine stays parked
+                // on the dead handle — the same accepted leak, never a
+                // mid-read destroy of a draining engine).
+                val joined = kotlinx.coroutines.withTimeoutOrNull(TEARDOWN_JOIN_BUDGET_MS) {
+                    scopeJob?.children?.toList().orEmpty().forEach { it.join() }
+                }
+                if (joined == null) {
+                    Log.w(
+                        TAG,
+                        "Engine-scope children still draining after ${TEARDOWN_JOIN_BUDGET_MS}ms; " +
+                            "proceeding to destroy the mpv context",
+                    )
+                }
             }
         }
         // Blocks until the core's internal threads exit; afterwards the
@@ -1368,10 +1388,19 @@ open class MpvDesktopEngine(
     }
 
     private companion object {
+        private const val TAG = "MpvDesktopEngine"
         // DEFAULT_POLLING_INTERVAL_MS lives on the state chassis (protected).
         private const val VIDEO_STATS_POLL_MS = 1000L
         private const val RELEASE_JOIN_TIMEOUT_MS = 2_000L
         private const val RELEASE_JOIN_ATTEMPTS = 3
+
+        /**
+         * Budget for the engine-scope children join in [release] — the same
+         * envelope as the event thread's [RELEASE_JOIN_TIMEOUT_MS]. A healthy
+         * engine's pollers/collectors observe the cancel within one dispatch,
+         * so only a child wedged inside a native call can expire this.
+         */
+        private const val TEARDOWN_JOIN_BUDGET_MS = 2_000L
         /** mpv's untouched default for `audio-channels`. */
         private const val AUTO_CHANNELS = "auto"
 

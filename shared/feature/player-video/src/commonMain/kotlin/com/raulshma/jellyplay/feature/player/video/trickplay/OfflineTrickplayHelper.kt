@@ -90,6 +90,9 @@ object OfflineTrickplayHelper {
                 interval = interval,
                 bandwidth = bandwidth,
             )
+        } catch (ce: kotlinx.coroutines.CancellationException) {
+            // Never swallow cancellation — breaks structured concurrency.
+            throw ce
         } catch (_: Exception) { null }
     }
 }

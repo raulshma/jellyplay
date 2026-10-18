@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.home
 
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Stable
@@ -17,6 +18,10 @@ import androidx.compose.ui.unit.Dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import coil3.PlatformContext
+import coil3.SingletonImageLoader
+import coil3.request.ImageRequest
+import coil3.size.Size as CoilSize
 import com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryStore
 import com.raulshma.jellyplay.core.model.CuratedHeroEntry
 import com.raulshma.jellyplay.core.model.MediaItem
@@ -28,12 +33,57 @@ import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.WindowSizeClass
 import com.raulshma.jellyplay.core.ui.components.LocalPerformanceMode
 import com.raulshma.jellyplay.core.ui.components.LocalSurpriseOnLaunch
+import com.raulshma.jellyplay.core.ui.image.mediaImageDecodeSize
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import org.koin.compose.koinInject
+
+/**
+ * The hero backdrop's decode size — MUST mirror the hero `MediaImage`'s
+ * `size = CoilSize(1920, 1080)` in HomeHero.kt (performanceModeAware true, so
+ * [mediaImageDecodeSize] tiers it to 768² under performance mode exactly as
+ * the display request is clamped). The rotation prefetch loads at this size so
+ * the display request hits the prefetched memory-cache entry instead of
+ * re-fetching and re-decoding at a different key.
+ */
+private val HeroBackdropDecodeSize = CoilSize(1920, 1080)
+
+/**
+ * Holds the ONE in-flight hero-backdrop prefetch (the downloads sidecar's
+ * `imageLoader.enqueue` targetless-preload posture). A new [prefetch] call
+ * disposes the previous request first — that IS the fast-manual-navigation
+ * cancellation: a surprise pick or quick rotation tick that replaces the
+ * current hero before the last prefetch finished drops the now-stale transfer
+ * instead of letting it burn bandwidth toward a cache entry nobody will read.
+ * [cancel] runs at composition leave (the hero left Home) so no prefetch
+ * outlives the screen that wanted it.
+ */
+internal class HeroBackdropPrefetcher {
+    private var disposable: coil3.request.Disposable? = null
+
+    fun prefetch(context: PlatformContext, url: String, decodeSize: CoilSize) {
+        cancel()
+        if (url.isBlank()) return
+        disposable = SingletonImageLoader.get(context).enqueue(
+            ImageRequest.Builder(context)
+                .data(url)
+                // Same URL + same decode size as the hero's display request →
+                // same memory/disk cache keys (Coil's auto-derived memory-cache
+                // key embeds the size string). No crossfade/transition: this is
+                // a targetless preload, only the caches matter.
+                .size(decodeSize)
+                .build()
+        )
+    }
+
+    fun cancel() {
+        disposable?.dispose()
+        disposable = null
+    }
+}
 
 /**
  * Selects the hero "featured" candidate list from the home sections, in a single
@@ -337,6 +387,42 @@ internal fun rememberHeroController(
         }
     }
 
+    // Hero backdrop prefetch: the moment an item becomes current, preload the
+    // NEXT rotation successor's backdrop (same URL builder the hero display
+    // uses, [HeroBackdropDecodeSize]'s size) so a rotation swaps straight to a
+    // decoded bitmap instead of holding the blurHash placeholder through a
+    // full network fetch + decode of a ~1920px JPEG. autoRotateEnabled rides
+    // in the flow so a rotation-off state (TV default, Surprise Me) prefetches
+    // nothing; flipping it re-evaluates immediately. Every featured change
+    // REPLACES the in-flight prefetch ([HeroBackdropPrefetcher.prefetch]
+    // disposes the previous request first) and leaving the composition cancels
+    // it — a fast manual navigation never leaves stale transfers running.
+    val prefetchContext = coil3.compose.LocalPlatformContext.current
+    val prefetchPerformanceMode = LocalPerformanceMode.current
+    val backdropPrefetcher = remember { HeroBackdropPrefetcher() }
+    DisposableEffect(backdropPrefetcher) {
+        onDispose { backdropPrefetcher.cancel() }
+    }
+    LaunchedEffect(controller, backdropPrefetcher, prefetchContext, prefetchPerformanceMode) {
+        snapshotFlow {
+            Triple(controller.featuredItem, controller.nextCandidate, controller.autoRotateEnabled)
+        }.collect { (current, next, autoRotate) ->
+            if (!autoRotate) return@collect
+            val candidate = next ?: return@collect
+            if (candidate.id == current?.id) return@collect
+            val url = getBackdropUrl(candidate.id)
+            if (url.isBlank()) return@collect
+            backdropPrefetcher.prefetch(
+                context = prefetchContext,
+                url = url,
+                // The clamp must produce the display request's exact decode
+                // size (the hero keeps performanceModeAware true), or the
+                // display path would miss the prefetched memory-cache entry.
+                decodeSize = mediaImageDecodeSize(HeroBackdropDecodeSize, prefetchPerformanceMode),
+            )
+        }
+    }
+
     return controller
 }
 
@@ -376,6 +462,19 @@ internal class HeroController(
     internal var focusSnapSettled: Boolean by mutableStateOf(false)
 
     val featuredItem: MediaItem? get() = candidates.getOrNull(featuredIndex)
+
+    /**
+     * The rotation successor of [featuredItem] (featuredIndex + 1, wrapping) —
+     * the candidate the next auto-rotation tick features, known ahead of time
+     * so its backdrop can be prefetched while the current item displays. Null
+     * on an empty pool; equals the current item on a single-entry pool.
+     */
+    val nextCandidate: MediaItem?
+        get() {
+            val pool = candidates
+            if (pool.isEmpty()) return null
+            return pool[(featuredIndex + 1) % pool.size]
+        }
 
     /**
      * Memoized per (candidates, featuredIndex) read: [featuredItem]'s

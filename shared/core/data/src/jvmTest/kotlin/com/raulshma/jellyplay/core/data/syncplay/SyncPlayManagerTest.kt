@@ -12,7 +12,10 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -67,6 +70,7 @@ class SyncPlayManagerTest {
             syncPlayController = syncPlayController,
             playbackCore = playbackCore,
             queueCore = queueCore,
+            applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
         )
     }
 

@@ -19,6 +19,7 @@ import com.raulshma.jellyplay.core.network.websocket.toSessionInfo
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -37,6 +38,13 @@ class JellyfinRemotePlayCastStrategy(
     private val serverIdentityStore: ServerIdentityStore,
     private val webSocketClient: com.raulshma.jellyplay.core.network.websocket.JellyfinWebSocketClient,
     private val imageUrlProvider: ImageUrlProvider,
+    /**
+     * The Koin application scope (DatastoreQualifiers.applicationScope) the
+     * Default-dispatcher scope hangs off as a SupervisorJob child — the
+     * strategy never cancels its own scope, so the child now dies with an
+     * app-level teardown.
+     */
+    private val applicationScope: CoroutineScope,
 ) : CastStrategy {
 
     companion object {
@@ -61,7 +69,8 @@ class JellyfinRemotePlayCastStrategy(
             android.provider.Settings.Secure.ANDROID_ID,
         ) ?: ""
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val scope =
+        CoroutineScope(SupervisorJob(applicationScope.coroutineContext[Job]) + Dispatchers.Default)
 
     /**
      * The strategy's two cancel-and-replace job slots — the discovery loop

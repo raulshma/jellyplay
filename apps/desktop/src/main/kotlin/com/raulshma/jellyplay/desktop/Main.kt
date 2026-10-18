@@ -192,7 +192,19 @@ fun main(args: Array<String>) {
         ?.let { DesktopWindowStateStore.sanitize(it, DesktopWindowStateStore.availableScreens()) }
     val pxToDp = DesktopWindowPlacementController.pxToDpFactor()
 
+    //  startup mark: closes main()'s synchronous post-Koin segment (the
+    // startup kicks, the image loader install, the window-state load) so the
+    // koin→windowShown gap splits into koinStart→appEntry→firstComposition
+    // →windowShown.
+    startupPerf.markAppEntry()
+
     application {
+        //  startup mark: first statement of the content's first composition
+        // (remember initializers run during composition, once per composition
+        // lifetime) — the segment before it is Compose/Skia init + window
+        // creation.
+        remember(startupPerf) { startupPerf.markFirstComposition() }
+
         val windowState = rememberWindowState(
             position = savedWindowGeometry
                 ?.let { WindowPosition((it.x / pxToDp).dp, (it.y / pxToDp).dp) }

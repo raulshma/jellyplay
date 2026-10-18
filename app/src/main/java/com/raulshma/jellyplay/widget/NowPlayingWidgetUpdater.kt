@@ -37,8 +37,16 @@ import kotlinx.coroutines.launch
 class NowPlayingWidgetUpdater (
     private val context: Context,
     private val audioPlaybackManager: AudioPlaybackManager,
+    /**
+     * The Koin application scope (DatastoreQualifiers.applicationScope) the
+     * updater's Default-dispatcher scope hangs off as a SupervisorJob child —
+     * [stop] still cancels only the two collectors, while the scope itself
+     * now dies with an app-level teardown instead of outliving it.
+     */
+    applicationScope: CoroutineScope,
 ) {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val scope =
+        CoroutineScope(SupervisorJob(applicationScope.coroutineContext[Job]) + Dispatchers.Default)
     private var metadataJob: Job? = null
     private var positionJob: Job? = null
     private val pushGate = WidgetPushGate()

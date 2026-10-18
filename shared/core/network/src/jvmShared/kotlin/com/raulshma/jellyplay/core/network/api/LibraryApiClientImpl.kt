@@ -99,6 +99,17 @@ private val SEARCH_SUGGESTIONS_SORT = SEARCH_SUGGESTIONS_SORT_BY.map { token ->
  */
 private const val BOX_SET_ENUMERATE_CAP = 100
 
+/**
+ * Cap on the total library items the tag scan behind
+ * [LibraryApiClient.getTags] pages through: the filter sheets need every tag
+ * in the library, and the former first-page-only read silently dropped any
+ * tag not carried by the first `limit` items. The scan pages with a
+ * TAGS-only projection until the server's totalRecordCount is exhausted or
+ * 1000 items (10 pages at the default page size) have been scanned — the
+ * accepted, documented truncation for a pathological library.
+ */
+private const val TAGS_ITEM_SCAN_CAP = 1000
+
 private val SEARCH_SUGGESTIONS_KINDS = SEARCH_SUGGESTIONS_ITEM_TYPES.map { token ->
     BaseItemKind.entries.firstOrNull { it.serialName == token }
         ?: error("BaseItemKind has no serial name '$token' — SDK drift vs the search-suggestions projection")
@@ -1038,14 +1049,34 @@ class LibraryApiClientImpl(
         // The parental-rating filter (toFilteredMediaItems) is intentionally not applied: tags are
         // plain strings with no rating attribute to filter on, and the server
         // already enforces library-access scoping on the underlying item query.
-        val response = api.itemsApi.getItems(
-            parentId = parentId?.let { it.toUUID() },
-            startIndex = startIndex,
-            limit = limit,
-            recursive = true,
-            fields = listOf(ItemFields.TAGS),
-        ).content
-        response.items.flatMap { it.tags ?: emptyList() }.distinct().sorted()
+        //
+        // The scan pages the whole library (not just the first `limit` items —
+        // a tag not carried by the first page never surfaced before): each page
+        // requests the TAGS-only projection, advancing until the server's
+        // totalRecordCount is exhausted (a short page also ends it — the last
+        // page's shape), capped at [TAGS_ITEM_SCAN_CAP] scanned items. [limit]
+        // is the page size; the returned list stays the sorted distinct tag
+        // fold it has always been (never truncated to [limit]).
+        val tags = sortedSetOf<String>()
+        var cursor = startIndex
+        var total = Int.MAX_VALUE
+        while (cursor < total && cursor - startIndex < TAGS_ITEM_SCAN_CAP) {
+            val pageSize = minOf(limit, TAGS_ITEM_SCAN_CAP - (cursor - startIndex))
+            val response = api.itemsApi.getItems(
+                parentId = parentId?.let { it.toUUID() },
+                startIndex = cursor,
+                limit = pageSize,
+                recursive = true,
+                fields = listOf(ItemFields.TAGS),
+            ).content
+            val items = response.items ?: emptyList()
+            if (items.isEmpty()) break
+            items.forEach { item -> tags.addAll(item.tags ?: emptyList()) }
+            cursor += items.size
+            total = response.totalRecordCount
+            if (items.size < pageSize) break
+        }
+        tags.toList()
     }
 
     override suspend fun getFavorites(

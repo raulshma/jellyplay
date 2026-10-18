@@ -16,6 +16,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -30,6 +31,7 @@ import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.JellyPlayScreenScaffold
 import com.raulshma.jellyplay.core.ui.components.ScreenEmptyState
 import com.raulshma.jellyplay.core.ui.components.ScreenLoadingState
+import com.raulshma.jellyplay.core.ui.components.formatDurationMs
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
 import com.raulshma.jellyplay.core.ui.tv.TvGrabInitialFocus
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
@@ -112,19 +114,21 @@ fun SmartPlaylistDetailScreen(
                     ) {
                         items(viewModel.generatedItems.size, key = { viewModel.generatedItems[it].id }, contentType = { "mediaItem" }) { index ->
                             val track = viewModel.generatedItems[index]
+                            // Per-row derived values are remembered per track
+                            // id, so a list-wide recomposition (playback state,
+                            // scroll-driven slot churn) doesn't recompute the
+                            // image-URL assembly and duration render for every
+                            // visible row on long playlists.
+                            val duration = remember(track.id) {
+                                track.runTimeTicks?.let { formatDurationMs(it / 10_000) }
+                            }
+                            val imageUrl = remember(track.id) { viewModel.getImageUrl(track.id) }
                             TrackRow(
                                 name = track.name,
                                 artist = track.albumArtist,
                                 album = track.album,
-                                duration = track.runTimeTicks?.let { ticks ->
-                                    val totalSeconds = ticks / 10_000_000
-                                    val minutes = (totalSeconds % 3600) / 60
-                                    val seconds = totalSeconds % 60
-                                    // Manual render (output identical
-                                    // for m:ss).
-                                    "$minutes:${seconds.toString().padStart(2, '0')}"
-                                },
-                                imageUrl = viewModel.getImageUrl(track.id),
+                                duration = duration,
+                                imageUrl = imageUrl,
                                 onClick = { viewModel.playAll(index) },
                                 blurHash = track.blurHashes.primary,
                             )

@@ -86,6 +86,9 @@ internal class AndroidStatisticsExport(
                 }
                 context.startActivity(Intent.createChooser(intent, "Share Stats"))
             }
+        } catch (ce: kotlinx.coroutines.CancellationException) {
+            // Never swallow cancellation — breaks structured concurrency.
+            throw ce
         } catch (_: Exception) {
         }
     }

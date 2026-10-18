@@ -242,7 +242,11 @@ private fun PlaylistTrackRow(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            val subtitle = listOfNotNull(item.artist, item.album).joinToString(" — ")
+            // Remembered per item id so a list-wide recomposition doesn't
+            // re-join the subtitle string for every visible row.
+            val subtitle = remember(item.id) {
+                listOfNotNull(item.artist, item.album).joinToString(" — ")
+            }
             if (subtitle.isNotBlank()) {
                 Text(
                     text = subtitle,

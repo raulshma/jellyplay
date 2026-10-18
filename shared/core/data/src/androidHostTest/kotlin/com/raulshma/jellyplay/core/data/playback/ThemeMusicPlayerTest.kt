@@ -14,6 +14,9 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -69,6 +72,7 @@ class ThemeMusicPlayerTest {
         musicCatalogue = musicCatalogue,
         playbackRepository = playbackRepository,
         appearanceStore = appearanceStore,
+        applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Main),
     )
 
     private fun idle() = shadowOf(android.os.Looper.getMainLooper()).idle()

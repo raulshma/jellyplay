@@ -9,6 +9,7 @@ import com.raulshma.jellyplay.core.data.repository.StreamingSubtitleStoreImpl
 import com.raulshma.jellyplay.core.data.shortcuts.AppShortcutManager
 import org.koin.core.module.Module
 import org.koin.dsl.module
+import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
 
 /**
  * The download-intake / subtitle-storage / shortcuts family of the
@@ -44,6 +45,7 @@ internal fun androidIntakeStorageModule(context: Context): Module = module {
         AppShortcutManager(
             context = context,
             audioPlaybackManagerLazy = lazy { get<AudioPlaybackManager>() },
+            applicationScope = get(DatastoreQualifiers.applicationScope),
         )
     }
 }

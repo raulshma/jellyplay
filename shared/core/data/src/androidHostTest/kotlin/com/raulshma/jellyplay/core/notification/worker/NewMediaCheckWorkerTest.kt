@@ -479,6 +479,92 @@ class NewMediaCheckWorkerTest {
     }
 
     @Test
+    fun `multi-series pass merges every series diff into ONE store write`() = runTest {
+        stubPreferences(
+            enabledPrefs(
+                newEpisodesEnabled = true,
+                seriesConfigs = mapOf(
+                    "s1" to SeriesNotificationConfig(lastNotifiedEpisodeId = "ep1"),
+                    "s2" to SeriesNotificationConfig(),
+                ),
+            ),
+        )
+        stubFolders()
+        coEvery {
+            seriesNotificationReads.getSeriesNextUpEpisode("s1")
+        } returns Result.success(item("ep2", MediaType.EPISODE))
+        coEvery {
+            seriesNotificationReads.getSeriesNextUpEpisode("s2")
+        } returns Result.success(item("ep9", MediaType.EPISODE))
+        coEvery { mediaRepository.getMediaDetail(any()) } returns Result.failure(IOException("no arr configured"))
+        val transform = slot<(Map<String, SeriesNotificationConfig>) -> Map<String, SeriesNotificationConfig>>()
+        coEvery { notificationStore.updateSeriesNotificationConfigs(capture(transform)) } returns Unit
+
+        val result = worker(fixedClock()).doWork()
+
+        assertTrue(result is ListenableWorker.Result.Success)
+        // ONE merged RMW edit for the whole pass — not one DataStore write
+        // per series (each of which re-ran the preference slice projections).
+        coVerify(exactly = 1) { notificationStore.updateSeriesNotificationConfigs(any()) }
+        val written = transform.captured(
+            mapOf(
+                "s1" to SeriesNotificationConfig(lastNotifiedEpisodeId = "ep1"),
+                "s2" to SeriesNotificationConfig(),
+            ),
+        )
+        assertEquals("ep2", written.getValue("s1").lastNotifiedEpisodeId)
+        assertEquals("ep9", written.getValue("s2").lastNotifiedEpisodeId)
+        // Only the genuinely-new series dispatches; the first check after
+        // opt-in (s2) baselines silently.
+        verify(exactly = 1) {
+            dispatcher.dispatchSeriesNewEpisode(seriesId = "s1", episode = any(), prefs = any())
+        }
+    }
+
+    @Test
+    fun `failed newest read for one series drops only its write - sibling still merges`() = runTest {
+        stubPreferences(
+            enabledPrefs(
+                newEpisodesEnabled = true,
+                seriesConfigs = mapOf(
+                    "s1" to SeriesNotificationConfig(lastNotifiedEpisodeId = "ep1", lastCheckAt = 123L),
+                    "s2" to SeriesNotificationConfig(lastNotifiedEpisodeId = "ep8"),
+                ),
+            ),
+        )
+        stubFolders()
+        coEvery { seriesNotificationReads.getSeriesNextUpEpisode("s1") } returns Result.failure(IOException())
+        coEvery {
+            seriesNotificationReads.getSeriesNextUpEpisode("s2")
+        } returns Result.success(item("ep9", MediaType.EPISODE))
+        coEvery { mediaRepository.getMediaDetail(any()) } returns Result.failure(IOException("no arr configured"))
+        val transform = slot<(Map<String, SeriesNotificationConfig>) -> Map<String, SeriesNotificationConfig>>()
+        coEvery { notificationStore.updateSeriesNotificationConfigs(capture(transform)) } returns Unit
+
+        val result = worker(fixedClock()).doWork()
+
+        assertTrue(result is ListenableWorker.Result.Success)
+        val written = transform.captured(
+            mapOf(
+                "s1" to SeriesNotificationConfig(lastNotifiedEpisodeId = "ep1", lastCheckAt = 123L),
+                "s2" to SeriesNotificationConfig(lastNotifiedEpisodeId = "ep8"),
+            ),
+        )
+        // The RMW transform carries the full config map, so the failed-read
+        // series rides through UNTOUCHED — no diff branch ran for it (any of
+        // them would have stamped lastCheckAt with the fixed clock's now) —
+        // while s2's diff lands.
+        assertEquals(123L, written.getValue("s1").lastCheckAt)
+        assertEquals("ep1", written.getValue("s1").lastNotifiedEpisodeId)
+        assertEquals("ep9", written.getValue("s2").lastNotifiedEpisodeId)
+        // s2's ep8 → ep9 is genuinely newer, so only it dispatches; the
+        // failed-read s1 never reaches the dispatcher.
+        verify(exactly = 1) {
+            dispatcher.dispatchSeriesNewEpisode(seriesId = "s2", episode = match { it.id == "ep9" }, prefs = any())
+        }
+    }
+
+    @Test
     fun `arr accelerator schedules one delayed one-shot per upcoming sonarr episode`() = runTest {
         stubPreferences(seriesPrefs(SeriesNotificationConfig(lastNotifiedEpisodeId = "ep1")))
         stubFolders()

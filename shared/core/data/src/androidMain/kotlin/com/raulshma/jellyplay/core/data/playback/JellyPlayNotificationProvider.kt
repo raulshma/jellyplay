@@ -22,6 +22,7 @@ import com.raulshma.jellyplay.core.notification.channel.NotificationChannelManag
 import com.raulshma.jellyplay.shared.core.data.R
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
@@ -43,10 +44,18 @@ import kotlinx.coroutines.withContext
 @OptIn(UnstableApi::class)
 class JellyPlayNotificationProvider(
     context: Context,
+    /**
+     * The Koin application scope (DatastoreQualifiers.applicationScope) the
+     * provider's IO-dispatcher artwork scope hangs off as a SupervisorJob
+     * child — [release] still cancels only the provider's own scope, while
+     * the artwork jobs can no longer outlive an app-level teardown.
+     */
+    private val applicationScope: CoroutineScope,
 ) : MediaNotification.Provider {
 
     private val appContext = context.applicationContext
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val scope =
+        CoroutineScope(SupervisorJob(applicationScope.coroutineContext[Job]) + Dispatchers.IO)
     private val imageLoader by lazy { coil3.SingletonImageLoader.get(appContext) }
     private val bitmapLock = Any()
     @Volatile private var cachedBitmap: Bitmap? = null
@@ -214,6 +223,10 @@ class JellyPlayNotificationProvider(
                         )
                     }
                 }
+            } catch (ce: kotlinx.coroutines.CancellationException) {
+                // Never swallow cancellation — a cancelled artwork load (scope
+                // released mid-flight) must not report as a failed build.
+                throw ce
             } catch (_: Exception) {
             }
         }
@@ -229,6 +242,9 @@ class JellyPlayNotificationProvider(
             palette.vibrantSwatch?.rgb
                 ?: palette.dominantSwatch?.rgb
                 ?: FALLBACK_COLOR
+        } catch (ce: kotlinx.coroutines.CancellationException) {
+            // Never swallow cancellation — breaks structured concurrency.
+            throw ce
         } catch (_: Exception) {
             FALLBACK_COLOR
         }

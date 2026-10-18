@@ -53,10 +53,59 @@ import java.io.File
  * raise it. A legitimate NEW non-suspend use inside a suspend fun (parse
  * guards) should prefer extracting the parse into a non-suspend fun over
  * raising the baseline.
+ *
+ * Second arm — `catch (…: Exception)` swallowing CancellationException:
+ * a plain `catch (…: Exception)` / `catch (…: Throwable)` (with no
+ * CancellationException arm or in-body rethrow) whose try-block contains a
+ * suspension point swallows structured cancellation the same way — a
+ * cancelled collector keeps running as a zombie past `stop()`, a scope
+ * release reports an in-flight load as a failure. The compliant shapes are
+ * the rethrow arm (`catch (ce: CancellationException) { throw ce }` before
+ * the `catch (…: Exception)`, as in TimeSyncManager.sync) or the in-body
+ * rethrow (`catch (t: Throwable) { if (t is CancellationException) throw t … }`),
+ * or the doctrine helper [runCatchingRethrowingCancellation]. Since plain
+ * `catch` needs no `runCatching` literal to hide behind, this arm detects the
+ * suspension point textually: the try-block must match one of an
+ * unambiguous-marker list of coroutines/flow primitives (withContext, delay,
+ * .collect, .await, this repo's suspend DAO `.upsert(…)` convention, …).
+ * Ambiguous tokens that are suspend in one idiom and blocking in another are
+ * deliberately NOT markers (OkHttp's blocking `.execute()`/`.enqueue()`,
+ * stdlib `.toList()`/`.single()`/`.join()`), so a try-block whose only
+ * suspend call is e.g. a bespoke repository function stays invisible —
+ * the one known-live site of this kind (DlnaCastStrategy.fetchDeviceDetails)
+ * has since been converted by hand; keep new bespoke-callee try/catches
+ * compliant by discipline. Like the first arm, only
+ * `suspend fun` bodies are scanned, so suspend LAMBDAS inside non-suspend
+ * functions (a `scope.launch { try { … } catch (…: Exception) { } }`) are
+ * invisible; keep those compliant by discipline.
+ *
+ * Lower [maxCatchExceptionAroundSuspendCalls] when another site converts;
+ * never raise it.
  */
 class BareRunCatchingRatchetTest {
 
     private val maxBareRunCatchingInSuspendFuns = 2
+
+    /** Sites where a plain `catch (…: Exception/Throwable)` wraps a suspension point. Zero-tolerance. */
+    private val maxCatchExceptionAroundSuspendCalls = 0
+
+    /** `catch (name: Type)` clauses; group 1 is the caught type. */
+    private val catchClause = Regex("""catch\s*\(\s*\w+\s*:\s*([\w.]+)\s*\)""")
+
+    /**
+     * Unambiguous suspension-point markers (see the class KDoc for what is
+     * deliberately absent). `.upsert(…)` is this repo's suspend-DAO convention.
+     */
+    private val suspendCallMarker = Regex(
+        """withContext\s*\(|withTimeout(?:OrNull)?\s*\(|\bdelay\s*\(|\byield\s*\(|awaitAll\s*\(|""" +
+            """coroutineScope\s*\{|supervisorScope\s*\{|suspendCancellableCoroutine|""" +
+            """runCatchingRethrowingCancellation\s*\(|\.collect\s*[({]|\.collectLatest\s*[({]|""" +
+            """\.emit\s*\(|\.emitAll\s*\(|\.await\s*\(|\.first\s*\(\s*\)|\.cancelAndJoin|""" +
+            """\.onSubscription|\.upsert\s*\(""",
+    )
+
+    /** Catch types that capture CancellationException when unqualified by a rethrow arm. */
+    private val swallowingCatchTypes = setOf("Exception", "RuntimeException", "Throwable")
 
     /**
      * The hand-maintained guard list this test used before root discovery, kept as
@@ -302,9 +351,102 @@ class BareRunCatchingRatchetTest {
         }
     }
 
+    /**
+     * Flags `catch (…: Exception|RuntimeException|Throwable)` clauses inside
+     * `suspend fun` bodies whose try-block contains a suspension-point marker
+     * and which carry no CancellationException compliance anywhere between the
+     * try open brace and the end of that catch clause's block (so both the
+     * rethrow-arm shape and the in-body `if (t is CancellationException) throw t`
+     * shape read as compliant).
+     */
+    private fun suspendFunsCatchExceptionAroundSuspendCalls(file: File): List<Hit> {
+        val text = runCatching { file.readText(Charsets.UTF_8) }.getOrDefault("")
+        val (src, lineOf) = stripCommentsAndStrings(text)
+        val hits = mutableListOf<Hit>()
+        val windows = suspendFunWindows(src)
+        if (windows.isEmpty()) return hits
+        val tryStarts = Regex("""\btry\b""").findAll(src).map { it.range.first }.toList()
+        for (catchMatch in catchClause.findAll(src)) {
+            val cm = catchMatch.range.first
+            val window = windows.firstOrNull { it.first < cm && cm < it.second } ?: continue
+            val excType = catchMatch.groupValues[1].substringAfterLast('.')
+            if (excType !in swallowingCatchTypes) continue
+            // Innermost try whose block encloses this catch: the last try
+            // keyword before it whose matched block is still open at the catch.
+            val tryOpen = tryStarts.lastOrNull { it in window.first until cm } ?: continue
+            val blockOpen = src.indexOf('{', tryOpen)
+            if (blockOpen < 0 || blockOpen > cm) continue
+            val blockClose = matchBraces(src, blockOpen)
+            if (blockClose < 0 || blockClose > cm) continue
+            // Compliance region: try open brace → end of this catch block.
+            var catchBodyOpen = catchMatch.range.last + 1
+            while (catchBodyOpen < src.length && src[catchBodyOpen] != '{') catchBodyOpen++
+            val regionEnd = if (catchBodyOpen < src.length) {
+                val close = matchBraces(src, catchBodyOpen)
+                if (close > cm) close else cm
+            } else {
+                cm
+            }
+            if (src.subSequence(blockOpen, regionEnd).contains("CancellationException")) continue
+            val tryBody = src.subSequence(blockOpen, blockClose)
+            if (suspendCallMarker.containsMatchIn(tryBody)) {
+                hits += Hit(file, lineOf[cm])
+            }
+        }
+        return hits
+    }
+
+    /** All `suspend fun` body windows, reusing the first ratchet's windowing rules. */
+    private fun suspendFunWindows(src: String): List<Pair<Int, Int>> {
+        val windows = mutableListOf<Pair<Int, Int>>()
+        var searchFrom = 0
+        while (true) {
+            val funRange = src.indexOf("suspend fun", searchFrom).let { if (it < 0) return windows else it }
+            // Same bodyless-declaration guard as the first ratchet: stop the
+            // signature walk at the next `fun` keyword.
+            val nextDecl = Regex("""\bfun\b""").find(src, funRange + "suspend fun".length)
+                ?.range?.first ?: src.length
+            var brace = -1
+            var depthParen = 0
+            var j = funRange
+            var sawOpenParen = false
+            while (j < src.length && j < nextDecl) {
+                val ch = src[j]
+                if (ch == '(') { sawOpenParen = true; depthParen++ }
+                if (ch == ')') depthParen--
+                if (ch == '{' && sawOpenParen && depthParen <= 0) { brace = j; break }
+                if (ch == '}' && depthParen <= 0) break
+                if (ch == '\n' && !sawOpenParen) break
+                j++
+            }
+            if (brace >= 0) {
+                val bodyEnd = matchBraces(src, brace)
+                if (bodyEnd > 0) {
+                    windows += brace to bodyEnd
+                    searchFrom = bodyEnd + 1
+                    continue
+                }
+            }
+            searchFrom = maxOf(funRange + 1, nextDecl)
+        }
+    }
+
+    /** Index of the brace matching the one at [open], or -1. */
+    private fun matchBraces(src: String, open: Int): Int {
+        var depth = 0
+        var k = open
+        while (k < src.length) {
+            when (src[k]) {
+                '{' -> depth++
+                '}' -> { depth--; if (depth == 0) return k }
+            }
+            k++
+        }
+        return -1
+    }
+
     @Test
-    fun `bare runCatching inside suspend funs never increases`() {
-        val hits = guardedSources().flatMap { suspendFunsBareRunCatching(it) }
+    fun `bare runCatching inside suspend funs never increases`() {        val hits = guardedSources().flatMap { suspendFunsBareRunCatching(it) }
             .distinctBy { it.file to it.line }
         val report = hits.groupBy { it.file }.entries
             .sortedByDescending { it.value.size }
@@ -316,6 +458,24 @@ class BareRunCatchingRatchetTest {
             "bare runCatching inside suspend funs: ${hits.size} (baseline $maxBareRunCatchingInSuspendFuns). " +
                 "Convert to runCatchingRethrowingCancellation (com.raulshma.jellyplay.core.concurrency), " +
                 "or extract the non-suspend work out of the suspend body:\n$report",
+        )
+    }
+
+    @Test
+    fun `catch Exception around suspend calls never increases`() {
+        val hits = guardedSources().flatMap { suspendFunsCatchExceptionAroundSuspendCalls(it) }
+            .distinctBy { it.file to it.line }
+        val report = hits.groupBy { it.file }.entries
+            .sortedByDescending { it.value.size }
+            .joinToString("\n") { (file, list) ->
+                "  ${file.path}: ${list.size} (${list.joinToString(", ") { "${it.line}" }})"
+            }
+        assertTrue(
+            hits.size <= maxCatchExceptionAroundSuspendCalls,
+            "catch(…Exception) swallowing CancellationException around suspend calls: ${hits.size} " +
+                "(baseline $maxCatchExceptionAroundSuspendCalls). Add a CancellationException rethrow " +
+                "arm (shape: TimeSyncManager.sync) or wrap the work in " +
+                "runCatchingRethrowingCancellation (com.raulshma.jellyplay.core.concurrency):\n$report",
         )
     }
 

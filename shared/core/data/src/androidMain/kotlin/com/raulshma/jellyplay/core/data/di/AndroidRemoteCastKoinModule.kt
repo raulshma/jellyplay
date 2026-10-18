@@ -13,6 +13,7 @@ import com.raulshma.jellyplay.core.data.remote.RemoteControlReceiver
 import com.raulshma.jellyplay.core.data.remote.RemoteNavigationBridge
 import com.raulshma.jellyplay.core.data.remote.RemotePlaybackReporter
 import com.raulshma.jellyplay.core.data.remote.VideoRemoteControlDispatcher
+import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
 import okhttp3.OkHttpClient
 import org.koin.core.module.Module
 import org.koin.dsl.module
@@ -48,6 +49,7 @@ internal fun androidRemoteCastModule(context: Context): Module = module {
             audioPlaybackManager = get(),
             authRepository = get(),
             activePlayerController = get(),
+            applicationScope = get(DatastoreQualifiers.applicationScope),
         )
     }
     single {
@@ -62,6 +64,7 @@ internal fun androidRemoteCastModule(context: Context): Module = module {
             securityStore = get(),
             remoteNavigationBridge = get<RemoteNavigationBridge>(),
             audioQueueManager = get<AudioQueueManager>(),
+            applicationScope = get(DatastoreQualifiers.applicationScope),
         )
     }
 
@@ -80,6 +83,7 @@ internal fun androidRemoteCastModule(context: Context): Module = module {
             serverIdentityStore = get(),
             webSocketClient = get(),
             imageUrlProvider = get(),
+            applicationScope = get(DatastoreQualifiers.applicationScope),
         )
     }
     single {
@@ -89,6 +93,7 @@ internal fun androidRemoteCastModule(context: Context): Module = module {
             dlnaCastStrategy = get(),
             jellyfinRemotePlayCastStrategy = get(),
             syncPlayCastStore = get(),
+            applicationScope = get(DatastoreQualifiers.applicationScope),
         )
     }
 }

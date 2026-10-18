@@ -53,6 +53,7 @@ import com.raulshma.jellyplay.shell.PinGateController
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import org.koin.mp.KoinPlatform
+import java.util.concurrent.atomic.AtomicBoolean
 
 // FragmentActivity is load-bearing: androidx.biometric.BiometricPrompt hosts its
 // dialog in a support fragment, so AuthChallengeScreen's findFragmentActivity()
@@ -124,6 +125,11 @@ class MainActivity : FragmentActivity() {
     // re-triggering the Dynamite dex load.
     private var castPreinitialized by mutableStateOf(false)
 
+    // One-shot guard for the reportFullyDrawn() call above the splash-gate
+    // collector in onCreate. Per-instance (a locale recreate() gets a fresh
+    // one, which is correct — the recreated activity has its own launch).
+    private val fullyDrawnReported = AtomicBoolean(false)
+
     private val requestNotificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { _ -> }
@@ -186,6 +192,22 @@ class MainActivity : FragmentActivity() {
         // there, CastManager, GoogleCastStrategy) still hits the cached
         // singleton.
         splashScreen.setKeepOnScreenCondition { shellInfra.sessionCoordinatorLazy.value.isRestoring.value }
+        // Fully-drawn report: the splash gate clearing is the app's real
+        // "content ready" boundary (Home is composed and the shell can render),
+        // so that is where reportFullyDrawn fires. StartupTimingMetric uses it
+        // as TimeToFullDisplay; without it, full-display timing is unmeasurable.
+        // The collector runs on Main (reportFullyDrawn is a main-thread API) and
+        // the AtomicBoolean makes it fire exactly once per activity instance
+        // even though the StateFlow replays its current value to every
+        // subscriber and the restore choreography can flip the gate more than
+        // once during a locale-driven recreate().
+        lifecycleScope.launch(Dispatchers.Main) {
+            shellInfra.sessionCoordinatorLazy.value.isRestoring.collect { restoring ->
+                if (!restoring && fullyDrawnReported.compareAndSet(false, true)) {
+                    reportFullyDrawn()
+                }
+            }
+        }
         // No custom setOnExitAnimationListener: the system default splash exit
         // is a clean cross-fade to the first composed frame. A manual listener
         // holds the splash view alive across an alpha fade, and because the

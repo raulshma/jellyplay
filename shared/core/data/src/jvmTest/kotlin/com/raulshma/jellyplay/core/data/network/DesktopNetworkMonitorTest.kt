@@ -1,6 +1,9 @@
 package com.raulshma.jellyplay.core.data.network
 
 import com.raulshma.jellyplay.core.model.NetworkStatus
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import java.net.NetworkInterface
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -96,7 +99,7 @@ class DesktopNetworkMonitorTest {
 
     @Test
     fun `isMetered is constantly false on desktop`() {
-        assertFalse(DesktopNetworkMonitor().isMetered.value)
+        assertFalse(DesktopNetworkMonitor(testApplicationScope()).isMetered.value)
     }
 
     @Test
@@ -105,7 +108,7 @@ class DesktopNetworkMonitorTest {
         // equal the pure decision over the host's own interface table —
         // taken immediately after construction to keep the race window
         // negligible on machines whose interfaces flap (VPN up/down).
-        val monitor = DesktopNetworkMonitor()
+        val monitor = DesktopNetworkMonitor(testApplicationScope())
         val hostSnapshot = NetworkInterface.getNetworkInterfaces()
             ?.toList().orEmpty()
             .map { nif ->
@@ -118,3 +121,7 @@ class DesktopNetworkMonitorTest {
         assertEquals(networkStatusFromInterfaces(hostSnapshot), monitor.networkStatus.value)
     }
 }
+
+/** Fresh parent scope standing in for the Koin applicationScope single. */
+private fun testApplicationScope(): CoroutineScope =
+    CoroutineScope(SupervisorJob() + Dispatchers.IO)

@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
@@ -46,6 +47,13 @@ class CastManager(
     private val dlnaCastStrategy: DlnaCastStrategy,
     private val jellyfinRemotePlayCastStrategy: JellyfinRemotePlayCastStrategy,
     private val syncPlayCastStore: com.raulshma.jellyplay.core.datastore.syncplaycast.SyncPlayCastStore,
+    /**
+     * The Koin application scope (DatastoreQualifiers.applicationScope) this
+     * manager's Main-dispatcher scope hangs off as a SupervisorJob child:
+     * [release] still cancels only the manager's own scope, while an
+     * app-level teardown can no longer orphan it.
+     */
+    private val applicationScope: CoroutineScope,
 ) {
     companion object {
         private const val TAG = "CastManager"
@@ -72,7 +80,8 @@ class CastManager(
     private var sessionAvailabilityListener: SessionAvailabilityListener? = null
     private var externalListener: Player.Listener? = null
 
-    private val coroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private val coroutineScope =
+        CoroutineScope(SupervisorJob(applicationScope.coroutineContext[Job]) + Dispatchers.Main)
 
     /**
      * The manager's four cancel-and-replace job slots — the shared ticker,

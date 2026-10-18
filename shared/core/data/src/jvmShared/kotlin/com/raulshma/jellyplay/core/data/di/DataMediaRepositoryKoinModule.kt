@@ -12,6 +12,7 @@ import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryCacheInvalidation
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryImpl
 import com.raulshma.jellyplay.core.data.repository.MediaRepositoryInternals
+import com.raulshma.jellyplay.core.data.repository.MediaCatalogueEnrichments
 import com.raulshma.jellyplay.core.data.repository.MusicCatalogue
 import com.raulshma.jellyplay.core.data.repository.SeriesNotificationReads
 import com.raulshma.jellyplay.core.data.repository.OfflineFirstItemResolver
@@ -150,6 +151,9 @@ internal val dataMediaRepositoryModule: Module = module {
     // the user-data feed). getAlbumTracks is the one member still dual-declared:
     // the detail provider's session resolves detail + album tracks together.
     single<MusicCatalogue> { get<MediaRepositoryImpl>() }
+    // The browse-catalogue enrichments (filter-sheet tags, the detail
+    // franchise row) — same over-the-impl aliasing for their two screens.
+    single<MediaCatalogueEnrichments> { get<MediaRepositoryImpl>() }
     // D12: the series-notification family (the per-series Next Up diff read).
     single<SeriesNotificationReads> { get<MediaRepositoryImpl>() }
     single<UserDataWriteOperations> { get<MediaRepositoryImpl>() }
@@ -286,7 +290,7 @@ internal val dataMediaRepositoryModule: Module = module {
     // MediaRepository) is Koin-owned above.
     single { AudioLyricsManager(get()) }
 
-    single { TimeSyncManager(get()) }
+    single { TimeSyncManager(get(), applicationScope = get(DatastoreQualifiers.applicationScope)) }
     single { SyncPlayController(get()) }
     single { SyncPlayEventHandler() }
     single { SyncPlayQueueCore(get()) }
@@ -295,6 +299,7 @@ internal val dataMediaRepositoryModule: Module = module {
             timeSyncManager = get(),
             controller = get(),
             syncPlayCastStore = get(),
+            applicationScope = get(DatastoreQualifiers.applicationScope),
         )
     }
     single {
@@ -314,6 +319,7 @@ internal val dataMediaRepositoryModule: Module = module {
             syncPlayController = get(),
             playbackCore = get(),
             queueCore = get(),
+            applicationScope = get(DatastoreQualifiers.applicationScope),
         )
     }
 

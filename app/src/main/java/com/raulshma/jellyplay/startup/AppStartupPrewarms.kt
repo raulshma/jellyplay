@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.startup
 
 import com.raulshma.jellyplay.core.concurrency.runCatchingRethrowingCancellation
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
+import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.JellyPlayLiveResyncConnector
 import com.raulshma.jellyplay.core.data.session.JellyPlayEventsSessionController
 import com.raulshma.jellyplay.core.data.update.AppUpdateRepository
@@ -19,6 +20,10 @@ import com.raulshma.jellyplay.core.notification.scheduler.NotificationReconnectL
 import com.raulshma.jellyplay.core.notification.scheduler.NotificationScheduler
 import com.raulshma.jellyplay.feature.player.video.engine.VideoStreamCache
 import com.raulshma.jellyplay.feature.player.video.subtitle.FontProvider
+import com.raulshma.jellyplay.shell.SessionCoordinator
+import com.raulshma.jellyplay.shell.SyncPlayOpenCoordinator
+import com.raulshma.jellyplay.shell.UpdateCoordinator
+import com.raulshma.jellyplay.shell.WhatsNewCoordinator
 import com.raulshma.jellyplay.widget.NowPlayingWidgetUpdater
 import com.raulshma.jellyplay.widget.WidgetWorkScheduler
 import kotlinx.coroutines.CoroutineDispatcher
@@ -30,6 +35,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import okhttp3.OkHttpClient
 
 /** Bound on the device-id prewarm await; see the launch in [start]. */
 private const val DEVICE_ID_PREWARM_TIMEOUT_MS = 5_000L
@@ -70,9 +76,10 @@ private const val BACKGROUND_START_DEFERRAL_MS = 2_000L
  * former field comments.
  *
  * Group order (pinned by [com.raulshma.jellyplay.startup.AppStartupPrewarmsTest]):
- *  1. critical DataStore prewarms + font/stream cache prewarms (below),
+ *  1. critical DataStore prewarms + font/stream cache prewarms + the
+ *     off-main construction warmups (OkHttp/AuthRepository/coordinators, below),
  *  2. the audio + widget updaters (after the 2 s deferral),
- *  3. the background schedulers (after the same deferral),
+ *  3. the background schedulers in two async subgroups (after the same deferral),
  *  4. best-effort download recovery + the self-update APK sweep.
  */
 class AppStartupPrewarms(
@@ -166,6 +173,27 @@ class AppStartupPrewarms(
     private val eventsSessionController: Lazy<JellyPlayEventsSessionController>,
     private val liveResyncConnector: Lazy<JellyPlayLiveResyncConnector>,
     private val downloadSummarySurface: Lazy<DownloadSummarySurface>,
+    // Off-main construction warmups for the graph the splash gate and
+    // MainViewModel otherwise resolve ON MAIN inside the first-frame window:
+    // the base OkHttp client (whose resolution constructs the
+    // ClientCertificateManager — certs-dir mkdirs + the encrypted
+    // certificate-status read behind SecureStorageHealMachine's
+    // constructor-open) and AuthRepositoryImpl (Room + migrations + the
+    // WebSocket client) via SessionCoordinator, plus the remaining three
+    // coordinators MainViewModel constructor-injects. Resolving the lazy
+    // here is identity-neutral (Koin memoization — the same single the
+    // later Main-thread resolution returns); it moves CONSTRUCTION only,
+    // and every start() call stays on its existing scope (MainViewModel's
+    // init for the coordinators). All four coordinator ctors are
+    // side-effect-free: ShellCoordinator.commandScope is lazy, and
+    // SessionRestore / UpdateCoordinator's preference projection are
+    // `by lazy` in their own sources.
+    private val okHttpClient: Lazy<OkHttpClient>,
+    private val authRepository: Lazy<AuthRepository>,
+    private val sessionCoordinator: Lazy<SessionCoordinator>,
+    private val updateCoordinator: Lazy<UpdateCoordinator>,
+    private val whatsNewCoordinator: Lazy<WhatsNewCoordinator>,
+    private val syncPlayOpenCoordinator: Lazy<SyncPlayOpenCoordinator>,
 ) {
 
     /**
@@ -268,6 +296,18 @@ class AppStartupPrewarms(
             // moves the construction to IO while the documented side-effect
             // free ctor and the deferred start() stay exactly where they were.
             audioPlaybackManager.value
+            // Same off-main CONSTRUCTION move for the splash-gate chain
+            // (SessionCoordinator → AuthRepositoryImpl → base OkHttp client →
+            // ClientCertificateManager) and the rest of MainViewModel's
+            // constructor graph — see the parameter comments above. No
+            // start() here: the coordinators arm their collectors from
+            // MainViewModel's init, exactly as before.
+            okHttpClient.value
+            authRepository.value
+            sessionCoordinator.value
+            updateCoordinator.value
+            whatsNewCoordinator.value
+            syncPlayOpenCoordinator.value
         }
     }
 
@@ -288,25 +328,47 @@ class AppStartupPrewarms(
     // Background schedulers — independent enqueue calls, all KEEP-safe.
     // Run concurrently with the critical path so cold start isn't gated on
     // audio init. Each lazy resolution constructs its scheduler here (off
-    // the main thread) instead of during onCreate.
+    // the main thread) instead of during onCreate. The two independent
+    // subgroups — the widget/notification pair vs. the data-sync listeners +
+    // session machinery — run as async siblings (the font/stream prewarm
+    // idiom above), with the failure isolation INSIDE each async so a failed
+    // call neither cancels its sibling nor fails the outer launch.
     private fun launchBackgroundSchedulers() {
         applicationScope.launch(ioDispatcher) {
             delay(BACKGROUND_START_DEFERRAL_MS)
-            widgetWorkScheduler.value.enqueuePeriodic()
-            userDataSyncScheduler.value.enqueuePeriodic()
-            playbackSyncScheduler.value.enqueuePeriodic()
-            playbackSyncReconnectListener.value.start()
-            settingsSyncBackgroundTrigger.value.start()
-            downloadReconnectListener.value.start()
-            notificationReconnectListener.value.start()
-            autoDownloadScheduler.value.sync()
-            notificationScheduler.value.scheduleOrUpdate()
-            // The de-eagered core:data session machinery (see the parameter
-            // comments): idempotent arms, same background group as the other
-            // process-lifetime collectors.
-            eventsSessionController.value.start()
-            liveResyncConnector.value.start()
-            downloadSummarySurface.value.start()
+            coroutineScope {
+                // scheduleOrUpdate suspends → the cancellation-rethrowing
+                // variant for this subgroup.
+                async {
+                    runCatchingRethrowingCancellation {
+                        widgetWorkScheduler.value.enqueuePeriodic()
+                        notificationScheduler.value.scheduleOrUpdate()
+                    }
+                }
+                async {
+                    // Plain runCatching (not the rethrowing variant): every
+                    // callee below is non-suspend — each arms its own
+                    // collectors on its own scope internally — so the block
+                    // has no suspension point for a CancellationException to
+                    // hide in.
+                    runCatching {
+                        userDataSyncScheduler.value.enqueuePeriodic()
+                        playbackSyncScheduler.value.enqueuePeriodic()
+                        playbackSyncReconnectListener.value.start()
+                        settingsSyncBackgroundTrigger.value.start()
+                        downloadReconnectListener.value.start()
+                        notificationReconnectListener.value.start()
+                        autoDownloadScheduler.value.sync()
+                        // The de-eagered core:data session machinery (see the
+                        // parameter comments): idempotent arms, same
+                        // background group as the other process-lifetime
+                        // collectors.
+                        eventsSessionController.value.start()
+                        liveResyncConnector.value.start()
+                        downloadSummarySurface.value.start()
+                    }
+                }
+            }
         }
     }
 

@@ -2,6 +2,7 @@ package com.raulshma.jellyplay.feature.search
 
 import com.raulshma.jellyplay.core.data.download.QuickDownloadActions
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
+import com.raulshma.jellyplay.core.data.repository.MediaCatalogueEnrichments
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.SeerrRepository
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
@@ -61,6 +62,21 @@ import kotlin.test.assertEquals
 @OptIn(ExperimentalCoroutinesApi::class)
 class SearchViewModelFilterPersistenceTest {
 
+    // The browse-catalogue enrichments seam — the filter sheets' tag facet
+    // reads this seam (off the wide repository surface); the fake records the
+    // call count the repository-mock verifications used to pin.
+    private val catalogueEnrichments = object : MediaCatalogueEnrichments {
+        var tagsResult: Result<List<String>> = Result.success(emptyList())
+        var tagsCalls: Int = 0
+        override suspend fun getTags(parentId: String?): Result<List<String>> {
+            tagsCalls++
+            return tagsResult
+        }
+        override suspend fun getBoxSetsContaining(itemId: String) =
+            Result.success(emptyList<com.raulshma.jellyplay.core.model.CollectionSummary>())
+    }
+
+
     // The legacy suite's MainDispatcherRule (:core:testing), inlined — jvmTest
     // has no access to that module (SearchViewModelTest pattern).
     private val mainDispatcher = StandardTestDispatcher()
@@ -102,7 +118,7 @@ class SearchViewModelFilterPersistenceTest {
         every { quickDownloadActions.downloadedIds } returns downloadedIds
         every { seerrRepository.preferences } returns MutableStateFlow(SeerrPreferences())
         coEvery { mediaRepository.getGenres(any()) } returns Result.success(emptyList())
-        coEvery { libraryApiClient.getTags(any(), any(), any()) } returns Result.success(emptyList())
+        catalogueEnrichments.tagsResult = Result.success(emptyList())
         coEvery { libraryApiClient.getSearchSuggestions(any()) } returns Result.success(
             SearchResult(emptyList(), 0, 0)
         )
@@ -117,6 +133,7 @@ class SearchViewModelFilterPersistenceTest {
 
     private fun createViewModel() = SearchViewModel(
         mediaRepository,
+        catalogueEnrichments,
         libraryApiClient,
         userDataMutator,
         imageUrlProvider,

@@ -18,6 +18,9 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -99,6 +102,7 @@ class RemoteControlReceiverTest {
         securityStore = securityStore,
         remoteNavigationBridge = bridge,
         audioQueueManager = audioQueueManager,
+        applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
     )
 
     private fun startAndAwaitSubscription(r: RemoteControlReceiver) {

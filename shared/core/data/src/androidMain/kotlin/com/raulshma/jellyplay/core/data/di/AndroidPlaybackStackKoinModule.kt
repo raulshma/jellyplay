@@ -122,6 +122,7 @@ internal fun androidPlaybackStackModule(context: Context): Module = module {
             musicCatalogue = get(),
             playbackRepository = get(),
             appearanceStore = get(),
+            applicationScope = get(DatastoreQualifiers.applicationScope),
         )
     }
     // H7/D22: the ambient hero-clip transport (muted-by-contract, looping) —

@@ -48,7 +48,7 @@ class StreamingSubtitleStoreImpl(
         // Stable filename keyed by provider+id so repeated downloads overwrite
         // rather than accumulate. Sanitized the same way the cache path is.
         val safeId = "${provider.name.lowercase()}_$providerSubtitleId"
-            .replace(Regex("[^A-Za-z0-9_-]"), "")
+            .replace(SAFE_ID_REGEX, "")
         val storedFileName = "$safeId.$ext"
         File(dir, storedFileName).writeBytes(bytes)
 
@@ -143,5 +143,9 @@ class StreamingSubtitleStoreImpl(
     private companion object {
         const val ROOT_DIR_NAME = "streaming-subtitles"
         const val MANIFEST_FILE_NAME = "manifest.json"
+
+        // Single-shape filename sanitizer, hoisted out of [save] so a stored
+        // subtitle never recompiles the pattern per call.
+        private val SAFE_ID_REGEX = Regex("[^A-Za-z0-9_-]")
     }
 }

@@ -34,13 +34,20 @@ class ThemeMusicPlayer(
     private val musicCatalogue: MusicCatalogue,
     private val playbackRepository: PlaybackRepository,
     private val appearanceStore: AppearanceStore,
+    /**
+     * The Koin application scope (DatastoreQualifiers.applicationScope) the
+     * Main-dispatcher scope hangs off as a SupervisorJob child — [release]
+     * still cancels only the player's own scope.
+     */
+    private val applicationScope: CoroutineScope,
 ) {
     companion object {
         private const val TAG = "ThemeMusicPlayer"
         private const val AMBIENT_VOLUME = 0.3f
     }
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private val scope =
+        CoroutineScope(SupervisorJob(applicationScope.coroutineContext[Job]) + Dispatchers.Main)
     private var player: ExoPlayer? = null
     private var fetchJob: Job? = null
 

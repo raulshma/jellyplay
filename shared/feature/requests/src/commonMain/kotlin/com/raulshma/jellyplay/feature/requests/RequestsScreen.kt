@@ -163,9 +163,17 @@ fun RequestsScreen(
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             items(state.requests, key = { it.id }) { request ->
+                                // Mechanical per-row remember: the media-info
+                                // map lookup is keyed per request id + map
+                                // identity so unrelated recompositions (selection
+                                // toggles, action-state churn) don't re-hash
+                                // every visible row.
+                                val requestMediaInfo = remember(request.id, mediaInfo) {
+                                    mediaInfo[request.media.tmdbId]
+                                }
                                 RequestListItem(
                                     request = request,
-                                    mediaInfo = mediaInfo[request.media.tmdbId],
+                                    mediaInfo = requestMediaInfo,
                                     isAdmin = isAdmin,
                                     actionInProgress = state.actionInProgress,
                                     selectionMode = state.selectionMode,

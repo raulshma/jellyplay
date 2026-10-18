@@ -82,6 +82,9 @@ class SeerrRequestDelegate(
                 launch { seerrRepository.getRecommendations(tmdbId, type) }
                 launch { seerrRepository.getSimilar(tmdbId, type) }
             }
+        } catch (ce: kotlinx.coroutines.CancellationException) {
+            // Never swallow cancellation — breaks structured concurrency.
+            throw ce
         } catch (_: Exception) {
         }
     }

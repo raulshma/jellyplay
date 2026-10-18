@@ -7,6 +7,8 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -85,7 +87,7 @@ class SyncPlayPlaybackCoreReconcileTest {
         every { castStore.syncPlayCast } returns MutableStateFlow(SyncPlayCastSlice())
         timeSyncManager.remoteNow()
         timeSyncManager.toLocal(0L)
-        core = SyncPlayPlaybackCore(timeSyncManager, controller, castStore)
+        core = SyncPlayPlaybackCore(timeSyncManager, controller, castStore, CoroutineScope(SupervisorJob() + Dispatchers.Main))
     }
 
     @AfterTest

@@ -65,13 +65,22 @@ class SyncPlayManager(
     private val syncPlayController: SyncPlayController,
     private val playbackCore: SyncPlayPlaybackCore,
     private val queueCore: SyncPlayQueueCore,
+    /**
+     * The Koin application scope (DatastoreQualifiers.applicationScope) the
+     * manager's Default-dispatcher scope hangs off as a SupervisorJob child —
+     * the manager cancels its per-session jobs individually (never the scope
+     * itself), so the child now also dies with an app-level teardown instead
+     of outliving it.
+     */
+    private val applicationScope: CoroutineScope,
 ) {
     private val activeGroupIdRef = AtomicReference<String?>(null)
     private val isGroupActive = AtomicBoolean(false)
     private val syncPlayEnabledAtMs = AtomicLong(0L)
     private val syncPlayReady = AtomicBoolean(false)
     private val cachedGroup = AtomicReference<SyncPlayGroup?>(null)
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val scope =
+        CoroutineScope(SupervisorJob(applicationScope.coroutineContext[Job]) + Dispatchers.Default)
     private var eventJob: Job? = null
     private var pingReportJob: Job? = null
     private var reconnectWatchJob: Job? = null

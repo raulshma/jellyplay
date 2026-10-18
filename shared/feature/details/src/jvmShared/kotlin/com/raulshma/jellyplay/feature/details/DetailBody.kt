@@ -43,6 +43,7 @@ import com.raulshma.jellyplay.core.ui.components.ErrorScreen
 import com.raulshma.jellyplay.core.ui.components.LocalAnimatedVisibilityScope
 import com.raulshma.jellyplay.core.ui.components.LocalSharedTransitionScope
 import com.raulshma.jellyplay.core.ui.image.MediaImage
+import com.raulshma.jellyplay.core.ui.image.rememberMediaImageMemoryCacheKey
 import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import androidx.compose.ui.ExperimentalComposeUiApi
@@ -213,13 +214,23 @@ internal fun DetailBodyPortrait(
                                 .width(posterWidth)
                                 .requiredHeight(posterHeight),
                         ) {
+                            // The list→detail handoff: the grid tile the user
+                            // tapped (PosterCard) decoded this same poster URL
+                            // at 360×540 — pass that request's memory-cache key
+                            // so Coil paints the tile's cached bitmap as the
+                            // placeholder while this larger decode runs.
+                            val posterUrl = state.assets.posterPath
+                                ?: callbacks.artwork.getImageUrl(state.itemId)
                             MediaImage(
                                 // Prefer the on-disk poster (DetailAssets.posterPath)
                                 // for a LOCAL origin before the server fallback.
-                                url = state.assets.posterPath
-                                    ?: callbacks.artwork.getImageUrl(state.itemId),
+                                url = posterUrl,
                                 contentDescription = null,
                                 blurHash = item?.blurHashes?.primary,
+                                placeholderMemoryCacheKey = rememberMediaImageMemoryCacheKey(
+                                    url = posterUrl,
+                                    size = coil3.size.Size(360, 540),
+                                ),
                                 // Portrait poster (~120 dp × 3× ≈ 432 px) — decode a
                                 // right-sized thumbnail instead of the default 512×512
                                 // (or larger) bitmap.
@@ -293,10 +304,17 @@ private fun DetailPoster(
                 )
             }
         } else Modifier
+    // The list→detail handoff (the portrait header poster's rationale): the
+    // grid tile decoded this same poster URL at 360×540, so its memory-cache
+    // key becomes the placeholder while this larger rail decode runs.
     MediaImage(
         url = getImageUrl(itemId),
         contentDescription = null,
         blurHash = primaryBlurHash,
+        placeholderMemoryCacheKey = rememberMediaImageMemoryCacheKey(
+            url = getImageUrl(itemId),
+            size = coil3.size.Size(360, 540),
+        ),
         // posterWidth × 3× decode width; 2/3 aspect → proportional height.
         // Avoids under-sized decode (blur on TV) and over-sized decode (memory
         // waste on phone) from the default size.

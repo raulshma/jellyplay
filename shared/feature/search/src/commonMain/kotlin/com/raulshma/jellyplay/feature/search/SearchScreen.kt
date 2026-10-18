@@ -57,8 +57,10 @@ import androidx.compose.material3.SearchBarDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.MutableIntState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -219,6 +221,19 @@ internal fun SearchScreen(
 
     val pagedResults = viewModel.pagedResults.collectAsLazyPagingItems()
     val refreshPhase = pagedResults.loadState.refresh.toPagedRefreshPhase()
+
+    // Result-set entrance generation (bumped by the leaf below): the id set
+    // is recreated per generation, so each result card plays its entrance
+    // exactly once per settled search — cards scrolled out and back inside
+    // one generation compose settled instead of replaying the fade. Mirrors
+    // the Library masonry's refreshGeneration threading.
+    val entranceGeneration = remember { mutableIntStateOf(0) }
+    SearchResultEntranceGeneration(
+        pagedResults = pagedResults,
+        viewModel = viewModel,
+        generation = entranceGeneration,
+    )
+    val entranceAnimatedIds = remember(entranceGeneration.intValue) { mutableSetOf<String>() }
 
     // Only persist the query to "Recent Searches" once the pager confirms a
     // non-empty result set for it. See [SearchHistoryRecorder] — the effect
@@ -893,7 +908,7 @@ internal fun SearchScreen(
                                     null
                                 }
                                 if (item != null) {
-                                    AnimatedSearchItem(index = index) {
+                                    AnimatedSearchItem(itemId = item.id, animatedIds = entranceAnimatedIds) {
                                         val itemProgress = item.progressFraction()
                                         // Memoize the per-item URL + click lambda (LibraryScreen
                                         // already does this) so a results re-emit (paging,
@@ -1201,14 +1216,46 @@ private fun SearchHistoryRecorder(
     }
 }
 
+/**
+ * Bumps the result-set generation each time a search settles (query change or
+ * refresh completion — the refresh LoadState always transits Loading in
+ * between, so the effect re-runs per result set but not per page append).
+ * Lives in a leaf so it can key on the live query without the screen body
+ * recomposing per keystroke — the same split as [SearchHistoryRecorder].
+ */
+@Composable
+private fun SearchResultEntranceGeneration(
+    pagedResults: LazyPagingItems<MediaItem>,
+    viewModel: SearchViewModel,
+    generation: MutableIntState,
+) {
+    val query by viewModel.query.collectAsStateWithLifecycle()
+    val refreshLoadState = pagedResults.loadState.refresh
+    LaunchedEffect(refreshLoadState, query) {
+        if (refreshLoadState is LoadState.NotLoading) {
+            generation.intValue++
+        }
+    }
+}
+
 @Composable
 private fun AnimatedSearchItem(
-    index: Int,
+    itemId: String,
+    animatedIds: MutableSet<String>,
     content: @Composable () -> Unit,
 ) {
-    var visible by remember { mutableStateOf(false) }
-    androidx.compose.runtime.LaunchedEffect(Unit) {
-        visible = true
+    // The entrance plays once per result generation: the hoisted set records
+    // each id when its card first animates, so a card re-entering view later
+    // (scroll-back after grid disposal) composes settled instead of replaying
+    // the fade. Set membership is only read here; the add happens in the
+    // effect coroutine, never during composition.
+    val alreadyAnimated = itemId in animatedIds
+    var visible by remember { mutableStateOf(alreadyAnimated) }
+    if (!alreadyAnimated) {
+        androidx.compose.runtime.LaunchedEffect(Unit) {
+            visible = true
+            animatedIds += itemId
+        }
     }
 
     val animationProgress by animateFloatAsState(

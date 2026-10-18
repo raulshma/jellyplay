@@ -278,7 +278,9 @@ fun JellyPlaySyncScreen(
                     item(key = "quota_card") { QuotaCard(status) }
                 }
                 val namespaceRows = if (isTv) uiState.namespaceRows.filter { it.toggleable } else uiState.namespaceRows
-                items(namespaceRows, key = { "ns_${it.ns}" }) { namespace ->
+                items(namespaceRows, key = { "ns_${it.ns}" }, contentType = { row ->
+                    if (row.toggleable) "namespaceToggle" else "namespaceInfo"
+                }) { namespace ->
                     if (namespace.toggleable) {
                         SettingToggleItem(
                             icon = Tabler.Outline.Database,
@@ -301,7 +303,7 @@ fun JellyPlaySyncScreen(
                         stringResource(Res.string.settings_jellyplay_sync_admin_section),
                         Modifier.padding(top = 8.dp, start = 4.dp),
                     ) }
-                    items(adminUsers, key = { "admin_${it.userId}" }) { user ->
+                    items(adminUsers, key = { "admin_${it.userId}" }, contentType = { "adminUser" }) { user ->
                         SettingInfoItem(
                             icon = Tabler.Outline.Users,
                             title = user.userName.ifBlank { user.userId },
@@ -325,7 +327,7 @@ fun JellyPlaySyncScreen(
                         stringResource(Res.string.settings_jellyplay_sync_conflicts_title),
                         Modifier.padding(top = 8.dp, start = 4.dp),
                     ) }
-                    items(syncState.conflicts, key = { "conflict_${it.ns}/${it.key}" }) { conflict ->
+                    items(syncState.conflicts, key = { "conflict_${it.ns}/${it.key}" }, contentType = { "conflictRow" }) { conflict ->
                         val key = "${conflict.ns}/${conflict.key}"
                         ConflictRow(
                             conflict = conflict,
@@ -345,7 +347,7 @@ fun JellyPlaySyncScreen(
                     stringResource(Res.string.settings_jellyplay_sync_devices_title),
                     Modifier.padding(top = 8.dp, start = 4.dp),
                 ) }
-                items(uiState.devices, key = { it.deviceId }) { device ->
+                items(uiState.devices, key = { it.deviceId }, contentType = { "deviceRow" }) { device ->
                     val lastSync = device.lastSyncAt
                         ?.let { stringResource(Res.string.settings_jellyplay_sync_device_last_sync, formatSyncTimestamp(it)) }
                         ?: stringResource(Res.string.settings_sync_never)
@@ -396,7 +398,7 @@ fun JellyPlaySyncScreen(
                     if (uiState.history.isEmpty()) {
                         item(key = "history_empty") { QuietLine(stringResource(Res.string.settings_jellyplay_sync_history_empty)) }
                     } else {
-                        items(uiState.history, key = { it.seq }) { entry ->
+                        items(uiState.history, key = { it.seq }, contentType = { "historyRow" }) { entry ->
                             HistoryRow(
                                 entry = entry,
                                 expanded = uiState.expandedHistorySeq == entry.seq,
@@ -432,7 +434,7 @@ fun JellyPlaySyncScreen(
                     if (snapshots.isEmpty()) {
                         item(key = "snapshots_empty") { QuietLine(stringResource(Res.string.settings_jellyplay_sync_snapshots_empty)) }
                     } else {
-                        items(snapshots, key = { "snapshot_${it.id}" }) { snapshot ->
+                        items(snapshots, key = { "snapshot_${it.id}" }, contentType = { "snapshotRow" }) { snapshot ->
                             SettingListItem(
                                 icon = Tabler.Outline.Clock,
                                 title = stringResource(

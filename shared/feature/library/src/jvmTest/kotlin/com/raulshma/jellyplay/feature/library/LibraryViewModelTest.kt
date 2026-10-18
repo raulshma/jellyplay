@@ -9,7 +9,7 @@ import androidx.paging.PagingDataEvent
 import androidx.paging.PagingDataPresenter
 import com.raulshma.jellyplay.core.data.download.DownloadOutcomeMessenger
 import com.raulshma.jellyplay.core.data.download.DownloadRequestResult
-import com.raulshma.jellyplay.core.network.api.LibraryApiClient
+import com.raulshma.jellyplay.core.data.repository.MediaCatalogueEnrichments
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.data.util.ImageUrlProvider
@@ -56,12 +56,26 @@ import kotlin.test.assertNull
 
 class LibraryViewModelTest {
 
+    // The browse-catalogue enrichments seam — the filter sheets' tag facet
+    // reads this seam (off the wide repository surface); the fake records the
+    // call count the repository-mock verifications used to pin.
+    private val catalogueEnrichments = object : MediaCatalogueEnrichments {
+        var tagsResult: Result<List<String>> = Result.success(emptyList())
+        var tagsCalls: Int = 0
+        override suspend fun getTags(parentId: String?): Result<List<String>> {
+            tagsCalls++
+            return tagsResult
+        }
+        override suspend fun getBoxSetsContaining(itemId: String) =
+            Result.success(emptyList<com.raulshma.jellyplay.core.model.CollectionSummary>())
+    }
+
+
     // The legacy suite's MainDispatcherRule (:core:testing), inlined — jvmTest
     // has no access to that module (search conveyor port pattern).
     private val mainDispatcher = StandardTestDispatcher()
 
     private lateinit var mediaRepository: MediaRepository
-    private val libraryApiClient: LibraryApiClient = mockk(relaxed = true)
     private lateinit var offlineRepository: com.raulshma.jellyplay.core.data.repository.OfflineRepository
     private lateinit var quickDownloadActions: com.raulshma.jellyplay.core.data.download.QuickDownloadActions
     private lateinit var offlineModeManager: com.raulshma.jellyplay.core.data.offline.OfflineModeManager
@@ -125,7 +139,7 @@ class LibraryViewModelTest {
         // ClassCasts inside the inline onSuccess/onFailure.
         coEvery { mediaRepository.getLibraryFolders(any()) } returns Result.success(emptyList<LibraryFolder>())
         coEvery { mediaRepository.getGenres(any(), any()) } returns Result.success(emptyList())
-        coEvery { libraryApiClient.getTags(any(), any(), any()) } returns Result.success(emptyList())
+        catalogueEnrichments.tagsResult = Result.success(emptyList())
         // The deferred refresher collects this for the whole VM lifetime.
         every { mediaRepository.userDataChanges } returns userDataEvents
     }
@@ -143,7 +157,7 @@ class LibraryViewModelTest {
             com.raulshma.jellyplay.core.ui.message.UserMessageBus(),
     ): LibraryViewModel = LibraryViewModel(
         mediaRepository = mediaRepository,
-        libraryApiClient = libraryApiClient,
+        mediaCatalogueEnrichments = catalogueEnrichments,
         offlineRepository = offlineRepository,
         quickDownloadActions = quickDownloadActions,
         offlineModeManager = offlineModeManager,
@@ -986,8 +1000,8 @@ class LibraryViewModelTest {
         // Initial load is cached; the manual pull-to-refresh is not.
         coVerify(exactly = 1) { mediaRepository.getLibraryFolders(force = true) }
         coVerify(exactly = 1) { mediaRepository.getGenres(force = true) }
-        // Tags are an uncached passthrough: both loads hit them.
-        coVerify(exactly = 2) { libraryApiClient.getTags(any(), any(), any()) }
+        // Both loads run (the tag cache lives beneath the mocked repository).
+        assertEquals(2, catalogueEnrichments.tagsCalls)
     }
 
     // ── Saved sort fallbacks ─────────────────────────────────────────────────

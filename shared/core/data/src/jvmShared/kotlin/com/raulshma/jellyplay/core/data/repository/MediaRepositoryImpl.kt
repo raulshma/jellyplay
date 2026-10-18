@@ -9,6 +9,7 @@ import com.raulshma.jellyplay.core.data.session.SessionCacheRegistry
 import com.raulshma.jellyplay.core.data.session.SessionScopedCache
 import com.raulshma.jellyplay.core.model.CacheIdentity
 import com.raulshma.jellyplay.core.model.FreshnessCeilings
+import com.raulshma.jellyplay.core.model.CollectionSummary
 import com.raulshma.jellyplay.core.model.DiscoverRowConfig
 import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.HomeFreshness
@@ -174,6 +175,7 @@ class MediaRepositoryImpl internal constructor(
     UserDataChanges,
     SeriesNotificationReads,
     MediaRepositoryCacheInvalidation,
+    MediaCatalogueEnrichments,
     MediaCacheInvalidator {
 
     // The detail screen's item-scoped cache cluster — detail snapshot,
@@ -224,6 +226,20 @@ class MediaRepositoryImpl internal constructor(
     )
     private val studiosSpec = MediaCacheSpec<List<Studio>>(
         owner = "media-studios",
+        groups = setOf(MediaCacheGroup.WHOLESALE),
+        maxSize = 64,
+        ttlMs = FreshnessCeilings.FOLDERS_TTL_MS,
+        registry = sessionCacheRegistry,
+        identity = { homeSession.cacheIdentity() },
+    )
+
+    // The filter sheets' tag facets: the sorted distinct tag list the client
+    // collects across the paged library scan. Genres/studios-shaped (same
+    // near-static catalogue-metadata ceiling), and — because the underlying
+    // read walks up to the scan cap's worth of items — the one cache that
+    // keeps the filter sheets from re-paying the walk on every open.
+    private val tagsSpec = MediaCacheSpec<List<String>>(
+        owner = "media-tags",
         groups = setOf(MediaCacheGroup.WHOLESALE),
         maxSize = 64,
         ttlMs = FreshnessCeilings.FOLDERS_TTL_MS,
@@ -288,6 +304,7 @@ class MediaRepositoryImpl internal constructor(
         libraryFoldersSpec,
         genresSpec,
         studiosSpec,
+        tagsSpec,
         latestMediaSpec,
         collectionItemsSpec,
         photoFolderChildUrlSpec,
@@ -731,6 +748,15 @@ class MediaRepositoryImpl internal constructor(
             libraryApiClient.getStudios(parentId)
         }
 
+    override suspend fun getTags(parentId: String?): Result<List<String>> =
+        // Cached like its genres/studios siblings: the client read walks the
+        // library's items (TAGS-only projection, scan-capped) so the filter
+        // sheets' tag list is complete — the cache keeps that walk to once
+        // per ceiling window instead of once per sheet open.
+        tagsSpec.cache.getOrFetch("tags_${parentId ?: "root"}") {
+            libraryApiClient.getTags(parentId = parentId)
+        }
+
     override suspend fun getAlbumTracks(albumId: String, force: Boolean): Result<List<MediaItem>> =
         // Announced-staleness read (see [albumTracksStale]): a track flip
         // arms the marker because the composite user-data eviction only
@@ -754,6 +780,16 @@ class MediaRepositoryImpl internal constructor(
         // item-scoped key, 2-minute TTL, epoch-guarded write — evicted with
         // the detail's other per-item caches in DetailCacheGroup.invalidateItem.
         detailCaches.themeSongs(itemId)
+
+    override suspend fun getBoxSetsContaining(itemId: String): Result<List<CollectionSummary>> =
+        // The detail screen's franchise row: the enumerate-then-probe fan-out
+        // (one round-trip per boxset) is the costliest detail enrichment, so
+        // it caches beside the detail's other per-item shapes — identity
+        // keyed, single-flight, epoch-guarded write, and evicted per item by
+        // DetailCacheGroup.invalidateItem (the user-data write funnel) under
+        // the LONGER near-static catalogue ceiling. See the member's KDoc on
+        // DetailCacheGroup for the declared TTL divergence.
+        detailCaches.boxSetsContaining(itemId)
 
     override suspend fun getSeasons(seriesId: String): Result<List<MediaItem>> =
         // Thin passthrough: the catalogue owns the seasons/episodes snapshot
@@ -836,7 +872,9 @@ class MediaRepositoryImpl internal constructor(
     // paged projections that routed through two of
     // those forwards (getMediaItemsPaged / getFavoritesPaged) stay here and
     // call the client directly — same named arguments, so the wire calls are
-    // unchanged.
+    // unchanged. One member has since returned with a cache the stateless
+    // forward never had: getTags (the filter sheets' walk-the-library scan,
+    // the genres/studios-shaped [tagsSpec] above).
 
     private val syntheticUserDataChanges = MutableSharedFlow<UserDataChange>(
         extraBufferCapacity = SYNTHETIC_CHANGES_BUFFER,

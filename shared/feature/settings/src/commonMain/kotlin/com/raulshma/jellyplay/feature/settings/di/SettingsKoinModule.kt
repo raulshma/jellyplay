@@ -381,6 +381,7 @@ val settingsModule: Module = module {
             homeDiscoveryStore = get(),
             editor = get(),
             mediaRepository = get(),
+            mediaCatalogueEnrichments = get(),
             libraryApiClient = get(),
         )
     }

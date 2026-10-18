@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.startup
 
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
+import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.JellyPlayLiveResyncConnector
 import com.raulshma.jellyplay.core.data.session.JellyPlayEventsSessionController
 import com.raulshma.jellyplay.core.data.update.AppUpdateRepository
@@ -21,6 +22,10 @@ import com.raulshma.jellyplay.core.notification.scheduler.NotificationReconnectL
 import com.raulshma.jellyplay.core.notification.scheduler.NotificationScheduler
 import com.raulshma.jellyplay.feature.player.video.engine.VideoStreamCache
 import com.raulshma.jellyplay.feature.player.video.subtitle.FontProvider
+import com.raulshma.jellyplay.shell.SessionCoordinator
+import com.raulshma.jellyplay.shell.SyncPlayOpenCoordinator
+import com.raulshma.jellyplay.shell.UpdateCoordinator
+import com.raulshma.jellyplay.shell.WhatsNewCoordinator
 import com.raulshma.jellyplay.widget.NowPlayingWidgetUpdater
 import com.raulshma.jellyplay.widget.WidgetWorkScheduler
 import io.mockk.coEvery
@@ -36,6 +41,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import okhttp3.OkHttpClient
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -50,7 +56,8 @@ import org.junit.Test
  *  - download recovery and the APK sweep begin at t=0, after group 1's head;
  *  - the audio/widget group and the scheduler group are gated behind the
  *    2 s deferral (virtual time), audio → widget first, then the scheduler
- *    group in its enqueue order.
+ *    group as two async subgroups (widget/notification pair, then the
+ *    data-sync listeners + session machinery).
  *
  * Every collaborator is a recording mock. All five launches land on one
  * single-threaded virtual-time dispatcher (the test-only constructor seam —
@@ -152,6 +159,16 @@ class AppStartupPrewarmsTest {
             }
         }
 
+    // The off-main construction warmups (group 1): construction-only, so
+    // relaxed mocks record nothing — their resolution is pinned through the
+    // lazies' isInitialized() below instead of an event tag.
+    private val okHttpClient: OkHttpClient = mockk(relaxed = true)
+    private val authRepository: AuthRepository = mockk(relaxed = true)
+    private val sessionCoordinator: SessionCoordinator = mockk(relaxed = true)
+    private val updateCoordinator: UpdateCoordinator = mockk(relaxed = true)
+    private val whatsNewCoordinator: WhatsNewCoordinator = mockk(relaxed = true)
+    private val syncPlayOpenCoordinator: SyncPlayOpenCoordinator = mockk(relaxed = true)
+
     private fun createPrewarms(
         scope: CoroutineScope,
         ioDispatcher: CoroutineDispatcher,
@@ -179,7 +196,20 @@ class AppStartupPrewarmsTest {
         eventsSessionController = lazy { eventsSessionController },
         liveResyncConnector = lazy { liveResyncConnector },
         downloadSummarySurface = lazy { downloadSummarySurface },
+        okHttpClient = okHttpLazy,
+        authRepository = authRepositoryLazy,
+        sessionCoordinator = sessionCoordinatorLazy,
+        updateCoordinator = updateCoordinatorLazy,
+        whatsNewCoordinator = whatsNewCoordinatorLazy,
+        syncPlayOpenCoordinator = syncPlayOpenCoordinatorLazy,
     )
+
+    private val okHttpLazy = lazy { okHttpClient }
+    private val authRepositoryLazy = lazy { authRepository }
+    private val sessionCoordinatorLazy = lazy { sessionCoordinator }
+    private val updateCoordinatorLazy = lazy { updateCoordinator }
+    private val whatsNewCoordinatorLazy = lazy { whatsNewCoordinator }
+    private val syncPlayOpenCoordinatorLazy = lazy { syncPlayOpenCoordinator }
 
     private fun indexOf(name: String) = events.indexOfFirst { it.name == name }
     private fun timeOf(name: String) = events.first { it.name == name }.atMs
@@ -222,7 +252,12 @@ class AppStartupPrewarmsTest {
         val postDeferralOrder = listOf(
             "audio.start",
             "widget.start",
+            // Scheduler subgroup A (widget/notification pair) runs to
+            // completion before subgroup B: the two async siblings are queued
+            // FIFO on this single-threaded dispatcher.
             "widgetWork.enqueuePeriodic",
+            "notificationScheduler.scheduleOrUpdate",
+            // Scheduler subgroup B (data-sync listeners + session machinery).
             "userDataSync.enqueuePeriodic",
             "playbackSync.enqueuePeriodic",
             "playbackSyncReconnect.start",
@@ -230,7 +265,6 @@ class AppStartupPrewarmsTest {
             "downloadReconnect.start",
             "notificationReconnect.start",
             "autoDownload.sync",
-            "notificationScheduler.scheduleOrUpdate",
             "eventsSession.start",
             "liveResync.start",
             "downloadSummary.start",
@@ -240,6 +274,15 @@ class AppStartupPrewarmsTest {
             "audio/widget + scheduler groups must run only after the 2 s deferral",
             events.takeLast(postDeferralOrder.size).all { it.atMs == 2_000L },
         )
+
+        // Group 1's off-main construction warmups resolved (construction-only
+        // collaborators — no event tags; see the lazy declarations above).
+        assertTrue(okHttpLazy.isInitialized())
+        assertTrue(authRepositoryLazy.isInitialized())
+        assertTrue(sessionCoordinatorLazy.isInitialized())
+        assertTrue(updateCoordinatorLazy.isInitialized())
+        assertTrue(whatsNewCoordinatorLazy.isInitialized())
+        assertTrue(syncPlayOpenCoordinatorLazy.isInitialized())
 
         // The prewarm/recovery/sweep work itself stays at t=0 — the deferral
         // gates only the two deferred groups.

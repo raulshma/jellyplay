@@ -4,6 +4,7 @@ import com.raulshma.jellyplay.core.data.session.HomeSession
 import com.raulshma.jellyplay.core.data.session.SessionCacheRegistry
 import com.raulshma.jellyplay.core.data.session.SessionScopedCache
 import com.raulshma.jellyplay.core.model.CacheIdentity
+import com.raulshma.jellyplay.core.model.CollectionSummary
 import com.raulshma.jellyplay.core.model.FreshnessCeilings
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
@@ -49,17 +50,18 @@ internal const val DETAIL_CACHE_MAX_ENTRIES = 30
 internal class MediaRepositoryInternals(
     /**
      * The LibraryApiClient family seam: the detail cluster's fetch paths call
-     * getMediaDetail/getSimilarItems/getAlbumTracks/getThemeSongs through it,
-     * exactly as they did when the group lived inside [MediaRepositoryImpl]
-     * (the PlaybackRepositoryImpl ctor precedent — all four fetches are
-     * LibraryApiClient members, so the family single composes the same impl
+     * getMediaDetail/getSimilarItems/getAlbumTracks/getThemeSongs (plus the
+     * boxsets-containing member) through it, exactly as they did when the
+     * group lived inside [MediaRepositoryImpl]
+     * (the PlaybackRepositoryImpl ctor precedent — every fetch is a
+     * LibraryApiClient member, so the family single composes the same impl
      * the former union delegated to).
      */
     apiClient: LibraryApiClient,
     homeSession: HomeSession,
     /**
      * The single home for identity reactions (see [SessionCacheRegistry]):
-     * the group's four member caches each register their own identity action
+     * the group's member caches each register their own identity action
      * through their [SessionScopedCache] chassis, so the registry must reach
      * the group at construction.
      */
@@ -75,12 +77,12 @@ internal class MediaRepositoryInternals(
 }
 
 /**
- * The detail screen's item-scoped cache group — the single owner of the four
+ * The detail screen's item-scoped cache group — the single owner of the
  * caches that co-evict with one detail item (the detail snapshot, similar
- * items, album tracks, theme songs) plus the ONE epoch that guards every
- * write against that invalidation stream. Beside
- * [MediaRepositoryInternals] (the `EpisodeCatalogueImpl` shape in miniature: a
- * cache cluster + its invalidation choreography, constructor-injected with
+ * items, album tracks, theme songs, boxsets-containing) plus the ONE epoch
+ * that guards every write against that invalidation stream. Beside
+ * [MediaRepositoryInternals] (the `EpisodeCatalogueImpl` shape in miniature:
+ * a cache cluster + its invalidation choreography, constructor-injected with
  * its two collaborators); the repo's public members are one-line delegates.
  *
  * ## Key grammar — the drift this group exists to kill
@@ -118,7 +120,7 @@ internal class MediaRepositoryInternals(
  * [HomeSession.cacheIdentitySnapshot]) so a wrong identity is a guaranteed
  * miss by construction. Each member cache registers its own identity action
  * (epoch bump + wholesale clear) through the chassis; the ONE [epoch] is
- * injected into all four so a single bump stall-guards every member's
+ * injected into every member so a single bump stall-guards every member's
  * writers.
  */
 internal class DetailCacheGroup(
@@ -134,11 +136,11 @@ internal class DetailCacheGroup(
     // pre-mutation snapshot for the full TTL, whichever member it was
     // fetching into. Declared delta over the former registration (unobservable
     // beyond the veto itself): the identity transition bumps this epoch once
-    // per member action (four bumps) instead of once — the veto is monotonic,
+    // per member action instead of once — the veto is monotonic,
     // so more bumps reject strictly more stale writes and nothing else.
     private val epoch = AtomicLong(0L)
 
-    // The identity supplier the four chassis share: the source-flow read (the
+    // The identity supplier the member chassis share: the source-flow read (the
     // mirror lags a switch by a dispatch, which would key fetches under the
     // previous identity).
     private val identity: suspend () -> CacheIdentity = { homeSession.cacheIdentity() }
@@ -180,6 +182,26 @@ internal class DetailCacheGroup(
         identity = identity,
     )
 
+    // BoxSets containing a detail item (the franchise row's sources): the
+    // fetch is the most expensive detail enrichment — enumerate the user's
+    // boxsets, then ONE membership probe per boxset at bounded concurrency —
+    // so a detail re-entry inside the window re-serves the row instead of
+    // re-probing. Declared divergence from its siblings: a LONGER ceiling
+    // (the near-static catalogue-metadata ceiling the folders/genres/studios
+    // caches cite, not the 2-minute DETAIL one — boxset membership changes
+    // at collection-edit cadence, not playback cadence), same identity
+    // keying, single-flight read and shared epoch as every other member. A
+    // user-data write on the item evicts it beside the item's other shapes
+    // (see [invalidateItem]); collection edits that change membership
+    // self-invalidate through the collection items path.
+    private val boxSetsContainingCache = SessionScopedCache<List<CollectionSummary>>(
+        owner = "media-boxsets-containing",
+        ttlMs = FreshnessCeilings.FOLDERS_TTL_MS,
+        epoch = epoch,
+        registry = sessionCacheRegistry,
+        identity = identity,
+    )
+
     // ── Key grammar (the one home of every item-scoped key) ────────────────
 
     /**
@@ -198,6 +220,12 @@ internal class DetailCacheGroup(
 
     /** Album-tracks key — unshaped; removed by exact key. */
     private fun tracksKey(albumId: String) = "tracks_$albumId"
+
+    /**
+     * BoxSets-containing key — unshaped; the prefix evict is exact-match
+     * equivalent (mirrors [themesKey]).
+     */
+    private fun boxSetsContainingKey(itemId: String) = "boxsets_containing_$itemId"
 
     // ── Accessors ──────────────────────────────────────────────────────────
 
@@ -246,6 +274,17 @@ internal class DetailCacheGroup(
             apiClient.getThemeSongs(itemId)
         }
 
+    /**
+     * BoxSets containing the item — epoch-guarded write, the LONGER
+     * catalogue-metadata ceiling (see the member declaration): the
+     * enumerate-then-probe fan-out is the detail screen's costliest
+     * enrichment, and a detail re-entry inside the window must not re-pay it.
+     */
+    suspend fun boxSetsContaining(itemId: String): Result<List<CollectionSummary>> =
+        boxSetsContainingCache.getOrFetch(boxSetsContainingKey(itemId)) {
+            apiClient.getBoxSetsContaining(itemId)
+        }
+
     /** Best-effort pre-eviction read of the cached detail (snapshot identity). */
     fun cachedDetail(itemId: String): MediaDetail? =
         detailCache.get(homeSession.cacheIdentitySnapshot(), itemId)
@@ -254,16 +293,18 @@ internal class DetailCacheGroup(
 
     /**
      * Drops EVERY cached shape of one item: the detail snapshot, every limit
-     * variant of its similar items (prefix evict), and its theme songs —
-     * plus the epoch bump that stall-guards in-flight writers. ONE bump
-     * (through the detail entry's chassis invalidate) covers all three
-     * evictions; the similar/themes removes are bump-less on purpose.
+     * variant of its similar items (prefix evict), its theme songs, and its
+     * boxsets-containing row — plus the epoch bump that stall-guards
+     * in-flight writers. ONE bump (through the detail entry's chassis
+     * invalidate) covers all evictions; the similar/themes/boxsets removes
+     * are bump-less on purpose.
      */
     fun invalidateItem(itemId: String) {
         val snapshotIdentity = homeSession.cacheIdentitySnapshot()
         detailCache.invalidate(snapshotIdentity, itemId)
         similarCache.removeByKeyPrefix(snapshotIdentity, similarEvictAllLimitsPrefix(itemId))
         themeSongsCache.removeByKeyPrefix(snapshotIdentity, themesKey(itemId))
+        boxSetsContainingCache.removeByKeyPrefix(snapshotIdentity, boxSetsContainingKey(itemId))
     }
 
     /**
@@ -278,15 +319,17 @@ internal class DetailCacheGroup(
     }
 
     /**
-     * Wholesale drop of the detail/similar/themes trio plus the epoch bump
-     * (one per member chassis — monotonic, see the epoch-semantics KDoc).
-     * This (not [clearAll]) is ALSO the identity-transition reaction: each
-     * member's chassis registers this section as its own registry action.
+     * Wholesale drop of the detail/similar/themes/boxsets quartet plus the
+     * epoch bump (one per member chassis — monotonic, see the
+     * epoch-semantics KDoc). This (not [clearAll]) is ALSO the
+     * identity-transition reaction: each member's chassis registers this
+     * section as its own registry action.
      */
     fun invalidateAll() {
         detailCache.invalidateAll()
         similarCache.invalidateAll()
         themeSongsCache.invalidateAll()
+        boxSetsContainingCache.invalidateAll()
     }
 
     /**

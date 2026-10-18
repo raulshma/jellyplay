@@ -28,6 +28,7 @@ import coil3.compose.LocalPlatformContext
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import coil3.compose.AsyncImagePainter
+import coil3.memory.MemoryCache
 import coil3.request.ImageRequest
 import coil3.request.crossfade
 import coil3.size.isOriginal
@@ -38,6 +39,93 @@ import coil3.size.Size as CoilSize
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
 import org.jetbrains.compose.resources.stringResource
+
+/**
+ * [MediaImage]'s default decode size (384²), hoisted as a single val: a
+ * `CoilSize(384, 384)` default expression allocates a fresh Size on every
+ * invocation otherwise. Lowered from 512² originally — visually
+ * indistinguishable for posters and ~30% less decode memory. At lower
+ * densities / TV (where isTv() is true and grids are denser) 512² was
+ * roughly 2× over-sampling, doubling decode time and memory for each card
+ * visible in a horizontal row of 8.
+ */
+private val DefaultDecodeSize = CoilSize(384, 384)
+
+/**
+ * The decode size a [MediaImage] request actually runs at: [size] unchanged
+ * unless performance mode is on AND the caller allows the clamp, in which
+ * case fixed-pixel requests collapse to the tiered thumbnail (768² for
+ * full-bleed ≥1080 requests, 256² otherwise). [CoilSize.isOriginal] is never
+ * clamped.
+ *
+ * Public because two consumers must reproduce the DISPLAY request's decode
+ * size exactly: the home-hero rotation prefetch (a preload computed at a
+ * different size produces a separate memory-cache key, so the display path
+ * would re-fetch and re-decode) and the list→detail placeholder handoff
+ * ([rememberMediaImageMemoryCacheKey] — Coil embeds the size string in the
+ * auto-derived memory-cache key, so a handoff key built at the wrong size
+ * never hits). Keep this the single definition of the clamp.
+ */
+fun mediaImageDecodeSize(
+    size: CoilSize,
+    performanceMode: Boolean,
+    performanceModeAware: Boolean = true,
+): CoilSize = when {
+    size.isOriginal -> size
+    performanceMode && performanceModeAware -> {
+        // Performance mode clamp, tiered by the requested size so full-bleed
+        // callers (hero, detail backdrop) still get a sharp-enough decode
+        // instead of being crushed to poster-thumbnail resolution.
+        val largest = maxOf(
+            size.width.pxOrElse { 0 },
+            size.height.pxOrElse { 0 },
+        )
+        if (largest >= 1080) CoilSize(768, 768) else CoilSize(256, 256)
+    }
+    else -> size
+}
+
+/**
+ * The `coil#size` extra key Coil's MemoryCacheService appends to a request's
+ * auto-derived memory-cache key (transformation-free requests carry the
+ * resolved size string under this extra; [MediaImage] requests never set
+ * transformations). Byte-identical to Coil's own constant, hoisted so the
+ * handoff helper below reproduces the derivation without drift.
+ */
+private const val COIL_SIZE_EXTRA_KEY = "coil#size"
+
+/**
+ * The exact memory-cache key a [MediaImage] request for [url] at [size]
+ * auto-derives (Coil keys transformation-free requests as
+ * `MemoryCache.Key(url, extras)` with the resolved size string under the
+ * `coil#size` extra), with the same performance-mode clamp [MediaImage]
+ * applies. Feeding this into a LARGER request's `placeholderMemoryCacheKey`
+ * makes Coil paint the cached list bitmap as that request's placeholder while
+ * the larger decode runs — the list→detail handoff: the grid tile's image
+ * stays on screen across the navigation instead of dropping to the blurHash.
+ * (Coil looks the placeholder key up raw against the memory cache — no size
+ * re-validation — so the whole Key, extras included, must match.)
+ *
+ * [size] is the LIST call site's decode size (e.g. a poster grid tile's
+ * 360×540), NOT the consuming request's. Null for a null/blank url — nothing
+ * to hand off.
+ */
+@Composable
+fun rememberMediaImageMemoryCacheKey(url: String?, size: CoilSize): MemoryCache.Key? {
+    val performanceMode = com.raulshma.jellyplay.core.ui.components.LocalPerformanceMode.current
+    return remember(url, size, performanceMode) {
+        if (url.isNullOrEmpty()) {
+            null
+        } else {
+            MemoryCache.Key(
+                key = url,
+                extras = mapOf(
+                    COIL_SIZE_EXTRA_KEY to mediaImageDecodeSize(size, performanceMode).toString(),
+                ),
+            )
+        }
+    }
+}
 
 @Composable
 fun MediaImage(
@@ -52,12 +140,9 @@ fun MediaImage(
     // the whole surface as a background rather than letterboxing with the photo.
     blurHashContentScale: ContentScale = contentScale,
     crossfade: Boolean = true,
-    // Default decode size lowered from 512² to 384² — visually
-    // indistinguishable for posters and ~30% less decode memory. At lower
-    // densities / TV (where isTv() is true and grids are denser) 512² was
-    // roughly 2× over-sampling, doubling decode time and memory for each card
-    // visible in a horizontal row of 8.
-    size: CoilSize = CoilSize(384, 384),
+    // The default decode size is hoisted to [DefaultDecodeSize] so the default
+    // expression doesn't allocate a fresh Size on every invocation.
+    size: CoilSize = DefaultDecodeSize,
     colorFilter: ColorFilter? = null,
     placeholderIcon: ImageVector = Tabler.Outline.Photo,
     // Performance mode lowers decode size to save memory. Full-screen images
@@ -65,6 +150,21 @@ fun MediaImage(
     // a single full-bleed image to 256² looks badly blurry, and there is only
     // ever one such image on screen so the memory saving is negligible.
     performanceModeAware: Boolean = true,
+    /**
+     * Coil's placeholder-memory-cache handoff for the list→detail transition:
+     * the memory-cache key of the SMALLER list request that already decoded
+     * this artwork (build it with [rememberMediaImageMemoryCacheKey] from the
+     * LIST call site's URL and decode size). While this request runs, Coil
+     * paints that cached bitmap as the placeholder, so the grid tile's image
+     * stays on screen across the navigation instead of dropping to the
+     * blurHash. Null (default) keeps today's behavior.
+     *
+     * The full `MemoryCache.Key` (not a bare URL string) is required because
+     * Coil's auto-derived keys carry the `coil#size` extra and the placeholder
+     * lookup matches the whole key. Applied to the PRIMARY request only — the
+     * fallback chain's requests are different URLs with no handoff semantics.
+     */
+    placeholderMemoryCacheKey: MemoryCache.Key? = null,
 ) {
     val performanceMode = com.raulshma.jellyplay.core.ui.components.LocalPerformanceMode.current
     val reducedMotion = com.raulshma.jellyplay.core.ui.components.LocalReducedMotion.current
@@ -72,32 +172,22 @@ fun MediaImage(
     // explicitly request [Size.ORIGINAL] (e.g. the full-screen photo viewer)
     // need the unmodified resolution — capping them to 256² produces blurry
     // photos. Clamp only the fixed-pixel defaults, never ORIGINAL.
-    val effectiveSize = when {
-        size.isOriginal -> size
-        performanceMode && performanceModeAware -> {
-            // Performance mode clamp, tiered by the requested size so full-bleed
-            // callers (hero, detail backdrop) still get a sharp-enough decode
-            // instead of being crushed to poster-thumbnail resolution.
-            val largest = maxOf(
-                size.width.pxOrElse { 0 },
-                size.height.pxOrElse { 0 },
-            )
-            if (largest >= 1080) CoilSize(768, 768) else CoilSize(256, 256)
-        }
-        else -> size
-    }
+    val effectiveSize = mediaImageDecodeSize(size, performanceMode, performanceModeAware)
     val effectiveBlurHash = if (performanceMode) null else blurHash
     // Crossfade is a motion effect, so disable it under either performance mode
     // or reduce motion (blurHash is a memory/quality optimization and stays
     // gated on performance mode alone).
     val effectiveCrossfade = if (reducedMotion) false else crossfade
     val context = LocalPlatformContext.current
-    val imageRequest = remember(url, effectiveSize, effectiveCrossfade) {
-        ImageRequest.Builder(context)
+    val imageRequest = remember(url, effectiveSize, effectiveCrossfade, placeholderMemoryCacheKey) {
+        val builder = ImageRequest.Builder(context)
             .data(url)
             .crossfade(effectiveCrossfade)
             .size(effectiveSize)
-            .build()
+        if (placeholderMemoryCacheKey != null) {
+            builder.placeholderMemoryCacheKey(placeholderMemoryCacheKey)
+        }
+        builder.build()
     }
 
     Box(modifier = modifier) {

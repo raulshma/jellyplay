@@ -198,12 +198,17 @@ class DownloadTransferRunner(
      * The throttled byte-transfer loop + integrity checks. Streams the response
      * body to the target file, polling the row's status column every
      * [PROGRESS_INTERVAL_MS] for a pause/cancel transition written by another
-     * process, updating progress + speed + the foreground notification, then
-     * verifying the final byte count.
+     * process, updating the foreground notification at that same 2 s cadence
+     * from the in-memory counter, persisting progress + speed to Room on the
+     * gated [DB_PERSIST_INTERVAL_MS] / [PERSIST_MIN_DELTA_PERCENT] schedule
+     * (pause/cancel/completion/error persist immediately), then verifying the
+     * final byte count.
      *
      * Reproduced exactly from the pre-extraction loop: 64 KiB buffer, 2 s
      * status-only poll (was a 23-col `SELECT *`), append on 206 / overwrite on
-     * 200. The total-size derivation prefers the GET response's Content-Length
+     * 200 — except the Room persist, now gated to >= 5 s and a >= 1% byte
+     * delta, because each progress write invalidates every observing
+     * downloads-table Flow. The total-size derivation prefers the GET response's Content-Length
      * / Content-Range and falls back to the HEAD probe when the body is
      * chunked/transcoded — the fix for "downloads show finished but media
      * unavailable offline".
@@ -244,6 +249,7 @@ class DownloadTransferRunner(
         var lastProgressUpdate = System.currentTimeMillis()
         var lastSpeedBytes = downloadedBytes
         var speedBytesPerSec = 0L
+        val persistGate = RoomPersistGate(effectiveTotalSize, initialBytes = downloadedBytes)
 
         try {
             response.openBody().use { input ->
@@ -253,6 +259,9 @@ class DownloadTransferRunner(
                     var bytesRead: Int
                     while (input.read(buffer).also { bytesRead = it } != -1) {
                         if (isStopped()) {
+                            // Checkpoint: flush so the persisted count is a
+                            // flushed on-disk prefix, never ahead of it.
+                            out.flush()
                             dao.updateProgress(downloadId, downloadedBytes, DownloadStatus.PAUSED.name)
                             response.close()
                             return TransferOutcome.Success
@@ -276,10 +285,15 @@ class DownloadTransferRunner(
                             lastSpeedBytes = downloadedBytes
                             lastProgressUpdate = now
 
-                            dao.updateProgressWithSpeed(
-                                downloadId, downloadedBytes,
-                                DownloadStatus.DOWNLOADING.name, speedBytesPerSec,
-                            )
+                            if (persistGate.shouldPersist(now, downloadedBytes)) {
+                                // Resume checkpoint: flush so the row's count is
+                                // never ahead of the flushed file bytes.
+                                out.flush()
+                                dao.updateProgressWithSpeed(
+                                    downloadId, downloadedBytes,
+                                    DownloadStatus.DOWNLOADING.name, speedBytesPerSec,
+                                )
+                            }
 
                             val progress = if (effectiveTotalSize > 0) {
                                 (downloadedBytes * 100 / effectiveTotalSize).toInt()
@@ -373,7 +387,21 @@ class DownloadTransferRunner(
     companion object {
         const val BUFFER_SIZE = 65536
         const val MIN_MULTI_SIZE = 2L * 1024 * 1024
+
+        /** Status-poll + notification tick; the notification cadence never widens. */
         const val PROGRESS_INTERVAL_MS = 2000L
+
+        // Room persist gate (also used by MultiConnectionDownloadStrategy):
+        // progress-row writes invalidate every observing downloads-table Flow,
+        // so persist at most every DB_PERSIST_INTERVAL_MS and only when the
+        // byte count moved >= PERSIST_MIN_DELTA_PERCENT of a known total since
+        // the last persist. Pause/cancel/completion/error persist immediately.
+        // Resume-granularity constraint: the persisted count is the
+        // single-connection resume offset, so it must never lead the flushed
+        // file bytes (flush before persist) — the widened gate means a crash
+        // re-fetches at most ~5 s / 1% of progress.
+        const val DB_PERSIST_INTERVAL_MS = 5000L
+        const val PERSIST_MIN_DELTA_PERCENT = 1L
     }
 }
 

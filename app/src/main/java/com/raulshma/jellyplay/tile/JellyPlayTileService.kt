@@ -23,7 +23,12 @@ class JellyPlayTileService : TileService() {
     // construction until the tile is actually bound/listened to.
     private val audioPlaybackManager: AudioPlaybackManager by lazy { KoinPlatform.getKoin()!!.get() }
 
-    private val tileScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    // A fresh scope per listening window (created in onStartListening,
+    // cancelled in onStopListening AND onDestroy): the scope lives exactly as
+    // long as the system is listening, so no SupervisorJob + main-dispatcher
+    // association survives a listening cycle, and a re-listen never lands on
+    // a cancelled scope.
+    private var tileScope: CoroutineScope? = null
     private var job: Job? = null
 
     override fun onStartListening() {
@@ -33,7 +38,9 @@ class JellyPlayTileService : TileService() {
         // playing, paused (session loaded but not playing), and inactive (no
         // session). QS tiles are binary (ACTIVE/INACTIVE), so the paused state is
         // surfaced via the label/contentDescription rather than the tile icon.
-        job = tileScope.launch {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+        tileScope = scope
+        job = scope.launch {
             kotlinx.coroutines.flow.combine(
                 audioPlaybackManager.isPlaying,
                 audioPlaybackManager.title,
@@ -47,14 +54,19 @@ class JellyPlayTileService : TileService() {
         super.onStopListening()
         job?.cancel()
         job = null
+        tileScope?.cancel()
+        tileScope = null
     }
 
     override fun onDestroy() {
         super.onDestroy()
         // TileService instances are created/destroyed by the system (listening
-        // bind/unbind, user pulling the tile); without cancelling tileScope the
-        // SupervisorJob + main-dispatcher association leak per recreate.
-        tileScope.cancel()
+        // bind/unbind, user pulling the tile); onDestroy can land without a
+        // final onStopListening, so the per-listen scope is cancelled here too.
+        job?.cancel()
+        job = null
+        tileScope?.cancel()
+        tileScope = null
     }
 
     override fun onClick() {

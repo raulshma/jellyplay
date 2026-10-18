@@ -30,8 +30,6 @@ class DownloadActionReceiver : BroadcastReceiver() {
     // long before any broadcast can arrive).
     private val downloadRepository: DownloadRepository by lazy { koin().get() }
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-
     override fun onReceive(context: Context, intent: Intent) {
         val downloadId = intent.getStringExtra(EXTRA_DOWNLOAD_ID) ?: return
         when (intent.action) {
@@ -68,17 +66,22 @@ class DownloadActionReceiver : BroadcastReceiver() {
     }
 
     /**
-     * Runs [block] on this receiver's coroutine scope, keeping the broadcast
-     * alive ([goAsync]) until it completes. Mirrors NotificationActionReceiver.
+     * Runs [block] on a scope created for THIS broadcast, keeping the
+     * broadcast alive ([goAsync]) until it completes. The scope dies with the
+     * broadcast window — no per-instance scope survives between broadcasts
+     * (or, worse, a reuse of this receiver instance after its single scope
+     * was cancelled by an earlier broadcast's finally). Mirrors
+     * NotificationActionReceiver.
      */
     private fun launchPending(block: suspend () -> Unit) {
         val pendingResult = goAsync()
-        scope.launch {
+        val broadcastScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        broadcastScope.launch {
             try {
                 block()
             } finally {
                 pendingResult.finish()
-                scope.cancel()
+                broadcastScope.cancel()
             }
         }
     }

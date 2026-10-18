@@ -1,6 +1,7 @@
 package com.raulshma.jellyplay.core.data.repository
 
 import androidx.paging.PagingData
+import com.raulshma.jellyplay.core.model.CollectionSummary
 import com.raulshma.jellyplay.core.model.DiscoverRowConfig
 import com.raulshma.jellyplay.core.model.Genre
 import com.raulshma.jellyplay.core.model.HomeSection
@@ -152,6 +153,39 @@ interface MediaRepository {
     suspend fun markPlayed(itemId: String): Result<Unit>
 
     suspend fun getPhotoFolderChildImageUrls(folderId: String, limit: Int = 4): List<String>
+}
+
+/**
+ * The browse-catalogue enrichment family seam of [MediaRepository]: the
+ * filter sheets' tag facet and the detail screen's franchise (BoxSets-
+ * containing) row — two cached reads whose consumers are clean family
+ * consumers (nothing else on the wide surface they need). [MediaRepositoryImpl]
+ * implements this seam alongside the wide interface (the [MusicCatalogue]
+ * pattern), so the surface ratchet stays flat instead of absorbing growth
+ * that only two screens read.
+ */
+interface MediaCatalogueEnrichments {
+
+    /**
+     * The tag names feeding the filter sheets' tag facets ([parentId], or
+     * server-wide when null). The underlying read pages the library's items
+     * (a TAGS-only projection, scan-capped), so a tag past the first page
+     * still surfaces; the sorted distinct list is cached under the same
+     * near-static catalogue-metadata ceiling as genres/studios.
+     */
+    suspend fun getTags(parentId: String?): Result<List<String>>
+
+    /**
+     * The BoxSets whose hierarchy contains [itemId] — the detail screen's
+     * "More in this collection" franchise row's sources. The underlying read
+     * enumerates the user's boxsets and probes each for the item (one
+     * round-trip per boxset, bounded-concurrent), so the result is
+     * identity-keyed and TTL-cached beside the detail cluster: a detail
+     * re-entry inside the window re-serves the row instead of re-probing.
+     * A user-data write on the item evicts it with the item's other
+     * detail-scoped caches.
+     */
+    suspend fun getBoxSetsContaining(itemId: String): Result<List<CollectionSummary>>
 }
 
 /**

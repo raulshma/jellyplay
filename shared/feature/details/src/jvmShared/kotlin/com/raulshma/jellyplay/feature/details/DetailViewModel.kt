@@ -13,6 +13,7 @@ import com.raulshma.jellyplay.core.data.repository.ReaderAnnotationsRepository
 import com.raulshma.jellyplay.core.data.book.BookTocProber
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.network.api.toModel
+import com.raulshma.jellyplay.core.data.repository.MediaCatalogueEnrichments
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
@@ -121,6 +122,7 @@ class DetailViewModel internal constructor(
     private val storageProbe: DetailStorageProbe,
     private val strings: DetailStrings,
     private val mediaRepository: MediaRepository,
+    private val mediaCatalogueEnrichments: MediaCatalogueEnrichments,
     /** The item-attached extras + provider-id reads (the detail screen's
      *  special-features row, the Seerr item resolution). */
     private val libraryApiClient: LibraryApiClient,
@@ -1271,7 +1273,11 @@ class DetailViewModel internal constructor(
             // a preference read, not snapshot state (the externalRatings
             // convention).
             if (!preferences.value.showMoreInCollection) return@DetailEnrichment
-            val boxSets = libraryApiClient.getBoxSetsContaining(inputs.itemId)
+            // The franchise read rides the repository's cache (the detail
+            // cluster's boxsets-containing member): the enumerate-then-probe
+            // fan-out below is the costliest enrichment, so a re-entry inside
+            // its TTL window re-serves the row instead of re-probing.
+            val boxSets = mediaCatalogueEnrichments.getBoxSetsContaining(inputs.itemId)
                 .getOrNull()
                 ?.take(FRANCHISE_MAX_COLLECTIONS)
                 .orEmpty()

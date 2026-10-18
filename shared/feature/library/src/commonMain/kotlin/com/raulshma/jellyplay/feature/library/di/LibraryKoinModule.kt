@@ -38,7 +38,7 @@ val libraryModule: Module = module {
     viewModel {
         LibraryViewModel(
             mediaRepository = get(),
-            libraryApiClient = get(),
+            mediaCatalogueEnrichments = get(),
             offlineRepository = get(),
             quickDownloadActions = get(),
             offlineModeManager = get(),

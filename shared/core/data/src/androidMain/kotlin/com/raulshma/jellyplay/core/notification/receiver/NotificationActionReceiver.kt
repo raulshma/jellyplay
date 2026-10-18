@@ -20,8 +20,6 @@ class NotificationActionReceiver : BroadcastReceiver() {
     // long before any broadcast can arrive).
     private val seenMediaRepository: SeenMediaRepository by lazy { koin().get() }
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-
     override fun onReceive(context: Context, intent: Intent) {
         when (intent.action) {
             ACTION_OPEN_DETAIL -> {
@@ -81,18 +79,23 @@ class NotificationActionReceiver : BroadcastReceiver() {
     }
 
     /**
-     * Runs [block] on this receiver's coroutine scope, keeping the broadcast
-     * alive ([goAsync]) until it completes. Both mark-seen actions share this
-     * shape — the only difference is the work they do — so it lives here once.
+     * Runs [block] on a scope created for THIS broadcast, keeping the
+     * broadcast alive ([goAsync]) until it completes. Both mark-seen actions
+     * share this shape — the only difference is the work they do — so it
+     * lives here once. The scope dies with the broadcast window: no
+     * per-instance scope survives between broadcasts (or a reuse of this
+     * receiver instance after its single scope was cancelled by an earlier
+     * broadcast's finally).
      */
     private fun launchPending(block: suspend () -> Unit) {
         val pendingResult = goAsync()
-        scope.launch {
+        val broadcastScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        broadcastScope.launch {
             try {
                 block()
             } finally {
                 pendingResult.finish()
-                scope.cancel()
+                broadcastScope.cancel()
             }
         }
     }

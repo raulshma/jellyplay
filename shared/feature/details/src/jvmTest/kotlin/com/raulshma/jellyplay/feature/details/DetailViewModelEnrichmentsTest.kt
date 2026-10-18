@@ -10,6 +10,7 @@ import com.raulshma.jellyplay.core.network.api.LibraryApiClient
 import com.raulshma.jellyplay.core.network.api.JellyPlayEpisodeRatings
 import com.raulshma.jellyplay.core.network.api.JellyPlayRatingsResult
 import com.raulshma.jellyplay.core.network.api.JellyPlayRatingsRoutes
+import com.raulshma.jellyplay.core.data.repository.MediaCatalogueEnrichments
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.MetadataEditorRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
@@ -110,6 +111,20 @@ class DetailViewModelEnrichmentsTest {
     private val strings = fakeDetailStrings()
 
     private lateinit var mediaRepository: MediaRepository
+
+    // The browse-catalogue enrichments fake (the franchise row's source read).
+    // Defaults to success/empty; tests override via boxSetResults and assert
+    // reachability via boxSetCalls.
+    private val catalogueEnrichments = object : MediaCatalogueEnrichments {
+        val boxSetResults = HashMap<String, Result<List<com.raulshma.jellyplay.core.model.CollectionSummary>>>()
+        val boxSetCalls = mutableListOf<String>()
+        override suspend fun getTags(parentId: String?): Result<List<String>> =
+            Result.success(emptyList())
+        override suspend fun getBoxSetsContaining(itemId: String): Result<List<com.raulshma.jellyplay.core.model.CollectionSummary>> {
+            boxSetCalls += itemId
+            return boxSetResults[itemId] ?: Result.success(emptyList())
+        }
+    }
     private lateinit var libraryApiClient: LibraryApiClient
     private lateinit var mediaDetailProvider: MediaDetailProvider
     private lateinit var playbackRepository: PlaybackRepository
@@ -143,9 +158,9 @@ class DetailViewModelEnrichmentsTest {
         every { offlineModeManager.networkStatus } returns MutableStateFlow(NetworkStatus.Online)
         coEvery { mediaRepository.getSimilarItems(any(), any()) } returns Result.success(emptyList())
         coEvery { libraryApiClient.getSpecialFeatures(any()) } returns Result.success(emptyList())
-        // D6: the franchise rows' BoxSet-ancestor read — empty keeps every
-        // pre-D6 behavior (no ancestor → no rows). Individual tests override.
-        coEvery { libraryApiClient.getBoxSetsContaining(any()) } returns Result.success(emptyList())
+        // D6: the franchise rows' BoxSet-ancestor read — the injected
+        // [catalogueEnrichments] fake defaults to success/empty (no ancestor
+        // → no rows). Individual tests override via boxSetResults.
         // D7: the "Airing next" strip fetch — empty keeps the strip absent.
         // Individual tests override.
         coEvery { libraryApiClient.getUpcoming(any(), any(), any()) } returns Result.success(emptyList())
@@ -199,6 +214,7 @@ class DetailViewModelEnrichmentsTest {
         storageProbe = mockk<DetailStorageProbe>(relaxed = true),
         strings = strings,
         mediaRepository = mediaRepository,
+        mediaCatalogueEnrichments = catalogueEnrichments,
         libraryApiClient = libraryApiClient,
         collectionApiClient = mockk<com.raulshma.jellyplay.core.network.api.CollectionApiClient>(relaxed = true),
         userDataMutator = FakeUserDataMutator(mediaDetailProvider),
@@ -779,7 +795,7 @@ class DetailViewModelEnrichmentsTest {
     @Test
     fun franchise_remoteMovie_mapsBoxSetAncestorsToRows_selfFiltered() = runTest(mainDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
-        coEvery { libraryApiClient.getBoxSetsContaining("m1") } returns Result.success(
+        catalogueEnrichments.boxSetResults["m1"] = Result.success(
             listOf(boxSet("box1", "Fast Saga"), boxSet("box2", "Spy Universe")),
         )
         coEvery { mediaRepository.getCollectionItems("box1", any(), any(), any()) } returns Result.success(
@@ -822,7 +838,7 @@ class DetailViewModelEnrichmentsTest {
     @Test
     fun franchise_capsAtTwoBoxSets_andDropsEmptyRows() = runTest(mainDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
-        coEvery { libraryApiClient.getBoxSetsContaining("m2") } returns Result.success(
+        catalogueEnrichments.boxSetResults["m2"] = Result.success(
             listOf(boxSet("box1", "One"), boxSet("box2", "Two"), boxSet("box3", "Three")),
         )
         coEvery { mediaRepository.getCollectionItems("box1", any(), any(), any()) } returns Result.success(
@@ -854,7 +870,7 @@ class DetailViewModelEnrichmentsTest {
     @Test
     fun franchise_ancestorsFetchFailure_leavesRowsEmpty() = runTest(mainDispatcher) {
         backgroundScope.launch { viewModel.uiState.collect { /* warm */ } }
-        coEvery { libraryApiClient.getBoxSetsContaining("m3") } returns Result.failure(RuntimeException("down"))
+        catalogueEnrichments.boxSetResults["m3"] = Result.failure(RuntimeException("down"))
         stubProvider(
             "m3",
             snapshot(
@@ -892,7 +908,7 @@ class DetailViewModelEnrichmentsTest {
         advanceUntilIdle()
 
         assertTrue(viewModel.uiState.value.franchiseCollections.isEmpty())
-        coVerify(exactly = 0) { libraryApiClient.getBoxSetsContaining(any()) }
+        assertTrue(catalogueEnrichments.boxSetCalls.isEmpty())
     }
 
     @Test
@@ -912,7 +928,7 @@ class DetailViewModelEnrichmentsTest {
         viewModel.onEvent(DetailUiEvent.LoadItem("e9"))
         advanceUntilIdle()
 
-        coVerify(exactly = 0) { libraryApiClient.getBoxSetsContaining(any()) }
+        assertTrue(catalogueEnrichments.boxSetCalls.isEmpty())
         assertTrue(viewModel.uiState.value.franchiseCollections.isEmpty())
     }
 

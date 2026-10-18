@@ -62,9 +62,17 @@ class RemoteControlReceiver(
     private val securityStore: SecurityStore,
     private val remoteNavigationBridge: RemoteNavigationBridge,
     private val audioQueueManager: AudioQueueManager,
+    /**
+     * The Koin application scope (DatastoreQualifiers.applicationScope) the
+     * receiver's Default-dispatcher scope hangs off as a SupervisorJob child —
+     * [stop] still cancels only the collection job, while the scope itself now
+     * dies with an app-level teardown instead of outliving it.
+     */
+    private val applicationScope: CoroutineScope,
 ) {
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val scope =
+        CoroutineScope(SupervisorJob(applicationScope.coroutineContext[Job]) + Dispatchers.Default)
     private var collectionJob: Job? = null
 
     /**
@@ -99,6 +107,9 @@ class RemoteControlReceiver(
             // the file read lands.
             val enabled = try {
                 securityStore.firstPersistedSecurity().remoteControlEnabled
+            } catch (ce: kotlinx.coroutines.CancellationException) {
+                // Never swallow cancellation — breaks structured concurrency.
+                throw ce
             } catch (_: Exception) {
                 true
             }
@@ -126,6 +137,9 @@ class RemoteControlReceiver(
     private suspend fun isAuthenticatedSync(): Boolean {
         return try {
             authRepository.isAuthenticated.first()
+        } catch (ce: kotlinx.coroutines.CancellationException) {
+            // Never swallow cancellation — breaks structured concurrency.
+            throw ce
         } catch (_: Exception) {
             false
         }
@@ -323,6 +337,9 @@ class RemoteControlReceiver(
         // DataStore emission lands (the store's own documented race).
         val enabled = try {
             securityStore.firstPersistedSecurity().remoteDisplayContentEnabled
+        } catch (ce: kotlinx.coroutines.CancellationException) {
+            // Never swallow cancellation — breaks structured concurrency.
+            throw ce
         } catch (_: Exception) {
             false
         }

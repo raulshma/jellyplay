@@ -34,12 +34,16 @@ import kotlin.system.exitProcess
  *
  * Output schema (single compact JSON line each):
  *  * `<logs>/startup-latest.json`: bootNanos/preKoinDoneNanos/koinStartedNanos/
- *    windowShownNanos/firstFrameNanos (absolute monotonic System.nanoTime,
- *    machine-local) plus preKoinDoneMs/koinStartMs/windowShownMs/firstFrameMs
- *    deltas relative to bootNanos; unrecorded marks serialize as null. The
- *    pre-Koin mark splits Main's synchronous pre-Koin IO (paths/lock/drop-file/
- *    crash-marker) from the `startKoin` graph-construction segment, so Koin
- *    A/Bs (e.g. eager-singleton changes) aren't polluted by the IO share.
+ *    appEntryNanos/firstCompositionNanos/windowShownNanos/firstFrameNanos
+ *    (absolute monotonic System.nanoTime, machine-local) plus
+ *    preKoinDoneMs/koinStartMs/appEntryMs/firstCompositionMs/windowShownMs/
+ *    firstFrameMs deltas relative to bootNanos; unrecorded marks serialize as
+ *    null. The pre-Koin mark splits Main's synchronous pre-Koin IO
+ *    (paths/lock/drop-file/crash-marker) from the `startKoin` graph-
+ *    construction segment, so Koin A/Bs (e.g. eager-singleton changes) aren't
+ *    polluted by the IO share; the app-entry and first-composition marks
+ *    split the koin→windowShown gap into main()'s post-Koin sync work,
+ *    Compose/Skia init + window creation, and the composition itself.
  *  * `<logs>/memory-latest.json`: sampledUptimeMs + used/max heap bytes.
  */
 class DesktopStartupPerf(
@@ -52,6 +56,8 @@ class DesktopStartupPerf(
     private val boot = AtomicLong(bootT0Nanos)
     private val preKoinDone = AtomicLong(MISSING_MARK)
     private val koinStarted = AtomicLong(MISSING_MARK)
+    private val appEntry = AtomicLong(MISSING_MARK)
+    private val firstComposition = AtomicLong(MISSING_MARK)
     private val windowShown = AtomicLong(MISSING_MARK)
     private val firstFrame = AtomicLong(MISSING_MARK)
 
@@ -70,6 +76,22 @@ class DesktopStartupPerf(
 
     fun markKoinStarted() {
         koinStarted.set(System.nanoTime())
+    }
+
+    /** Called immediately before `application {}` — closes main()'s post-Koin
+     * segment (startup kicks, image loader install, window-state load). */
+    fun markAppEntry() {
+        appEntry.set(System.nanoTime())
+    }
+
+    /**
+     * Called from the first statement of the application content's first
+     * composition — the call site wraps it in a `remember` initializer, which
+     * runs during composition exactly once per composition lifetime, so the
+     * mark fires on the first pass only.
+     */
+    fun markFirstComposition() {
+        firstComposition.set(System.nanoTime())
     }
 
     /**
@@ -183,10 +205,14 @@ class DesktopStartupPerf(
                 append("\"bootNanos\":").append(b)
                 append(",\"preKoinDoneNanos\":").append(jsonNumber(preKoinDone.get()))
                 append(",\"koinStartedNanos\":").append(jsonNumber(koinStarted.get()))
+                append(",\"appEntryNanos\":").append(jsonNumber(appEntry.get()))
+                append(",\"firstCompositionNanos\":").append(jsonNumber(firstComposition.get()))
                 append(",\"windowShownNanos\":").append(jsonNumber(windowShown.get()))
                 append(",\"firstFrameNanos\":").append(jsonNumber(firstFrame.get()))
                 append(",\"preKoinDoneMs\":").append(jsonDeltaMs(b, preKoinDone.get()))
                 append(",\"koinStartMs\":").append(jsonDeltaMs(b, koinStarted.get()))
+                append(",\"appEntryMs\":").append(jsonDeltaMs(b, appEntry.get()))
+                append(",\"firstCompositionMs\":").append(jsonDeltaMs(b, firstComposition.get()))
                 append(",\"windowShownMs\":").append(jsonDeltaMs(b, windowShown.get()))
                 append(",\"firstFrameMs\":").append(jsonDeltaMs(b, firstFrame.get()))
                 append(",\"persistRequested\":").append(persistRequested)

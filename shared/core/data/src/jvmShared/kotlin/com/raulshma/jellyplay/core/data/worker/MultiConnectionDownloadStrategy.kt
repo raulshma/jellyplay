@@ -139,6 +139,7 @@ object MultiConnectionDownloadStrategy {
                     var lastProgressUpdate = System.currentTimeMillis()
                     var lastSpeedBytes = 0L
                     var speedBytesPerSec = 0L
+                    val persistGate = RoomPersistGate(totalSize)
                     delay(PROGRESS_UPDATE_INTERVAL_MS)
                     while (isActive && !cancelled.get()) {
                         val now = System.currentTimeMillis()
@@ -157,10 +158,12 @@ object MultiConnectionDownloadStrategy {
                         lastSpeedBytes = currentDownloaded
                         lastProgressUpdate = now
 
-                        dao.updateProgressWithSpeed(
-                            downloadId, currentDownloaded,
-                            DownloadStatus.DOWNLOADING.name, speedBytesPerSec,
-                        )
+                        if (persistGate.shouldPersist(now, currentDownloaded)) {
+                            dao.updateProgressWithSpeed(
+                                downloadId, currentDownloaded,
+                                DownloadStatus.DOWNLOADING.name, speedBytesPerSec,
+                            )
+                        }
 
                         val progress = if (totalSize > 0) {
                             (currentDownloaded * 100 / totalSize).toInt()

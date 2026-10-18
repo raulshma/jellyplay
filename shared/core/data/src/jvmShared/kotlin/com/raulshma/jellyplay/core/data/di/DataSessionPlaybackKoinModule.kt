@@ -128,6 +128,15 @@ internal val dataSessionPlaybackModule: Module = module {
     single {
         SleepCountdown(
             clock = SleepCountdownClock { get<TimeSource>().nowElapsedRealtimeMillis() },
+            // Explicit scope injection, the same applicationScope the sibling
+            // singles here receive: the production single no longer falls
+            // back to the class's self-created scope (the reader and the
+            // tests keep that default-parameter behavior). The countdown's
+            // expiry/ramp callbacks only call engine methods, and the engines
+            // marshal their own threading (ExoPlayer posts to its player
+            // thread; mpv/LibVLC commands are cross-thread), so the scope's
+            // Default dispatcher is safe for them.
+            scope = get(DatastoreQualifiers.applicationScope),
         )
     }
 
@@ -145,7 +154,14 @@ internal val dataSessionPlaybackModule: Module = module {
     // VideoPlayerViewModel, livetv's ChannelsViewModel) resolve this single
     // directly from Koin; ChannelsViewModel resolves it
     // directly from here.
-    single { VideoMiniPlayerState() }
+    single {
+        // The session-cache registry seam releases a deposited mini-player
+        // engine on sign-out / user switch / server switch (the class's init
+        // registers the reaction) — otherwise a native MPV/LibVLC engine
+        // would ride into the next identity on the 5-minute auto-release
+        // window.
+        VideoMiniPlayerState(sessionCacheRegistry = get())
+    }
 
     single {
         AudioCachePolicyGuard(

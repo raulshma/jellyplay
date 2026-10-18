@@ -54,8 +54,6 @@ class JellyPlayUnifiedPushReceiver : MessagingReceiver() {
     private val notificationDispatcher: NotificationDispatcher by lazy { koin().get() }
     private val featureGate: JellyPlayFeatureGate by lazy { koin().get() }
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-
     override fun onNewEndpoint(context: Context, endpoint: PushEndpoint, instance: String) {
         launchPending {
             pushRepository.onNewEndpoint(endpoint.url, instance)
@@ -103,14 +101,17 @@ class JellyPlayUnifiedPushReceiver : MessagingReceiver() {
     }
 
     /**
-     * Runs [block] on this receiver's coroutine scope, keeping the broadcast
-     * alive ([goAsync]) until it completes — the DownloadActionReceiver /
-     * NotificationActionReceiver idiom (the repository's paths hit DataStore
-     * and the network, neither allowed on the main thread).
+     * Runs [block] on a scope created for THIS broadcast, keeping the
+     * broadcast alive ([goAsync]) until it completes — the
+     * DownloadActionReceiver / NotificationActionReceiver idiom (the
+     * repository's paths hit DataStore and the network, neither allowed on
+     * the main thread). The scope dies with the broadcast window, so no
+     * per-instance scope accumulates across the receiver's lifetime.
      */
     private fun launchPending(block: suspend () -> Unit) {
         val pendingResult = goAsync()
-        scope.launch {
+        val broadcastScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        broadcastScope.launch {
             try {
                 block()
             } catch (e: CancellationException) {
@@ -121,6 +122,7 @@ class JellyPlayUnifiedPushReceiver : MessagingReceiver() {
                 android.util.Log.w("JellyPlayUnifiedPush", "push callback failed", t)
             } finally {
                 pendingResult.finish()
+                broadcastScope.cancel()
             }
         }
     }

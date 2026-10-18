@@ -86,6 +86,25 @@ data class PlayerSessionState(
     val isOffline: Boolean = false,
 )
 
+/**
+ * The settled next-item warm slot, published for the ViewModel's next-stream
+ * byte pre-warm ([NextStreamByteWarmer]): the resolved stream facts the slot's
+ * PlaybackInfo resolution produced for the Up Next card's item — the same
+ * shape [loadOnline] would rebuild at advance time. [playMethod] is
+ * normalized exactly like the live path folds it ([loadOnline]'s
+ * `resolved?.playMethod ?: DIRECT_PLAY` — the StaticFallback arm IS the
+ * client-built direct URL); [container] is the server-reported media-source
+ * container (`null` for VOD sources, so the eligibility gate infers HLS from
+ * the URL, the same way the engine does for VOD requests).
+ */
+data class WarmNextStream(
+    val itemId: String,
+    val streamUrl: String,
+    val playMethod: PlayMethod,
+    val playerType: PlayerType,
+    val container: String?,
+)
+
 internal class PlayerSessionManager(
     private val scope: CoroutineScope,
     private val mediaRepository: MediaRepository,
@@ -526,7 +545,10 @@ internal class PlayerSessionManager(
      * and stores the PlaybackInfo resolution for single-consume reuse in
      * [loadOnline] — removing the server round-trips from the
      * episode-to-episode switch. Engine-agnostic: mpv/VLC ride the same
-     * pipeline. Byte pre-caching is deliberately out of scope.
+     * pipeline. Byte pre-caching stays out of THIS slot's scope (the resolve
+     * is still metadata-only); the settled resolution is mirrored through
+     * [warmNextStream] so the ViewModel can pre-warm the next item's first
+     * bytes into the stream cache on its own trigger.
      *
      * One slot, keyed by item: a new warm call replaces the previous one.
      * The stored resolution is consumed only when the freshly-built
@@ -539,11 +561,23 @@ internal class PlayerSessionManager(
     private var warmNextItemId: String? = null
     private var warmNextResolution: Pair<PlaybackResolveRequest, PlaybackResolution>? = null
 
+    /**
+     * The slot's settled resolution, mirrored as a [WarmNextStream] snapshot
+     * for the ViewModel's byte pre-warm (the resolve itself stays
+     * single-consume for the advance — this mirror is read-only and never
+     * consumed). Cleared wherever the slot clears: a new warm target, a
+     * resolve miss, and the advance's single-consume take (the handover —
+     * the real load owns the item from there).
+     */
+    private val _warmNextStream = MutableStateFlow<WarmNextStream?>(null)
+    val warmNextStream: StateFlow<WarmNextStream?> = _warmNextStream.asStateFlow()
+
     fun warmNextEpisode(itemId: String) {
         if (itemId == warmNextItemId) return
         warmNextJob?.cancel()
         warmNextItemId = itemId
         warmNextResolution = null
+        _warmNextStream.value = null
         warmNextJob = scope.launch { warmNextNow(itemId) }
     }
 
@@ -556,6 +590,7 @@ internal class PlayerSessionManager(
             // Offline miss / vanished item: drop the slot so a later trigger
             // can re-attempt, and stay silent (autoplay re-resolves anyway).
             warmNextItemId = null
+            _warmNextStream.value = null
             return
         }
         playbackRepository.getMediaSegments(itemId)
@@ -566,7 +601,28 @@ internal class PlayerSessionManager(
         )
         // The auto-advance path always starts at 0.
         val request = buildResolveRequest(itemId, source, startTimeTicks = 0L, agg = agg)
-        warmNextResolution = request to playbackRepository.resolvePlayable(request)
+        val resolution = playbackRepository.resolvePlayable(request)
+        warmNextResolution = request to resolution
+        // Publish the byte-warm snapshot: the same play-method fold the live
+        // path applies (Resolved rides as-is; StaticFallback is the client-
+        // built direct URL, i.e. the DIRECT_PLAY default; Unplayable clears).
+        when (resolution) {
+            is PlaybackResolution.Resolved -> _warmNextStream.value = WarmNextStream(
+                itemId = itemId,
+                streamUrl = resolution.playback.streamUrl,
+                playMethod = resolution.playback.playMethod,
+                playerType = request.playerType,
+                container = resolution.playback.container,
+            )
+            is PlaybackResolution.StaticFallback -> _warmNextStream.value = WarmNextStream(
+                itemId = itemId,
+                streamUrl = resolution.streamUrl,
+                playMethod = PlayMethod.DIRECT_PLAY,
+                playerType = request.playerType,
+                container = null,
+            )
+            PlaybackResolution.Unplayable -> _warmNextStream.value = null
+        }
     }
 
     /** Single-consume: reuse the warmed resolution only on an exact request match. */
@@ -575,6 +631,7 @@ internal class PlayerSessionManager(
         if (warmRequest != request) return null
         warmNextResolution = null
         warmNextItemId = null
+        _warmNextStream.value = null
         return resolution
     }
 

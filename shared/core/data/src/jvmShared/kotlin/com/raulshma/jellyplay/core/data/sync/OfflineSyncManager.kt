@@ -29,6 +29,7 @@ import com.raulshma.jellyplay.core.model.ResyncStepResult
 import com.raulshma.jellyplay.core.model.SyncStatus
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -101,7 +102,11 @@ class OfflineSyncManager(
     // The interface carries the parameter defaults; the overrides inherit
     // them.
 
-    private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    // IO child of the injected [appScope]: same dispatcher the one-shot flag
+    // clear always rode, but the child job now dies with an app-level teardown
+    // instead of outliving it. Never cancelled locally — the flag clear is
+    // fire-and-forget, exactly as before.
+    private val ioScope = CoroutineScope(SupervisorJob(appScope.coroutineContext[Job]) + Dispatchers.IO)
 
     private val _batchProgress = MutableStateFlow(ResyncBatchProgress())
     override val batchProgress: StateFlow<ResyncBatchProgress> = _batchProgress.asStateFlow()
@@ -418,6 +423,9 @@ class OfflineSyncManager(
             )
             steps += ResyncStepResult(itemId, ResyncStep.UPDATE_BASELINE, success = true)
             setProgress(itemId, ResyncPhase.DONE, null)
+        } catch (ce: kotlinx.coroutines.CancellationException) {
+            // Never swallow cancellation — breaks structured concurrency.
+            throw ce
         } catch (e: Exception) {
             Log.w(TAG, "Resync failed for $itemId", e)
             steps += ResyncStepResult(itemId, ResyncStep.UPDATE_BASELINE, success = false, message = e.message)

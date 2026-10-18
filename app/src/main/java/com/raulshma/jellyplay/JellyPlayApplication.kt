@@ -3,6 +3,9 @@ package com.raulshma.jellyplay
 import android.app.ActivityManager
 import android.app.Application
 import android.content.Context
+import android.os.SystemClock
+import android.os.Trace
+import android.util.Log
 import coil3.ImageLoader
 import coil3.SingletonImageLoader
 import coil3.memory.MemoryCache
@@ -22,6 +25,8 @@ import okio.Path.Companion.toPath
 import kotlinx.coroutines.CoroutineScope
 import org.koin.core.context.startKoin
 import org.koin.mp.KoinPlatform
+
+private const val TAG = "JellyPlay"
 
 class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Configuration.Provider {
 
@@ -98,9 +103,21 @@ class JellyPlayApplication : Application(), SingletonImageLoader.Factory, Config
         // shared core graph, this shell's platform actuals, and the ONE
         // spread of sharedFeatureModules both JVM shells consume — every
         // per-registration comment moved there with its registration.
-        startKoin {
-            modules(androidKoinModules(this@JellyPlayApplication))
+        // Boot mark around the startKoin segment (module registration +
+        // definition classloading): elapsed-realtime delta surfaced as the
+        // same always-on "[JellyPlay][perf]" one-liner the desktop shell's
+        // DesktopStartupPerf marks emit (logcat filters identically), plus a
+        // Trace section so the segment is visible in captured startup traces.
+        val koinStartT0 = SystemClock.elapsedRealtime()
+        Trace.beginSection("JellyPlay.startKoin")
+        try {
+            startKoin {
+                modules(androidKoinModules(this@JellyPlayApplication))
+            }
+        } finally {
+            Trace.endSection()
         }
+        Log.i(TAG, "[JellyPlay][perf] koinStartMs=${SystemClock.elapsedRealtime() - koinStartT0}")
         super.onCreate()
         // The cold-start choreography — (a) the critical-path prewarms
         // (network-offline DataStore slice before the Coil DiskCache sizing

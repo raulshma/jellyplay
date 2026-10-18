@@ -44,6 +44,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import com.raulshma.jellyplay.feature.player.video.engine.EnginePositionTicker
 import kotlin.math.pow
@@ -120,6 +121,12 @@ class AudioPlaybackManager(
         // (POSITION_PAUSED_RECHECK_MS / POSITION_NOT_READY_*), which now owns
         // this loop.
         private const val POSITION_POLL_INTERVAL_MS = 250L
+
+        // Downgraded poll cadence for the no-collector session — the common
+        // screen-off background-playback case, where the position flow feeds
+        // nothing (the MediaSession serves the notification seekbar on
+        // demand). Matches the video side's controls-hidden cadence.
+        private const val POSITION_POLL_IDLE_INTERVAL_MS = 1_000L
     }
 
     private var exoPlayer: ExoPlayer? = null
@@ -265,6 +272,14 @@ class AudioPlaybackManager(
             positionProvider = { state.currentPosition.value },
             durationProvider = { state.duration.value },
         )
+        // The reactive twins above: the engine's trigger watcher re-runs its
+        // evaluation on track changes and per-track threshold crossings
+        // derived from these flows (mid-queue warming).
+        audioPrefetchEngine.bindTriggerFlows(
+            positionFlow = state.currentPosition,
+            durationFlow = state.duration,
+            currentIndexFlow = state.currentIndex,
+        )
         audioPrefetchEngine.start()
         scope.launch(Dispatchers.IO) {
             restorePersistedQueue()
@@ -274,6 +289,18 @@ class AudioPlaybackManager(
     private var mediaSession: MediaSession? = null
     private var _isLoadingItemFlag = false
     private var positionJob: Job? = null
+
+    /**
+     * The live poll cadence the position ticker reads at every `delay()` —
+     * [POSITION_POLL_INTERVAL_MS] while anything collects [currentPosition]
+     * (mini-player / now-playing smoothness: 4 Hz for the seekbar) or a
+     * crossfade is armed (the fade trigger rides the tick body, so it needs
+     * the fast cadence), [POSITION_POLL_IDLE_INTERVAL_MS] otherwise. The
+     * governor below writes it; [startPositionTracking] hands the flow to
+     * [EnginePositionTicker], which re-reads `.value` every loop iteration —
+     * a write takes effect from the next tick with no further wiring.
+     */
+    private val positionPollIntervalMs = MutableStateFlow(POSITION_POLL_INTERVAL_MS)
 
     private val _gaplessEnabled = MutableStateFlow(true)
     val gaplessEnabled: StateFlow<Boolean> = _gaplessEnabled.asStateFlow()
@@ -489,6 +516,26 @@ class AudioPlaybackManager(
         }
         scope.launch {
             playbackStore.playback.collect { playback -> currentPlayback = playback }
+        }
+        // Poll-cadence governor: 250 ms only while a position collector exists
+        // (subscriptionCount rises on every subscribe — mini-player, now-
+        // playing screen, widget — and falls on cancellation) or a crossfade
+        // is armed; 1 s otherwise, so a session nobody watches no longer wakes
+        // the main dispatcher 4×/s. The ticker re-reads the interval at every
+        // delay(), so each transition lands from the next tick. Read from the
+        // chassis's backing MutableStateFlow: subscriptionCount is a
+        // MutableSharedFlow member there (the public StateFlow alias only
+        // exposes it via the same underlying instance).
+        scope.launch {
+            combine(
+                state._currentPosition.subscriptionCount,
+                crossfadeDurationMs,
+            ) { subscribers, xfadeMs -> subscribers > 0 || xfadeMs > 0L }
+                .distinctUntilChanged()
+                .collect { needsFastPoll ->
+                    positionPollIntervalMs.value =
+                        if (needsFastPoll) POSITION_POLL_INTERVAL_MS else POSITION_POLL_IDLE_INTERVAL_MS
+                }
         }
         // Note: there is intentionally no `repeatMode.collect { exoPlayer?.repeatMode = ... }`
         // here. `setRepeatMode()` sets `exoPlayer.repeatMode` inline, the player
@@ -1594,7 +1641,10 @@ class AudioPlaybackManager(
         // on EnginePositionTicker's primeFirstTick KDoc).
         positionJob = EnginePositionTicker(
             scopeProvider = { scope },
-            pollingIntervalMs = MutableStateFlow(POSITION_POLL_INTERVAL_MS),
+            // Mutable on purpose — the init-block governor downgrades/restores
+            // this cadence as position collectors come and go (see
+            // positionPollIntervalMs).
+            pollingIntervalMs = positionPollIntervalMs,
             isPlayingFlow = state._isPlaying,
             isCurrentlyPlaying = { exoPlayer?.isPlaying == true },
             isReady = { exoPlayer != null },

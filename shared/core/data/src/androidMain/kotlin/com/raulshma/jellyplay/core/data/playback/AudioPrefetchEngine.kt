@@ -10,7 +10,12 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.launch
 import kotlin.math.max
 
@@ -18,10 +23,14 @@ import kotlin.math.max
  * Watches the audio queue + playhead position and proactively warms
  * upcoming-track bytes into [AudioStreamCache] via [CacheWriter].
  *
- * Trigger: when the current track's playhead crosses ~50% of its duration
+ * Triggers: when the current track's playhead crosses ~50% of its duration
  * (tracks with unknown/indefinite duration are skipped — no threshold
- * reachable). Bounded by `AudioCacheSlice.audioPrefetchLookahead` and gated
- * by [AudioCachePolicyGuard]. Cancels stale warming jobs on queue mutation.
+ * reachable), and on every queue-cursor move (track change). Both edges are
+ * derived from the manager's live position/index flows (see
+ * [bindTriggerFlows]); the cache/policy watcher additionally re-evaluates on
+ * cache-pref or network-policy changes. Bounded by
+ * `AudioCacheSlice.audioPrefetchLookahead` and gated by
+ * [AudioCachePolicyGuard]. Cancels stale warming jobs on queue mutation.
  *
  * Back-fill is implicit: recently-played tracks remain in the LRU cache and
  * are evicted by [LeastRecentlyUsedCacheEvictor] under pressure.
@@ -39,6 +48,13 @@ class AudioPrefetchEngine(
     private var positionProvider: (() -> Long)? = null
     private var durationProvider: (() -> Long)? = null
 
+    // Late-bound by AudioPlaybackManager.start() — the reactive twins of the
+    // pull providers above, consumed by the trigger watcher below (read as
+    // flows, never polled).
+    private var positionFlow: StateFlow<Long>? = null
+    private var durationFlow: StateFlow<Long>? = null
+    private var currentIndexFlow: StateFlow<Int>? = null
+
     fun bindProviders(
         queueProvider: () -> List<AudioQueueItem>,
         currentIndexProvider: () -> Int,
@@ -51,10 +67,21 @@ class AudioPrefetchEngine(
         this.durationProvider = durationProvider
     }
 
+    fun bindTriggerFlows(
+        positionFlow: StateFlow<Long>,
+        durationFlow: StateFlow<Long>,
+        currentIndexFlow: StateFlow<Int>,
+    ) {
+        this.positionFlow = positionFlow
+        this.durationFlow = durationFlow
+        this.currentIndexFlow = currentIndexFlow
+    }
+
     private val _warmingState = MutableStateFlow<Map<String, Float>>(emptyMap())
     val warmingState: StateFlow<Map<String, Float>> = _warmingState.asStateFlow()
 
     private var watchJob: Job? = null
+    private var triggerJob: Job? = null
     private val activeJobs = mutableMapOf<String, Job>()
     private var avgTrackBytes = 8_000_000L // 8 MB conservative seed
 
@@ -74,12 +101,82 @@ class AudioPrefetchEngine(
                     evaluateAndWarm(prefs.audioPrefetchLookahead, prefs.audioPrefetchBackfill)
                 }
         }
+        startTriggerWatcher()
     }
 
     fun stop() {
         watchJob?.cancel()
         watchJob = null
+        triggerJob?.cancel()
+        triggerJob = null
         cancelAllJobs()
+    }
+
+    /** One warming re-evaluation request (see [startTriggerWatcher]). */
+    private sealed interface PrefetchTrigger {
+        /** The playhead entered the past-[PREFETCH_THRESHOLD] region of the current track. */
+        data object ThresholdCrossed : PrefetchTrigger
+
+        /** The queue cursor moved to another row (skip / natural transition / restore). */
+        data object TrackChanged : PrefetchTrigger
+    }
+
+    /**
+     * The re-trigger watcher. The cache/policy watcher in [start] only
+     * re-evaluates when cache prefs or the network policy change — neither
+     * reflects the playhead or the cursor, so mid-queue warming would never
+     * fire after the initial evaluation. This watcher re-runs
+     * [evaluateAndWarm] on two edges derived from the manager's live flows —
+     * no polling: the body is a few comparisons, and the position flow only
+     * publishes while playback progresses, so an idle or paused session
+     * emits nothing:
+     *  - [PrefetchTrigger.ThresholdCrossed] — a distinctUntilChanged gate on
+     *    the Boolean "at/after [PREFETCH_THRESHOLD]", so it fires once per
+     *    entry into the beyond-region (once per track: the reset to ~0 on
+     *    every track change re-arms it).
+     *  - [PrefetchTrigger.TrackChanged] — every queue-cursor move, covering
+     *    skips into tracks that resume already past the threshold.
+     * All existing guards stay: the gate below re-checks the same cache
+     * prefs + policy the watcher above uses, and [evaluateAndWarm] keeps its
+     * own position/duration/queue-bounds/per-item-cached checks.
+     */
+    private fun startTriggerWatcher() {
+        if (triggerJob?.isActive == true) return
+        val posFlow = positionFlow ?: return
+        val durFlow = durationFlow ?: return
+        val idxFlow = currentIndexFlow ?: return
+        triggerJob = backgroundScope.launch {
+            merge(
+                combine(posFlow, durFlow) { pos, dur ->
+                    dur > 0L && pos >= dur * PREFETCH_THRESHOLD
+                }
+                    // drop(1): the StateFlow replays its current Boolean on
+                    // subscribe — a session opening already past the
+                    // threshold would fire a duplicate of the cache/policy
+                    // watcher's initial evaluation (every track re-checked
+                    // twice at start). Only a real false→true crossing
+                    // triggers; the opening-past case is covered by that
+                    // watcher's own initial evaluation.
+                    .drop(1)
+                    .distinctUntilChanged()
+                    .filter { it }
+                    .map { PrefetchTrigger.ThresholdCrossed },
+                // drop(1): the StateFlow replays its current index on
+                // subscribe — not a change. Only real cursor moves trigger.
+                idxFlow.drop(1).map { PrefetchTrigger.TrackChanged },
+            )
+                .conflate()
+                .collect {
+                    val prefs = audioCacheStore.audioCache.value
+                    if (!prefs.audioCachingEnabled ||
+                        !policyGuard.isPrefetchAllowed.value ||
+                        prefs.audioPrefetchLookahead <= 0
+                    ) {
+                        return@collect
+                    }
+                    evaluateAndWarm(prefs.audioPrefetchLookahead, prefs.audioPrefetchBackfill)
+                }
+        }
     }
 
     private suspend fun evaluateAndWarm(lookahead: Int, backfill: Int) {

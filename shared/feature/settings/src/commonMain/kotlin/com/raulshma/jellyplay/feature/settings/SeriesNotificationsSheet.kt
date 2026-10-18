@@ -105,12 +105,17 @@ internal fun SeriesNotificationsSheet(
                         count = state.series.size,
                         key = { index -> state.series[index].id },
                     ) { index ->
+                        val series = state.series[index]
+                        // Poster URL assembly is remembered per series id so a
+                        // sheet-wide recomposition (a removal, state churn)
+                        // doesn't rebuild the URL for every visible row.
+                        val posterUrl = remember(series.id) { viewModel.seriesPosterUrl(series.id) }
                         SeriesNotificationRow(
-                            row = state.series[index],
+                            row = series,
                             index = index,
                             count = state.series.size,
-                            posterUrl = viewModel.seriesPosterUrl(state.series[index].id),
-                            onRemove = { viewModel.removeSeriesNotifications(state.series[index].id) },
+                            posterUrl = posterUrl,
+                            onRemove = { viewModel.removeSeriesNotifications(series.id) },
                         )
                     }
                 }

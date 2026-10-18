@@ -7,6 +7,7 @@ import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaLibraryService.MediaLibrarySession
 import com.raulshma.jellyplay.core.data.di.koin
+import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
 
 @UnstableApi
 class JellyPlayPlaybackService : MediaLibraryService(), PlaybackSessionManager.Listener {
@@ -27,7 +28,10 @@ class JellyPlayPlaybackService : MediaLibraryService(), PlaybackSessionManager.L
         // only weakly by the parent MediaLibraryService) leaks a
         // SupervisorJob + Dispatchers.IO scope and a Bitmap on every service
         // destroy/recreate cycle.
-        val provider = JellyPlayNotificationProvider(this)
+        val provider = JellyPlayNotificationProvider(
+            this,
+            applicationScope = koin().get(DatastoreQualifiers.applicationScope),
+        )
         notificationProvider = provider
         setMediaNotificationProvider(provider)
         sessionManager.addListener(this)

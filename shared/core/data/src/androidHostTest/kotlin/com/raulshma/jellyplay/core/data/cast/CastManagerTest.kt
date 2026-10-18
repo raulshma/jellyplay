@@ -16,6 +16,7 @@ import io.mockk.verify
 import io.mockk.verifyOrder
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -114,6 +115,7 @@ class CastManagerTest {
         dlnaCastStrategy = dlnaCastStrategy,
         jellyfinRemotePlayCastStrategy = jellyfinCastStrategy,
         syncPlayCastStore = syncPlayCastStore,
+        applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
     )
 
     private fun idleMain() = shadowOf(Looper.getMainLooper()).idle()

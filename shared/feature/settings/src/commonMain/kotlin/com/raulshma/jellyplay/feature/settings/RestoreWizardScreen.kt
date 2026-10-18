@@ -409,6 +409,11 @@ private fun snapshotSubtitle(snapshot: JellyPlaySnapshot): String = buildString 
     }
 }
 
+// DateTimeFormatter is immutable and thread-safe, so one instance is shared
+// instead of re-parsing the pattern for every snapshot row on every restart.
+private val WIZARD_TIMESTAMP_FORMAT: java.time.format.DateTimeFormatter =
+    java.time.format.DateTimeFormatter.ofPattern("MMM d, HH:mm")
+
 /**
  * The entry timestamp's compact face ("MMM d, HH:mm") — informational only;
  * a clock failure falls back to the raw millis (the sync screen's idiom).
@@ -418,7 +423,7 @@ private fun formatWizardTimestamp(epochMillis: Long): String =
     runCatching {
         val dateTime = java.time.Instant.ofEpochMilli(epochMillis)
             .atZone(java.time.ZoneId.systemDefault())
-        java.time.format.DateTimeFormatter.ofPattern("MMM d, HH:mm").format(dateTime)
+        WIZARD_TIMESTAMP_FORMAT.format(dateTime)
     }.getOrDefault(epochMillis.toString())
 
 // ---------------------------------------------------------------------------

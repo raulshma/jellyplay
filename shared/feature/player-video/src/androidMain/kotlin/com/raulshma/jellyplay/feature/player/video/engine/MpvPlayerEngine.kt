@@ -117,6 +117,11 @@ class MpvPlayerEngine(
     private var mpvView: PlayerMPVView? = null
     private var pendingRequest: PlaybackRequest? = null
 
+    // ── time-pos dispatch dedupe (see the postInitOptions observe KDoc) ─────
+    // The observer events and the reset sites below all run on the main
+    // looper, so the stateful dedupe needs no synchronization.
+    private val timePosDedupe = TimePosDedupe()
+
     // ── Stall watchdog (MpvStallWatchdog for the WHY) ───────────────────────
     // The wedged-session rescues: the per-load decision state, the mpv log
     // evidence that the zero-copy hwdec path is implicated (set from the log
@@ -395,6 +400,10 @@ class MpvPlayerEngine(
                 core.onPropertyChange(property, MpvIntakeValue.Whole(value))
             }
             override fun eventProperty(property: String, value: Double) {
+                // The per-frame time-pos stream is deduped at dispatch — see
+                // the observe-site KDoc in postInitOptions for the SyncPlay
+                // constraint that pins the 50 ms window.
+                if (property == MpvProperties.TIME_POS && !timePosDedupe.accept(value)) return
                 core.onPropertyChange(property, MpvIntakeValue.Decimal(value))
             }
             override fun eventProperty(property: String, value: Boolean) {
@@ -415,16 +424,26 @@ class MpvPlayerEngine(
             override fun eventProperty(property: String, value: String) {
                 if (property == MpvProperties.SID || property == MpvProperties.AID) {
                     Log.d(TAG, "MPV $property changed to ${redactSensitive(value)}")
+                    // A track change is one of the dedupe-resetting state
+                    // changes — the next time-pos must land unthrottled.
+                    timePosDedupe.reset()
                 }
                 core.onPropertyChange(property, MpvIntakeValue.Text(value))
             }
             override fun eventProperty(property: String, value: MPVNode) {
                 when (property) {
                     // the range-level buffered surface. Node arrives parsed;
-                    // flattening + clamping is the shared pure derivation
-                    // (see MpvCore.decodeBufferedRanges).
+                    // only the three keys the shared decode reads are
+                    // extracted (see [asBufferedRangesPayload]) — mpv emits
+                    // this property several times per second on the main
+                    // looper, and a whole-tree flatten deep-copied every
+                    // range/cache subtree per event for keys nothing reads.
                     MpvProperties.DEMUXER_CACHE_STATE ->
-                        core.onPropertyChange(property, MpvIntakeValue.Node, nodePayload = value.asPlainValue())
+                        core.onPropertyChange(
+                            property,
+                            MpvIntakeValue.Node,
+                            nodePayload = value.asBufferedRangesPayload(),
+                        )
                     else -> core.onPropertyChange(property, MpvIntakeValue.Node)
                 }
             }
@@ -664,6 +683,15 @@ class MpvPlayerEngine(
             // updates per frame, giving ms precision. (The DECISION for
             // each observed property lives in the shared MpvPropertyIntake
             // table; only the observe formats live here.)
+            //
+            // The per-frame DOUBLE stream is deduped at DISPATCH (the
+            // observer's [TimePosDedupe]): a value is handed to the core only
+            // when it moved >= 50 ms since the last ACCEPTED one, and the
+            // first observation after a seek/pause/play/track change lands
+            // unthrottled. 50 ms keeps 2x headroom under SyncPlay's 100 ms
+            // correction threshold (SYNC_CORRECTION_THRESHOLD_MS): the cached
+            // position lags the demuxer by at most the dedupe window plus one
+            // frame — never enough for the correction loop to read as drift.
             mpv.observeProperty(MpvProperties.PAUSE, MPV.mpvFormat.MPV_FORMAT_FLAG)
             mpv.observeProperty(MpvProperties.SPEED, MPV.mpvFormat.MPV_FORMAT_DOUBLE)
             mpv.observeProperty(MpvProperties.PAUSED_FOR_CACHE, MPV.mpvFormat.MPV_FORMAT_FLAG)
@@ -750,6 +778,7 @@ class MpvPlayerEngine(
         // first time-pos / duration observations repopulate them as the
         // demuxer resolves. The playhead seeds from the request's start.
         core.resetPlaybackCaches(positionMs = request.startPositionMs)
+        timePosDedupe.reset()
         pendingRequest = request
         // Fresh per-file watchdog state (the sticky hwdec override survives —
         // once this instance has proven the zero-copy path wedges, later
@@ -802,6 +831,9 @@ class MpvPlayerEngine(
         dialogueBoost.detach()
         equalizerHelper.detach()
         nightMode.detach()
+        // Stop the display-event refreshes: the probe's listener is held
+        // strongly by DisplayManager, so it must not outlive the engine.
+        displayHdrProbe.release()
         engineScope.cancel()
         val view = mpvView
         mpvView = null
@@ -848,18 +880,22 @@ class MpvPlayerEngine(
 
     override fun play() {
         core.play()
+        timePosDedupe.reset()
     }
 
     override fun pause() {
         core.pause()
+        timePosDedupe.reset()
     }
 
     override fun stop() {
         core.commandStop()
+        timePosDedupe.reset()
     }
 
     override fun seekTo(positionMs: Long) {
         core.seekTo(positionMs)
+        timePosDedupe.reset()
     }
 
     override fun setPlaybackSpeed(speed: Float) {
@@ -1218,7 +1254,13 @@ class MpvPlayerEngine(
             refreshUserOwnedSubtitleKeys()
             view.initialize(configDir.absolutePath, context.cacheDir.absolutePath)
             view.setVo(mpvCfg.videoOutput.key)
-            core.applySubtitleStyleRuntime(currentConfig.subtitleStyle)
+            // No style apply here: initialize()'s initOptions ran the INIT
+            // phase for the pre-load window, and EVERY playFile goes through
+            // configureMpvForRequest (the pendingRequest arm below, or a later
+            // load()), whose RUNTIME pass writes the full style table straight
+            // before the file starts. The former surface-create runtime apply
+            // re-wrote that table and fired a sub-reload against a handle with
+            // no file loaded.
         } catch (e: Exception) {
             Log.e(TAG, "MPV initialize failed", e)
             return view
@@ -1488,21 +1530,21 @@ class MpvPlayerEngine(
         // PERSIST on the view's mpv handle across loads — write the reset
         // trio when no certificate is active (same discipline as
         // http-header-fields below) so the previous item's credentials are
-        // never inherited.
+        // never inherited. Property writes only: this always runs on an
+        // initialized handle, where an option write IS a property write —
+        // the former option+property pair was two identical JNI round-trips
+        // per key.
         MpvTlsOptions.from(request.requestSpecific?.tls).forEach { (option, value) ->
             try {
-                view.mpv.setOptionString(option, value)
                 view.mpv.setPropertyString(option, value)
             } catch (_: Exception) {}
         }
 
         if (request.startPositionMs > 0) {
             val startVal = "+${request.startPositionMs / 1000.0}"
-            try { view.mpv.setOptionString(MpvProperties.START, startVal) } catch (_: Exception) {}
             try { view.mpv.setPropertyString(MpvProperties.START, startVal) } catch (_: Exception) {}
         }
 
-        view.mpv.setOptionString(MpvProperties.SUB_VISIBILITY, "yes")
         view.mpv.setPropertyBoolean(MpvProperties.SUB_VISIBILITY, true)
         request.preferredAudioLanguage?.takeIf { it.isNotBlank() }?.let { language ->
             view.mpv.setOptionString(MpvProperties.ALANG, normalizeLanguageList(language))
@@ -1522,14 +1564,12 @@ class MpvPlayerEngine(
                 .firstOrNull { it.key.equals("User-Agent", ignoreCase = true) }
                 ?.value
             if (!userAgent.isNullOrBlank()) {
-                try { view.mpv.setOptionString(MpvProperties.USER_AGENT, userAgent) } catch (_: Exception) {}
                 try { view.mpv.setPropertyString(MpvProperties.USER_AGENT, userAgent) } catch (_: Exception) {}
             }
             val headerStr = request.headers.entries
                 .filter { !it.key.equals("User-Agent", ignoreCase = true) }
                 .joinToString(",") { "${it.key}: ${it.value}" }
             if (headerStr.isNotBlank()) {
-                try { view.mpv.setOptionString(MpvProperties.HTTP_HEADER_FIELDS, headerStr) } catch (_: Exception) {}
                 try { view.mpv.setPropertyString(MpvProperties.HTTP_HEADER_FIELDS, headerStr) } catch (_: Exception) {}
             }
             Log.d(TAG, "Applied MPV HTTP headers: ${request.headers.keys}")
@@ -1591,6 +1631,32 @@ class MpvPlayerEngine(
         asArray()?.let { array -> return array.map { it.asPlainValue() } }
         return asString() ?: asInt() ?: asDouble() ?: asBoolean()
     }
+
+    /**
+     * The `demuxer-cache-state` slice [MpvCore.decodeBufferedRanges] reads —
+     * `seekable-ranges` (each entry's `start`/`end`) plus the two scalars —
+     * extracted directly from the node tree in the shape the decode expects
+     * (plain maps/`Number`s). A non-map node keeps the full flatten so the
+     * decode's map-cast reject behaves exactly as before.
+     */
+    private fun MPVNode.asBufferedRangesPayload(): Any? {
+        val map = asMap() ?: return asPlainValue()
+        val payload = HashMap<String, Any?>(4)
+        map["seekable-ranges"]?.asArray()?.let { ranges ->
+            payload["seekable-ranges"] = ranges.mapNotNull { range ->
+                val entry = range.asMap() ?: return@mapNotNull null
+                val start = entry["start"]?.asNumber() ?: return@mapNotNull null
+                val end = entry["end"]?.asNumber() ?: return@mapNotNull null
+                mapOf("start" to start, "end" to end)
+            }
+        }
+        map["demuxer-start-time"]?.let { payload["demuxer-start-time"] = it.asNumber() }
+        map["cache-end"]?.let { payload["cache-end"] = it.asNumber() }
+        return payload
+    }
+
+    /** The numeric payload the shared decode coerces through `Number` (Int/Double nodes). */
+    private fun MPVNode.asNumber(): Number? = asInt() ?: asDouble()
 
     /**
      * The Android [MpvBinding] over the `is.xyz.mpv` wrapper: the platform

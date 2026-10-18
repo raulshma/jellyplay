@@ -28,9 +28,16 @@ class RemotePlaybackReporter(
     private val audioPlaybackManager: AudioPlaybackManager,
     private val authRepository: AuthRepository,
     private val activePlayerController: ActivePlayerController,
+    /**
+     * The Koin application scope (DatastoreQualifiers.applicationScope) the
+     * IO scope hangs off as a SupervisorJob child — only the per-session
+     * progress job is cancelled locally, so the child now dies with an
+     * app-level teardown instead of outliving it.
+     */
+    private val applicationScope: CoroutineScope,
 ) {
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val scope = CoroutineScope(SupervisorJob(applicationScope.coroutineContext[Job]) + Dispatchers.IO)
     private var progressJob: Job? = null
     private var sessionId: String? = null
     private var currentItemId: String? = null

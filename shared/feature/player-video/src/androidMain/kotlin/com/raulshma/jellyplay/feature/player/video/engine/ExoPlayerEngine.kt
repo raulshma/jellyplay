@@ -114,6 +114,12 @@ private val DEFAULT_SUBTITLE_SIZE_SP =
     SubtitleRenderDefaults.EXOPLAYER_OVERRIDE.fontSizeSp.toFloat()
 private const val TAG = "ExoPlayerEngine"
 
+/**
+ * The buffered-band publish gate's start-step (see the positionFlow tick body):
+ * a start move smaller than this keeps the previous band published.
+ */
+private const val BUFFERED_BAND_START_STEP_MS = 500L
+
 class ExoPlayerEngine(
     private val context: Context,
     private val streamingOkHttpClient: OkHttpClient,
@@ -1126,6 +1132,9 @@ class ExoPlayerEngine(
         // the neutralization so the next load re-derives it from a fresh
         // evaluation.
         spatializerHelper.release()
+        // Stop the display-event refreshes: the probe's listener is held
+        // strongly by DisplayManager, so it must not outlive the engine.
+        displayHdrProbe.release()
         spatialNeutralizationActive = false
         spatialSupersededVirtualizer = false
         audioPipelineReconfiguring = false
@@ -1636,7 +1645,8 @@ class ExoPlayerEngine(
             isPlayingFlow = _isPlaying,
             isCurrentlyPlaying = { p.isPlaying },
             onActive = {
-                trySend(p.currentPosition)
+                val pos = p.currentPosition
+                trySend(pos)
                 val buffered = p.bufferedPosition.coerceAtLeast(0L)
                 if (buffered != _bufferedPositionMs.value) {
                     _bufferedPositionMs.value = buffered
@@ -1645,11 +1655,27 @@ class ExoPlayerEngine(
                 // DefaultLoadControl's back-buffer extent is not exposed
                 // per-range, so the contiguous ahead-window is the honest
                 // band. Normalizes + dedups into the shared flow.
-                _bufferedRanges.value = BufferedRanges.contiguous(
-                    startMs = p.currentPosition,
-                    endMs = buffered,
-                    durationMs = durationMs,
-                )
+                //
+                // Only the band's start creeps tick-to-tick (the buffered end
+                // moves on buffer events), so re-derive and publish only when
+                // the end point moved or the start jumped >= 500 ms in either
+                // direction; otherwise the previous publication stands. The
+                // consumers (seek bar band shading, stats ranges readout)
+                // tolerate sub-half-second start staleness, and the gate keeps
+                // the ticker off a fresh List<LongRange> allocation per tick.
+                // The empty-band steady state (buffered <= position) stays
+                // allocation-free: contiguous() returns the shared emptyList.
+                val previous = _bufferedRanges.value.singleOrNull()
+                if (previous == null ||
+                    buffered != previous.last ||
+                    kotlin.math.abs(pos - previous.first) >= BUFFERED_BAND_START_STEP_MS
+                ) {
+                    _bufferedRanges.value = BufferedRanges.contiguous(
+                        startMs = pos,
+                        endMs = buffered,
+                        durationMs = durationMs,
+                    )
+                }
                 if (_videoStatsEnabled.value) {
                     updateVideoStats()
                 }

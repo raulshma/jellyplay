@@ -212,7 +212,7 @@ fun ArrSettingsScreen(
             }
 
             if (allServers.isEmpty()) {
-                item {
+                item(contentType = "arrHint") {
                     val text = when {
                         isRefreshing -> stringResource(Res.string.settings_arr_resolving)
                         servers.discoveryError is ArrDiscoveryError.NoAdminPermission ->
@@ -232,7 +232,7 @@ fun ArrSettingsScreen(
                 // manual server as a workaround; surface the misconfiguration so
                 // they know auto-discover is still broken.
                 servers.discoveryError?.let { err ->
-                    item {
+                    item(contentType = "arrError") {
                         Text(
                             when (err) {
                                 is ArrDiscoveryError.NoAdminPermission ->
@@ -244,7 +244,7 @@ fun ArrSettingsScreen(
                         )
                     }
                 }
-                items(allServers, key = { it.id }) { server ->
+                items(allServers, key = { it.id }, contentType = { "arrServer" }) { server ->
                     ServerRow(
                         server = server,
                         status = serverStatus[server.id]
@@ -255,7 +255,7 @@ fun ArrSettingsScreen(
                 }
             }
 
-            item {
+            item(contentType = "arrAddButton") {
                 OutlinedButton(
                     onClick = { showAddDialog = true },
                     modifier = Modifier

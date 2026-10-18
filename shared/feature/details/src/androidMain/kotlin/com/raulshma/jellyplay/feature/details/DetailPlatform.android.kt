@@ -87,6 +87,7 @@ fun androidDetailsModule(context: Context): Module = module {
             storageProbe = get(),
             strings = get(),
             mediaRepository = get(),
+            mediaCatalogueEnrichments = get(),
             libraryApiClient = get(),
             collectionApiClient = get(),
             userDataMutator = get(),

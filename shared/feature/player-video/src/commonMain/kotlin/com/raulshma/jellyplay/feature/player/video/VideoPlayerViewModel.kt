@@ -210,6 +210,8 @@ class VideoPlayerViewModel(
      * re-initialization, where the session manager's release also runs).
      */
     private val nowPlayingReporter: NowPlayingReporter,
+    /** The next-item stream-cache pre-warm seam; null disables it (test graphs). */
+    private val nextStreamByteWarmer: NextStreamByteWarmer? = null,
 ) : JellyPlayViewModel() {
 
     private val castManager: CastManager = castManager
@@ -507,6 +509,15 @@ class VideoPlayerViewModel(
                 }
             }
         }
+        NextStreamByteWarmWatcher(
+            scope = scope,
+            warmNextStream = playbackSession.playerSessionManager.warmNextStream,
+            upNextCard = playbackSession.upNext.upNextCard,
+            engineFlow = playbackSession.playerSessionManager.engineFlow,
+            sessionState = playbackSession.playerSessionManager.sessionState,
+            isInSyncPlaySession = { _uiState.value.isInSyncPlaySession },
+            warmer = nextStreamByteWarmer,
+        ).install()
     }
 
     /**

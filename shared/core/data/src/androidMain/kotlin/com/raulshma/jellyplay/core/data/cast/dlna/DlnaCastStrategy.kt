@@ -5,12 +5,15 @@ import android.net.wifi.WifiManager
 import android.util.Log
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
+import com.raulshma.jellyplay.core.concurrency.PollSpec
+import com.raulshma.jellyplay.core.concurrency.boundedPoll
 import com.raulshma.jellyplay.core.data.cast.CastDevice
 import com.raulshma.jellyplay.core.data.cast.CastMediaOptions
 import com.raulshma.jellyplay.core.data.cast.CastStrategy
 import com.raulshma.jellyplay.core.data.cast.withCastQueryParams
 import com.raulshma.jellyplay.core.datastore.UserPreferencesStore
 import com.raulshma.jellyplay.core.model.DlnaDeviceRef
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -31,6 +34,15 @@ class DlnaCastStrategy(
     companion object {
         private const val TAG = "DlnaCastStrategy"
         private const val STRATEGY_NAME = "dlna"
+
+        // Seek-after-load readiness poll ([awaitRendererReadyForSeek]): the
+        // first probe waits one interval (a GetTransportInfo the instant Play
+        // returns is known to still be TRANSITIONING), and the envelope caps
+        // the whole wait — expiry degrades to the old fixed-wait behavior,
+        // bounded.
+        private const val SEEK_READY_FIRST_PROBE_DELAY_MS = 250L
+        private const val SEEK_READY_POLL_INTERVAL_MS = 250L
+        private const val SEEK_READY_ENVELOPE_MS = 3_000L
     }
 
     private val wifiManager: WifiManager by lazy {
@@ -149,6 +161,8 @@ class DlnaCastStrategy(
                 val currentLocations = ssdpDiscovery.discoveredLocations.value.values.toList()
                 refreshDeviceList(currentLocations)
             }
+        } catch (ce: CancellationException) {
+            throw ce
         } catch (e: Exception) {
             Log.d(TAG, "Failed to fetch device details from $locationUrl", e)
         }
@@ -217,10 +231,43 @@ class DlnaCastStrategy(
                 return@launch
             }
             if (positionMs > 0) {
-                kotlinx.coroutines.delay(500)
+                awaitRendererReadyForSeek(controlUrl)
                 UpnpControlPoint.seek(controlUrl, positionMs = positionMs, client = okHttpClient)
             }
             _rendererIsPlaying.value = true
+        }
+    }
+
+    /**
+     * Bounded readiness wait before the resume-position seek of [loadMedia]:
+     * a Seek issued while the renderer is still loading (transport
+     * TRANSITIONING / NO_MEDIA_PRESENT) is silently dropped by many devices —
+     * the gap the former blind `delay(500)` papered over. The poll probes
+     * GetTransportInfo every [SEEK_READY_POLL_INTERVAL_MS] starting after
+     * [SEEK_READY_FIRST_PROBE_DELAY_MS] and returns as soon as the transport
+     * reports loaded media — PLAYING, or PAUSED when the device already
+     * paused on its side (both honor seeks). The envelope caps the whole
+     * wait; on expiry the seek proceeds anyway, so a renderer that never
+     * reports a loaded transport degrades to the old fixed-wait behavior,
+     * bounded. GetTransportInfo answers UNKNOWN (never throws) on transport
+     * noise, so an unreachable device just burns the envelope — the seek it
+     * gates would have failed the same way.
+     */
+    private suspend fun awaitRendererReadyForSeek(controlUrl: String) {
+        val ready = boundedPoll(
+            PollSpec(
+                initialDelayMs = SEEK_READY_FIRST_PROBE_DELAY_MS,
+                intervalMs = SEEK_READY_POLL_INTERVAL_MS,
+                envelopeMs = SEEK_READY_ENVELOPE_MS,
+            ),
+        ) {
+            when (UpnpControlPoint.getTransportInfo(controlUrl, client = okHttpClient)) {
+                TransportState.PLAYING, TransportState.PAUSED -> true
+                else -> null
+            }
+        }
+        if (ready == null) {
+            Log.d(TAG, "Renderer transport not ready for seek within ${SEEK_READY_ENVELOPE_MS}ms; seeking anyway")
         }
     }
 

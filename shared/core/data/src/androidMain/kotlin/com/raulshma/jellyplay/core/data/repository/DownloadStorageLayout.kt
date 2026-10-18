@@ -256,6 +256,13 @@ enum class StorageMountKind {
 }
 
 /**
+ * The single-shape `EXTERNAL_N` matcher, hoisted out of
+ * [StorageLocationPref.externalIndex] so the parse never recompiles the
+ * pattern per call (the pref spelling is closed — nothing parameterizes it).
+ */
+private val EXTERNAL_N_PREF_REGEX = Regex("^EXTERNAL_(\\d+)$", RegexOption.IGNORE_CASE)
+
+/**
  * Value class around the raw `download_storage_location` preference string,
  * so the "is this INTERNAL?" / "which external index?" parsing lives in one
  * place instead of being re-derived at every call site.
@@ -289,7 +296,7 @@ value class StorageLocationPref(val raw: String) {
         get() {
             val upper = raw.trim()
             if (upper.equals("EXTERNAL", ignoreCase = true)) return 0
-            val match = Regex("^EXTERNAL_(\\d+)$", RegexOption.IGNORE_CASE).matchEntire(upper)
+            val match = EXTERNAL_N_PREF_REGEX.matchEntire(upper)
                 ?: return 0
             return ((match.groupValues[1].toIntOrNull() ?: 1) - 1).coerceAtLeast(0)
         }

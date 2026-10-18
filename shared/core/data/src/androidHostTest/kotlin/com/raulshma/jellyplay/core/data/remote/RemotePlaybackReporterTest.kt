@@ -12,6 +12,9 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -66,6 +69,7 @@ class RemotePlaybackReporterTest {
         audioPlaybackManager = audioPlaybackManager,
         authRepository = authRepository,
         activePlayerController = activePlayerController,
+        applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
     )
 
     private fun captureStart(block: (PlaybackStartInfo) -> Unit) {
