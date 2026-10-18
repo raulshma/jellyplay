@@ -33,6 +33,7 @@ val downloadsModule: Module = module {
             queue = get(),
             offlineRepository = get(),
             resync = get(),
+            downloadsStore = get(),
         )
     }
     viewModel {

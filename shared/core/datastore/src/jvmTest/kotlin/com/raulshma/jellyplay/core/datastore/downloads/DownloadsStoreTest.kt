@@ -192,4 +192,26 @@ class DownloadsStoreTest {
         dataStore.edit { it[stringPreferencesKey("u_user-1::auto_download_servers")] = "nonsense" }
         assertEquals(emptySet(), store.downloads.first().autoDownloadServers)
     }
+
+    @Test
+    fun `downloads list filter and sort round-trip and default to empty`() = runTest {
+        // "" = never set; the feature's decode side falls back to its defaults.
+        val fresh = store.downloads.first()
+        assertEquals("", fresh.downloadsListFilter)
+        assertEquals("", fresh.downloadsListSort)
+
+        store.setDownloadsListFilter("SERIES")
+        store.setDownloadsListSort("SIZE")
+        val slice = store.downloads.first()
+        assertEquals("SERIES", slice.downloadsListFilter)
+        assertEquals("SIZE", slice.downloadsListSort)
+    }
+
+    @Test
+    fun `restore writes the downloads list filter and sort`() = runTest {
+        store.restore(DownloadsSlice(downloadsListFilter = "MOVIES", downloadsListSort = "NAME"))
+        val slice = store.downloads.first()
+        assertEquals("MOVIES", slice.downloadsListFilter)
+        assertEquals("NAME", slice.downloadsListSort)
+    }
 }

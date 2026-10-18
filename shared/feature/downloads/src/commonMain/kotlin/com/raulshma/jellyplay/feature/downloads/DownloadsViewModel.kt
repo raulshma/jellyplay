@@ -6,14 +6,17 @@ import com.raulshma.jellyplay.core.data.download.OfflineResync
 import com.raulshma.jellyplay.core.data.error.UserErrorMessages
 import com.raulshma.jellyplay.core.data.repository.DownloadProgress
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
+import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
 import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.model.OfflineSyncUpdate
 import com.raulshma.jellyplay.core.model.ResyncBatchProgress
 import com.raulshma.jellyplay.core.model.ResyncOptions
 import com.raulshma.jellyplay.core.model.SelectionState
+import com.raulshma.jellyplay.core.model.toMediaItem
 import com.raulshma.jellyplay.core.ui.viewmodel.ConfirmationHost
 import com.raulshma.jellyplay.core.ui.viewmodel.JellyPlayViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.channels.Channel
@@ -28,9 +31,12 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.scan
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.withContext
 
 @Immutable
 data class DownloadsUiState(
@@ -68,6 +74,7 @@ class DownloadsViewModel(
     private val queue: DownloadQueue,
     private val offlineRepository: OfflineRepository,
     private val resync: OfflineResync,
+    private val downloadsStore: DownloadsStore,
 ) : JellyPlayViewModel() {
 
     private val _uiState = stateFlow(DownloadsUiState())
@@ -172,7 +179,123 @@ class DownloadsViewModel(
             items.sumOf { item -> progress[item.id]?.downloadedBytes ?: item.downloadedBytes }
         }.stateIn(scope, SharingStarted.WhileSubscribed(5_000), 0L)
 
+    /**
+     * The download storage ceiling as bytes, or null when no cap is set —
+     * `maxDownloadStorageGb == 0` means unlimited, the same encoding
+     * [com.raulshma.jellyplay.core.data.repository.StoragePolicy] enforces at
+     * enqueue time. Consumed by the screen's quota bar.
+     */
+    val maxStorageBytes: StateFlow<Long?> =
+        downloadsStore.downloads
+            .map { slice ->
+                slice.maxDownloadStorageGb
+                    .takeIf { it > 0 }
+                    ?.let { gb -> gb * 1024L * 1024L * 1024L }
+            }
+            .stateIn(scope, SharingStarted.WhileSubscribed(5_000), null)
+
+    // ── List filter / sort / series grouping (gh-175) ────────────────────
+
+    /**
+     * Type filter for the downloads list — All / Movies / Series. Persisted
+     * through [DownloadsStore] so the choice survives app restarts.
+     */
+    private val _filter = MutableStateFlow(DownloadListFilter.ALL)
+    val filter: StateFlow<DownloadListFilter> = _filter.asStateFlow()
+
+    /**
+     * Sort for the downloads list. Orders series groups and flat rows relative
+     * to each other only — the season → episode order INSIDE a group is always
+     * numeric playback order regardless of this setting (see
+     * [DownloadListSort]). Persisted through [DownloadsStore].
+     */
+    private val _sort = MutableStateFlow(DownloadListSort.RECENT)
+    val sort: StateFlow<DownloadListSort> = _sort.asStateFlow()
+
+    fun setFilter(value: DownloadListFilter) {
+        _filter.value = value
+        launch { downloadsStore.setDownloadsListFilter(value.name) }
+    }
+
+    fun setSort(value: DownloadListSort) {
+        _sort.value = value
+        launch { downloadsStore.setDownloadsListSort(value.name) }
+    }
+
+    /** Expanded series/season group keys — groups start collapsed (session-only). */
+    private val _expandedKeys = MutableStateFlow<Set<String>>(emptySet())
+    val expandedKeys: StateFlow<Set<String>> = _expandedKeys.asStateFlow()
+
+    /** Toggles a series or season group's expanded state. */
+    fun toggleExpanded(key: String) {
+        _expandedKeys.update { if (key in it) it - key else it + key }
+    }
+
+    /**
+     * Expands every series and season group present in the current view. The
+     * season keys can't be read off the current rows — a collapsed series
+     * doesn't emit its season headers — so they are derived straight from the
+     * structural list using the exact key shape the rows engine emits
+     * (`"<seriesKey>/season/<seasonKey>"`). Extra keys for single-season
+     * groups are inert (no rendered row carries them).
+     */
+    fun expandAll() {
+        val current = rows.value ?: return
+        val seriesKeys = current.mapNotNull { row ->
+            (row as? DownloadListRow.SeriesHeader)?.key
+        }
+        if (seriesKeys.isEmpty()) return
+        val seasonKeys = HashSet<String>()
+        structuralItems.value.forEach { item ->
+            if (item.mediaType != com.raulshma.jellyplay.core.model.MediaType.EPISODE) return@forEach
+            val position = item.episodePosition
+            val seriesKey = position.seriesKey ?: return@forEach
+            seasonKeys += seasonRowKey(seriesKey, position.seasonKey)
+        }
+        _expandedKeys.value = seriesKeys.toSet() + seasonKeys
+    }
+
+    /** Collapses every group. */
+    fun collapseAll() {
+        _expandedKeys.value = emptySet()
+    }
+
+    /**
+     * The rendered rows — series/season headers interleaved with the flat
+     * (non-episode) rows — built by the pure [downloadListRows] from the same
+     * structural projection [uiState] consumes, so status flips re-derive the
+     * grouping but progress ticks don't. Computation hops off Main, mirroring
+     * OfflineLibraryViewModel's filter/sort pipeline.
+     *
+     * Null until the first derivation lands: the combine runs off Main, so on
+     * screen entry there is a window where [uiState] already carries downloads
+     * but no rows exist yet. The screen must treat null as "not computed" and
+     * render neither the list nor the category-empty state — an initial
+     * emptyList would flash "nothing in this category" while downloads exist.
+     */
+    internal val rows: StateFlow<List<DownloadListRow>?> =
+        combine(structuralItems, _filter, _sort, _expandedKeys) { items, filter, sort, expanded ->
+            withContext(Dispatchers.Default) {
+                downloadListRows(items, filter, sort, expanded)
+            }
+        }.stateIn(scope, SharingStarted.WhileSubscribed(5_000), null)
+
     init {
+        launch {
+            // Seed the persisted list state once, from the first DataStore
+            // read. A slot the user already touched during that read window
+            // keeps their write — the seed only fills slots still holding the
+            // feature default (an explicit default pick inside the window is
+            // a same-value write). An empty stored string decodes to the
+            // feature default via the fromName fallbacks.
+            val slice = downloadsStore.downloads.first()
+            if (_filter.value == DownloadListFilter.ALL) {
+                _filter.value = DownloadListFilter.fromName(slice.downloadsListFilter)
+            }
+            if (_sort.value == DownloadListSort.RECENT) {
+                _sort.value = DownloadListSort.fromName(slice.downloadsListSort)
+            }
+        }
         launch {
             // Change-filtering lives in two layers. The repository's filter
             // (id order + per-item bytes/status) still forwards byte movement
@@ -286,8 +409,51 @@ class DownloadsViewModel(
         _uiState.update { it.copy(selection = it.selection.cleared()) }
     }
 
+    /**
+     * Selects every download matching the ACTIVE filter — a collapsed group's
+     * episodes count too (they're part of the Series view), while items hidden
+     * by the Movies/Series filter don't.
+     */
     fun selectAll() {
-        _uiState.update { it.copy(selection = it.selection.selectAll(it.downloads.map { item -> item.id })) }
+        val activeFilter = _filter.value
+        _uiState.update { state ->
+            val candidates = state.downloads.filter(activeFilter::accepts).map { it.id }
+            state.copy(selection = state.selection.selectAll(candidates))
+        }
+    }
+
+    /**
+     * Tri-state group write behind the series/season headers (gh-175): a
+     * fully selected group deselects, anything else selects the whole group.
+     */
+    fun toggleGroupSelection(groupIds: Collection<String>) {
+        if (groupIds.isEmpty()) return
+        _uiState.update { state ->
+            state.copy(selection = SelectionState(toggledGroupSelection(state.selectedIds, groupIds)))
+        }
+    }
+
+    /**
+     * The download a group header's Play action targets, resolved from the
+     * header's playback-ordered episode ids: the first unplayed COMPLETED
+     * episode wins, falling back to the first COMPLETED episode of the group;
+     * a group with nothing finished yields null (the click is a no-op — the
+     * same `status == COMPLETED` gate the row-level Play applies, see
+     * [groupPlayTarget]). Played state reads the offline DB once, normalized
+     * through the shared [toMediaItem] projection — the same ≥95% watched rule
+     * the offline cards use — so a nearly-finished episode counts as watched
+     * instead of hijacking Play.
+     */
+    suspend fun resolveGroupPlayTarget(episodeIds: List<String>): DownloadItem? {
+        if (episodeIds.isEmpty()) return null
+        val byId = _uiState.value.downloads.associateBy { it.id }
+        val ordered = episodeIds.mapNotNull(byId::get)
+        if (ordered.isEmpty()) return null
+        val played = offlineRepository.getOfflineEpisodes()
+            .first()
+            .filter { it.toMediaItem().isPlayed }
+            .mapTo(HashSet()) { it.id }
+        return groupPlayTarget(ordered, played)
     }
 
     // ── Bulk actions ─────────────────────────────────────────────────────

@@ -66,6 +66,13 @@ fun OfflineMediaCard(
      * fallback otherwise). Null (default) keeps the video percentage math.
      */
     progressFractionOverride: Float? = null,
+    /**
+     * Optional badge rendered in the poster's top-left overlay stack (the
+     * [PosterCard.topStartBadge] passthrough) — the offline library's series
+     * cards use it for the downloaded-episode-count chip. The caller renders
+     * it so the string resources stay in the caller's module.
+     */
+    topStartBadge: (@Composable () -> Unit)? = null,
 ) {
     // Memoised so recompositions of this card don't re-run the mapping or
     // re-allocate the fallback list (unstable List params would otherwise
@@ -106,6 +113,7 @@ fun OfflineMediaCard(
             bookProgressFractionOverride = progressFractionOverride,
             clipToShape = clipToShape,
             gradientBrush = gradientBrush,
+            topStartBadge = topStartBadge,
         )
 
         // Watched state is rendered solely by PosterCard's pref-gated tick

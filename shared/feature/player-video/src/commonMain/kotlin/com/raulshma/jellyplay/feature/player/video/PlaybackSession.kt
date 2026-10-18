@@ -1435,6 +1435,7 @@ internal class PlaybackSession(
         startPositionTicks: Long,
         subtitleStreamIndex: Int? = null,
         audioStreamIndex: Int? = null,
+        forceStream: Boolean = false,
     ) {
         // Defensive: PipController is a process @Singleton whose one-shot event
         // flags outlive this Activity. A flag left set by an abnormally torn
@@ -1455,6 +1456,7 @@ internal class PlaybackSession(
                 forceCinemaMode = cinemaModeOverride?.consume() == true,
                 subtitleStreamIndex = subtitleStreamIndex,
                 audioStreamIndex = audioStreamIndex,
+                forceStream = forceStream,
             )
         )
     }

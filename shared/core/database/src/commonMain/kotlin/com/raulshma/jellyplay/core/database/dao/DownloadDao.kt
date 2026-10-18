@@ -407,7 +407,8 @@ interface DownloadDao {
         """
         SELECT m.seriesId AS seriesId,
             COALESCE(SUM(d.totalSizeBytes), 0) AS totalSizeBytes,
-            COALESCE(SUM(d.downloadedBytes), 0) AS downloadedBytes
+            COALESCE(SUM(d.downloadedBytes), 0) AS downloadedBytes,
+            COUNT(*) AS episodeCount
         FROM downloads d
         INNER JOIN offline_media m ON m.id = d.mediaItemId
         WHERE m.seriesId IN (:seriesIds)
@@ -475,12 +476,15 @@ data class SeriesDownloadPathRow(
 
 /**
  * Per-series aggregated size used by the offline library/home summary.
- * See [DownloadDao.getSeriesSizeAggregatesFlow].
+ * [episodeCount] is the number of downloaded episode rows for the series —
+ * the offline library series cards' "N episodes" chip. See
+ * [DownloadDao.getSeriesSizeAggregatesFlow].
  */
 data class SeriesSizeAggregate(
     val seriesId: String,
     val totalSizeBytes: Long,
     val downloadedBytes: Long,
+    val episodeCount: Int,
 )
 
 /**

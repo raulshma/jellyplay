@@ -95,6 +95,16 @@ class DownloadsStore constructor(
          * Never read/written as a flat key: see the class KDoc.
          */
         val AUTO_DOWNLOAD_SERVERS = stringPreferencesKey("auto_download_servers")
+        /**
+         * Downloads-screen list state (gh-175 follow-up): the persisted
+         * All/Movies/Series filter and Recent/Name/Size sort, stored as the
+         * enum name strings. The enums live in the downloads feature (this
+         * module cannot see them), so unknown values degrade at the feature's
+         * decode side (`DownloadListFilter.fromName` / `DownloadListSort.fromName`),
+         * and an empty string means "never set" — the feature's defaults.
+         */
+        val DOWNLOADS_LIST_FILTER = stringPreferencesKey("downloads_list_filter")
+        val DOWNLOADS_LIST_SORT = stringPreferencesKey("downloads_list_sort")
     }
 
     val downloads: StateFlow<DownloadsSlice> =
@@ -116,6 +126,8 @@ class DownloadsStore constructor(
             .coerceAtLeast(0),
         autoDownloadServers = readAutoDownloadServers(prefs),
         maxDownloadStorageGb = PreferenceCodec.readInt(prefs, Keys.MAX_DOWNLOAD_STORAGE_GB, "max_download_storage_gb", 0),
+        downloadsListFilter = prefs[Keys.DOWNLOADS_LIST_FILTER] ?: "",
+        downloadsListSort = prefs[Keys.DOWNLOADS_LIST_SORT] ?: "",
         downloadStorageLocation = prefs[Keys.DOWNLOAD_STORAGE_LOCATION] ?: "INTERNAL",
         autoDeleteAfterWatch = prefs[Keys.AUTO_DELETE_AFTER_WATCH] ?: false,
         cellularDownloadSizeWarningMb = PreferenceCodec.readInt(prefs, Keys.CELLULAR_DOWNLOAD_SIZE_WARNING_MB, "cellular_download_size_warning_mb", 0),
@@ -204,6 +216,16 @@ class DownloadsStore constructor(
         dataStore.edit { it[Keys.MAX_DOWNLOAD_STORAGE_GB] = gb }
     }
 
+    /** Persists the downloads-list filter (an enum name string; see [Keys.DOWNLOADS_LIST_FILTER]). */
+    suspend fun setDownloadsListFilter(value: String) {
+        dataStore.edit { it[Keys.DOWNLOADS_LIST_FILTER] = value }
+    }
+
+    /** Persists the downloads-list sort (an enum name string; see [Keys.DOWNLOADS_LIST_SORT]). */
+    suspend fun setDownloadsListSort(value: String) {
+        dataStore.edit { it[Keys.DOWNLOADS_LIST_SORT] = value }
+    }
+
     suspend fun setDownloadStorageLocation(location: String) {
         dataStore.edit { it[Keys.DOWNLOAD_STORAGE_LOCATION] = location }
     }
@@ -258,6 +280,8 @@ class DownloadsStore constructor(
             Keys.AUTO_DOWNLOAD_KEEP_DAYS,
             Keys.MAX_DOWNLOAD_STORAGE_GB,
             Keys.DOWNLOAD_STORAGE_LOCATION,
+            Keys.DOWNLOADS_LIST_FILTER,
+            Keys.DOWNLOADS_LIST_SORT,
             Keys.AUTO_DELETE_AFTER_WATCH,
             Keys.CELLULAR_DOWNLOAD_SIZE_WARNING_MB,
             Keys.DOWNLOAD_SCHEDULE_ENABLED,
@@ -311,6 +335,8 @@ class DownloadsStore constructor(
             it[Keys.AUTO_DOWNLOAD_KEEP_DAYS] = slice.autoDownloadKeepDays
             it[Keys.MAX_DOWNLOAD_STORAGE_GB] = slice.maxDownloadStorageGb
             it[Keys.DOWNLOAD_STORAGE_LOCATION] = slice.downloadStorageLocation
+            it[Keys.DOWNLOADS_LIST_FILTER] = slice.downloadsListFilter
+            it[Keys.DOWNLOADS_LIST_SORT] = slice.downloadsListSort
             it[Keys.AUTO_DELETE_AFTER_WATCH] = slice.autoDeleteAfterWatch
             it[Keys.CELLULAR_DOWNLOAD_SIZE_WARNING_MB] = slice.cellularDownloadSizeWarningMb
             it[Keys.DOWNLOAD_SCHEDULE_ENABLED] = slice.downloadScheduleEnabled
@@ -358,6 +384,10 @@ data class DownloadsSlice(
     /** Active user's auto-download server allow-list (empty = all servers). */
     val autoDownloadServers: Set<String> = emptySet(),
     val maxDownloadStorageGb: Int = 0,
+    /** Downloads-list filter as an enum name string ("" = feature default). */
+    val downloadsListFilter: String = "",
+    /** Downloads-list sort as an enum name string ("" = feature default). */
+    val downloadsListSort: String = "",
     val downloadStorageLocation: String = "INTERNAL",
     val autoDeleteAfterWatch: Boolean = false,
     val cellularDownloadSizeWarningMb: Int = 0,

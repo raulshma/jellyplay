@@ -170,6 +170,32 @@ Open **Settings → Storage** to tune downloads. Defaults are shown below.
 
 Open **Downloads** to see every download and its live state.
 
+**Grouping (gh-175):** an **All / Movies / Series** segmented filter and a
+**Recent / Name / Size** sort sit above the list. Downloaded episodes group
+into **series** (collapsed by default — tap to expand), with **season
+sub-groups** when a series spans more than one downloaded season. Episodes
+inside a group always sort by numeric season, then episode number —
+downloading E08 before E03 still displays E03 first, and no sort choice
+scrambles playback order. Group order follows the active sort; music, books
+and unidentified legacy rows stay flat. In selection mode each group header
+carries a tri-state checkbox that selects/clears the whole group (collapsed
+episodes included), and Select-all covers only what the active filter shows.
+
+**Group header extras (gh-175 follow-up):** a partially downloaded group
+shows a `N of M downloaded · size` summary under its title (fully downloaded
+groups show the size alone); a header carries the same update-available dot
+as its flagged episode rows; and a **Play** button starts the group's next
+unwatched episode in playback order (falls back to the first episode when
+everything is watched). The chevrons control beside the sort menu expands or
+collapses every group at once. Your **filter and sort choice persist** across
+app restarts; expansion state stays per-session.
+
+**Stream instead:** a completed download shows a **Stream** action while the
+device is online — it plays the server copy instead of the local file
+(useful when the local transfer is broken, you're avoiding storage, or you
+prefer the transcoded ladder). Offline the action hides; the global
+"Offline playback" playback preference still governs regular Play.
+
 **Download states:** `Pending` → `Queued` → `Downloading` → `Completed`
 (or `Paused` / `Failed` / `Cancelled`).
 
@@ -629,10 +655,17 @@ construction so a check interrupted by process death doesn't render as a stuck
   selection) initiates downloads; `DetailViewModel` performs the cellular-warning check and
   calls `DownloadIntake`.
 - **`shared/feature/downloads`** — reserved for download **queue** and **offline-library**
-  management: `DownloadsScreen` (queue + per-row actions, the freshness-resync
-  appbar action with a batch check + `DownloadsResyncSheet`, and the granular
+  management: `DownloadsScreen` (grouped queue — All/Movies/Series type filter,
+  Recent/Name/Size sort (both persisted), series/season groups with numeric season→episode
+  ordering, tri-state group selection, header size/progress summaries, update dots,
+  expand/collapse-all, group Play (next unwatched), per-row actions including
+  Stream-instead-when-online, the storage header with a quota bar against
+  `max_download_storage_gb`, the
+  freshness-resync appbar action with a batch check + `DownloadsResyncSheet`, and the granular
   per-item / per-category `ForceResyncSheet`) and `OfflineLibraryScreen`
-  (grid with search/sort/filter + storage header). Both drill into
+  (grid with search/sort/filter — the Videos tab split into Movies + Series
+  tabs (gh-175) — + storage header; series cards badge their downloaded
+  episode count). Both drill into
   `Route.MediaDetail(id)` — there is no longer a separate offline detail or series
   screen.
 - **`shared/feature/home`** — the `SyncStatusIcon` + `SyncDetailsSheet` that

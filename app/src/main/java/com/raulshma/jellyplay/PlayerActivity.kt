@@ -248,6 +248,7 @@ class PlayerActivity : FragmentActivity() {
                                 startPositionTicks = args.startPositionTicks,
                                 subtitleStreamIndex = args.subtitleStreamIndex,
                                 audioStreamIndex = args.audioStreamIndex,
+                                forceStream = args.forceStream,
                                 onBack = { finish() },
                                 onEnterPip = { enterPipMode() },
                                 onOpenSubtitleTester = { showSubtitleTester = true },

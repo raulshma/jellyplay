@@ -125,7 +125,7 @@ class NavRequestCollectorTest {
         advanceUntilIdle()
 
         assertEquals(
-            listOf("navigate:VideoPlayer(itemId=item-1, mediaSourceId=null, startPositionTicks=10000, subtitleStreamIndex=null, audioStreamIndex=null)"),
+            listOf("navigate:VideoPlayer(itemId=item-1, mediaSourceId=null, startPositionTicks=10000, subtitleStreamIndex=null, audioStreamIndex=null, forceStream=false)"),
             shell.events,
         )
     }
@@ -265,7 +265,7 @@ class NavRequestCollectorTest {
         advanceUntilIdle()
 
         assertEquals(
-            listOf("navigate:VideoPlayer(itemId=ep-1, mediaSourceId=null, startPositionTicks=7000, subtitleStreamIndex=null, audioStreamIndex=null)"),
+            listOf("navigate:VideoPlayer(itemId=ep-1, mediaSourceId=null, startPositionTicks=7000, subtitleStreamIndex=null, audioStreamIndex=null, forceStream=false)"),
             shell.events,
         )
     }

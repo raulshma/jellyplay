@@ -212,6 +212,7 @@ class OfflineRepositoryImpl constructor(
                         downloadedBytes = agg?.downloadedBytes ?: 0L,
                         totalSizeBytes = agg?.totalSizeBytes ?: 0L,
                         unplayedEpisodeCount = unplayedMap[item.id],
+                        downloadedEpisodeCount = agg?.episodeCount?.takeIf { it > 0 },
                     )
                 } else {
                     item.withDownload(downloadMap[item.id])

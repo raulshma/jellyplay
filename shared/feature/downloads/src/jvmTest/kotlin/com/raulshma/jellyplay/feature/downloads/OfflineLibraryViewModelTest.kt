@@ -89,7 +89,7 @@ class OfflineLibraryViewModelTest {
     // ── Filter tabs ───────────────────────────────────────────────────────
 
     @Test
-    fun videos_tab_keeps_series_and_movies_only() = runTest(mainDispatcher) {
+    fun movies_tab_keeps_movies_only() = runTest(mainDispatcher) {
         libraryFlow.value = listOf(
             offline("ser", mediaType = MediaType.SERIES),
             offline("mov", mediaType = MediaType.MOVIE),
@@ -97,9 +97,23 @@ class OfflineLibraryViewModelTest {
             offline("aud", mediaType = MediaType.AUDIO),
         )
         val job = collectAndSettle()
-        viewModel.setFilter(OfflineLibraryFilter.VIDEOS)
+        viewModel.setFilter(OfflineLibraryFilter.MOVIES)
 
-        awaitLibrary(listOf("ser", "mov"))
+        awaitLibrary(listOf("mov"))
+        job.cancel()
+    }
+
+    @Test
+    fun series_tab_keeps_series_only() = runTest(mainDispatcher) {
+        libraryFlow.value = listOf(
+            offline("ser", mediaType = MediaType.SERIES),
+            offline("mov", mediaType = MediaType.MOVIE),
+            offline("ep", mediaType = MediaType.EPISODE),
+        )
+        val job = collectAndSettle()
+        viewModel.setFilter(OfflineLibraryFilter.SERIES)
+
+        awaitLibrary(listOf("ser"))
         job.cancel()
     }
 

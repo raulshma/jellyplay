@@ -40,6 +40,12 @@ data class LoadRequest(
      * external player, SyncPlay, item type. Default false = today's behavior.
      */
     val forceCinemaMode: Boolean = false,
+    /**
+     * "Stream instead": resolve the session to [PlaybackSource.Online] even
+     * when a completed download exists (the downloads row's stream action).
+     * Default false keeps the Auto resolution — local file wins when usable.
+     */
+    val forceStream: Boolean = false,
 )
 
 /** Terminal state of one session load. */
@@ -271,7 +277,17 @@ internal class SessionLoadPipeline(
         // bar at 0 and jump to resume on the engine's first tick.
         outputs.onPlayheadSeeded(resolvedStartTicks)
 
-        sessionManager.loadMedia(request.itemId, request.mediaSourceId, resolvedStartTicks)
+        // Force-stream loads skip the Auto resolution entirely — a completed
+        // download must not win the source decision. The offline-resume hook
+        // still runs (its mirror position is the correct entry point even when
+        // streaming); the online gate inside loadMedia still applies, so a
+        // force-stream while offline fails fast with the offline-stream error
+        // rather than silently falling back to the file.
+        if (request.forceStream) {
+            sessionManager.loadMedia(PlaybackSource.Online(request.itemId, request.mediaSourceId), resolvedStartTicks)
+        } else {
+            sessionManager.loadMedia(request.itemId, request.mediaSourceId, resolvedStartTicks)
+        }
 
         // loadMedia reports its own failures (offline gate, detail-fetch miss,
         // vanished offline file) by leaving isReady = false. Continuing would

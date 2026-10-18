@@ -81,6 +81,7 @@ object PlaybackHostRouter {
                     startPositionTicks = route.startPositionTicks,
                     subtitleStreamIndex = route.subtitleStreamIndex,
                     audioStreamIndex = route.audioStreamIndex,
+                    forceStream = route.forceStream,
                 ),
             )
 

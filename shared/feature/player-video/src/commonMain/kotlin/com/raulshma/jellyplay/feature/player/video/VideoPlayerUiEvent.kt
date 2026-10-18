@@ -57,6 +57,8 @@ sealed interface VideoPlayerUiEvent {
         val startPositionTicks: Long = 0L,
         val subtitleStreamIndex: Int? = null,
         val audioStreamIndex: Int? = null,
+        /** "Stream instead": resolve Online even when a completed download exists. */
+        val forceStream: Boolean = false,
     ) : VideoPlayerUiEvent
 
     /** Starts playback of a picked episode at its saved position. */

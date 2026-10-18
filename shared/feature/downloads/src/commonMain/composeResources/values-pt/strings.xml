@@ -15,6 +15,7 @@
 
     <!-- Storage / counts -->
     <string name="downloads_storage_used">Armazenamento usado: %1$s</string>
+    <string name="downloads_storage_quota">%1$s de %2$s usados</string>
     <string name="downloads_on_device">· %1$s no dispositivo</string>
     <plurals name="downloads_item_count">
         <item quantity="one">%1$d item</item>
@@ -37,11 +38,14 @@
     <string name="downloads_action_move_to_front">Mover para o início</string>
     <string name="downloads_action_select_all">Selecionar tudo</string>
     <string name="downloads_action_clear_selection">Limpar seleção</string>
+    <string name="downloads_action_stream">Transmitir em vez disso</string>
     <string name="downloads_pause_all">Pausar tudo</string>
     <string name="downloads_retry_failed">Repetir todas as falhas</string>
     <string name="downloads_clear_cd">Limpar</string>
     <string name="downloads_search_cd">Pesquisar</string>
     <string name="downloads_sort_cd">Ordenar</string>
+    <string name="downloads_expand_all_cd">Expandir todas as séries</string>
+    <string name="downloads_collapse_all_cd">Recolher todas as séries</string>
     <string name="downloads_search_downloads_placeholder">Pesquisar downloads…</string>
     <string name="downloads_selection_hint">Mantenha um download pressionado para selecioná-lo e aplicar ações em massa</string>
 
@@ -69,6 +73,15 @@
     <string name="downloads_status">Estado</string>
 
     <!-- Seasons / episodes -->
+    <string name="downloads_season_n">Temporada %1$d</string>
+    <plurals name="downloads_episode_count">
+        <item quantity="one">%1$d episódio</item>
+        <item quantity="other">%1$d episódios</item>
+    </plurals>
+    <plurals name="downloads_group_progress">
+        <item quantity="one">%1$d de %2$d baixado</item>
+        <item quantity="other">%1$d de %2$d baixados</item>
+    </plurals>
 
     <!-- Library sort / filter -->
     <string name="downloads_sort_recent">Recente</string>
@@ -76,7 +89,8 @@
     <string name="downloads_sort_rating">Avaliação</string>
     <string name="downloads_sort_size">Tamanho</string>
     <string name="downloads_filter_all">Tudo</string>
-    <string name="downloads_filter_videos">Vídeos</string>
+    <string name="downloads_filter_movies">Filmes</string>
+    <string name="downloads_filter_series">Séries</string>
     <string name="downloads_filter_music">Música</string>
     <string name="downloads_filter_books">Livros</string>
     <!-- Offline download resync -->

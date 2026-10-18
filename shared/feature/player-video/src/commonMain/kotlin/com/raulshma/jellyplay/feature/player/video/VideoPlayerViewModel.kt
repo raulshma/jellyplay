@@ -543,6 +543,7 @@ class VideoPlayerViewModel(
                     startPositionTicks = event.startPositionTicks,
                     subtitleStreamIndex = event.subtitleStreamIndex,
                     audioStreamIndex = event.audioStreamIndex,
+                    forceStream = event.forceStream,
                 )
             }
             is VideoPlayerUiEvent.PlayEpisode -> {

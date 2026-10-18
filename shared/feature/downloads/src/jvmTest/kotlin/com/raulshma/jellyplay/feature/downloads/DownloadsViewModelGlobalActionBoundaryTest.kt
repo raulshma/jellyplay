@@ -2,6 +2,8 @@ package com.raulshma.jellyplay.feature.downloads
 
 import com.raulshma.jellyplay.core.data.download.DownloadQueue
 import com.raulshma.jellyplay.core.data.download.OfflineResync
+import com.raulshma.jellyplay.core.datastore.downloads.DownloadsSlice
+import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
 import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.DownloadStatus
@@ -53,6 +55,7 @@ class DownloadsViewModelGlobalActionBoundaryTest {
     private lateinit var downloadRepository: DownloadQueue
     private lateinit var offlineRepository: OfflineRepository
     private lateinit var syncManager: OfflineResync
+    private lateinit var downloadsStore: DownloadsStore
     private lateinit var viewModel: DownloadsViewModel
 
     private lateinit var downloadsFlow: MutableStateFlow<List<DownloadItem>>
@@ -70,7 +73,9 @@ class DownloadsViewModelGlobalActionBoundaryTest {
         every { syncManager.batchProgress } returns MutableStateFlow(ResyncBatchProgress())
         every { offlineRepository.getUpdatesCount() } returns MutableStateFlow(0)
         every { offlineRepository.getItemsWithUpdates() } returns MutableStateFlow(emptyList())
-        viewModel = DownloadsViewModel(downloadRepository, offlineRepository, syncManager)
+        downloadsStore = mockk(relaxed = true)
+        every { downloadsStore.downloads } returns MutableStateFlow(DownloadsSlice())
+        viewModel = DownloadsViewModel(downloadRepository, offlineRepository, syncManager, downloadsStore)
     }
 
     @AfterTest

@@ -408,6 +408,7 @@ internal fun DesktopNavScaffold(
                         startPositionTicks = key.startPositionTicks,
                         subtitleStreamIndex = key.subtitleStreamIndex,
                         audioStreamIndex = key.audioStreamIndex,
+                        forceStream = key.forceStream,
                         onBack = { guardedNavigator.goBack() },
                     )
                 }

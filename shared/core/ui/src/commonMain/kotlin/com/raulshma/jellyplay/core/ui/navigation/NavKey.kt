@@ -187,6 +187,13 @@ sealed class Route : NavKey {
         val startPositionTicks: Long = 0,
         val subtitleStreamIndex: Int? = null,
         val audioStreamIndex: Int? = null,
+        /**
+         * Resolve the session to [com.raulshma.jellyplay.feature.player.video.PlaybackSource.Online]
+         * even when a completed download exists — the "Stream instead" action
+         * on a downloaded item. Default false keeps the Auto behavior (local
+         * file wins when usable).
+         */
+        val forceStream: Boolean = false,
     ) : Route() {
         override val isFullScreen = true
         override val isPlayer = true

@@ -133,6 +133,8 @@ fun VideoPlayerScreen(
     startPositionTicks: Long,
     subtitleStreamIndex: Int? = null,
     audioStreamIndex: Int? = null,
+    /** "Stream instead": resolve Online even when a completed download exists. */
+    forceStream: Boolean = false,
     onBack: () -> Unit,
     onEnterPip: () -> Unit = {},
     onOpenSubtitleTester: () -> Unit = {},
@@ -334,7 +336,7 @@ fun VideoPlayerScreen(
     var gestureTrickplayVisible by remember { mutableStateOf(false) }
     var tvTrickplayBitmap by remember { mutableStateOf<PlatformBitmap?>(null) }
 
-    LaunchedEffect(itemId) {
+    LaunchedEffect(itemId, forceStream) {
         if (viewModel.sessionSlices.cast.isBackgroundCasting) {
             viewModel.onEvent(VideoPlayerUiEvent.ReattachFromBackgroundCast)
         } else {
@@ -345,6 +347,7 @@ fun VideoPlayerScreen(
                     startPositionTicks = startPositionTicks,
                     subtitleStreamIndex = subtitleStreamIndex,
                     audioStreamIndex = audioStreamIndex,
+                    forceStream = forceStream,
                 )
             )
         }

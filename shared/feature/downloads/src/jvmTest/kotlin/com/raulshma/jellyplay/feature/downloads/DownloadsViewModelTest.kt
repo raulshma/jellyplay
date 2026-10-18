@@ -4,9 +4,12 @@ import com.raulshma.jellyplay.core.data.download.DownloadQueue
 import com.raulshma.jellyplay.core.data.download.OfflineResync
 import com.raulshma.jellyplay.core.data.repository.DownloadProgress
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
+import com.raulshma.jellyplay.core.datastore.downloads.DownloadsSlice
+import com.raulshma.jellyplay.core.datastore.downloads.DownloadsStore
 import com.raulshma.jellyplay.core.model.DownloadItem
 import com.raulshma.jellyplay.core.model.DownloadStatus
 import com.raulshma.jellyplay.core.model.MediaType
+import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.model.OfflineSyncUpdate
 import com.raulshma.jellyplay.core.model.ResyncBatchProgress
 import com.raulshma.jellyplay.core.model.ResyncCategory
@@ -22,6 +25,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -44,6 +48,7 @@ class DownloadsViewModelTest {
     private lateinit var downloadRepository: DownloadQueue
     private lateinit var offlineRepository: OfflineRepository
     private lateinit var syncManager: OfflineResync
+    private lateinit var downloadsStore: DownloadsStore
     private lateinit var viewModel: DownloadsViewModel
 
     /** Backing flow behind getAllDownloads so tests can push list changes. */
@@ -51,6 +56,12 @@ class DownloadsViewModelTest {
 
     /** Backing flow behind getActiveDownloadProgress so tests can push ticks. */
     private lateinit var progressFlow: MutableStateFlow<Map<String, DownloadProgress>>
+
+    /** Backing flow behind the downloads preference slice (persisted list state). */
+    private lateinit var storeSliceFlow: MutableStateFlow<DownloadsSlice>
+
+    /** Backing flow behind getOfflineEpisodes (group play-target played state). */
+    private lateinit var offlineEpisodesFlow: MutableStateFlow<List<OfflineMediaItem>>
 
     @BeforeTest
     fun setUp() {
@@ -60,6 +71,8 @@ class DownloadsViewModelTest {
         syncManager = mockk<OfflineResync>(relaxed = true)
         downloadsFlow = MutableStateFlow(emptyList())
         progressFlow = MutableStateFlow(emptyMap())
+        storeSliceFlow = MutableStateFlow(DownloadsSlice())
+        offlineEpisodesFlow = MutableStateFlow(emptyList())
         every { downloadRepository.getAllDownloads() } returns downloadsFlow
         // The JVM queue seam is supported in production; the VM only emits
         // success messages when the seam says deletions are real.
@@ -73,7 +86,10 @@ class DownloadsViewModelTest {
         // Flow-returning repo reads are non-suspend → `every` as well.
         every { offlineRepository.getUpdatesCount() } returns MutableStateFlow(0)
         every { offlineRepository.getItemsWithUpdates() } returns MutableStateFlow(emptyList())
-        viewModel = DownloadsViewModel(downloadRepository, offlineRepository, syncManager)
+        every { offlineRepository.getOfflineEpisodes() } returns offlineEpisodesFlow
+        downloadsStore = mockk(relaxed = true)
+        every { downloadsStore.downloads } returns storeSliceFlow
+        viewModel = DownloadsViewModel(downloadRepository, offlineRepository, syncManager, downloadsStore)
     }
 
     @AfterTest
@@ -160,7 +176,7 @@ class DownloadsViewModelTest {
         every { downloadRepository.getAllDownloads() } returns kotlinx.coroutines.flow.flow {
             throw RuntimeException(null as String?)
         }
-        val failingViewModel = DownloadsViewModel(downloadRepository, offlineRepository, syncManager)
+        val failingViewModel = DownloadsViewModel(downloadRepository, offlineRepository, syncManager, downloadsStore)
         advanceUntilIdle()
 
         // Throwable.message == null must hit the fallback literal (kept
@@ -322,6 +338,243 @@ class DownloadsViewModelTest {
         viewModel.clearSelection()
         assertEquals(emptySet(), viewModel.uiState.value.selectedIds)
         assertFalse(viewModel.uiState.value.selectionMode)
+    }
+
+    // ── Grouped rows (gh-175) ─────────────────────────────────────────────
+    // rows hops to Dispatchers.Default and back (a real thread) like the
+    // OfflineLibrary pipeline — the virtual scheduler can't see the returning
+    // continuation, so assert via the same real-time poll idiom.
+
+    private fun TestScope.awaitRows(expectedKeys: List<String>) {
+        val deadline = System.currentTimeMillis() + 5_000
+        // rows is null until the first (off-Main) derivation lands — orEmpty
+        // keeps the poll honest during that window.
+        while (viewModel.rows.value.orEmpty().map { it.key } != expectedKeys &&
+            System.currentTimeMillis() < deadline
+        ) {
+            advanceUntilIdle()
+            Thread.sleep(10)
+        }
+        advanceUntilIdle()
+        assertEquals(expectedKeys, viewModel.rows.value.orEmpty().map { it.key })
+    }
+
+    @Test
+    fun rows_group_episodes_collapsed_with_flat_rows_interleaved_by_recency() = runTest(mainDispatcher) {
+        backgroundScope.launch { viewModel.rows.collect {} }
+        pushItems(
+            listOf(
+                item("ep2", mediaType = MediaType.EPISODE, seriesId = "s1", seriesName = "Show", seasonNumber = 1, episodeNumber = 2),
+                item("movie"),
+                item("ep1", mediaType = MediaType.EPISODE, seriesId = "s1", seriesName = "Show", seasonNumber = 1, episodeNumber = 1),
+            ),
+        )
+        advanceUntilIdle()
+
+        // The group takes its newest episode's slot (idx 0), collapsed by default.
+        awaitRows(listOf("series:s1", "download:movie"))
+    }
+
+    @Test
+    fun expanding_a_series_discloses_episodes_in_playback_order() = runTest(mainDispatcher) {
+        backgroundScope.launch { viewModel.rows.collect {} }
+        pushItems(
+            listOf(
+                item("ep8", mediaType = MediaType.EPISODE, seriesId = "s1", seriesName = "Show", seasonNumber = 1, episodeNumber = 8),
+                item("ep2", mediaType = MediaType.EPISODE, seriesId = "s1", seriesName = "Show", seasonNumber = 1, episodeNumber = 2),
+            ),
+        )
+        advanceUntilIdle()
+
+        // Downloaded E08 before E02 — E02 still displays first.
+        viewModel.toggleExpanded("series:s1")
+        awaitRows(listOf("series:s1", "download:ep2", "download:ep8"))
+
+        viewModel.toggleExpanded("series:s1")
+        awaitRows(listOf("series:s1"))
+    }
+
+    @Test
+    fun filter_and_sort_drive_the_rows_view() = runTest(mainDispatcher) {
+        backgroundScope.launch { viewModel.rows.collect {} }
+        pushItems(
+            listOf(
+                item("z1", mediaType = MediaType.EPISODE, seriesId = "sZ", seriesName = "Zeta", seasonNumber = 1, episodeNumber = 1),
+                item("a"),
+            ),
+        )
+        advanceUntilIdle()
+
+        viewModel.setFilter(DownloadListFilter.SERIES)
+        awaitRows(listOf("series:sZ"))
+
+        viewModel.setFilter(DownloadListFilter.MOVIES)
+        awaitRows(listOf("download:a"))
+
+        viewModel.setFilter(DownloadListFilter.ALL)
+        viewModel.setSort(DownloadListSort.NAME)
+        awaitRows(listOf("download:a", "series:sZ"))
+    }
+
+    @Test
+    fun selectAll_respects_the_active_filter() = runTest(mainDispatcher) {
+        pushItems(
+            listOf(
+                item("ep", mediaType = MediaType.EPISODE, seriesId = "s1", seriesName = "Show", seasonNumber = 1, episodeNumber = 1),
+                item("movie"),
+            ),
+        )
+        advanceUntilIdle()
+
+        viewModel.setFilter(DownloadListFilter.SERIES)
+        viewModel.selectAll()
+        assertEquals(setOf("ep"), viewModel.uiState.value.selectedIds)
+
+        viewModel.setFilter(DownloadListFilter.MOVIES)
+        viewModel.selectAll()
+        assertEquals(setOf("movie"), viewModel.uiState.value.selectedIds)
+
+        viewModel.setFilter(DownloadListFilter.ALL)
+        viewModel.selectAll()
+        assertEquals(setOf("ep", "movie"), viewModel.uiState.value.selectedIds)
+    }
+
+    @Test
+    fun toggleGroupSelection_selects_then_clears_the_whole_group() = runTest(mainDispatcher) {
+        pushItems(
+            listOf(
+                item("ep1", mediaType = MediaType.EPISODE, seriesId = "s1", seriesName = "Show", seasonNumber = 1, episodeNumber = 1),
+                item("ep2", mediaType = MediaType.EPISODE, seriesId = "s1", seriesName = "Show", seasonNumber = 1, episodeNumber = 2),
+            ),
+        )
+        advanceUntilIdle()
+
+        viewModel.toggleGroupSelection(listOf("ep1", "ep2"))
+        assertEquals(setOf("ep1", "ep2"), viewModel.uiState.value.selectedIds)
+        assertTrue(viewModel.uiState.value.selectionMode)
+
+        viewModel.toggleGroupSelection(listOf("ep1", "ep2"))
+        assertEquals(emptySet(), viewModel.uiState.value.selectedIds)
+    }
+
+    // ── Persisted list state + expand-all (gh-175 follow-up) ──────────────
+
+    @Test
+    fun setFilter_and_setSort_write_through_to_the_store() = runTest(mainDispatcher) {
+        viewModel.setFilter(DownloadListFilter.SERIES)
+        viewModel.setSort(DownloadListSort.NAME)
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { downloadsStore.setDownloadsListFilter("SERIES") }
+        coVerify(exactly = 1) { downloadsStore.setDownloadsListSort("NAME") }
+        assertEquals(DownloadListFilter.SERIES, viewModel.filter.value)
+        assertEquals(DownloadListSort.NAME, viewModel.sort.value)
+    }
+
+    @Test
+    fun persisted_slice_seeds_the_initial_filter_and_sort() = runTest(mainDispatcher) {
+        storeSliceFlow.value = DownloadsSlice(downloadsListFilter = "SERIES", downloadsListSort = "SIZE")
+        val seeded = DownloadsViewModel(downloadRepository, offlineRepository, syncManager, downloadsStore)
+        advanceUntilIdle()
+
+        assertEquals(DownloadListFilter.SERIES, seeded.filter.value)
+        assertEquals(DownloadListSort.SIZE, seeded.sort.value)
+    }
+
+    @Test
+    fun expandAll_expands_every_group_and_collapseAll_clears() = runTest(mainDispatcher) {
+        backgroundScope.launch { viewModel.rows.collect {} }
+        pushItems(
+            listOf(
+                item("s1e1", mediaType = MediaType.EPISODE, seriesId = "s1", seriesName = "Show A", seasonNumber = 1, episodeNumber = 1),
+                item("s2e1", mediaType = MediaType.EPISODE, seriesId = "s1", seriesName = "Show A", seasonNumber = 2, episodeNumber = 1),
+                item("sBe1", mediaType = MediaType.EPISODE, seriesId = "sB", seriesName = "Show B", seasonNumber = 1, episodeNumber = 1),
+            ),
+        )
+        advanceUntilIdle()
+
+        // Everything expanded: the multi-season series discloses its season
+        // headers AND their episodes; the single-season one lists directly.
+        viewModel.expandAll()
+        awaitRows(
+            listOf(
+                "series:s1",
+                "series:s1/season/number:1",
+                "download:s1e1",
+                "series:s1/season/number:2",
+                "download:s2e1",
+                "series:sB",
+                "download:sBe1",
+            ),
+        )
+        val expanded = viewModel.expandedKeys.value
+        assertTrue("series:s1" in expanded)
+        assertTrue("series:sB" in expanded)
+        assertTrue(expanded.any { it.startsWith("series:s1/season/") })
+
+        viewModel.collapseAll()
+        awaitRows(listOf("series:s1", "series:sB"))
+        assertEquals(emptySet(), viewModel.expandedKeys.value)
+    }
+
+    @Test
+    fun resolveGroupPlayTarget_skips_watched_episodes_and_falls_back_to_first() = runTest(mainDispatcher) {
+        // Only COMPLETED rows are playable (the row-level Play gate), so the
+        // fixture uses completed episodes throughout.
+        pushItems(
+            listOf(
+                item("e1", mediaType = MediaType.EPISODE, seriesId = "s1", seriesName = "Show", seasonNumber = 1, episodeNumber = 1, status = DownloadStatus.COMPLETED),
+                item("e2", mediaType = MediaType.EPISODE, seriesId = "s1", seriesName = "Show", seasonNumber = 1, episodeNumber = 2, status = DownloadStatus.COMPLETED),
+                item("e3", mediaType = MediaType.EPISODE, seriesId = "s1", seriesName = "Show", seasonNumber = 1, episodeNumber = 3, status = DownloadStatus.COMPLETED),
+            ),
+        )
+        // e1 watched outright; e2 at 96% of its runtime (≥ threshold → watched).
+        offlineEpisodesFlow.value = listOf(
+            episodeRow("e1", isPlayed = true),
+            episodeRow("e2", positionTicks = 96, runTimeTicks = 100),
+        )
+        advanceUntilIdle()
+
+        val target = viewModel.resolveGroupPlayTarget(listOf("e1", "e2", "e3"))
+        assertEquals("e3", target?.id)
+
+        // Everything watched → the first episode in playback order.
+        offlineEpisodesFlow.value = listOf(
+            episodeRow("e1", isPlayed = true),
+            episodeRow("e2", positionTicks = 96, runTimeTicks = 100),
+            episodeRow("e3", isPlayed = true),
+        )
+        val fallback = viewModel.resolveGroupPlayTarget(listOf("e1", "e2", "e3"))
+        assertEquals("e1", fallback?.id)
+    }
+
+    @Test
+    fun resolveGroupPlayTarget_is_null_when_no_episode_is_completed() = runTest(mainDispatcher) {
+        // A group with nothing finished has no playable target — the header
+        // Play click is a no-op rather than attempting an offline play of a
+        // file that isn't on disk.
+        pushItems(
+            listOf(
+                item("e1", mediaType = MediaType.EPISODE, seriesId = "s1", seriesName = "Show", seasonNumber = 1, episodeNumber = 1, status = DownloadStatus.QUEUED),
+                item("e2", mediaType = MediaType.EPISODE, seriesId = "s1", seriesName = "Show", seasonNumber = 1, episodeNumber = 2, status = DownloadStatus.DOWNLOADING),
+            ),
+        )
+        advanceUntilIdle()
+
+        assertNull(viewModel.resolveGroupPlayTarget(listOf("e1", "e2")))
+    }
+
+    @Test
+    fun maxStorageBytes_maps_gb_cap_to_bytes_and_null_means_unlimited() = runTest(mainDispatcher) {
+        backgroundScope.launch { viewModel.maxStorageBytes.collect {} }
+
+        storeSliceFlow.value = DownloadsSlice(maxDownloadStorageGb = 0)
+        advanceUntilIdle()
+        assertNull(viewModel.maxStorageBytes.value)
+
+        storeSliceFlow.value = DownloadsSlice(maxDownloadStorageGb = 10)
+        advanceUntilIdle()
+        assertEquals(10L * 1024 * 1024 * 1024, viewModel.maxStorageBytes.value)
     }
 
     // ── Bulk actions (status-filtered targets) ────────────────────────────
@@ -594,21 +847,39 @@ class DownloadsViewModelTest {
         seriesName: String? = null,
         seasonNumber: Int? = null,
         episodeNumber: Int? = null,
+        mediaType: MediaType = MediaType.MOVIE,
+        seriesId: String? = null,
     ) = DownloadItem(
         id = id,
         mediaItemId = mediaItemId,
         name = "Item $id",
-        mediaType = MediaType.MOVIE,
+        mediaType = mediaType,
         downloadPath = "/data/$id",
         downloadUrl = "https://server/$id",
         totalSizeBytes = totalBytes,
         downloadedBytes = downloadedBytes,
         status = status,
         priority = priority,
+        seriesId = seriesId,
         seriesName = seriesName,
         seasonNumber = seasonNumber,
         episodeNumber = episodeNumber,
     )
 
     private fun update(id: String) = OfflineSyncUpdate(id = id, name = "Update $id", mediaFileChanged = false)
+
+    /** An offline episode row for the group play-target's played-state read. */
+    private fun episodeRow(
+        mediaItemId: String,
+        isPlayed: Boolean = false,
+        positionTicks: Long? = null,
+        runTimeTicks: Long? = null,
+    ) = OfflineMediaItem(
+        id = mediaItemId,
+        name = "Episode $mediaItemId",
+        mediaType = MediaType.EPISODE,
+        isPlayed = isPlayed,
+        playbackPositionTicks = positionTicks,
+        runTimeTicks = runTimeTicks,
+    )
 }

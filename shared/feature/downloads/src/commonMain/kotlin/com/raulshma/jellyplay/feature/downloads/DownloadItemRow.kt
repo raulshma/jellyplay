@@ -5,6 +5,7 @@ import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.designsystem.theme.StatusColors
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.Arrangement
@@ -58,12 +59,14 @@ import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_ac
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_action_play
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_action_resume
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_action_retry
+import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_action_stream
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_selection_hint
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_status_cancelled
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_status_failed
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_status_paused
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_status_queued
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_status_waiting
+import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_storage_quota
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_storage_used
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -85,6 +88,12 @@ internal fun DownloadItemRow(
     hasUpdate: Boolean = false,
     onOpenDetail: () -> Unit,
     onPlay: () -> Unit,
+    /**
+     * Stream-instead action for completed downloads while online — plays the
+     * server copy instead of the local file. Null hides the action (offline,
+     * or a non-completed row).
+     */
+    onStream: (() -> Unit)? = null,
     onCancel: () -> Unit,
     onPause: () -> Unit,
     onResume: () -> Unit,
@@ -370,6 +379,14 @@ internal fun DownloadItemRow(
                             tint = MaterialTheme.colorScheme.primary,
                             onClick = onPlay,
                         )
+                        if (onStream != null) {
+                            DownloadActionButton(
+                                icon = Tabler.Outline.World,
+                                contentDescription = stringResource(Res.string.downloads_action_stream),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                onClick = onStream,
+                            )
+                        }
                         DownloadActionButton(
                             icon = Tabler.Outline.Trash,
                             contentDescription = stringResource(Res.string.downloads_action_delete),
@@ -377,7 +394,11 @@ internal fun DownloadItemRow(
                             onClick = onDelete,
                         )
                     }
-                    else -> {}
+                    DownloadStatus.CANCELLED -> {
+                        // A cancelled row's artifacts are already gone; the only
+                        // meaningful action is delete, which the swipe gesture
+                        // and selection mode still reach.
+                    }
                 }
             }
         }
@@ -411,23 +432,69 @@ private fun DownloadActionButton(
  * "Storage used" header line, as a narrow binder (VideoPlayerScreen's
  * ChapterPickerBinder pattern): the total rides the live download-progress
  * tick — bytes accumulate mid-transfer — so the StateFlow is collected
- * INSIDE this leaf. Only this Text recomposes per tick; the downloads screen
+ * INSIDE this leaf. Only this header recomposes per tick; the downloads screen
  * body that hosts it does not.
+ *
+ * When a download storage cap is set ([maxStorageBytes] non-null — the same
+ * value [com.raulshma.jellyplay.core.data.repository.StoragePolicy] enforces),
+ * a slim quota bar renders under the text: fill turns warning-colored at 90%
+ * and error-colored at the cap, and the whole row is clickable into the
+ * storage settings screen where the cap is adjustable.
  */
 @Composable
 internal fun DownloadsStorageUsedText(
     totalStorageBytes: StateFlow<Long>,
+    maxStorageBytes: StateFlow<Long?>,
     formatBytes: (Long) -> String,
     horizontalPadding: Dp,
+    onOpenStorageSettings: (() -> Unit)? = null,
 ) {
     val totalStorage by totalStorageBytes.collectAsStateWithLifecycle()
+    val maxStorage by maxStorageBytes.collectAsStateWithLifecycle()
     if (totalStorage > 0) {
-        Text(
-            stringResource(Res.string.downloads_storage_used, formatBytes(totalStorage)),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        Column(
             modifier = Modifier.padding(start = horizontalPadding, end = horizontalPadding, bottom = 8.dp),
-        )
+        ) {
+            Text(
+                stringResource(Res.string.downloads_storage_used, formatBytes(totalStorage)),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            val maxBytes = maxStorage
+            if (maxBytes != null && maxBytes > 0) {
+                val fraction = (totalStorage.toFloat() / maxBytes.toFloat()).coerceIn(0f, 1f)
+                val quotaColor = when {
+                    fraction >= 1f -> MaterialTheme.colorScheme.error
+                    fraction >= 0.9f -> MaterialTheme.colorScheme.tertiary
+                    else -> MaterialTheme.colorScheme.primary
+                }
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .then(
+                            if (onOpenStorageSettings != null) {
+                                Modifier.clickable(onClick = onOpenStorageSettings)
+                            } else {
+                                Modifier
+                            },
+                        )
+                        .padding(top = 4.dp),
+                ) {
+                    JellyPlayLinearProgressIndicator(
+                        progress = { fraction },
+                        color = quotaColor,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Text(
+                        stringResource(Res.string.downloads_storage_quota, formatBytes(totalStorage), formatBytes(maxBytes)),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
     }
 }
 
