@@ -39,6 +39,7 @@
     <string name="downloads_action_select_all">Selecionar tudo</string>
     <string name="downloads_action_clear_selection">Limpar seleção</string>
     <string name="downloads_action_stream">Transmitir em vez disso</string>
+    <string name="downloads_action_more_cd">Mais ações</string>
     <string name="downloads_pause_all">Pausar tudo</string>
     <string name="downloads_retry_failed">Repetir todas as falhas</string>
     <string name="downloads_clear_cd">Limpar</string>

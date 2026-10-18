@@ -20,6 +20,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -30,6 +32,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -54,6 +59,7 @@ import com.raulshma.jellyplay.feature.downloads.generated.resources.Res
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_action_cancel
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_action_delete
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_action_lower_priority
+import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_action_more_cd
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_action_move_to_front
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_action_pause
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_action_play
@@ -133,6 +139,11 @@ internal fun DownloadItemRow(
                 },
                 onLongClick = onToggleSelection,
             ),
+        // Match the SwipeActionBox clip (ShapeCache.smooth12): with the larger
+        // inherited shapes.medium the card recedes from the wrapper's rounded
+        // corners and the always-painted errorContainer swipe background peeks
+        // through as thin red crescents on the edges.
+        shape = ShapeCache.smooth12,
         colors = CardDefaults.elevatedCardColors(
             containerColor = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerLow,
         ),
@@ -229,17 +240,39 @@ internal fun DownloadItemRow(
                             modifier = Modifier.fillMaxWidth(),
                         )
                         Spacer(Modifier.height(2.dp))
-                        val sizeText = "${formatBytes(downloadedBytes)} / ${formatBytes(item.totalSizeBytes.coerceAtLeast(1))}"
-                        val speedText = formatSpeed(speedBytesPerSec)
-                        val etaText = formatEta(downloadedBytes, item.totalSizeBytes, speedBytesPerSec)
+                        // Two deterministic lines instead of one free-wrapping
+                        // string — size, then speed · ETA — so wraps land
+                        // between segments, never mid-segment with a dangling
+                        // "·". A server that never reports a total renders the
+                        // downloaded bytes alone (no bogus "/ 1 B") and simply
+                        // has no ETA; each line ellipsizes its own tail rather
+                        // than wrapping the row taller.
                         Text(
-                            buildString {
-                                append(sizeText)
-                                if (speedText.isNotEmpty()) append(" · $speedText")
-                                if (etaText.isNotEmpty()) append(" · $etaText")
+                            if (item.totalSizeBytes > 0) {
+                                "${formatBytes(downloadedBytes)} / ${formatBytes(item.totalSizeBytes)}"
+                            } else {
+                                formatBytes(downloadedBytes)
                             },
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            buildString {
+                                val speedText = formatSpeed(speedBytesPerSec)
+                                val etaText = formatEta(downloadedBytes, item.totalSizeBytes, speedBytesPerSec)
+                                if (speedText.isNotEmpty()) append(speedText)
+                                if (etaText.isNotEmpty()) {
+                                    if (isNotEmpty()) append(" · ")
+                                    append(etaText)
+                                }
+                            },
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                         )
                     }
                     DownloadStatus.QUEUED -> {
@@ -299,105 +332,103 @@ internal fun DownloadItemRow(
             }
 
             // Per-row actions are hidden while selecting — bulk controls live
-            // in the bottom action bar instead (matches ArrQueueScreen).
+            // in the bottom action bar instead (matches ArrQueueScreen). Every
+            // status' buttons render as one tight cluster: no extra Row
+            // spacing — adjacent compact IconButtons already separate via
+            // their intrinsic padding.
             if (!selectionMode) {
-                when (item.status) {
-                    DownloadStatus.DOWNLOADING -> {
-                        DownloadActionButton(
-                            icon = Tabler.Outline.ArrowDown,
-                            contentDescription = stringResource(Res.string.downloads_action_lower_priority),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            onClick = onLowerPriority,
-                        )
-                        DownloadActionButton(
-                            icon = Tabler.Outline.PlayerPause,
-                            contentDescription = stringResource(Res.string.downloads_action_pause),
-                            tint = MaterialTheme.colorScheme.primary,
-                            onClick = onPause,
-                        )
-                        DownloadActionButton(
-                            icon = Tabler.Outline.Trash,
-                            contentDescription = stringResource(Res.string.downloads_action_cancel),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            onClick = onCancel,
-                        )
-                    }
-                    DownloadStatus.PENDING -> {
-                        DownloadActionButton(
-                            icon = Tabler.Outline.ArrowUp,
-                            contentDescription = stringResource(Res.string.downloads_action_move_to_front),
-                            tint = MaterialTheme.colorScheme.primary,
-                            onClick = onMoveToFront,
-                        )
-                        DownloadActionButton(
-                            icon = Tabler.Outline.Trash,
-                            contentDescription = stringResource(Res.string.downloads_action_cancel),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            onClick = onCancel,
-                        )
-                    }
-                    DownloadStatus.QUEUED -> {
-                        DownloadActionButton(
-                            icon = Tabler.Outline.ArrowUp,
-                            contentDescription = stringResource(Res.string.downloads_action_move_to_front),
-                            tint = MaterialTheme.colorScheme.primary,
-                            onClick = onMoveToFront,
-                        )
-                        DownloadActionButton(
-                            icon = Tabler.Outline.Trash,
-                            contentDescription = stringResource(Res.string.downloads_action_cancel),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            onClick = onCancel,
-                        )
-                    }
-                    DownloadStatus.PAUSED -> {
-                        DownloadActionButton(
-                            icon = Tabler.Outline.PlayerPlay,
-                            contentDescription = stringResource(Res.string.downloads_action_resume),
-                            tint = MaterialTheme.colorScheme.primary,
-                            onClick = onResume,
-                        )
-                        DownloadActionButton(
-                            icon = Tabler.Outline.Trash,
-                            contentDescription = stringResource(Res.string.downloads_action_cancel),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            onClick = onCancel,
-                        )
-                    }
-                    DownloadStatus.FAILED -> {
-                        DownloadActionButton(
-                            icon = Tabler.Outline.Refresh,
-                            contentDescription = stringResource(Res.string.downloads_action_retry),
-                            tint = MaterialTheme.colorScheme.primary,
-                            onClick = onRetry,
-                        )
-                    }
-                    DownloadStatus.COMPLETED -> {
-                        DownloadActionButton(
-                            icon = Tabler.Outline.PlayerPlay,
-                            contentDescription = stringResource(Res.string.downloads_action_play),
-                            tint = MaterialTheme.colorScheme.primary,
-                            onClick = onPlay,
-                        )
-                        if (onStream != null) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    when (item.status) {
+                        DownloadStatus.DOWNLOADING -> {
                             DownloadActionButton(
-                                icon = Tabler.Outline.World,
-                                contentDescription = stringResource(Res.string.downloads_action_stream),
+                                icon = Tabler.Outline.ArrowDown,
+                                contentDescription = stringResource(Res.string.downloads_action_lower_priority),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                onClick = onStream,
+                                onClick = onLowerPriority,
+                            )
+                            DownloadActionButton(
+                                icon = Tabler.Outline.PlayerPause,
+                                contentDescription = stringResource(Res.string.downloads_action_pause),
+                                tint = MaterialTheme.colorScheme.primary,
+                                onClick = onPause,
+                            )
+                            DownloadActionButton(
+                                icon = Tabler.Outline.Trash,
+                                contentDescription = stringResource(Res.string.downloads_action_cancel),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                onClick = onCancel,
                             )
                         }
-                        DownloadActionButton(
-                            icon = Tabler.Outline.Trash,
-                            contentDescription = stringResource(Res.string.downloads_action_delete),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            onClick = onDelete,
-                        )
-                    }
-                    DownloadStatus.CANCELLED -> {
-                        // A cancelled row's artifacts are already gone; the only
-                        // meaningful action is delete, which the swipe gesture
-                        // and selection mode still reach.
+                        DownloadStatus.PENDING -> {
+                            DownloadActionButton(
+                                icon = Tabler.Outline.ArrowUp,
+                                contentDescription = stringResource(Res.string.downloads_action_move_to_front),
+                                tint = MaterialTheme.colorScheme.primary,
+                                onClick = onMoveToFront,
+                            )
+                            DownloadActionButton(
+                                icon = Tabler.Outline.Trash,
+                                contentDescription = stringResource(Res.string.downloads_action_cancel),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                onClick = onCancel,
+                            )
+                        }
+                        DownloadStatus.QUEUED -> {
+                            DownloadActionButton(
+                                icon = Tabler.Outline.ArrowUp,
+                                contentDescription = stringResource(Res.string.downloads_action_move_to_front),
+                                tint = MaterialTheme.colorScheme.primary,
+                                onClick = onMoveToFront,
+                            )
+                            DownloadActionButton(
+                                icon = Tabler.Outline.Trash,
+                                contentDescription = stringResource(Res.string.downloads_action_cancel),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                onClick = onCancel,
+                            )
+                        }
+                        DownloadStatus.PAUSED -> {
+                            DownloadActionButton(
+                                icon = Tabler.Outline.PlayerPlay,
+                                contentDescription = stringResource(Res.string.downloads_action_resume),
+                                tint = MaterialTheme.colorScheme.primary,
+                                onClick = onResume,
+                            )
+                            DownloadActionButton(
+                                icon = Tabler.Outline.Trash,
+                                contentDescription = stringResource(Res.string.downloads_action_cancel),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                onClick = onCancel,
+                            )
+                        }
+                        DownloadStatus.FAILED -> {
+                            DownloadActionButton(
+                                icon = Tabler.Outline.Refresh,
+                                contentDescription = stringResource(Res.string.downloads_action_retry),
+                                tint = MaterialTheme.colorScheme.primary,
+                                onClick = onRetry,
+                            )
+                        }
+                        DownloadStatus.COMPLETED -> {
+                            // Play + stream live in an overflow menu so the row
+                            // keeps only two inline actions; stream hides while
+                            // offline.
+                            CompletedRowOverflowMenu(
+                                onPlay = onPlay,
+                                onStream = onStream,
+                            )
+                            DownloadActionButton(
+                                icon = Tabler.Outline.Trash,
+                                contentDescription = stringResource(Res.string.downloads_action_delete),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                onClick = onDelete,
+                            )
+                        }
+                        DownloadStatus.CANCELLED -> {
+                            // A cancelled row's artifacts are already gone; the
+                            // only meaningful action is delete, which the swipe
+                            // gesture and selection mode still reach.
+                        }
                     }
                 }
             }
@@ -405,6 +436,12 @@ internal fun DownloadItemRow(
     }
 }
 
+/**
+ * A row's inline action button — compact (32dp box, 18dp icon, TrackRow's
+ * row-menu pattern) so up to three of them don't starve the text column on a
+ * phone. The reduced touch target matches the music row precedent; TV focus
+ * still rings via [tvFocusIndicator].
+ */
 @Composable
 private fun DownloadActionButton(
     icon: ImageVector,
@@ -418,11 +455,63 @@ private fun DownloadActionButton(
             .then(focusState.focusModifier)
             .tvFocusIndicator(focusState, ShapeCache.smooth10),
     ) {
-        IconButton(onClick = onClick) {
+        IconButton(
+            onClick = onClick,
+            modifier = Modifier.size(32.dp),
+        ) {
             Icon(
                 icon,
                 contentDescription,
                 tint = tint,
+                modifier = Modifier.size(18.dp),
+            )
+        }
+    }
+}
+
+/**
+ * A completed download row's overflow menu — play, and stream-instead while
+ * online. The anchor reuses [DownloadActionButton] (DotsVertical) so it
+ * matches the delete button beside it in size and TV focus; the stream entry
+ * is dropped when [onStream] is null (offline or non-completed row).
+ */
+@Composable
+private fun CompletedRowOverflowMenu(
+    onPlay: () -> Unit,
+    onStream: (() -> Unit)?,
+) {
+    var menuExpanded by remember { mutableStateOf(false) }
+    DownloadActionButton(
+        icon = Tabler.Outline.DotsVertical,
+        contentDescription = stringResource(Res.string.downloads_action_more_cd),
+        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        onClick = { menuExpanded = true },
+    )
+    DropdownMenu(
+        expanded = menuExpanded,
+        onDismissRequest = { menuExpanded = false },
+    ) {
+        DropdownMenuItem(
+            text = { Text(stringResource(Res.string.downloads_action_play)) },
+            leadingIcon = {
+                Icon(Tabler.Outline.PlayerPlay, contentDescription = null, modifier = Modifier.size(18.dp))
+            },
+            onClick = {
+                menuExpanded = false
+                onPlay()
+            },
+        )
+        val streamAction = onStream
+        if (streamAction != null) {
+            DropdownMenuItem(
+                text = { Text(stringResource(Res.string.downloads_action_stream)) },
+                leadingIcon = {
+                    Icon(Tabler.Outline.World, contentDescription = null, modifier = Modifier.size(18.dp))
+                },
+                onClick = {
+                    menuExpanded = false
+                    streamAction()
+                },
             )
         }
     }
