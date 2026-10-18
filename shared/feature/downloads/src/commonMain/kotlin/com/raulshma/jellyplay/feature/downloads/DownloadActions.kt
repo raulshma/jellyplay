@@ -32,9 +32,11 @@ sealed interface DownloadActionScope {
 
 /**
  * Pure write-algebra for [DownloadBulkAction]: the admission table (which
- * [DownloadStatus] values an action may act on) and the target fold
- * (which concrete items a scope admits). Derived verbatim from the former
- * hand-written filter lambdas in [DownloadsViewModel] — no new semantics:
+ * [DownloadStatus] values an action may act on), the target fold (which
+ * concrete items a scope admits), the per-item availability fold the row
+ * renderer consumes, and the COMPLETED-is-playable fold. Derived verbatim
+ * from the former hand-written filter lambdas in [DownloadsViewModel] and the
+ * row's former per-status button encoding — no new semantics:
  *
  *  - PAUSE        admits DOWNLOADING;
  *  - RESUME       admits PAUSED;
@@ -43,7 +45,8 @@ sealed interface DownloadActionScope {
  *  - DELETE       admits every status (a delete frees disk regardless).
  *
  * The VM dispatches exactly what [targets] returns; the screen enables a
- * control exactly when [supports] is true, so neither re-encodes the table.
+ * control exactly when [supports] is true; the row renders exactly what
+ * [availableActions] admits — so neither re-encodes the table.
  */
 object DownloadActions {
 
@@ -60,6 +63,30 @@ object DownloadActions {
         DownloadBulkAction.RETRY_FAILED to setOf(DownloadStatus.FAILED),
         DownloadBulkAction.DELETE to null,
     )
+
+    /**
+     * The actions the admission table admits for [item], in declaration order
+     * — the single source the row renderer consults for which actions EXIST
+     * for a status. Per-status placement (which slot a button renders in,
+     * icon, order) stays row code keyed on this set; only the admission is
+     * module-owned, so a table change re-dresses rows without touching them.
+     */
+    fun availableActions(item: DownloadItem): List<DownloadBulkAction> =
+        DownloadBulkAction.entries.filter { action ->
+            admittingStatuses.getValue(action)?.let { item.status in it } ?: true
+        }
+
+    /**
+     * The COMPLETED-is-playable fold: a download backs offline playback only
+     * once its artifact set is complete — the gate the row's tap-to-detail and
+     * Play actions, the stream-instead offer, and the group header's play
+     * target all previously restated as raw `status == COMPLETED` checks.
+     * Connectivity is deliberately NOT part of this fold: streaming-instead is
+     * a presentation concern (the row's stream entry drops while offline) and
+     * the gate stays at the call site — only the COMPLETED half is module
+     * vocabulary.
+     */
+    fun isPlayable(item: DownloadItem): Boolean = item.status == DownloadStatus.COMPLETED
 
     /**
      * True when [targets] is non-empty — the screen's "never offer a no-op"

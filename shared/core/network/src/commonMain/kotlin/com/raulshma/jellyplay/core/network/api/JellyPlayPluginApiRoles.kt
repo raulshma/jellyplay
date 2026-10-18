@@ -1,5 +1,8 @@
 package com.raulshma.jellyplay.core.network.api
 
+import com.raulshma.jellyplay.core.model.JellyPlayEpisodeMarker
+import com.raulshma.jellyplay.core.model.JellyPlayEpisodeScore
+import com.raulshma.jellyplay.core.model.JellyPlayPluginRating
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -241,31 +244,42 @@ interface JellyPlaySeerrRoutes {
  * The ratings role — the `ratings` feature family (`jellyplay/mdblist/…`,
  * `jellyplay/tmdb/seasonRatings`). Main consumer: the detail screen's plugin
  * enrichments (the mdblist chips row and the per-season TMDB episode scores).
+ * Returns the core:model projections ([JellyPlayPluginRating],
+ * [JellyPlayEpisodeScore]) — the wire DTOs stop at the impl (the
+ * JellyPlayDtoMappers convention).
  */
 interface JellyPlayRatingsRoutes {
-    /** null = MDBList unconfigured or no data for the id (plugin 404). */
-    suspend fun getMdbListRatings(imdbId: String): Result<JellyPlayRatingsResult?>
+    /**
+     * null = MDBList unconfigured or no data for the id (plugin 404). The
+     * entries map field-for-field (scoreless ones ride along) — dropping them
+     * is the detail feature's presentation rule, not this role's.
+     */
+    suspend fun getMdbListRatings(imdbId: String): Result<List<JellyPlayPluginRating>?>
 
-    suspend fun getTmdbSeasonRatings(tmdbId: String, seasonNumber: Int): Result<Map<Int, JellyPlayEpisodeRatings>?>
+    suspend fun getTmdbSeasonRatings(tmdbId: String, seasonNumber: Int): Result<Map<Int, JellyPlayEpisodeScore>?>
 }
 
 /**
  * The recommendations role — `jellyplay/items/{id}/similar` (the plugin's
  * server-scored similar-items row). Main consumer: the detail screen's
- * "More like this" plugin enrichment.
+ * "More like this" plugin enrichment. Returns the scored item ids in the
+ * plugin's serve order — the only wire field the client consumes (each id is
+ * hydrated through the local detail read; the score/name fields ride the DTO
+ * verbatim and stop at the impl).
  */
 interface JellyPlayRecommendationsRoutes {
-    suspend fun getJellyPlaySimilarItems(itemId: String, limit: Int = 12): Result<List<JellyPlayScoredItem>>
+    suspend fun getJellyPlaySimilarItems(itemId: String, limit: Int = 12): Result<List<String>>
 }
 
 /**
  * The anime-markers role — `jellyplay/animemarkers/…` (series-level
  * filler/recap markers). Main consumer: the detail screen's seasons section
- * badges.
+ * badges. Returns the core:model marker projections in the wire's list order —
+ * the wrapper's series/provider-id echoes stop at the impl.
  */
 interface JellyPlayMarkersRoutes {
     /** null = no markers cached for the series (plugin 404). */
-    suspend fun getAnimeMarkers(seriesId: String, providerSeriesId: String): Result<JellyPlaySeriesMarkers?>
+    suspend fun getAnimeMarkers(seriesId: String, providerSeriesId: String): Result<List<JellyPlayEpisodeMarker>?>
 }
 
 /**

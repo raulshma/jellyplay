@@ -1203,6 +1203,7 @@ class ExoPlayerEngine(
     override fun snapshotIsPlaying(): Boolean = player?.isPlaying ?: super.snapshotIsPlaying()
 
     override fun onConfigChanged(oldConfig: EngineConfig, newConfig: EngineConfig) {
+        val delta = EngineConfigDelta.of(oldConfig, newConfig)
         // decoderMode change: decoding changes require a reload, which is
         // handled by the upper layer recreating the player — nothing to do here.
         //
@@ -1214,8 +1215,11 @@ class ExoPlayerEngine(
         // re-evaluate the delay continuously (sub-delay / setSpuDelay), so no
         // reload is needed there.
 
-        if (oldConfig.audioEffects != newConfig.audioEffects) {
+        if (delta.audioEffectsChanged) {
             applyAudioEffects()
+            // No delta flag pins this sub-arm — it is a derived
+            // AudioEffectsConfig predicate, not a config slice — so it keeps
+            // re-diffing the two configs directly.
             if (requiresAudioPipelineReconfiguration(oldConfig.audioEffects, newConfig.audioEffects)) {
                 reconfigureAudioPipeline()
             }
@@ -1225,15 +1229,17 @@ class ExoPlayerEngine(
             updateSpatialState()
         }
 
-        if (oldConfig.subtitleStyle != newConfig.subtitleStyle) {
+        if (delta.subtitleStyleChanged) {
             applySubtitleStyle(newConfig.subtitleStyle)
-            // The offset lives on SubtitleStyle.offsetMs, so a delay change also
-            // flows through here. Media3 caches parsed cues for the active text
-            // track and will not re-invoke the OffsettingSubtitleParserFactory
-            // for the cached sample — so the overlay would look like it does
-            // nothing until the next reload/seek. Rebuild the media item so the
-            // subtitle is parsed through the offset wrapper with the new value.
-            if (oldConfig.subtitleStyle.offsetMs != newConfig.subtitleStyle.offsetMs) {
+            // The delay rides SubtitleStyle.offsetMs and is mirrored into
+            // subtitleDelayMs by EngineConfigBuilder, so delta.subtitleDelayChanged
+            // is exactly the old inner offsetMs re-diff. Media3 caches parsed
+            // cues for the active text track and will not re-invoke the
+            // OffsettingSubtitleParserFactory for the cached sample — so the
+            // overlay would look like it does nothing until the next
+            // reload/seek. Rebuild the media item so the subtitle is parsed
+            // through the offset wrapper with the new value.
+            if (delta.subtitleDelayChanged) {
                 refreshSubtitlesForOffsetChange()
             }
         }

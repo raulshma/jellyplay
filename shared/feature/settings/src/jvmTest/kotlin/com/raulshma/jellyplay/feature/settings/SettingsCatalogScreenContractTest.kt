@@ -550,28 +550,37 @@ class SettingsCatalogScreenContractTest {
 
     // ── 3. The fixed drifts, pinned behaviorally ────────────────────────
 
-    /** The playback screen groups in LazyColumn order, from the declaration. */
-    private val playbackGroups = listOf(
-        SettingsScreenGroups.playbackPlayer.itemIdSet,
-        SettingsScreenGroups.playbackAdvancedVideo.itemIdSet,
-        SettingsScreenGroups.playbackEngine.itemIdSet,
-        SettingsScreenGroups.playbackMediaSegments.itemIdSet,
-        SettingsScreenGroups.playbackSyncPlay.itemIdSet,
-        SettingsScreenGroups.playbackCasting.itemIdSet,
-        SettingsScreenGroups.playbackDvr.itemIdSet,
+    /**
+     * The playback screen sections in LazyColumn order — the same
+     * [SettingsScreenSection] declaration the screen consumes, so the adjust
+     * pins below run the very [deriveAdjustForAdvanced] the screen passes to
+     * `PreferenceScreenScaffold` (no per-screen hand-written lambda left to
+     * drift from the shipped shapes).
+     */
+    private val playbackSections = listOf(
+        SettingsScreenSection(SettingsScreenGroups.playbackPlayer.itemIdSet),
+        SettingsScreenSection(SettingsScreenGroups.playbackAdvancedVideo.itemIdSet, advancedOnly = true),
+        SettingsScreenSection(SettingsScreenGroups.playbackEngine.itemIdSet, advancedOnly = true),
+        SettingsScreenSection(SettingsScreenGroups.playbackMediaSegments.itemIdSet, advancedOnly = true),
+        SettingsScreenSection(SettingsScreenGroups.playbackSyncPlay.itemIdSet),
+        SettingsScreenSection(SettingsScreenGroups.playbackCasting.itemIdSet),
+        SettingsScreenSection(SettingsScreenGroups.playbackDvr.itemIdSet),
     )
+
+    /** The playback screen groups in LazyColumn order, from the declaration. */
+    private val playbackGroups = playbackSections.map { it.idSet }
 
     @Test
     fun `vlc_video_output deep-links into the engine group`() {
         assertTrue(PlaybackRows.VlcVideoOutput.id in SettingsScreenGroups.playbackEngine.itemIdSet)
         assertEquals(
             2,
-            resolveHighlightScrollIndex(PlaybackRows.VlcVideoOutput.id, playbackGroups, playbackAdjustForAdvanced(true)),
+            resolveHighlightScrollIndex(PlaybackRows.VlcVideoOutput.id, playbackGroups, deriveAdjustForAdvanced(playbackSections, true)),
         )
         // With advanced hidden the engine group doesn't compose — no scroll.
         assertEquals(
             -1,
-            resolveHighlightScrollIndex(PlaybackRows.VlcVideoOutput.id, playbackGroups, playbackAdjustForAdvanced(false)),
+            resolveHighlightScrollIndex(PlaybackRows.VlcVideoOutput.id, playbackGroups, deriveAdjustForAdvanced(playbackSections, false)),
         )
     }
 
@@ -582,11 +591,11 @@ class SettingsCatalogScreenContractTest {
         assertTrue(PlaybackRows.DialogueBoostStrength.id in advanced)
         assertEquals(
             1,
-            resolveHighlightScrollIndex(PlaybackRows.LiveStreamOption.id, playbackGroups, playbackAdjustForAdvanced(true)),
+            resolveHighlightScrollIndex(PlaybackRows.LiveStreamOption.id, playbackGroups, deriveAdjustForAdvanced(playbackSections, true)),
         )
         assertEquals(
             1,
-            resolveHighlightScrollIndex(PlaybackRows.DialogueBoostStrength.id, playbackGroups, playbackAdjustForAdvanced(true)),
+            resolveHighlightScrollIndex(PlaybackRows.DialogueBoostStrength.id, playbackGroups, deriveAdjustForAdvanced(playbackSections, true)),
         )
     }
 
@@ -604,7 +613,7 @@ class SettingsCatalogScreenContractTest {
         // list had omitted it all the same; the derivation keeps it honest.
         assertEquals(
             0,
-            resolveHighlightScrollIndex(PlaybackRows.GestureIndicatorSide.id, playbackGroups, playbackAdjustForAdvanced(true)),
+            resolveHighlightScrollIndex(PlaybackRows.GestureIndicatorSide.id, playbackGroups, deriveAdjustForAdvanced(playbackSections, true)),
         )
     }
 
@@ -614,20 +623,20 @@ class SettingsCatalogScreenContractTest {
         // LazyColumn indices 1/2/3 behind the player group.
         assertEquals(
             1,
-            resolveHighlightScrollIndex(PlaybackRows.SyncplayJoinBehavior.id, playbackGroups, playbackAdjustForAdvanced(false)),
+            resolveHighlightScrollIndex(PlaybackRows.SyncplayJoinBehavior.id, playbackGroups, deriveAdjustForAdvanced(playbackSections, false)),
         )
         assertEquals(
             2,
-            resolveHighlightScrollIndex(PlaybackRows.BackgroundCasting.id, playbackGroups, playbackAdjustForAdvanced(false)),
+            resolveHighlightScrollIndex(PlaybackRows.BackgroundCasting.id, playbackGroups, deriveAdjustForAdvanced(playbackSections, false)),
         )
         assertEquals(
             3,
-            resolveHighlightScrollIndex(PlaybackRows.DvrRecordingQuality.id, playbackGroups, playbackAdjustForAdvanced(false)),
+            resolveHighlightScrollIndex(PlaybackRows.DvrRecordingQuality.id, playbackGroups, deriveAdjustForAdvanced(playbackSections, false)),
         )
         // The player group never moves.
         assertEquals(
             0,
-            resolveHighlightScrollIndex(PlaybackRows.PlayerEngine.id, playbackGroups, playbackAdjustForAdvanced(false)),
+            resolveHighlightScrollIndex(PlaybackRows.PlayerEngine.id, playbackGroups, deriveAdjustForAdvanced(playbackSections, false)),
         )
     }
 
@@ -1452,6 +1461,52 @@ class SettingsCatalogScreenContractTest {
         assertEquals(
             SettingsScreenGroups.appearanceNewsletter.items.size - 1 + sectionCount,
             rowTotalFor(SettingsScreenGroups.appearanceNewsletter, RowAdmissionFlags(showAdvanced = true)) - 1 + sectionCount,
+        )
+    }
+
+    /**
+     * The appearance screen sections in LazyColumn order — the same
+     * [SettingsScreenSection] declaration the screen consumes, so the
+     * trailing-shape adjust pin below runs the very [deriveAdjustForAdvanced]
+     * the screen passes to `PreferenceScreenScaffold` (the hand-written
+     * per-screen lambda is gone).
+     */
+    private val appearanceSections = listOf(
+        SettingsScreenSection(SettingsScreenGroups.appearanceTheme.itemIdSet),
+        SettingsScreenSection(SettingsScreenGroups.appearanceNavigation.itemIdSet),
+        SettingsScreenSection(SettingsScreenGroups.appearanceLibrary.itemIdSet),
+        SettingsScreenSection(SettingsScreenGroups.appearancePerformance.itemIdSet, advancedOnly = true),
+        SettingsScreenSection(SettingsScreenGroups.appearanceEyeCare.itemIdSet, advancedOnly = true),
+        SettingsScreenSection(SettingsScreenGroups.appearanceNewsletter.itemIdSet, advancedOnly = true),
+    )
+
+    @Test
+    fun `appearance trailing expert groups stay out of the derived scroll adjust when advanced is hidden`() {
+        // The shipped trailing shape: with advanced hidden the three trailing
+        // expert groups don't compose (their ids cannot scroll → -1) and
+        // nothing trails them, so the three always-visible leading groups
+        // keep their indices; with advanced shown every group composes and
+        // the adjust is the identity.
+        assertEquals(-1, deriveAdjustForAdvanced(appearanceSections, false)(3))
+        assertEquals(-1, deriveAdjustForAdvanced(appearanceSections, false)(4))
+        assertEquals(-1, deriveAdjustForAdvanced(appearanceSections, false)(5))
+        assertEquals(0, deriveAdjustForAdvanced(appearanceSections, false)(0))
+        assertEquals(1, deriveAdjustForAdvanced(appearanceSections, false)(1))
+        assertEquals(2, deriveAdjustForAdvanced(appearanceSections, false)(2))
+        for (raw in appearanceSections.indices) {
+            assertEquals(raw, deriveAdjustForAdvanced(appearanceSections, true)(raw))
+        }
+        // End-to-end over the same resolver the scaffold drives: an expert id
+        // lands on its declared index when shown and scrolls nowhere when hidden.
+        val appearanceGroups = appearanceSections.map { it.idSet }
+        val expertId = SettingsScreenGroups.appearancePerformance.itemIds.first()
+        assertEquals(
+            3,
+            resolveHighlightScrollIndex(expertId, appearanceGroups, deriveAdjustForAdvanced(appearanceSections, true)),
+        )
+        assertEquals(
+            -1,
+            resolveHighlightScrollIndex(expertId, appearanceGroups, deriveAdjustForAdvanced(appearanceSections, false)),
         )
     }
 

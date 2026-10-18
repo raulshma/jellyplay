@@ -7,8 +7,8 @@ import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.DetailLoadState
 import com.raulshma.jellyplay.core.data.repository.MediaDetailProvider
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
-import com.raulshma.jellyplay.core.network.api.JellyPlayEpisodeRatings
-import com.raulshma.jellyplay.core.network.api.JellyPlayRatingsResult
+import com.raulshma.jellyplay.core.model.JellyPlayEpisodeScore
+import com.raulshma.jellyplay.core.model.JellyPlayPluginRating
 import com.raulshma.jellyplay.core.network.api.JellyPlayRatingsRoutes
 import com.raulshma.jellyplay.core.data.repository.MediaCatalogueEnrichments
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
@@ -941,17 +941,17 @@ class DetailViewModelEnrichmentsTest {
      * re-fetches a settled season shows up here immediately.
      */
     private class CountingSeasonRatingsApi(
-        private val resultsBySeasonNumber: Map<Int, Result<Map<Int, JellyPlayEpisodeRatings>?>> = emptyMap(),
+        private val resultsBySeasonNumber: Map<Int, Result<Map<Int, JellyPlayEpisodeScore>?>> = emptyMap(),
     ) : JellyPlayRatingsRoutes {
         val callsBySeasonNumber = mutableMapOf<Int, Int>()
 
-        override suspend fun getMdbListRatings(imdbId: String): Result<JellyPlayRatingsResult?> =
+        override suspend fun getMdbListRatings(imdbId: String): Result<List<JellyPlayPluginRating>?> =
             Result.success(null)
 
         override suspend fun getTmdbSeasonRatings(
             tmdbId: String,
             seasonNumber: Int,
-        ): Result<Map<Int, JellyPlayEpisodeRatings>?> {
+        ): Result<Map<Int, JellyPlayEpisodeScore>?> {
             callsBySeasonNumber[seasonNumber] = (callsBySeasonNumber[seasonNumber] ?: 0) + 1
             return resultsBySeasonNumber[seasonNumber] ?: Result.success(null)
         }
@@ -988,11 +988,11 @@ class DetailViewModelEnrichmentsTest {
     fun seasonRatings_multipleSeasons_mapsEveryScoredSeasonById() = runTest(mainDispatcher) {
         val ratingsApi = CountingSeasonRatingsApi(
             mapOf(
-                1 to Result.success(mapOf(1 to JellyPlayEpisodeRatings(tmdbScore = 7.5, tmdbVotes = 120))),
+                1 to Result.success(mapOf(1 to JellyPlayEpisodeScore(tmdbScore = 7.5, tmdbVotes = 120))),
                 2 to Result.success(
                     mapOf(
-                        3 to JellyPlayEpisodeRatings(tmdbScore = 8.0, tmdbVotes = 90),
-                        4 to JellyPlayEpisodeRatings(tmdbScore = 6.5, tmdbVotes = 70),
+                        3 to JellyPlayEpisodeScore(tmdbScore = 8.0, tmdbVotes = 90),
+                        4 to JellyPlayEpisodeScore(tmdbScore = 6.5, tmdbVotes = 70),
                     ),
                 ),
                 // An empty payload drops its season (the serial loop's
@@ -1033,7 +1033,7 @@ class DetailViewModelEnrichmentsTest {
     fun seasonRatings_perSeasonFailure_dropsOnlyTheFailedSeason() = runTest(mainDispatcher) {
         val ratingsApi = CountingSeasonRatingsApi(
             mapOf(
-                1 to Result.success(mapOf(1 to JellyPlayEpisodeRatings(tmdbScore = 7.0))),
+                1 to Result.success(mapOf(1 to JellyPlayEpisodeScore(tmdbScore = 7.0))),
                 2 to Result.failure(RuntimeException("season 2 down")),
             ),
         )
@@ -1063,8 +1063,8 @@ class DetailViewModelEnrichmentsTest {
     fun seasonRatings_lazySeasonExpansion_rerunFetchesOnlyTheNewSeason() = runTest(mainDispatcher) {
         val ratingsApi = CountingSeasonRatingsApi(
             mapOf(
-                1 to Result.success(mapOf(1 to JellyPlayEpisodeRatings(tmdbScore = 7.5))),
-                2 to Result.success(mapOf(2 to JellyPlayEpisodeRatings(tmdbScore = 8.0))),
+                1 to Result.success(mapOf(1 to JellyPlayEpisodeScore(tmdbScore = 7.5))),
+                2 to Result.success(mapOf(2 to JellyPlayEpisodeScore(tmdbScore = 8.0))),
             ),
         )
         viewModel = ratingsFeatureWiredViewModel(ratingsApi)
@@ -1111,7 +1111,7 @@ class DetailViewModelEnrichmentsTest {
         // (a) The Ratings feature toggled off: the enrichment never reaches
         // the fetch (the franchise preferenceOff convention).
         val gatedApi = CountingSeasonRatingsApi(
-            mapOf(1 to Result.success(mapOf(1 to JellyPlayEpisodeRatings(tmdbScore = 7.0)))),
+            mapOf(1 to Result.success(mapOf(1 to JellyPlayEpisodeScore(tmdbScore = 7.0)))),
         )
         val featureGate = mockk<com.raulshma.jellyplay.core.data.session.JellyPlayFeatureGate>(relaxed = true)
         coEvery { featureGate.isAvailableNow(any()) } returns false

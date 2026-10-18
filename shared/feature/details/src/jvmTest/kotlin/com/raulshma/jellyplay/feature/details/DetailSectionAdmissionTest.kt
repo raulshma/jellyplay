@@ -581,33 +581,16 @@ class DetailSectionAdmissionTest {
         val item = MediaItem(id = "i3", name = "Movie", mediaType = MediaType.MOVIE)
         val detail = MediaDetail(item = item)
         fun stateWith(hidden: Map<String, Set<String>>) = DetailContentState(
-            itemId = "i3",
-            detail = detail,
-            seasons = emptyList(),
-            episodes = emptyMap(),
-            fetchedSeasonIds = emptySet(),
-            smartPlayTarget = null,
-            selectedSubtitleIndex = null,
-            selectedAudioIndex = null,
-            isDownloading = false,
-            isDownloadingSeries = false,
-            loadState = DetailUiLoadState.Loaded,
-            albumTracks = emptyList(),
-            collectionItems = emptyList(),
-            relatedItems = emptyList(),
-            relatedVideos = emptyList(),
-            seerrRecommendations = emptyList(),
-            seerrSimilar = emptyList(),
-            isSeerrConnected = false,
-            isSeerrRecommendationsEnabled = false,
-            preferences = DetailPreferences(),
-            canManageSeries = false,
-            origin = DetailOrigin.REMOTE,
-            franchiseCollections = listOf(
-                DetailUiState.FranchiseCollection(id = "box1", name = "Franchise", members = listOf(item)),
-                DetailUiState.FranchiseCollection(id = "box2", name = "Shared universe", members = listOf(item)),
+            core = DetailUiState(
+                detail = detail,
+                origin = DetailOrigin.REMOTE,
+                franchiseCollections = listOf(
+                    DetailUiState.FranchiseCollection(id = "box1", name = "Franchise", members = listOf(item)),
+                    DetailUiState.FranchiseCollection(id = "box2", name = "Shared universe", members = listOf(item)),
+                ),
+                hiddenFranchiseCollections = hidden,
             ),
-            hiddenFranchiseCollections = hidden,
+            itemId = "i3",
         )
 
         // No hides → admitted.
@@ -631,28 +614,14 @@ class DetailSectionAdmissionTest {
         val item = MediaItem(id = "i1", name = "Album", mediaType = MediaType.ALBUM)
         val detail = MediaDetail(item = item)
         val state = DetailContentState(
+            core = DetailUiState(
+                detail = detail,
+                origin = DetailOrigin.REMOTE,
+                albumTracks = listOf(item),
+                isSeerrConnected = true,
+                isSeerrRecommendationsEnabled = false,
+            ),
             itemId = "i1",
-            detail = detail,
-            seasons = emptyList(),
-            episodes = emptyMap(),
-            fetchedSeasonIds = emptySet(),
-            smartPlayTarget = null,
-            selectedSubtitleIndex = null,
-            selectedAudioIndex = null,
-            isDownloading = false,
-            isDownloadingSeries = false,
-            loadState = DetailUiLoadState.Loaded,
-            albumTracks = listOf(item),
-            collectionItems = emptyList(),
-            relatedItems = emptyList(),
-            relatedVideos = emptyList(),
-            seerrRecommendations = emptyList(),
-            seerrSimilar = emptyList(),
-            isSeerrConnected = true,
-            isSeerrRecommendationsEnabled = false,
-            preferences = DetailPreferences(),
-            canManageSeries = false,
-            origin = DetailOrigin.REMOTE,
         )
 
         val inputs = DetailSectionAdmission.from(state, detail)
@@ -679,28 +648,11 @@ class DetailSectionAdmissionTest {
         val detail = MediaDetail(item = item)
         DetailOrigin.entries.forEach { origin ->
             val state = DetailContentState(
+                core = DetailUiState(
+                    detail = detail,
+                    origin = origin,
+                ),
                 itemId = "i2",
-                detail = detail,
-                seasons = emptyList(),
-                episodes = emptyMap(),
-                fetchedSeasonIds = emptySet(),
-                smartPlayTarget = null,
-                selectedSubtitleIndex = null,
-                selectedAudioIndex = null,
-                isDownloading = false,
-                isDownloadingSeries = false,
-                loadState = DetailUiLoadState.Loaded,
-                albumTracks = emptyList(),
-                collectionItems = emptyList(),
-                relatedItems = emptyList(),
-                relatedVideos = emptyList(),
-                seerrRecommendations = emptyList(),
-                seerrSimilar = emptyList(),
-                isSeerrConnected = false,
-                isSeerrRecommendationsEnabled = false,
-                preferences = DetailPreferences(),
-                canManageSeries = false,
-                origin = origin,
             )
             assertEquals(
                 origin.isLocal,

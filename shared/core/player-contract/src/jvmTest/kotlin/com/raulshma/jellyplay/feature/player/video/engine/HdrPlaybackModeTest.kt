@@ -1,16 +1,15 @@
-package com.raulshma.jellyplay.feature.player.video.components
+package com.raulshma.jellyplay.feature.player.video.engine
 
 import com.raulshma.jellyplay.core.model.PlayerType
-import com.raulshma.jellyplay.feature.player.video.engine.HdrOutputDecision
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
 /**
- * Pins the HDR sheet's status-card derivations — the pure helpers behind the
- * "Playback mode" card ([resolveHdrPlaybackMode]), the detected-display row
- * ([resolveDetectedDisplayLabel]) and the family labels ([hdrLabelFor]).
- * Load-bearing shapes:
+ * Pins the HDR status-card derivations — the pure policy behind the HDR
+ * sheet's "Playback mode" card ([resolveHdrPlaybackMode]), the detected-
+ * display row ([resolveDetectedDisplayLabel]) and the family labels
+ * ([hdrLabelFor]). Load-bearing shapes:
  *
  *  - The engine's ACTIVE verdict wins over the content basis (the Exo
  *    observed-SDR downgrade would already have cleared it).

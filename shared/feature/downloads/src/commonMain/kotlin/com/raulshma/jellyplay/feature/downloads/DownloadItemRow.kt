@@ -75,6 +75,17 @@ import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_st
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_storage_quota
 import com.raulshma.jellyplay.feature.downloads.generated.resources.downloads_storage_used
 
+/**
+ * One download row: thumbnail, title/context line, status body, and the
+ * per-status action cluster. The cluster's AVAILABILITY is the module's
+ * [DownloadActions.availableActions] fold over the admission table (a status'
+ * buttons exist exactly when the table admits them); only PLACEMENT — which
+ * slot a button renders in, its icon, tint, and order — stays this file's
+ * per-status code, and dispatch flows through the single [onAction] sink
+ * instead of a callback per verb. The former shape encoded the admission
+ * table visually as one hand-written button per status branch (re-encoding
+ * what the table already knew); this shape asks the module first.
+ */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun DownloadItemRow(
@@ -100,11 +111,14 @@ internal fun DownloadItemRow(
      * or a non-completed row).
      */
     onStream: (() -> Unit)? = null,
-    onCancel: () -> Unit,
-    onPause: () -> Unit,
-    onResume: () -> Unit,
-    onDelete: () -> Unit,
-    onRetry: () -> Unit,
+    /**
+     * The single sink for every [DownloadBulkAction] the row's inline cluster
+     * offers (pause / resume / cancel / retry / delete). One callback replaces
+     * the former one-per-verb fan (the screen's sink decides the per-verb
+     * policy — e.g. delete confirms before it dispatches).
+     */
+    onAction: (DownloadBulkAction) -> Unit,
+    /** Queue-ordering verbs — deliberately outside the bulk-action vocabulary. */
     onMoveToFront: () -> Unit,
     onLowerPriority: () -> Unit,
     onToggleSelection: () -> Unit,
@@ -337,6 +351,10 @@ internal fun DownloadItemRow(
             // spacing — adjacent compact IconButtons already separate via
             // their intrinsic padding.
             if (!selectionMode) {
+                // The module's admission fold, keyed on status only — the fold
+                // reads nothing else off the item, so progress ticks re-render
+                // the row without recomputing it.
+                val available = remember(item.status) { DownloadActions.availableActions(item) }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     when (item.status) {
                         DownloadStatus.DOWNLOADING -> {
@@ -346,17 +364,21 @@ internal fun DownloadItemRow(
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 onClick = onLowerPriority,
                             )
-                            DownloadActionButton(
+                            RowActionSlot(
+                                action = DownloadBulkAction.PAUSE,
+                                available = available,
                                 icon = Tabler.Outline.PlayerPause,
                                 contentDescription = stringResource(Res.string.downloads_action_pause),
                                 tint = MaterialTheme.colorScheme.primary,
-                                onClick = onPause,
+                                onAction = onAction,
                             )
-                            DownloadActionButton(
+                            RowActionSlot(
+                                action = DownloadBulkAction.CANCEL,
+                                available = available,
                                 icon = Tabler.Outline.Trash,
                                 contentDescription = stringResource(Res.string.downloads_action_cancel),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                onClick = onCancel,
+                                onAction = onAction,
                             )
                         }
                         DownloadStatus.PENDING -> {
@@ -366,11 +388,13 @@ internal fun DownloadItemRow(
                                 tint = MaterialTheme.colorScheme.primary,
                                 onClick = onMoveToFront,
                             )
-                            DownloadActionButton(
+                            RowActionSlot(
+                                action = DownloadBulkAction.CANCEL,
+                                available = available,
                                 icon = Tabler.Outline.Trash,
                                 contentDescription = stringResource(Res.string.downloads_action_cancel),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                onClick = onCancel,
+                                onAction = onAction,
                             )
                         }
                         DownloadStatus.QUEUED -> {
@@ -380,33 +404,41 @@ internal fun DownloadItemRow(
                                 tint = MaterialTheme.colorScheme.primary,
                                 onClick = onMoveToFront,
                             )
-                            DownloadActionButton(
+                            RowActionSlot(
+                                action = DownloadBulkAction.CANCEL,
+                                available = available,
                                 icon = Tabler.Outline.Trash,
                                 contentDescription = stringResource(Res.string.downloads_action_cancel),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                onClick = onCancel,
+                                onAction = onAction,
                             )
                         }
                         DownloadStatus.PAUSED -> {
-                            DownloadActionButton(
+                            RowActionSlot(
+                                action = DownloadBulkAction.RESUME,
+                                available = available,
                                 icon = Tabler.Outline.PlayerPlay,
                                 contentDescription = stringResource(Res.string.downloads_action_resume),
                                 tint = MaterialTheme.colorScheme.primary,
-                                onClick = onResume,
+                                onAction = onAction,
                             )
-                            DownloadActionButton(
+                            RowActionSlot(
+                                action = DownloadBulkAction.CANCEL,
+                                available = available,
                                 icon = Tabler.Outline.Trash,
                                 contentDescription = stringResource(Res.string.downloads_action_cancel),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                onClick = onCancel,
+                                onAction = onAction,
                             )
                         }
                         DownloadStatus.FAILED -> {
-                            DownloadActionButton(
+                            RowActionSlot(
+                                action = DownloadBulkAction.RETRY_FAILED,
+                                available = available,
                                 icon = Tabler.Outline.Refresh,
                                 contentDescription = stringResource(Res.string.downloads_action_retry),
                                 tint = MaterialTheme.colorScheme.primary,
-                                onClick = onRetry,
+                                onAction = onAction,
                             )
                         }
                         DownloadStatus.COMPLETED -> {
@@ -417,11 +449,13 @@ internal fun DownloadItemRow(
                                 onPlay = onPlay,
                                 onStream = onStream,
                             )
-                            DownloadActionButton(
+                            RowActionSlot(
+                                action = DownloadBulkAction.DELETE,
+                                available = available,
                                 icon = Tabler.Outline.Trash,
                                 contentDescription = stringResource(Res.string.downloads_action_delete),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                onClick = onDelete,
+                                onAction = onAction,
                             )
                         }
                         DownloadStatus.CANCELLED -> {
@@ -433,6 +467,32 @@ internal fun DownloadItemRow(
                 }
             }
         }
+    }
+}
+
+/**
+ * One inline slot for a bulk action: renders [DownloadActionButton] only while
+ * the module's admission fold ([available]) admits [action] for this row's
+ * status, and dispatches it through the row's single sink. The per-status
+ * branches above own placement (slot, icon, tint, order); this slot owns the
+ * admission — a table change re-dresses rows without touching them.
+ */
+@Composable
+private fun RowActionSlot(
+    action: DownloadBulkAction,
+    available: List<DownloadBulkAction>,
+    icon: ImageVector,
+    contentDescription: String,
+    tint: Color,
+    onAction: (DownloadBulkAction) -> Unit,
+) {
+    if (action in available) {
+        DownloadActionButton(
+            icon = icon,
+            contentDescription = contentDescription,
+            tint = tint,
+            onClick = { onAction(action) },
+        )
     }
 }
 

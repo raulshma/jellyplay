@@ -102,6 +102,7 @@ import com.raulshma.jellyplay.feature.player.video.generated.resources.player_vi
 
 
 import com.raulshma.jellyplay.feature.player.video.AbRepeatState
+import com.raulshma.jellyplay.feature.player.video.HdrSheetModule
 import com.raulshma.jellyplay.feature.player.video.PlayerSheet
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
@@ -648,7 +649,8 @@ internal fun PlayerControls(
                         subtitleDelayMs = tracks.subtitleDelayMs,
                         onSubtitleDelayClick = sheets.onSubtitleDelayClick,
                         onPlayMethodClick = { sheets.openSheet(PlayerSheet.PlaybackMode) },
-                        onHdrClick = { sheets.openSheet(PlayerSheet.Hdr) },
+                        // The chip entry declares through the HDR sheet module's registered key.
+                        onHdrClick = { sheets.openSheet(HdrSheetModule.sheet) },
                         mpvConfigNoticeActive = tracks.mpvConfigNoticeActive,
                         onMpvConfigNoticeClick = sheets.onMpvConfigNoticeClick,
                         modifier = Modifier.padding(bottom = 4.dp)

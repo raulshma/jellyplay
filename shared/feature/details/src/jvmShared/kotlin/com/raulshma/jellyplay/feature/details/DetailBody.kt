@@ -74,7 +74,7 @@ internal fun DetailBodyLandscape(
 ) {
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isTv = com.raulshma.jellyplay.core.ui.tv.LocalTvMode.current
-    val detail = state.detail
+    val detail = state.core.detail
 
     Row(
         modifier = Modifier
@@ -97,7 +97,7 @@ internal fun DetailBodyLandscape(
                 FadingItem {
                     // Prefer the on-disk poster (DetailAssets.posterPath) for a
                     // LOCAL origin before the server getImageUrl fallback.
-                    val posterImageUrl = state.assets.posterPath
+                    val posterImageUrl = state.core.assets.posterPath
                         ?: callbacks.artwork.getImageUrl(state.itemId)
                     DetailPoster(
                         itemId = state.itemId,
@@ -143,7 +143,7 @@ internal fun DetailBodyLandscape(
                 )
             }
         } else {
-            val err = state.loadState as? DetailUiLoadState.Error
+            val err = state.core.loadState as? DetailUiLoadState.Error
             if (err != null) {
                 ErrorScreen(
                     message = err.message,
@@ -175,7 +175,7 @@ internal fun DetailBodyPortrait(
     item: MediaItem?,
 ) {
     val adaptiveInfo = LocalAdaptiveInfo.current
-    val detail = state.detail
+    val detail = state.core.detail
 
     // Books on compact phones: the hero backdrop already shows the cover
     // sharp edge-to-edge (BookCoverHero.SHARP), so the poster card would be
@@ -219,7 +219,7 @@ internal fun DetailBodyPortrait(
                             // at 360×540 — pass that request's memory-cache key
                             // so Coil paints the tile's cached bitmap as the
                             // placeholder while this larger decode runs.
-                            val posterUrl = state.assets.posterPath
+                            val posterUrl = state.core.assets.posterPath
                                 ?: callbacks.artwork.getImageUrl(state.itemId)
                             MediaImage(
                                 // Prefer the on-disk poster (DetailAssets.posterPath)
@@ -262,7 +262,7 @@ internal fun DetailBodyPortrait(
                 )
             }
         } else {
-            val err = state.loadState as? DetailUiLoadState.Error
+            val err = state.core.loadState as? DetailUiLoadState.Error
             if (err != null) {
                 ErrorScreen(
                     message = err.message,

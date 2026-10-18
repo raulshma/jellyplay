@@ -200,6 +200,8 @@ internal class PlaybackSession(
     private val hooksOverride: SessionLifecycleHooks? = null,
     /** Test override; production resolves the localized FORCE_DIRECT_PLAY fallback notice. */
     directPlayFallbackNotice: (suspend (String) -> String)? = null,
+    /** The seek clamp's "Skipped …" notice (VM-owned; the router's local arm fires it). */
+    private val onSegmentSkippedNotice: (com.raulshma.jellyplay.core.model.MediaSegmentType) -> Unit = {},
 
     // ── Constructor dependencies (what the deleted wiring builder injected) ──
 
@@ -246,7 +248,7 @@ internal class PlaybackSession(
     private val sessionStack: PlayerSessionStackSources,
     private val itemContent: PlayerItemContentSources,
     private val handles: PlayerStateHandles,
-    /** The owner's transport/policy funnels — see [SessionHostLambdas]. */
+    /** The owner's session-policy funnels — see [SessionHostLambdas]. */
     private val host: SessionHostLambdas,
 
     // ── Engine-room dependencies (kept injectable for the behavioral suites) ──
@@ -664,16 +666,22 @@ internal class PlaybackSession(
      * aspect/source-rect pushes. Re-armed from [arm] AND from the
      * [SessionLifecycleHooks.rearmTransports] hook — see
      * PipTransportController's KDoc for why the re-arm must ride the load
-     * lifecycle. The dispatch lambdas route through [host] (the owner's
-     * transport funnels) or read later-declared collaborators lazily.
+     * lifecycle. The dispatch lambdas route through [transport] (the session's
+     * transport router) or read later-declared collaborators lazily.
      */
     internal val pipTransport = PipTransportController(
         pipController = pipController,
         getEngine = { playerSessionManager.engine },
-        routedPlay = { play -> host.routedPlay(play) },
-        seekByStep = { direction -> host.seekByStep(direction) },
+        routedPlay = { play -> transport.play(play) },
+        seekByStep = { direction -> transport.step(direction) },
         playNextEpisode = { upNext.playNextEpisode() },
     )
+
+    /** The session-owned transport routing module (ladders + local seek arm; wiring in TransportRouter.kt). */
+    internal val transport = transportRouter(handles, stores, onSegmentSkippedNotice)
+
+    /** The session-owned pref write choreography (wiring in PlayerUiCommands.kt). */
+    internal val uiCommands = playerUiCommands(handles, stores, playbackStore)
 
     /**
      * The "Still watching?" confirm overlay's prompt lifecycle (feature 1.3) —
@@ -688,7 +696,7 @@ internal class PlaybackSession(
         getCountdownSeconds = { uiState.value.autoplay.autoPlayCountdownSec },
         onUserInteraction = { autoplayController.onUserInteraction() },
         playNextEpisode = { upNext.playNextEpisode() },
-        resumePlayback = { host.resumePlayback() },
+        resumePlayback = { transport.resume() },
         pauseEngine = { playerSessionManager.engine?.pause() },
         cancelAutoplay = { upNext.cancelAutoplay() },
     )
@@ -768,7 +776,7 @@ internal class PlaybackSession(
                 initialize(itemId, null, positionTicks)
             } else {
                 // Group-driven position sync, not a user seek — never clamped.
-                host.seekTo(positionTicks / 10_000, false)
+                transport.seekLocal(positionTicks / 10_000, false)
             }
         },
         // Session-state write seam: the bridge no longer holds the UiState
@@ -2486,7 +2494,7 @@ internal class PlaybackSession(
         // re-reads per command, so engine swaps mid-duck are observed.
         videoFocusSurface?.bind(
             target = { playerSessionManager.engine?.let { engine -> MediaEngineFocusTarget(engine, { uiState.value.isMuted }) } },
-            onRestore = { playerSessionManager.engine?.let { host.applyResumeSkip(it) } },
+            onRestore = { playerSessionManager.engine?.let { transport.applyResumeSkip(it) } },
         )
 
         // Displaced-holder self-pause: the decision (which claim states
@@ -3001,22 +3009,12 @@ internal class SavedStateHandlePositionStore(
 
 /**
  * The owner-funnel lambda bundle (the successor of the deleted wiring's
- * WiringHostLambdas, shrunk to the entries that are GENUINELY ViewModel-owned:
- * the transport funnels — seek/step/route/resume and the resume-skip — and
- * the end-of-playback policy dispatch. Everything the wiring used to call
- * back into the VM for (the load funnel, the remote-play routing, the
- * per-item hydration, the teardown halves) is session-internal since the C6
- * collapse. Built at the VM from its private handlers; STORED while the
- * session is still under construction but only INVOKED from [PlaybackSession.arm]
- * onward, so no lambda can observe an uninitialized VM field — the same
- * lazy-callback discipline the wiring lambdas always applied.
+ * WiringHostLambdas): the end-of-playback policy dispatch + the auto-skip arm
+ * with its "Skipped …" notice. The transport funnels moved into the session's
+ * [TransportRouter]; everything else the wiring called back into the VM for is
+ * session-internal since the C6 collapse; only INVOKED from [PlaybackSession.arm].
  */
 internal data class SessionHostLambdas(
-    val seekTo: (positionMs: Long, userInitiated: Boolean) -> Unit,
-    val seekByStep: (direction: Int) -> Unit,
-    val routedPlay: (play: Boolean) -> Unit,
-    val resumePlayback: () -> Unit,
-    val applyResumeSkip: (engine: MediaEngine) -> Unit,
     val autoSkipSegment: (segment: MediaSegment) -> Unit,
     val onEndedWithNoNext: () -> Unit,
     val handlePlaybackEnded: () -> Unit,

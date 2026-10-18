@@ -54,9 +54,10 @@ sealed interface MpvStallRecoveryAction {
  * The common observable for both wedges is precise: `playbackState == READY`,
  * the fold says we are playing (not paused, not buffering), and the position
  * does not move across ticks. Recovery is the seek kick above, escalating to
- * the hwdec switch when the zero-copy path is implicated. The host applies
- * the returned action (property write + `core.seekTo`); this class owns only
- * WHEN and WHICH.
+ * the hwdec switch when the zero-copy path is implicated. The shared mpv core
+ * ([MpvCore], player-video commonMain — the "mpv recovery choreography" term)
+ * drives this class and applies the returned action (property write +
+ * `core.seekTo`); this class owns only WHEN and WHICH.
  *
  * Timing: a window opens on the first tick that sees the same position as the
  * previous one and fires once it has stayed frozen [STALL_CONFIRM_MS] — for a

@@ -246,6 +246,19 @@ class DownloadRepositoryImpl(
         }
     }
 
+    // The resume/retry verbs are COMPOSITES (mark PENDING, then enqueue — see
+    // the interface KDoc): the enqueue follow-up lives here, inside the one
+    // implementation both control surfaces share, so the DownloadsViewModel and
+    // DownloadActionReceiver dispatch a single verb instead of each hand-pairing
+    // the same two calls. Deliberately enqueue-inside rather than a new
+    // composite member on [DownloadQueue]: it changes no interface size (the
+    // surface ratchet forbids growth), and every production caller already
+    // paired the two calls unconditionally — the fold is behavior-identical on
+    // every success path where the row exists (the enqueue of a missing row
+    // was, and stays, a worker no-op). The only divergence is the failure
+    // path, where the old per-caller pairing enqueued even when the status
+    // flip threw; the folded order adopts resumeInterruptedDownloads' invariant
+    // instead — a row is only enqueued once its status flip succeeded.
     override suspend fun resumeDownload(id: String): Result<Unit> = runCatchingRethrowingCancellation {
         val entity = downloadDao.getDownloadById(id) ?: return@runCatchingRethrowingCancellation
         if (DownloadStates.isPausedOrFailed(entity.status)) {
@@ -253,6 +266,7 @@ class DownloadRepositoryImpl(
             // auto-retry budget — the user has taken ownership of this row.
             downloadDao.markPendingForManualResume(id, entity.downloadedBytes)
         }
+        enqueueDownload(id)
     }
 
     override suspend fun deleteDownload(id: String): Result<Unit> = runCatchingRethrowingCancellation {
@@ -269,6 +283,8 @@ class DownloadRepositoryImpl(
         // A manual retry starts fresh — reset the bytes, clear the auto-retry
         // budget and reason, all in one UPDATE.
         downloadDao.markPendingForManualResume(id, 0L)
+        // Composite verb: the enqueue follow-up rides inside (see resumeDownload).
+        enqueueDownload(id)
     }
 
     override suspend fun resumeInterruptedDownloads() {

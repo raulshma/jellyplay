@@ -345,8 +345,11 @@ class DownloadsViewModel(
      * The single dispatch for every [DownloadBulkAction]. Target selection is
      * the pure [DownloadActions] fold (scope ∩ live list ∩ admission table);
      * a no-target call is a guarded no-op, exactly like the per-action funs it
-     * replaced. DELETE additionally clears the selection (bulk scope only) and
-     * emits the one-shot Deleted message at every scope — the former
+     * replaced. RESUME and RETRY_FAILED are the queue's composite verbs
+     * (status flip + enqueue inside — see [DownloadQueue.resumeDownload]); the
+     * VM dispatches one verb per target and no longer hand-pairs the enqueue
+     * follow-up. DELETE additionally clears the selection (bulk scope only)
+     * and emits the one-shot Deleted message at every scope — the former
      * deleteSelected/deleteDownload side effects.
      */
     fun applyBulkAction(action: DownloadBulkAction, scope: DownloadActionScope) {
@@ -357,15 +360,9 @@ class DownloadsViewModel(
             bulkMap(targets) { item ->
                 when (action) {
                     DownloadBulkAction.PAUSE -> queue.pauseDownload(item.id)
-                    DownloadBulkAction.RESUME -> {
-                        queue.resumeDownload(item.id)
-                        queue.enqueueDownload(item.id)
-                    }
+                    DownloadBulkAction.RESUME -> queue.resumeDownload(item.id)
                     DownloadBulkAction.CANCEL -> queue.cancelDownload(item.id)
-                    DownloadBulkAction.RETRY_FAILED -> {
-                        queue.retryDownload(item.id)
-                        queue.enqueueDownload(item.id)
-                    }
+                    DownloadBulkAction.RETRY_FAILED -> queue.retryDownload(item.id)
                     DownloadBulkAction.DELETE -> queue.deleteDownload(item.id)
                 }
             }
@@ -438,7 +435,7 @@ class DownloadsViewModel(
      * header's playback-ordered episode ids: the first unplayed COMPLETED
      * episode wins, falling back to the first COMPLETED episode of the group;
      * a group with nothing finished yields null (the click is a no-op — the
-     * same `status == COMPLETED` gate the row-level Play applies, see
+     * same [DownloadActions.isPlayable] gate the row-level Play applies, see
      * [groupPlayTarget]). Played state reads the offline DB once, normalized
      * through the shared [toMediaItem] projection — the same ≥95% watched rule
      * the offline cards use — so a nearly-finished episode counts as watched

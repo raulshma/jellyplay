@@ -210,7 +210,7 @@ internal fun DetailContentBody(
     showMediaInfo: Boolean = true,
     contentFocusRequester: FocusRequester? = null,
 ) {
-    val detail = state.detail ?: return
+    val detail = state.core.detail ?: return
     val item = detail.item
 
     val adaptiveInfo = LocalAdaptiveInfo.current
@@ -228,7 +228,7 @@ internal fun DetailContentBody(
     // declaration order (= the emission order): the hand-written fold for the
     // unmigrated sections, the detail section registry's modules for the
     // migrated ones (wave 1: PLUGIN_RATINGS, TMDB_REVIEWS). Memoized on exactly
-    // the fold's inputs (detail == state.detail) so the Compose-free fold +
+    // the fold's inputs (detail == state.core.detail) so the Compose-free fold +
     // registry merge + re-sort is not re-executed per recomposition (the
     // screen-level entrance animation re-runs this body per frame while it
     // plays).
@@ -264,7 +264,7 @@ internal fun DetailContentBody(
                             callbacks = callbacks,
                             detail = detail,
                             item = item,
-                            isLocalOrigin = state.origin?.isLocal == true,
+                            isLocalOrigin = state.core.origin?.isLocal == true,
                             bodyContentPad = bodyContentPad,
                             contentFocusRequester = contentFocusRequester,
                         )
@@ -451,7 +451,7 @@ internal fun DetailSectionRenderer(
             DetailSeerrRowSection(
                 delayIndex = section.delayIndex,
                 titleRes = Res.string.detail_section_seerr_recommendations,
-                items = state.seerrRecommendations,
+                items = state.core.seerrRecommendations,
                 keyPrefix = "seerr_rec",
                 contentType = "seerrRecItem",
                 callbacks = callbacks,
@@ -461,7 +461,7 @@ internal fun DetailSectionRenderer(
             DetailSeerrRowSection(
                 delayIndex = section.delayIndex,
                 titleRes = Res.string.detail_section_seerr_similar,
-                items = state.seerrSimilar,
+                items = state.core.seerrSimilar,
                 keyPrefix = "seerr_sim",
                 contentType = "seerrSimItem",
                 callbacks = callbacks,
@@ -497,10 +497,10 @@ private fun DetailRelatedVideosSection(
     state: DetailContentState,
     callbacks: DetailContentCallbacks,
 ) {
-    if (state.trailers.isEmpty()) return
+    if (state.core.trailers.isEmpty()) return
     StaggeredDetailSection(visible = true, delayIndex = delayIndex) {
         VideosSection(
-            trailers = state.trailers,
+            trailers = state.core.trailers,
             getImageUrl = callbacks.artwork.getImageUrl,
             onVideoClick = callbacks.seerr.onVideoClick,
             onPlayLocal = { trailerId ->

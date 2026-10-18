@@ -8,6 +8,7 @@ import com.raulshma.jellyplay.core.datastore.screensaver.ScreensaverPreferenceSp
 import com.raulshma.jellyplay.core.datastore.spec.PreferenceSpec
 import com.raulshma.jellyplay.core.datastore.spec.PreferenceStorage
 import com.raulshma.jellyplay.core.datastore.spec.PreferenceSyncPolicy
+import com.raulshma.jellyplay.core.datastore.subtitle.SubtitlePreferenceSpecs
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerPreferenceSpecs
 import com.raulshma.jellyplay.core.datastore.volume.VolumeProfileStore
 import kotlinx.serialization.json.Json
@@ -36,7 +37,7 @@ import javax.xml.parsers.DocumentBuilderFactory
  *
  * Coverage policy (the catalog is an ALLOWLIST, not an enumeration of
  * `user_prefs`):
- *  - spec rows of the six spec-backed domains, minus the prefixes the sync
+ *  - spec rows of the seven spec-backed domains, minus the prefixes the sync
  *    adapter excludes at its registration (`dream`/`screensaver` — the
  *    catalog must describe exactly what syncs);
  *  - the [SUPPLEMENTAL] rows below — valuable hand-written store keys that
@@ -129,6 +130,12 @@ object SettingsCatalogGenerator {
         "Video player" to VideoPlayerPreferenceSpecs.all,
         "Screensaver" to ScreensaverPreferenceSpecs.all,
         "Experimental" to ExperimentalPreferenceSpecs.all,
+        // After Experimental: the app_language / prefer_audio_description wire
+        // keys are dual-declared (the experimental store's rows exist to cover
+        // them; reset ownership is the subtitle store's) and the catalog keeps
+        // ONE entry per wire key, first domain wins — so the shared pair stays
+        // catalogued where it always was.
+        "Subtitles & language" to SubtitlePreferenceSpecs.all,
     )
 
     /**

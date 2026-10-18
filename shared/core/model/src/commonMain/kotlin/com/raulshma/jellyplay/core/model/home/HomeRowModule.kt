@@ -66,6 +66,15 @@ public interface HomeRowModule {
     public val resumeLike: Boolean get() = false
 
     /**
+     * The row's title is rendered from its SEED item ("Because You Watched
+     * …") rather than the section's own display string: Recommendations, the
+     * only seed-chain row. The render site still needs the seed itself (a
+     * null seed falls back to the plain title) — this fact only says the
+     * title FORM carries it.
+     */
+    public val titleCarriesSeed: Boolean get() = false
+
+    /**
      * The row can be refetched on its own (the home screen's edge-pull
      * refresh): the type half of the gesture gate — a registered single-row
      * refresh arm exists for it in core/network's transport registration
@@ -219,6 +228,7 @@ public object RecentlyAdded : HomeRowModule {
 public object Recommendations : HomeRowModule {
     override val type = HomeSectionType.RECOMMENDATIONS
     override val descriptor = type.descriptor
+    override val titleCarriesSeed = true
     override val offline = RecommendationsOfflineProjection
 }
 

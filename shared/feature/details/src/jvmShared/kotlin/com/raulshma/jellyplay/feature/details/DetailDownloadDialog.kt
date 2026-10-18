@@ -82,7 +82,7 @@ import org.jetbrains.compose.resources.pluralStringResource
  * available storage) promoted from the former storage-confirmation dialog, plus a
  * download-quality chip row and an external-subtitle multi-select list.
  *
- * Driven by [DetailContentState.downloadPicker] (visibility / quality /
+ * Driven by [DetailContentState.downloads.downloadPicker] (visibility / quality /
  * [SubtitleSelection]); the confirm action hands off to the
  * [DetailContentCallbacks.download] bundle's `onDownloadClick` (→
  * [DetailViewModel.startDownload]), which reads the pending values and runs

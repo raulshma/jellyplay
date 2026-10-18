@@ -336,7 +336,8 @@ internal fun groupSelectionState(ids: Collection<String>, selectedIds: Set<Strin
  * [DownloadListRow.SeriesHeader.episodeIds] order — numeric season → episode),
  * falling back to the first COMPLETED download when every completed episode in
  * the group is already watched. Rows still in flight are never targeted — the
- * same `status == COMPLETED` gate the row-level Play applies — so a header
+ * COMPLETED-is-playable gate is the module's [DownloadActions.isPlayable]
+ * fold, the same one the row-level Play applies — so a header
  * Play can't attempt to play a file that isn't on disk yet; a group with
  * nothing completed yields null and the click is a no-op. [playedItemIds]
  * holds media item ids the caller resolved from the offline DB (already
@@ -347,8 +348,8 @@ internal fun groupPlayTarget(
     playedItemIds: Set<String>,
 ): DownloadItem? =
     groupDownloads.firstOrNull {
-        it.status == DownloadStatus.COMPLETED && it.mediaItemId !in playedItemIds
-    } ?: groupDownloads.firstOrNull { it.status == DownloadStatus.COMPLETED }
+        DownloadActions.isPlayable(it) && it.mediaItemId !in playedItemIds
+    } ?: groupDownloads.firstOrNull(DownloadActions::isPlayable)
 
 /**
  * The expanded-key of a season sub-header — the single shape both

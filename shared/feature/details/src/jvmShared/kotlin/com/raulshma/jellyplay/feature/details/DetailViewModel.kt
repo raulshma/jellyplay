@@ -12,7 +12,6 @@ import com.raulshma.jellyplay.core.data.repository.NoopBookTocCacheRepository
 import com.raulshma.jellyplay.core.data.repository.ReaderAnnotationsRepository
 import com.raulshma.jellyplay.core.data.book.BookTocProber
 import com.raulshma.jellyplay.core.network.api.LibraryApiClient
-import com.raulshma.jellyplay.core.network.api.toModel
 import com.raulshma.jellyplay.core.data.repository.MediaCatalogueEnrichments
 import com.raulshma.jellyplay.core.data.repository.MediaRepository
 import com.raulshma.jellyplay.core.data.repository.OfflineRepository
@@ -21,6 +20,7 @@ import com.raulshma.jellyplay.core.data.repository.UserDataContainer
 import com.raulshma.jellyplay.core.data.repository.UserDataMutator
 import com.raulshma.jellyplay.core.model.HomeFreshness
 import com.raulshma.jellyplay.core.model.JellyPlayPluginFeatures
+import com.raulshma.jellyplay.core.model.JellyPlayPluginRating
 import com.raulshma.jellyplay.core.data.seerr.SeerrRequestStateHolder
 import com.raulshma.jellyplay.core.data.seerr.TmdbCompanionFetches
 import com.raulshma.jellyplay.core.data.seerr.TmdbCompanionLanding
@@ -943,7 +943,7 @@ class DetailViewModel internal constructor(
 
         override suspend fun mdbListRatings(
             imdbId: String,
-        ): Result<com.raulshma.jellyplay.core.network.api.JellyPlayRatingsResult?>? =
+        ): Result<List<JellyPlayPluginRating>?>? =
             pluginRatingsApi?.getMdbListRatings(imdbId)
     }
 
@@ -1169,15 +1169,15 @@ class DetailViewModel internal constructor(
             val scored = pluginRecommendationsApi?.getJellyPlaySimilarItems(inputs.itemId, limit = SIMILAR_ITEMS_LIMIT)
                 ?.getOrNull()
                 .orEmpty()
-                .filter { it.itemId != inputs.itemId }
-                .distinctBy { it.itemId }
+                .filter { it != inputs.itemId }
+                .distinct()
             if (scored.isEmpty()) return@DetailEnrichment
             // The shared bounded-parallel hydration (DEFAULT_FANOUT_PARALLELISM,
             // the arrqueue/heatmap idiom): per-id failures and null details drop
             // out (mapConcurrentCatching's drop policy) instead of an unbounded
             // async/awaitAll fan-out over the server.
             val hydrated = hydrationSemaphore.mapConcurrentCatching(scored) { candidate ->
-                mediaRepository.getMediaDetail(candidate.itemId).getOrNull()?.item
+                mediaRepository.getMediaDetail(candidate).getOrNull()?.item
             }
             if (!loadGuard.isCurrent(inputs.itemId)) return@DetailEnrichment
             _uiState.update {
@@ -1209,7 +1209,7 @@ class DetailViewModel internal constructor(
             val markers = pluginMarkersApi?.getAnimeMarkers(seriesId, providerSeriesId)
                 ?.getOrNull() ?: return@DetailEnrichment
             if (!loadGuard.isCurrent(inputs.itemId)) return@DetailEnrichment
-            _uiState.update { it.copy(animeMarkers = animeBadges(markers.markers.map { it.toModel() })) }
+            _uiState.update { it.copy(animeMarkers = animeBadges(markers)) }
         },
         DetailEnrichment(
             name = "pluginSeasonRatings",
@@ -1245,7 +1245,7 @@ class DetailViewModel internal constructor(
                     pluginRatingsApi?.getTmdbSeasonRatings(tmdbId.toString(), seasonNumber)
                         ?.getOrNull()
                         ?.takeIf { it.isNotEmpty() }
-                        ?.let { ratings -> season.id to ratings.mapValues { (_, episode) -> episode.toModel() } }
+                        ?.let { ratings -> season.id to ratings }
                 }
                 .filterNotNull()
                 .toMap()

@@ -64,33 +64,11 @@ sealed class PlayerSheet {
  * Allows the currently-open sheet to survive configuration changes (locale
  * switch, rotation outside the player's locked orientation) via
  * `rememberSaveable(stateSaver = PlayerSheetSaver)`. Restores by matching
- * each sheet's [PlayerSheet.key]; unknown values fall back to `None`.
+ * each sheet's [PlayerSheet.key] against the sheet registry's explicit
+ * enumeration ([PlayerSheetRegistry.all]); unknown values fall back to
+ * `None`.
  */
 val PlayerSheetSaver: Saver<PlayerSheet, String> = Saver(
     save = { it.key },
-    restore = { name -> ALL_SHEETS.firstOrNull { it.key == name } ?: PlayerSheet.None },
-)
-
-// Explicit list avoids kotlin-reflect (sealedSubclasses), which is not on
-// the runtime classpath and crashes PlayerSheetKt's <clinit> on launch.
-private val ALL_SHEETS: List<PlayerSheet> = listOf(
-    PlayerSheet.None,
-    PlayerSheet.Speed,
-    PlayerSheet.Audio,
-    PlayerSheet.Chapter,
-    PlayerSheet.PlaybackInfo,
-    PlayerSheet.AspectRatio,
-    PlayerSheet.SubtitleHub,
-    PlayerSheet.AVSync,
-    PlayerSheet.Decoder,
-    PlayerSheet.Episodes,
-    PlayerSheet.Queue,
-    PlayerSheet.SyncPlay,
-    PlayerSheet.Quality,
-    PlayerSheet.PlaybackMode,
-    PlayerSheet.SleepTimer,
-    PlayerSheet.VideoFilter,
-    PlayerSheet.Hdr,
-    PlayerSheet.Render,
-    PlayerSheet.Version,
+    restore = { name -> PlayerSheetRegistry.all.firstOrNull { it.key == name } ?: PlayerSheet.None },
 )

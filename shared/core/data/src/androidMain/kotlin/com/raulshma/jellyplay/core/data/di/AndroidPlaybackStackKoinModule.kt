@@ -15,6 +15,7 @@ import com.raulshma.jellyplay.core.data.playback.AudioPlayerEngine
 import com.raulshma.jellyplay.core.data.playback.AudioStreamCache
 import com.raulshma.jellyplay.core.data.playback.DefaultAudioQueueFacade
 import com.raulshma.jellyplay.core.data.playback.ExoAmbientVideoPlayer
+import com.raulshma.jellyplay.core.data.playback.NowPlayingVerdict
 import com.raulshma.jellyplay.core.data.playback.PipController
 import com.raulshma.jellyplay.core.data.playback.PlaybackSessionManager
 import com.raulshma.jellyplay.core.data.playback.ThemeMusicPlayer
@@ -86,6 +87,13 @@ internal fun androidPlaybackStackModule(context: Context): Module = module {
             jellyfinRemotePlayCastStrategy = get(),
             audioStreamCache = get(),
             audioPrefetchEngine = get(),
+            // The remote-session gate over the verdict's flag cell —
+            // call-time resolution on purpose: the verdict ctor-injects
+            // THIS manager as its audio face, so an eager edge would be a
+            // construction cycle (same shape as the browser's facade
+            // provider above). The gate is only read when the audio
+            // progress loop starts, long after both singles exist.
+            remoteSessionActive = { get<NowPlayingVerdict>().remoteSessionActive.value },
         )
     }
     // Former bindAudioQueueManager / AudioEffectsManager @Binds-style aliases:
@@ -96,6 +104,16 @@ internal fun androidPlaybackStackModule(context: Context): Module = module {
     single<AudioQueueManager> { get<AudioPlaybackManager>() }
     single<AudioEffectsManager> { get<AudioPlaybackManager>() }
     single<AudioPlayerEngine> { get<AudioPlaybackManager>() }
+    // The Now-playing verdict (GLOSSARY): one fold over the video registry
+    // (commonMain, dataJvmModule) and this module's manager as the audio
+    // face. Consumed by the remote-cast family's reporter + receiver, the
+    // app's widget updater and the QS tile.
+    single {
+        NowPlayingVerdict(
+            videoEngines = get(),
+            audio = get<AudioPlaybackManager>(),
+        )
+    }
 
     single {
         AudioStreamCache(

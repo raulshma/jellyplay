@@ -130,10 +130,19 @@ interface DownloadRepository : OfflineDownloadWriter {
 
     suspend fun pauseDownload(id: String): Result<Unit>
 
+    /**
+     * The composite resume verb: marks the row PENDING **and** re-enqueues its
+     * worker — one dispatch for what the in-app and notification control
+     * surfaces always did as a hand-paired resume+enqueue. The enqueue
+     * follow-up lives inside the single [DownloadRepositoryImpl] (which also
+     * implements the DownloadQueue seam the screen consumes), so both
+     * vocabularies stay composite without growing either interface.
+     */
     suspend fun resumeDownload(id: String): Result<Unit>
 
     suspend fun deleteDownload(id: String): Result<Unit>
 
+    /** The composite retry verb — same enqueue-inside shape as [resumeDownload], from byte 0. */
     suspend fun retryDownload(id: String): Result<Unit>
 
     suspend fun getTotalDownloadedBytes(): Long

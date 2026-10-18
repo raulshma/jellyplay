@@ -1,7 +1,7 @@
 package com.raulshma.jellyplay.core.data.remote
 
 import android.util.Log
-import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
+import com.raulshma.jellyplay.core.data.playback.NowPlayingVerdict
 import com.raulshma.jellyplay.core.data.repository.AuthRepository
 import com.raulshma.jellyplay.core.data.repository.PlaybackRepository
 import com.raulshma.jellyplay.core.model.PlayMethod
@@ -21,13 +21,19 @@ import kotlinx.coroutines.launch
  * Jellyfin server while a remotely-initiated session is active.
  *
  * One progress loop polls the active engine / audio manager every 10s while
- * playing and every 60s while paused, until [stopSession] is called.
+ * playing and every 60s while paused, until [stopSession] is called. The
+ * poll itself is a [NowPlayingVerdict] read: the engine-vs-manager fork
+ * this class used to restate twice (`currentPositionTicksAndPaused` +
+ * `isPausedNow`) is the verdict's [NowPlayingVerdict.progressTicksAndPaused]
+ * / [NowPlayingVerdict.isPausedNow], and the remote-session flag it used to
+ * write on the audio manager is the verdict's cell (this reporter is still
+ * the ONE writer — via the verdict's internal mark, at the same two
+ * protocol points).
  */
 class RemotePlaybackReporter(
     private val playbackRepository: PlaybackRepository,
-    private val audioPlaybackManager: AudioPlaybackManager,
+    private val nowPlayingVerdict: NowPlayingVerdict,
     private val authRepository: AuthRepository,
-    private val activePlayerController: ActivePlayerController,
     /**
      * The Koin application scope (DatastoreQualifiers.applicationScope) the
      * IO scope hangs off as a SupervisorJob child — only the per-session
@@ -62,7 +68,7 @@ class RemotePlaybackReporter(
             return
         }
 
-        audioPlaybackManager.remoteSessionActive = true
+        nowPlayingVerdict.markRemoteSession(true)
 
         val newSessionId = java.util.UUID.randomUUID().toString()
         sessionId = newSessionId
@@ -82,7 +88,7 @@ class RemotePlaybackReporter(
 
         progressJob = scope.launch {
             while (isActive) {
-                val playing = currentPositionTicksAndPaused()
+                val playing = nowPlayingVerdict.progressTicksAndPaused()
                 if (playing != null) {
                     val (pos, paused) = playing
                     lastPositionTicks = pos
@@ -99,7 +105,7 @@ class RemotePlaybackReporter(
                         ),
                     )
                 }
-                delay(if (isPausedNow()) 60_000L else 10_000L)
+                delay(if (nowPlayingVerdict.isPausedNow()) 60_000L else 10_000L)
             }
         }
     }
@@ -127,26 +133,7 @@ class RemotePlaybackReporter(
         sessionId = null
         currentItemId = null
         currentMediaSourceId = null
-        audioPlaybackManager.remoteSessionActive = false
-    }
-
-    private fun currentPositionTicksAndPaused(): Pair<Long, Boolean>? {
-        val engine: RemotePlayableEngine? = activePlayerController.engine
-        if (engine != null) {
-            return engine.currentPositionMs * 10_000L to !engine.isPlaying.value
-        }
-        val pos = audioPlaybackManager.currentPosition.value
-        val paused = !audioPlaybackManager.isPlaying.value
-        if (audioPlaybackManager.hasActiveSession) {
-            return pos * 10_000L to paused
-        }
-        return null
-    }
-
-    private fun isPausedNow(): Boolean {
-        val engine = activePlayerController.engine
-        if (engine != null) return !engine.isPlaying.value
-        return !audioPlaybackManager.isPlaying.value
+        nowPlayingVerdict.markRemoteSession(false)
     }
 
     private suspend fun isAuthenticated(): Boolean = try {

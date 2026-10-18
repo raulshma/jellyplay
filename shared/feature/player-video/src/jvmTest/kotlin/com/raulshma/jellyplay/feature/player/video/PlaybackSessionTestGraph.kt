@@ -225,12 +225,7 @@ internal class PlaybackSessionTestGraph private constructor(
     val uiState get() = handles.uiState
 
     private val host = SessionHostLambdas(
-        seekTo = { _, _ -> },
-        seekByStep = { _ -> },
-        routedPlay = { _ -> },
-        resumePlayback = {},
-        applyResumeSkip = {},
-        autoSkipSegment = {},
+        autoSkipSegment = { _ -> },
         onEndedWithNoNext = {},
         handlePlaybackEnded = {},
     )

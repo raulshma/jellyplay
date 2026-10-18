@@ -9,9 +9,11 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
- * Pins the [DownloadActions] admission table and the selected/all/item
- * targeting fold — the table the former hand-written filter lambdas in
- * [DownloadsViewModel] encoded action-by-action, now in one place.
+ * Pins the [DownloadActions] admission table, the selected/all/item targeting
+ * fold, the per-item availability fold the row renderer consumes, and the
+ * COMPLETED-is-playable fold — the tables the former hand-written filter
+ * lambdas in [DownloadsViewModel] and the row's per-status button branches
+ * encoded action-by-action, now in one place.
  */
 class DownloadActionsTest {
 
@@ -200,5 +202,58 @@ class DownloadActionsTest {
         assertTrue(
             DownloadActions.targets(DownloadBulkAction.DELETE, downloads, emptySet(), DownloadActionScope.Item("gone")).isEmpty(),
         )
+    }
+
+    // ── Per-item availability fold (the row renderer's source) ───────────
+
+    /**
+     * The full status × action matrix, stated explicitly: this IS the row
+     * renderer's placement input, so the test reads as the table the inline
+     * clusters used to re-encode branch by branch. Order is the enum's
+     * declaration order (the cluster renders in it).
+     */
+    @Test
+    fun availableActions_folds_the_admission_table_per_status() {
+        val expected: Map<DownloadStatus, List<DownloadBulkAction>> = mapOf(
+            DownloadStatus.PENDING to listOf(DownloadBulkAction.CANCEL, DownloadBulkAction.DELETE),
+            DownloadStatus.QUEUED to listOf(DownloadBulkAction.CANCEL, DownloadBulkAction.DELETE),
+            DownloadStatus.DOWNLOADING to listOf(DownloadBulkAction.PAUSE, DownloadBulkAction.CANCEL, DownloadBulkAction.DELETE),
+            DownloadStatus.PAUSED to listOf(DownloadBulkAction.RESUME, DownloadBulkAction.CANCEL, DownloadBulkAction.DELETE),
+            DownloadStatus.COMPLETED to listOf(DownloadBulkAction.DELETE),
+            DownloadStatus.FAILED to listOf(DownloadBulkAction.RETRY_FAILED, DownloadBulkAction.DELETE),
+            DownloadStatus.CANCELLED to listOf(DownloadBulkAction.DELETE),
+        )
+        expected.forEach { (status, actions) ->
+            assertEquals(actions, DownloadActions.availableActions(item("x", status)), "availability for $status")
+        }
+    }
+
+    @Test
+    fun availableActions_agrees_with_the_supports_fold_at_item_scope() {
+        // The fold and the scope fold read the same table: an action is in
+        // availableActions(item) iff Item-scope targets for it are non-empty.
+        DownloadStatus.entries.forEach { status ->
+            val single = listOf(item("x", status))
+            DownloadBulkAction.entries.forEach { action ->
+                assertEquals(
+                    DownloadActions.supports(action, single, emptySet(), DownloadActionScope.Item("x")),
+                    action in DownloadActions.availableActions(item("x", status)),
+                    "$action availability vs admission for $status",
+                )
+            }
+        }
+    }
+
+    // ── COMPLETED-is-playable fold ─────────────────────────────────────────
+
+    @Test
+    fun isPlayable_admits_only_completed() {
+        DownloadStatus.entries.forEach { status ->
+            assertEquals(
+                status == DownloadStatus.COMPLETED,
+                DownloadActions.isPlayable(item("x", status)),
+                "playability for $status",
+            )
+        }
     }
 }

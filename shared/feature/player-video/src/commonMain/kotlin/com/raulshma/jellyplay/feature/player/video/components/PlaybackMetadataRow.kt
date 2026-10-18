@@ -46,7 +46,10 @@ import com.raulshma.jellyplay.core.ui.tv.rememberTvFocusState
 import com.raulshma.jellyplay.core.ui.tv.tvFocusIndicator
 import com.raulshma.jellyplay.feature.player.video.TrackOption
 import com.raulshma.jellyplay.feature.player.video.engine.EngineVideoStats
+import com.raulshma.jellyplay.feature.player.video.engine.HdrContentInfo
 import com.raulshma.jellyplay.feature.player.video.engine.PlaybackMetadataSnapshot
+import com.raulshma.jellyplay.feature.player.video.engine.hdrFamilyOf
+import com.raulshma.jellyplay.feature.player.video.engine.hdrLabelFor
 import com.raulshma.jellyplay.feature.player.video.generated.resources.Res
 import com.raulshma.jellyplay.feature.player.video.generated.resources.player_video_mpv_config_chip
 import kotlinx.coroutines.flow.StateFlow
@@ -113,22 +116,23 @@ internal fun PlaybackMetadataRow(
     val resolutionLabel = deriveResolutionLabel(videoStream, videoStats.videoResolution)
     val videoCodec = formatVideoCodec(videoStream?.codec ?: videoStats.videoCodec)
 
-    val isDolbyVision = hdrType?.lowercase() in listOf("dolbyvision", "dolby_vision", "dovi") ||
-        (videoStream?.videoDoViTitle?.isNotBlank() == true) ||
-        (videoStream?.videoRangeType?.lowercase()?.contains("dovi") == true) ||
-        (videoStream?.videoRange?.lowercase()?.contains("dovi") == true) ||
-        (videoStats.videoHdrType?.lowercase()?.contains("dolby") == true) ||
-        (videoStats.videoHdrType?.lowercase()?.contains("dovi") == true)
+    // The HDR chip folds through the engine policy's ONE family parser
+    // (hdrFamilyOf) — the same vocabulary the HDR sheet and the config
+    // builder's hdrContentFromStreams consume; the row keeps only the
+    // presentation choices: the DV badge (the DoVi title alone also arms
+    // it) and the label fallback chain (claim label → raw stats text).
+    val hdrFamily = hdrFamilyOf(
+        hdrType,
+        videoStats.videoHdrType,
+        videoStream?.videoRange,
+        videoStream?.videoRangeType,
+    )
+    val isDolbyVision = hdrFamily == HdrContentInfo.DOLBY_VISION ||
+        (videoStream?.videoDoViTitle?.isNotBlank() == true)
 
     val hdrLabel = when {
-        isDolbyVision -> "Dolby Vision"
-        hdrType != null -> when (hdrType.lowercase()) {
-            "hdr10" -> "HDR10"
-            "hdr10plus", "hdr10_plus" -> "HDR10+"
-            "hlg" -> "HLG"
-            "hdr" -> "HDR"
-            else -> hdrType.uppercase()
-        }
+        isDolbyVision -> HdrContentInfo.DOLBY_VISION.displayName
+        hdrType != null -> hdrLabelFor(hdrType) ?: hdrType.uppercase()
         videoStats.videoHdrType != null -> videoStats.videoHdrType
         else -> null
     }

@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.feature.player.video.engine
 import androidx.compose.runtime.Immutable
 import com.raulshma.jellyplay.core.model.ExoHdrToneMappingMode
 import com.raulshma.jellyplay.core.model.MediaStream
+import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.model.StreamType
 
 /**
@@ -53,6 +54,63 @@ enum class HdrContentInfo(val displayName: String) {
 }
 
 /**
+ * The single HDR-family vocabulary parser — the ONE place free-form HDR text
+ * (Jellyfin `videoRange`/`videoRangeType` claims, the engines' stats
+ * projections, the HDR sheet's chip labels) becomes an [HdrContentInfo].
+ * Every consumer that used to spell the vocabulary itself — the stream fold
+ * ([hdrContentFromStreams]), the family labels ([hdrLabelFor]) and the
+ * playback-metadata row's DV badge — folds through here, so the spelling
+ * sets that grew independently (dovi / dolbyvision / dolby_vision / the
+ * label-shaped "dolby …"; hdr10plus / hdr10+ / hdr10_plus) can never drift
+ * apart again.
+ *
+ * The rung order encodes the same specificity as [HdrContentInfo]: Dolby
+ * Vision first (its `DolbyVisionWithHDR10` profile strings mention HDR10 —
+ * `dolby` subsumes the `dolbyvision`/`dolby_vision`/"dolby vision" label
+ * spellings), then the HDR10+ / HDR10 pair (`hdr10plus`/`hdr10+`/
+ * `hdr10_plus` must match before the bare `hdr10`), then HLG, then the bare
+ * `hdr` catch-all (the legacy `videoRange=HDR` — the "HDR, static-info"
+ * family). Each rung scans ALL the texts before the next rung starts — the
+ * contains-ladder semantics of the space-joined range+rangeType string the
+ * stream fold used to build, not a first-text-wins fold (range "HDR" +
+ * rangeType "DolbyVision…" must still read DV).
+ *
+ * Returns `null` when no text carries an HDR family (SDR / unknown /
+ * unrecognized) — callers' fallback chains stay single-sourced on that null.
+ */
+fun hdrFamilyOf(vararg texts: String?): HdrContentInfo? {
+    val lowered = texts.filterNotNull().filter { it.isNotBlank() }.map { it.lowercase() }
+    if (lowered.isEmpty()) return null
+    return when {
+        lowered.any { it.contains("dovi") || it.contains("dolby") } -> HdrContentInfo.DOLBY_VISION
+        lowered.any { it.contains("hdr10plus") || it.contains("hdr10+") || it.contains("hdr10_plus") } ->
+            HdrContentInfo.HDR10_PLUS
+        lowered.any { it.contains("hdr10") } -> HdrContentInfo.HDR10
+        lowered.any { it.contains("hlg") } -> HdrContentInfo.HLG
+        lowered.any { it.contains("hdr") } -> HdrContentInfo.HDR10
+        else -> null
+    }
+}
+
+/**
+ * The HDR family's user-facing label ("Dolby Vision", "HDR10", "HDR10+"), or
+ * `null` for SDR/unknown — the label twin of [hdrFamilyOf]. The HDR sheet's
+ * content row and the playback-metadata row's HDR chip both render through
+ * it, so a family cannot gain a spelling without gaining its label. The
+ * SDR/unknown vocabularies normalize to null so callers' fallback chains
+ * (metadata → observed → "SDR") stay single-sourced; the bare legacy `hdr`
+ * claim keeps its own label (the chip reads "HDR", not "HDR10" — the
+ * static-info family [hdrFamilyOf] classifies it as); anything unrecognized
+ * is shouted through unchanged (`raw.uppercase()`).
+ */
+fun hdrLabelFor(raw: String?): String? {
+    if (raw.isNullOrBlank()) return null
+    if (raw.equals("sdr", ignoreCase = true) || raw.equals("unknown", ignoreCase = true)) return null
+    if (raw.equals("hdr", ignoreCase = true)) return "HDR"
+    return hdrFamilyOf(raw)?.displayName ?: raw.uppercase()
+}
+
+/**
  * The CURRENT item's HDR classification, folded into [EngineConfig.hdrContent]
  * beside the Boolean [EngineConfig.hdrSource] (`hdrSource = hdrContent != NONE`
  * always). The derivation order encodes specificity: Dolby Vision first (its
@@ -70,19 +128,9 @@ fun hdrContentFromStreams(streams: List<MediaStream>): HdrContentInfo =
 
 /** Single-stream classification for [hdrContentFromStreams]. */
 private fun hdrContentOfStream(stream: MediaStream): HdrContentInfo {
-    val range = stream.videoRange?.lowercase().orEmpty()
-    val rangeType = stream.videoRangeType?.lowercase().orEmpty()
-    val combined = "$range $rangeType"
-    return when {
-        stream.videoDoViTitle != null ||
-            combined.contains("dovi") ||
-            combined.contains("dolbyvision") -> HdrContentInfo.DOLBY_VISION
-        combined.contains("hdr10plus") || combined.contains("hdr10+") -> HdrContentInfo.HDR10_PLUS
-        combined.contains("hdr10") -> HdrContentInfo.HDR10
-        combined.contains("hlg") -> HdrContentInfo.HLG
-        combined.contains("hdr") -> HdrContentInfo.HDR10
-        else -> HdrContentInfo.NONE
-    }
+    // The DoVi title alone decides (the local MediaExtractor probe's DV path).
+    if (stream.videoDoViTitle != null) return HdrContentInfo.DOLBY_VISION
+    return hdrFamilyOf(stream.videoRange, stream.videoRangeType) ?: HdrContentInfo.NONE
 }
 
 /**
@@ -244,4 +292,158 @@ fun resolveMpvHdrOutput(
         notice = HdrOutputDecision.NOTICE_SDR_DISPLAY,
     )
     else -> HdrOutputDecision(toneMappingActive = true)
+}
+
+// ── The status-card verdict (pure, testable; the HDR sheet renders it) ──
+
+/**
+ * The user-facing HDR playback mode the status card leads with — the
+ * shopping-list answer to "what is happening to the HDR picture right now".
+ */
+@Immutable
+enum class HdrPlaybackMode {
+    /** The display switched to the content's HDR transfer — playback is native HDR. */
+    HdrOutput,
+    /** The engine converts HDR → SDR in its render pipeline. */
+    ToneMapped,
+    /** Native output with NO tone-mapping path — washed-out colors are expected. */
+    NativeUnhandled,
+    /** No HDR signal in the current decode — no HDR processing is involved. */
+    SdrPlayback,
+    /** The engine exposes no HDR output state (VLC, external players). */
+    NotReported,
+}
+
+@Immutable
+data class HdrPlaybackModeInfo(
+    val mode: HdrPlaybackMode,
+    /** The status card's headline ("Tone mapped to SDR"). */
+    val title: String,
+    /** The status card's one-line explanation. */
+    val explanation: String,
+)
+
+private fun sdrPlaybackInfo() = HdrPlaybackModeInfo(
+    mode = HdrPlaybackMode.SdrPlayback,
+    title = "SDR playback",
+    explanation = "What's playing right now has no HDR signal — the picture plays as-is.",
+)
+
+/**
+ * The HDR sheet's honest mapping from the (player type × content × output)
+ * facts to the status-card headline. Matches the shared [HdrOutputDecision]
+ * notice CONSTANT references (compile-checked; never raw string literals).
+ *
+ * The content basis is engine-specific, mirroring how each engine publishes
+ * its verdict:
+ *  - **ExoPlayer** identifies the DECODING stream every time (colorInfo /
+ *    MIME → [observedHdrType]), and DOWNGRADES its published
+ *    `hdrOutputActive` when the observed track is clearly SDR (the adaptive
+ *    transcode-rendition case). Its observed family is therefore
+ *    authoritative: observed null ⇒ no HDR signal in the decode.
+ *  - **mpv hosts** never publish an observed transfer (the stats projection
+ *    reads no transfer property), so the metadata claim ([contentHdrType])
+ *    is the only content basis; the output verdict comes from the
+ *    `video-target-params` probe — mpv always tone maps a non-HDR target.
+ */
+fun resolveHdrPlaybackMode(
+    playerType: PlayerType,
+    contentHdrType: String?,
+    observedHdrType: String?,
+    hdrOutputActive: Boolean,
+    hdrOutputNotice: String?,
+): HdrPlaybackModeInfo {
+    val reportsOutput = playerType == PlayerType.MPV || playerType == PlayerType.EXO_PLAYER
+    val claimsHdr = !contentHdrType.isNullOrBlank() || !observedHdrType.isNullOrBlank()
+    val observesHdr = !observedHdrType.isNullOrBlank()
+    return when {
+        // Engines that expose no HDR output state: the honest empty state.
+        !reportsOutput -> HdrPlaybackModeInfo(
+            mode = HdrPlaybackMode.NotReported,
+            title = "No HDR report",
+            explanation = "This player doesn't report an HDR output state.",
+        )
+        // The engine's display-in-HDR verdict wins over everything (the Exo
+        // observed-SDR downgrade would already have cleared it).
+        hdrOutputActive -> HdrPlaybackModeInfo(
+            mode = HdrPlaybackMode.HdrOutput,
+            title = "Native HDR output",
+            explanation = "Your display switched to its HDR mode — the picture plays natively.",
+        )
+        // mpv: the claim (or the desktop's observed family) decides content;
+        // a non-HDR target gets mpv's tone-mapping preset, always — whether
+        // passthrough is off or the display ignored the colorspace hint.
+        playerType == PlayerType.MPV ->
+            if (claimsHdr) {
+                HdrPlaybackModeInfo(
+                    mode = HdrPlaybackMode.ToneMapped,
+                    title = "Tone mapped to SDR",
+                    explanation = "The output stayed SDR — colors are converted for your display.",
+                )
+            } else {
+                sdrPlaybackInfo()
+            }
+        // Exo with an HDR decode: the notice disambiguates the posture.
+        observesHdr -> when {
+            hdrOutputNotice == HdrOutputDecision.NOTICE_SDR_NO_TONE_MAPPING ||
+                hdrOutputNotice == HdrOutputDecision.NOTICE_DV_NON_DV_DISPLAY ->
+                // The tone-mapping lever was declined (AUTO/OFF) or the
+                // family is unrepresentable (DV profile 5): native output,
+                // colors unhandled.
+                HdrPlaybackModeInfo(
+                    mode = HdrPlaybackMode.NativeUnhandled,
+                    title = "HDR output unhandled",
+                    explanation = hdrOutputNotice.orEmpty(),
+                )
+            hdrOutputNotice == HdrOutputDecision.NOTICE_SDR_DISPLAY ->
+                // AUTO + a reported-SDR display: the GL tone-mapping path is
+                // engaged (the notice says it).
+                HdrPlaybackModeInfo(
+                    mode = HdrPlaybackMode.ToneMapped,
+                    title = "Tone mapped to SDR",
+                    explanation = "The display can't show this HDR family — the picture is " +
+                        "converted for SDR.",
+                )
+            else ->
+                // The display probe never answered (AUTO/OFF both land here):
+                // the tone-mapping lever was not engaged, so the output is
+                // native either way — on an SDR display that means washed out.
+                HdrPlaybackModeInfo(
+                    mode = HdrPlaybackMode.NativeUnhandled,
+                    title = "HDR output unhandled",
+                    explanation = "Tone mapping isn't engaged and the display's HDR support " +
+                        "is unknown — colors may look washed out.",
+                )
+        }
+        // Exo with no observed HDR signal: SDR decode (or the format hasn't
+        // reported yet) — no HDR processing in the pipeline.
+        else -> sdrPlaybackInfo()
+    }
+}
+
+/**
+ * The DETECTED display type the facts row shows — the most precise fact
+ * available, with honest render-path inference when the platform probe has
+ * no answer (some devices answer `Display.getHdrCapabilities` with null
+ * even on HDR-capable panels):
+ *  - the probe's family list when it answered ("HDR10, Dolby Vision" /
+ *    "SDR" — both Android engines publish the same shapes),
+ *  - the output spot-check when only a target verdict exists (mpv's
+ *    `video-target-params` HDR verdict — the desktop mpv hosts),
+ *  - "SDR (the output stayed SDR)" when the engine tone mapped — the
+ *    tone-mapping render path itself proves the output is SDR,
+ *  - "Unknown" with the reason when only a lever decision exists but no
+ *    display fact (the probing exo lever is not engaged — the display probe
+ *    never answered),
+ *  - an honest "Not detected" only when nothing observable says anything.
+ */
+fun resolveDetectedDisplayLabel(
+    displayHdrTypes: String?,
+    mode: HdrPlaybackMode,
+): String = when {
+    !displayHdrTypes.isNullOrBlank() -> displayHdrTypes
+    mode == HdrPlaybackMode.HdrOutput -> "HDR (detected from the output)"
+    mode == HdrPlaybackMode.ToneMapped -> "SDR (the output stayed SDR)"
+    mode == HdrPlaybackMode.NativeUnhandled -> "Unknown (the display probe didn't answer)"
+    else -> "Not detected"
 }

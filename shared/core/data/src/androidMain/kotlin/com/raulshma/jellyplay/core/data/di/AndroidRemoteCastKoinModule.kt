@@ -5,7 +5,6 @@ import com.raulshma.jellyplay.core.data.cast.CastManager
 import com.raulshma.jellyplay.core.data.cast.GoogleCastStrategy
 import com.raulshma.jellyplay.core.data.cast.dlna.DlnaCastStrategy
 import com.raulshma.jellyplay.core.data.cast.remote.JellyfinRemotePlayCastStrategy
-import com.raulshma.jellyplay.core.data.playback.AudioQueueManager
 import com.raulshma.jellyplay.core.data.remote.AndroidAudioRemoteControlDispatcher
 import com.raulshma.jellyplay.core.data.remote.AndroidVideoRemoteControlDispatcher
 import com.raulshma.jellyplay.core.data.remote.AudioRemoteControlDispatcher
@@ -46,9 +45,8 @@ internal fun androidRemoteCastModule(context: Context): Module = module {
     single {
         RemotePlaybackReporter(
             playbackRepository = get(),
-            audioPlaybackManager = get(),
+            nowPlayingVerdict = get(),
             authRepository = get(),
-            activePlayerController = get(),
             applicationScope = get(DatastoreQualifiers.applicationScope),
         )
     }
@@ -63,7 +61,7 @@ internal fun androidRemoteCastModule(context: Context): Module = module {
             activePlayerController = get(),
             securityStore = get(),
             remoteNavigationBridge = get<RemoteNavigationBridge>(),
-            audioQueueManager = get<AudioQueueManager>(),
+            nowPlayingVerdict = get(),
             applicationScope = get(DatastoreQualifiers.applicationScope),
         )
     }

@@ -109,7 +109,7 @@ internal fun DetailActionButtons(
     vertical: Boolean = false,
     contentFocusRequester: FocusRequester? = null,
 ) {
-    val detail = state.detail ?: return
+    val detail = state.core.detail ?: return
     val item = detail.item
     val isAudio = item.mediaType.isAudioType
     val isAlbum = item.mediaType == MediaType.ALBUM
@@ -148,17 +148,17 @@ internal fun DetailActionButtons(
     // required play) apply to a SEASON entry as well — its snapshot IS a
     // series catalogue.
     val isSeriesLike = isSeries || item.mediaType == MediaType.SEASON
-    val target = if (showsSeasonTree(item.mediaType)) state.smartPlayTarget else null
+    val target = if (showsSeasonTree(item.mediaType)) state.core.smartPlayTarget else null
     val itemProgressFraction = item.progressFraction()
     val hasProgress = itemProgressFraction != null && itemProgressFraction > 0f
-    val allSeasonsFetched = state.seasons.isEmpty() || state.seasons.all { it.id in state.fetchedSeasonIds }
-    val allEpisodesEmpty = remember(state.seasons, state.episodes) {
-        state.seasons.isNotEmpty() && state.episodes.values.all { it.isEmpty() }
+    val allSeasonsFetched = state.core.seasons.isEmpty() || state.core.seasons.all { it.id in state.core.fetchedSeasonIds }
+    val allEpisodesEmpty = remember(state.core.seasons, state.core.episodes) {
+        state.core.seasons.isNotEmpty() && state.core.episodes.values.all { it.isEmpty() }
     }
     val isResolvingSeriesTarget = isSeriesLike &&
         target == null &&
         !allSeasonsFetched
-    val hasNoEpisodes = isSeriesLike && allSeasonsFetched && (allEpisodesEmpty || state.episodes.isEmpty())
+    val hasNoEpisodes = isSeriesLike && allSeasonsFetched && (allEpisodesEmpty || state.core.episodes.isEmpty())
     // A series with no episodes has no valid play target — never let the primary button
     // dispatch play on the series root item. The button already dims when this is false.
     // A book is playable when its format is readable in-app OR unknown-but-unprobed
@@ -214,15 +214,15 @@ internal fun DetailActionButtons(
     // Shared click handler — identical for vertical and horizontal so the two
     // branches can never diverge in play-resolution logic.
     val playConfirmHaptic = rememberConfirmHaptic()
-    val onPlay = remember(canPlayPrimary, isBook, isAlbum, isAudio, target, item, detail, state.selectedVersionId, callbacks, state.albumTracks) {
+    val onPlay = remember(canPlayPrimary, isBook, isAlbum, isAudio, target, item, detail, state.selectedVersionId, callbacks, state.core.albumTracks) {
         {
             if (!canPlayPrimary) return@remember
             playConfirmHaptic()
             if (isBook) {
                 callbacks.playback.onReadClick(item.id, null, null)
-            } else if (isAlbum && state.albumTracks.isNotEmpty()) {
+            } else if (isAlbum && state.core.albumTracks.isNotEmpty()) {
                 callbacks.playback.onPlayAlbumTrack(0)
-                state.albumTracks.firstOrNull()?.let { track ->
+                state.core.albumTracks.firstOrNull()?.let { track ->
                     callbacks.navigation.onNavigate(Route.AudioPlayer(track.id))
                 }
             } else if (isAudio) {

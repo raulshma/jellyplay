@@ -523,30 +523,40 @@ fun DownloadsScreen(
                                             // Completed downloads open their detail page on tap
                                             // (matching the online experience) rather than auto-playing.
                                             // A distinct Play action is still available in the row.
+                                            // Both gates read the module's COMPLETED-is-playable
+                                            // fold instead of restating the status check.
                                             onOpenDetail = {
-                                                if (download.status == DownloadStatus.COMPLETED) {
+                                                if (DownloadActions.isPlayable(download)) {
                                                     onItemClick(download.mediaItemId)
                                                 }
                                             },
                                             onPlay = {
-                                                if (download.status == DownloadStatus.COMPLETED) {
+                                                if (DownloadActions.isPlayable(download)) {
                                                     onPlayOffline(download.mediaItemId, download.mediaType)
                                                 }
                                             },
                                             // Stream-instead: offered for completed downloads
                                             // while online — plays the server copy when the
                                             // local file is unwanted (data roaming, a broken
-                                            // transfer, preferring the transcoded ladder).
-                                            onStream = if (download.status == DownloadStatus.COMPLETED && networkStatus.hasNetwork) {
+                                            // transfer, preferring the transcoded ladder). The
+                                            // COMPLETED half is the module's playable fold; the
+                                            // connectivity half stays a call-site (presentation)
+                                            // gate.
+                                            onStream = if (DownloadActions.isPlayable(download) && networkStatus.hasNetwork) {
                                                 { onStreamOffline(download.mediaItemId) }
                                             } else {
                                                 null
                                             },
-                                            onCancel = { viewModel.applyBulkAction(DownloadBulkAction.CANCEL, DownloadActionScope.Item(download.id)) },
-                                            onPause = { viewModel.applyBulkAction(DownloadBulkAction.PAUSE, DownloadActionScope.Item(download.id)) },
-                                            onResume = { viewModel.applyBulkAction(DownloadBulkAction.RESUME, DownloadActionScope.Item(download.id)) },
-                                            onDelete = { viewModel.pendingDelete.show(download) },
-                                            onRetry = { viewModel.applyBulkAction(DownloadBulkAction.RETRY_FAILED, DownloadActionScope.Item(download.id)) },
+                                            // One sink per row: the row dispatches a bare action
+                                            // and the screen owns the per-verb policy — DELETE
+                                            // confirms through the same dialog the swipe gesture
+                                            // uses, everything else dispatches at Item scope.
+                                            onAction = { action ->
+                                                when (action) {
+                                                    DownloadBulkAction.DELETE -> viewModel.pendingDelete.show(download)
+                                                    else -> viewModel.applyBulkAction(action, DownloadActionScope.Item(download.id))
+                                                }
+                                            },
                                             onMoveToFront = { viewModel.moveToFront(download) },
                                             onLowerPriority = { viewModel.lowerPriority(download) },
                                             onToggleSelection = { viewModel.toggleSelection(download) },

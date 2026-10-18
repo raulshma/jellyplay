@@ -18,9 +18,13 @@ composeMaterial3AdaptiveNavigationSuite = "1.5.0-alpha25"
 # Android target these redirect to the androidx artifacts.
 composeMultiplatform = "1.11.1"
 # JB material3 rides its own train; the 1.11.x line never stabilised past
-# alpha (latest release overall is 1.9.0), so pin the newest of the matching
-# 1.11 line to keep expressive APIs available on desktop.
-composeMultiplatformMaterial3 = "1.11.0-alpha07"
+# alpha (latest release overall is 1.9.0). Pin the 1.12 line: coil 3.6.3
+# already raises JB foundation to 1.12.0, and 1.11.0-alpha07 was compiled
+# against foundation 1.11.0-beta03 (its CustomStyle SAM descriptor predates
+# the applyStyle(CustomStyleScope) shape), which surfaces as an
+# AbstractMethodError in Compose UI host tests. 1.12.0-alpha03 targets
+# foundation 1.12.0-beta01 and stays binary-compatible with 1.12.0.
+composeMultiplatformMaterial3 = "1.12.0-alpha03"
 # Koin: shared-module DI. Hand-written DSL modules — koin-annotations
 # deferred until its KSP line settles.
 koin = "4.2.2"

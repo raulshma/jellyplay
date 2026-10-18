@@ -80,6 +80,28 @@ applied where a section's inputs currently restate themselves in four places.
 Status: implemented as a registry with two pilot sections (TMDB reviews,
 plugin ratings); remaining sections migrate into it as touched.
 
+## Downloads
+
+**Download action module** — everything "what can I do to a download"
+knows about itself: admission (the `DownloadActions` table, consumed —
+never re-encoded as a per-status `when`; the row re-encoding it today
+violates the table's own "neither re-encodes the table" contract), the
+composite verbs (resume/retry + enqueue) that the ViewModel and the
+notification receiver both dispatch, the COMPLETED-is-playable fold
+(five restatements today), and the post-action effects (message,
+selection clear) — behind one interface the row renderer, the screen's
+action sink and the receiver consume. The row's per-status placement
+stays code keyed on the module's available-action set; a placement
+flag table is the rejected shape. The row interface shrinks from
+twenty parameters (ten action callbacks) to an item plus a sink.
+Status: implemented 2026-10-18 (`DownloadActions.availableActions` /
+`isPlayable`; composite resume/retry+enqueue folded inside
+`DownloadRepositoryImpl` — the DownloadRepositorySurfaceTest member
+ratchet ruled out a new queue verb; the row's five callbacks collapsed
+into one `onAction` sink; the notification receiver dispatches the
+composite verb alone; the effects fold stayed VM-side — DELETE-only,
+already single-sited).
+
 ## Playback
 
 **Up Next module** — everything "what plays next" knows about itself:
@@ -91,6 +113,42 @@ projections gate on the uiState mirror, the advance on the manager flag.
 Segment display math (`SegmentCalculator`) and the autoplay gate consume
 the precedence verdict; neither carries queue fragments.
 
+**Transport routing module** — the SyncPlay → cast → local seek/play precedence ladder plus its per-arm bypass rules (clamp only on user-initiated local seeks, no position-flow write on group/cast arms, resume-skip import on the local play arm), behind one small interface owned by `PlaybackSession`. The session's collaborators call the router directly; `SessionHostLambdas` carries only policy outcomes (segment skip, end-of-playback), and the ViewModel's transport funnel arms are one-line forwards. The ladder is asserted behaviorally (recording arms), not by source text.
+Status: implemented 2026-10-18 (`TransportRouter` beside `PipTransportController`; `SessionHostLambdas` 8→3; the skipped-segment notice stays VM-side via a narrow ctor callback).
+
+**Player UI commands module** — the preference-write choreography (guard → uiState mirror → persist launch → apply, with the sibling-snapshot-captured-before-write and engine-before-mirror rules), one module instead of ten hand-rolled setter copies. Each setter's divergence stays code, not a flag table.
+Status: implemented 2026-10-18 (`PlayerUiCommands` owned by `PlaybackSession`; `applyPlaybackPrefChange` absorbed; aspect-ratio included despite persisting nothing — the name says UI commands).
+
+**Config delta** — one decision half for all four engines: `EngineConfigDelta.of(old, new)` computes which config slices moved, and every adapter's `onConfigChanged` switches on flags instead of hand-rolled `old != new` ladders. The subtitle carve-out (style change excluding the delay that rides `SubtitleStyle.offsetMs`) is computed inside `of()` from the raw configs — never derived from the other flags.
+Status: implemented 2026-10-18 (`subtitleStyleChangedExcludingDelay`; Exo and VLC consume the delta, joining the two mpv hosts).
+
+**Player sheet module** — everything one player sheet knows about
+itself: its entry points (chip, overflow, gear, cross-sheet links),
+its commands, and its slice region — registered in a sheet registry at
+the Home row module's grain (feature-grain; NOT ADR-0009's rejected
+settings-group grain). The 19-branch router `when` and the manual
+`ALL_SHEETS` list dissolve into the registry; a new sheet lands in one
+module instead of touching six-plus files (the HDR sheet measured
+nineteen). Migration is staged: pilot sheets first, the rest as
+touched — the Detail section module precedent.
+Status: implemented as a registry with two pilot sheets (Hdr, Render) — `PlayerSheetModule.kt`: interface + scope + explicit no-reflection registry with an exhaustive-`when` totality gate; `PlayerSheetSaver` restores via the registry; the pilot router branches delegate to their modules and the chip/gear/cross-sheet entries reference the modules' keys. The router `when` remains for the unmigrated 17 (migrate as touched); the commands, slice-region and entry-bundle halves are later waves.
+
+**HDR mode verdict** — the playback-mode derivation
+(`resolveHdrPlaybackMode`, today a 74-line decision tree inside the
+`HdrOptionsSheet` presentation file) and the HDR family vocabulary
+(dovi / hdr10+ / hlg spellings, today normalized three times with
+three spelling sets that must agree) live in `HdrOutputPolicy`; the
+sheet renders the verdict, the metadata row labels through the one
+family parser, the engines consume the same decision.
+`HdrPlaybackModeTest` moves from pinning sheet-file internals to the
+policy's own JVM lane — the interface becomes the test surface again.
+Status: implemented 2026-10-18 (`HdrOutputPolicy` absorbed
+`resolveHdrPlaybackMode`/`resolveDetectedDisplayLabel`/`hdrLabelFor`
+verbatim, internal→public; the one family parser is `hdrFamilyOf`,
+feeding `hdrContentFromStreams`, the sheet and the metadata row;
+`HdrPlaybackModeTest` moved to player-contract's jvmTest, all 18 cases
+verbatim; sheet 555→391 lines).
+
 **mpv core** — the commonMain implementation of the mpv engine choreography:
 load, seek, track selection, subtitle style application, property intake,
 ordering rules. Platform code shrinks to a **mpv binding** — an adapter over
@@ -100,6 +158,27 @@ The core deliberately spans two halves — a pure fold/projection half and the
 binding-driving half; both are the core, and "where does mpv behavior live"
 has this term as its one-word answer (see also the plugin glossary's
 vocabulary for what the plugin side owns).
+
+**mpv recovery choreography** — the stall-watchdog wiring (the
+sticky-hwdec precedence ladder spanning initOptions, load,
+onConfigChanged and recovery — untested in androidMain today) and the
+HDR probe machine (the per-host @Volatile probe twins, the
+change-cached hint write, `hdrPassthroughRequested` duplicated verbatim
+as "the desktop twin") owned by the mpv core behind the binding seam.
+Both bindings ride it — the desktop host gains stall recovery it
+currently lacks, and the fake binding can pin the precedence ladder.
+The pure decision modules (`MpvStallWatchdog`, `HdrOutputPolicy`) stay
+where they are; this term is their wiring's home.
+Status: implemented 2026-10-18 (the ladder, retirement, per-load
+reset, tick funnel, log feed and recovery execution live in `MpvCore`
+through `MpvCore.Hosts` (`writeStallHwdec`, `stallHwdecFallbackValue`,
+`writeTargetColorspaceHint`); MpvPlayerEngine's seven sites are thin
+delegations; the desktop engine rides the same machinery and gains
+stall recovery; the "desktop twin" `hdrPassthroughRequested` died into
+the core; nine fake-binding ladder/HDR pins added to `MpvCoreTest`).
+Host-side remainders, with reasons: the probe reads
+(`DisplayHdrCapabilitiesProbe`, desktop gamma read), the configured
+hwdec dialects, and the desktop one-shot hint gate.
 
 **Session slice** — the one read seam between the player UI and the playback
 session: per-region projections (overlay, status, sheets, cast) whose
@@ -142,7 +221,67 @@ enable gates and the SELECT ladder through it over the same
 `videoInputBindings` store, zap behavior preserved as the default
 binding).
 
+**Detail content state core** — the screen's content state is the ViewModel's `DetailUiState` carried wholesale plus the handful of genuinely screen-resolved extras (navigation id, persisted season, selected version, downloads slice, resync, manage flag). No verbatim fold restates the core's fields, so a new enrichment field lands in one bag; the fields that must not cross (dialog snapshots, VM-internal combine inputs) are named on the type.
+Status: implemented 2026-10-18 (`DetailContentState.core` + extras incl. the nested `DownloadsExtras`; the 43-line fold deleted; reader renames are `state.core.X` — no passthrough properties).
+
+**Model-typed enrichment roles** — the detail-facing plugin roles (mdbList ratings, TMDB season ratings, anime markers, similar items) return `core:model` types; wire DTOs decode at the role implementation, completing the mapper's stated "DTOs stop at the client boundary." Presentation rules (dropping scoreless entries) stay in the section module arm, not the role.
+Status: implemented 2026-10-18 (the three detail-facing roles re-typed; `DetailSectionEnrichmentHost` model-only; settings/admin roles keep their DTO-in-ViewModel convention — a future review's term if it ever ratifies).
+
 ## Cross-feature
+
+**Screen-shape declaration** — each settings screen's ordered section list, typed as payload-free `SettingsScreenSection(idSet, advancedOnly)`; the scroll-adjust arithmetic derives from it (`deriveAdjustForAdvanced`) and a source-scan guard ties each `advancedOnly` flag to an advanced-gated emission block. The declaration must never grow a composable slot — that would be ADR-0009's rejected registry at group grain. Emission blocks and engine-dependent hidden-count literals stay hand-written.
+Status: implemented 2026-10-18 (Playback + Appearance converted — the only two non-identity adjust functions).
+
+**Koin registration totality** — plain ViewModel registrations ride `viewModelOf(::X)`; hand-written blocks remain only where wiring is genuinely non-obvious (nullable platform seams, function-typed ctor defaults). A source-scan guard asserts every ViewModel class has exactly one registration.
+Status: implemented 2026-10-18 (`SettingsKoinModule` 398→238 lines, 25 converted / 3 hand-kept; settings only — the hand-written convention stands elsewhere).
+
+**Preference spec tier (subtitle domain)** — the seventh spec domain: the subtitle store's keys, reads, restore, reset lists, defaults and search faces derive from `SubtitlePreferenceSpecs` rows; invariant writes (LRU per-item delay, identity-by-absence sets, nullable set-or-remove) stay hand setters beside the rows — the documented `derived` opt-out. Migrating a domain requires the derivation test before the reset rewire and a plugin-catalog artifact regeneration.
+Status: implemented 2026-10-18 (subtitle store public surface byte-identical; `SubtitleSpecDerivationTest` pins key identity; catalog artifact +11 entries).
+
+**Receiver intake fold** — each currently-untested entry receiver's
+decode (verb, extras — including `NotificationActionReceiver`'s
+hand-validated parallel arrays — and the deep-link intent it rebuilds
+by string) as a pure fold beside one goAsync scope-window idiom
+(three drifted private copies today; the widget family's skeleton
+already owns its variant and keeps it). Receivers shrink to
+fold + dispatch; the decode becomes JVM-testable without Robolectric,
+giving `NotificationActionReceiver` and `JellyPlayUnifiedPushReceiver`
+their first seam. Deep-link intent construction rides `DeepLinkGrammar`
+(killing the four-plus-one mirror). Widget, shortcut and PiP action
+strings stay pair-local — a universal twenty-six-verb intent grammar
+is the rejected god-module shape.
+Status: implemented 2026-10-18 (`NotificationEntryFold`,
+`DownloadEntryFold`, `PushMessageIntake` decode folds;
+`BroadcastScope.runWithBroadcastScope` — one goAsync idiom, the
+Throwable catch widened to all three receivers deliberately;
+`mediaDeepLinkIntent` killed the dispatcher's three copies plus the
+receiver's; NotificationActionReceiver 116→68 lines, UnifiedPush
+129→111; first fold suites: 10 + 8 + 3 tests; the receiver's
+MediaDeepLinkIntent lives beside the dispatcher, TvWatchNextPublisher's
+different-flags copy deliberately left pair-local).
+
+**Now-playing verdict** — one fold over the video-engine /
+audio-manager fork answering "is anything playing, anywhere" — today
+restated thirteen times in three formulations, plus the mutable
+`remoteSessionActive` flag whose single-writer contract lives in a
+prose note. The verdict module derives that flag instead;
+`RemotePlaybackReporter`, `RemoteControlReceiver`, the widget updater
+and the tile read the one interface. `NowPlayingSurface` stays the
+audio metadata surface; this term is the cross-family verdict beside
+it.
+Status: implemented 2026-10-18 (`NowPlayingVerdict` + its
+`AudioNowPlayingFace` input, commonMain beside `NowPlayingSurface` —
+the video registry + both audio managers satisfy it; the reporter's
+position/paused fork and the receiver's idle gate moved in verbatim,
+and the widget updater + QS tile read the audio family through it, the
+cross-family faces left for the day those surfaces go cross-family).
+Flag resolution: the cell MOVED into the verdict, not derived — a
+cast/Play-To session can be active while the local engine idles, so
+deriving from the playing flows would gate the local reporter off
+during plain local playback; `RemotePlaybackReporter` stays the single
+writer via the verdict's internal mark at the same two protocol points,
+and the audio progress loop reads the same value through a ctor gate
+lambda.
 
 **Refresh cycle module** — one module owning a poll loop's whole contract:
 start/stop, interval or backoff policy, and the visibility gate, so a
@@ -198,3 +337,24 @@ the settings-search resolve-once pipeline, the deep-link route fold beside
 (`pagedGridQuickActions`), and the secure-storage heal state machine.
 Every selected term was implemented the same day; their entries above
 carry the implementing type.
+
+The 2026-10-18 review (candidates from the architecture-report pass,
+deepened per the grilling loop) implemented the **Transport routing
+module**, **Player UI commands module**, **Config delta**, **Detail
+content state core**, **Model-typed enrichment roles**,
+**Screen-shape declaration**, **Koin registration totality** and the
+subtitle **Preference spec tier**, plus the `positionAwareState()`
+shim deletion and `HomeRowModule.titleCarriesSeed` (the write-effect
+lift was REJECTED: the facts fail ADR-0008's deletion test — one
+consumer, mutex-scoped pairing, pinned twice).
+
+A second 2026-10-18 pass (downloads / player / app-scope lens over the
+commit hot spots, auto-grilled per candidate) selected the **Download
+action module**, **Player sheet module**, **HDR mode verdict**, **mpv
+recovery choreography**, **Receiver intake fold** and **Now-playing
+verdict** — all six implemented the same day. The startup prewarm
+declared list was REJECTED: single-consumer startup choreography fails
+the deletion test (order-as-data adds interface without depth; the
+29-parameter constructor is a testability extraction, not a seam);
+only the desktop timeout-twin merge stands, as chore rather than
+architecture.

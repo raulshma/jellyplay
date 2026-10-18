@@ -145,29 +145,29 @@ internal data class DetailSectionAdmission(
     val showActionButtons: Boolean,
     /** DetailContentBody param: every current call site leaves it true. */
     val showMediaInfo: Boolean,
-    /** Book UI state present (state.book != null) — reading card + TOC source. */
+    /** Book UI state present (state.core.book != null) — reading card + TOC source. */
     val hasBookState: Boolean,
     /** The book's TOC cache carries entries (book?.toc non-empty). */
     val hasBookToc: Boolean,
     /** Server/detail chapter list carries entries (detail.chapters non-empty). */
     val hasChapters: Boolean,
-    /** Album/audio track list carries entries (state.albumTracks non-empty). */
+    /** Album/audio track list carries entries (state.core.albumTracks non-empty). */
     val hasAlbumTracks: Boolean,
-    /** Smart-play target resolved (state.smartPlayTarget != null). */
+    /** Smart-play target resolved (state.core.smartPlayTarget != null). */
     val hasSmartPlayTarget: Boolean,
     /** User preference: the detail screen shows the Up Next card. */
     val showDetailUpNext: Boolean,
     /** Seerr integration is connected AND recommendations are enabled. */
     val seerrDataAvailable: Boolean,
-    /** Seerr recommendation cards fetched (state.seerrRecommendations non-empty). */
+    /** Seerr recommendation cards fetched (state.core.seerrRecommendations non-empty). */
     val hasSeerrRecommendations: Boolean,
-    /** Seerr similar cards fetched (state.seerrSimilar non-empty). */
+    /** Seerr similar cards fetched (state.core.seerrSimilar non-empty). */
     val hasSeerrSimilar: Boolean,
-    /** Special features fetched (state.specialFeatures non-empty). */
+    /** Special features fetched (state.core.specialFeatures non-empty). */
     val hasSpecialFeatures: Boolean,
-    /** A download lifecycle is attached to the snapshot (state.detailContext?.download != null). */
+    /** A download lifecycle is attached to the snapshot (state.core.detailContext?.download != null). */
     val hasAttachedDownload: Boolean,
-    /** Plugin scored-similar items hydrated (state.pluginSimilarItems non-empty — ADR 0010).
+    /** Plugin scored-similar items hydrated (state.core.pluginSimilarItems non-empty — ADR 0010).
      *  Admits JELLYPLAY_SIMILAR; with [suppressStockSimilar] it also stands the
      *  stock row down. */
     val hasPluginSimilar: Boolean = false,
@@ -178,14 +178,14 @@ internal data class DetailSectionAdmission(
      *  plugins — the lists differ, both rows render. */
     val suppressStockSimilar: Boolean = false,
     /** D6 franchise rows hydrated with non-empty members
-     *  (state.franchiseCollections non-empty). Admits MORE_IN_COLLECTION
+     *  (state.core.franchiseCollections non-empty). Admits MORE_IN_COLLECTION
      *  together with [showMoreInCollection]. */
     val hasFranchiseCollections: Boolean = false,
     /** User preference: the detail screen shows the "More in this collection"
      *  franchise rows (D6's show_more_in_collection — gates the whole
      *  MORE_IN_COLLECTION slot). */
     val showMoreInCollection: Boolean = true,
-    /** D7 unaired-episode strip fetched with rows (state.upcomingEpisodes
+    /** D7 unaired-episode strip fetched with rows (state.core.upcomingEpisodes
      *  non-empty). Admits UPCOMING_EPISODES together with [showUpcomingStrip]. */
     val hasUpcomingEpisodes: Boolean = false,
     /** User preference: the detail screen shows the "Airing next" strip
@@ -280,8 +280,8 @@ internal data class DetailSectionAdmission(
     companion object {
 
         /**
-         * Reads the admission inputs off a loaded detail state. [detail] must be
-         * the body's already-unwrapped `state.detail` (the body returns early on
+         * Reads the admission inputs off a loaded detail state.core. [detail] must be
+         * the body's already-unwrapped `state.core.detail` (the body returns early on
          * null before admitting).
          */
         fun from(
@@ -291,32 +291,32 @@ internal data class DetailSectionAdmission(
             showMediaInfo: Boolean = true,
         ): DetailSectionAdmission = DetailSectionAdmission(
             mediaType = detail.item.mediaType,
-            isLocalOrigin = state.origin?.isLocal == true,
-            capabilities = state.capabilities,
+            isLocalOrigin = state.core.origin?.isLocal == true,
+            capabilities = state.core.capabilities,
             showActionButtons = showActionButtons,
             showMediaInfo = showMediaInfo,
-            hasBookState = state.book != null,
-            hasBookToc = !state.book?.toc.isNullOrEmpty(),
+            hasBookState = state.core.book != null,
+            hasBookToc = !state.core.book?.toc.isNullOrEmpty(),
             hasChapters = detail.chapters.isNotEmpty(),
-            hasAlbumTracks = state.albumTracks.isNotEmpty(),
-            hasSmartPlayTarget = state.smartPlayTarget != null,
+            hasAlbumTracks = state.core.albumTracks.isNotEmpty(),
+            hasSmartPlayTarget = state.core.smartPlayTarget != null,
             showDetailUpNext = state.preferences.showDetailUpNext,
-            seerrDataAvailable = state.isSeerrConnected && state.isSeerrRecommendationsEnabled,
-            hasSeerrRecommendations = state.seerrRecommendations.isNotEmpty(),
-            hasSeerrSimilar = state.seerrSimilar.isNotEmpty(),
-            hasSpecialFeatures = state.specialFeatures.isNotEmpty(),
-            hasAttachedDownload = state.detailContext?.download != null,
-            hasPluginSimilar = state.pluginSimilarItems.isNotEmpty(),
-            suppressStockSimilar = state.pluginSimilarSuppressesStock,
+            seerrDataAvailable = state.core.isSeerrConnected && state.core.isSeerrRecommendationsEnabled,
+            hasSeerrRecommendations = state.core.seerrRecommendations.isNotEmpty(),
+            hasSeerrSimilar = state.core.seerrSimilar.isNotEmpty(),
+            hasSpecialFeatures = state.core.specialFeatures.isNotEmpty(),
+            hasAttachedDownload = state.core.detailContext?.download != null,
+            hasPluginSimilar = state.core.pluginSimilarItems.isNotEmpty(),
+            suppressStockSimilar = state.core.pluginSimilarSuppressesStock,
             // The D6 franchise admission counts only VISIBLE rows: a row the
             // user eye-hid is excluded here (not just render-side) so a fully
             // hidden row family doesn't leave an empty admitted slot's gap in
             // the body column.
-            hasFranchiseCollections = state.franchiseCollections.any { collection ->
-                collection.id !in state.hiddenFranchiseCollections[state.itemId].orEmpty()
+            hasFranchiseCollections = state.core.franchiseCollections.any { collection ->
+                collection.id !in state.core.hiddenFranchiseCollections[state.itemId].orEmpty()
             },
             showMoreInCollection = state.preferences.showMoreInCollection,
-            hasUpcomingEpisodes = state.upcomingEpisodes.isNotEmpty(),
+            hasUpcomingEpisodes = state.core.upcomingEpisodes.isNotEmpty(),
             showUpcomingStrip = state.preferences.showUpcomingStrip,
         )
     }
@@ -324,7 +324,7 @@ internal data class DetailSectionAdmission(
 
 /**
  * The admission gate of the SEASONS slot ([DetailSectionAdmission] applies
- * it; the renderers check only `state.seasons` emptiness): which detail
+ * it; the renderers check only `state.core.seasons` emptiness): which detail
  * entry types render the season tabs + episode tree. SERIES (the tree's
  * owner), EPISODE (the parent series' context tree), and — since #168 —
  * SEASON (the entry season's own tree: a season arriving from the home rows

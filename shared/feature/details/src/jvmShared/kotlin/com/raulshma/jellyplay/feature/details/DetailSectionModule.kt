@@ -22,10 +22,10 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.raulshma.jellyplay.core.designsystem.theme.ShapeCache
 import com.raulshma.jellyplay.core.model.JellyPlayPluginFeatures
+import com.raulshma.jellyplay.core.model.JellyPlayPluginRating
 import com.raulshma.jellyplay.core.model.MediaDetail
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.seerr.TmdbReview
-import com.raulshma.jellyplay.core.network.api.toModel
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.adaptive.contentPadding
 import com.raulshma.jellyplay.core.ui.tv.LocalTvMode
@@ -130,7 +130,7 @@ internal interface DetailSectionEnrichmentHost {
      * Null when the plugin seam is unwired (direct-construction tests) — the
      * arm degrades to silent absence.
      */
-    suspend fun mdbListRatings(imdbId: String): Result<com.raulshma.jellyplay.core.network.api.JellyPlayRatingsResult?>?
+    suspend fun mdbListRatings(imdbId: String): Result<List<JellyPlayPluginRating>?>?
 }
 
 /**
@@ -145,7 +145,7 @@ internal object PluginRatingsSectionModule : DetailSectionModule {
     override val kind: DetailSectionKind = DetailSectionKind.PLUGIN_RATINGS
 
     override fun isAdmitted(state: DetailContentState, detail: MediaDetail): Boolean =
-        state.pluginRatings.isNotEmpty()
+        state.core.pluginRatings.isNotEmpty()
 
     override fun enrichments(host: DetailSectionEnrichmentHost): List<DetailEnrichment> = listOf(
         DetailEnrichment(
@@ -157,16 +157,12 @@ internal object PluginRatingsSectionModule : DetailSectionModule {
         ) { inputs ->
             if (!host.pluginFeature(JellyPlayPluginFeatures.Ratings, inputs.itemId)) return@DetailEnrichment
             val imdbId = resolveImdbId(inputs.detail) ?: return@DetailEnrichment
-            val result = host.mdbListRatings(imdbId)?.getOrNull() ?: return@DetailEnrichment
+            val ratings = host.mdbListRatings(imdbId)?.getOrNull() ?: return@DetailEnrichment
             if (!host.isCurrent(inputs.itemId)) return@DetailEnrichment
             host.updateState {
                 // Scoreless entries would render an empty chip — dropped here so
                 // the section's emptiness check matches what it can render.
-                it.copy(
-                    pluginRatings = result.ratings
-                        .filter { r -> r.score != null }
-                        .map { it.toModel() },
-                )
+                it.copy(pluginRatings = ratings.filter { r -> r.score != null })
             }
         },
     )
@@ -179,7 +175,7 @@ internal object PluginRatingsSectionModule : DetailSectionModule {
      */
     @Composable
     override fun Content(scope: DetailSectionRenderScope) {
-        val ratings = scope.state.pluginRatings
+        val ratings = scope.state.core.pluginRatings
         StaggeredDetailSection(visible = ratings.isNotEmpty(), delayIndex = kind.delayIndex) {
             Column(modifier = Modifier.padding(horizontal = scope.bodyContentPad)) {
                 FadingItem {
@@ -214,18 +210,18 @@ internal object PluginRatingsSectionModule : DetailSectionModule {
                         if (
                             externalRatingsMergedIntoPluginRow(
                                 hasPluginRatings = ratings.isNotEmpty(),
-                                external = scope.state.externalRatings,
-                                externalSuppressedByPlugin = scope.state.externalRatingsSuppressedByPlugin,
+                                external = scope.state.core.externalRatings,
+                                externalSuppressedByPlugin = scope.state.core.externalRatingsSuppressedByPlugin,
                             )
                         ) {
                             RatingsRow(
-                                critics = scope.state.externalRatings.critics,
-                                audience = scope.state.externalRatings.audience,
-                                imdb = scope.state.externalRatings.imdb,
-                                tmdb = scope.state.externalRatings.tmdb,
-                                rtUrl = scope.state.externalRatings.rtUrl,
-                                imdbUrl = scope.state.externalRatings.imdbUrl,
-                                tmdbUrl = scope.state.externalRatings.tmdbUrl,
+                                critics = scope.state.core.externalRatings.critics,
+                                audience = scope.state.core.externalRatings.audience,
+                                imdb = scope.state.core.externalRatings.imdb,
+                                tmdb = scope.state.core.externalRatings.tmdb,
+                                rtUrl = scope.state.core.externalRatings.rtUrl,
+                                imdbUrl = scope.state.core.externalRatings.imdbUrl,
+                                tmdbUrl = scope.state.core.externalRatings.tmdbUrl,
                             )
                         }
                     }
@@ -246,7 +242,7 @@ internal object TmdbReviewsSectionModule : DetailSectionModule {
     override val kind: DetailSectionKind = DetailSectionKind.TMDB_REVIEWS
 
     override fun isAdmitted(state: DetailContentState, detail: MediaDetail): Boolean =
-        state.preferences.showReviews && state.tmdbReviews.isNotEmpty()
+        state.preferences.showReviews && state.core.tmdbReviews.isNotEmpty()
 
     // The enrichment arm is deliberately empty: the reviews fetch rides the
     // seerrDiscovery declaration's TmdbCompanion leg — the shared 350ms
@@ -264,11 +260,11 @@ internal object TmdbReviewsSectionModule : DetailSectionModule {
     @Composable
     override fun Content(scope: DetailSectionRenderScope) {
         StaggeredDetailSection(
-            visible = scope.state.tmdbReviews.isNotEmpty(),
+            visible = scope.state.core.tmdbReviews.isNotEmpty(),
             delayIndex = kind.delayIndex,
         ) {
             ReviewsSection(
-                reviews = scope.state.tmdbReviews,
+                reviews = scope.state.core.tmdbReviews,
                 onAllReviews = {
                     scope.callbacks.navigation.onNavigate(
                         com.raulshma.jellyplay.core.ui.navigation.Route.Reviews(scope.state.itemId),

@@ -14,8 +14,6 @@ import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.RemoteConnectivity
 import com.raulshma.jellyplay.core.model.seerr.SeerrSearchItem
 import com.raulshma.jellyplay.core.model.seerr.TmdbReview
-import com.raulshma.jellyplay.core.network.api.JellyPlayRatingEntry
-import com.raulshma.jellyplay.core.network.api.JellyPlayRatingsResult
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -64,36 +62,35 @@ class DetailSectionRegistryTest {
         showReviews: Boolean = true,
         seerrDataAvailable: Boolean = false,
     ): DetailContentState = DetailContentState(
+        core = DetailUiState(
+            detail = movieDetail,
+            seasons = emptyList(),
+            episodes = emptyMap(),
+            fetchedSeasonIds = emptySet(),
+            smartPlayTarget = null,
+            selectedSubtitleIndex = null,
+            selectedAudioIndex = null,
+            loadState = DetailUiLoadState.Loaded,
+            albumTracks = emptyList(),
+            collectionItems = emptyList(),
+            relatedItems = emptyList(),
+            relatedVideos = emptyList(),
+            seerrRecommendations = if (seerrDataAvailable) listOf(seerrItem(1)) else emptyList(),
+            seerrSimilar = if (seerrDataAvailable) listOf(seerrItem(2)) else emptyList(),
+            isSeerrConnected = seerrDataAvailable,
+            isSeerrRecommendationsEnabled = seerrDataAvailable,
+            origin = DetailOrigin.REMOTE,
+            capabilities = allCapabilities(),
+            tmdbReviews = tmdbReviews,
+            pluginRatings = pluginRatings,
+            specialFeatures = if (seerrDataAvailable) {
+                listOf(MediaItem(id = "sf1", name = "Extra", mediaType = MediaType.MOVIE))
+            } else {
+                emptyList()
+            },
+        ),
         itemId = "m1",
-        detail = movieDetail,
-        seasons = emptyList(),
-        episodes = emptyMap(),
-        fetchedSeasonIds = emptySet(),
-        smartPlayTarget = null,
-        selectedSubtitleIndex = null,
-        selectedAudioIndex = null,
-        isDownloading = false,
-        isDownloadingSeries = false,
-        loadState = DetailUiLoadState.Loaded,
-        albumTracks = emptyList(),
-        collectionItems = emptyList(),
-        relatedItems = emptyList(),
-        relatedVideos = emptyList(),
-        seerrRecommendations = if (seerrDataAvailable) listOf(seerrItem(1)) else emptyList(),
-        seerrSimilar = if (seerrDataAvailable) listOf(seerrItem(2)) else emptyList(),
-        isSeerrConnected = seerrDataAvailable,
-        isSeerrRecommendationsEnabled = seerrDataAvailable,
         preferences = DetailPreferences(showReviews = showReviews),
-        canManageSeries = false,
-        origin = DetailOrigin.REMOTE,
-        capabilities = allCapabilities(),
-        tmdbReviews = tmdbReviews,
-        pluginRatings = pluginRatings,
-        specialFeatures = if (seerrDataAvailable) {
-            listOf(MediaItem(id = "sf1", name = "Extra", mediaType = MediaType.MOVIE))
-        } else {
-            emptyList()
-        },
     )
 
     private fun seerrItem(id: Int) = SeerrSearchItem(id = id, mediaType = "movie")
@@ -136,7 +133,7 @@ class DetailSectionRegistryTest {
     /** A [DetailSectionEnrichmentHost] fake recording the state writes. */
     private class FakeHost(
         private val probe: Boolean,
-        private val result: Result<JellyPlayRatingsResult?>?,
+        private val result: Result<List<JellyPlayPluginRating>?>?,
     ) : DetailSectionEnrichmentHost {
         var written: DetailUiState? = null
 
@@ -150,7 +147,7 @@ class DetailSectionRegistryTest {
 
         override suspend fun mdbListRatings(
             imdbId: String,
-        ): Result<JellyPlayRatingsResult?>? = result
+        ): Result<List<JellyPlayPluginRating>?>? = result
     }
 
     // ── registry order ────────────────────────────────────────────────────
@@ -267,16 +264,13 @@ class DetailSectionRegistryTest {
     // ── the plugin ratings enrichment arm ─────────────────────────────────
 
     @Test
-    fun pluginRatings_arm_mapsAndDropsScorelessEntries() = runTest {
+    fun pluginRatings_arm_dropsScorelessEntries() = runTest {
         val host = FakeHost(
             probe = true,
             result = Result.success(
-                JellyPlayRatingsResult(
-                    imdbId = "tt1",
-                    ratings = listOf(
-                        JellyPlayRatingEntry(source = "RT", score = 96.0),
-                        JellyPlayRatingEntry(source = "MC", score = null),
-                    ),
+                listOf(
+                    JellyPlayPluginRating(source = "RT", score = 96.0),
+                    JellyPlayPluginRating(source = "MC", score = null),
                 ),
             ),
         )
@@ -298,7 +292,7 @@ class DetailSectionRegistryTest {
         val inputs = armInputs()
 
         // Feature probe false (unwired store / user toggle) → no write.
-        val probedOff = FakeHost(probe = false, result = Result.success(JellyPlayRatingsResult("tt1")))
+        val probedOff = FakeHost(probe = false, result = Result.success(emptyList()))
         PluginRatingsSectionModule.enrichments(probedOff).single().run(inputs)
         assertNull(probedOff.written)
 
@@ -343,7 +337,7 @@ class DetailSectionRegistryTest {
                 assets = DetailAssets(),
             ),
         )
-        val host = FakeHost(probe = true, result = Result.success(JellyPlayRatingsResult("tt1")))
+        val host = FakeHost(probe = true, result = Result.success(emptyList()))
         assertFalse(PluginRatingsSectionModule.enrichments(host).single().gate(localInputs))
     }
 }

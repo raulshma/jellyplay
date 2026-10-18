@@ -3,6 +3,7 @@ package com.raulshma.jellyplay.widget
 import android.content.Context
 import android.graphics.Bitmap
 import com.raulshma.jellyplay.core.data.playback.AudioPlaybackManager
+import com.raulshma.jellyplay.core.data.playback.NowPlayingVerdict
 import com.raulshma.jellyplay.widget.skeleton.updateAllProviderWidgets
 import com.raulshma.jellyplay.widget.skeleton.widgetIdsFor
 import kotlinx.coroutines.CoroutineScope
@@ -33,10 +34,24 @@ import kotlinx.coroutines.launch
  * What to push, and what the last push retained, is decided by
  * [WidgetPushGate]; this class keeps the flow collection, the manager
  * re-reads and the RemoteViews submission.
+ *
+ * Playing-state reads go through the Now-playing verdict's AUDIO face
+ * ([NowPlayingVerdict.audio] — the manager's own StateFlow by reference,
+ * so every trigger below is the instance it always was). The five-flow
+ * combine deliberately does NOT collapse into a verdict snapshot flow: its
+ * trigger semantics are per-flow combine + a five-field diff, and the
+ * verdict's natural snapshot carries the CROSS-family playing state —
+ * feeding that into a gate whose pushes render the audio manager's
+ * isPlaying (via [NowPlayingWidgetRenderer.readPushSnapshot]) would
+ * re-render the audio widget on video-only play edges, a push-count change
+ * the old combine suppressed. The widget is the audio session's remote
+ * control; it reads the verdict's audio family and keeps the manager for
+ * the metadata/snapshot reads (NowPlayingSurface's job).
  */
 class NowPlayingWidgetUpdater (
     private val context: Context,
     private val audioPlaybackManager: AudioPlaybackManager,
+    private val nowPlayingVerdict: NowPlayingVerdict,
     /**
      * The Koin application scope (DatastoreQualifiers.applicationScope) the
      * updater's Default-dispatcher scope hangs off as a SupervisorJob child —
@@ -101,7 +116,7 @@ class NowPlayingWidgetUpdater (
             audioPlaybackManager.title,
             audioPlaybackManager.artist,
             audioPlaybackManager.albumArtUrl,
-            audioPlaybackManager.isPlaying,
+            nowPlayingVerdict.audio.isPlaying,
         ) { itemId, title, artist, artUrl, isPlaying ->
             MetadataSnapshot(itemId, title, artist, artUrl, isPlaying)
         }
@@ -133,7 +148,7 @@ class NowPlayingWidgetUpdater (
         // bar and the "Paused ·" label settle. No clock-driven work — and no
         // binder IPC — while paused.
         launch {
-            audioPlaybackManager.isPlaying.collectLatest { playing ->
+            nowPlayingVerdict.audio.isPlaying.collectLatest { playing ->
                 if (playing) {
                     while (true) {
                         pushPositionUpdate()
@@ -148,7 +163,7 @@ class NowPlayingWidgetUpdater (
         // push those too so the bar doesn't go stale until playback resumes.
         launch {
             audioPlaybackManager.currentPosition.collect {
-                if (!audioPlaybackManager.isPlaying.value) pushPositionUpdate()
+                if (!nowPlayingVerdict.audio.isPlaying.value) pushPositionUpdate()
             }
         }
     }

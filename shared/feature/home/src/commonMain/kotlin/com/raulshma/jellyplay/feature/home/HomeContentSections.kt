@@ -71,6 +71,7 @@ import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.OfflineMediaItem
 import com.raulshma.jellyplay.core.model.bookProgressFraction
 import com.raulshma.jellyplay.core.model.descriptor
+import com.raulshma.jellyplay.core.model.home.HomeRowModules
 import com.raulshma.jellyplay.core.model.toMediaItem
 import com.raulshma.jellyplay.core.ui.adaptive.LocalAdaptiveInfo
 import com.raulshma.jellyplay.core.ui.animation.lazyItemPlacementSpec
@@ -596,7 +597,7 @@ internal fun HomeContentList(
                     }
 
                 val seedItem = section.seedItem
-                val sectionTitle = if (section.type == HomeSectionType.RECOMMENDATIONS && seedItem != null) {
+                val sectionTitle = if (HomeRowModules[section.type].titleCarriesSeed && seedItem != null) {
                     stringResource(Res.string.home_because_you_watched, seedItem.name)
                 } else {
                     section.title

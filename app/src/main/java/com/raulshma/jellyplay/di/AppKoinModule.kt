@@ -210,6 +210,7 @@ fun androidAppModule(context: Context): Module = module {
         NowPlayingWidgetUpdater(
             context = context,
             audioPlaybackManager = get(),
+            nowPlayingVerdict = get(),
             applicationScope = get(DatastoreQualifiers.applicationScope),
         )
     }

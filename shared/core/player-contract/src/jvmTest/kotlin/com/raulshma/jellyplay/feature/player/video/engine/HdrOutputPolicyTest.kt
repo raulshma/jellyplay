@@ -65,6 +65,45 @@ class HdrOutputPolicyTest {
         }
     }
 
+    // ── hdrFamilyOf / hdrLabelFor (the one shared vocabulary) ──
+
+    @Test
+    fun familyParser_unionsTheFormerlySeparateSpellingSets() {
+        // The stream fold, the sheet's labels and the metadata row's DV badge
+        // used to spell the vocabulary three times; every spelling now lands
+        // on the same family from any consumer's text shape.
+        assertEquals(HdrContentInfo.DOLBY_VISION, hdrFamilyOf("dovi"))
+        assertEquals(HdrContentInfo.DOLBY_VISION, hdrFamilyOf("dolbyvision"))
+        assertEquals(HdrContentInfo.DOLBY_VISION, hdrFamilyOf("dolby_vision"))
+        assertEquals(HdrContentInfo.DOLBY_VISION, hdrFamilyOf("Dolby Vision"))
+        assertEquals(HdrContentInfo.HDR10_PLUS, hdrFamilyOf("hdr10plus"))
+        assertEquals(HdrContentInfo.HDR10_PLUS, hdrFamilyOf("hdr10+"))
+        assertEquals(HdrContentInfo.HDR10_PLUS, hdrFamilyOf("hdr10_plus"))
+        assertEquals(HdrContentInfo.HDR10, hdrFamilyOf("hdr10"))
+        assertEquals(HdrContentInfo.HLG, hdrFamilyOf("hlg"))
+        assertEquals(HdrContentInfo.HDR10, hdrFamilyOf("hdr"))
+        assertNull(hdrFamilyOf("sdr"))
+        assertNull(hdrFamilyOf(null))
+        // DV beats the HDR10 mention inside the combined profile strings, and
+        // the rungs scan ALL texts before advancing (the space-joined
+        // range+rangeType fold semantics): range "HDR" + rangeType
+        // "DolbyVision…" reads DV, not first-text HDR10.
+        assertEquals(HdrContentInfo.DOLBY_VISION, hdrFamilyOf("HDR", "DolbyVisionWithHDR10"))
+        assertEquals(HdrContentInfo.HDR10, hdrFamilyOf("HDR", "unknown"))
+    }
+
+    @Test
+    fun familyLabels_agreeWithTheParser() {
+        // The label twin renders the parser's displayName (plus the bare-`hdr`
+        // and SDR/unknown special cases), so a spelling can't gain a family
+        // without gaining its label.
+        assertEquals("Dolby Vision", hdrLabelFor("Dolby Vision"))
+        assertEquals("HDR10+", hdrLabelFor("hdr10_plus"))
+        assertEquals("HDR10", hdrLabelFor("HDR10"))
+        assertEquals("HDR", hdrLabelFor("hdr"))
+        assertNull(hdrLabelFor("unknown"))
+    }
+
     // ── DisplayHdrSupport ──
 
     @Test

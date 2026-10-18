@@ -70,7 +70,7 @@ internal fun DetailContent(
     callbacks: DetailContentCallbacks,
     availableStorageProvider: suspend (isAudio: Boolean) -> Long,
 ) {
-    val item = state.detail?.item
+    val item = state.core.detail?.item
     val listState = rememberLazyListState()
     val isAudio = item?.mediaType?.isAudioType == true
     val isAlbum = item?.mediaType == MediaType.ALBUM
@@ -79,7 +79,7 @@ internal fun DetailContent(
     val adaptiveInfo = LocalAdaptiveInfo.current
     val isExpanded = adaptiveInfo.windowSizeClass != WindowSizeClass.Compact
     val isTv = LocalTvMode.current
-    val contentVisible = state.detail != null && item != null
+    val contentVisible = state.core.detail != null && item != null
 
     val scrollState = rememberDetailScrollState(listState, contentVisible)
 
@@ -157,40 +157,40 @@ internal fun DetailContent(
         canPlayWithPrerolls = !isSeries && !syncPlayManager.isInSyncPlaySession,
         onPlayWithPrerolls = callbacks.playback.onPlayWithPrerolls,
         item = item,
-        detail = state.detail,
+        detail = state.core.detail,
         itemId = state.itemId,
         isAudio = isAudio,
         isSeries = isSeries,
-        seasons = state.seasons,
+        seasons = state.core.seasons,
         preferences = state.preferences,
-        isDownloading = state.isDownloading,
-        isDownloadingSeries = state.isDownloadingSeries,
+        isDownloading = state.downloads.isDownloading,
+        isDownloadingSeries = state.downloads.isDownloadingSeries,
         canManageSeries = state.canManageSeries,
-        canDeleteDownloadedSeries = state.origin?.isLocal == true &&
+        canDeleteDownloadedSeries = state.core.origin?.isLocal == true &&
             isSeries &&
-            (state.detailContext?.seriesAggregate?.downloadedEpisodeCount ?: 0) > 0,
-        canEditMetadata = state.capabilities.remoteDiscovery,
-        canRefreshMetadata = state.canManageMetadata && state.capabilities.remoteDiscovery,
-        canIdentify = state.canManageMetadata && state.capabilities.remoteDiscovery &&
+            (state.core.detailContext?.seriesAggregate?.downloadedEpisodeCount ?: 0) > 0,
+        canEditMetadata = state.core.capabilities.remoteDiscovery,
+        canRefreshMetadata = state.core.canManageMetadata && state.core.capabilities.remoteDiscovery,
+        canIdentify = state.core.canManageMetadata && state.core.capabilities.remoteDiscovery &&
             (item?.mediaType == MediaType.SERIES || item?.mediaType == MediaType.MOVIE),
-        canPickVersion = !isAudio && !isSeries && (state.detail?.mediaSources?.size ?: 0) > 1,
+        canPickVersion = !isAudio && !isSeries && (state.core.detail?.mediaSources?.size ?: 0) > 1,
         onVersionPicker = callbacks.playback.onOpenVersionPicker,
         // The Merge/Split endpoints are Movies-only server-side
         // (/Videos/MergeVersions, /Videos/{id}/AlternateSources) and
         // admin-gated (RequiresElevation) — the same gate the refresh/identify
         // entries resolve. Split only applies to an already-merged item.
-        canMergeVersions = state.canManageMetadata && state.capabilities.remoteDiscovery &&
+        canMergeVersions = state.core.canManageMetadata && state.core.capabilities.remoteDiscovery &&
             item?.mediaType == MediaType.MOVIE,
         onMergeVersions = callbacks.metadata.onOpenMergeVersions,
-        canSplitVersions = state.canManageMetadata && state.capabilities.remoteDiscovery &&
-            item?.mediaType == MediaType.MOVIE && (state.detail?.mediaSources?.size ?: 0) > 1,
+        canSplitVersions = state.core.canManageMetadata && state.core.capabilities.remoteDiscovery &&
+            item?.mediaType == MediaType.MOVIE && (state.core.detail?.mediaSources?.size ?: 0) > 1,
         onSplitVersions = callbacks.metadata.onSplitVersions,
-        canAddToPlaylist = state.capabilities.remoteDiscovery,
-        canAddToCollection = state.capabilities.remoteDiscovery,
-        canInstantMix = isAudio && state.capabilities.remoteDiscovery,
-        canStartRadio = isAudio && state.capabilities.remoteDiscovery,
-        canStartWatchParty = state.capabilities.remoteWorkAllowed,
-        isOffline = state.origin?.isLocal == true,
+        canAddToPlaylist = state.core.capabilities.remoteDiscovery,
+        canAddToCollection = state.core.capabilities.remoteDiscovery,
+        canInstantMix = isAudio && state.core.capabilities.remoteDiscovery,
+        canStartRadio = isAudio && state.core.capabilities.remoteDiscovery,
+        canStartWatchParty = state.core.capabilities.remoteWorkAllowed,
+        isOffline = state.core.origin?.isLocal == true,
         onClose = { /* menus close themselves */ },
         onEditClick = callbacks.navigation.onEditClick,
         onShare = shareMedia,
@@ -206,7 +206,7 @@ internal fun DetailContent(
         onShowDetailUpNext = callbacks.userData.onShowDetailUpNext,
         // D12: the per-series notify entry rides the platform seam — desktop
         // (no notification stack) never sees it.
-        seriesNotificationsEnabled = state.seriesNotificationsEnabled,
+        seriesNotificationsEnabled = state.core.seriesNotificationsEnabled,
         platformSupportsNotifications = platformHasNotificationStack,
         onToggleSeriesNotifications = callbacks.userData.onToggleSeriesNotifications,
         onManageSeries = callbacks.navigation.onManageSeries,
@@ -265,7 +265,7 @@ internal fun DetailContent(
         // On TV the loading surface must be focusable (LoadingScreen grabs focus) so the
         // D-pad isn't orphaned until data arrives; on touch a delayed spinner keeps fast
         // loads from flickering.
-        when (val loadState = state.loadState) {
+        when (val loadState = state.core.loadState) {
             is DetailUiLoadState.Loading -> {
                 if (!contentVisible) {
                     if (isTv) {
@@ -305,12 +305,12 @@ internal fun DetailContent(
             targetBackdropId = targetBackdropId,
             backdropBlurHash = if (isBook) item?.blurHashes?.primary else item?.blurHashes?.backdrop,
             getBackdropUrl = if (isBook) callbacks.artwork.getImageUrl else callbacks.artwork.getBackdropUrl,
-            trailers = state.trailers,
+            trailers = state.core.trailers,
             preferences = state.preferences,
             scrollState = scrollState,
-            localBackdropPath = if (isBook) state.assets.posterPath else state.assets.backdropPath,
+            localBackdropPath = if (isBook) state.core.assets.posterPath else state.core.assets.backdropPath,
             coverHero = coverHero,
-            themeVideoStreamUrl = state.themeVideoStreamUrl,
+            themeVideoStreamUrl = state.core.themeVideoStreamUrl,
             trailerFocusPreview = trailerFocusPreview,
         )
 
@@ -325,7 +325,7 @@ internal fun DetailContent(
             // the outermost modifier there.
             if (!isTv) {
                 PullToRefreshBox(
-                    isRefreshing = state.loadState is DetailUiLoadState.Refreshing,
+                    isRefreshing = state.core.loadState is DetailUiLoadState.Refreshing,
                     onRefresh = callbacks.screen.onRefresh,
                     modifier = Modifier.fillMaxSize(),
                 ) {
@@ -372,7 +372,7 @@ internal fun DetailContent(
             // D8: the mute chip exists only while theme audio is actually
             // audible; its icon reflects the per-series memory (the same
             // theme-source keying the VM's enrichment gate uses).
-            themeMusicVisible = state.themeMusicPlaying,
+            themeMusicVisible = state.core.themeMusicPlaying,
             themeMusicMuted = state.preferences.isThemeMusicMutedFor(
                 item?.seriesId ?: state.itemId,
             ),
@@ -380,8 +380,8 @@ internal fun DetailContent(
         )
     }
 
-    if (state.downloadPicker.visible) {
-        val source = state.detail?.mediaSources?.firstOrNull()
+    if (state.downloads.downloadPicker.visible) {
+        val source = state.core.detail?.mediaSources?.firstOrNull()
         // External/deliverable subtitle streams eligible for offline bundling.
         // Shares MediaStream.isBundleableSubtitle with the download writer + sync
         // comparator so the multi-select shows exactly the subtitles that save.
@@ -395,8 +395,8 @@ internal fun DetailContent(
             isAudio = isAudio,
             availableStorageProvider = availableStorageProvider,
             subtitleStreams = subtitleStreams,
-            pendingQuality = state.downloadPicker.quality,
-            pendingSubtitleSelection = state.downloadPicker.subtitleSelection,
+            pendingQuality = state.downloads.downloadPicker.quality,
+            pendingSubtitleSelection = state.downloads.downloadPicker.subtitleSelection,
             onPendingQualityChange = callbacks.download.onPendingQualityChange,
             onPendingSubtitleSelectionChange = callbacks.download.onPendingSubtitleSelectionChange,
             onConfirm = { callbacks.download.onDownloadClick() },

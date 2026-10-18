@@ -5,6 +5,8 @@ import com.raulshma.jellyplay.core.data.remote.DesktopAudioRemoteControlDispatch
 import com.raulshma.jellyplay.core.data.remote.DesktopVideoRemoteControlDispatcher
 import com.raulshma.jellyplay.core.data.remote.RemoteControlReceiver
 import com.raulshma.jellyplay.core.data.remote.VideoRemoteControlDispatcher
+import com.raulshma.jellyplay.core.data.playback.DesktopAudioQueueManager
+import com.raulshma.jellyplay.core.data.playback.NowPlayingVerdict
 import org.koin.core.module.Module
 import org.koin.dsl.module
 import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
@@ -35,6 +37,18 @@ internal val desktopRemoteControlModule: Module = module {
             remoteNavigationBridge = get(),
         )
     }
+    // The Now-playing verdict's desktop half: the video registry (common,
+    // dataJvmModule) over the desktop manager as the audio face (its
+    // AudioNowPlayingFace members are the same re-exposed chassis flows the
+    // dispatcher twins read). The concrete manager single lives in
+    // apps/desktop's desktopPlayerModule — resolved lazily like the ports
+    // above, so this definition stays inert until the receiver asks.
+    single {
+        NowPlayingVerdict(
+            videoEngines = get(),
+            audio = get<DesktopAudioQueueManager>(),
+        )
+    }
     single {
         RemoteControlReceiver(
             webSocketClient = get(),
@@ -46,7 +60,7 @@ internal val desktopRemoteControlModule: Module = module {
             activePlayerController = get(),
             securityStore = get(),
             remoteNavigationBridge = get(),
-            audioQueueManager = get(),
+            nowPlayingVerdict = get(),
             applicationScope = get(DatastoreQualifiers.applicationScope),
         )
     }

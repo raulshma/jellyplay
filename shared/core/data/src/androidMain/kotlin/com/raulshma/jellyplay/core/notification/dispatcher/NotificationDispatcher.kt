@@ -13,10 +13,10 @@ import com.raulshma.jellyplay.core.model.LibraryFolder
 import com.raulshma.jellyplay.core.model.MediaItem
 import com.raulshma.jellyplay.core.model.MediaType
 import com.raulshma.jellyplay.core.model.NotificationPreferences
-import com.raulshma.jellyplay.core.model.deeplink.DeepLinkGrammar
 import com.raulshma.jellyplay.shared.core.data.R
 import com.raulshma.jellyplay.core.notification.channel.NotificationChannelManager
 import com.raulshma.jellyplay.core.notification.receiver.NotificationActionReceiver
+import com.raulshma.jellyplay.core.push.PushMessageIntake
 
 class NotificationDispatcher(
     private val context: Context,
@@ -76,14 +76,13 @@ class NotificationDispatcher(
         channelManager.ensureSummaryChannel()
 
         val notificationId = pluginNotificationIdFor(event.itemId)
-        // Same explicit-intent convention as buildItemNotification (CodeQL):
-        // setters chained on the Intent expression itself.
+        // The one media deep-link builder (CodeQL's explicit-intent
+        // convention — setters chained on the Intent expression — lives
+        // inside [mediaDeepLinkIntent] now).
         val contentIntent = PendingIntent.getActivity(
             context,
             notificationId,
-            Intent(Intent.ACTION_VIEW, android.net.Uri.parse(DeepLinkGrammar.mediaLink(event.itemId)))
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-                .setPackage(context.packageName),
+            mediaDeepLinkIntent(context, event.itemId),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
@@ -153,24 +152,14 @@ class NotificationDispatcher(
     }
 
     /**
-     * Whether [payloadJson] is the SILENT `sync-nudge` kind. The generic
-     * UnifiedPush body carries `kind` at the top level; a relayed ntfy JSON
-     * publish body carries it in the per-message `headers` map under
-     * `X-JellyPlay-Kind` — both spellings answer true (data-only either way).
-     * Malformed JSON is simply not a nudge.
+     * Whether [payloadJson] is the SILENT `sync-nudge` kind. A delegate to
+     * [PushMessageIntake.isSyncNudge] — the GLOSSARY "Receiver intake fold"
+     * moved the check (and the `sync-nudge` / `X-JellyPlay-Kind` constants)
+     * beside the push receiver as pure Kotlin; the member stays so this
+     * tray-side guard and the existing call shape don't move.
      */
-    internal fun isSyncNudgePayload(payloadJson: String): Boolean {
-        val payload = runCatching { json.parseToJsonElement(payloadJson) }
-            .getOrNull() as? kotlinx.serialization.json.JsonObject ?: return false
-
-        fun text(element: kotlinx.serialization.json.JsonElement?, key: String): String? =
-            (element as? kotlinx.serialization.json.JsonObject)
-                ?.let { it[key] as? kotlinx.serialization.json.JsonPrimitive }
-                ?.content
-
-        if (text(payload, "kind") == KIND_SYNC_NUDGE) return true
-        return text(payload["headers"], NTFY_KIND_HEADER) == KIND_SYNC_NUDGE
-    }
+    internal fun isSyncNudgePayload(payloadJson: String): Boolean =
+        PushMessageIntake.isSyncNudge(payloadJson)
 
     /**
      * One generic push text (broadcast/message kind): title + body on the
@@ -231,14 +220,12 @@ class NotificationDispatcher(
         channelManager.ensureNewEpisodesChannel()
 
         val notificationId = seriesEpisodeNotificationIdFor(seriesId, episode.id)
-        // Same explicit-intent convention as buildItemNotification (CodeQL):
-        // setters chained on the Intent expression itself.
+        // The one media deep-link builder (CodeQL's explicit-intent
+        // convention lives inside [mediaDeepLinkIntent]).
         val contentIntent = PendingIntent.getActivity(
             context,
             notificationId,
-            Intent(Intent.ACTION_VIEW, android.net.Uri.parse(DeepLinkGrammar.mediaLink(episode.id)))
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-                .setPackage(context.packageName),
+            mediaDeepLinkIntent(context, episode.id),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         val openIntent = Intent()
@@ -447,17 +434,15 @@ class NotificationDispatcher(
 
         // The content intent is explicit: ACTION_VIEW scoped to our own package so
         // the PendingIntent cannot be hijacked by another app claiming the scheme.
-        // `setPackage` is hoisted out of an `Intent(...).apply { ... }` block on
-        // purpose — CodeQL's implicit-PendingIntent recognition only treats a setter
-        // call as making the intent explicit when its receiver is the Intent
-        // expression itself; inside `.apply {}` the receiver is the lambda's `this`
-        // and the analysis cannot link it to the value handed to PendingIntent.
+        // The builder IS that convention ([mediaDeepLinkIntent]): setters chained
+        // directly on the Intent expression — never inside an
+        // `Intent(...).apply { ... }` block — because CodeQL's implicit-PendingIntent
+        // recognition only treats a setter call as making the intent explicit when
+        // its receiver is the Intent expression itself.
         val contentIntent = PendingIntent.getActivity(
             context,
             notificationId,
-            Intent(Intent.ACTION_VIEW, android.net.Uri.parse(DeepLinkGrammar.mediaLink(item.id)))
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-                .setPackage(context.packageName),
+            mediaDeepLinkIntent(context, item.id),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
@@ -557,11 +542,6 @@ class NotificationDispatcher(
     companion object {
         private const val GROUP_GLOBAL = "new_media_global"
 
-        /** The silent push kind (registry v7) — data-only, never a tray notification. */
-        internal const val KIND_SYNC_NUDGE = "sync-nudge"
-
-        /** The ntfy per-message header the kind rides in the ntfy JSON publish body. */
-        internal const val NTFY_KIND_HEADER = "X-JellyPlay-Kind"
         private const val NOTIFICATION_ID_GLOBAL = 5000
         private const val NOTIFICATION_ID_BASE = 5001
 

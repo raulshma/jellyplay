@@ -35,6 +35,7 @@ import com.raulshma.jellyplay.feature.settings.WhatsNewViewModel
 import com.raulshma.jellyplay.core.datastore.di.DatastoreQualifiers
 import com.raulshma.jellyplay.core.ui.settingssearch.SettingsSearchProvider
 import org.koin.compose.viewmodel.dsl.viewModel
+import org.koin.compose.viewmodel.dsl.viewModelOf
 import org.koin.core.module.Module
 import org.koin.dsl.module
 
@@ -107,129 +108,60 @@ val settingsModule: Module = module {
         )
     }
 
-    viewModel {
-        SettingsViewModel(
-            settingsBackupIo = get(),
-            preferencesStore = get(),
-            projections = get(),
-            authRepository = get(),
-            seerrRepository = get(),
-            serverAdminActions = get(),
-            editor = get(),
-            recentsStore = get(),
-            jellyPlayStatusStore = get(),
-            jellyPlaySyncRepository = get(),
-            jellyPlayEventsRepository = get(),
-            jellyPlayFeatureGate = get(),
-            jellyPlayPushRepository = get(),
-            secretsBackupAssembler = get(),
-            serverIdentityStore = get(),
-        )
-    }
+    viewModelOf(::SettingsViewModel)
 
     // The companion-plugin inbox screen (ADR 0010). Reachability is gated at
     // the settings root's "Messages" entry; the VM still re-checks the
     // `messages` gate (probe AND the user's toggle) before every api call.
-    viewModel {
-        JellyPlayMessagesViewModel(
-            eventsRepository = get(),
-            statusStore = get(),
-            featureGate = get(),
-        )
-    }
+    viewModelOf(::JellyPlayMessagesViewModel)
+
     // The companion-plugin "My ratings" screen (ADR 0010). Reachability is
     // gated at the settings root's entry; the VM still re-checks the
     // `user-ratings` gate (probe AND the user's toggle) before every api call.
-    viewModel {
-        JellyPlayUserRatingsViewModel(
-            pluginApiClient = get(),
-            statusStore = get(),
-            featureGate = get(),
-        )
-    }
+    viewModelOf(::JellyPlayUserRatingsViewModel)
+
     // The companion-plugin "Your watching" screen. Reachability is gated at
     // the settings root's entry; the VM still re-checks the `analytics` gate
     // (probe AND the user's toggle — the per-user analytics face, not the
     // admin route) before every api call.
-    viewModel {
-        JellyPlayYourWatchingViewModel(
-            pluginApiClient = get(),
-            statusStore = get(),
-            featureGate = get(),
-        )
-    }
+    viewModelOf(::JellyPlayYourWatchingViewModel)
+
     // The companion-plugin settings-sync screen (ADR 0010). Reachability is
     // gated at the settings root's "Sync" entry (probe AND the `settings-sync`
     // meta key — no user toggle exists for meta keys); the VM still re-checks
     // the same probe-only gate before every api call.
-    viewModel {
-        JellyPlaySyncViewModel(
-            syncRepository = get(),
-            pluginApiClient = get(),
-            deviceRegistry = get(),
-            statusStore = get(),
-            // The background flush scheduler — the disable edge de-arms the
-            // 12h catch-up periodic (ADR 0011: armed only while enabled).
-            syncScheduler = get(),
-        )
-    }
-    viewModel {
-        AppearanceSettingsViewModel(
-            projections = get(),
-            advancedSettings = get(),
-            editor = get(),
-        )
-    }
-    viewModel {
-        HomeSettingsViewModel(
-            projections = get(),
-            advancedSettings = get(),
-            editor = get(),
-            // The H20 home-layout DisplayPreferences bridge (core:data) —
-            // the manual Upload/Restore actions + the autopush engine.
-            homeLayoutSync = get(),
-        )
-    }
-    viewModel {
-        LanguageSettingsViewModel(
-            appLocaleSetter = get(),
-            projections = get(),
-            advancedSettings = get(),
-            editor = get(),
-        )
-    }
+    viewModelOf(::JellyPlaySyncViewModel)
+
+    viewModelOf(::AppearanceSettingsViewModel)
+
+    // The H20 home-layout DisplayPreferences bridge (core:data) — the manual
+    // Upload/Restore actions + the autopush engine.
+    viewModelOf(::HomeSettingsViewModel)
+
+    viewModelOf(::LanguageSettingsViewModel)
+
+    // Hand-written, not viewModelOf: the nullable audio-device seam resolves
+    // with getOrNull (the ctor KDoc owns the rationale), which viewModelOf's
+    // per-param hard get() cannot express.
     viewModel {
         PlaybackSettingsViewModel(
             projections = get(),
             advancedSettings = get(),
             editor = get(),
             watchNextRefresher = get(),
-            // mpv audio-device enumeration: desktop-only — Android
-            // binds no enumerator and the row is capability-hidden there.
             audioDeviceEnumerator = getOrNull(),
         )
     }
-    viewModel {
-        InputBindingsViewModel(
-            projections = get(),
-            editor = get(),
-        )
-    }
-    viewModel {
-        AudioSettingsViewModel(
-            projections = get(),
-            advancedSettings = get(),
-            editor = get(),
-            audioCacheClearer = get(),
-        )
-    }
-    viewModel {
-        ExperimentalSettingsViewModel(
-            projections = get(),
-            advancedSettings = get(),
-            editor = get(),
-        )
-    }
+
+    viewModelOf(::InputBindingsViewModel)
+
+    viewModelOf(::AudioSettingsViewModel)
+
+    viewModelOf(::ExperimentalSettingsViewModel)
+
+    // Hand-written, not viewModelOf: diffLabelResolver is a function-typed
+    // ctor default (::resolveDiffLabels) with no Koin binding — viewModelOf
+    // resolves every ctor param with a hard get() and would crash here.
     viewModel {
         FactoryResetViewModel(
             snapshotReader = get(),
@@ -239,11 +171,15 @@ val settingsModule: Module = module {
             statusStore = get(),
         )
     }
+
     // The unified restore wizard (Wave 5): ONE flow for restoring settings
     // regardless of source. Replaces the retired ImportPreviewViewModel (the
     // file arm ports its parser/diff/restore logic verbatim over the same
     // seams) and absorbs the sync screen's import + one-click snapshot
     // restore rows.
+    // Hand-written, not viewModelOf: diffLabelResolver/textResolver are
+    // function-typed ctor defaults with no Koin binding — viewModelOf
+    // resolves every ctor param with a hard get() and would crash here.
     viewModel {
         RestoreWizardViewModel(
             settingsBackupIo = get(),
@@ -253,146 +189,50 @@ val settingsModule: Module = module {
             // of enumerating the stores here, so a new slice extends the
             // bundle, not this definition.
             snapshotReader = get(),
-            // The Wave-3 secrets seam: unlock preview counts + the explicit
-            // apply fan-out.
             secretsBackupAssembler = get(),
             // The server arm: restore points, current-state diff, apply batch,
             // plus the Wave-6 pre-apply safety capture.
             pluginApiClient = get(),
             statusStore = get(),
             syncRepository = get(),
-            // The Wave-3 cross-account warning vs the staged backup's origin ids.
             serverIdentityStore = get(),
-            // The Wave-6 warning surface (safety-capture misses + summaries).
             messageBus = get(),
         )
     }
     // ──: storage / privacy / server / security / integrations / about ──
-    viewModel {
-        StorageSettingsViewModel(
-            projections = get(),
-            advancedSettings = get(),
-            editor = get(),
-            autoDownloadSync = get(),
-            autoDownloadCleanup = get(),
-            storageAreas = get(),
-            storageMountsProvider = get(),
-            authRepository = get(),
-        )
-    }
-    viewModel {
-        PrivacyDataViewModel(
-            editor = get(),
-            serverIdentityStore = get(),
-            searchHistoryRepository = get(),
-            storageAreas = get(),
-        )
-    }
-    viewModel {
-        ServerManagementViewModel(
-            authRepository = get(),
-            serverIdentityStore = get(),
-            // Per-server self-signed trust toggle state + grants (network
-            // DataStore, same store the OkHttp config StateFlow flows from).
-            networkOfflineStore = get(),
-            // The trust-toggle DECISION seam (core:data) — grants still
-            // observed/written through the store above; matching happens
-            // behind this repository so no core:network type reaches here.
-            selfSignedTrustRepository = get(),
-            // the app-level client certificate (mTLS) import /
-            // toggle / remove seam (core:data) — delegates to the same
-            // manager single the handshake layer (applyTls) reads.
-            clientCertificate = get(),
-        )
-    }
-    viewModel {
-        ServerSettingsViewModel(
-            authRepository = get(),
-        )
-    }
-    viewModel {
-        SecuritySettingsViewModel(
-            projections = get(),
-            advancedSettings = get(),
-            editor = get(),
-            authRepository = get(),
-        )
-    }
-    viewModel {
-        SeerrSettingsViewModel(
-            seerrAuthenticator = get(),
-            seerrPreferencesStore = get(),
-            secureCredentialsStore = get(),
-            // The "via server" bridge seams (ADR 0010): the plugin api client
-            // (seerr status/login/logout), the ONE availability gate, the
-            // per-feature gate (probe AND the user's `seerr-bridge` toggle),
-            // and the Jellyfin Quick Connect source the plugin authorizes
-            // against.
-            pluginApiClient = get(),
-            pluginStatusStore = get(),
-            jellyPlayFeatureGate = get(),
-            authRepository = get(),
-        )
-    }
-    viewModel {
-        ArrSettingsViewModel(
-            arrRepository = get(),
-            arrPreferencesStore = get(),
-            secureCredentialsStore = get(),
-        )
-    }
-    viewModel {
-        SubtitleProviderSettingsViewModel(
-            preferencesStore = get(),
-            subtitleProviderRepository = get(),
-        )
-    }
-    viewModel {
-        AboutViewModel(
-            appMetaProvider = get(),
-            logCollector = get(),
-            serverAdminActions = get(),
-            authRepository = get(),
-            experimentalStore = get(),
-        )
-    }
-    viewModel {
-        LicensesViewModel(
-            jsonSource = get(),
-        )
-    }
-    viewModel {
-        WhatsNewViewModel(
-            whatsNewRepository = get(),
-        )
-    }
+    viewModelOf(::StorageSettingsViewModel)
+
+    viewModelOf(::PrivacyDataViewModel)
+
+    // The per-server self-signed trust toggle state + grants (network
+    // DataStore, same store the OkHttp config StateFlow flows from); the
+    // trust-toggle DECISION seam (core:data) — grants still observed/written
+    // through that store above, matching happens behind this repository so no
+    // core:network type reaches here; and the app-level client certificate
+    // (mTLS) import / toggle / remove seam (core:data) — delegates to the
+    // same manager single the handshake layer (applyTls) reads.
+    viewModelOf(::ServerManagementViewModel)
+
+    viewModelOf(::ServerSettingsViewModel)
+
+    viewModelOf(::SecuritySettingsViewModel)
+
+    viewModelOf(::SeerrSettingsViewModel)
+
+    viewModelOf(::ArrSettingsViewModel)
+
+    viewModelOf(::SubtitleProviderSettingsViewModel)
+
+    viewModelOf(::AboutViewModel)
+
+    viewModelOf(::LicensesViewModel)
+
+    viewModelOf(::WhatsNewViewModel)
+
     // ──  final slice: home-layout cluster + notifications ──
-    viewModel {
-        LibraryLayoutViewModel(
-            homeDiscoveryStore = get(),
-            editor = get(),
-            mediaRepository = get(),
-            libraryApiClient = get(),
-            playlistRepository = get(),
-        )
-    }
-    viewModel {
-        DiscoverRowsViewModel(
-            homeDiscoveryStore = get(),
-            editor = get(),
-            mediaRepository = get(),
-            mediaCatalogueEnrichments = get(),
-            libraryApiClient = get(),
-        )
-    }
-    viewModel {
-        NotificationSettingsViewModel(
-            projections = get(),
-            advancedSettings = get(),
-            editor = get(),
-            mediaRepository = get(),
-            notificationSync = get(),
-            imageUrlProvider = get(),
-        )
-    }
+    viewModelOf(::LibraryLayoutViewModel)
+
+    viewModelOf(::DiscoverRowsViewModel)
+
+    viewModelOf(::NotificationSettingsViewModel)
 }

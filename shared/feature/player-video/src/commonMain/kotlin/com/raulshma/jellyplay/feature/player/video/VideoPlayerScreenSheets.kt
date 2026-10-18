@@ -8,16 +8,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.StateFlow
 import org.jetbrains.compose.resources.stringResource
-import com.raulshma.jellyplay.core.model.ExoHdrToneMappingMode
-import com.raulshma.jellyplay.core.model.PlayerType
 import com.raulshma.jellyplay.core.ui.components.PlayerModalBottomSheet
 import com.raulshma.jellyplay.feature.player.video.components.AVSyncSheet
 import com.raulshma.jellyplay.feature.player.video.components.AspectRatioSheet
@@ -25,12 +21,10 @@ import com.raulshma.jellyplay.feature.player.video.components.ChapterPickerSheet
 import com.raulshma.jellyplay.feature.player.video.components.VideoQueueSheet
 import com.raulshma.jellyplay.feature.player.video.components.DecoderPickerSheet
 import com.raulshma.jellyplay.feature.player.video.components.EpisodePickerSheet
-import com.raulshma.jellyplay.feature.player.video.components.HdrOptionsSheet
 import com.raulshma.jellyplay.feature.player.video.components.PlaybackInfoOverlay
 import com.raulshma.jellyplay.feature.player.video.components.PlaybackModeSheet
 import com.raulshma.jellyplay.feature.player.video.components.QualityPickerSheet
 import com.raulshma.jellyplay.feature.player.video.components.RememberPreferenceToggle
-import com.raulshma.jellyplay.feature.player.video.components.RenderSheet
 import com.raulshma.jellyplay.feature.player.video.components.SleepTimerSheet
 import com.raulshma.jellyplay.feature.player.video.components.SpeedPickerSheet
 import com.raulshma.jellyplay.feature.player.video.components.SubtitleHubSheet
@@ -58,15 +52,23 @@ import com.raulshma.jellyplay.feature.player.video.generated.resources.player_vi
 // split: declarations are unchanged except `private` → `internal` where the
 // root file calls the symbol. See the section-host map on
 // VideoPlayerScreen.kt.
+//
+// The sheet-module migration is staged (the Detail section precedent): the
+// migrated branches (wave 1: Hdr, Render) delegate to their
+// [PlayerSheetModule]s in PlayerSheetModule.kt — the registry
+// ([PlayerSheetRegistry]) owns the sheet enumeration the former manual
+// ALL_SHEETS list carried — and the remaining branches stay hand-written
+// here, migrating as touched.
 
 /**
  * Input bundle for [PlayerSheetRouter] (the
  * [com.raulshma.jellyplay.feature.player.video.components.PlayerEffectsControls]
- * idiom): the 14 non-state values the router reads — the sheet-change /
- * dismiss funnels, the sheet-local flow subscriptions, the seek handoff and
- * the SubtitleHub per-open intents (reset-first flag + landing tab) — riding
- * one `@Immutable` carrier remembered on its value fields at the call wall;
- * its lambdas capture only stable handles (the screen's rememberSaveable
+ * idiom): the 16 non-state values the router reads — the sheet-change /
+ * dismiss funnels, the sheet-local flow subscriptions, the seek handoff, the
+ * SubtitleHub per-open intents (reset-first flag + landing tab) and the
+ * Render sheet's router-scoped "save for this series" toggle — riding one
+ * `@Immutable` carrier remembered on its value fields at the call wall; its
+ * lambdas capture only stable handles (the screen's rememberSaveable
  * delegates, the document pickers), so the bundle instance stays equal across
  * recompositions until an intent value actually flips.
  */
@@ -89,6 +91,17 @@ internal data class SheetRouterInputs(
     val onSubtitleHubResetConsumed: () -> Unit,
     /** The tab this SubtitleHub open lands on (set by the entry that opened it). */
     val subtitleHubInitialTab: SubtitleHubTab,
+    /**
+     * The Render sheet's "save for this series" toggle — the sheet's
+     * router-scoped sheet-local state (defaults off = session-only edits),
+     * hoisted beside the bundle so it survives sheet close/reopen. Written
+     * through [onSaveRenderForSeriesChange]; the bundle rebuilds on a flip
+     * (the value is a remember key at the call wall), the same contract as
+     * [subtitleHubResetFirst].
+     */
+    val saveRenderForSeries: Boolean,
+    /** Writes [saveRenderForSeries] (the Render sheet's toggle callback). */
+    val onSaveRenderForSeriesChange: (Boolean) -> Unit,
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -99,12 +112,13 @@ internal fun PlayerSheetRouter(
     inputs: SheetRouterInputs,
     viewModel: VideoPlayerViewModel,
 ) {
-    // the Render sheet's "save for this series" toggle — sheet-local
-    // UI state, defaults off (session-only edits).
-    var saveRenderForSeries by remember { mutableStateOf(false) }
-    // The sheets region's session slice: every branch reads the session
+    // the sheets region's session slice: every branch reads the session
     // through it (the GLOSSARY "Session slice" seam) — no controller reaches.
     val sheets = viewModel.sessionSlices.sheets
+    // The module slot's region params — only the migrated branches read it
+    // (the pilots: Hdr, Render); their slice collections stay inside each
+    // module's Content exactly where the branches collected them.
+    val moduleScope = PlayerSheetScope(uiState, inputs, viewModel, sheets)
     when (val sheet = currentSheet) {
         is PlayerSheet.Speed -> {
             SpeedPickerSheet(
@@ -498,71 +512,16 @@ internal fun PlayerSheetRouter(
                 onDismiss = inputs.dismissSheet,
             )
         }
-        is PlayerSheet.Hdr -> {
-            // HDR output sheet. The engine's live output facts are collected
-            // HERE (sheet-local) so the router root doesn't tick with the
-            // stats cadence. Both engine picks read through the sheets slice;
-            // the toggles keep a sheet-local optimistic mirror (seeded from
-            // the pending lens / the global slice, re-seeded when the async
-            // store round-trip lands) so the switch reflects the tap
-            // immediately without a whole-vm state round trip.
-            val stats by viewModel.videoStats.collectAsStateWithLifecycle()
-            val globalMpv = sheets.globalMpvConfig
-            val globalExo = sheets.globalExoConfig
-            val seededMpvPass = sheets.render.pending.hdrPassthrough ?: globalMpv.hdrPassthrough
-            var mpvPassthrough by remember(seededMpvPass) { mutableStateOf(seededMpvPass) }
-            var exoMode by remember(globalExo.hdrToneMapping) { mutableStateOf(globalExo.hdrToneMapping) }
-            val isMpv = uiState.preferredPlayerType == PlayerType.MPV
-            val isExo = uiState.preferredPlayerType == PlayerType.EXO_PLAYER
-            HdrOptionsSheet(
-                contentHdrType = uiState.hdrType,
-                observedHdrType = stats.videoHdrType,
-                playerType = uiState.preferredPlayerType,
-                hdrOutputActive = stats.hdrOutputActive,
-                hdrOutputNotice = stats.hdrOutputNotice,
-                displayHdrTypes = stats.displayHdrTypes,
-                mpvHdrPassthrough = mpvPassthrough.takeIf { isMpv },
-                onMpvHdrPassthroughChange = { enabled ->
-                    mpvPassthrough = enabled
-                    viewModel.onEvent(VideoPlayerUiEvent.SetMpvHdrPassthrough(enabled))
-                },
-                exoHdrToneMapping = exoMode.takeIf { isExo },
-                onExoHdrToneMappingSelect = { mode ->
-                    exoMode = mode
-                    viewModel.onEvent(VideoPlayerUiEvent.SetExoHdrToneMapping(mode))
-                },
-                onOpenRender = { inputs.onSheetChange(PlayerSheet.Render) },
-                onDismiss = inputs.dismissSheet,
-            )
-        }
-        is PlayerSheet.Render -> {
-            // mpv render surface. The session render state is the
-            // sheet's source of truth; picks apply to the running engine
-            // immediately and (with the toggle on) persist to the series row.
-            val sessionRender = sheets.render
-            val global = sheets.globalMpvConfig
-            val effective = sessionRender.effectiveMpvConfig(global)
-            val active = sessionRender.override
-            RenderSheet(
-                shaderPack = active?.shaderPack ?: global.shaderPack,
-                toneMapping = active?.toneMapping ?: global.toneMapping,
-                // The effective quality (the session lens may hold a pick the
-                // DataStore round-trip hasn't mirrored into the aggregate yet).
-                renderQuality = effective.renderQuality,
-                hasStoredOverride = active != null,
-                canSaveForSeries = uiState.media.seriesId != null || inputs.itemId != null,
-                saveForSeries = saveRenderForSeries,
-                onShaderPackSelect = { viewModel.onEvent(VideoPlayerUiEvent.SetRenderShaderPack(it, saveRenderForSeries)) },
-                onToneMappingSelect = { viewModel.onEvent(VideoPlayerUiEvent.SetRenderToneMapping(it, saveRenderForSeries)) },
-                onRenderQualitySelect = { viewModel.onEvent(VideoPlayerUiEvent.SetRenderQuality(it)) },
-                onSaveForSeriesChange = { saveRenderForSeries = it },
-                onInherit = {
-                    viewModel.onEvent(VideoPlayerUiEvent.ClearRenderOverride)
-                    inputs.onSheetChange(PlayerSheet.None)
-                },
-                onDismiss = inputs.dismissSheet,
-            )
-        }
+        is PlayerSheet.Hdr ->
+            // Migrated (the sheet-module pilot): the branch body — the
+            // sheet-local optimistic mirrors and the stats collection
+            // included — lives in HdrSheetModule.Content.
+            HdrSheetModule.Content(moduleScope)
+        is PlayerSheet.Render ->
+            // Migrated (the sheet-module pilot): the branch body lives in
+            // RenderSheetModule.Content; the "save for this series" toggle
+            // rides the inputs bundle.
+            RenderSheetModule.Content(moduleScope)
         PlayerSheet.None -> { }
     }
 }

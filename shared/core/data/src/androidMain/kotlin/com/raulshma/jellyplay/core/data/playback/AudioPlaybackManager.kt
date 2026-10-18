@@ -57,7 +57,14 @@ import kotlin.math.pow
  * app-scoped Koin SINGLE, identity-stable for the app's lifetime (the
  * remember-key contract the shells' audio-clicks helper reads; its four
  * now-playing flows are the surface's members, satisfied by the
- * [AudioQueueManager]/[AudioPlayerEngine] overrides below).
+ * [AudioQueueManager]/[AudioPlayerEngine] overrides below). It is also the
+ * ANDROID HALF of the [NowPlayingVerdict]'s audio input: the
+ * [AudioNowPlayingFace] members below are by-reference re-exposures of the
+ * same overrides plus the [hasActiveSession] pull, and the remote-session
+ * flag the verdict owns is read here only through the [remoteSessionActive]
+ * gate lambda (the former manager-local `@Volatile var` — its storage and
+ * single-writer contract moved into the verdict; the audio side never
+ * writes it).
  */
 @Stable
 class AudioPlaybackManager(
@@ -110,7 +117,17 @@ class AudioPlaybackManager(
      * callers omit it and the media3 player is built as before.
      */
     playerFactory: (() -> ExoPlayer)? = null,
-) : AudioEffectsManager by effectsProcessor, AudioQueueManager, AudioPlayerEngine, NowPlayingSurface {
+    /**
+     * The remote-session gate, read by [progressReporter]'s loop-start
+     * check ("the remote session owns server reporting then"). Production
+     * wiring resolves the [NowPlayingVerdict]'s flag cell at call time (a
+     * deferred Koin `get` — the verdict ctor-injects THIS manager, so an
+     * eager edge would be a construction cycle). Defaulted off so plain
+     * constructions (tests, previews) keep the pre-verdict semantics —
+     * the flag's resting value was `false` too.
+     */
+    private val remoteSessionActive: () -> Boolean = { false },
+) : AudioEffectsManager by effectsProcessor, AudioQueueManager, AudioPlayerEngine, NowPlayingSurface, AudioNowPlayingFace {
     private val scope = playbackScope ?: CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val testPlayerFactory = playerFactory
 
@@ -154,11 +171,13 @@ class AudioPlaybackManager(
 
     // Promoted reporter (commonMain): the former `exoPlayerProvider`
     // seam became the ExoPlayer-backed lambda pair below — behaviour
-    // byte-identical (same cadence/dedup/stop ordering).
+    // byte-identical (same cadence/dedup/stop ordering). The remote gate
+    // is the ctor lambda over the verdict's flag cell — same read point
+    // (the loop's start check), same resting value.
     private val progressReporter = AudioProgressReporter(
         scope = scope,
         playbackRepository = playbackRepository,
-        remoteSessionActive = { remoteSessionActive },
+        remoteSessionActive = remoteSessionActive,
         positionMsProvider = { exoPlayer?.currentPosition },
         isPlayingProvider = { exoPlayer?.isPlaying == true },
         itemIdProvider = { currentItemId },
@@ -369,9 +388,11 @@ class AudioPlaybackManager(
         },
     )
 
-    @Volatile
-    var remoteSessionActive: Boolean = false
-        internal set
+    // The remote-session flag that used to live here (@Volatile var,
+    // internal set) is the [NowPlayingVerdict]'s cell now — the manager
+    // reads it only through the [remoteSessionActive] ctor gate, and the
+    // single writer (RemotePlaybackReporter, via the verdict's internal
+    // mark) never touched this class's API surface anyway.
 
     /**
      * Sole writer of the now-playing metadata below; the manager re-exposes
@@ -493,7 +514,16 @@ class AudioPlaybackManager(
         }
     }
 
-    val hasActiveSession: Boolean
+    /**
+     * [AudioNowPlayingFace.hasActiveSession] — a live engine AND a claimed
+     * item. A PULL on purpose (the face's one non-flow member): the item
+     * CLAIM is a chassis cell written synchronously at `play()` entry,
+     * while the tracker flow feeding [currentPlayingItemId] publishes only
+     * after the detail resolve — no flow folds these two without changing
+     * what the reporter's gate and the tile's paused fold read inside the
+     * window where they disagree.
+     */
+    override val hasActiveSession: Boolean
         get() = exoPlayer != null && currentItemId != null
 
     init {

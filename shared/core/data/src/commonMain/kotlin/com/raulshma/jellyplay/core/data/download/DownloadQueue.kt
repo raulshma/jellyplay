@@ -41,7 +41,14 @@ interface DownloadQueue {
     /** Pauses an active transfer. */
     suspend fun pauseDownload(id: String): Result<Unit>
 
-    /** Resumes a paused transfer. */
+    /**
+     * The composite resume verb: marks the row PENDING **and** re-enqueues its
+     * worker (honoring schedule/network prefs) — one dispatch for what every
+     * control surface (the screen's VM, the notification receiver) always did
+     * as a hand-paired resume+enqueue. The enqueue follow-up lives inside the
+     * shared implementation rather than as a new interface member, so the two
+     * callers dispatch one verb and the surface stays at this size.
+     */
     suspend fun resumeDownload(id: String): Result<Unit>
 
     /** Re-queues a paused/failed row (non-suspend, mirrors the repository). */
@@ -50,7 +57,7 @@ interface DownloadQueue {
     /** Cancels a pending/queued/active transfer. */
     suspend fun cancelDownload(id: String): Result<Unit>
 
-    /** Retries a failed transfer. */
+    /** The composite retry verb — same enqueue-inside shape as [resumeDownload], from byte 0. */
     suspend fun retryDownload(id: String): Result<Unit>
 
     /** Deletes a download (artifacts + offline rows). */

@@ -45,6 +45,7 @@ import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvIntakeValue
 import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvProperties
 import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvStatsProjection
 import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvStatsReads
+import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvStallRecoveryAction
 import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvSubtitleOwnership
 import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvSubtitleSideLoadPlan
 import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvVideoEffectChain
@@ -237,7 +238,18 @@ open class MpvDesktopEngine(
             pollingIntervalMs = _pollingIntervalMs,
             isPlayingFlow = isPlaying,
             isCurrentlyPlaying = { isPlaying.value },
-            onActive = { trySend(currentPositionMs) },
+            onActive = {
+                trySend(currentPositionMs)
+                // The stall watchdog rides the same tick — the ratified
+                // "mpv recovery choreography" term's desktop gain: this host
+                // never had stall recovery (the Android engine's seven wiring
+                // sites had no desktop counterpart). Same shape as the
+                // Android host's ticker body: publish first, then the
+                // watchdog (which runs its own state gates — paused/buffering
+                // ticks are no-ops). `System.nanoTime` is this host's
+                // monotonic clock (Android: SystemClock.elapsedRealtime).
+                core.onStallWatchdogTick(nowMs = System.nanoTime() / 1_000_000L)
+            },
         ).launch()
         awaitClose { ticker.cancel() }
     }.conflate()
@@ -279,9 +291,10 @@ open class MpvDesktopEngine(
         override fun onBeforeFileLoaded() {
             core.cachedPositionMs = 0L
             // New file → the display-target probe starts over (the target
-            // of the previous item must not leak into this one's stats).
-            hdrProbePending = true
-            hdrTargetIsHdr = false
+            // of the previous item must not leak into this one's stats). The
+            // probe CACHE is the core's HDR probe machine; the three
+            // hdrStats* badge latches below stay this engine's.
+            core.rearmHdrTargetProbe()
             hdrStatsActive = false
             hdrStatsNotice = null
             hdrStatsType = null
@@ -314,6 +327,56 @@ open class MpvDesktopEngine(
 
         override fun subStartSeconds(): Double? =
             binding.readDouble(MpvProperties.SUB_START)?.takeIf { it >= 0 }
+
+        // ── mpv recovery choreography residue (the shared wiring is the core's;
+        // this host is its second rider — it GAINED stall recovery here). ──
+
+        override fun stallHwdecFallbackValue(): String =
+            // The desktop copy path: `auto-copy` decodes through any available
+            // hwdec into system-memory frames the VO can always present — the
+            // same posture the watchdog's Android fallback
+            // (`mediacodec-copy`) buys on its decoder set (this libmpv has no
+            // mediacodec; a literal fallback write would be rejected).
+            "auto-copy"
+
+        override fun writeStallHwdec(value: String) {
+            // The JNA transport cannot throw — absorbing by nature (the
+            // core's kick then always follows; Android's throwing transport
+            // is the one that can abort the recovery).
+            aliveCtx()?.let { MpvLib.setPropertyString(it, MpvProperties.HWDEC, value) }
+        }
+
+        override fun onStallRecoveryIssued(
+            action: MpvStallRecoveryAction,
+            appliedHwdecValue: String?,
+            frozenPositionMs: Long,
+        ) {
+            if (appliedHwdecValue != null) {
+                Log.w(
+                    TAG,
+                    "Stall watchdog: play loop wedged at ${frozenPositionMs}ms — switching hwdec to " +
+                        "$appliedHwdecValue and kicking the play loop"
+                )
+            } else {
+                Log.w(
+                    TAG,
+                    "Stall watchdog: play loop wedged at ${frozenPositionMs}ms " +
+                        "(position frozen while playing) — kicking with a seek restart"
+                )
+            }
+        }
+
+        override fun onStallRecoveryFailed(action: MpvStallRecoveryAction, error: Throwable) {
+            Log.w(TAG, "Stall watchdog recovery failed", error)
+        }
+
+        override fun writeTargetColorspaceHint(value: String) {
+            // The JNA write (error codes, not exceptions — absorbed by
+            // nature). Only the engine-factory's one-shot "yes" arms it (see
+            // the init block); the core's change-cache makes that call a
+            // single write exactly like the former inline one.
+            aliveCtx()?.let { MpvLib.setPropertyString(it, MpvProperties.TARGET_COLORSPACE_HINT, value) }
+        }
     }
 
     /**
@@ -401,9 +464,22 @@ open class MpvDesktopEngine(
         // HDR passthrough — mpv switches an HDR-capable display to its
         // HDR transfer on the first HDR frame when the hint is set. Runtime
         // property write (post-init): the option is meaningful per-output and
-        // this libmpv accepts the string write after mpv_initialize.
+        // this libmpv accepts the string write after mpv_initialize. The
+        // write goes through the shared core's change-cached hint machine now
+        // (the Android host's applyTargetColorspaceHint shape) — the
+        // [targetColorspaceHint] FACTORY PARAM remains for construction-order
+        // reasons: the vo=gpu-next/HWND-embed gate is factory knowledge (the
+        // software-render path cannot pass HDR through), evaluated before any
+        // engine exists, and the desktop shipped a one-shot "yes" (never a
+        // reset "no", no re-evaluation) which this single call preserves —
+        // first call, cache null → exactly one "yes" write. Accessing the
+        // lazy core here is safe: Kotlin executes initializers in
+        // declaration order, so by this block the fields the core captures
+        // (engineScope, coreHosts, binding, the chassis flows) are all
+        // initialized, and core construction launches nothing on the event
+        // surface.
         if (targetColorspaceHint) {
-            ctx?.let { MpvLib.setPropertyString(it, MpvProperties.TARGET_COLORSPACE_HINT, "yes") }
+            core.applyTargetColorspaceHint(requested = true)
         }
 
         // Stats projector: polls while enabled, mirroring the Android engines'
@@ -532,14 +608,17 @@ open class MpvDesktopEngine(
     }
 
     // ── HDR passthrough state ───────────────────────────────────────
-    // The display-target probe: pending from FILE_LOADED until the first
-    // stats tick where mpv's `video-target-params/gamma` resolves (the target
-    // exists only after the first frame is rendered), then cached for the
-    // file. `hdrTargetIsHdr` gates the tone-mapping suppression in
-    // applyEngineConfig; the three hdrStats* fields feed the stats overlay's
-    // badge/notice rows and survive the per-tick stats rebuild.
-    @Volatile private var hdrProbePending = false
-    @Volatile private var hdrTargetIsHdr = false
+    // The display-target probe CACHE (the pending latch + the
+    // `video-target-params/gamma` verdict) is the shared [MpvCore] HDR probe
+    // machine now — the former per-host @Volatile twins (`hdrProbePending`,
+    // `hdrTargetIsHdr`); this engine delivers reads ([probeHdrTarget]) and
+    // re-arms/clears at the shipped sites (the FILE_LOADED extras above /
+    // `stop`). The three hdrStats* fields stay HERE: they are the desktop
+    // stats badge's per-file LATCH (computed once at probe-resolve time so
+    // the badge survives the per-tick stats rebuild — the Android host
+    // re-derives its decision per tick through resolveMpvHdrOutput instead;
+    // the declared publish-shape divergence the ratified term leaves
+    // host-side).
     @Volatile private var hdrStatsActive = false
     @Volatile private var hdrStatsNotice: String? = null
     @Volatile private var hdrStatsType: String? = null
@@ -828,9 +907,9 @@ open class MpvDesktopEngine(
         // The stopped file's buffer ranges die with it.
         _bufferedRanges.value = emptyList()
         // The HDR verdict belongs to the (now stopped) file — clear it with
-        // the rest of the per-item derived state.
-        hdrProbePending = false
-        hdrTargetIsHdr = false
+        // the rest of the per-item derived state (the probe latch is the
+        // core's; the badge latches are this engine's).
+        core.clearHdrTargetProbe()
         hdrStatsActive = false
         hdrStatsNotice = null
         hdrStatsType = null
@@ -1057,11 +1136,22 @@ open class MpvDesktopEngine(
                 // (and a stale preset from an SDR session is explicitly
                 // reset). Before the target probe lands the gate is open
                 // (the preset is written): the safe fallback for SDR displays.
-                toneMappingSuppressed = hdrPassthroughRequested(currentConfig) && hdrTargetIsHdr,
+                // The intent fold + the target verdict live on the shared
+                // core (the former Android-twin duplication).
+                toneMappingSuppressed =
+                    MpvCore.hdrPassthroughRequested(currentConfig) && core.hdrTargetIsHdr,
             )
         },
         refreshOwnedKeys = { refreshUserOwnedSubtitleKeys(currentConfig) },
-        hwdecValue = { cfg -> hwdecFor(cfg.decoderMode) },
+        hwdecValue = { cfg ->
+            // The sticky-hwdec precedence ladder (the core's): a stall
+            // recovery's switch sticks across FILE_LOADED full-applies —
+            // without the ladder the per-item config apply would stomp the
+            // copy path back onto the wedging zero-copy default every file.
+            // The configured-value dialect stays this engine's (`hwdecFor`,
+            // the sw-render subclass's override included).
+            core.stallAwareHwdecValue(hwdecFor(cfg.decoderMode))
+        },
         applySubtitleStyle = { cfg -> core.applySubtitleStyleRuntime(cfg.subtitleStyle) },
         applyAudioEffects = { _, new, delta, full ->
             if (full || delta.audioEffectsChanged || delta.engineSpecificChanged) {
@@ -1083,6 +1173,12 @@ open class MpvDesktopEngine(
     )
 
     override protected fun onConfigChanged(oldConfig: EngineConfig, newConfig: EngineConfig) {
+        // A user-authored decoder-mode move retires the watchdog's sticky
+        // stall override (the core's rule — the desktop now RUNS the recovery
+        // choreography, so it retires like the Android engine does; the
+        // configured-value dialect is `hwdecFor`, same value the applier
+        // above would write).
+        core.onHwdecConfigured(hwdecFor(newConfig.decoderMode))
         configApplier.applyDelta(oldConfig, newConfig)
     }
 
@@ -1090,16 +1186,9 @@ open class MpvDesktopEngine(
         configApplier.applyFull(config)
     }
 
-    /**
-     * The HDR-passthrough INTENT (not the active state): the user's setting
-     * is on AND the current item's streams are HDR (the config builder folds
-     * `isHdrFromStreams` into [EngineConfig.hdrSource]). Whether the OUTPUT is
-     * actually HDR additionally depends on the display target
-     * ([hdrTargetIsHdr], read from `video-target-params` after the first
-     * frame).
-     */
-    private fun hdrPassthroughRequested(config: EngineConfig): Boolean =
-        (config.engineSpecific as? MpvEngineConfig)?.hdrPassthrough == true && config.hdrSource
+    // (the HDR-passthrough INTENT fold — the former `hdrPassthroughRequested`
+    // verbatim Android twin — is [MpvCore.Companion.hdrPassthroughRequested]
+    // now; both hosts call the same companion helper with their own config.)
 
     /**
      * push the audio-effects config onto mpv — the `af` chain
@@ -1260,29 +1349,31 @@ open class MpvDesktopEngine(
     }
 
     /**
-     * The display-capability probe: reads `video-target-params/gamma`
+     * The display-capability probe's READ half: `video-target-params/gamma`
      * (mpv exposes the ACTIVE output transfer there — pq/HLG on an HDR
      * target) ONCE per file, at the first stats tick where the property
-     * resolves after FILE_LOADED, and caches the verdict. Re-reads would be
-     * harmless, but the plan's "poll once after first frame" keeps the
-     * badge stable against mid-file output switches.
+     * resolves after FILE_LOADED. The CACHE is the core's
+     * ([MpvCore.observeHdrTargetGamma] — pending latch + verdict); this
+     * engine derives its badge latch from the resolution it gets back.
+     * Re-reads would be harmless, but the plan's "poll once after first
+     * frame" keeps the badge stable against mid-file output switches.
      */
     private fun probeHdrTarget(context: Pointer) {
-        if (!hdrProbePending) return
-        val gamma = MpvLib.getPropertyString(context, "video-target-params/gamma") ?: return
-        hdrProbePending = false
-        hdrTargetIsHdr = gamma == TARGET_GAMMA_PQ || gamma == TARGET_GAMMA_HLG
-        hdrStatsType = when (gamma) {
-            TARGET_GAMMA_PQ -> "HDR10"
-            TARGET_GAMMA_HLG -> "HLG"
+        if (!core.hdrProbePending) return
+        val resolved = core.observeHdrTargetGamma(
+            MpvLib.getPropertyString(context, MpvProperties.VIDEO_TARGET_PARAMS_GAMMA),
+        ) ?: return
+        hdrStatsType = when (resolved) {
+            MpvCore.TARGET_GAMMA_PQ -> "HDR10"
+            MpvCore.TARGET_GAMMA_HLG -> "HLG"
             else -> null
         }
-        val requested = hdrPassthroughRequested(currentConfig)
-        hdrStatsActive = requested && hdrTargetIsHdr
+        val requested = MpvCore.hdrPassthroughRequested(currentConfig)
+        hdrStatsActive = requested && core.hdrTargetIsHdr
         // Passthrough on but the display target stayed SDR: the tone
         // mapping handles the HDR→SDR conversion — say so in one line.
         hdrStatsNotice =
-            if (requested && !hdrTargetIsHdr) HDR_SDR_FALLBACK_NOTICE else null
+            if (requested && !core.hdrTargetIsHdr) HDR_SDR_FALLBACK_NOTICE else null
     }
 
     // (the former private resolution() helper died with the shared
@@ -1406,10 +1497,6 @@ open class MpvDesktopEngine(
 
         /** Temp-file prefix for screenshot-to-file captures. */
         private const val TEMP_SHOT_PREFIX = "jellyplay-frame-"
-
-        /** `video-target-params/gamma` values that mean an HDR output. */
-        private const val TARGET_GAMMA_PQ = "pq"
-        private const val TARGET_GAMMA_HLG = "hlg"
 
         /** The one-line stats fallback notice when passthrough is on but the target stayed SDR. */
         private const val HDR_SDR_FALLBACK_NOTICE = "SDR display - tone mapping active"

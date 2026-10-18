@@ -450,12 +450,13 @@ class LibVlcPlayerEngine(
     override fun onConfigChanged(oldConfig: EngineConfig, newConfig: EngineConfig) {
         try {
             val mp = mediaPlayer ?: return
+            val delta = EngineConfigDelta.of(oldConfig, newConfig)
 
             // Audio delay and subtitle delay apply live via libvlc setters.
-            if (oldConfig.audioDelayMs != newConfig.audioDelayMs) {
+            if (delta.audioDelayChanged) {
                 mp.setAudioDelay(newConfig.audioDelayMs)
             }
-            if (oldConfig.subtitleDelayMs != newConfig.subtitleDelayMs) {
+            if (delta.subtitleDelayChanged) {
                 mp.setSpuDelay(newConfig.subtitleDelayMs * 1000L)
             }
 
@@ -476,9 +477,9 @@ class LibVlcPlayerEngine(
             // VLC for Android, which calls MediaPlayer.setSpuDelay() at runtime
             // without reloading (see scratch vlc-android: PlayerController/
             // PlaylistManager setSpuDelay — no stop/seek).
-            if (styleChangedExcludingDelay(oldConfig.subtitleStyle, newConfig.subtitleStyle) ||
-                oldConfig.videoEffects != newConfig.videoEffects ||
-                oldConfig.audioEffects != newConfig.audioEffects
+            if (delta.subtitleStyleChangedExcludingDelay ||
+                delta.videoEffectsChanged ||
+                delta.audioEffectsChanged
             ) {
                 reloadMediaForSubtitleStyleChange()
             }

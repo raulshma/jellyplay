@@ -105,6 +105,19 @@ class HomeRowModulesTest {
         }
     }
 
+    @Test
+    fun titleCarriesSeed_exactlyRecommendations() {
+        // The seed-chain row's title renders "Because You Watched <seed>";
+        // every other row keeps its plain display string.
+        for (type in HomeSectionType.entries) {
+            assertEquals(
+                type == HomeSectionType.RECOMMENDATIONS,
+                HomeRowModules[type].titleCarriesSeed,
+                "type=$type",
+            )
+        }
+    }
+
     // ── The v3 registrations (H4 Upcoming + H5 My Media) ──
 
     @Test

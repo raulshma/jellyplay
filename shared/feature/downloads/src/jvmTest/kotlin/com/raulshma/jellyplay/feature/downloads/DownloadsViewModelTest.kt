@@ -211,7 +211,7 @@ class DownloadsViewModelTest {
     }
 
     @Test
-    fun applyBulkAction_resume_item_resets_and_reenqueues() = runTest(mainDispatcher) {
+    fun applyBulkAction_resume_item_dispatches_the_composite_resume_verb() = runTest(mainDispatcher) {
         pushItems(listOf(item("d9", status = DownloadStatus.PAUSED)))
         advanceUntilIdle()
 
@@ -219,12 +219,14 @@ class DownloadsViewModelTest {
         advanceUntilIdle()
 
         coVerify(exactly = 1) { downloadRepository.resumeDownload("d9") }
-        // enqueueDownload is a non-suspend fun on the writer port.
-        verify(exactly = 1) { downloadRepository.enqueueDownload("d9") }
+        // The enqueue follow-up lives INSIDE the queue's composite resume verb
+        // (DownloadRepositoryImpl, shared with the notification receiver) — the
+        // VM dispatches one verb and never enqueues itself.
+        verify(exactly = 0) { downloadRepository.enqueueDownload(any()) }
     }
 
     @Test
-    fun applyBulkAction_retry_item_resets_and_reenqueues() = runTest(mainDispatcher) {
+    fun applyBulkAction_retry_item_dispatches_the_composite_retry_verb() = runTest(mainDispatcher) {
         pushItems(listOf(item("d9", status = DownloadStatus.FAILED)))
         advanceUntilIdle()
 
@@ -232,7 +234,7 @@ class DownloadsViewModelTest {
         advanceUntilIdle()
 
         coVerify(exactly = 1) { downloadRepository.retryDownload("d9") }
-        verify(exactly = 1) { downloadRepository.enqueueDownload("d9") }
+        verify(exactly = 0) { downloadRepository.enqueueDownload(any()) }
     }
 
     // ── Bus→flow seam (V3 conveyor) ───────────────────────────────────────
@@ -630,7 +632,7 @@ class DownloadsViewModelTest {
     }
 
     @Test
-    fun applyBulkAction_resume_selected_resumes_and_reenqueues_only_selected_paused_items() = runTest(mainDispatcher) {
+    fun applyBulkAction_resume_selected_resumes_only_selected_paused_items() = runTest(mainDispatcher) {
         pushItems(
             listOf(
                 item("pa", status = DownloadStatus.PAUSED),
@@ -644,9 +646,9 @@ class DownloadsViewModelTest {
         advanceUntilIdle()
 
         coVerify(exactly = 1) { downloadRepository.resumeDownload("pa") }
-        verify(exactly = 1) { downloadRepository.enqueueDownload("pa") }
         coVerify(exactly = 0) { downloadRepository.resumeDownload("dl") }
-        verify(exactly = 0) { downloadRepository.enqueueDownload("dl") }
+        // enqueue rides inside the composite verb — the VM never enqueues.
+        verify(exactly = 0) { downloadRepository.enqueueDownload(any()) }
     }
 
     @Test
@@ -697,7 +699,7 @@ class DownloadsViewModelTest {
     }
 
     @Test
-    fun applyBulkAction_retry_failed_retries_and_reenqueues_every_failed_item() = runTest(mainDispatcher) {
+    fun applyBulkAction_retry_failed_retries_every_failed_item() = runTest(mainDispatcher) {
         pushItems(
             listOf(
                 item("f1", status = DownloadStatus.FAILED),
@@ -712,9 +714,9 @@ class DownloadsViewModelTest {
 
         coVerify(exactly = 1) { downloadRepository.retryDownload("f1") }
         coVerify(exactly = 1) { downloadRepository.retryDownload("f2") }
-        verify(exactly = 1) { downloadRepository.enqueueDownload("f1") }
-        verify(exactly = 1) { downloadRepository.enqueueDownload("f2") }
         coVerify(exactly = 0) { downloadRepository.retryDownload("ok") }
+        // enqueue rides inside the composite verb — the VM never enqueues.
+        verify(exactly = 0) { downloadRepository.enqueueDownload(any()) }
     }
 
     @Test

@@ -1,5 +1,7 @@
 package com.raulshma.jellyplay.feature.player.video.engine
 
+import com.raulshma.jellyplay.core.model.MpvEngineConfig
+import com.raulshma.jellyplay.core.model.MpvVideoOutput
 import com.raulshma.jellyplay.core.model.SubtitleStyle
 import com.raulshma.jellyplay.core.model.TrackType
 import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvBinding
@@ -8,6 +10,8 @@ import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvEndFileError
 import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvIntakeHost
 import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvIntakeValue
 import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvProperties
+import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvStallRecoveryAction
+import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvStallWatchdog
 import com.raulshma.jellyplay.feature.player.video.engine.mpv.MpvSubtitleSideLoadPlan
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -19,6 +23,7 @@ import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -34,7 +39,12 @@ import kotlin.test.assertTrue
  * fixed-precision seek, the keep-open EOF restart, the track-selection
  * arms), the aspect plan, the side-load plan executions, the coalesced
  * refresh burst, the buffered-ranges decode, the cue accumulator's start
- * source, and the ownership refresh.
+ * source, and the ownership refresh. The mpv recovery choreography (the
+ * ratified glossary term) is pinned here too: the sticky-hwdec precedence
+ * ladder (watchdog override > host config), the per-load watchdog reset, the
+ * retirement-on-user-config-move, the recovery hand and the HDR probe
+ * machine (probe cache, change-cached hint write, the passthrough-intent
+ * folds) — the wiring that had no test in androidMain.
  */
 class MpvCoreTest {
 
@@ -124,6 +134,11 @@ class MpvCoreTest {
         val eventLog = mutableListOf<String>()
         var publishedLists = 0
         val unsalvageableReports = mutableListOf<Set<String>>()
+        // The mpv recovery choreography's recorded residue (the fake host's
+        // transport/log seams — the assertion surface for the ladder pins).
+        val stallHwdecWrites = mutableListOf<String>()
+        val hintWrites = mutableListOf<String>()
+        var failHintWrites = false
 
         val hosts = object : MpvCore.Hosts() {
             override fun onTransportError(op: String, error: Throwable) {
@@ -157,6 +172,15 @@ class MpvCoreTest {
                 binding.commands += listOf(MpvProperties.CMD_SUB_ADD, add.source.url, add.flags, add.label)
                 return true
             }
+
+            override fun writeStallHwdec(value: String) {
+                stallHwdecWrites += value
+            }
+
+            override fun writeTargetColorspaceHint(value: String) {
+                if (failHintWrites) throw IllegalStateException("hint unsupported")
+                hintWrites += value
+            }
         }
 
         val core = MpvCore(
@@ -185,6 +209,29 @@ class MpvCoreTest {
         mimeType = "application/x-subrip",
         id = id,
     )
+
+    /**
+     * Parks the fixture in the watchdog's wedged-prone steady state (READY +
+     * playing + frozen at [positionMs]) and runs the 1s-cadence ticks across
+     * [fromMs]..[toMs] through the core's tick funnel — the same drive
+     * [MpvStallWatchdogTest] uses, one level up (through the core's own
+     * state reads instead of watchdog parameters).
+     */
+    private fun Fixture.tickFrozen(
+        fromMs: Long,
+        toMs: Long,
+        positionMs: Long = 0L,
+        stepMs: Long = 1_000L,
+    ) {
+        playbackState.value = EnginePlaybackState.READY
+        isPlaying.value = true
+        core.cachedPositionMs = positionMs
+        var t = fromMs
+        while (t <= toMs) {
+            core.onStallWatchdogTick(t)
+            t += stepMs
+        }
+    }
 
     // ── Property intake + cached fields ─────────────────────────────────────
 
@@ -826,5 +873,226 @@ class MpvCoreTest {
         core.applySubtitleStyleRuntime(style)
         assertTrue(f.binding.writes.isNotEmpty(), "the applier wrote the sub-* table")
         assertEquals(style, styled, "the host extra fires after the writes")
+    }
+
+    // ── mpv recovery choreography: the sticky-hwdec precedence ladder ───────
+    // The ratified term's fake-binding pins: the ladder's precedence, the
+    // per-load reset, the retirement-on-user-config-move and the recovery
+    // hand — the wiring that had NO test in androidMain (the pure WHEN/WHICH
+    // lives in MpvStallWatchdogTest; this drives it through the core).
+
+    /**
+     * Drives one confirmed stall through the core and asserts the switch
+     * recovery: the hwdec write carries the host's fallback value, the kick
+     * seek follows it, and the sticky override now tops the ladder over the
+     * host-configured value.
+     */
+    @Test
+    fun stallSwitchAppliesTheHostFallbackAndArmsTheStickyLadderTop() {
+        val f = Fixture()
+        assertEquals(
+            "auto-safe",
+            f.core.stallAwareHwdecValue("auto-safe"),
+            "no override armed: the host-configured value stands",
+        )
+
+        // Wedged from birth (1s ticks, 8s confirm window): t=1000 reads as
+        // progress (the -1 seed), window 2000..9000, first fire at 10000.
+        f.tickFrozen(fromMs = 1_000L, toMs = 9_000L)
+        assertTrue(f.binding.commands.isEmpty(), "nothing fires inside the confirm window")
+
+        // The log-detector feed (the host's pre-filter guarantee) implicates
+        // the zero-copy path before the fire.
+        f.core.onMpvLogLine("vo/gpu-next/aimagereader", "acquireLatestImage failed: -30001")
+        f.core.onStallWatchdogTick(10_000L)
+
+        assertEquals(
+            listOf(MpvStallWatchdog.HWDEC_STALL_FALLBACK),
+            f.stallHwdecWrites,
+            "the switch writes the host's copy-path value (the default Hosts spelling)",
+        )
+        assertEquals(
+            listOf(listOf("seek", "0.250000", "absolute")),
+            f.binding.commands,
+            "the kick seek follows the switch, at the frozen position + slack",
+        )
+        assertEquals(
+            MpvStallWatchdog.HWDEC_STALL_FALLBACK,
+            f.core.stallAwareHwdecValue("auto-safe"),
+            "the sticky override now tops the ladder — every later load/config starts on the copy path",
+        )
+    }
+
+    @Test
+    fun stallKickWithoutLogEvidenceNeverTouchesTheLadder() {
+        val f = Fixture()
+        f.tickFrozen(fromMs = 1_000L, toMs = 9_000L)
+        f.core.onStallWatchdogTick(10_000L)
+        assertTrue(f.stallHwdecWrites.isEmpty(), "the plain kick never writes hwdec")
+        assertEquals(1, f.binding.commands.size, "the kick seek still lands")
+        assertEquals(
+            "auto-safe",
+            f.core.stallAwareHwdecValue("auto-safe"),
+            "no sticky armed without a switch",
+        )
+    }
+
+    @Test
+    fun stallRecoveryOnADeadBindingIsANoOp() {
+        val f = Fixture()
+        f.binding.alive = false
+        f.tickFrozen(fromMs = 1_000L, toMs = 10_000L)
+        assertTrue(f.stallHwdecWrites.isEmpty())
+        assertTrue(f.binding.commands.isEmpty(), "the shipped dead-handle guard: no recovery at all")
+    }
+
+    @Test
+    fun userConfigMoveRetiresTheStickyAndIdenticalValueSurvives() {
+        val f = Fixture()
+        f.tickFrozen(fromMs = 1_000L, toMs = 9_000L)
+        f.core.onMpvLogLine("vo/gpu-next/aimagereader", "acquireLatestImage failed: -30001")
+        f.core.onStallWatchdogTick(10_000L)
+        assertEquals(1, f.stallHwdecWrites.size, "precondition: the sticky is armed")
+
+        // The watchdog moved the value to exactly this one — identical value,
+        // nothing to decide, the sticky survives.
+        f.core.onHwdecConfigured(MpvStallWatchdog.HWDEC_STALL_FALLBACK)
+        assertEquals(
+            MpvStallWatchdog.HWDEC_STALL_FALLBACK,
+            f.core.stallAwareHwdecValue("some-other-value"),
+            "identical configured value — the sticky survives",
+        )
+
+        // A user-authored move elsewhere retires it — their explicit choice
+        // governs again.
+        f.core.onHwdecConfigured("no")
+        assertEquals(
+            "no",
+            f.core.stallAwareHwdecValue("no"),
+            "a retired override must not shadow the configured value",
+        )
+    }
+
+    @Test
+    fun beginLoadResetsTheWatchdogWindowBudgetAndLogFlag() {
+        val f = Fixture()
+        // Burn attempt 1 with the detector armed (the switch).
+        f.core.onMpvLogLine("vo/gpu-next/aimagereader", "acquireLatestImage failed: -30001")
+        f.tickFrozen(fromMs = 1_000L, toMs = 9_000L)
+        f.core.onStallWatchdogTick(10_000L)
+        assertEquals(1, f.stallHwdecWrites.size)
+
+        // The next load resets window, budget and the log flag (the sticky
+        // override survives — asserted by the ladder test above).
+        f.core.beginLoad(
+            PlaybackRequest(uri = "https://example.test/next.m3u8", title = "next"),
+        )
+        f.tickFrozen(fromMs = 1_000L, toMs = 9_000L)
+        f.core.onStallWatchdogTick(10_000L)
+        assertEquals(
+            1,
+            f.stallHwdecWrites.size,
+            "the fresh file's first fire is a PLAIN kick — window, budget and log flag all reset",
+        )
+        assertEquals(2, f.binding.commands.size, "the kick itself still lands for the new file")
+    }
+
+    // ── HDR probe machine ───────────────────────────────────────────────────
+
+    @Test
+    fun hdrProbeVerdictCachesOncePerFileAndClearsOnStop() {
+        val f = Fixture()
+        assertFalse(f.core.hdrProbePending, "seeded inert — hosts re-arm per file")
+        assertNull(
+            f.core.observeHdrTargetGamma("pq"),
+            "inert: an un-armed probe drops the read",
+        )
+        assertFalse(f.core.hdrTargetIsHdr)
+
+        f.core.rearmHdrTargetProbe()
+        assertTrue(f.core.hdrProbePending)
+        assertNull(
+            f.core.observeHdrTargetGamma(null),
+            "an unresolved read (target not yet rendered) leaves the latch armed",
+        )
+        assertTrue(f.core.hdrProbePending)
+
+        assertEquals("pq", f.core.observeHdrTargetGamma("pq"), "the resolving read returns its gamma")
+        assertTrue(f.core.hdrTargetIsHdr, "pq is an HDR output")
+        assertFalse(f.core.hdrProbePending)
+        assertNull(
+            f.core.observeHdrTargetGamma("hlg"),
+            "resolved once per file — later reads are dropped",
+        )
+        assertTrue(f.core.hdrTargetIsHdr, "the cached verdict survives the per-tick rebuilds")
+
+        f.core.clearHdrTargetProbe()
+        assertFalse(f.core.hdrTargetIsHdr)
+        assertFalse(f.core.hdrProbePending, "the per-item teardown leaves the probe inert")
+    }
+
+    @Test
+    fun hdrProbeRejectsNonHdrGammaWhenArmed() {
+        val f = Fixture()
+        f.core.rearmHdrTargetProbe()
+        f.core.observeHdrTargetGamma("bt.1886")
+        assertFalse(f.core.hdrTargetIsHdr, "an SDR gamma resolves the probe to NOT-HDR (not back to pending)")
+        assertFalse(f.core.hdrProbePending)
+    }
+
+    @Test
+    fun hdrPassthroughRequestedFoldsSettingAndSource() {
+        fun cfg(hdrPassthrough: Boolean, hdrSource: Boolean) = EngineConfig(
+            engineSpecific = MpvEngineConfig(hdrPassthrough = hdrPassthrough),
+            hdrSource = hdrSource,
+        )
+        assertTrue(MpvCore.hdrPassthroughRequested(cfg(hdrPassthrough = true, hdrSource = true)))
+        assertFalse(MpvCore.hdrPassthroughRequested(cfg(hdrPassthrough = true, hdrSource = false)))
+        assertFalse(MpvCore.hdrPassthroughRequested(cfg(hdrPassthrough = false, hdrSource = true)))
+        assertFalse(
+            MpvCore.hdrPassthroughRequested(EngineConfig()),
+            "no engineSpecific — the null-safe shape is simply not-requested",
+        )
+    }
+
+    @Test
+    fun targetColorspaceHintRequestedAddsTheGpuNextGate() {
+        fun cfg(videoOutput: MpvVideoOutput) = EngineConfig(
+            engineSpecific = MpvEngineConfig(hdrPassthrough = true, videoOutput = videoOutput),
+            hdrSource = true,
+        )
+        assertTrue(MpvCore.targetColorspaceHintRequested(cfg(MpvVideoOutput.GPU_NEXT)))
+        assertFalse(
+            MpvCore.targetColorspaceHintRequested(cfg(MpvVideoOutput.GPU)),
+            "only vo=gpu-next honors the hint — both hosts' shipped gate",
+        )
+    }
+
+    @Test
+    fun targetColorspaceHintWriteIsChangeCachedAndAbsorbsFailures() {
+        val f = Fixture()
+        f.core.applyTargetColorspaceHint(requested = true)
+        assertEquals(listOf("yes"), f.hintWrites)
+        f.core.applyTargetColorspaceHint(requested = true)
+        assertEquals(1, f.hintWrites.size, "an unchanged request is the change-cache's no-op")
+
+        f.core.applyTargetColorspaceHint(requested = false)
+        assertEquals(listOf("yes", "no"), f.hintWrites, "the 'no' resets a stale value from a previous HDR item")
+
+        f.core.clearTargetColorspaceHintCache()
+        f.core.applyTargetColorspaceHint(requested = false)
+        assertEquals(3, f.hintWrites.size, "a cleared cache (fresh handle) re-lands the write")
+
+        // A THROWING transport (an older bundled libmpv without the property)
+        // must leave the cache unset — the next identical request retries.
+        f.failHintWrites = true
+        f.core.applyTargetColorspaceHint(requested = true)
+        f.failHintWrites = false
+        f.core.applyTargetColorspaceHint(requested = true)
+        assertEquals(
+            listOf("yes", "no", "no", "yes"),
+            f.hintWrites,
+            "the failed write was absorbed AND retried — the cache never believed it landed",
+        )
     }
 }

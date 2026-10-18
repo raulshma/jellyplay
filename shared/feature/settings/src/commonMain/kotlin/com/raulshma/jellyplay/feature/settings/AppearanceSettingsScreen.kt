@@ -112,30 +112,19 @@ private val THEME_HIGHLIGHT_IDS = setOf(AppearanceRows.ThemeMode.id, AppearanceR
  * source the deep-link scroll resolver consumes (see HighlightScroll.kt), so
  * the scroll target can never drift from the UI. Indices 0-2 always render;
  * 3-5 (performance, eye care, newsletter) only compose when advanced settings
- * are shown. (The home display / Next Up / home-layout rows AND the
- * home-discovery card-display quartet moved to HomeSettingsScreen.)
+ * are shown (their [SettingsScreenSection] carries `advancedOnly = true`,
+ * which [deriveAdjustForAdvanced] folds into the adjust). (The home display /
+ * Next Up / home-layout rows AND the home-discovery card-display quartet moved
+ * to HomeSettingsScreen.)
  */
-private val appearanceScreenGroups: List<Set<String>> = listOf(
-    SettingsScreenGroups.appearanceTheme.itemIdSet,
-    SettingsScreenGroups.appearanceNavigation.itemIdSet,
-    SettingsScreenGroups.appearanceLibrary.itemIdSet,
-    SettingsScreenGroups.appearancePerformance.itemIdSet,
-    SettingsScreenGroups.appearanceEyeCare.itemIdSet,
-    SettingsScreenGroups.appearanceNewsletter.itemIdSet,
+private val appearanceScreenSections: List<SettingsScreenSection> = listOf(
+    SettingsScreenSection(SettingsScreenGroups.appearanceTheme.itemIdSet),
+    SettingsScreenSection(SettingsScreenGroups.appearanceNavigation.itemIdSet),
+    SettingsScreenSection(SettingsScreenGroups.appearanceLibrary.itemIdSet),
+    SettingsScreenSection(SettingsScreenGroups.appearancePerformance.itemIdSet, advancedOnly = true),
+    SettingsScreenSection(SettingsScreenGroups.appearanceEyeCare.itemIdSet, advancedOnly = true),
+    SettingsScreenSection(SettingsScreenGroups.appearanceNewsletter.itemIdSet, advancedOnly = true),
 )
-
-/**
- * [resolveHighlightScrollIndex]'s [rememberHighlightScrollIndex adjustForAdvanced]
- * for this screen's LazyColumn: with advanced hidden the three trailing
- * expert groups don't compose, so their ids cannot scroll (`-1`). Pure (and
- * internal) so the contract test can pin the derivation against it.
- */
-internal fun appearanceAdjustForAdvanced(showAdvanced: Boolean): (Int) -> Int =
-    if (showAdvanced) {
-        { it }
-    } else {
-        { raw -> if (raw >= 3) -1 else raw }
-    }
 
 /**
  * The persisted accent id for a themed variant, or null when the variant has
@@ -230,8 +219,8 @@ fun AppearanceSettingsScreen(
         onBack = onBack,
         focusTag = "appearance_init",
         highlightSettingId = highlightSettingId,
-        highlightGroups = appearanceScreenGroups,
-        adjustForAdvanced = appearanceAdjustForAdvanced(showAdvanced),
+        highlightGroups = appearanceScreenSections.map { it.idSet },
+        adjustForAdvanced = deriveAdjustForAdvanced(appearanceScreenSections, showAdvanced),
         advancedToggle = PreferenceAdvancedToggle(
             showAdvanced = showAdvanced,
             onToggle = { viewModel.setShowAdvancedSettings(!showAdvanced) },

@@ -2,6 +2,8 @@ package com.raulshma.jellyplay.feature.settings
 
 import com.composables.icons.tabler.Tabler
 import com.composables.icons.tabler.outline.*
+import com.raulshma.jellyplay.core.datastore.spec.PreferenceSearchSpec
+import com.raulshma.jellyplay.core.datastore.subtitle.SubtitlePreferenceSpecs
 import com.raulshma.jellyplay.core.ui.generated.resources.Res as CoreUiRes
 import com.raulshma.jellyplay.core.ui.generated.resources.ss_cat_language_subtitles
 import com.raulshma.jellyplay.core.ui.navigation.Route
@@ -65,18 +67,25 @@ import com.raulshma.jellyplay.feature.settings.generated.resources.ss_subtitle_v
 /**
  * The language domain's fused row declarations — the feature-side single home
  * of every language/subtitle row's presentation, ordering, and capability
- * (the [AppearanceRows] template), plus the screen's "Track Selection" group
- * ([TrackSelectionRows]). Each [SettingsRow] replaces the trio the domain
+ * (the [AppearanceRows] template), plus the screen's "Track Selection"
+ * group ([TrackSelectionRows]). Each [SettingsRow] replaces the trio the domain
  * used to declare per row: the `SettingsSearchBinding` entry, the
  * `SettingsRowRecord` entry, and the `LanguageSettingsIds` /
  * `TrackSelectionIds` holder constants (all retired).
  *
- * Every row is a HAND-MAINTAINED residual (the knobs live in spec-less
- * stores) and carries its full hand search faces; the gates state the shipped
- * quirks explicitly — the per-app display-language row rides the
- * `AppLocaleSetter` seam's capability, high-contrast subtitles is declared
- * advanced yet always shown, and the HDR font-size row compounds advanced
- * with the HDR-style toggle. The projection
+ * The rows whose knobs live in the spec-backed subtitle store
+ * ([SubtitleLanguageStore]) are SPEC-BACKED: their search semantics (keywords,
+ * advanced flag, route kind, resource keys) come from the
+ * [SubtitlePreferenceSpecs] declarations (the six style-editor faces ride the
+ * two style blobs' standalone catalog entries — the per-codec passthrough
+ * precedent), and the row carries the presentation faces + gate only. Two
+ * rows stay HAND-MAINTAINED residuals with their full hand search faces:
+ * `pgs_direct_play` (the knob is the playback domain's `pgs_subtitle_direct_play`
+ * row, which declares no search entry) and `subtitle_tester` (a navigation
+ * fact, not a preference). The gates state the shipped quirks explicitly — the
+ * per-app display-language row rides the `AppLocaleSetter` seam's capability,
+ * high-contrast subtitles is declared advanced yet always shown, and the HDR
+ * font-size row compounds advanced with the HDR-style toggle. The projection
  * ([List.toSearchItems]/[List.asRowGroup]) fails fast at catalog init on any
  * drift; search results, catalog order, group membership and per-gate
  * visibility are byte-identical to the retired declarations.
@@ -92,8 +101,6 @@ internal object LanguageRows {
         subtitleRes = Res.string.settings_display_language_subtitle,
         searchTitleRes = Res.string.ss_app_language_title,
         searchSubtitleRes = Res.string.ss_app_language_subtitle,
-        keywords = listOf("language", "display", "interface", "locale", "ui language", "app language"),
-        route = Route.LanguageSettings(),
         platforms = platformsForCapability(settingsCapabilities.supportsAppLocaleOverride),
         gate = RowAdmission.Platform(RowAdmissionCapability.AppLocaleOverride),
     )
@@ -105,8 +112,6 @@ internal object LanguageRows {
         subtitleRes = Res.string.settings_audio_language_subtitle,
         searchTitleRes = Res.string.ss_audio_language_title,
         searchSubtitleRes = Res.string.ss_audio_language_subtitle,
-        keywords = listOf("language", "audio track", "speech", "default language"),
-        route = Route.LanguageSettings(),
     )
 
     val SubtitleLanguage = SettingsRow(
@@ -116,8 +121,6 @@ internal object LanguageRows {
         subtitleRes = Res.string.settings_subtitle_language_subtitle,
         searchTitleRes = Res.string.ss_subtitle_language_title,
         searchSubtitleRes = Res.string.ss_subtitle_language_subtitle,
-        keywords = listOf("subtitles", "language", "cc", "captions"),
-        route = Route.LanguageSettings(),
     )
 
     // -- The "Subtitles" group's twelve rows — every id declares its gate (the strict shape) — in catalog order. --
@@ -129,8 +132,6 @@ internal object LanguageRows {
         subtitleRes = Res.string.settings_font_size_subtitle,
         searchTitleRes = Res.string.ss_subtitle_font_size_title,
         searchSubtitleRes = Res.string.ss_subtitle_font_size_subtitle,
-        keywords = listOf("subtitle size", "font size", "text size", "bigger"),
-        route = Route.LanguageSettings(),
         gate = RowAdmission.Always,
     )
 
@@ -140,8 +141,6 @@ internal object LanguageRows {
         titleRes = Res.string.settings_forced_subtitles,
         searchTitleRes = Res.string.ss_subtitle_forced_only_title,
         searchSubtitleRes = Res.string.ss_subtitle_forced_only_subtitle,
-        keywords = listOf("forced", "subtitles", "foreign", "parts", "native"),
-        route = Route.LanguageSettings(),
         gate = RowAdmission.Always,
     )
 
@@ -163,9 +162,6 @@ internal object LanguageRows {
         titleRes = Res.string.settings_hdr_subtitle_style,
         searchTitleRes = Res.string.ss_hdr_subtitle_style_title,
         searchSubtitleRes = Res.string.ss_hdr_subtitle_style_subtitle,
-        keywords = listOf("hdr", "subtitle", "style", "dolby vision", "hdr10", "brightness"),
-        route = Route.LanguageSettings(),
-        isAdvanced = true,
         gate = RowAdmission.Advanced,
     )
 
@@ -176,9 +172,6 @@ internal object LanguageRows {
         subtitleRes = Res.string.settings_subtitle_text_color_subtitle,
         searchTitleRes = Res.string.ss_subtitle_color_title,
         searchSubtitleRes = Res.string.ss_subtitle_color_subtitle,
-        keywords = listOf("subtitle color", "text color", "yellow subtitles", "white"),
-        route = Route.LanguageSettings(),
-        isAdvanced = true,
         gate = RowAdmission.Advanced,
     )
 
@@ -189,9 +182,6 @@ internal object LanguageRows {
         subtitleRes = Res.string.settings_subtitle_background_subtitle,
         searchTitleRes = Res.string.ss_subtitle_background_title,
         searchSubtitleRes = Res.string.ss_subtitle_background_subtitle,
-        keywords = listOf("subtitle background", "opacity", "transparency", "box"),
-        route = Route.LanguageSettings(),
-        isAdvanced = true,
         gate = RowAdmission.Advanced,
     )
 
@@ -202,9 +192,6 @@ internal object LanguageRows {
         subtitleRes = Res.string.settings_subtitle_edge_style_subtitle,
         searchTitleRes = Res.string.ss_subtitle_edge_style_title,
         searchSubtitleRes = Res.string.ss_subtitle_edge_style_subtitle,
-        keywords = listOf("edge style", "shadow", "outline", "border"),
-        route = Route.LanguageSettings(),
-        isAdvanced = true,
         gate = RowAdmission.Advanced,
     )
 
@@ -214,9 +201,6 @@ internal object LanguageRows {
         titleRes = Res.string.settings_subtitle_sync_offset,
         searchTitleRes = Res.string.ss_subtitle_sync_offset_title,
         searchSubtitleRes = Res.string.ss_subtitle_sync_offset_subtitle,
-        keywords = listOf("sync", "offset", "delay", "lagging subtitles"),
-        route = Route.LanguageSettings(),
-        isAdvanced = true,
         gate = RowAdmission.Advanced,
     )
 
@@ -227,9 +211,6 @@ internal object LanguageRows {
         subtitleRes = Res.string.settings_subtitle_vertical_position_subtitle,
         searchTitleRes = Res.string.ss_subtitle_vertical_position_title,
         searchSubtitleRes = Res.string.ss_subtitle_vertical_position_subtitle,
-        keywords = listOf("position", "height", "vertical", "bottom", "margin"),
-        route = Route.LanguageSettings(),
-        isAdvanced = true,
         gate = RowAdmission.Advanced,
     )
 
@@ -239,9 +220,6 @@ internal object LanguageRows {
         titleRes = Res.string.settings_high_contrast_subtitles,
         searchTitleRes = Res.string.ss_high_contrast_subtitles_title,
         searchSubtitleRes = Res.string.ss_high_contrast_subtitles_subtitle,
-        keywords = listOf("subtitle", "high", "contrast", "accessibility", "visibility"),
-        route = Route.LanguageSettings(),
-        isAdvanced = true,
         gate = RowAdmission.Always,
     )
 
@@ -263,9 +241,6 @@ internal object LanguageRows {
         subtitleRes = Res.string.settings_hdr_font_size_subtitle,
         searchTitleRes = Res.string.ss_hdr_subtitle_font_size_title,
         searchSubtitleRes = Res.string.ss_hdr_subtitle_font_size_subtitle,
-        keywords = listOf("hdr", "subtitle", "font size", "text", "dolby vision"),
-        route = Route.LanguageSettings(),
-        isAdvanced = true,
         gate = RowAdmission.All(RowAdmission.Advanced, RowAdmission.WhenOn(LanguageRows.HdrSubtitleStyle.id)),
     )
 
@@ -285,7 +260,12 @@ internal object LanguageRows {
 // below are the spine — presentation faces, catalog order, gates.
 // ---------------------------------------------------------------------
 
-private val searchRoutes: Map<String, Route> = emptyMap()
+private val searchRoutes: Map<String, Route> = mapOf(
+    SubtitlePreferenceSpecs.ROUTE_LANGUAGE_SETTINGS to Route.LanguageSettings(),
+)
+
+private val subtitleSpecEntries: List<PreferenceSearchSpec> =
+    SubtitlePreferenceSpecs.searchEntries
 
 private val languageCategory = CoreUiRes.string.ss_cat_language_subtitles
 
@@ -316,10 +296,20 @@ internal val LanguageSubtitlesRows: List<SettingsRow> = listOf(
  * single home of the groups' order, faces and gates.
  */
 internal val LanguageGeneralGroup =
-    LanguageGeneralRows.asRowGroup("language.general", emptyList(), searchRoutes, languageCategory)
+    LanguageGeneralRows.asRowGroup(
+        "language.general",
+        specEntriesFor(LanguageGeneralRows, subtitleSpecEntries),
+        searchRoutes,
+        languageCategory,
+    )
 
 internal val LanguageSubtitlesGroup =
-    LanguageSubtitlesRows.asRowGroup("language.subtitles", emptyList(), searchRoutes, languageCategory)
+    LanguageSubtitlesRows.asRowGroup(
+        "language.subtitles",
+        specEntriesFor(LanguageSubtitlesRows, subtitleSpecEntries),
+        searchRoutes,
+        languageCategory,
+    )
 
 // The catalog projections, kept as named vals — the search/catalog-order
 // pins (SpecDerivedSearchItemsTest, SettingsSearchCatalogTest) read these

@@ -59,24 +59,6 @@ class SettingsSearchCatalogTest {
     @Test
     fun `aggregation preserves the verbatim move - the full catalog in flat order`() {
         val items = SettingsSearchCatalog.items
-        // 316 through the fused conversion; +12 for the ADR-0010 companion-
-        // plugin wave (the per-feature switch rows + their group), re-pinned
-        // there and again through the sync-screen consolidation (zero net);
-        // +1 for the push wave's 13th per-feature switch row; +1 for the
-        // analytics wave's 14th per-feature switch row; +1 for the Wave-3
-        // "Export with Secrets" backup row; +14 for the detail-preference
-        // wave (13 Library & Cards detail-display rows + the
-        // play-trailer-before-movie playback row); +13 for the home-preference
-        // wave (the H6/H7/H10/H13/H15/H17/H18/H19/H20/H21 home rows + the
-        // H11/H12 card-badge rows); +2 for the H11/H12 card-badge rows'
-        // second faces in Appearance → Library & Cards (namespaced residual
-        // ids over the same home-store prefs); +1 for the D12 wave's
-        // per-series notification row (the "Series notifications" fused row
-        // beside the per-library list); +1 for the H5 hidden-libraries
-        // restore row (the My Media hidden-libraries drill-in); +2 for the
-        // spatial-audio pair (the ADVISORY master toggle + its headphones
-        // sub-knob on the playback slice); +1 for the HDR wave's ExoPlayer
-        // "HDR Tone Mapping" engine row (exo_hdr_tone_mapping).
         assertEquals(365, items.size)
         // Curated flat order starts with the account/session pair that used to
         // open the old registry, and the aggregation is a pure concatenation

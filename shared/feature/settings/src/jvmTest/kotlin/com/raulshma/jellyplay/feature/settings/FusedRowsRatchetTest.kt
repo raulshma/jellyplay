@@ -5,6 +5,7 @@ import com.raulshma.jellyplay.core.datastore.experimental.ExperimentalPreference
 import com.raulshma.jellyplay.core.datastore.home.HomeDiscoveryPreferenceSpecs
 import com.raulshma.jellyplay.core.datastore.playback.PlaybackPreferenceSpecs
 import com.raulshma.jellyplay.core.datastore.screensaver.ScreensaverPreferenceSpecs
+import com.raulshma.jellyplay.core.datastore.subtitle.SubtitlePreferenceSpecs
 import com.raulshma.jellyplay.core.datastore.videoplayer.VideoPlayerPreferenceSpecs
 import com.raulshma.jellyplay.core.model.MediaSegmentType
 import com.raulshma.jellyplay.core.model.PlatformKind
@@ -400,6 +401,7 @@ class FusedRowsRatchetTest {
         val specIds = (
             VideoPlayerPreferenceSpecs.searchEntries +
                 PlaybackPreferenceSpecs.searchEntries +
+                SubtitlePreferenceSpecs.searchEntries +
                 HomeDiscoveryPreferenceSpecs.searchEntries +
                 AppearancePreferenceSpecs.searchEntries +
                 ScreensaverPreferenceSpecs.searchEntries +

@@ -1607,9 +1607,10 @@ fun VideoPlayerScreen(
                     onMarkUnwatchedAndQuit = { viewModel.onEvent(VideoPlayerUiEvent.MarkUnwatchedAndQuit) },
                     // the Rendering sheet is an mpv surface (shader packs /
                     // tone mapping / quality); the deinterlace item gates on
-                    // the engine capability matrix.
+                    // the engine capability matrix. The gear entry declares
+                    // through the sheet module's registered key.
                     supportsRenderPanel = uiState.preferredPlayerType == PlayerType.MPV,
-                    onRenderClick = { openSheet(PlayerSheet.Render) },
+                    onRenderClick = { openSheet(RenderSheetModule.sheet) },
                     supportsDeinterlace = uiState.engineCapabilities.supportsDeinterlace,
                     deinterlaceMode = if (uiState.engineCapabilities.supportsDeinterlace) {
                         controls.render.deinterlace
@@ -1842,12 +1843,19 @@ fun VideoPlayerScreen(
         }
     }
 
+    // The Render sheet's "save for this series" toggle — the sheet's
+    // router-scoped sheet-local state (defaults off = session-only edits),
+    // hoisted beside the router inputs so it survives sheet close/reopen
+    // exactly as the former router-held remember did. The bundle rebuilds on
+    // a flip (keyed below), the same contract as subtitleHubResetFirst.
+    var saveRenderForSeries by remember { mutableStateOf(false) }
     val sheetRouterInputs = remember(
         itemId,
         syncPlayIgnoreWait,
         onOpenSubtitleTester,
         subtitleHubResetFirst,
         subtitleHubInitialTab,
+        saveRenderForSeries,
     ) {
         SheetRouterInputs(
             onSheetChange = { sheet -> currentSheet = sheet },
@@ -1871,6 +1879,8 @@ fun VideoPlayerScreen(
             subtitleHubResetFirst = subtitleHubResetFirst,
             onSubtitleHubResetConsumed = { subtitleHubResetFirst = false },
             subtitleHubInitialTab = subtitleHubInitialTab,
+            saveRenderForSeries = saveRenderForSeries,
+            onSaveRenderForSeriesChange = { saveRenderForSeries = it },
         )
     }
 
