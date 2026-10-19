@@ -24,6 +24,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.json.JsonElement
 import kotlin.test.BeforeTest
+import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -52,6 +53,11 @@ import kotlin.test.assertTrue
 class UserPreferencesStoreRestoreCategoriesTest {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
+
+    @AfterTest
+    fun tearDown() {
+        cancelGraphInitCollectors(scope)
+    }
     private lateinit var dataStore: DataStore<Preferences>
     private lateinit var graph: PreferenceSliceGraph
     private lateinit var store: UserPreferencesStore

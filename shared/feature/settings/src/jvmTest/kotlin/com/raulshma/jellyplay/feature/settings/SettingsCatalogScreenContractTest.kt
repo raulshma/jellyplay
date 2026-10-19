@@ -1599,6 +1599,4 @@ class SettingsCatalogScreenContractTest {
         assertFalse(on.enableAdvanced)
     }
 }
-dvanced)
-    }
-}
+

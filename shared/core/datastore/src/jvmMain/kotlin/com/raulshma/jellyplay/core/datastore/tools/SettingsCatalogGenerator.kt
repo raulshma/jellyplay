@@ -164,6 +164,13 @@ object SettingsCatalogGenerator {
 
         SPEC_DOMAINS.forEach { (domain, rows) ->
             rows.forEach { spec ->
+                // Install-global bookkeeping markers are spec rows (reset
+                // coverage + derivation-integrity reflection) but describe
+                // nothing that syncs or that an admin should default —
+                // SKIPPED here where the [DENYLIST] would hard-error (these
+                // are legal rows; see
+                // PreferenceSyncPolicy.EXCLUDED_BOOKKEEPING_KEYS).
+                if (spec.keyName in PreferenceSyncPolicy.EXCLUDED_BOOKKEEPING_KEYS) return@forEach
                 if (SYNC_EXCLUDED_PREFIXES.none { spec.keyName.startsWith(it) }) {
                     spec.toEntry(domain, strings)?.let(::add)
                 }

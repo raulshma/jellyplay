@@ -15,6 +15,7 @@ import kotlinx.coroutines.test.runTest
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlin.test.BeforeTest
+import kotlin.test.AfterTest
 import kotlin.test.Test
 
 /**
@@ -32,6 +33,11 @@ import kotlin.test.Test
 class PreferencesEditScopeTest {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
+
+    @AfterTest
+    fun tearDown() {
+        cancelGraphInitCollectors(scope)
+    }
     private lateinit var graph: PreferenceSliceGraph
     private lateinit var store: UserPreferencesStore
     private lateinit var editor: PreferencesEditor

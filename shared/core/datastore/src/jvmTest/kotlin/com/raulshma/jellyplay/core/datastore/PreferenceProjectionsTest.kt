@@ -35,6 +35,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 import kotlin.test.BeforeTest
+import kotlin.test.AfterTest
 import kotlin.test.Test
 
 /**
@@ -51,6 +52,11 @@ import kotlin.test.Test
 class PreferenceProjectionsTest {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
+
+    @AfterTest
+    fun tearDown() {
+        cancelGraphInitCollectors(scope)
+    }
     private lateinit var dataStore: DataStore<Preferences>
     private lateinit var graph: PreferenceSliceGraph
     private val projections: PreferenceProjections get() = graph.projections

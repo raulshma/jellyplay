@@ -10,6 +10,7 @@ import kotlinx.coroutines.test.runTest
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlin.test.BeforeTest
+import kotlin.test.AfterTest
 import kotlin.test.Test
 
 /**
@@ -24,6 +25,11 @@ import kotlin.test.Test
 class HomeBackdropPreferencesTest {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
+
+    @AfterTest
+    fun tearDown() {
+        cancelGraphInitCollectors(scope)
+    }
     private lateinit var graph: PreferenceSliceGraph
 
     @BeforeTest

@@ -11,13 +11,13 @@ import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.raulshma.jellyplay.core.datastore.TestDataStoreProvider
 import com.raulshma.jellyplay.core.datastore.UserNamespacedKeys
+import com.raulshma.jellyplay.core.datastore.cancelGraphInitCollectors
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.PreferenceResetCategory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
@@ -60,7 +60,7 @@ class HomeDiscoverySpecDerivationTest {
 
     @AfterTest
     fun tearDown() {
-        scope.cancel()
+        cancelGraphInitCollectors(scope)
     }
 
     private suspend fun activate(userId: String) = identityStore.setActiveUser(userId)
@@ -120,6 +120,7 @@ class HomeDiscoverySpecDerivationTest {
         "show_settings_in_home_search" to Boolean::class,
         "hide_top_header_on_scroll" to Boolean::class,
         "home_ns_migrated" to Boolean::class,
+        "home_v3_upgrade_baseline_done" to Boolean::class,
     )
 
     private fun expectedKey(name: String, type: kotlin.reflect.KClass<*>): Preferences.Key<*> = when (type) {
@@ -178,18 +179,20 @@ class HomeDiscoverySpecDerivationTest {
 
     @Test
     fun `the namespace migration copy lists derive from the rows by storage`() {
-        // legacyKeys: every row except the global marker.
+        // legacyKeys: every row except the global markers.
         assertEquals(
-            expectedStoredType.keys.filter { it != "home_ns_migrated" }.sorted(),
+            expectedStoredType.keys
+                .filter { it != "home_ns_migrated" && it != "home_v3_upgrade_baseline_done" }.sorted(),
             HomeDiscoveryPreferenceSpecs.legacyKeys.map { it.name }.sorted(),
         )
 
         val migrationNames = HomeDiscoveryPreferenceSpecs.migrationRows.map { it.keyName }
-        // The hidden-library key is a migration SOURCE only, and the marker is
-        // global — neither is ever a copy destination.
+        // The hidden-library key is a migration SOURCE only, and the markers
+        // are global — none is ever a copy destination.
         assertFalse("home_hidden_library_section_ids" in migrationNames)
         assertFalse("home_ns_migrated" in migrationNames)
-        assertEquals(expectedStoredType.size - 2, migrationNames.size)
+        assertFalse("home_v3_upgrade_baseline_done" in migrationNames)
+        assertEquals(expectedStoredType.size - 3, migrationNames.size)
 
         // The per-type copy lists, exactly the hand-written predecessor's
         // three lists (booleans, ints, strings — enum slots included) plus

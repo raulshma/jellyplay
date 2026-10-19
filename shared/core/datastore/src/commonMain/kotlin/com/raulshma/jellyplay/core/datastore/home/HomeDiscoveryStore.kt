@@ -30,6 +30,7 @@ import com.raulshma.jellyplay.core.model.DiscoverRowConfig
 import com.raulshma.jellyplay.core.model.HomeLayoutPreset
 import com.raulshma.jellyplay.core.model.HomeMode
 import com.raulshma.jellyplay.core.model.PinnedHomeSection
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -67,7 +68,8 @@ import kotlinx.serialization.Serializable
  * rows by reset category, and the namespace migration's per-type copy lists
  * are the rows filtered by declared storage. The read-modify-write commands,
  * the enabled-set version-union decode (whose per-user parse cache a row
- * encoding cannot carry) and the first-user-claims migration stay hand-written
+ * encoding cannot carry), the first-user-claims migration and the v3
+ * upgrade baseline ([ensureV3UpgradeBaseline]) stay hand-written
  * by decision — see the spec KDoc.
  *
  * **Storage:** reuses the shared `"user_prefs"` DataStore file, but every key
@@ -103,6 +105,11 @@ class HomeDiscoveryStore constructor(
         scope.launch {
             identityStore.activeUserId.collect { userId ->
                 val uid = userId?.takeIf { it.isNotBlank() } ?: return@collect
+                // The v3 baseline MUST classify before the namespace migration
+                // runs — after it, HOME_NS_MIGRATED is set on fresh installs
+                // too and every one would misclassify as an upgrader. See
+                // [ensureV3UpgradeBaseline].
+                ensureV3UpgradeBaseline(uid)
                 ensureNamespacedMigration(uid)
             }
         }
@@ -206,6 +213,8 @@ class HomeDiscoveryStore constructor(
         val SHOW_SETTINGS_IN_HOME_SEARCH = booleanPreferencesKey(HomeDiscoveryPreferenceSpecs.SHOW_SETTINGS_IN_HOME_SEARCH.keyName)
         val HIDE_TOP_HEADER_ON_SCROLL = booleanPreferencesKey(HomeDiscoveryPreferenceSpecs.HIDE_TOP_HEADER_ON_SCROLL.keyName)
         val HOME_NS_MIGRATED = booleanPreferencesKey(HomeDiscoveryPreferenceSpecs.HOME_NS_MIGRATED.keyName)
+        val HOME_V3_UPGRADE_BASELINE_DONE =
+            booleanPreferencesKey(HomeDiscoveryPreferenceSpecs.HOME_V3_UPGRADE_BASELINE_DONE.keyName)
     }
 
     // ------------------------------------------------------------------
@@ -229,6 +238,23 @@ class HomeDiscoveryStore constructor(
     internal val legacyKeys: List<Preferences.Key<*>> = HomeDiscoveryPreferenceSpecs.legacyKeys
 
     /**
+     * Runs a one-time home fold with the module's DataStore failure posture:
+     * a read/edit failure (IO error, corruption) is swallowed and degraded —
+     * the init collector runs in the ApplicationScope, which has no
+     * CoroutineExceptionHandler, so a throw would crash the app and kill the
+     * collector for good — and the fold's marker is only set on success, so
+     * the next user activation retries (silent-swallow is the module
+     * convention — see ArrSecureCredentialsStore.getManualServers).
+     * Cancellation is rethrown, never swallowed: a canceled collector must
+     * die at its suspension point, not dispatch its edit after the fact — a
+     * post-cancel edit would write against whatever state the next
+     * activation has since created.
+     */
+    private suspend fun runOneTimeFold(block: suspend () -> Unit) {
+        runCatching { block() }.onFailure { if (it is CancellationException) throw it }
+    }
+
+    /**
      * ONE-TIME, GLOBAL, FIRST-USER-CLAIMS migration from the legacy flat keys
      * to the active user's `u_<userId>::` namespace.
      *
@@ -247,18 +273,12 @@ class HomeDiscoveryStore constructor(
      * Idempotent and crash-safe: the fast path skips when the marker is set,
      * the copies and the marker (set last) commit in one atomic DataStore edit,
      * and copies only fill absent namespaced keys — a crash at any point
-     * re-runs to the same result.
+     * re-runs to the same result. Runs under [runOneTimeFold]'s
+     * swallow-and-degrade failure posture.
      */
     internal suspend fun ensureNamespacedMigration(userId: String) {
-        // A DataStore read/edit failure (IO error, corruption) must not escape
-        // into the init collector's ApplicationScope coroutine — that scope has
-        // no CoroutineExceptionHandler, so a throw would crash the app and kill
-        // the migration collector for good. Swallow and degrade instead: the
-        // marker is only set on success, so the next user activation retries.
-        // (Silent-swallow is the module convention — see
-        // ArrSecureCredentialsStore.getManualServers.)
-        runCatching {
-            if (dataStore.data.first()[Keys.HOME_NS_MIGRATED] == true) return
+        runOneTimeFold {
+            if (dataStore.data.first()[Keys.HOME_NS_MIGRATED] == true) return@runOneTimeFold
             dataStore.edit { prefs ->
                 if (prefs[Keys.HOME_NS_MIGRATED] == true) return@edit
                 // Fold the legacy hidden-library conversion in first so its
@@ -280,6 +300,66 @@ class HomeDiscoveryStore constructor(
                     copyIntoNamespace(prefs, it.typedKey(), userId, ::stringPreferencesKey) { raw -> raw }
                 }
                 prefs[Keys.HOME_NS_MIGRATED] = true
+            }
+        }
+    }
+
+    /**
+     * ONE-TIME, GLOBAL v3 upgrade baseline. UPCOMING and MY_MEDIA ship as
+     * [HomeSectionType.CONFIGURABLE] default-set members, so an ABSENT
+     * enabled-set serves both — indistinguishably, on a fresh install and on
+     * an install updating from v0.11.4 whose user never touched section
+     * config. The read-side union cannot help (an absent set is not a
+     * persisted one), so this fold decides once per install: classify, and
+     * for an UPGRADING install materialize the default set minus
+     * [HomeDiscoveryPreferenceSpecs.V3_UPGRADE_EXCLUDED_SECTIONS] as the
+     * first active user's persisted set, stamped current — their home keeps
+     * exactly the rows it had, and enabling either section later is an
+     * ordinary verbatim write. A user who already persisted a set is left
+     * untouched (its v3 absence is respected by the union not carrying the
+     * pair); a FRESH install gets no write at all and keeps serving the
+     * default with the pair visible.
+     *
+     * Classification: [Keys.HOME_NS_MIGRATED] already set (any
+     * namespacing-era install), or ANY legacy flat home key still on disk
+     * (pre-namespacing installs — the copy fold never deletes, so the keys
+     * are there whether or not the namespace migration has run). Both
+     * signals must be consulted BEFORE [ensureNamespacedMigration] on the
+     * same activation — the init collector orders them — because the
+     * migration sets the marker on fresh installs too, and a fold that ran
+     * after it would misclassify every fresh install as an upgrader.
+     *
+     * First-user-claims, matching the namespace migration: later users
+     * activating on an updated install have no persisted set and start from
+     * the spec default (pair visible) — the baseline claims for exactly the
+     * user who was active at upgrade time. Idempotent and crash-safe in the
+     * same shape: fast-path skip on the marker, classify + write + marker
+     * (set last) in one atomic edit, a crash re-runs to the same result.
+     * DataStore failures are swallowed (module convention — see
+     * [runOneTimeFold]) — the marker is only set on success, so the next
+     * activation retries.
+     */
+    internal suspend fun ensureV3UpgradeBaseline(userId: String) {
+        runOneTimeFold {
+            if (dataStore.data.first()[Keys.HOME_V3_UPGRADE_BASELINE_DONE] == true) return@runOneTimeFold
+            dataStore.edit { prefs ->
+                if (prefs[Keys.HOME_V3_UPGRADE_BASELINE_DONE] == true) return@edit
+                val wasUpdating = prefs[Keys.HOME_NS_MIGRATED] == true ||
+                    // Name-based across ALL slots: the legacy layer holds
+                    // typed and pre-typed STRING forms under the same names.
+                    prefs.asMap().keys.any { it.name in HomeDiscoveryPreferenceSpecs.legacyRowNames }
+                if (wasUpdating) {
+                    val setKeyName = HomeDiscoveryPreferenceSpecs.HOME_ENABLED_SECTION_TYPES.rawUserKey(userId).name
+                    if (prefs.asMap().keys.none { it.name == setKeyName }) {
+                        writeEnabledHomeSectionTypes(
+                            prefs,
+                            userId,
+                            HomeDiscoveryPreferenceSpecs.HOME_ENABLED_SECTION_TYPES.default -
+                                HomeDiscoveryPreferenceSpecs.V3_UPGRADE_EXCLUDED_SECTIONS,
+                        )
+                    }
+                }
+                prefs[Keys.HOME_V3_UPGRADE_BASELINE_DONE] = true
             }
         }
     }
@@ -463,16 +543,17 @@ class HomeDiscoveryStore constructor(
          * `(shipped-at, section)` entry here and bumps
          * [HomeDiscoveryPreferenceSpecs.HOME_ENABLED_SECTION_TYPES_CURRENT_VERSION];
          * existing entries are never edited.
+         *
+         * v3 (UPCOMING + MY_MEDIA) is intentionally absent: those ship as
+         * default-set members for fresh installs only — upgrading installs
+         * are handled by [ensureV3UpgradeBaseline], and nothing must union
+         * the pair into a persisted set.
          */
         private val sectionsShippedByVersion: List<Pair<Int, HomeSectionType>> = listOf(
             // v1: reading-experience 2.0's Continue Reading row
             HomeDiscoveryPreferenceSpecs.CONTINUE_READING_SHIPPED_AT_VERSION to HomeSectionType.CONTINUE_READING,
             // v2: the custom discover rows block (Home Screen settings hub)
             HomeDiscoveryPreferenceSpecs.DISCOVER_SHIPPED_AT_VERSION to HomeSectionType.DISCOVER,
-            // v3: Upcoming (Next Up's complement) and the My Media tiles
-            // row — one bump, one announcement for both.
-            HomeDiscoveryPreferenceSpecs.UPCOMING_SHIPPED_AT_VERSION to HomeSectionType.UPCOMING,
-            HomeDiscoveryPreferenceSpecs.MY_MEDIA_SHIPPED_AT_VERSION to HomeSectionType.MY_MEDIA,
         )
 
         /**

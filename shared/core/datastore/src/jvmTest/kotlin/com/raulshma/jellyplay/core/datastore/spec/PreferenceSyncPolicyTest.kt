@@ -59,4 +59,31 @@ class PreferenceSyncPolicyTest {
             SettingsCatalogGenerator.DENYLIST,
         )
     }
+
+    @Test
+    fun bookkeepingKeys_areExactlyTheHomeGlobalMarkers() {
+        // Byte pin for the install-global bookkeeping face: the specs'
+        // global-marker rows (the ones legacyRows excludes), derived into the
+        // policy so a new marker joins automatically — this pin catches a
+        // derivation regression in EITHER direction (a global row forgotten
+        // outside legacyRows would sync raw; a synced marker claims, or
+        // skips, another device's one-time fold).
+        assertEquals(
+            setOf("home_ns_migrated", "home_v3_upgrade_baseline_done"),
+            PreferenceSyncPolicy.EXCLUDED_BOOKKEEPING_KEYS,
+        )
+        // Disjoint from the denylist by construction: the bookkeeping keys
+        // ARE spec rows (the denylist hard-errors on any row reaching the
+        // catalog), which is why they ride a separate face.
+        assertTrue(
+            PreferenceSyncPolicy.EXCLUDED_BOOKKEEPING_KEYS.intersect(PreferenceSyncPolicy.EXCLUDED_KEYS).isEmpty(),
+        )
+        // The summed face the sync adapter's registration consumes stays
+        // exactly denylist + bookkeeping — a hand-rolled replacement set
+        // would drift from the faces it must track.
+        assertEquals(
+            PreferenceSyncPolicy.EXCLUDED_KEYS + PreferenceSyncPolicy.EXCLUDED_BOOKKEEPING_KEYS,
+            PreferenceSyncPolicy.SYNC_EXCLUDED_KEYS,
+        )
+    }
 }

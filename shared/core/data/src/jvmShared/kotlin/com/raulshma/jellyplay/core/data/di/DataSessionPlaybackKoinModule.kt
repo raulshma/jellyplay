@@ -267,7 +267,11 @@ internal val dataSessionPlaybackModule: Module = module {
             // real leak this closes). Mirror entries stranded by a
             // retroactive exclusion (the widget payload keys synced before
             // theirs landed) are swept by the adapter's one-time prune.
-            excludedKeys = PreferenceSyncPolicy.EXCLUDED_KEYS,
+            // SYNC_EXCLUDED_KEYS adds the install-global bookkeeping markers
+            // (home_ns_migrated, home_v3_upgrade_baseline_done) — raw
+            // non-namespaced keys the policy documents; a marker that
+            // synced before this exclusion lands is swept by the same prune.
+            excludedKeys = PreferenceSyncPolicy.SYNC_EXCLUDED_KEYS,
         )
     } bind ProfileSyncAdapter::class
 

@@ -4,6 +4,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import com.raulshma.jellyplay.core.datastore.TestDataStoreProvider
+import com.raulshma.jellyplay.core.datastore.cancelGraphInitCollectors
 import com.raulshma.jellyplay.core.datastore.createPreferenceSliceGraph
 import com.raulshma.jellyplay.core.datastore.security.PinRateLimiter
 import com.raulshma.jellyplay.core.datastore.volume.VolumeProfileSlice
@@ -17,6 +18,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import kotlin.test.BeforeTest
+import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -32,6 +34,11 @@ import kotlin.test.assertEquals
 class PreferenceSnapshotReaderTest {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
+
+    @AfterTest
+    fun tearDown() {
+        cancelGraphInitCollectors(scope)
+    }
     private lateinit var dataStore: DataStore<Preferences>
     private lateinit var graph: com.raulshma.jellyplay.core.datastore.PreferenceSliceGraph
     private lateinit var pinRateLimiter: PinRateLimiter

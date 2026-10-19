@@ -87,6 +87,17 @@ object HomeDiscoveryPreferenceSpecs {
      * sections default to visible instead of staying invisible to every user
      * whose set predates them, while a user who then disables the section
      * keeps that choice.
+     *
+     * v3 is the deliberate exception: UPCOMING and MY_MEDIA ship as
+     * [HomeSectionType.CONFIGURABLE] default-set members (fresh installs see
+     * them) but must NOT appear unasked on an upgrading install — so there
+     * are no shipped-at entries at 3. Instead the store's one-time v3
+     * upgrade baseline ([HOME_V3_UPGRADE_BASELINE_DONE]) materializes the
+     * default set minus [V3_UPGRADE_EXCLUDED_SECTIONS] for a pre-v0.11.5
+     * install whose user never persisted a set, and sets predating v3 simply
+     * stay verbatim (nothing unions the pair in). A future section that
+     * should default visible everywhere appends its shipped-at entry and
+     * bumps CURRENT as before.
      */
     const val HOME_ENABLED_SECTION_TYPES_CURRENT_VERSION = 3
 
@@ -109,18 +120,18 @@ object HomeDiscoveryPreferenceSpecs {
     const val DISCOVER_SHIPPED_AT_VERSION = 2
 
     /**
-     * The version at which [HomeSectionType.UPCOMING] shipped — same
-     * union-in mechanics as the shipped-at entries above. UPCOMING and MY_MEDIA land in
-     * ONE bump (both v3) so existing users get a single announcement for
-     * the pair.
+     * The sections an UPGRADING install's baselined enabled-set omits —
+     * the v3 pair, UPCOMING and MY_MEDIA. They ship as CONFIGURABLE
+     * default-set members (a fresh install's absent set serves the default
+     * and shows both), but a home screen that predates them must not grow
+     * two new rows unasked: the store's one-time v3 upgrade baseline
+     * writes `HOME_ENABLED_SECTION_TYPES.default - this` as the first
+     * active user's persisted set when the install predates v0.11.5. A
+     * user who then enables either keeps that choice — every later write
+     * is verbatim.
      */
-    const val UPCOMING_SHIPPED_AT_VERSION = 3
-
-    /**
-     * The version at which [HomeSectionType.MY_MEDIA] shipped — same
-     * union-in mechanics as [UPCOMING_SHIPPED_AT_VERSION], same bump.
-     */
-    const val MY_MEDIA_SHIPPED_AT_VERSION = 3
+    val V3_UPGRADE_EXCLUDED_SECTIONS: Set<HomeSectionType> =
+        setOf(HomeSectionType.UPCOMING, HomeSectionType.MY_MEDIA)
 
     // ------------------------------------------------------------------
     // Settings-search route kinds (the plain ids the feature layer maps to
@@ -856,6 +867,25 @@ object HomeDiscoveryPreferenceSpecs {
     )
 
     /**
+     * One-time marker for the v3 upgrade baseline — the store fold that
+     * classifies an install as predating v0.11.5 ([HOME_NS_MIGRATED] already
+     * set, or any legacy flat home key still on disk) and materializes the
+     * default enabled-set minus [V3_UPGRADE_EXCLUDED_SECTIONS] for the first
+     * active user. Deliberately **global** like [HOME_NS_MIGRATED]: the
+     * fresh-vs-updated question is per-INSTALL, not per-user, and a later
+     * user activating on an updated install starts from the spec default
+     * (first-user-claims semantics — the baseline claims for exactly the one
+     * user who was active at upgrade time). Declared as a boolean row so its
+     * wire name and reset participation live with the rows; lives OUTSIDE any
+     * namespace, never a migration copy destination.
+     */
+    val HOME_V3_UPGRADE_BASELINE_DONE: PreferenceSpec<Boolean> = PreferenceSpec.boolean(
+        keyName = "home_v3_upgrade_baseline_done",
+        default = false,
+        resetCategory = PreferenceResetCategory.HOME_DISCOVERY,
+    )
+
+    /**
      * Every row this store declares, in [HomeDiscoverySlice] property order
      * (with the version-stamp row beside its set row, the legacy
      * hidden-library migration source beside the overrides row it feeds, and
@@ -909,19 +939,41 @@ object HomeDiscoveryPreferenceSpecs {
         SHOW_SETTINGS_IN_HOME_SEARCH,
         HIDE_TOP_HEADER_ON_SCROLL,
         HOME_NS_MIGRATED,
+        HOME_V3_UPGRADE_BASELINE_DONE,
     )
 
     /**
      * Every canonical key this store owns, in its legacy flat form — derived
-     * as every row except the global [HOME_NS_MIGRATED] marker (which lives
-     * outside any namespace). Doubles as (a) the canonical-suffix set the
+     * as every row except the global markers ([HOME_NS_MIGRATED],
+     * [HOME_V3_UPGRADE_BASELINE_DONE], which live OUTSIDE any namespace).
+     * Doubles as (a) the canonical-suffix set the
      * dynamic factory-reset strip matches against and (b) the legacy/
      * canonical layer that factory reset must also strip. Includes the legacy
      * [HOME_HIDDEN_LIBRARY_SECTION_IDS] migration source.
      */
-    val legacyRows: List<PreferenceSpec<*>> = all.filterNot { it === HOME_NS_MIGRATED }
+    val legacyRows: List<PreferenceSpec<*>> =
+        all.filterNot { it === HOME_NS_MIGRATED || it === HOME_V3_UPGRADE_BASELINE_DONE }
+
+    /**
+     * The install-global bookkeeping markers' wire names — exactly the rows
+     * [legacyRows] excludes, derived as that complement so a future global
+     * marker joins automatically. [PreferenceSyncPolicy.EXCLUDED_BOOKKEEPING_KEYS]
+     * consumes this: the markers persist under their raw canonical names
+     * (outside every `u_<userId>::` namespace), so un-excluded they would
+     * sync across devices and let one device's one-time fold claim, or skip,
+     * another's.
+     */
+    val globalMarkerKeys: Set<String> =
+        all.filterNot { it in legacyRows }.map { it.keyName }.toSet()
 
     val legacyKeys: List<Preferences.Key<*>> = legacyRows.map { it.typedKey() }
+
+    /**
+     * [legacyRows]' wire names as a set — the "is this key a legacy flat home
+     * key" test the v3 upgrade baseline's classification walks DataStore's
+     * raw key map against, precomputed once instead of per edit.
+     */
+    val legacyRowNames: Set<String> = legacyRows.map { it.keyName }.toSet()
 
     /**
      * The rows the one-time FIRST-USER-CLAIMS namespace migration copies into

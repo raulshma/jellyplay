@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.raulshma.jellyplay.core.datastore.TestDataStoreProvider
 import com.raulshma.jellyplay.core.datastore.PreferenceCodec
+import com.raulshma.jellyplay.core.datastore.cancelGraphInitCollectors
 import com.raulshma.jellyplay.core.datastore.createUserPreferencesStore
 import com.raulshma.jellyplay.core.datastore.identity.ServerIdentityStore
 import com.raulshma.jellyplay.core.model.ContinueWatchingClickBehavior
@@ -22,7 +23,6 @@ import com.raulshma.jellyplay.core.datastore.home.HomeDiscoverySlice
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
@@ -75,10 +75,7 @@ class HomeDiscoveryStoreTest {
 
     @AfterTest
     fun tearDown() {
-        // Stop this instance's Eagerly sharing + migration collectors so they
-        // do not keep reacting to later tests' user switches on the shared
-        // DataStore singleton.
-        scope.cancel()
+        cancelGraphInitCollectors(scope)
     }
 
     /** Switches the active user through the production seam (`active_user_id`). */
@@ -377,7 +374,9 @@ class HomeDiscoveryStoreTest {
         // A set persisted before the section shipped (no version stamp): the
         // union must surface the new row, and the untouched types must not be
         // re-enabled if the user had disabled them. DISCOVER ships at v2 and
-        // UPCOMING + MY_MEDIA at v3; they union in for the same reason.
+        // unions in for the same reason. The v3 pair (UPCOMING, MY_MEDIA) has
+        // no shipped-at entry — upgrading installs meet them through the v3
+        // upgrade baseline instead, so a persisted set never gains them here.
         dataStore.edit {
             it[stringPreferencesKey("u_userA::home_enabled_section_types")] =
                 """["CONTINUE_WATCHING","LATEST_MEDIA","RECOMMENDATIONS"]"""
@@ -387,8 +386,6 @@ class HomeDiscoveryStoreTest {
                 HomeSectionType.CONTINUE_WATCHING,
                 HomeSectionType.CONTINUE_READING,
                 HomeSectionType.DISCOVER,
-                HomeSectionType.UPCOMING,
-                HomeSectionType.MY_MEDIA,
                 HomeSectionType.LATEST_MEDIA,
                 HomeSectionType.RECOMMENDATIONS,
             ),
@@ -421,7 +418,7 @@ class HomeDiscoveryStoreTest {
         }
         val s = slice()
         // Absent version stamp = predates versioning itself: the union folds
-        // in ALL shipped sections (v1–v3), and the read reports exactly those
+        // in ALL shipped sections (v1–v2), and the read reports exactly those
         // as the union's contribution (the announcement must not name
         // sections the persisted set already carried).
         assertEquals(0, s.enabledHomeSectionTypesVersion)
@@ -429,16 +426,12 @@ class HomeDiscoveryStoreTest {
             setOf(
                 HomeSectionType.CONTINUE_READING,
                 HomeSectionType.DISCOVER,
-                HomeSectionType.UPCOMING,
-                HomeSectionType.MY_MEDIA,
             ),
             s.sectionsAddedByUnion,
         )
         assertTrue(
             HomeSectionType.CONTINUE_READING in s.enabledHomeSectionTypes &&
-                HomeSectionType.DISCOVER in s.enabledHomeSectionTypes &&
-                HomeSectionType.UPCOMING in s.enabledHomeSectionTypes &&
-                HomeSectionType.MY_MEDIA in s.enabledHomeSectionTypes,
+                HomeSectionType.DISCOVER in s.enabledHomeSectionTypes,
         )
     }
 
@@ -449,27 +442,25 @@ class HomeDiscoveryStoreTest {
             it[stringPreferencesKey("u_userA::home_enabled_section_types")] =
                 """["CONTINUE_WATCHING"]"""
             // Stamped v1: CONTINUE_READING (shipped@1) is already covered by
-            // the stamp; DISCOVER (shipped@2) and the v3 pair union in.
+            // the stamp; DISCOVER (shipped@2) unions in.
             it[intPreferencesKey("u_userA::home_enabled_section_types_version")] = 1
         }
         val s = slice()
         assertEquals(1, s.enabledHomeSectionTypesVersion)
         assertEquals(
-            setOf(
-                HomeSectionType.DISCOVER,
-                HomeSectionType.UPCOMING,
-                HomeSectionType.MY_MEDIA,
-            ),
+            setOf(HomeSectionType.DISCOVER),
             s.sectionsAddedByUnion,
         )
     }
 
     @Test
-    fun `a v2-stamped set unions only the v3 pair`() = runTest {
+    fun `a v2-stamped set unions nothing and keeps the v3 pair disabled`() = runTest {
         activate("userA")
-        // A set written after DISCOVER shipped but before UPCOMING/My Media: exactly the
-        // v3 pair (Upcoming + My Media) is the union's — and therefore the
-        // announcement's — contribution.
+        // A set written after DISCOVER shipped but before UPCOMING/My Media:
+        // v3 has no shipped-at entries — the pair must NOT union in (they
+        // reach upgrading installs through the v3 upgrade baseline, never
+        // through the read), so absence stays the effective disabled choice
+        // until the baseline or the user writes them.
         dataStore.edit {
             it[stringPreferencesKey("u_userA::home_enabled_section_types")] =
                 """["CONTINUE_WATCHING","DISCOVER"]"""
@@ -477,13 +468,10 @@ class HomeDiscoveryStoreTest {
         }
         val s = slice()
         assertEquals(2, s.enabledHomeSectionTypesVersion)
+        assertTrue(s.sectionsAddedByUnion.isEmpty())
         assertEquals(
-            setOf(HomeSectionType.UPCOMING, HomeSectionType.MY_MEDIA),
-            s.sectionsAddedByUnion,
-        )
-        assertTrue(
-            HomeSectionType.UPCOMING in s.enabledHomeSectionTypes &&
-                HomeSectionType.MY_MEDIA in s.enabledHomeSectionTypes,
+            setOf(HomeSectionType.CONTINUE_WATCHING, HomeSectionType.DISCOVER),
+            s.enabledHomeSectionTypes,
         )
     }
 
@@ -526,8 +514,6 @@ class HomeDiscoveryStoreTest {
                 HomeSectionType.CONTINUE_WATCHING,
                 HomeSectionType.CONTINUE_READING,
                 HomeSectionType.DISCOVER,
-                HomeSectionType.UPCOMING,
-                HomeSectionType.MY_MEDIA,
                 HomeSectionType.NEXT_UP,
                 HomeSectionType.LATEST_MEDIA,
             ),
@@ -536,15 +522,13 @@ class HomeDiscoveryStoreTest {
         store.setSectionVisible(HomeSectionType.CONTINUE_READING, visible = false)
         // DISCOVER survives the rewrite (the pre-version read unioned it in,
         // shipped@2) — same carry-through CONTINUE_READING documented above —
-        // as do the v3 pair (shipped@3): the read-modify-write only drops the
-        // member being disabled.
+        // the read-modify-write only drops the member being disabled. The v3
+        // pair carries nothing: they were never unioned into this set.
         assertEquals(
             setOf(
                 HomeSectionType.CONTINUE_WATCHING,
                 HomeSectionType.NEXT_UP,
                 HomeSectionType.DISCOVER,
-                HomeSectionType.UPCOMING,
-                HomeSectionType.MY_MEDIA,
                 HomeSectionType.LATEST_MEDIA,
             ),
             slice().enabledHomeSectionTypes,
@@ -564,16 +548,13 @@ class HomeDiscoveryStoreTest {
         // read-modify-write drops exactly the unioned member) under the new
         // version stamp — the parse cache must key on the stamp too, or it
         // serves the stale unioned value from the first read until restart.
-        // DISCOVER (also unioned at this pre-version stamp) and the v3 pair
-        // carry through.
+        // DISCOVER (also unioned at this pre-version stamp) carries through.
         store.setSectionVisible(HomeSectionType.CONTINUE_READING, visible = false)
         assertEquals(
             setOf(
                 HomeSectionType.CONTINUE_WATCHING,
                 HomeSectionType.NEXT_UP,
                 HomeSectionType.DISCOVER,
-                HomeSectionType.UPCOMING,
-                HomeSectionType.MY_MEDIA,
             ),
             slice().enabledHomeSectionTypes,
         )
@@ -675,6 +656,87 @@ class HomeDiscoveryStoreTest {
         // The namespaced copy exists and the legacy source key is dropped.
         assertNotNull(raw()[stringPreferencesKey("u_userA::home_library_section_overrides")])
         assertNull(raw()[stringPreferencesKey("home_hidden_library_section_ids")])
+    }
+
+    // ------------------------------------------------------------------
+    // v3 upgrade baseline: Upcoming + My Media default visible on fresh
+    // installs, baselined OFF on installs updating from v0.11.4.
+    // ------------------------------------------------------------------
+
+    @Test
+    fun `a fresh install's baseline classifies as fresh and never writes a set`() = runTest {
+        activate("userA")
+        // No migration marker, no legacy flat keys: a fresh install. The
+        // fold claims itself (one-shot) but writes nothing, so the absent
+        // set keeps serving the spec default with the v3 pair visible.
+        store.ensureV3UpgradeBaseline("userA")
+        assertNull(raw()[stringPreferencesKey("u_userA::home_enabled_section_types")])
+        assertEquals(HomeSectionType.CONFIGURABLE.toSet(), slice().enabledHomeSectionTypes)
+        assertEquals(true, raw()[booleanPreferencesKey("home_v3_upgrade_baseline_done")])
+    }
+
+    @Test
+    fun `a namespacing-era install baselines the v3 pair off for the first active user`() = runTest {
+        // HOME_NS_MIGRATED = true: the install ran a pre-v0.11.5 version.
+        // The user never persisted a set, so the fold materializes the
+        // default minus the v3 pair, stamped current — home keeps exactly
+        // the rows it had.
+        dataStore.edit { it[booleanPreferencesKey("home_ns_migrated")] = true }
+        activate("userA")
+        store.ensureV3UpgradeBaseline("userA")
+        assertEquals(
+            HomeSectionType.CONFIGURABLE.toSet() -
+                setOf(HomeSectionType.UPCOMING, HomeSectionType.MY_MEDIA),
+            slice().enabledHomeSectionTypes,
+        )
+        assertEquals(
+            HomeDiscoveryPreferenceSpecs.HOME_ENABLED_SECTION_TYPES_CURRENT_VERSION,
+            slice().enabledHomeSectionTypesVersion,
+        )
+        // The baselined set is a real persisted set: a later toggle is
+        // verbatim and never resurrects the pair.
+        store.setSectionVisible(HomeSectionType.LATEST_MEDIA, visible = false)
+        assertEquals(
+            HomeSectionType.CONFIGURABLE.toSet() -
+                setOf(HomeSectionType.UPCOMING, HomeSectionType.MY_MEDIA, HomeSectionType.LATEST_MEDIA),
+            slice().enabledHomeSectionTypes,
+        )
+    }
+
+    @Test
+    fun `the v3 baseline leaves an already-persisted set verbatim`() = runTest {
+        // A user who DID touch section config pre-v0.11.5: their set (which
+        // lacks the pair) is respected as-is — the fold must not overwrite
+        // it, and the read must not union the pair in either.
+        dataStore.edit {
+            it[booleanPreferencesKey("home_ns_migrated")] = true
+            it[stringPreferencesKey("u_userA::home_enabled_section_types")] =
+                """["CONTINUE_WATCHING","DISCOVER"]"""
+            it[intPreferencesKey("u_userA::home_enabled_section_types_version")] = 2
+        }
+        activate("userA")
+        store.ensureV3UpgradeBaseline("userA")
+        assertEquals(
+            setOf(HomeSectionType.CONTINUE_WATCHING, HomeSectionType.DISCOVER),
+            slice().enabledHomeSectionTypes,
+        )
+        // The stamp is untouched — still the v2 write the fold found.
+        assertEquals(2, slice().enabledHomeSectionTypesVersion)
+    }
+
+    @Test
+    fun `a pre-namespacing install is classified by its legacy flat keys`() = runTest {
+        // An older install whose marker was never set but whose legacy flat
+        // keys are still on disk (the copy fold never deletes them) — the
+        // key presence must classify it as updating too.
+        dataStore.edit { it[booleanPreferencesKey("home_hero_enabled")] = false }
+        activate("userA")
+        store.ensureV3UpgradeBaseline("userA")
+        assertEquals(
+            HomeSectionType.CONFIGURABLE.toSet() -
+                setOf(HomeSectionType.UPCOMING, HomeSectionType.MY_MEDIA),
+            slice().enabledHomeSectionTypes,
+        )
     }
 
     // ------------------------------------------------------------------
